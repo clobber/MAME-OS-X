@@ -1,0 +1,93 @@
+{
+    IBClasses = (
+        {
+            CLASS = AOSegmentedControl; 
+            LANGUAGE = ObjC; 
+            SUPERCLASS = NSSegmentedControl; 
+        }, 
+        {CLASS = BackgroundBox; LANGUAGE = ObjC; SUPERCLASS = NSView; }, 
+        {CLASS = DDCustomOpenGLView; LANGUAGE = ObjC; SUPERCLASS = NSView; }, 
+        {CLASS = FirstResponder; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {
+            ACTIONS = {
+                abortAudit = id; 
+                auditAllGames = id; 
+                auditRoms = id; 
+                auditSelectedGames = id; 
+                auditUnauditedGames = id; 
+                cancelOpenPanel = id; 
+                clearLogWindow = id; 
+                endOpenPanel = id; 
+                exportFavorites = id; 
+                gameFilterAction = id; 
+                hideOpenPanel = id; 
+                importFavorites = id; 
+                nextVisualEffect = id; 
+                nullAction = id; 
+                previousVisualEffects = id; 
+                raiseOpenPanel = id; 
+                refreshGames = id; 
+                resetAuditStatus = id; 
+                resizeToActualSize = id; 
+                resizeToDoubleSize = id; 
+                resizeToMaximumIntegralSize = id; 
+                resizeToMaximumSize = id; 
+                resizeToOptimalSize = id; 
+                restoreOpenFrame = id; 
+                saveAction = id; 
+                showAudioEffectsPanel = id; 
+                showLogWindow = id; 
+                showPreferencesPanel = id; 
+                showReleaseNotes = id; 
+                showWhatsNew = id; 
+                toggleFavorite = id; 
+                togglePause = id; 
+                toggleScreenshot = id; 
+                toggleSubstitution = id; 
+                toggleThrottled = id; 
+                visualEffectsMenuChanged = id; 
+            }; 
+            CLASS = MameController; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {
+                mAllGamesController = NSArrayController; 
+                mAuditTableSubstitutionView = NSView; 
+                mDragView = NSImageView; 
+                mDrawer = NSDrawer; 
+                mEffectsMenu = NSMenu; 
+                mFavoriteColumn = NSTableColumn; 
+                mGameFilterMenu = NSMenu; 
+                mGameSplit = RBSplitSubview; 
+                mGamesTable = NSTableView; 
+                mInfoAuditNotes = NSTextView; 
+                mInfoPanel = NSPanel; 
+                mMameLogPanel = NSPanel; 
+                mMameLogView = NSTextView; 
+                mMameView = MameView; 
+                mOpenPanel = NSWindow; 
+                mOriginalLogger = id; 
+                mProgressIndicator = NSProgressIndicator; 
+                mScreenshotSplit = RBSplitSubview; 
+                mScreenshotView = QCView; 
+                mToolbar = NSToolbar; 
+                mVersionChecker = VersionChecker; 
+            }; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {
+            CLASS = MameView; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {mController = MameController; mDelegate = id; }; 
+            SUPERCLASS = DDCustomOpenGLView; 
+        }, 
+        {CLASS = NSObject; LANGUAGE = ObjC; }, 
+        {CLASS = NSSegmentedControl; LANGUAGE = ObjC; SUPERCLASS = NSControl; }, 
+        {
+            ACTIONS = {checkForUpdates = id; }; 
+            CLASS = VersionChecker; 
+            LANGUAGE = ObjC; 
+            SUPERCLASS = NSObject; 
+        }
+    ); 
+    IBVersion = 1; 
+}

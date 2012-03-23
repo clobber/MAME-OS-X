@@ -1,0 +1,13 @@
+<html>
+  <head>
+    <title><%= @page_title %></title>
+    <meta name="description" content="<%= description %>">
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+    <link href="<%= link_rel '/main.css' %>" type="text/css" rel="STYLESHEET">
+  </head>
+
+  <body>
+    <h1><%= breadcrumbs(@breadcrumbs) %></h1>
+    <%= @content_for_layout %>
+  </body>
+</html>

@@ -1,0 +1,71 @@
+Support Files and Directories
+-------------------------------
+
+MAME OS X creates and uses various files and directories in:
+
+    ${HOME}/Library/Application Support/MAME OS X
+    
+Here is a description of these files and directories (directories end in a slash):
+
+<dl>
+  <dt class="dir">Cabinet Art/</dt>
+  <dd>
+    Some of the actual arcade machines had images inside them, which were projected into the screen. This can't be emulated in any other way than having the actual image and putting it to the screen in the emulator.  These images can be obtained from the <a href="http://www.mame.net/downart.html">MAME website</a>.
+  </dd>
+  <dt class="dir">cheat.dat</dt>
+  <dd>
+    Enables various cheats and hacks.  This file is not included and may be found on the Internet.
+  </dd>
+  <dt class="dir">Config/</dt>
+  <dd>
+    MAME uses this to store global and per-game options.
+  </dd>
+  <dt class="dir">Control Panels/</dt>
+  <dd>
+    Some dedicated control panels are provided with configurations files for proper key mappings.  Place these configuration files in this directory.
+  </dd>
+  <dt class="dir">Diffs/</dt>
+  <dd>
+    This directory stores modifications to hard disk images.  Since hard disk images are quite large, it is more efficient to only store the differences, hence the name "Diffs".
+  </dd>
+  <dt class="dir">Effects/</dt>
+  <dd>
+    This directory stores visual effects.  A visual effect can be a PNG image that is used as an overlay or a Quartz Composer composition.  See [Visual Effects](<%= link_rel '/visual_effects.html' %>) for more information.
+  </dd>
+  <dt class="dir">Hard Disk Images/</dt>
+  <dd>
+    Hard disk images, often called CHDs for compressed hard disk, should be placed in this directory.
+  </dd>
+  <dt class="dir">Input/</dt>
+  <dd>
+    Stores input recordings.
+  </dd>
+  <dt class="dir">Memcard/</dt>
+  <dd>
+    Memory cards.
+  </dd>
+  <dt class="dir">MAME OS X.db</dt>
+  <dd>
+    Persistent cache of favorites, play stats, audit state, etc.
+  </dd>
+  <dt class="dir">NVRAM/</dt>
+  <dd>
+    Non-volatile RAM storage.
+  </dd>
+  <dt class="dir">ROMs/</dt>
+  <dd>
+    Stores ROM images.  Often found as zip archives.  They do not need to be uncompressed, and the zip files can be stored directly this directory.
+  </dd>
+  <dt class="dir">Screenshots/</dt>
+  <dd>
+    Screen shots created by using F12 are placed in this directory.  A subdirectory the same name of the game is created, and all screen shots for that game are placed there.
+  </dd>
+  <dt class="dir">Sound Samples/</dt>
+  <dd>
+    Not all sounds can be emulated properly.  To overcome this, samples have been obtained from the original games, instead.  Download the samples from the <a href="http://www.mame.net/downsamples.html">MAME website</a>, and place them in this directory.
+  </dd>
+  <dt class="dir">States/</dt>
+  <dd>
+    Save states.
+  </dd>
+</ul>

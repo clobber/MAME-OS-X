@@ -1,0 +1,12 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH.unshift File.join(File.dirname($0), "lib")
+
+require 'bluecloth'
+require 'erb'
+
+manual = IO.read(ARGV[0])
+html = BlueCloth.new(manual).to_html
+
+template = IO.read(ARGV[1])
+puts ERB.new(template, nil).result

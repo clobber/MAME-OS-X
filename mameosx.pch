@@ -1,0 +1,14 @@
+/*
+ *  mameosx.pch
+ *  mameosx
+ *
+ *  Created by Dave Dribin on 1/8/07.
+ *  Copyright 2007 __MyCompanyName__. All rights reserved.
+ *
+ */
+
+#include "config.h"
+#ifdef __OBJC__
+    #import <Cocoa/Cocoa.h>
+    #import "JRLog.h"
+#endif

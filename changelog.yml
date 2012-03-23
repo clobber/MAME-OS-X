@@ -1,0 +1,259 @@
+<% version = "0.135" %>
+- version: "<%=version%>"
+  date: 2009-11-15
+  changes:
+    - Upgrade to 0.135 baseline. Much thanks to Zuki Gottlieb!
+
+<% version = "0.124" %>
+- version: "<%=version%>"
+  date: 2008-04-23
+  changes:
+    - Upgrade to 0.124 baseline.
+    - Support HID devices like PS/2 to USB as separate joysticks.
+
+<% version = "0.122" %>
+- version: "<%=version%>"
+  date: 2008-01-06
+  changes:
+    - Upgrade to 0.122 baseline.
+    - Fix bug on Leopard where default log level is "Debug".
+    - Send Info and Debug log messages to a file in
+      ~/Library/Logs/net.mame.mameosx/
+    - Log file is rotated on every launch.
+    - Fix log window's resizing (#1856565)
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 25859933
+    - name: mameosx-<%=version%>.tgz
+      size: 15572865
+
+<% version = "0.119" %>
+- version: "<%=version%>"
+  date: 2007-12-14
+  changes:
+    - Upgrade to 0.119 baseline.
+    - Ignores input while in the background.
+    - Properly normalize analog joysticks (#1780515).
+    - Fix double Command-Q to quit (#1789071).
+    - Fix quitting after errors (#1799359).
+    - Fix Command-F enables visual effects on Leopard (#1843080).
+    - Remove "Status" column per mamedev's request.
+    - Tweak performance of game list.
+    - Don't default to auditing at startup.
+    - Fix vector flicker default setting.
+    - Add joystick deadzone and saturation UI preferences.
+    - Fix crash on exit for games with overlays and artwork (#1785151)
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 25324422
+    - name: mameosx-<%=version%>.tgz
+      size: 15272227
+
+<% version = "0.118" %>
+- version: "<%=version%>"
+  date: 2007-08-17
+  changes:
+    - Upgrade to 0.118 baseline.
+    - Major UI overhaul based on audit status.
+    - Allow multiple keyboards to be used as separate devices.
+    - Allow multiple mice to be used as separate devices.
+    - Preferences window uses standard OS X style toolbar.
+    - Help manual is broken out into several pages.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 25212804
+    - name: mameosx-<%=version%>.tgz
+      size: 15144723
+
+<% version = "0.117-1" %>
+- version: "<%=version%>"
+  date: 2007-07-14
+  changes:
+    - Fix tiny builds.
+    - Fix aperature effects.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 23594873
+    - name: mameosx-<%=version%>.tgz
+      size: 14148423
+
+<% version = "0.117" %>
+- version: "<%=version%>"
+  date: 2007-07-13
+  changes:
+    - Upgrade to 0.117 baseline.
+    - Add support for cheat.dat.
+    - Add preference to enable auto save states.
+    - Add mameosx-util command line app for --listxml, etc.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 23593591
+    - name: mameosx-<%=version%>.tgz
+      size: 14143924
+
+<% version = "0.116" %>
+- version: "<%=version%>"
+  date: 2007-06-26
+  changes:
+    - Upgrade to 0.116 core.
+    - Fix aspect ratio for rotated displays.
+    - Save and restore audit results.  (Thanks to b.bum)
+    - Enable dynamic recompiler (DRC) on Intel.
+    - Ignore HID devices that could not be open.  Should fix Wacom tablet issues.
+    - Assume square pixels if display size cannot be determined, i.e. a TV.
+    - Add Help menu item to show core whatsnew.txt.
+    - Fix Command-T throttle so it works, again.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 23488265
+    - name: mameosx-<%=version%>.tgz
+      size: 14084789
+  
+<% version = "0.114" %>
+- version: "<%=version%>"
+  date: 2007-04-04
+  changes:
+    - Upgrade to 0.114 core.
+    - Mouse is no longer grabbed at startup.
+    - Add preference to grab mouse at startup.
+    - Add keyboard shortcut to grab/ungrab mouse during game.
+    - Map Page Down to Fast Forward.
+    - Support for other joysticks axes and point of view hat switches.
+    - Preference for default visual effect.
+    - Visual effects are implemented using Quartz Composer.
+    - Custom Core Image filter for PNG-based overlay effects.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 22301201
+    - name: mameosx-<%=version%>.tgz
+      size: 13951821
+
+<% version = "0.112-1" %>
+- version: "<%=version%>"
+  date: 2007-03-22
+  changes:
+    - Add joystick/gamepad support, via HID.
+    - Add mouse support, via HID.
+    - Move keyboard support over to HID.
+    - Add Fonts directory in Application Support to support font caching.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 21294545
+    - name: mameosx-<%=version%>.tgz
+      size: 14035263
+
+<% version = "0.112" %>
+- version: "<%=version%>"
+  date: 2007-02-17
+  changes:
+    - Upgrade to 0.112 core.
+    - Add separate directory for hard disk images.
+    - Add directory for controller (ctrlr) configurations.
+    - Fix bug preventing screenshot directories from being created.
+    - Route JRLog output to log window, as well as console.
+    - New application icon from Jason Moore.
+    - Fix PNG-based effects, thanks to Didier Arenzana.
+    - Create basic manual for standard application help.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 21238349
+    - name: mameosx-<%=version%>.tgz
+      size: 14012775
+
+<% version = "0.111-1" %>
+- version: "<%=version%>"
+  date: 2007-01-10
+  changes:
+    - Implement auto frame skipping.
+    - Implement standard F8, F9, F10 key bindings.
+    - Menu works better when game is paused.
+    - Add preference to startup in full screen mode.
+    - Add preference to switch full screen resolutions (off by default).
+    - Add preference to control full screen zoom level.
+    - Upgrade NXLog to JRLog.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 23187795
+    - name: mameosx-<%=version%>.tgz
+      size: 418141
+
+<% version = "0.111" %>
+- version: "<%=version%>"
+  date: 2006-12-18
+  changes:
+    - Upgrade to 0.111 core.
+    - Add audio effects using any available Audio Unit.
+    - Add preference to preserve game aspect ratio.  It's on by default.
+    - Add preferences for initial window size.
+    - Add preference to disable smooth UI font.
+    - Add preference to choose how frames are rendered.
+    - Add preference to choose which thread frames are rendered in.
+    - Add Effects menu for visual and audio effects.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 24017249
+    - name: mameosx-<%=version%>.tgz
+      size: 406823
+
+<% version = "0.110-1" %>
+- version: "<%=version%>"
+  date: 2006-12-03
+  changes:
+    - Add Diffs directory to default paths list (thanks to Martin White).
+    - Add ROM Auditing tool.
+    - Add scanline and aperature effects.
+    - Use NXLog for logging.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 24102522
+    - name: mameosx-<%=version%>.tgz
+      size: 381839
+  
+<% version = "0.110" %>
+- version: "<%=version%>"
+  date: 2006-11-26
+  changes:
+    - Upgrade to 0.110 core.
+    - Use ${HOME}/Library/Application Support/MAME OS X/ as default directory.
+    - Add preference for checking updates at startup (thanks to Martin White).
+    - Rename ROM Loading Log to MAME Log.
+    - Add linear filtering.
+    - Use a lockless audio buffer for less chance of sound glitches.
+    - Add MAME startup messages preferences to the UI.
+    - Set window title to game description.
+    - Add loading message with game description.
+    - Increase performance on machines without Core Image acceleration.
+    - Add release notes item Help menu and disk image.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 24068542
+    - name: mameosx-<%=version%>.tgz
+      size: 358511
+  
+<% version = "0.109-1" %>
+- version: "<%=version%>"
+  date: 2006-11-18
+  changes:
+    - Resolve aliases in paths (thanks to Martin White).
+    - Add ROM Loading Log.
+    - Show an error sheet if there were any errors loading ROMs.
+    - Add simple preferences panel.
+    - Add Internet version checking.
+    - Sleep while throttling to avoid 100% CPU usage.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 23977459
+    - name: mameosx-<%=version%>.tar.gz
+      size: 306986
+  
+<% version = "0.109" %>
+- version: "<%=version%>"
+  date: 2006-11-12
+  changes:
+    - Initial release.
+  files:
+    - name: MAMEOSX-<%=version%>.dmg
+      size: 23911621
+    - name: mameosx-<%=version%>.tar.gz
+      size: 312942
+  

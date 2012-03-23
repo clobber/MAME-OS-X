@@ -1,0 +1,24 @@
+<html>
+  <head>
+    <title><%= @page_title %></title>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+    <meta name="AppleTitle" content="MAME OS X Help">
+    <meta name="AppleIcon" content="icon.png">
+    <link href="main.css" type="text/css" rel="STYLESHEET">
+  </head>
+
+  <body>
+    <h1><%= breadcrumbs(@breadcrumbs) %></h1>
+
+  	<p id="appdescription">
+  		<img src="icon.png" />
+  		<strong>MAME OS X</strong>
+  		<a href="http://mameosx.sourceforge.net/">http://mameosx.sourceforge.net</a>
+  	</p>
+
+    <div id="helpindex">
+    <%= @content_for_layout %>
+    </div>
+  	<p id="copyright">&copy; 2006-2007 Dave Dribin and <a href="acknowledgements.html">others</a></p>	
+  </body>
+</html>

@@ -1,0 +1,68 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH.unshift File.join(File.dirname($0), "lib")
+
+require 'yaml'
+require 'changelog'
+require 'bluecloth'
+require 'builder'
+require 'time'
+require 'date'
+
+def changes2markdown(changes)
+  markdown = ""
+  changes.each { |c| markdown << "* " + c + "\n" }
+  return markdown
+end
+
+def changes2xhtml(changes)
+  return BlueCloth.new(changes2markdown(changes)).to_html
+end
+
+def changelog2atom(changelog, target = $stdout)
+  xml = Builder::XmlMarkup.new(:target => target, :indent => 2)
+  xml.instruct!
+  xml.feed :xmlns=>'http://www.w3.org/2005/Atom' do
+    xml.title "MAME OS X Release Notes"
+    xml.updated Time.now.iso8601
+    xml.id 'http://mameosx.sourceforge.net/release_notes/'
+
+    xml.link :rel => "self",
+      :href => 'http://mameosx.sourceforge.net/release_notes/index.atom'
+    xml.link :rel => "alternate",
+      :href => 'http://mameosx.sourceforge.net/release_notes/'
+    
+    xml.author do
+      xml.name "Dave Dribin"
+    end
+
+    changelog.each do |release|
+      xml.entry do
+        xml.title "Version " + release.version + " Released"
+        xml.updated release.date.iso8601
+        xml.id "tag:mameosx.mame.net," + release.date.strftime("%Y-%m-%d") +
+          ":/release_notes/" + release.version
+
+        xml.content :type => 'xhtml' do
+          xml.div :xmlns=>'http://www.w3.org/1999/xhtml' do
+            xml << changes2xhtml(release.changes)
+          end
+        end
+        xml.link :rel => 'alternate',
+          :href => 'http://mameosx.sourceforge.net/release_notes/'
+        
+        if (!release.files.nil?)
+          dmg_file = release.files.find { |f| f.name =~ /\.dmg$/ }
+          xml.link :rel => 'enclosure', :type => "application/x-apple-diskimage",
+            :title => "Disk Image",
+            :href => "http://prdownloads.sourceforge.net/mameosx/" +
+              dmg_file.name + "?download",
+            :length => dmg_file.size
+        end
+      end
+    end
+  end
+end
+
+changelog = read_changelog(ARGV[0])
+changelog2atom(changelog, $stdout)

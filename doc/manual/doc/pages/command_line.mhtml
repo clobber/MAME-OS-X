@@ -1,0 +1,25 @@
+Running from the Command Line
+-----------------------------
+
+The main binary can be used to launch games from the command line, without invoking the GUI.  For example, if you installed MAME OS X in `/Applications`, then the main binary is at:
+
+    /Applications/MAME OS X.app/Contents/MacOS/MAME OS X
+
+Any preference can be passed as options to this executable.  For example, you could launch Ms. Pac-Man using the following command:
+
+    MAME OS X -Game mspacman
+
+### Common Options
+
+Here are some common options:
+
+<dl class>
+  <dt class="option">-Game <i>shortname</i></dt>
+  <dd>
+    Run the specified game, using the short name.
+  </dd>
+  <dt class="option">-FullScreen <i>YES/NO</i></dt>
+  <dd>
+    When set to <i>YES</i>, runs the game in full screen.
+  </dd>
+</dl>

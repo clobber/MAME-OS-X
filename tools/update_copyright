@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+
+header_file = ARGV.shift
+header = IO.read(header_file)
+
+ARGV.each do |path|
+  unless path.match(/\.(c|cpp|h|m|mm)$/)
+    $stderr.puts "Skipping #{path}"
+    next
+  end
+
+  File.open(path + ".tmp", "w") do |out_file|
+    File.open(path) do |in_file|
+      in_file.each do |line|
+        if line =~ /^\w*$/
+          out_file.puts header
+          out_file.puts
+          break
+        end
+      end
+      in_file.each do |line|
+        out_file.puts line
+      end
+    end
+  end
+  File.rename(path, path + ".bak")
+  File.rename(path + ".tmp", path)
+  $stderr.puts "Fixed #{path}"
+end

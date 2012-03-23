@@ -1,0 +1,4 @@
+Mouse
+-----
+
+The mouse may be used for games that used trackballs.  In order to prevent mouse clicks from registering with other applications and activating them, the mouse may be grabbed during play using the View > Grab Mouse menu.  There is a preference to always grab the mouse at startup.  Pausing the game also ungrabs the mouse.  If you have multiple mice, they should map to different player's controls in MAME.

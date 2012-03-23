@@ -1,0 +1,11 @@
+kernel vec4 mameEffect(sampler image, sampler effect)
+{
+	vec2 imageXY = samplerCoord(image);
+	vec4 imagePixel = sample(image, imageXY);
+	vec2 effectSize = samplerSize(effect);
+	vec2 effectXY;
+	effectXY.x = mod(imageXY.x, effectSize.x);
+	effectXY.y = mod(imageXY.y, effectSize.y);
+	vec4 effectPixel = sample(effect, effectXY);
+	return imagePixel*effectPixel;
+}

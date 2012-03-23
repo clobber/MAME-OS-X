@@ -1,0 +1,3 @@
+#!/bin/sh
+
+./vendor/mogenerator/mogenerator -m osx/model/Mame_DataModel.xcdatamodel -O osx/model

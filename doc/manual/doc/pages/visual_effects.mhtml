@@ -1,0 +1,10 @@
+Visual Effects
+--------------
+
+[Quartz Composer][] compositions may be used to create visual effects.  The frame is passed as a published input named "Frame" to the composition, which may then display the frame however it wishes.  As a convenience, you may also create published inputs with the names "Width" or "Height" that are the dimensions of the frame in Quartz Composer coordinates.  These are useful if you want to render the frame in a Billboard or Sprite patch.  Place the compositions in:
+
+    ${HOME}/Library/Application Support/MAME OS X/Effects
+  
+You may then select one from the Visual Effects menu.  Please keep in mind that a complicated composition will take away CPU time from MAME, so you may see decreased frame rates while using them.
+
+[quartz composer]: http://developer.apple.com/graphicsimaging/quartz/quartzcomposer.html

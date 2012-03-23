@@ -1,0 +1,10 @@
+#!/bin/sh
+
+echo "Building manual" 1>&2
+
+source="${SRCROOT}/doc/manual.text"
+template="${SRCROOT}/osx/English.lproj/manual/manual.html"
+output="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/English.lproj/manual/manual.html"
+    
+"${MY_SCRIPT_DIR}/manual2html" \
+    "$source" "$template"  > "$output"

@@ -1,0 +1,66 @@
+/*
+ *  tinymame.pch
+ *  mameosx
+ *
+ *  Created by Dave Dribin on 10/22/06.
+ *  Copyright 2006 __MyCompanyName__. All rights reserved.
+ *
+ */
+
+#include "config.h"
+
+/*-------------------------------------------------
+ * You need to define two strings:
+ *
+ * TINY_NAME is a comma-separated list of driver
+ * names that will be referenced.
+ *
+ * TINY_DRIVER should be the same list but with
+ * an & in front of each name.
+ *-------------------------------------------------*/
+
+#define TINY_NAME \
+    driver_suprmrio,\
+    driver_mspacman,\
+    driver_pacman,\
+    driver_puckman,\
+    driver_argus,\
+    driver_crysbios,\
+    driver_crysking
+
+#define TINY_POINTER \
+    &driver_suprmrio,\
+    &driver_mspacman,\
+    &driver_pacman,\
+    &driver_puckman,\
+    &driver_argus,\
+    &driver_crysbios,\
+    &driver_crysking
+
+/*-------------------------------------------------
+ * Specify all the CPU cores necessary for these
+ * drivers.
+ *-------------------------------------------------*/
+
+#define HAS_M6502   1
+#define HAS_N2A03   1
+#define HAS_Z80     1
+// For argus:
+#define HAS_S2660   1
+// For crysking:
+#define HAS_SE3208  1
+
+/*-------------------------------------------------
+ * Specify all the sound cores necessary for these
+ * drivers.
+ *-------------------------------------------------*/
+
+#define HAS_DAC     1
+#define HAS_NES     1
+#define HAS_NAMCO   1
+#define HAS_SN76496 1
+#define HAS_AY8910  1
+// For argus:
+#define HAS_YM2203  1
+// For crysking:
+#define HAS_VRENDER0 1

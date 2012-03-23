@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+
+require 'rexml/document'
+
+file = File.new("mame_source.webloc")
+doc = REXML::Document.new file
+puts doc.elements['plist/dict/string'].text

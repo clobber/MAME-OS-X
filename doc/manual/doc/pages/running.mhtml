@@ -1,0 +1,8 @@
+How to Run MAME OS X
+--------------------
+
+MAME OS X does not come with the game software.  To play the games you must obtain the game software, called ROMs, because the are images from the ROM chips of the original machine. Keep in mind that most ROMs are still covered by the manufacturer's copyright.  Please respect this and only use ROMs that you actually own hardware for.  MAME OS X looks for ROMs in:
+
+    ${HOME}/Library/Application Support/MAME OS X/ROMs
+
+Once you have ROMs, you can run the game by entering the game name in the dialog box.  Game names are short, 8 characters or less.  To see a list of possible game names, run the ROM Audit tool from the "Tools > ROM Audit" menu.

@@ -1,0 +1,4 @@
+Using Joysticks and Gamepads
+----------------------------
+
+USB joysticks and gamepads should be detected when the game starts up.  MAME OS X does its best to map joystick buttons and inputs to MAME inputs.  The player mappings should be based on which USB port the joystick is plugged into.  If you have multiple joysticks, and the player order is incorrect, try swapping the USB ports.

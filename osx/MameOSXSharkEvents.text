@@ -1,0 +1,9 @@
+0x00 MameGameStart
+0x01 MameGameEnd
+0x02 MameGetPrimitives
+0x03 MameRenderFrame
+0x04 MameSkipFrame
+
+0x100 MameLockAcquire
+0x101 MameLockTry
+0x102 MameLockRelease

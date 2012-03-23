@@ -1,0 +1,345 @@
+MAME OS X User's Guide
+======================
+
+MAME OS X is a port of [MAME][] to [Mac OS X][osx].  MAME OS X allows you to play arcade games as they were originally written.  It is able to do this because it uses the original game software, and it emulates the hardware, such as microprocessor, graphics, and sound chips.
+
+Running MAME OS X
+-----------------
+
+MAME OS X does not come with the game software.  To play the games you must obtain the game software, called ROMs, because the are images from the ROM chips of the original machine. Keep in mind that most ROMs are still covered by the manufacturer's copyright.  Please respect this and only use ROMs that you actually own hardware for.  MAME OS X looks for ROMs in:
+
+    ${HOME}/Library/Application Support/MAME OS X/ROMs
+
+Once you have ROMs, you can run the game by entering the game name in the dialog box.  Game names are short, 8 characters or less.  To see a list of possible game names, run the ROM Audit tool from the "Tools > ROM Audit" menu.
+
+Preferences
+-----------
+
+Preferences are set using the "Preferences" menu.
+
+Default Keys
+------------
+
+All keys are configurable in the user interface.  This table shows the standard keyboard configuration:
+
+<table width="100%" border="1" cellspacing="0" cellpadding="5">
+  <tr>
+    <th>Key</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>5, 6, 7, 8</td>
+    <td>Insert coin (players 1, 2, 3, 4)</td>
+  </tr>
+  <tr>
+    <td>1, 2, 3, 4</td>
+    <td>Start (players 1, 2, 3, 4)</td>
+  </tr>
+  <tr>
+    <td>Arrow keys</td>
+    <td>Move</td>
+  </tr>
+  <tr>
+    <td>Left Control</td>
+    <td>Button 1</td>
+  </tr>
+  <tr>
+    <td>Left Option</td>
+    <td>Button 2</td>
+  </tr>
+  <tr>
+    <td>Space</td>
+    <td>Button 3</td>
+  </tr>
+  <tr>
+    <td>Tab</td>
+    <td>Toggles the configuration menu</td>
+  </tr>
+  <tr>
+    <td>~</td>
+    <td>
+      Toggles the On Screen Display. Use the up and down arrow keys to
+      select which parameter to modify (global volume, mixing level, 
+      gamma correction etc.) Use the left and right to arrow keys to 
+      change modify the value. Some parameters adjust with finer or
+      coarser control if you hold down the CTRL or SHIFT keys while
+      pressing the left/right arrows. Use the ENTER key to reset a value
+      to its default.
+    </td>
+  </tr>
+  <tr>
+    <td>P</td>
+    <td>Pauses the game</td>
+  </tr>
+  <tr>
+    <td>SHIFT+P</td>
+    <td>While paused, advances to next frame</td>
+  </tr>
+  <tr>
+    <td>F1</td>
+    <td>Toggle crosshairs for games that use them</td>
+  </tr>
+  <tr>
+    <td>F2</td>
+    <td>Service Mode</td>
+  </tr>
+  <tr>
+    <td>F3</td>
+    <td>Resets the game</td>
+  </tr>
+  <tr>
+    <td>F4</td>
+    <td>
+      Shows the game palette, decoded GFX, and any tilemaps. Use the
+      ENTER key to switch between the three modes (palette, graphics,
+      and tilemaps). Press F4 again to turn off the display.
+    </td>
+  </tr>
+  <tr>
+    <td>F7</td>
+    <td>
+      Load a save state. You will be requested to press a key to
+      determine which save state you wish to load. Note that the save
+      state feature is not supported for a large number of drivers. If
+      support is not enabled for a given driver, you will receive a 
+      warning when attempting to save or load.
+    </td>
+  </tr>
+  <tr>
+    <td>SHIFT+F7</td>
+    <td>
+      Create a save state. Requires an additional keypress to identify
+      the state, similar to the load option above.
+    </td>
+  </tr>
+  <tr>
+    <td>F8</td>
+    <td>Decrease frame skip on the fly</td>
+  </tr>
+  <tr>
+    <td>F9</td>
+    <td>Increase frame skip on the fly</td>
+  </tr>
+  <tr>
+    <td>F10</td>
+    <td>Toggle speed throttling</td>
+  </tr>
+  <tr>
+    <td>F11</td>
+    <td>Toggles speed display</td>
+  </tr>
+  <tr>
+    <td>SHIFT+F11</td>
+    <td>Toggles profiler display (debug builds only)</td>
+  </tr>
+  <tr>
+    <td>F12</td>
+    <td>Saves a screen snapshot</td>
+  </tr>
+  <tr>
+    <td>ESC</td>
+    <td>Exits emulator</td>
+  </tr>
+</table>
+
+Button 1 usually represents a game's primary action, like "Fire" or "Jump." Button 2 is the secondary action, like "Thrust" in Asteroids. Button 3 is used for "Hyperspace" in Asteroids. Some games won't use any buttons, while others (such as Defender or Street Fighter) will use many buttons.
+
+Games which use two joysticks simultaneously, such as Karate Champ, Robotron, Crazy Climber, or Battle Zone, default to using the E/S/D/F keys for the left joystick and the I/J/K/L keys for the right joystick
+
+Mouse
+-----
+
+The mouse may be used for games that used trackballs.  In order to prevent mouse clicks from registering with other applications and activating them, the mouse may be grabbed during play using the View > Grab Mouse menu.  There is a preference to always grab the mouse at startup.  Pausing the game also ungrabs the mouse.  If you have multiple mice, they should map to different player's controls in MAME.
+
+Joysticks and Gamepads
+----------------------
+
+USB joysticks and gamepads should be detected when the game starts up.  MAME OS X does its best to map joystick buttons and inputs to MAME inputs.  The player mappings should be based on which USB port the joystick is plugged into.  If you have multiple joysticks, and they player order is incorrect, try swapping the USB ports.
+
+Quartz Composer Effects
+-----------------------
+
+[Quartz Composer][] compositions may be used to create visual effects.  The frame is passed as a published input named "Frame" to the composition, which may then display the frame however it wishes.  As a convenience, you may also create published inputs with the names "Width" or "Height" that are the dimensions of the frame in Quartz Composer coordinates.  These are useful if you want to render the frame in a Billboard or Sprite patch.  Place the compositions in:
+
+    ${HOME}/Library/Application Support/MAME OS X/Effects
+  
+You may then select one from the Visual Effects menu.  Please keep in mind that a complicated composition will take away CPU time from MAME, so you may see decreased frame rates while using them.
+
+mameosx-util
+------------
+
+`mameosx-util` is a command line program that prints information about the games for front-end authors.  The binary is included inside the standard application bundle, under the MacOS directory.  For example, if you installed MAME OS X in /Applications, then the binary is at:
+
+    /Applications/MAME OS X.app/Contents/MacOS/mameosx-util
+
+This command has the following usage:
+
+    mameosx-util [OPTIONS] [<gamename|wildcard>]
+
+The options are summarized in this table:
+
+<table width="100%" border="1" cellspacing="0" cellpadding="5">
+  <tr>
+    <th width="20%">Option</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>--listxml</td>
+    <td>
+      List comprehensive details for all of the supported games. The
+      output is quite long, so it is usually better to redirect this
+      into a file.  The output is in XML format. By default all games
+      are listed; however, you can limit this list by specifying a
+      driver name or wildcard after the --listxml command.
+    </td>
+  </tr>
+  <tr>
+    <td>--listfull</td>
+    <td>
+      Displays a list of game driver names and descriptions. By default
+      all games are listed; however, you can limit this list by specifying a
+      driver name or wildcard after the --listfull command
+    </td>
+  </tr>
+  <tr>
+    <td>--listsource</td>
+    <td>
+    	Displays a list of drivers and the names of the source files their game
+    	drivers live in. Useful for finding which driver a game runs on in 
+    	order to fix bugs. By default all games are listed; however, you can 
+    	limit this list by specifying a driver name or wildcard after the 
+    	--listsource command.
+    </td>
+  </tr>
+  <tr>
+    <td>--listclones</td>
+    <td>
+    	Displays a list of clones. By default all clones are listed; however, 
+    	you can limit this list by specifying a driver name or wildcard after 
+    	the -listclones command.
+    </td>
+  </tr>
+  <tr>
+    <td>--listcrc</td>
+    <td>
+    	Displays a full list of CRCs of all ROM images referenced by all
+    	drivers within MAME.
+    </td>
+  </tr>
+</table>
+
+Where To Get Help
+-----------------
+
+A [web forum][forum] for MAME OS X is available for any questions not covered by this document.
+
+
+MAME OS X Directories
+---------------------
+
+MAME OS X creates and uses various directories in:
+
+    ${HOME}/Library/Application Support/MAME OS X
+    
+Here is a description of these directories:
+
+<table width="100%" border="1" cellspacing="0" cellpadding="5">
+  <tr>
+    <th>Directory</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>Cabinet Art</td>
+    <td>
+      Some of the actual arcade machines had images inside them, which were projected into the screen. This can't be emulated in any other way than having the actual image and putting it to the screen in the emulator.  These images can be obtained from the <a href="http://www.mame.net/downart.html">MAME website</a>.
+    </td>
+  </tr>
+  <tr>
+    <td>Config</td>
+    <td>
+      MAME uses this to store global and per-game options.
+    </td>
+  </tr>
+  <tr>
+    <td>Control Panels</td>
+    <td>
+      Some dedicated control panels are provided with configurations files for proper key mappings.  Place these configuration files in this directory.
+    </td>
+  </tr>
+  <tr>
+    <td>Diffs</td>
+    <td>
+      This directory stores modifications to hard disk images.  Since hard disk images are quite large, it is more efficient to only store the differences, hence the name "Diffs".
+    </td>
+  </tr>
+  <tr>
+    <td>Effects</td>
+    <td>
+      This directory stores visual effects.  A visual effect can be a PNG image that is used as an overlay or a Quartz Composer composition.  See the section Quartz Composer Effects for more information.
+    </td>
+  </tr>
+  <tr>
+    <td>Hard Disk Images</td>
+    <td>
+      Hard disk images, often called CHDs for compressed hard disk, should be placed in this directory.
+    </td>
+  </tr>
+  <tr>
+    <td>Input</td>
+    <td>
+      Stores input recordings.
+    </td>
+  </tr>
+  <tr>
+    <td>Memcard</td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>NVRAM</td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>ROMs</td>
+    <td>
+      Stores ROM images.  Often found as zip archives.  They do not need to be uncompressed, and the zip files can be stored directly this directory.
+    </td>
+  </tr>
+  <tr>
+    <td>Screenshots</td>
+    <td>
+      Screen shots are created by using F12 are placed in this directory.  A directory the same name of the game is created, and all screen shots for that game are placed there.
+    </td>
+  </tr>
+  <tr>
+    <td>Sound Samples</td>
+    <td>
+      Not all sounds can be emulated properly.  To overcome this, samples have been obtained from the original games, instead.  Download the samples from the <a href="http://www.mame.net/downsamples.html">MAME website</a>, and place them in this directory.
+    </td>
+  </tr>
+  <tr>
+    <td>States</td>
+    <td>
+      Save states.
+    </td>
+  </tr>
+</table>
+
+Acknowledgments
+---------------
+
+Thanks to the [MAME development team][mamedev] for providing a fantastic code base to build on.  [Dave Dribin][] maintains the MAME OS X port.  Other contributers are:
+
+  * Martin White
+  * Didier Arenzana
+  * [Jason Moore][]
+
+[mame]: http://www.mame.net/
+[osx]: http://www.apple.com/macosx/
+[artwork]: http://www.mame.net/downart.html
+[forum]: http://www.bannister.org/forums/ubbthreads.php
+[mamedev]: http://mamedev.org/
+[dave dribin]: http://www.dribin.org/dave/
+[jason moore]: http://www.midnightoilproductions.com/
+[quartz composer]: http://developer.apple.com/graphicsimaging/quartz/quartzcomposer.html

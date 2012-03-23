@@ -1,0 +1,12 @@
+Acknowledgments
+---------------
+
+Thanks to the [MAME development team][mamedev] for providing a fantastic code base to build on.  [Dave Dribin][] maintains the MAME OS X port.  Other contributers are:
+
+  * Martin White
+  * Didier Arenzana
+  * [Jason Moore][]
+
+[mamedev]: http://mamedev.org/
+[dave dribin]: http://www.dribin.org/dave/
+[jason moore]: http://www.midnightoilproductions.com/

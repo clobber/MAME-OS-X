@@ -1,0 +1,85 @@
+Using a Keyboard
+----------------
+
+All keys are configurable in the user interface from the Configuration Menu.  This list shows the default keyboard configuration:
+
+### Main Keys
+
+<dl>
+  <dt>5, 6, 7, 8</dt>
+  <dd>Insert coin (players 1, 2, 3, 4)</dd>
+  <dt>1, 2, 3, 4</dt>
+  <dd>Start (players 1, 2, 3, 4)</dd>
+  <dt>Arrow keys</dt>
+  <dd>Move Joystick</dd>
+  <dt>Left Control</dt>
+  <dd>Button 1</dd>
+  <dt>Left Option</dt>
+  <dd>Button 2</dd>
+  <dt>Space</dt>
+  <dd>Button 3</dd>
+  <dt>ESC (Escape)</dt>
+  <dd>Quits the game</dd>
+</dl>
+
+Button 1 usually represents a game's primary action, like "Fire" or "Jump." Button 2 is the secondary action, like "Thrust" in Asteroids. Button 3 is used for "Hyperspace" in Asteroids. Some games won't use any buttons, while others (such as Defender or Street Fighter) will use many buttons.
+
+Games which use two joysticks simultaneously, such as Karate Champ, Robotron, Crazy Climber, or Battle Zone, default to using the E/S/D/F keys for the left joystick and the I/J/K/L keys for the right joystick
+
+### Other Keys
+
+<dl>
+  <dt>Tab</dt>
+  <dd>Toggles the Configuration Menu</dd>
+  <dt>~ (Tilde)</dt>
+  <dd>
+    Toggles the On Screen Display. Use the up and down arrow keys to
+    select which parameter to modify (global volume, mixing level, 
+    gamma correction etc.) Use the left and right to arrow keys to 
+    change modify the value. Some parameters adjust with finer or
+    coarser control if you hold down the CTRL or SHIFT keys while
+    pressing the left/right arrows. Use the ENTER key to reset a value
+    to its default.
+  </dd>
+  <dt>P</dt>
+  <dd>Pauses the game</dd>
+  <dt>SHIFT+P</dt>
+  <dd>While paused, advances to next frame</dd>
+  <dt>F1</dt>
+  <dd>Toggle crosshairs for games that use them</dd>
+  <dt>F2</dt>
+  <dd>Service Mode</dd>
+  <dt>F3</dt>
+  <dd>Resets the game</dd>
+  <dt>F4</dt>
+  <dd>
+    Shows the game palette, decoded GFX, and any tilemaps. Use the
+    ENTER key to switch between the three modes (palette, graphics,
+    and tilemaps). Press F4 again to turn off the display.
+  </dd>
+  <dt>F7</dt>
+  <dd>
+    Load a save state. You will be requested to press a key to
+    determine which save state you wish to load. Note that the save
+    state feature is not supported for a large number of drivers. If
+    support is not enabled for a given driver, you will receive a 
+    warning when attempting to save or load.
+  </dd>
+  <dt>SHIFT+F7</dt>
+  <dd>
+    Create a save state. Requires an additional keypress to identify
+    the state, similar to the load option above.
+  </dd>
+  <dt>F8</dt>
+  <dd>Decrease frame skip on the fly</dd>
+  <dt>F9</dt>
+  <dd>Increase frame skip on the fly</dd>
+  <dt>F10</dt>
+  <dd>Toggle speed throttling</dd>
+  <dt>F11</dt>
+  <dd>Toggles speed display</dd>
+  <dt>SHIFT+F11</dt>
+  <dd>Toggles profiler display (debug builds only)</dd>
+  <dt>F12</dt>
+  <dd>Saves a screen snapshot</dd>
+</dl>

@@ -1,0 +1,21 @@
+#!/bin/sh
+exec <"$0" || exit; read v; read v; exec /usr/bin/osascript - "$@"; exit
+
+on set_comment(theComment, thePaths)
+	repeat with thePath in thePaths
+		set theFile to POSIX file thePath
+		tell application "Finder"
+			set theAlias to theFile as alias
+			set theOldComment to the comment of theAlias
+			set theNewComment to theOldComment & " " & theComment
+			set comment of theAlias to theNewComment
+		end tell
+	end repeat
+end set_comment
+
+on run argv
+	set theComment to item 1 of argv
+	set thePaths to rest of argv
+	set_comment(theComment, thePaths)
+	return "Done"
+end run

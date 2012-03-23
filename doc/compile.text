@@ -1,0 +1,22 @@
+How To Compile
+==============
+
+Download MAME core source, if it does not already exist. Run the following set
+of commands:
+
+    % mkdir mame
+    % cd mame
+    % unzip ../mame.zip
+    % ../tools/fix_eol.rb .
+
+If a `mame.patch` file exists, apply the patch like:
+
+    % patch -p1 < ../mame.patch
+
+If you want to open the NIB files in Interface Builder, you will need to
+install a couple of 3rd party palettes. The first is under
+vendor/generictoolbar/. And the second is under vendor/RBSplitView/.  If you put them in:
+
+    ~/Library/Palettes
+
+Then IB will pick them up automatically.

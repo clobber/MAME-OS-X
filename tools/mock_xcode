@@ -1,0 +1,15 @@
+#!/bin/sh
+
+export PROJECT_NAME="mameosx"
+export CONFIGURATION="${CONFIGURATION:-Debug}"
+export TARGET="${TARGET:-MAME OS X.app}"
+
+export SRCROOT="$PWD"
+export OBJROOT="${PWD}/build"
+export SYMROOT="${OBJROOT}"
+export PROJECT_TEMP_DIR="${OBJROOT}/${PROJECT_NAME}.build"
+export CONFIGURATION_BUILD_DIR="${SYMROOT}/${CONFIGURATION}"
+export BUILT_PRODUCTS_DIR="${CONFIGURATION_BUILD_DIR}"
+export UNLOCALIZED_RESOURCES_FOLDER_PATH="${TARGET}/Contents/Resources"
+
+exec "$@"

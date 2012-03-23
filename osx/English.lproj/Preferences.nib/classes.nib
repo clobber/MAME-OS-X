@@ -1,0 +1,39 @@
+{
+    IBClasses = (
+        {
+            CLASS = DBPrefsWindowController; 
+            LANGUAGE = ObjC; 
+            SUPERCLASS = NSWindowController; 
+        }, 
+        {CLASS = FirstResponder; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {
+            ACTIONS = {
+                chooseArtworkDirectory = id; 
+                chooseDiskImageDirectory = id; 
+                chooseRomDirectory = id; 
+                chooseSamplesDirectory = id; 
+                resetToDefaultsGeneral = id; 
+                resetToDefaultsInputs = id; 
+                resetToDefaultsMessages = id; 
+                resetToDefaultsVector = id; 
+                resetToDefaultsVideo = id; 
+            }; 
+            CLASS = PreferencesWindowController; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {
+                mArtworkDirectory = NSPopUpButton; 
+                mControllerAlias = NSObjectController; 
+                mDiskImageDirectory = NSPopUpButton; 
+                mGeneralPreferenceView = NSView; 
+                mInputsPreferenceView = NSView; 
+                mMessagesPreferenceView = NSView; 
+                mRomDirectory = NSPopUpButton; 
+                mSamplesDirectory = NSPopUpButton; 
+                mVectorPreferencesView = NSView; 
+                mVideoPreferencesView = NSView; 
+            }; 
+            SUPERCLASS = DBPrefsWindowController; 
+        }
+    ); 
+    IBVersion = 1; 
+}

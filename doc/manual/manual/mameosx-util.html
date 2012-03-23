@@ -1,0 +1,75 @@
+<html>
+  <head>
+    <title>Using the mameosx-util Tool</title>
+    <meta name="description" content="Using the mameosx-util Tool">
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+    <link href="main.css" type="text/css" rel="STYLESHEET">
+  </head>
+
+  <body>
+    <h1><a href="index.html">MAME OS X Manual</a> &gt; <a href="contents.html">Contents</a> &gt; <b>Using the mameosx-util Tool</b></h1>
+    <h2>Using the mameosx-util Tool</h2>
+
+<p><code>mameosx-util</code> is a command line program that prints information about the games for front-end authors.  The binary is included inside the standard application bundle, under the MacOS directory.  For example, if you installed MAME OS X in <code>/Applications</code>, then the binary is at:</p>
+
+<pre><code>/Applications/MAME OS X.app/Contents/MacOS/mameosx-util
+</code></pre>
+
+<p>This command has the following usage:</p>
+
+<pre><code>mameosx-util [OPTIONS] [&lt;gamename|wildcard&gt;]
+</code></pre>
+
+<p>The options are summarized in this table:</p>
+
+<table width="100%" border="1" cellspacing="0" cellpadding="5">
+  <tr>
+    <th width="20%">Option</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>--listxml</td>
+    <td>
+      List comprehensive details for all of the supported games. The
+      output is quite long, so it is usually better to redirect this
+      into a file.  The output is in XML format. By default all games
+      are listed; however, you can limit this list by specifying a
+      driver name or wildcard after the --listxml command.
+    </td>
+  </tr>
+  <tr>
+    <td>--listfull</td>
+    <td>
+      Displays a list of game driver names and descriptions. By default
+      all games are listed; however, you can limit this list by specifying a
+      driver name or wildcard after the --listfull command
+    </td>
+  </tr>
+  <tr>
+    <td>--listsource</td>
+    <td>
+        Displays a list of drivers and the names of the source files their game
+        drivers live in. Useful for finding which driver a game runs on in 
+        order to fix bugs. By default all games are listed; however, you can 
+        limit this list by specifying a driver name or wildcard after the 
+        --listsource command.
+    </td>
+  </tr>
+  <tr>
+    <td>--listclones</td>
+    <td>
+        Displays a list of clones. By default all clones are listed; however, 
+        you can limit this list by specifying a driver name or wildcard after 
+        the -listclones command.
+    </td>
+  </tr>
+  <tr>
+    <td>--listcrc</td>
+    <td>
+        Displays a full list of CRCs of all ROM images referenced by all
+        drivers within MAME.
+    </td>
+  </tr>
+</table>
+  </body>
+</html>

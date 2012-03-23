@@ -1,0 +1,52 @@
+%start BackgroundUpdaterMap::Init
+%class  BackgroundUpdater
+%header BackgroundUpdater.h
+
+%map BackgroundUpdaterMap
+%%
+
+Init
+{
+    Init Idle {}
+}
+
+Idle
+Entry { setIdle(YES); }
+Exit { setIdle(NO); }
+{
+    Start UpdatingGameList { prepareToUpdateGameList(); }
+    StartSkipingUpdate AuditingGames { prepareToAuditAllGames(); }
+    AuditGames(games: NSArray *) AuditingGames { prepareToAuditGames(games); }
+}
+
+UpdatingGameList
+{
+    DoWork nil { updateGameList(); }
+    WorkDone AuditingGames { prepareToAuditAllGames(); }
+}
+
+AuditingGames
+Entry { setAuditing(YES); }
+Exit { setAuditing(NO); }
+{
+    DoWork nil { auditGames(); }
+    AbortAudit Idle { cleanUp(); }
+    WorkDone Idle { cleanUp(); }
+}
+
+Default
+{
+    Pause push(Paused) { }
+    DoWork nil { defaultWork(); }
+}
+
+Paused
+Entry { saveState(); }
+Exit { restoreState(); }
+{
+    Pause nil { }
+    Resume pop() { }
+    DoWork nil { }
+}
+
+%%

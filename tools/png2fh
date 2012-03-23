@@ -1,0 +1,16 @@
+#!/usr/bin/ruby
+
+require 'fileutils'
+
+png2bdc = "#{ENV['TARGET_BUILD_DIR']}/png2bdc"
+file2str = "#{ENV['TARGET_BUILD_DIR']}/file2str"
+tmpdir = "#{ENV['TARGET_TEMP_DIR']}"
+
+infile = ARGV[0]
+outfile = ARGV[1]
+tmpfile = "#{tmpdir}/temp.bdc"
+fontname = "font_" + File.basename(infile, '.png')
+
+FileUtils.mkdir_p(tmpdir)
+system(png2bdc, infile, tmpfile)
+system(file2str, tmpfile, outfile, fontname, "UINT8")

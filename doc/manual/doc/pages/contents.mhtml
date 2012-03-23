@@ -1,0 +1,24 @@
+
+### Basics
+
+* [What is MAME OS X](mame.html)
+* [How to Run MAME OS X](running.html)
+* [Preferences](preferences.html)
+
+### Inputs
+
+* [Using a Keyboard](keyboard.html)
+* [Using a Mouse](mouse.html)
+* [Using Joysticks and Gamepads](joystick.html)
+
+### Advanced
+
+* [Visual Effects](visual_effects.html)
+* [Running from the Command Line](command_line.html)
+* [Using the mameosx-util Tool](mameosx-util.html)
+* [Support Files and Directories](directories.html)
+
+### Other Information
+
+* [Where to Get Help](help.html)
+* [Acknowledgements](acknowledgements.html)

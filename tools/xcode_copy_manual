@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo "Copying manual" 1>&2
+
+source="${SRCROOT}/doc/manual/manual/"
+output="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/English.lproj/manual/"
+    
+rsync -a --cvs-exclude --delete "$source" "$output"

@@ -1,0 +1,43 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH.unshift File.join(File.dirname($0), "lib")
+
+require 'yaml'
+require 'time'
+require 'changelog'
+require 'bluecloth'
+require 'erb'
+require 'stringio'
+
+changelog = read_changelog(ARGV[0])
+out = StringIO.new
+changelog2markdown(changelog, out)
+html = BlueCloth.new(out.string).to_html
+
+puts ERB.new(DATA.read, nil).result
+
+__END__
+<html>
+  <head>
+    <title>MAME OS X Release Notes</title>
+    <style type="text/css">
+    <!--
+    OL,UL,P,BODY,TD,TR,TH,FORM,H1,H2,H3,H4,H5,H6 {
+      font-family: arial, helvetica, verdana, sans-serif;
+    }
+    h1 {
+            font-size: x-large;
+    }
+    h2 {
+            font-size: large;
+    }
+    h3 {
+            font-size: medium;
+    -->
+    </style>
+  </head>
+  <body>
+  <h1>MAME OS X Release Notes</h1>
+  <%= html %>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+
+* Automatically restore favorites when DB is blown away.
+
+* Add GUI pref for vector flicker and beam width
+* Add pref for audio effect.
+* Fix sound in cyberbal
+* Fix tiny release build.
+* Look into default size of window.
+* Fix audit crash if there's no ROMs.
+* Don't quit on game exit, but show game dialog again.
+* Add advanced preferences UI to expose everything, similar to
+  FireFox's about:config.
+* Handle multiple screens (ninjaw, cyberbal).
+* Add Spotlight support
+

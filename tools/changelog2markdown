@@ -1,0 +1,10 @@
+#!/usr/bin/ruby
+
+$LOAD_PATH.unshift File.join(File.dirname($0), "lib")
+
+require 'yaml'
+require 'time'
+require 'changelog'
+
+changelog = read_changelog(ARGV[0])
+changelog2markdown(changelog, $stdout)
