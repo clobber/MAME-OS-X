@@ -66,7 +66,7 @@ INLINE int _vec_mult(int x, int y)
 			:  "=&a" (result)           /* the result has to go in eax */
 			:  "mr" (x),                /* x and y can be regs or mem */
 			   "mr" (y)
-			:  "%edx", "%cc"            /* clobbers edx and flags */
+			:  "%edx", "cc"            /* clobbers edx and flags */
 		);
 	#endif
 	return result;

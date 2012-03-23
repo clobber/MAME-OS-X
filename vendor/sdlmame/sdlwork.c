@@ -200,7 +200,7 @@ INLINE INT32 scalable_lock_acquire(scalable_lock *lock)
 		: [haslock] "+m"  (lock->slot[myslot].haslock)
 		, [tmp]     "=&r" (tmp)
 		:
-		: "%cc"
+		: "cc"
 	);
 #elif defined(__ppc__) || defined (__PPC__) || defined(__ppc64__) || defined(__PPC64__)
 	register INT32 tmp;

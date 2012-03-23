@@ -43,7 +43,7 @@ _mul_32x32(INT32 a, INT32 b)
 		: [result] "=A" (result)	/* result in edx:eax */
 		: [a]      "%a"  (a)		/* 'a' should also be in eax on entry */
 		, [b]      "rm"  (b)		/* 'b' can be memory or register */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -69,7 +69,7 @@ _mulu_32x32(UINT32 a, UINT32 b)
 		: [result] "=A" (result)	/* result in edx:eax */
 		: [a]      "%a"  (a)		/* 'a' should also be in eax on entry */
 		, [b]      "rm"  (b)		/* 'b' can be memory or register */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -95,7 +95,7 @@ _mul_32x32_hi(INT32 a, INT32 b)
         , [temp]   "=a"  (temp)     /* This is effectively a clobber */
         : [a]      "a"  (a)        /* 'a' should be in eax on entry */
         , [b]      "rm"  (b)        /* 'b' can be memory or register */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -120,7 +120,7 @@ _mulu_32x32_hi(UINT32 a, UINT32 b)
         , [temp]   "=a"  (temp)     /* This is effectively a clobber */
         : [a]      "a"   (a)        /* 'a' should be in eax on entry */
         , [b]      "rm"  (b)        /* 'b' can be memory or register */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -149,7 +149,7 @@ _mul_32x32_shift(INT32 a, INT32 b, UINT8 shift)
 		: [a]      "%0" (a)			/* 'a' should also be in eax on entry */
 		, [b]      "rm" (b)			/* 'b' can be memory or register */
 		, [shift]  "Ic" (shift)		/* 'shift' must be constant in 0-31 range or in cl */
-		: "%edx", "%cc"				/* clobbers edx and condition codes */
+		: "%edx", "cc"				/* clobbers edx and condition codes */
 	);
 
 	return result;
@@ -179,7 +179,7 @@ _mulu_32x32_shift(UINT32 a, UINT32 b, UINT8 shift)
 		: [a]      "%0" (a)			/* 'a' should also be in eax on entry */
 		, [b]      "rm" (b)			/* 'b' can be memory or register */
 		, [shift]  "Ic" (shift)		/* 'shift' must be constant in 0-31 range or in cl */
-		: "%edx", "%cc"				/* clobbers edx and condition codes */
+		: "%edx", "cc"				/* clobbers edx and condition codes */
 	);
 
 	return result;
@@ -206,7 +206,7 @@ _div_64x32(INT64 a, INT32 b)
 		, [temp]   "=d" (temp)		/* This is effectively a clobber */
 		: [a]      "A"  (a)			/* 'a' in edx:eax */
 		, [b]      "rm" (b)			/* 'b' in register or memory */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -233,7 +233,7 @@ _divu_64x32(UINT64 a, UINT32 b)
 		, [temp]   "=d" (temp)		/* This is effectively a clobber */
 		: [a]      "A"  (a)			/* 'a' in edx:eax */
 		, [b]      "rm" (b)			/* 'b' in register or memory */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -261,7 +261,7 @@ _div_64x32_rem(INT64 dividend, INT32 divisor, INT32 *remainder)
 		, [remainder] "=d" (*remainder)	/* Remainder ends up in edx */
 		: [dividend]  "A"  (dividend)	/* 'dividend' in edx:eax */
 		, [divisor]   "rm" (divisor)	/* 'divisor' in register or memory */
-		: "%cc"							/* Clobbers condition codes */
+		: "cc"							/* Clobbers condition codes */
 	);
 
 	return quotient;
@@ -289,7 +289,7 @@ _divu_64x32_rem(UINT64 dividend, UINT32 divisor, UINT32 *remainder)
 		, [remainder] "=d" (*remainder)	/* Remainder ends up in edx */
 		: [dividend]  "A"  (dividend)	/* 'dividend' in edx:eax */
 		, [divisor]   "rm" (divisor)	/* 'divisor' in register or memory */
-		: "%cc"							/* Clobbers condition codes */
+		: "cc"							/* Clobbers condition codes */
 	);
 
 	return quotient;
@@ -321,7 +321,7 @@ _div_32x32_shift(INT32 a, INT32 b, UINT8 shift)
 		: [a]      "0"   (a)		/* 'a' should also be in eax on entry */
         , [b]      "rm"  (b)		/* 'b' can be memory or register */
         , [shift]  "Ic"  (shift)	/* 'shift' must be constant in 0-31 range or in cl */
-		: "%edx", "%cc"				/* clobbers edx and condition codes */
+		: "%edx", "cc"				/* clobbers edx and condition codes */
 	);
 
 	return result;
@@ -353,7 +353,7 @@ _divu_32x32_shift(UINT32 a, UINT32 b, UINT8 shift)
 		: [a]      "0"   (a)		/* 'a' should also be in eax on entry */
         , [b]      "rm"  (b)		/* 'b' can be memory or register */
         , [shift]  "Ic"  (shift)	/* 'shift' must be constant in 0-31 range or in cl */
-		: "%edx", "%cc"				/* clobbers edx and condition codes */
+		: "%edx", "cc"				/* clobbers edx and condition codes */
 	);
 
 	return result;
@@ -380,7 +380,7 @@ _mod_64x32(INT64 a, INT32 b)
 		, [temp]   "=a" (temp)		/* This is effectively a clobber */
 		: [a]      "A"  (a)			/* 'a' in edx:eax */
 		, [b]      "rm" (b)			/* 'b' in register or memory */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -407,7 +407,7 @@ _modu_64x32(UINT64 a, UINT32 b)
 		, [temp]   "=a" (temp)		/* This is effectively a clobber */
 		: [a]      "A"  (a)			/* 'a' in edx:eax */
 		, [b]      "rm" (b)			/* 'b' in register or memory */
-		: "%cc"						/* Clobbers condition codes */
+		: "cc"						/* Clobbers condition codes */
 	);
 
 	return result;
@@ -457,7 +457,7 @@ _count_leading_zeros(UINT32 value)
 		"1: xorl  $31, %[result]      ;"
 		: [result] "=r" (result)	/* result can be in any register */
 		: [value]  "rm" (value)		/* 'value' can be register or memory */
-		: "%cc"						/* clobbers condition codes */
+		: "cc"						/* clobbers condition codes */
 	);
 
 	return result;
@@ -484,7 +484,7 @@ _count_leading_ones(UINT32 value)
 		"1: xorl  $31, %[result]       ;"
 		: [result] "=r"  (result)	/* result can be in any register */
 		: [value]  "rmi" (value)	/* 'value' can be register, memory or immediate */
-		: "%cc"						/* clobbers condition codes */
+		: "cc"						/* clobbers condition codes */
 	);
 
 	return result;
@@ -515,7 +515,7 @@ _compare_exchange32(INT32 volatile *ptr, INT32 compare, INT32 exchange)
 	  , [result]   "=a" (result)
 	  : [compare]  "1"  (compare)
 	  , [exchange] "q"  (exchange)
-	  : "%cc"
+	  : "cc"
 	);
 
 	return result;
@@ -542,7 +542,7 @@ _compare_exchange64(INT64 volatile *ptr, INT64 compare, INT64 exchange)
 	  , [result]   "=a" (result)
 	  : [compare]  "1"  (compare)
 	  , [exchange] "q"  (exchange)
-	  : "%cc"
+	  : "cc"
 	);
 
 	return result;
@@ -590,7 +590,7 @@ _atomic_add32(INT32 volatile *ptr, INT32 delta)
 	  : [ptr]    "+m" (*ptr)
 	  , [result] "+r" (result)
 	  :
-	  : "%cc"
+	  : "cc"
 	);
 
 	return result + delta;
@@ -614,7 +614,7 @@ _atomic_increment32(INT32 volatile *ptr)
 	  : [ptr]    "+m" (*ptr)
 	  , [result] "+r" (result)
 	  :
-	  : "%cc"
+	  : "cc"
 	);
 
 	return result + 1;
@@ -638,7 +638,7 @@ _atomic_decrement32(INT32 volatile *ptr)
 	  : [ptr]    "+m" (*ptr)
 	  , [result] "+r" (result)
 	  :
-	  : "%cc"
+	  : "cc"
 	);
 
 	return result - 1;
