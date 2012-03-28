@@ -4,7 +4,19 @@
 
 *************************************************************************/
 
+#include "machine/atarigen.h"
+
+class xybots_state : public atarigen_state
+{
+public:
+	xybots_state(const machine_config &mconfig, device_type type, const char *tag)
+		: atarigen_state(mconfig, type, tag) { }
+
+	UINT16			m_h256;
+};
+
+
 /*----------- defined in video/xybots.c -----------*/
 
 VIDEO_START( xybots );
-VIDEO_UPDATE( xybots );
+SCREEN_UPDATE_IND16( xybots );

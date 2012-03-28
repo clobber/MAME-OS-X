@@ -4,15 +4,16 @@
 
 *************************************************************************/
 
-#include "driver.h"
-#include "firetrk.h"
+#include "emu.h"
+#include "includes/firetrk.h"
 #include "sound/discrete.h"
 
 
 WRITE8_DEVICE_HANDLER( firetrk_skid_reset_w )
 {
-	firetrk_skid[0] = 0;
-	firetrk_skid[1] = 0;
+	firetrk_state *state = device->machine().driver_data<firetrk_state>();
+	state->m_skid[0] = 0;
+	state->m_skid[1] = 0;
 
 	// also SUPERBUG_SKID_EN
 	discrete_sound_w(device, FIRETRUCK_SKID_EN, 1);
@@ -57,14 +58,8 @@ WRITE8_DEVICE_HANDLER( superbug_motor_snd_w )
 
 WRITE8_DEVICE_HANDLER( firetrk_xtndply_w )
 {
+	// also SUPERBUG_ASR_EN (extended play)
 	discrete_sound_w(device, FIRETRUCK_XTNDPLY_EN, data);
-}
-
-
-WRITE8_DEVICE_HANDLER( superbug_asr_w )
-{
-popmessage("ASR");
-		discrete_sound_w(device, SUPERBUG_ASR_EN, 1);	/* ASR */
 }
 
 
@@ -206,7 +201,7 @@ DISCRETE_SOUND_START(firetrk)
 	/* drive a modulo 12 counter, with div6 & div12 */
 	/* summed as the output of the circuit.         */
 	/************************************************/
-	DISCRETE_ADJUSTMENT_TAG(NODE_20,
+	DISCRETE_ADJUSTMENT(NODE_20,
 				RES_K(260),	// R26 + R27 @ max
 				RES_K(10),	// R26 + R27 @ min
 				DISC_LOGADJ, "R27")
@@ -288,7 +283,7 @@ DISCRETE_SOUND_START(firetrk)
 	/************************************************/
 	DISCRETE_RCDISC2(NODE_70, FIRETRUCK_BELL_EN,
 				4.4, 10,		// Q3 instantally charges C42
-				0, RES_K(33),	// discharges thru R66
+				0, RES_K(33),	// discharges through R66
 				CAP_U(10))		// C42
 	DISCRETE_TRANSFORM2(NODE_71, NODE_70,
 				5.0 * 680 / (RES_K(10) + 680),	// vRef = 5V * R64 / (R65 + R64)
@@ -409,7 +404,7 @@ DISCRETE_SOUND_START(superbug)
 	/* latch (4 bit). This freqency is then used to */
 	/* drive a modulo 12 counter.                   */
 	/************************************************/
-	DISCRETE_ADJUSTMENT_TAG(NODE_20,
+	DISCRETE_ADJUSTMENT(NODE_20,
 				RES_K(260),	// R12 + R62 @ max
 				RES_K(10),	// R12 + R62 @ min
 				DISC_LOGADJ, "R62")
@@ -593,7 +588,7 @@ DISCRETE_SOUND_START(montecar)
 	/* driver a modulo 12 counter, with div6, 4 & 3 */
 	/* summed as the output of the circuit.         */
 	/************************************************/
-	DISCRETE_ADJUSTMENT_TAG(NODE_20,
+	DISCRETE_ADJUSTMENT(NODE_20,
 				RES_K(260),	// R87 + R89 @ max
 				RES_K(10),	// R87 + R89 @ min
 				DISC_LOGADJ, "R89")
@@ -628,7 +623,7 @@ DISCRETE_SOUND_START(montecar)
 	/************************************************/
 	DISCRETE_COMP_ADDER(NODE_30, MONTECAR_DRONE_LOUD_DATA, &montecar_drone_vol_res)	// make sure to change the node value in the mixer table if you change this node number
 
-	DISCRETE_ADJUSTMENT_TAG(NODE_40,
+	DISCRETE_ADJUSTMENT(NODE_40,
 				RES_K(260),	// R85 + R88 @ max
 				RES_K(10),	// R85 + R88 @ min
 				DISC_LOGADJ, "R88")

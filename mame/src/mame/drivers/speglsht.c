@@ -103,32 +103,41 @@ Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mips/r3000.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 
-READ8_HANDLER(st0016_dma_r);
-static UINT8 *shared;
 
-UINT32 *speglsht_framebuffer;
-UINT32  speglsht_videoreg;
+class speglsht_state : public driver_device
+{
+public:
+	speglsht_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
+	UINT8 *m_shared;
+	UINT32 *m_framebuffer;
+	UINT32 m_videoreg;
+	bitmap_ind16 *m_bitmap;
+	UINT32 *m_cop_ram;
+};
+
+
+static ADDRESS_MAP_START( st0016_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xe87f) AM_RAM
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&shared)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_MEMBER(speglsht_state, m_shared)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( st0016_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w)
 	AM_RANGE(0xe1, 0xe1) AM_WRITE(st0016_rom_bank_w)
@@ -142,35 +151,39 @@ ADDRESS_MAP_END
 
 static READ32_HANDLER(shared_r)
 {
-	return shared[offset];
+	speglsht_state *state = space->machine().driver_data<speglsht_state>();
+	return state->m_shared[offset];
 }
 
 static WRITE32_HANDLER(shared_w)
 {
-	shared[offset]=data&0xff;
+	speglsht_state *state = space->machine().driver_data<speglsht_state>();
+	state->m_shared[offset]=data&0xff;
 }
 
 static WRITE32_HANDLER(videoreg_w)
 {
-	COMBINE_DATA(&speglsht_videoreg);
+	speglsht_state *state = space->machine().driver_data<speglsht_state>();
+	COMBINE_DATA(&state->m_videoreg);
 }
 
-static UINT32 *cop_ram;
 
 static WRITE32_HANDLER(cop_w)
 {
-	COMBINE_DATA(&cop_ram[offset]);
+	speglsht_state *state = space->machine().driver_data<speglsht_state>();
+	COMBINE_DATA(&state->m_cop_ram[offset]);
 
-	if(cop_ram[offset]&0x8000) //fix (sign)
+	if(state->m_cop_ram[offset]&0x8000) //fix (sign)
 	{
-		cop_ram[offset]|=0xffff0000;
+		state->m_cop_ram[offset]|=0xffff0000;
 	}
 }
 
 //matrix * vector
 static READ32_HANDLER(cop_r)
 {
-	INT32 *cop=(INT32*)&cop_ram[0];
+	speglsht_state *state = space->machine().driver_data<speglsht_state>();
+	INT32 *cop=(INT32*)&state->m_cop_ram[0];
 
 	union
 	{
@@ -202,19 +215,25 @@ static READ32_HANDLER(cop_r)
 	return 0;
 }
 
-static ADDRESS_MAP_START( speglsht_mem, ADDRESS_SPACE_PROGRAM, 32 )
+static READ32_HANDLER(irq_ack_clear)
+{
+	cputag_set_input_line(space->machine(), "sub", R3000_IRQ4, CLEAR_LINE);
+	return 0;
+}
+
+static ADDRESS_MAP_START( speglsht_mem, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_RAM
 	AM_RANGE(0x01000000, 0x01007fff) AM_RAM //tested - STATIC RAM
-	AM_RANGE(0x01600000, 0x0160004f) AM_READWRITE(cop_r, cop_w) AM_BASE(&cop_ram)
+	AM_RANGE(0x01600000, 0x0160004f) AM_READWRITE(cop_r, cop_w) AM_BASE_MEMBER(speglsht_state, m_cop_ram)
 	AM_RANGE(0x01800200, 0x01800203) AM_WRITE(videoreg_w)
 	AM_RANGE(0x01800300, 0x01800303) AM_READ_PORT("IN0")
 	AM_RANGE(0x01800400, 0x01800403) AM_READ_PORT("IN1")
-	AM_RANGE(0x01a00000, 0x01afffff) AM_RAM AM_BASE(&speglsht_framebuffer)
+	AM_RANGE(0x01a00000, 0x01afffff) AM_RAM AM_BASE_MEMBER(speglsht_state, m_framebuffer)
 	AM_RANGE(0x01b00000, 0x01b07fff) AM_RAM //cleared ...  video related ?
-	AM_RANGE(0x01c00000, 0x01dfffff) AM_READ(SMH_ROM) AM_WRITE(SMH_ROM) AM_REGION("user2", 0)
+	AM_RANGE(0x01c00000, 0x01dfffff) AM_ROM AM_REGION("user2", 0)
 	AM_RANGE(0x0a000000, 0x0a003fff) AM_READWRITE(shared_r, shared_w)
 	AM_RANGE(0x1eff0000, 0x1eff001f) AM_RAM
-	AM_RANGE(0x1eff003c, 0x1eff003f) AM_READNOP //interrupt related
+	AM_RANGE(0x1eff003c, 0x1eff003f) AM_READ(irq_ack_clear)
 	AM_RANGE(0x1fc00000, 0x1fdfffff) AM_ROM AM_REGION("user1", 0)
 	AM_RANGE(0x2fc00000, 0x2fdfffff) AM_ROM AM_REGION("user1", 0) // mirror for interrupts
 ADDRESS_MAP_END
@@ -233,7 +252,7 @@ static INPUT_PORTS_START( speglsht )
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN1")
-	PORT_DIPNAME( 0x00000007, 0x00000007, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x00000007, 0x00000007, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW1:1,2,3")
 	PORT_DIPSETTING(          0x00000003, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(          0x00000004, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(          0x00000007, DEF_STR( 1C_1C ) )
@@ -242,7 +261,7 @@ static INPUT_PORTS_START( speglsht )
 	PORT_DIPSETTING(          0x00000006, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(          0x00000005, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(          0x00000000, "2C Start/1C Continue" )
-	PORT_DIPNAME( 0x00000038, 0x00000038, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x00000038, 0x00000038, DEF_STR( Coin_B ) )	PORT_DIPLOCATION("SW1:4,5,6")
 	PORT_DIPSETTING(          0x00000018, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(          0x00000020, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(          0x00000038, DEF_STR( 1C_1C ) )
@@ -251,32 +270,30 @@ static INPUT_PORTS_START( speglsht )
 	PORT_DIPSETTING(          0x00000030, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(          0x00000028, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(          0x00000000, "2C Start/1C Continue" )
-	PORT_DIPNAME( 0x00000040, 0x00000040, "Unkown / Unused" )
-	PORT_DIPSETTING(          0x00000040, DEF_STR( Off ) )
-	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x00000080, 0x00000080, "Bonus for PAR Play" )
+	PORT_DIPUNUSED_DIPLOC( 0x00000040, 0x00000040, "SW1:7" )
+	PORT_DIPNAME( 0x00000080, 0x00000080, "Bonus for PAR Play" )	PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(          0x00000080, DEF_STR( None ) )
 	PORT_DIPSETTING(          0x00000000, "Extra Hole" )
-	PORT_DIPNAME( 0x00000300, 0x00000300, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x00000300, 0x00000300, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(          0x00000300, DEF_STR( Normal ) )
 	PORT_DIPSETTING(          0x00000200, DEF_STR( Easy ) )
 	PORT_DIPSETTING(          0x00000100, DEF_STR( Hard ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x00000c00, 0x00000c00, "Number of Players" )
+	PORT_DIPNAME( 0x00000c00, 0x00000c00, "Number of Players" )	PORT_DIPLOCATION("SW2:3,4")
 	PORT_DIPSETTING(          0x00000c00, "3" )
 	PORT_DIPSETTING(          0x00000800, "4" )
 	PORT_DIPSETTING(          0x00000400, "2" )
 	PORT_DIPSETTING(          0x00000000, "1" )
-	PORT_DIPNAME( 0x00001000, 0x00000000, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x00001000, 0x00000000, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:5")
 	PORT_DIPSETTING(          0x00001000, DEF_STR( Off ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x00002000, 0x00000000, "Control Panel" )
+	PORT_DIPNAME( 0x00002000, 0x00000000, "Control Panel" )		PORT_DIPLOCATION("SW2:6")
 	PORT_DIPSETTING(          0x00002000, "Double" )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( Single ) )
-	PORT_DIPNAME( 0x00004000, 0x00004000, "Country" )
+	PORT_DIPNAME( 0x00004000, 0x00000000, "Country" )		PORT_DIPLOCATION("SW2:7")
 	PORT_DIPSETTING(          0x00004000, DEF_STR( Japan ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( USA ) )
-	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPUNUSED_DIPLOC( 0x00008000, 0x00008000, "SW2:8" )
 	PORT_SERVICE_NO_TOGGLE( 0x00010000, IP_ACTIVE_HIGH )
 	PORT_BIT( 0x00020000, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x00040000, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -301,12 +318,7 @@ static const st0016_interface st0016_config =
 	&st0016_charram
 };
 
- static INTERRUPT_GEN( irq4_gen )
-{
-	cpu_set_input_line(device, R3000_IRQ4, ASSERT_LINE);
-}
-
-static const r3000_cpu_core config =
+static const r3000_cpu_core r3000_config =
 {
 	0,
 	4096,	/* code cache size */
@@ -315,46 +327,95 @@ static const r3000_cpu_core config =
 
 static MACHINE_RESET(speglsht)
 {
-	memset(shared,0,0x1000);
+	speglsht_state *state = machine.driver_data<speglsht_state>();
+	memset(state->m_shared,0,0x1000);
 }
 
-static MACHINE_DRIVER_START( speglsht )
+static VIDEO_START(speglsht)
+{
+	speglsht_state *state = machine.driver_data<speglsht_state>();
+	state->m_bitmap = auto_bitmap_ind16_alloc(machine, 512, 5122 );
+	VIDEO_START_CALL(st0016);
+}
+
+#define PLOT_PIXEL_RGB(x,y,r,g,b)	if(y>=0 && x>=0 && x<512 && y<512) \
+{ \
+		bitmap.pix32(y, x) = (b) | ((g)<<8) | ((r)<<16); \
+}
+
+static SCREEN_UPDATE_RGB32(speglsht)
+{
+	speglsht_state *state = screen.machine().driver_data<speglsht_state>();
+	int x,y,dy;
+
+	dy=(state->m_videoreg&0x20)?(256*512):0; //visible frame
+
+	for(y=0;y<256;y++)
+	{
+		for(x=0;x<512;x++)
+		{
+			int tmp=dy+y*512+x;
+			PLOT_PIXEL_RGB(x-67,y-5,(state->m_framebuffer[tmp]>>0)&0xff,(state->m_framebuffer[tmp]>>8)&0xff,(state->m_framebuffer[tmp]>>16)&0xff);
+		}
+	}
+
+	//draw st0016 gfx to temporary bitmap (indexed 16)
+	state->m_bitmap->fill(0);
+	st0016_draw_screen(screen, *state->m_bitmap, cliprect);
+
+	//copy temporary bitmap to rgb 32 bit bitmap
+	for(y=cliprect.min_y; y<cliprect.max_y;y++)
+	{
+		UINT16 *srcline = &state->m_bitmap->pix16(y);
+		for(x=cliprect.min_x; x<cliprect.max_x;x++)
+		{
+			if(srcline[x])
+			{
+				rgb_t color=palette_get_color(screen.machine(), srcline[x]);
+				PLOT_PIXEL_RGB(x,y,RGB_RED(color),RGB_GREEN(color),RGB_BLUE(color));
+			}
+		}
+	}
+
+	return 0;
+}
+
+static MACHINE_CONFIG_START( speglsht, speglsht_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",Z80, 8000000) /* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(st0016_mem)
-	MDRV_CPU_IO_MAP(st0016_io)
+	MCFG_CPU_ADD("maincpu",Z80, 8000000) /* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(st0016_mem)
+	MCFG_CPU_IO_MAP(st0016_io)
 
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", R3000LE, 25000000)
-	MDRV_CPU_CONFIG(config)
-	MDRV_CPU_PROGRAM_MAP(speglsht_mem)
-	MDRV_CPU_VBLANK_INT("screen", irq4_gen)
+	MCFG_CPU_ADD("sub", R3000LE, 25000000)
+	MCFG_CPU_CONFIG(r3000_config)
+	MCFG_CPU_PROGRAM_MAP(speglsht_mem)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_assert)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
-	MDRV_MACHINE_RESET(speglsht)
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MCFG_MACHINE_RESET(speglsht)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(512, 512)
-	MDRV_SCREEN_VISIBLE_AREA(0, 319, 8, 239-8)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(512, 512)
+	MCFG_SCREEN_VISIBLE_AREA(0, 319, 8, 239-8)
+	MCFG_SCREEN_UPDATE_STATIC(speglsht)
 
-	MDRV_GFXDECODE(speglsht)
-	MDRV_PALETTE_LENGTH(16*16*4+1)
+	MCFG_GFXDECODE(speglsht)
+	MCFG_PALETTE_LENGTH(16*16*4+1)
 
-	MDRV_VIDEO_START(st0016)
-	MDRV_VIDEO_UPDATE(st0016)
+	MCFG_VIDEO_START(speglsht)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
-	MDRV_SOUND_CONFIG(st0016_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("stsnd", ST0016, 0)
+	MCFG_SOUND_CONFIG(st0016_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 ROM_START( speglsht )
 	ROM_REGION( 0x210000, "maincpu", 0 )

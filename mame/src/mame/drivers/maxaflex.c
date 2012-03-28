@@ -6,14 +6,11 @@
     Based on Atari 400/800 MESS Driver by Juergen Buchmueller
 
     TODO:
-    - add AUDMUTE port - muting all sounds on system
     - fix LCD digits display controlling
-    - change lamps and time counter display to use artwork
 
 ******************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/m6805/m6805.h"
 #include "includes/atari.h"
@@ -25,13 +22,30 @@
 #include "maxaflex.lh"
 
 
+class maxaflex_state : public driver_device
+{
+public:
+	maxaflex_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 m_portA_in;
+	UINT8 m_portA_out;
+	UINT8 m_ddrA;
+	UINT8 m_portB_in;
+	UINT8 m_portB_out;
+	UINT8 m_ddrB;
+	UINT8 m_portC_in;
+	UINT8 m_portC_out;
+	UINT8 m_ddrC;
+	UINT8 m_tdr;
+	UINT8 m_tcr;
+	timer_device *m_mcu_timer;
+};
+
+
+
 /* Supervisor board emulation */
 
-static UINT8 portA_in,portA_out,ddrA;
-static UINT8 portB_in,portB_out,ddrB;
-static UINT8 portC_in,portC_out,ddrC;
-static UINT8 tdr,tcr;
-static emu_timer *mcu_timer;
 
 /* Port A:
     0   (in)  DSW
@@ -46,20 +60,22 @@ static emu_timer *mcu_timer;
 
 static READ8_HANDLER( mcu_portA_r )
 {
-	portA_in = input_port_read(space->machine, "dsw") | (input_port_read(space->machine, "coin") << 4) | (input_port_read(space->machine, "console") << 5);
-	return (portA_in & ~ddrA) | (portA_out & ddrA);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_portA_in = input_port_read(space->machine(), "dsw") | (input_port_read(space->machine(), "coin") << 4) | (input_port_read(space->machine(), "console") << 5);
+	return (state->m_portA_in & ~state->m_ddrA) | (state->m_portA_out & state->m_ddrA);
 }
 
 static WRITE8_HANDLER( mcu_portA_w )
 {
-	portA_out = data;
-	speaker_level_w(0, data >> 7);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_portA_out = data;
+	speaker_level_w(space->machine().device("speaker"), data >> 7);
 }
 
 /* Port B:
     0   (out)   Select 7-segment display to control by writing port C
     1   (out)
-    2   (out)   clear coin interupt
+    2   (out)   clear coin interrupt
     3   (out)   STRKEY - line connected to keyboard input in 600XL, seems to be not used
     4   (out)   RES600 - reset 600
     5   (out)   AUDMUTE - mutes audio
@@ -69,32 +85,34 @@ static WRITE8_HANDLER( mcu_portA_w )
 
 static READ8_HANDLER( mcu_portB_r )
 {
-	return (portB_in & ~ddrB) | (portB_out & ddrB);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return (state->m_portB_in & ~state->m_ddrB) | (state->m_portB_out & state->m_ddrB);
 }
 
 static WRITE8_HANDLER( mcu_portB_w )
 {
-	UINT8 diff = data ^ portB_out;
-	portB_out = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	UINT8 diff = data ^ state->m_portB_out;
+	state->m_portB_out = data;
 
 	/* clear coin interrupt */
 	if (data & 0x04)
-		cputag_set_input_line(space->machine, "mcu", M6805_IRQ_LINE, CLEAR_LINE );
+		cputag_set_input_line(space->machine(), "mcu", M6805_IRQ_LINE, CLEAR_LINE );
 
 	/* AUDMUTE */
-	sound_global_enable(space->machine, (data >> 5) & 1);
+	space->machine().sound().system_enable((data >> 5) & 1);
 
 	/* RES600 */
 	if (diff & 0x10)
-		cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* latch for lamps */
 	if ((diff & 0x40) && !(data & 0x40))
 	{
-		output_set_lamp_value(0, (portC_out >> 0) & 1);
-		output_set_lamp_value(1, (portC_out >> 1) & 1);
-		output_set_lamp_value(2, (portC_out >> 2) & 1);
-		output_set_lamp_value(3, (portC_out >> 3) & 1);
+		output_set_lamp_value(0, (state->m_portC_out >> 0) & 1);
+		output_set_lamp_value(1, (state->m_portC_out >> 1) & 1);
+		output_set_lamp_value(2, (state->m_portC_out >> 2) & 1);
+		output_set_lamp_value(3, (state->m_portC_out >> 3) & 1);
 	}
 }
 
@@ -106,23 +124,25 @@ static WRITE8_HANDLER( mcu_portB_w )
 
 static READ8_HANDLER( mcu_portC_r )
 {
-	return (portC_in & ~ddrC) | (portC_out & ddrC);
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return (state->m_portC_in & ~state->m_ddrC) | (state->m_portC_out & state->m_ddrC);
 }
 
 static WRITE8_HANDLER( mcu_portC_w )
 {
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
 	/* uses a 7447A, which is equivalent to an LS47/48 */
 	static const UINT8 ls48_map[16] =
 		{ 0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7c,0x07,0x7f,0x67,0x58,0x4c,0x62,0x69,0x78,0x00 };
 
-	portC_out = data & 0x0f;
+	state->m_portC_out = data & 0x0f;
 
 	/* displays */
-	switch( portB_out & 0x3 )
+	switch( state->m_portB_out & 0x3 )
 	{
-		case 0x0: output_set_digit_value(0, ls48_map[portC_out]); break;
-		case 0x1: output_set_digit_value(1, ls48_map[portC_out]); break;
-		case 0x2: output_set_digit_value(2, ls48_map[portC_out]); break;
+		case 0x0: output_set_digit_value(0, ls48_map[state->m_portC_out]); break;
+		case 0x1: output_set_digit_value(1, ls48_map[state->m_portC_out]); break;
+		case 0x2: output_set_digit_value(2, ls48_map[state->m_portC_out]); break;
 		case 0x3: break;
 	}
 }
@@ -134,27 +154,31 @@ static READ8_HANDLER( mcu_ddr_r )
 
 static WRITE8_HANDLER( mcu_portA_ddr_w )
 {
-	ddrA = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_ddrA = data;
 }
 
 static WRITE8_HANDLER( mcu_portB_ddr_w )
 {
-	ddrB = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_ddrB = data;
 }
 
 static WRITE8_HANDLER( mcu_portC_ddr_w )
 {
-	ddrC = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_ddrC = data;
 }
 
-static TIMER_CALLBACK( mcu_timer_proc )
+static TIMER_DEVICE_CALLBACK( mcu_timer_proc )
 {
-	if ( --tdr == 0x00 )
+	maxaflex_state *state = timer.machine().driver_data<maxaflex_state>();
+	if ( --state->m_tdr == 0x00 )
 	{
-		if ( (tcr & 0x40) == 0 )
+		if ( (state->m_tcr & 0x40) == 0 )
 		{
 			//timer interrupt!
-			generic_pulse_irq_line(cputag_get_cpu(machine, "mcu"), M68705_INT_TIMER);
+			generic_pulse_irq_line(timer.machine().device("mcu"), M68705_INT_TIMER);
 		}
 	}
 }
@@ -162,29 +186,33 @@ static TIMER_CALLBACK( mcu_timer_proc )
 /* Timer Data Reg */
 static READ8_HANDLER( mcu_tdr_r )
 {
-	return tdr;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return state->m_tdr;
 }
 
 static WRITE8_HANDLER( mcu_tdr_w )
 {
-	tdr = data;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_tdr = data;
 }
 
 /* Timer control reg */
 static READ8_HANDLER( mcu_tcr_r )
 {
-	return tcr & ~0x08;
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	return state->m_tcr & ~0x08;
 }
 
 static WRITE8_HANDLER( mcu_tcr_w )
 {
-	tcr = data;
-	if ( (tcr & 0x40) == 0 )
+	maxaflex_state *state = space->machine().driver_data<maxaflex_state>();
+	state->m_tcr = data;
+	if ( (state->m_tcr & 0x40) == 0 )
 	{
 		int divider;
 		attotime period;
 
-		if ( !(tcr & 0x20) )
+		if ( !(state->m_tcr & 0x20) )
 		{
 			/* internal clock / 4*/
 			divider = 4;
@@ -195,24 +223,25 @@ static WRITE8_HANDLER( mcu_tcr_w )
 			divider = 1;
 		}
 
-		if ( tcr & 0x07 )
+		if ( state->m_tcr & 0x07 )
 		{
 			/* use prescaler */
-			divider = divider * (1 << (tcr & 0x7));
+			divider = divider * (1 << (state->m_tcr & 0x7));
 		}
 
-		period = attotime_mul(ATTOTIME_IN_HZ(3579545), divider);
-		timer_adjust_periodic( mcu_timer, period, 0, period);
+		period = attotime::from_hz(3579545) * divider;
+		state->m_mcu_timer->adjust(period, 0, period);
 	}
 }
 
 static MACHINE_RESET(supervisor_board)
 {
-	portA_in = portA_out = ddrA	= 0;
-	portB_in = portB_out = ddrB	= 0;
-	portC_in = portC_out = ddrC	= 0;
-	tdr = tcr = 0;
-	mcu_timer = timer_alloc(machine,  mcu_timer_proc , NULL);
+	maxaflex_state *state = machine.driver_data<maxaflex_state>();
+	state->m_portA_in = state->m_portA_out = state->m_ddrA	= 0;
+	state->m_portB_in = state->m_portB_out = state->m_ddrB	= 0;
+	state->m_portC_in = state->m_portC_out = state->m_ddrC	= 0;
+	state->m_tdr = state->m_tcr = 0;
+	state->m_mcu_timer = machine.device<timer_device>("mcu_timer");
 
 	output_set_lamp_value(0, 0);
 	output_set_lamp_value(1, 0);
@@ -226,17 +255,18 @@ static MACHINE_RESET(supervisor_board)
 static INPUT_CHANGED( coin_inserted )
 {
 	if (!newval)
-		cputag_set_input_line(field->port->machine, "mcu", M6805_IRQ_LINE, HOLD_LINE );
+		cputag_set_input_line(field.machine(), "mcu", M6805_IRQ_LINE, HOLD_LINE );
 }
 
-int atari_input_disabled(void)
+int atari_input_disabled(running_machine &machine)
 {
-	return (portB_out & 0x80) == 0x00;
+	maxaflex_state *state = machine.driver_data<maxaflex_state>();
+	return (state->m_portB_out & 0x80) == 0x00;
 }
 
 
 
-static ADDRESS_MAP_START(a600xl_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(a600xl_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x3fff) AM_RAM
 	AM_RANGE(0x5000, 0x57ff) AM_ROM AM_REGION("maincpu", 0x5000)	/* self test */
 	AM_RANGE(0x8000, 0xbfff) AM_ROM	/* game cartridge */
@@ -244,13 +274,13 @@ static ADDRESS_MAP_START(a600xl_mem, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE(0xd000, 0xd0ff) AM_READWRITE(atari_gtia_r, atari_gtia_w)
 	AM_RANGE(0xd100, 0xd1ff) AM_NOP
 	AM_RANGE(0xd200, 0xd2ff) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
-    AM_RANGE(0xd300, 0xd3ff) AM_DEVREADWRITE("pia", pia6821_alt_r, pia6821_alt_w)
+    AM_RANGE(0xd300, 0xd3ff) AM_DEVREADWRITE_MODERN("pia", pia6821_device, read_alt, write_alt)
 	AM_RANGE(0xd400, 0xd4ff) AM_READWRITE(atari_antic_r, atari_antic_w)
 	AM_RANGE(0xd500, 0xd7ff) AM_NOP
 	AM_RANGE(0xd800, 0xffff) AM_ROM /* OS */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_mem, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
 	AM_RANGE(0x0000, 0x0000) AM_READ( mcu_portA_r ) AM_WRITE( mcu_portA_w )
 	AM_RANGE(0x0001, 0x0001) AM_READ( mcu_portB_r ) AM_WRITE( mcu_portB_w )
@@ -268,8 +298,8 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( a600xl )
 
     PORT_START("console")  /* IN0 console keys & switch settings */
-	PORT_BIT(0x04, 0x04, IPT_KEYBOARD) PORT_NAME("Option") PORT_CODE(KEYCODE_F2)
-	PORT_BIT(0x02, 0x02, IPT_KEYBOARD) PORT_NAME("Select") PORT_CODE(KEYCODE_F1)
+	PORT_BIT(0x04, 0x04, IPT_KEYPAD) PORT_NAME("Option") PORT_CODE(KEYCODE_F2)
+	PORT_BIT(0x02, 0x02, IPT_KEYPAD) PORT_NAME("Select") PORT_CODE(KEYCODE_F1)
 	PORT_BIT(0x01, 0x01, IPT_START1 )
 
 	PORT_START("djoy_0_1")	/* IN1 digital joystick #1 + #2 (PIA port A) */
@@ -329,96 +359,6 @@ static INPUT_PORTS_START( a600xl )
 
 INPUT_PORTS_END
 
-static const rgb_t atari_palette[256] =
-{
-	/* Grey */
-    MAKE_RGB(0x00,0x00,0x00), MAKE_RGB(0x1c,0x1c,0x1c), MAKE_RGB(0x39,0x39,0x39), MAKE_RGB(0x59,0x59,0x59),
-	MAKE_RGB(0x79,0x79,0x79), MAKE_RGB(0x92,0x92,0x92), MAKE_RGB(0xab,0xab,0xab), MAKE_RGB(0xbc,0xbc,0xbc),
-	MAKE_RGB(0xcd,0xcd,0xcd), MAKE_RGB(0xd9,0xd9,0xd9), MAKE_RGB(0xe6,0xe6,0xe6), MAKE_RGB(0xec,0xec,0xec),
-	MAKE_RGB(0xf2,0xf2,0xf2), MAKE_RGB(0xf8,0xf8,0xf8), MAKE_RGB(0xff,0xff,0xff), MAKE_RGB(0xff,0xff,0xff),
-	/* Gold */
-    MAKE_RGB(0x39,0x17,0x01), MAKE_RGB(0x5e,0x23,0x04), MAKE_RGB(0x83,0x30,0x08), MAKE_RGB(0xa5,0x47,0x16),
-	MAKE_RGB(0xc8,0x5f,0x24), MAKE_RGB(0xe3,0x78,0x20), MAKE_RGB(0xff,0x91,0x1d), MAKE_RGB(0xff,0xab,0x1d),
-	MAKE_RGB(0xff,0xc5,0x1d), MAKE_RGB(0xff,0xce,0x34), MAKE_RGB(0xff,0xd8,0x4c), MAKE_RGB(0xff,0xe6,0x51),
-	MAKE_RGB(0xff,0xf4,0x56), MAKE_RGB(0xff,0xf9,0x77), MAKE_RGB(0xff,0xff,0x98), MAKE_RGB(0xff,0xff,0x98),
-	/* Orange */
-    MAKE_RGB(0x45,0x19,0x04), MAKE_RGB(0x72,0x1e,0x11), MAKE_RGB(0x9f,0x24,0x1e), MAKE_RGB(0xb3,0x3a,0x20),
-	MAKE_RGB(0xc8,0x51,0x22), MAKE_RGB(0xe3,0x69,0x20), MAKE_RGB(0xff,0x81,0x1e), MAKE_RGB(0xff,0x8c,0x25),
-	MAKE_RGB(0xff,0x98,0x2c), MAKE_RGB(0xff,0xae,0x38), MAKE_RGB(0xff,0xc5,0x45), MAKE_RGB(0xff,0xc5,0x59),
-	MAKE_RGB(0xff,0xc6,0x6d), MAKE_RGB(0xff,0xd5,0x87), MAKE_RGB(0xff,0xe4,0xa1), MAKE_RGB(0xff,0xe4,0xa1),
-	/* Red-Orange */
-    MAKE_RGB(0x4a,0x17,0x04), MAKE_RGB(0x7e,0x1a,0x0d), MAKE_RGB(0xb2,0x1d,0x17), MAKE_RGB(0xc8,0x21,0x19),
-	MAKE_RGB(0xdf,0x25,0x1c), MAKE_RGB(0xec,0x3b,0x38), MAKE_RGB(0xfa,0x52,0x55), MAKE_RGB(0xfc,0x61,0x61),
-	MAKE_RGB(0xff,0x70,0x6e), MAKE_RGB(0xff,0x7f,0x7e), MAKE_RGB(0xff,0x8f,0x8f), MAKE_RGB(0xff,0x9d,0x9e),
-	MAKE_RGB(0xff,0xab,0xad), MAKE_RGB(0xff,0xb9,0xbd), MAKE_RGB(0xff,0xc7,0xce), MAKE_RGB(0xff,0xc7,0xce),
-	/* Pink */
-    MAKE_RGB(0x05,0x05,0x68), MAKE_RGB(0x3b,0x13,0x6d), MAKE_RGB(0x71,0x22,0x72), MAKE_RGB(0x8b,0x2a,0x8c),
-	MAKE_RGB(0xa5,0x32,0xa6), MAKE_RGB(0xb9,0x38,0xba), MAKE_RGB(0xcd,0x3e,0xcf), MAKE_RGB(0xdb,0x47,0xdd),
-	MAKE_RGB(0xea,0x51,0xeb), MAKE_RGB(0xf4,0x5f,0xf5), MAKE_RGB(0xfe,0x6d,0xff), MAKE_RGB(0xfe,0x7a,0xfd),
-	MAKE_RGB(0xff,0x87,0xfb), MAKE_RGB(0xff,0x95,0xfd), MAKE_RGB(0xff,0xa4,0xff), MAKE_RGB(0xff,0xa4,0xff),
-	/* Purple */
-    MAKE_RGB(0x28,0x04,0x79), MAKE_RGB(0x40,0x09,0x84), MAKE_RGB(0x59,0x0f,0x90), MAKE_RGB(0x70,0x24,0x9d),
-	MAKE_RGB(0x88,0x39,0xaa), MAKE_RGB(0xa4,0x41,0xc3), MAKE_RGB(0xc0,0x4a,0xdc), MAKE_RGB(0xd0,0x54,0xed),
-	MAKE_RGB(0xe0,0x5e,0xff), MAKE_RGB(0xe9,0x6d,0xff), MAKE_RGB(0xf2,0x7c,0xff), MAKE_RGB(0xf8,0x8a,0xff),
-	MAKE_RGB(0xff,0x98,0xff), MAKE_RGB(0xfe,0xa1,0xff), MAKE_RGB(0xfe,0xab,0xff), MAKE_RGB(0xfe,0xab,0xff),
-	/* Purple-Blue */
-    MAKE_RGB(0x35,0x08,0x8a), MAKE_RGB(0x42,0x0a,0xad), MAKE_RGB(0x50,0x0c,0xd0), MAKE_RGB(0x64,0x28,0xd0),
-	MAKE_RGB(0x79,0x45,0xd0), MAKE_RGB(0x8d,0x4b,0xd4), MAKE_RGB(0xa2,0x51,0xd9), MAKE_RGB(0xb0,0x58,0xec),
-	MAKE_RGB(0xbe,0x60,0xff), MAKE_RGB(0xc5,0x6b,0xff), MAKE_RGB(0xcc,0x77,0xff), MAKE_RGB(0xd1,0x83,0xff),
-	MAKE_RGB(0xd7,0x90,0xff), MAKE_RGB(0xdb,0x9d,0xff), MAKE_RGB(0xdf,0xaa,0xff), MAKE_RGB(0xdf,0xaa,0xff),
-	/* Blue 1 */
-    MAKE_RGB(0x05,0x1e,0x81), MAKE_RGB(0x06,0x26,0xa5), MAKE_RGB(0x08,0x2f,0xca), MAKE_RGB(0x26,0x3d,0xd4),
-	MAKE_RGB(0x44,0x4c,0xde), MAKE_RGB(0x4f,0x5a,0xee), MAKE_RGB(0x5a,0x68,0xff), MAKE_RGB(0x65,0x75,0xff),
-	MAKE_RGB(0x71,0x83,0xff), MAKE_RGB(0x80,0x91,0xff), MAKE_RGB(0x90,0xa0,0xff), MAKE_RGB(0x97,0xa9,0xff),
-	MAKE_RGB(0x9f,0xb2,0xff), MAKE_RGB(0xaf,0xbe,0xff), MAKE_RGB(0xc0,0xcb,0xff), MAKE_RGB(0xc0,0xcb,0xff),
-	/* Blue 2 */
-    MAKE_RGB(0x0c,0x04,0x8b), MAKE_RGB(0x22,0x18,0xa0), MAKE_RGB(0x38,0x2d,0xb5), MAKE_RGB(0x48,0x3e,0xc7),
-	MAKE_RGB(0x58,0x4f,0xda), MAKE_RGB(0x61,0x59,0xec), MAKE_RGB(0x6b,0x64,0xff), MAKE_RGB(0x7a,0x74,0xff),
-	MAKE_RGB(0x8a,0x84,0xff), MAKE_RGB(0x91,0x8e,0xff), MAKE_RGB(0x99,0x98,0xff), MAKE_RGB(0xa5,0xa3,0xff),
-	MAKE_RGB(0xb1,0xae,0xff), MAKE_RGB(0xb8,0xb8,0xff), MAKE_RGB(0xc0,0xc2,0xff), MAKE_RGB(0xc0,0xc2,0xff),
-	/* Light-Blue */
-    MAKE_RGB(0x1d,0x29,0x5a), MAKE_RGB(0x1d,0x38,0x76), MAKE_RGB(0x1d,0x48,0x92), MAKE_RGB(0x1c,0x5c,0xac),
-	MAKE_RGB(0x1c,0x71,0xc6), MAKE_RGB(0x32,0x86,0xcf), MAKE_RGB(0x48,0x9b,0xd9), MAKE_RGB(0x4e,0xa8,0xec),
-	MAKE_RGB(0x55,0xb6,0xff), MAKE_RGB(0x70,0xc7,0xff), MAKE_RGB(0x8c,0xd8,0xff), MAKE_RGB(0x93,0xdb,0xff),
-	MAKE_RGB(0x9b,0xdf,0xff), MAKE_RGB(0xaf,0xe4,0xff), MAKE_RGB(0xc3,0xe9,0xff), MAKE_RGB(0xc3,0xe9,0xff),
-	/* Turquoise */
-    MAKE_RGB(0x2f,0x43,0x02), MAKE_RGB(0x39,0x52,0x02), MAKE_RGB(0x44,0x61,0x03), MAKE_RGB(0x41,0x7a,0x12),
-	MAKE_RGB(0x3e,0x94,0x21), MAKE_RGB(0x4a,0x9f,0x2e), MAKE_RGB(0x57,0xab,0x3b), MAKE_RGB(0x5c,0xbd,0x55),
-	MAKE_RGB(0x61,0xd0,0x70), MAKE_RGB(0x69,0xe2,0x7a), MAKE_RGB(0x72,0xf5,0x84), MAKE_RGB(0x7c,0xfa,0x8d),
-	MAKE_RGB(0x87,0xff,0x97), MAKE_RGB(0x9a,0xff,0xa6), MAKE_RGB(0xad,0xff,0xb6), MAKE_RGB(0xad,0xff,0xb6),
-	/* Green-Blue */
-    MAKE_RGB(0x0a,0x41,0x08), MAKE_RGB(0x0d,0x54,0x0a), MAKE_RGB(0x10,0x68,0x0d), MAKE_RGB(0x13,0x7d,0x0f),
-    MAKE_RGB(0x16,0x92,0x12), MAKE_RGB(0x19,0xa5,0x14), MAKE_RGB(0x1c,0xb9,0x17), MAKE_RGB(0x1e,0xc9,0x19),
-	MAKE_RGB(0x21,0xd9,0x1b), MAKE_RGB(0x47,0xe4,0x2d), MAKE_RGB(0x6e,0xf0,0x40), MAKE_RGB(0x78,0xf7,0x4d),
-	MAKE_RGB(0x83,0xff,0x5b), MAKE_RGB(0x9a,0xff,0x7a), MAKE_RGB(0xb2,0xff,0x9a), MAKE_RGB(0xb2,0xff,0x9a),
-	/* Green */
-    MAKE_RGB(0x04,0x41,0x0b), MAKE_RGB(0x05,0x53,0x0e), MAKE_RGB(0x06,0x66,0x11), MAKE_RGB(0x07,0x77,0x14),
-	MAKE_RGB(0x08,0x88,0x17), MAKE_RGB(0x09,0x9b,0x1a), MAKE_RGB(0x0b,0xaf,0x1d), MAKE_RGB(0x48,0xc4,0x1f),
-	MAKE_RGB(0x86,0xd9,0x22), MAKE_RGB(0x8f,0xe9,0x24), MAKE_RGB(0x99,0xf9,0x27), MAKE_RGB(0xa8,0xfc,0x41),
-	MAKE_RGB(0xb7,0xff,0x5b), MAKE_RGB(0xc9,0xff,0x6e), MAKE_RGB(0xdc,0xff,0x81), MAKE_RGB(0xdc,0xff,0x81),
-	/* Yellow-Green */
-    MAKE_RGB(0x02,0x35,0x0f), MAKE_RGB(0x07,0x3f,0x15), MAKE_RGB(0x0c,0x4a,0x1c), MAKE_RGB(0x2d,0x5f,0x1e),
-	MAKE_RGB(0x4f,0x74,0x20), MAKE_RGB(0x59,0x83,0x24), MAKE_RGB(0x64,0x92,0x28), MAKE_RGB(0x82,0xa1,0x2e),
-	MAKE_RGB(0xa1,0xb0,0x34), MAKE_RGB(0xa9,0xc1,0x3a), MAKE_RGB(0xb2,0xd2,0x41), MAKE_RGB(0xc4,0xd9,0x45),
-	MAKE_RGB(0xd6,0xe1,0x49), MAKE_RGB(0xe4,0xf0,0x4e), MAKE_RGB(0xf2,0xff,0x53), MAKE_RGB(0xf2,0xff,0x53),
-	/* Orange-Green */
-    MAKE_RGB(0x26,0x30,0x01), MAKE_RGB(0x24,0x38,0x03), MAKE_RGB(0x23,0x40,0x05), MAKE_RGB(0x51,0x54,0x1b),
-	MAKE_RGB(0x80,0x69,0x31), MAKE_RGB(0x97,0x81,0x35), MAKE_RGB(0xaf,0x99,0x3a), MAKE_RGB(0xc2,0xa7,0x3e),
-	MAKE_RGB(0xd5,0xb5,0x43), MAKE_RGB(0xdb,0xc0,0x3d), MAKE_RGB(0xe1,0xcb,0x38), MAKE_RGB(0xe2,0xd8,0x36),
-	MAKE_RGB(0xe3,0xe5,0x34), MAKE_RGB(0xef,0xf2,0x58), MAKE_RGB(0xfb,0xff,0x7d), MAKE_RGB(0xfb,0xff,0x7d),
-	/* Light-Orange */
-    MAKE_RGB(0x40,0x1a,0x02), MAKE_RGB(0x58,0x1f,0x05), MAKE_RGB(0x70,0x24,0x08), MAKE_RGB(0x8d,0x3a,0x13),
-	MAKE_RGB(0xab,0x51,0x1f), MAKE_RGB(0xb5,0x64,0x27), MAKE_RGB(0xbf,0x77,0x30), MAKE_RGB(0xd0,0x85,0x3a),
-	MAKE_RGB(0xe1,0x93,0x44), MAKE_RGB(0xed,0xa0,0x4e), MAKE_RGB(0xf9,0xad,0x58), MAKE_RGB(0xfc,0xb7,0x5c),
-	MAKE_RGB(0xff,0xc1,0x60), MAKE_RGB(0xff,0xc6,0x71), MAKE_RGB(0xff,0xcb,0x83), MAKE_RGB(0xff,0xcb,0x83)
-};
-
-/* Initialise the palette */
-static PALETTE_INIT( atari )
-{
-	palette_set_colors(machine, 0, atari_palette, ARRAY_LENGTH(atari_palette));
-}
-
 
 static const pokey_interface pokey_config = {
 	{ DEVCB_NULL },
@@ -427,49 +367,77 @@ static const pokey_interface pokey_config = {
 	atari_interrupt_cb
 };
 
-static MACHINE_DRIVER_START( a600xl )
+READ8_DEVICE_HANDLER(maxaflex_atari_pia_pa_r)
+{
+	return atari_input_disabled(device->machine()) ? 0xFF : input_port_read_safe(device->machine(), "djoy_0_1", 0);
+}
+
+READ8_DEVICE_HANDLER(maxaflex_atari_pia_pb_r)
+{
+	return atari_input_disabled(device->machine()) ? 0xFF : input_port_read_safe(device->machine(), "djoy_2_3", 0);
+}
+
+
+const pia6821_interface maxaflex_atarixl_pia_interface =
+{
+	DEVCB_HANDLER(maxaflex_atari_pia_pa_r),		/* port A in */
+	DEVCB_HANDLER(maxaflex_atari_pia_pb_r),	/* port B in */
+	DEVCB_NULL,		/* line CA1 in */
+	DEVCB_NULL,		/* line CB1 in */
+	DEVCB_NULL,		/* line CA2 in */
+	DEVCB_NULL,		/* line CB2 in */
+	DEVCB_NULL,		/* port A out */
+	DEVCB_HANDLER(a600xl_pia_pb_w),		/* port B out */
+	DEVCB_NULL,		/* line CA2 out */
+	DEVCB_LINE(atari_pia_cb2_w),		/* port CB2 out */
+	DEVCB_NULL,		/* IRQA */
+	DEVCB_NULL		/* IRQB */
+};
+
+
+
+static MACHINE_CONFIG_START( a600xl, maxaflex_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, FREQ_17_EXACT)
-	MDRV_CPU_PROGRAM_MAP(a600xl_mem)
-	MDRV_CPU_VBLANK_INT_HACK(a800xl_interrupt, TOTAL_LINES_60HZ)
+	MCFG_CPU_ADD("maincpu", M6502, FREQ_17_EXACT)
+	MCFG_CPU_PROGRAM_MAP(a600xl_mem)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", a800xl_interrupt, "screen", 0, 1)
 
-	MDRV_CPU_ADD("mcu", M68705, 3579545)
-	MDRV_CPU_PROGRAM_MAP(mcu_mem)
+	MCFG_CPU_ADD("mcu", M68705, 3579545)
+	MCFG_CPU_PROGRAM_MAP(mcu_mem)
 
-	MDRV_PIA6821_ADD("pia", atarixl_pia_interface)
+	MCFG_PIA6821_ADD("pia", maxaflex_atarixl_pia_interface)
+	MCFG_TIMER_ADD("mcu_timer", mcu_timer_proc)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_VISIBLE_AREA(MIN_X, MAX_X, MIN_Y, MAX_Y)
-	MDRV_SCREEN_REFRESH_RATE(FRAME_RATE_60HZ)
-	MDRV_SCREEN_SIZE(HWIDTH*8, TOTAL_LINES_60HZ)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_VISIBLE_AREA(MIN_X, MAX_X, MIN_Y, MAX_Y)
+	MCFG_SCREEN_REFRESH_RATE(FRAME_RATE_60HZ)
+	MCFG_SCREEN_SIZE(HWIDTH*8, TOTAL_LINES_60HZ)
+	MCFG_SCREEN_UPDATE_STATIC(atari)
 
-	MDRV_PALETTE_LENGTH(ARRAY_LENGTH(atari_palette))
-	MDRV_PALETTE_INIT(atari)
-	MDRV_DEFAULT_LAYOUT(layout_maxaflex)
+	MCFG_PALETTE_LENGTH(256)
+	MCFG_PALETTE_INIT(atari)
+	MCFG_DEFAULT_LAYOUT(layout_maxaflex)
 
-	MDRV_VIDEO_START(atari)
-	MDRV_VIDEO_UPDATE(atari)
+	MCFG_VIDEO_START(atari)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey", POKEY, FREQ_17_EXACT)
-	MDRV_SOUND_CONFIG(pokey_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("pokey", POKEY, FREQ_17_EXACT)
+	MCFG_SOUND_CONFIG(pokey_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("speaker", SPEAKER, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("speaker", SPEAKER_SOUND, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_MACHINE_START( atarixl )
-MACHINE_DRIVER_END
+	MCFG_MACHINE_START( atarixl )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( maxaflex )
-	MDRV_IMPORT_FROM( a600xl )
-	MDRV_MACHINE_RESET( supervisor_board )
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( maxaflex, a600xl )
+	MCFG_MACHINE_RESET( supervisor_board )
+MACHINE_CONFIG_END
 
 ROM_START(maxaflex)
 	ROM_REGION(0x10000,"maincpu",0) /* 64K for the CPU */
@@ -533,7 +501,7 @@ ROM_END
 
 static DRIVER_INIT( a600xl )
 {
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 	memcpy( rom + 0x5000, rom + 0xd000, 0x800 );
 }
 

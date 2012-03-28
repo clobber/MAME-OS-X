@@ -197,24 +197,14 @@ the entire size of the screen.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2608intf.h"
 #include "sound/2610intf.h"
+#include "includes/bbusters.h"
+#include "machine/nvram.h"
 
-
-VIDEO_START( bbuster );
-VIDEO_START( mechatt );
-VIDEO_UPDATE( bbuster );
-VIDEO_UPDATE( mechatt );
-
-static UINT16 *bbusters_ram, *eprom_data;
-extern UINT16 *bbusters_pf1_data,*bbusters_pf2_data,*bbusters_pf1_scroll_data,*bbusters_pf2_scroll_data;
-
-WRITE16_HANDLER( bbusters_pf1_w );
-WRITE16_HANDLER( bbusters_pf2_w );
-WRITE16_HANDLER( bbusters_video_w );
 
 /******************************************************************************/
 
@@ -247,16 +237,18 @@ Country :
 
 /******************************************************************************/
 
-static int sound_status;
-
 static READ16_HANDLER( sound_status_r )
 {
-	return sound_status;
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
+
+	return state->m_sound_status;
 }
 
 static WRITE8_HANDLER( sound_status_w )
 {
-	sound_status = data;
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
+
+	state->m_sound_status = data;
 }
 
 static WRITE16_HANDLER( sound_cpu_w )
@@ -264,23 +256,24 @@ static WRITE16_HANDLER( sound_cpu_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data&0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 /* Eprom is byte wide, top half of word _must_ be 0xff */
 static READ16_HANDLER( eprom_r )
 {
-	return (eprom_data[offset]&0xff) | 0xff00;
-}
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 
-static int gun_select;
+	return (state->m_eprom_data[offset]&0xff) | 0xff00;
+}
 
 static READ16_HANDLER( control_3_r )
 {
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 	static const char *const port[] = { "GUNX1", "GUNY1", "GUNX2", "GUNY2", "GUNX3", "GUNY3" };
 
-	UINT16 retdata =  input_port_read(space->machine, port[gun_select]);
+	UINT16 retdata = input_port_read(space->machine(), port[state->m_gun_select]);
 
 	retdata >>=1; // by lowering the precision of the gun reading hardware the game seems to work better
 
@@ -289,27 +282,40 @@ static READ16_HANDLER( control_3_r )
 
 static WRITE16_HANDLER( gun_select_w )
 {
-	logerror("%08x: gun r\n",cpu_get_pc(space->cpu));
+	bbusters_state *state = space->machine().driver_data<bbusters_state>();
 
-	cpu_set_input_line(space->cpu, 2, HOLD_LINE);
+	logerror("%08x: gun r\n",cpu_get_pc(&space->device()));
 
+	device_set_input_line(&space->device(), 2, HOLD_LINE);
 
-	gun_select = data & 0xff;
+	state->m_gun_select = data & 0xff;
+}
+
+static WRITE16_HANDLER( two_gun_output_w )
+{
+	output_set_value("Player1_Gun_Recoil",(data & 0x01));
+	output_set_value("Player2_Gun_Recoil",(data & 0x02)>>1);
+}
+
+static WRITE16_HANDLER( three_gun_output_w )
+{
+	output_set_value("Player1_Gun_Recoil",(data & 0x01));
+	output_set_value("Player2_Gun_Recoil",(data & 0x02)>>1);
+	output_set_value("Player3_Gun_Recoil",(data & 0x04)>>2);
 }
 
 static READ16_HANDLER( kludge_r )
 {
 	// might latch the gun value?
 	return 0x0000;
-
 }
 
 static READ16_HANDLER( mechatt_gun_r )
 {
 	int x, y;
 
-	x = input_port_read(space->machine, offset ? "GUNX2" : "GUNX1");
-	y = input_port_read(space->machine, offset ? "GUNY2" : "GUNY1");
+	x = input_port_read(space->machine(), offset ? "GUNX2" : "GUNX1");
+	y = input_port_read(space->machine(), offset ? "GUNY2" : "GUNY1");
 
 	/* Todo - does the hardware really clamp like this? */
 	x += 0x18;
@@ -321,20 +327,20 @@ static READ16_HANDLER( mechatt_gun_r )
 
 /*******************************************************************************/
 
-static ADDRESS_MAP_START( bbusters_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bbusters_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE(&bbusters_ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE(&videoram16)
-	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, m_ram)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, m_videoram)
+	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_RAM		/* service mode */
-	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size)
+	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0x0a9000, 0x0affff) AM_RAM		/* service mode */
-	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE(&bbusters_pf1_data)
-	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE(&bbusters_pf2_data)
+	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, m_pf1_data)
+	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, m_pf2_data)
 	AM_RANGE(0x0b4000, 0x0b5fff) AM_RAM		/* service mode */
-	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE(&bbusters_pf1_scroll_data)
-	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE(&bbusters_pf2_scroll_data)
-	AM_RANGE(0x0d0000, 0x0d0fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf1_scroll_data)
+	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf2_scroll_data)
+	AM_RANGE(0x0d0000, 0x0d0fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("COINS")	/* Coins */
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("IN0")	/* Player 1 & 2 */
 	AM_RANGE(0x0e0004, 0x0e0005) AM_READ_PORT("IN1")	/* Player 3 */
@@ -343,48 +349,50 @@ static ADDRESS_MAP_START( bbusters_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0e0018, 0x0e0019) AM_READ(sound_status_r)
 	AM_RANGE(0x0e8000, 0x0e8001) AM_READWRITE(kludge_r, gun_select_w)
 	AM_RANGE(0x0e8002, 0x0e8003) AM_READ(control_3_r)
-	AM_RANGE(0x0f0008, 0x0f0009) AM_WRITENOP
+	/* AM_RANGE(0x0f0008, 0x0f0009) AM_WRITENOP */
+	AM_RANGE(0x0f0008, 0x0f0009) AM_WRITE(three_gun_output_w)
 	AM_RANGE(0x0f0018, 0x0f0019) AM_WRITE(sound_cpu_w)
-	AM_RANGE(0x0f8000, 0x0f80ff) AM_READ(eprom_r) AM_WRITEONLY AM_BASE(&eprom_data) /* Eeprom */
+	AM_RANGE(0x0f8000, 0x0f80ff) AM_READ(eprom_r) AM_WRITEONLY AM_SHARE("eeprom") /* Eeprom */
 ADDRESS_MAP_END
 
 /*******************************************************************************/
 
-static ADDRESS_MAP_START( mechatt_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( mechatt_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x06ffff) AM_ROM
-	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE(&bbusters_ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE(&videoram16)
-	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, m_ram)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, m_videoram)
+	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_WRITENOP
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE(&bbusters_pf1_data)
-	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE(&bbusters_pf1_scroll_data)
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE(&bbusters_pf2_data)
-	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE(&bbusters_pf2_scroll_data)
-	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, m_pf1_data)
+	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf1_scroll_data)
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, m_pf2_data)
+	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, m_pf2_scroll_data)
+	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("IN0")
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0e0004, 0x0e0007) AM_READ(mechatt_gun_r)
-	AM_RANGE(0x0e4002, 0x0e4003) AM_WRITENOP /* Gun force feedback? */
+	/* AM_RANGE(0x0e4002, 0x0e4003) AM_WRITENOP  Gun force feedback? */
+	AM_RANGE(0x0e4002, 0x0e4003) AM_WRITE(two_gun_output_w)
 	AM_RANGE(0x0e8000, 0x0e8001) AM_READWRITE(sound_status_r, sound_cpu_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf800) AM_READWRITE(soundlatch_r, sound_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xc0, 0xc1) AM_WRITENOP /* -> Main CPU */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sounda_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sounda_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym2608_r, ym2608_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2608_r, ym2608_w)
 	AM_RANGE(0xc0, 0xc1) AM_WRITENOP /* -> Main CPU */
 ADDRESS_MAP_END
 
@@ -634,9 +642,9 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq( const device_config *device, int irq )
+static void sound_irq( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2608_interface ym2608_config =
@@ -656,129 +664,103 @@ static const ym2610_interface ym2610_config =
 
 /******************************************************************************/
 
-// default eeprom with reasonable calibration for MAME
-static const unsigned char bbusters_default_eeprom[128] = {
-	                                    /*y*/                   /*y*/
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0xEE, 0x00,
-	0x00, 0x00, 0x00, 0x00,	0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0xFE, 0x00,
-	                                    /*y*/                   /*y*/
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00,	0x00, 0x00, 0xEE, 0x00,
-	0x00, 0x00, 0x00, 0x00,	0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0xFE, 0x00,
-	                                    /*y*/                   /*y*/
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00,	0x00, 0x00, 0xEE, 0x00,
-	0x00, 0x00, 0x00, 0x00,	0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0xFE, 0x00,
-
-
-	0x42, 0x00, 0x45, 0x00, 0x41, 0x00, 0x53, 0x00,	0x54, 0x00, 0x20, 0x00,
-	0x42, 0x00, 0x55, 0x00, 0x53, 0x00, 0x54, 0x00, 0x45, 0x00, 0x52, 0x00,
-	0x53, 0x00, 0x20, 0x00, 0x54, 0x00, 0x4D, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-};
-
-
-static NVRAM_HANDLER( bbusters )
+static SCREEN_VBLANK( bbuster )
 {
-	if( read_or_write ) {
-		mame_fwrite (file, eprom_data, 0x80);
-	}
-	else {
-		if (file)
-			mame_fread (file, eprom_data, 0x80);
-		else
-			memcpy(eprom_data, bbusters_default_eeprom, 0x80);
+	// rising edge
+	if (vblank_on)
+	{
+		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
+
+		buffer_spriteram16_w(space,0,0,0xffff);
+		buffer_spriteram16_2_w(space,0,0,0xffff);
 	}
 }
 
-static VIDEO_EOF( bbuster )
+static SCREEN_VBLANK( mechatt )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-
-	buffer_spriteram16_w(space,0,0,0xffff);
-	buffer_spriteram16_2_w(space,0,0,0xffff);
+	// rising edge
+	if (vblank_on)
+	{
+		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
+		buffer_spriteram16_w(space,0,0,0xffff);
+	}
 }
 
-static VIDEO_EOF( mechatt )
-{
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	buffer_spriteram16_w(space,0,0,0xffff);
-}
-
-static MACHINE_DRIVER_START( bbusters )
+static MACHINE_CONFIG_START( bbusters, bbusters_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(bbusters_map)
-	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 12000000)
+	MCFG_CPU_PROGRAM_MAP(bbusters_map)
+	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80,4000000) /* Accurate */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sound_portmap)
+	MCFG_CPU_ADD("audiocpu", Z80,4000000) /* Accurate */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sound_portmap)
 
-	MDRV_NVRAM_HANDLER(bbusters)
+	MCFG_NVRAM_ADD_0FILL("eeprom")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MDRV_GFXDECODE(bbusters)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(bbuster)
+	MCFG_SCREEN_VBLANK_STATIC(bbuster)
 
-	MDRV_VIDEO_START(bbuster)
-	MDRV_VIDEO_UPDATE(bbuster)
-	MDRV_VIDEO_EOF(bbuster)
+	MCFG_GFXDECODE(bbusters)
+	MCFG_PALETTE_LENGTH(2048)
+
+	MCFG_VIDEO_START(bbuster)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
-	MDRV_SOUND_CONFIG(ym2610_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker",  1.0)
-	MDRV_SOUND_ROUTE(0, "rspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
-	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2610, 8000000)
+	MCFG_SOUND_CONFIG(ym2610_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker",  1.0)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "lspeaker",  1.0)
+	MCFG_SOUND_ROUTE(2, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mechatt )
+static MACHINE_CONFIG_START( mechatt, bbusters_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(mechatt_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 12000000)
+	MCFG_CPU_PROGRAM_MAP(mechatt_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80,4000000) /* Accurate */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sounda_portmap)
+	MCFG_CPU_ADD("audiocpu", Z80,4000000) /* Accurate */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sounda_portmap)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MDRV_GFXDECODE(mechatt)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(mechatt)
+	MCFG_SCREEN_VBLANK_STATIC(mechatt)
 
-	MDRV_VIDEO_START(mechatt)
-	MDRV_VIDEO_UPDATE(mechatt)
-	MDRV_VIDEO_EOF(mechatt)
+	MCFG_GFXDECODE(mechatt)
+	MCFG_PALETTE_LENGTH(1024)
+
+	MCFG_VIDEO_START(mechatt)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2608, 8000000)
-	MDRV_SOUND_CONFIG(ym2608_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker",  0.50)
-	MDRV_SOUND_ROUTE(0, "rspeaker", 0.50)
-	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
-	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2608, 8000000)
+	MCFG_SOUND_CONFIG(ym2608_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker",  0.50)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 0.50)
+	MCFG_SOUND_ROUTE(1, "lspeaker",  1.0)
+	MCFG_SOUND_ROUTE(2, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 
@@ -820,11 +802,14 @@ ROM_START( bbusters )
 	ROM_LOAD( "bb-8.a14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 	ROM_LOAD( "bb-9.c14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "bb-pcmb.l3",  0x000000, 0x80000, CRC(c8d5dd53) SHA1(0f7e94532cc14852ca12c1b792e5479667af899e) )
+
+	ROM_REGION( 0x100, "eeprom", 0 )
+	ROM_LOAD( "bbusters-eeprom.bin", 0x00, 0x100, CRC(a52ebd66) SHA1(de04db6f1510700c61bf152799452a80220ae87c) )
 ROM_END
 
 ROM_START( bbustersu )
@@ -865,11 +850,14 @@ ROM_START( bbustersu )
 	ROM_LOAD( "bb-8.a14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 	ROM_LOAD( "bb-9.c14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
+
+	ROM_REGION( 0x100, "eeprom", 0 )
+	ROM_LOAD( "bbusters-eeprom.bin", 0x00, 0x100, CRC(a52ebd66) SHA1(de04db6f1510700c61bf152799452a80220ae87c) )
 ROM_END
 
 
@@ -901,7 +889,7 @@ ROM_START( mechatt )
 	ROM_REGION( 0x80000, "gfx5", 0 )
 	ROM_LOAD( "mab289c2.bin",  0x000000, 0x80000, CRC(14f97ceb) SHA1(a22033532ea616dc3a3db8b66ad6ccc6172ed7cc) )
 
-	ROM_REGION( 0x20000, "ym", 0 )
+	ROM_REGION( 0x20000, "ymsnd", 0 )
 	ROM_LOAD( "ma2.bin",       0x000000, 0x20000, CRC(ea4cc30d) SHA1(d8f089fc0ce76309411706a8110ad907f93dc97e) )
 
 	ROM_REGION( 0x20000, "user1", 0 ) /* Zoom table */
@@ -938,7 +926,7 @@ ROM_START( mechattu )
 	ROM_REGION( 0x80000, "gfx5", 0 )
 	ROM_LOAD( "mab289c2.bin",  0x000000, 0x80000, CRC(14f97ceb) SHA1(a22033532ea616dc3a3db8b66ad6ccc6172ed7cc) )
 
-	ROM_REGION( 0x20000, "ym", 0 )
+	ROM_REGION( 0x20000, "ymsnd", 0 )
 	ROM_LOAD( "ma2.bin",       0x000000, 0x20000, CRC(ea4cc30d) SHA1(d8f089fc0ce76309411706a8110ad907f93dc97e) )
 
 	ROM_REGION( 0x20000, "user1", 0 ) /* Zoom table */

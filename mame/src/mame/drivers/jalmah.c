@@ -3,7 +3,7 @@
 MJ-8956 HW games (c) 1989 Jaleco / NMK / UPL
 
 driver by Angelo Salese, based on early work by David Haywood
-Special thanks to Uki and Yasu for the priority system explaination.
+Special thanks to Uki and Yasu for the priority system explanation.
 
 Similar to the NMK16 / Jaleco Mega System 1 boards but without sprites.
 
@@ -109,23 +109,62 @@ OSC:    12.000MHz
 
 *******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
+
+
+class jalmah_state : public driver_device
+{
+public:
+	jalmah_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	tilemap_t *m_sc0_tilemap_0;
+	tilemap_t *m_sc0_tilemap_1;
+	tilemap_t *m_sc0_tilemap_2;
+	tilemap_t *m_sc0_tilemap_3;
+	tilemap_t *m_sc1_tilemap_0;
+	tilemap_t *m_sc1_tilemap_1;
+	tilemap_t *m_sc1_tilemap_2;
+	tilemap_t *m_sc1_tilemap_3;
+	tilemap_t *m_sc2_tilemap_0;
+	tilemap_t *m_sc2_tilemap_1;
+	tilemap_t *m_sc2_tilemap_2;
+	tilemap_t *m_sc2_tilemap_3;
+	tilemap_t *m_sc3_tilemap_0;
+	tilemap_t *m_sc3_tilemap_2;
+	tilemap_t *m_sc3_tilemap_3;
+	UINT16 *m_sc0_vram;
+	UINT16 *m_sc1_vram;
+	UINT16 *m_sc2_vram;
+	UINT16 *m_sc3_vram;
+	UINT16 *m_jm_scrollram;
+	UINT16 *m_jm_vregs;
+	UINT16 m_sc0bank;
+	UINT16 m_pri;
+	UINT8 m_sc0_prin;
+	UINT8 m_sc1_prin;
+	UINT8 m_sc2_prin;
+	UINT8 m_sc3_prin;
+	UINT16 *m_jm_shared_ram;
+	UINT16 *m_jm_mcu_code;
+	UINT8 m_mcu_prg;
+	int m_respcount;
+	UINT8 m_test_mode;
+	UINT16 m_dma_old;
+	UINT16 m_prg_prot;
+	UINT8 m_oki_rom;
+	UINT8 m_oki_bank;
+	UINT8 m_oki_za;
+};
+
 
 /******************************************************************************************
 
 Video Hardware start
 
 ******************************************************************************************/
-
-static tilemap *sc3_tilemap_0,*sc3_tilemap_2,*sc3_tilemap_3,
-			   *sc0_tilemap_0,*sc0_tilemap_1,*sc0_tilemap_2,*sc0_tilemap_3,
-   			   *sc1_tilemap_0,*sc1_tilemap_1,*sc1_tilemap_2,*sc1_tilemap_3,
-			   *sc2_tilemap_0,*sc2_tilemap_1,*sc2_tilemap_2,*sc2_tilemap_3;
-static UINT16 *sc3_vram,*sc0_vram,*sc1_vram,*sc2_vram;
-static UINT16 *jm_scrollram,*jm_vregs;
-static UINT16 sc0bank,pri;
 
 /*4096x512 tilemap*/
 static TILEMAP_MAPPER( range0_16x16 )
@@ -171,17 +210,19 @@ static TILEMAP_MAPPER( range3_8x8 )
 
 static TILE_GET_INFO( get_sc0_tile_info )
 {
-	int code = sc0_vram[tile_index];
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	int code = state->m_sc0_vram[tile_index];
 	SET_TILE_INFO(
 			3,
-			(code & 0xfff) + ((sc0bank & 3) << 12),
+			(code & 0xfff) + ((state->m_sc0bank & 3) << 12),
 			code >> 12,
 			0);
 }
 
 static TILE_GET_INFO( get_sc1_tile_info )
 {
-	int code = sc1_vram[tile_index];
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	int code = state->m_sc1_vram[tile_index];
 	SET_TILE_INFO(
 			2,
 			code & 0xfff,
@@ -191,7 +232,8 @@ static TILE_GET_INFO( get_sc1_tile_info )
 
 static TILE_GET_INFO( get_sc2_tile_info )
 {
-	int code = sc2_vram[tile_index];
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	int code = state->m_sc2_vram[tile_index];
 	SET_TILE_INFO(
 			1,
 			code & 0xfff,
@@ -201,7 +243,8 @@ static TILE_GET_INFO( get_sc2_tile_info )
 
 static TILE_GET_INFO( get_sc3_tile_info )
 {
-	int code = sc3_vram[tile_index];
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	int code = state->m_sc3_vram[tile_index];
 	SET_TILE_INFO(
 			0,
 			code & 0xfff,
@@ -211,62 +254,64 @@ static TILE_GET_INFO( get_sc3_tile_info )
 
 static VIDEO_START( jalmah )
 {
-	sc0_tilemap_0 = tilemap_create(machine, get_sc0_tile_info,range0_16x16,16,16,256,32);
-	sc0_tilemap_1 = tilemap_create(machine, get_sc0_tile_info,range1_16x16,16,16,128,64);
-	sc0_tilemap_2 = tilemap_create(machine, get_sc0_tile_info,range2_16x16,16,16,64,128);
-	sc0_tilemap_3 = tilemap_create(machine, get_sc0_tile_info,range3_16x16,16,16,32,256);
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	state->m_sc0_tilemap_0 = tilemap_create(machine, get_sc0_tile_info,range0_16x16,16,16,256,32);
+	state->m_sc0_tilemap_1 = tilemap_create(machine, get_sc0_tile_info,range1_16x16,16,16,128,64);
+	state->m_sc0_tilemap_2 = tilemap_create(machine, get_sc0_tile_info,range2_16x16,16,16,64,128);
+	state->m_sc0_tilemap_3 = tilemap_create(machine, get_sc0_tile_info,range3_16x16,16,16,32,256);
 
-	sc1_tilemap_0 = tilemap_create(machine, get_sc1_tile_info,range0_16x16,16,16,256,32);
-	sc1_tilemap_1 = tilemap_create(machine, get_sc1_tile_info,range1_16x16,16,16,128,64);
-	sc1_tilemap_2 = tilemap_create(machine, get_sc1_tile_info,range2_16x16,16,16,64,128);
-	sc1_tilemap_3 = tilemap_create(machine, get_sc1_tile_info,range3_16x16,16,16,32,256);
+	state->m_sc1_tilemap_0 = tilemap_create(machine, get_sc1_tile_info,range0_16x16,16,16,256,32);
+	state->m_sc1_tilemap_1 = tilemap_create(machine, get_sc1_tile_info,range1_16x16,16,16,128,64);
+	state->m_sc1_tilemap_2 = tilemap_create(machine, get_sc1_tile_info,range2_16x16,16,16,64,128);
+	state->m_sc1_tilemap_3 = tilemap_create(machine, get_sc1_tile_info,range3_16x16,16,16,32,256);
 
-	sc2_tilemap_0 = tilemap_create(machine, get_sc2_tile_info,range0_16x16,16,16,256,32);
-	sc2_tilemap_1 = tilemap_create(machine, get_sc2_tile_info,range1_16x16,16,16,128,64);
-	sc2_tilemap_2 = tilemap_create(machine, get_sc2_tile_info,range2_16x16,16,16,64,128);
-	sc2_tilemap_3 = tilemap_create(machine, get_sc2_tile_info,range3_16x16,16,16,32,256);
+	state->m_sc2_tilemap_0 = tilemap_create(machine, get_sc2_tile_info,range0_16x16,16,16,256,32);
+	state->m_sc2_tilemap_1 = tilemap_create(machine, get_sc2_tile_info,range1_16x16,16,16,128,64);
+	state->m_sc2_tilemap_2 = tilemap_create(machine, get_sc2_tile_info,range2_16x16,16,16,64,128);
+	state->m_sc2_tilemap_3 = tilemap_create(machine, get_sc2_tile_info,range3_16x16,16,16,32,256);
 
-	sc3_tilemap_0 = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_cols,8,8,256,32);
-//  sc3_tilemap_1 = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_cols,8,8,256,32);
-	sc3_tilemap_2 = tilemap_create(machine, get_sc3_tile_info,range2_8x8,8,8,128,64);
-	sc3_tilemap_3 = tilemap_create(machine, get_sc3_tile_info,range3_8x8,8,8,64,128);
+	state->m_sc3_tilemap_0 = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_cols,8,8,256,32);
+	//state->m_sc3_tilemap_1 = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_cols,8,8,256,32);
+	state->m_sc3_tilemap_2 = tilemap_create(machine, get_sc3_tile_info,range2_8x8,8,8,128,64);
+	state->m_sc3_tilemap_3 = tilemap_create(machine, get_sc3_tile_info,range3_8x8,8,8,64,128);
 
-	jm_scrollram = auto_alloc_array(machine, UINT16, 0x80/2);
-	jm_vregs = auto_alloc_array(machine, UINT16, 0x40/2);
+	state->m_jm_scrollram = auto_alloc_array(machine, UINT16, 0x80/2);
+	state->m_jm_vregs = auto_alloc_array(machine, UINT16, 0x40/2);
 
-	tilemap_set_transparent_pen(sc0_tilemap_0,15);
-	tilemap_set_transparent_pen(sc0_tilemap_1,15);
-	tilemap_set_transparent_pen(sc0_tilemap_2,15);
-	tilemap_set_transparent_pen(sc0_tilemap_3,15);
+	state->m_sc0_tilemap_0->set_transparent_pen(15);
+	state->m_sc0_tilemap_1->set_transparent_pen(15);
+	state->m_sc0_tilemap_2->set_transparent_pen(15);
+	state->m_sc0_tilemap_3->set_transparent_pen(15);
 
-	tilemap_set_transparent_pen(sc1_tilemap_0,15);
-	tilemap_set_transparent_pen(sc1_tilemap_1,15);
-	tilemap_set_transparent_pen(sc1_tilemap_2,15);
-	tilemap_set_transparent_pen(sc1_tilemap_3,15);
+	state->m_sc1_tilemap_0->set_transparent_pen(15);
+	state->m_sc1_tilemap_1->set_transparent_pen(15);
+	state->m_sc1_tilemap_2->set_transparent_pen(15);
+	state->m_sc1_tilemap_3->set_transparent_pen(15);
 
-	tilemap_set_transparent_pen(sc2_tilemap_0,15);
-	tilemap_set_transparent_pen(sc2_tilemap_1,15);
-	tilemap_set_transparent_pen(sc2_tilemap_2,15);
-	tilemap_set_transparent_pen(sc2_tilemap_3,15);
+	state->m_sc2_tilemap_0->set_transparent_pen(15);
+	state->m_sc2_tilemap_1->set_transparent_pen(15);
+	state->m_sc2_tilemap_2->set_transparent_pen(15);
+	state->m_sc2_tilemap_3->set_transparent_pen(15);
 
-	tilemap_set_transparent_pen(sc3_tilemap_0,15);
-	tilemap_set_transparent_pen(sc3_tilemap_2,15);
-	tilemap_set_transparent_pen(sc3_tilemap_3,15);
+	state->m_sc3_tilemap_0->set_transparent_pen(15);
+	//state->m_sc3_tilemap_1->set_transparent_pen(15);
+	state->m_sc3_tilemap_2->set_transparent_pen(15);
+	state->m_sc3_tilemap_3->set_transparent_pen(15);
 }
 
 static VIDEO_START( urashima )
 {
-	sc0_tilemap_0 = tilemap_create(machine, get_sc0_tile_info,range0_16x16,16,16,256,32);
-	sc3_tilemap_0 = tilemap_create(machine, get_sc3_tile_info,range2_8x8,8,8,128,64);
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	state->m_sc0_tilemap_0 = tilemap_create(machine, get_sc0_tile_info,range0_16x16,16,16,256,32);
+	state->m_sc3_tilemap_0 = tilemap_create(machine, get_sc3_tile_info,range2_8x8,8,8,128,64);
 
-	jm_scrollram = auto_alloc_array(machine, UINT16, 0x80/2);
-	jm_vregs = auto_alloc_array(machine, UINT16, 0x40/2);
+	state->m_jm_scrollram = auto_alloc_array(machine, UINT16, 0x80/2);
+	state->m_jm_vregs = auto_alloc_array(machine, UINT16, 0x40/2);
 
-	tilemap_set_transparent_pen(sc0_tilemap_0,15);
-	tilemap_set_transparent_pen(sc3_tilemap_0,15);
+	state->m_sc0_tilemap_0->set_transparent_pen(15);
+	state->m_sc3_tilemap_0->set_transparent_pen(15);
 }
 
-static UINT8 sc0_prin,sc1_prin,sc2_prin,sc3_prin;
 
 /***************************************************************************************
 The priority system is a combination between one prom and the priority number.
@@ -277,199 +322,213 @@ etc.)
 In the end the final results always are one bit assigned to each priority (i.e. most
 priority = 8, then 4, 2 and finally 1).
 ***************************************************************************************/
-static void jalmah_priority_system(running_machine *machine)
+static void jalmah_priority_system(running_machine &machine)
 {
-    UINT8 *pri_rom = memory_region(machine, "user1");
-    UINT8 i;
-    UINT8 prinum[0x10];
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	UINT8 *pri_rom = machine.region("user1")->base();
+	UINT8 i;
+	UINT8 prinum[0x10];
 
-	sc0_prin = 0;
-	sc1_prin = 0;
-	sc2_prin = 0;
-	sc3_prin = 0;
+	state->m_sc0_prin = 0;
+	state->m_sc1_prin = 0;
+	state->m_sc2_prin = 0;
+	state->m_sc3_prin = 0;
 
-    for(i=0;i<0x10;i++)
-    {
-        prinum[i] = pri_rom[i+pri*0x10];
-
-        if(prinum[i] == 0) { sc0_prin++; }
-        if(prinum[i] == 1) { sc1_prin++; }
-        if(prinum[i] == 2) { sc2_prin++; }
-        if(prinum[i] == 3) { sc3_prin++; }
-	}
-
-	//popmessage("%02x %02x %02x %02x",sc0_prin,sc1_prin,sc2_prin,sc3_prin);
-}
-
-static void draw_sc0_layer(bitmap_t *bitmap, const rectangle *cliprect)
-{
-	switch(jm_vregs[0] & 3)
+	for(i=0;i<0x10;i++)
 	{
-		case 0: tilemap_draw(bitmap,cliprect,sc0_tilemap_0,0,0); break;
-		case 1: tilemap_draw(bitmap,cliprect,sc0_tilemap_1,0,0); break;
-		case 2: tilemap_draw(bitmap,cliprect,sc0_tilemap_2,0,0); break;
-		case 3: tilemap_draw(bitmap,cliprect,sc0_tilemap_3,0,0); break;
+		prinum[i] = pri_rom[i+state->m_pri*0x10];
+
+		if(prinum[i] == 0) { state->m_sc0_prin++; }
+		if(prinum[i] == 1) { state->m_sc1_prin++; }
+		if(prinum[i] == 2) { state->m_sc2_prin++; }
+		if(prinum[i] == 3) { state->m_sc3_prin++; }
 	}
+
+	//popmessage("%02x %02x %02x %02x",state->m_sc0_prin,state->m_sc1_prin,state->m_sc2_prin,state->m_sc3_prin);
 }
 
-static void draw_sc1_layer(bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sc0_layer(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	switch(jm_vregs[1] & 3)
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	switch(state->m_jm_vregs[0] & 3)
 	{
-		case 0: tilemap_draw(bitmap,cliprect,sc1_tilemap_0,0,0); break;
-		case 1: tilemap_draw(bitmap,cliprect,sc1_tilemap_1,0,0); break;
-		case 2: tilemap_draw(bitmap,cliprect,sc1_tilemap_2,0,0); break;
-		case 3: tilemap_draw(bitmap,cliprect,sc1_tilemap_3,0,0); break;
+		case 0: state->m_sc0_tilemap_0->draw(bitmap, cliprect, 0,0); break;
+		case 1: state->m_sc0_tilemap_1->draw(bitmap, cliprect, 0,0); break;
+		case 2: state->m_sc0_tilemap_2->draw(bitmap, cliprect, 0,0); break;
+		case 3: state->m_sc0_tilemap_3->draw(bitmap, cliprect, 0,0); break;
 	}
 }
 
-static void draw_sc2_layer(bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sc1_layer(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	switch(jm_vregs[2] & 3)
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	switch(state->m_jm_vregs[1] & 3)
 	{
-		case 0: tilemap_draw(bitmap,cliprect,sc2_tilemap_0,0,0); break;
-		case 1: tilemap_draw(bitmap,cliprect,sc2_tilemap_1,0,0); break;
-		case 2: tilemap_draw(bitmap,cliprect,sc2_tilemap_2,0,0); break;
-		case 3: tilemap_draw(bitmap,cliprect,sc2_tilemap_3,0,0); break;
+		case 0: state->m_sc1_tilemap_0->draw(bitmap, cliprect, 0,0); break;
+		case 1: state->m_sc1_tilemap_1->draw(bitmap, cliprect, 0,0); break;
+		case 2: state->m_sc1_tilemap_2->draw(bitmap, cliprect, 0,0); break;
+		case 3: state->m_sc1_tilemap_3->draw(bitmap, cliprect, 0,0); break;
 	}
 }
 
-static void draw_sc3_layer(bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sc2_layer(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	switch(jm_vregs[3] & 3)
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	switch(state->m_jm_vregs[2] & 3)
+	{
+		case 0: state->m_sc2_tilemap_0->draw(bitmap, cliprect, 0,0); break;
+		case 1: state->m_sc2_tilemap_1->draw(bitmap, cliprect, 0,0); break;
+		case 2: state->m_sc2_tilemap_2->draw(bitmap, cliprect, 0,0); break;
+		case 3: state->m_sc2_tilemap_3->draw(bitmap, cliprect, 0,0); break;
+	}
+}
+
+static void draw_sc3_layer(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	switch(state->m_jm_vregs[3] & 3)
 	{
 		case 0:
-		case 1: tilemap_draw(bitmap,cliprect,sc3_tilemap_0,0,0); break;
-		case 2: tilemap_draw(bitmap,cliprect,sc3_tilemap_2,0,0); break;
-		case 3: tilemap_draw(bitmap,cliprect,sc3_tilemap_3,0,0); break;
+		case 1: state->m_sc3_tilemap_0->draw(bitmap, cliprect, 0,0); break;
+		case 2: state->m_sc3_tilemap_2->draw(bitmap, cliprect, 0,0); break;
+		case 3: state->m_sc3_tilemap_3->draw(bitmap, cliprect, 0,0); break;
 	}
 }
 
-static VIDEO_UPDATE( jalmah )
+static SCREEN_UPDATE_IND16( jalmah )
 {
-	static UINT8 cur_prin;
-	jalmah_priority_system(screen->machine);
+	jalmah_state *state = screen.machine().driver_data<jalmah_state>();
+	UINT16 *jm_scrollram = state->m_jm_scrollram;
+	UINT8 cur_prin;
+	jalmah_priority_system(screen.machine());
 
-	tilemap_set_scrollx( sc0_tilemap_0, 0, jm_scrollram[0] & 0xfff);
-	tilemap_set_scrollx( sc0_tilemap_1, 0, jm_scrollram[0] & 0x7ff);
-	tilemap_set_scrollx( sc0_tilemap_2, 0, jm_scrollram[0] & 0x3ff);
-	tilemap_set_scrollx( sc0_tilemap_3, 0, jm_scrollram[0] & 0x1ff);
+	state->m_sc0_tilemap_0->set_scrollx(0, jm_scrollram[0] & 0xfff);
+	state->m_sc0_tilemap_1->set_scrollx(0, jm_scrollram[0] & 0x7ff);
+	state->m_sc0_tilemap_2->set_scrollx(0, jm_scrollram[0] & 0x3ff);
+	state->m_sc0_tilemap_3->set_scrollx(0, jm_scrollram[0] & 0x1ff);
 
-	tilemap_set_scrollx( sc1_tilemap_0, 0, jm_scrollram[1] & 0xfff);
-	tilemap_set_scrollx( sc1_tilemap_1, 0, jm_scrollram[1] & 0x7ff);
-	tilemap_set_scrollx( sc1_tilemap_2, 0, jm_scrollram[1] & 0x3ff);
-	tilemap_set_scrollx( sc1_tilemap_3, 0, jm_scrollram[1] & 0x1ff);
+	state->m_sc1_tilemap_0->set_scrollx(0, jm_scrollram[1] & 0xfff);
+	state->m_sc1_tilemap_1->set_scrollx(0, jm_scrollram[1] & 0x7ff);
+	state->m_sc1_tilemap_2->set_scrollx(0, jm_scrollram[1] & 0x3ff);
+	state->m_sc1_tilemap_3->set_scrollx(0, jm_scrollram[1] & 0x1ff);
 
-	tilemap_set_scrollx( sc2_tilemap_0, 0, jm_scrollram[2] & 0xfff);
-	tilemap_set_scrollx( sc2_tilemap_1, 0, jm_scrollram[2] & 0x7ff);
-	tilemap_set_scrollx( sc2_tilemap_2, 0, jm_scrollram[2] & 0x3ff);
-	tilemap_set_scrollx( sc2_tilemap_3, 0, jm_scrollram[2] & 0x1ff);
+	state->m_sc2_tilemap_0->set_scrollx(0, jm_scrollram[2] & 0xfff);
+	state->m_sc2_tilemap_1->set_scrollx(0, jm_scrollram[2] & 0x7ff);
+	state->m_sc2_tilemap_2->set_scrollx(0, jm_scrollram[2] & 0x3ff);
+	state->m_sc2_tilemap_3->set_scrollx(0, jm_scrollram[2] & 0x1ff);
 
-	tilemap_set_scrollx( sc3_tilemap_0, 0, jm_scrollram[3] & 0x7ff);
+	state->m_sc3_tilemap_0->set_scrollx(0, jm_scrollram[3] & 0x7ff);
 //  empty
-	tilemap_set_scrollx( sc3_tilemap_2, 0, jm_scrollram[3] & 0x3ff);
-	tilemap_set_scrollx( sc3_tilemap_3, 0, jm_scrollram[3] & 0x1ff);
+	state->m_sc3_tilemap_2->set_scrollx(0, jm_scrollram[3] & 0x3ff);
+	state->m_sc3_tilemap_3->set_scrollx(0, jm_scrollram[3] & 0x1ff);
 
 
-	tilemap_set_scrolly( sc0_tilemap_0, 0, jm_scrollram[4] & 0x1ff);
-	tilemap_set_scrolly( sc0_tilemap_1, 0, jm_scrollram[4] & 0x3ff);
-	tilemap_set_scrolly( sc0_tilemap_2, 0, jm_scrollram[4] & 0x7ff);
-	tilemap_set_scrolly( sc0_tilemap_3, 0, jm_scrollram[4] & 0xfff);
+	state->m_sc0_tilemap_0->set_scrolly(0, jm_scrollram[4] & 0x1ff);
+	state->m_sc0_tilemap_1->set_scrolly(0, jm_scrollram[4] & 0x3ff);
+	state->m_sc0_tilemap_2->set_scrolly(0, jm_scrollram[4] & 0x7ff);
+	state->m_sc0_tilemap_3->set_scrolly(0, jm_scrollram[4] & 0xfff);
 
-	tilemap_set_scrolly( sc1_tilemap_0, 0, jm_scrollram[5] & 0x1ff);
-	tilemap_set_scrolly( sc1_tilemap_1, 0, jm_scrollram[5] & 0x3ff);
-	tilemap_set_scrolly( sc1_tilemap_2, 0, jm_scrollram[5] & 0x7ff);
-	tilemap_set_scrolly( sc1_tilemap_3, 0, jm_scrollram[5] & 0xfff);
+	state->m_sc1_tilemap_0->set_scrolly(0, jm_scrollram[5] & 0x1ff);
+	state->m_sc1_tilemap_1->set_scrolly(0, jm_scrollram[5] & 0x3ff);
+	state->m_sc1_tilemap_2->set_scrolly(0, jm_scrollram[5] & 0x7ff);
+	state->m_sc1_tilemap_3->set_scrolly(0, jm_scrollram[5] & 0xfff);
 
-	tilemap_set_scrolly( sc2_tilemap_0, 0, jm_scrollram[6] & 0x1ff);
-	tilemap_set_scrolly( sc2_tilemap_1, 0, jm_scrollram[6] & 0x3ff);
-	tilemap_set_scrolly( sc2_tilemap_2, 0, jm_scrollram[6] & 0x7ff);
-	tilemap_set_scrolly( sc2_tilemap_3, 0, jm_scrollram[6] & 0xfff);
+	state->m_sc2_tilemap_0->set_scrolly(0, jm_scrollram[6] & 0x1ff);
+	state->m_sc2_tilemap_1->set_scrolly(0, jm_scrollram[6] & 0x3ff);
+	state->m_sc2_tilemap_2->set_scrolly(0, jm_scrollram[6] & 0x7ff);
+	state->m_sc2_tilemap_3->set_scrolly(0, jm_scrollram[6] & 0xfff);
 
-	tilemap_set_scrolly( sc3_tilemap_0, 0, jm_scrollram[7] & 0xff);
+	state->m_sc3_tilemap_0->set_scrolly(0, jm_scrollram[7] & 0xff);
 //  empty
-	tilemap_set_scrolly( sc3_tilemap_2, 0, jm_scrollram[7] & 0x1ff);
-	tilemap_set_scrolly( sc3_tilemap_3, 0, jm_scrollram[7] & 0x3ff);
+	state->m_sc3_tilemap_2->set_scrolly(0, jm_scrollram[7] & 0x1ff);
+	state->m_sc3_tilemap_3->set_scrolly(0, jm_scrollram[7] & 0x3ff);
 
-    bitmap_fill(bitmap, cliprect, screen->machine->pens[0xff]); //selectable by a ram address?
+	bitmap.fill(screen.machine().pens[0xff], cliprect); //selectable by a ram address?
 
 	for(cur_prin=1;cur_prin<=0x8;cur_prin<<=1)
 	{
-		if(cur_prin==sc0_prin) { draw_sc0_layer(bitmap,cliprect); }
-		if(cur_prin==sc1_prin) { draw_sc1_layer(bitmap,cliprect); }
-		if(cur_prin==sc2_prin) { draw_sc2_layer(bitmap,cliprect); }
-		if(cur_prin==sc3_prin) { draw_sc3_layer(bitmap,cliprect); }
+		if(cur_prin==state->m_sc0_prin) { draw_sc0_layer(screen.machine(),bitmap,cliprect); }
+		if(cur_prin==state->m_sc1_prin) { draw_sc1_layer(screen.machine(),bitmap,cliprect); }
+		if(cur_prin==state->m_sc2_prin) { draw_sc2_layer(screen.machine(),bitmap,cliprect); }
+		if(cur_prin==state->m_sc3_prin) { draw_sc3_layer(screen.machine(),bitmap,cliprect); }
 	}
 
 	return 0;
 }
 
-static VIDEO_UPDATE( urashima )
+static SCREEN_UPDATE_IND16( urashima )
 {
+	jalmah_state *state = screen.machine().driver_data<jalmah_state>();
+	UINT16 *jm_scrollram = state->m_jm_scrollram;
 	/*this game doesn't use the RANGE register at all.*/
-	tilemap_set_scrollx( sc0_tilemap_0, 0, jm_scrollram[0]);
-	tilemap_set_scrollx( sc3_tilemap_0, 0, jm_scrollram[3]);
-	tilemap_set_scrolly( sc0_tilemap_0, 0, jm_scrollram[4]);
-	tilemap_set_scrolly( sc3_tilemap_0, 0, jm_scrollram[7]);
+	state->m_sc0_tilemap_0->set_scrollx(0, jm_scrollram[0]);
+	state->m_sc3_tilemap_0->set_scrollx(0, jm_scrollram[3]);
+	state->m_sc0_tilemap_0->set_scrolly(0, jm_scrollram[4]);
+	state->m_sc3_tilemap_0->set_scrolly(0, jm_scrollram[7]);
 
-	bitmap_fill(bitmap, cliprect, screen->machine->pens[0x1ff]);//selectable by a ram address?
-	if(jm_vregs[0] & 1) { tilemap_draw(bitmap,cliprect,sc0_tilemap_0,0,0); }
- 	if(jm_vregs[3] & 1) { tilemap_draw(bitmap,cliprect,sc3_tilemap_0,0,0); }
+	bitmap.fill(screen.machine().pens[0x1ff], cliprect);//selectable by a ram address?
+	if(state->m_jm_vregs[0] & 1) { state->m_sc0_tilemap_0->draw(bitmap, cliprect, 0,0); }
+	if(state->m_jm_vregs[3] & 1) { state->m_sc3_tilemap_0->draw(bitmap, cliprect, 0,0); }
 	return 0;
 }
 
 static WRITE16_HANDLER( sc0_vram_w )
 {
-	COMBINE_DATA(&sc0_vram[offset]);
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	COMBINE_DATA(&state->m_sc0_vram[offset]);
 	/*2048x256 tilemap*/
-	tilemap_mark_tile_dirty(sc0_tilemap_0,offset);
+	state->m_sc0_tilemap_0->mark_tile_dirty(offset);
 	/*1024x512 tilemap*/
-	tilemap_mark_tile_dirty(sc0_tilemap_1,offset);
+	state->m_sc0_tilemap_1->mark_tile_dirty(offset);
 	/*512x1024 tilemap*/
-	tilemap_mark_tile_dirty(sc0_tilemap_2,offset);
+	state->m_sc0_tilemap_2->mark_tile_dirty(offset);
 	/*256x2048 tilemap*/
-	tilemap_mark_tile_dirty(sc0_tilemap_3,offset);
+	state->m_sc0_tilemap_3->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( sc3_vram_w )
 {
-	COMBINE_DATA(&sc3_vram[offset]);
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	COMBINE_DATA(&state->m_sc3_vram[offset]);
 	/*2048x256 tilemap*/
-	tilemap_mark_tile_dirty(sc3_tilemap_0,offset);
+	state->m_sc3_tilemap_0->mark_tile_dirty(offset);
 	/*1024x512 tilemap*/
-	tilemap_mark_tile_dirty(sc3_tilemap_2,offset);
+	state->m_sc3_tilemap_2->mark_tile_dirty(offset);
 	/*512x1024 tilemap*/
-	tilemap_mark_tile_dirty(sc3_tilemap_3,offset);
+	state->m_sc3_tilemap_3->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( sc1_vram_w )
 {
-	COMBINE_DATA(&sc1_vram[offset]);
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	COMBINE_DATA(&state->m_sc1_vram[offset]);
 	/*2048x256 tilemap*/
-	tilemap_mark_tile_dirty(sc1_tilemap_0,offset);
+	state->m_sc1_tilemap_0->mark_tile_dirty(offset);
 	/*1024x512 tilemap*/
-	tilemap_mark_tile_dirty(sc1_tilemap_1,offset);
+	state->m_sc1_tilemap_1->mark_tile_dirty(offset);
 	/*512x1024 tilemap*/
-	tilemap_mark_tile_dirty(sc1_tilemap_2,offset);
+	state->m_sc1_tilemap_2->mark_tile_dirty(offset);
 	/*256x2048 tilemap*/
-	tilemap_mark_tile_dirty(sc1_tilemap_3,offset);
+	state->m_sc1_tilemap_3->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( sc2_vram_w )
 {
-	COMBINE_DATA(&sc2_vram[offset]);
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	COMBINE_DATA(&state->m_sc2_vram[offset]);
 	/*2048x256 tilemap*/
-	tilemap_mark_tile_dirty(sc2_tilemap_0,offset);
+	state->m_sc2_tilemap_0->mark_tile_dirty(offset);
 	/*1024x512 tilemap*/
-	tilemap_mark_tile_dirty(sc2_tilemap_1,offset);
+	state->m_sc2_tilemap_1->mark_tile_dirty(offset);
 	/*512x1024 tilemap*/
-	tilemap_mark_tile_dirty(sc2_tilemap_2,offset);
+	state->m_sc2_tilemap_2->mark_tile_dirty(offset);
 	/*256x2048 tilemap*/
-	tilemap_mark_tile_dirty(sc2_tilemap_3,offset);
+	state->m_sc2_tilemap_3->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( jalmah_tilebank_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	/*
      xxxx ---- fg bank (used by suchipi)
      ---- xxxx Priority number (trusted,see mjzoomin)
@@ -477,21 +536,24 @@ static WRITE16_HANDLER( jalmah_tilebank_w )
 	//popmessage("Write to tilebank %02x",data);
 	if (ACCESSING_BITS_0_7)
 	{
-		if (sc0bank != ((data & 0xf0) >> 4))
+		if (state->m_sc0bank != ((data & 0xf0) >> 4))
 		{
-			sc0bank = (data & 0xf0) >> 4;
-			tilemap_mark_all_tiles_dirty(sc0_tilemap_0);
-			tilemap_mark_all_tiles_dirty(sc0_tilemap_1);
-			tilemap_mark_all_tiles_dirty(sc0_tilemap_2);
-			tilemap_mark_all_tiles_dirty(sc0_tilemap_3);
+			state->m_sc0bank = (data & 0xf0) >> 4;
+			state->m_sc0_tilemap_0->mark_all_dirty();
+			state->m_sc0_tilemap_1->mark_all_dirty();
+			state->m_sc0_tilemap_2->mark_all_dirty();
+			state->m_sc0_tilemap_3->mark_all_dirty();
 		}
-		if (pri != (data & 0x0f))
-			pri = data & 0x0f;
+		if (state->m_pri != (data & 0x0f))
+			state->m_pri = data & 0x0f;
 	}
 }
 
 static WRITE16_HANDLER( jalmah_scroll_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	UINT16 *jm_scrollram = state->m_jm_scrollram;
+	UINT16 *jm_vregs = state->m_jm_vregs;
 	//logerror("[%04x]<-%04x\n",(offset+0x10)*2,data);
 	switch(offset+(0x10))
 	{
@@ -519,33 +581,39 @@ static WRITE16_HANDLER( jalmah_scroll_w )
 
 static WRITE16_HANDLER( urashima_bank_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		if (sc0bank != (data & 0x0f))
+		if (state->m_sc0bank != (data & 0x0f))
 		{
-			sc0bank = (data & 0x0f);
-			tilemap_mark_all_tiles_dirty(sc0_tilemap_0);
-			//tilemap_mark_all_tiles_dirty(sc0_tilemap_2);
-			//tilemap_mark_all_tiles_dirty(sc0_tilemap_3);
+			state->m_sc0bank = (data & 0x0f);
+			state->m_sc0_tilemap_0->mark_all_dirty();
+			//state->m_sc0_tilemap_2->mark_all_dirty();
+			//state->m_sc0_tilemap_3->mark_all_dirty();
 		}
 	}
 }
 
 static WRITE16_HANDLER( urashima_sc0_vram_w )
 {
-	COMBINE_DATA(&sc0_vram[offset]);
-	tilemap_mark_tile_dirty(sc0_tilemap_0,offset);
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	COMBINE_DATA(&state->m_sc0_vram[offset]);
+	state->m_sc0_tilemap_0->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( urashima_sc3_vram_w )
 {
-	COMBINE_DATA(&sc3_vram[offset]);
-	tilemap_mark_tile_dirty(sc3_tilemap_0,offset);
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	COMBINE_DATA(&state->m_sc3_vram[offset]);
+	state->m_sc3_tilemap_0->mark_tile_dirty(offset);
 }
 
 /*Urashima Mahjong uses a bigger (and mostly unused/wasted) video register ram.*/
 static WRITE16_HANDLER( urashima_vregs_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	UINT16 *jm_scrollram = state->m_jm_scrollram;
+	UINT16 *jm_vregs = state->m_jm_vregs;
 	//logerror("[%04x]<-%04x\n",(offset)*2,data);
 	switch(offset)
 	{
@@ -588,7 +656,6 @@ Protection file start
 
 ******************************************************************************************/
 
-static UINT16 *jm_shared_ram,*jm_mcu_code;
 
 /*
 MCU program number,different for each game(n.b. the numbering scheme is *mine*,do not
@@ -604,7 +671,6 @@ xxxx ---- MCU program revision
 ---- xxxx MCU program number assignment for each game.
 */
 
-static UINT8 mcu_prg;
 #define DAIREIKA_MCU (0x11)
 #define URASHIMA_MCU (0x12)
 #define MJZOOMIN_MCU (0x13)
@@ -612,8 +678,6 @@ static UINT8 mcu_prg;
 #define KAKUMEI2_MCU (0x22)
 #define SUCHIPI_MCU  (0x23)
 
-static int respcount;
-static UINT8 test_mode;
 
 #define MCU_READ(tag, _bit_, _offset_, _retval_) \
 if((0xffff - input_port_read(machine, tag)) & _bit_) { jm_shared_ram[_offset_] = _retval_; }
@@ -627,14 +691,15 @@ static WRITE16_HANDLER( urashima_dma_w )
 	{
 		UINT32 i;
 		for(i = 0; i < 0x200; i += 2)
-			memory_write_word(space, 0x88200 + i, memory_read_word(space, 0x88400 + i));
+			space->write_word(0x88200 + i, space->read_word(0x88400 + i));
 	}
 }
 
 /*same as $f00c0 sub-routine,but with additional work-around,to remove from here...*/
-static void daireika_palette_dma(running_machine *machine, UINT16 val)
+static void daireika_palette_dma(running_machine &machine, UINT16 val)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	//jalmah_state *state = machine.driver_data<jalmah_state>();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	UINT32 index_1, index_2, src_addr, tmp_addr;
 	/*a0=301c0+jm_shared_ram[0x540/2] & 0xf00 */
 	/*a1=88000*/
@@ -643,27 +708,28 @@ static void daireika_palette_dma(running_machine *machine, UINT16 val)
 	for(index_1 = 0; index_1 < 0x200; index_1 += 0x20)
 	{
 		tmp_addr = src_addr;
-		src_addr = memory_read_dword(space,src_addr);
+		src_addr = space->read_dword(src_addr);
 
 		for(index_2 = 0; index_2 < 0x20; index_2 += 2)
-			memory_write_word(space, 0x88000 + index_2 + index_1, memory_read_word(space, src_addr + index_2));
+			space->write_word(0x88000 + index_2 + index_1, space->read_word(src_addr + index_2));
 
 		src_addr = tmp_addr + 4;
 	}
 }
 
 /*RAM-based protection handlings*/
-static void daireika_mcu_run(running_machine *machine)
+static void daireika_mcu_run(running_machine &machine)
 {
-	static UINT16 prg_prot, dma_old;
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
 
-	if(((jm_shared_ram[0x550/2] & 0xf00) == 0x700) && ((jm_shared_ram[0x540/2] & 0xf00) != dma_old))
+	if(((jm_shared_ram[0x550/2] & 0xf00) == 0x700) && ((jm_shared_ram[0x540/2] & 0xf00) != state->m_dma_old))
 	{
-		dma_old = jm_shared_ram[0x540/2] & 0xf00;
+		state->m_dma_old = jm_shared_ram[0x540/2] & 0xf00;
 		daireika_palette_dma(machine,((jm_shared_ram[0x540/2] & 0x0f00) >> 8));
 	}
 
-	if(test_mode)	//service_mode
+	if(state->m_test_mode)	//service_mode
 	{
 		jm_shared_ram[0x000/2] = input_port_read(machine, "KEY0");
 		jm_shared_ram[0x002/2] = input_port_read(machine, "KEY1");
@@ -697,16 +763,17 @@ static void daireika_mcu_run(running_machine *machine)
 		MCU_READ("KEY1", 0x0002, 0x000/2, 0x13);		/*CHI   (trusted)*/
 		MCU_READ("KEY0", 0x0004, 0x000/2, 0x14);		/*START1*/
 	}
-	prg_prot++;
-	if(prg_prot > 0x10) { prg_prot = 0; }
-	jm_shared_ram[0x00e/2] = prg_prot;
+	state->m_prg_prot++;
+	if(state->m_prg_prot > 0x10) { state->m_prg_prot = 0; }
+	jm_shared_ram[0x00e/2] = state->m_prg_prot;
 }
 
-static void mjzoomin_mcu_run(running_machine *machine)
+static void mjzoomin_mcu_run(running_machine &machine)
 {
-	static UINT16 prg_prot;
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
 
-	if(test_mode)	//service_mode
+	if(state->m_test_mode)	//service_mode
 	{
 		jm_shared_ram[0x000/2] = input_port_read(machine, "KEY0");
 		jm_shared_ram[0x002/2] = input_port_read(machine, "KEY1");
@@ -740,17 +807,18 @@ static void mjzoomin_mcu_run(running_machine *machine)
 		MCU_READ("KEY1", 0x0002, 0x000/2, 0x13);		/*CHI   (trusted)*/
 		MCU_READ("KEY0", 0x0004, 0x000/2, 0x14);		/*START1*/
 	}
-	jm_shared_ram[0x00c/2] = mame_rand(machine) & 0xffff;
-	prg_prot++;
-	if(prg_prot > 0x10) { prg_prot = 0; }
-	jm_shared_ram[0x00e/2] = prg_prot;
+	jm_shared_ram[0x00c/2] = machine.rand() & 0xffff;
+	state->m_prg_prot++;
+	if(state->m_prg_prot > 0x10) { state->m_prg_prot = 0; }
+	jm_shared_ram[0x00e/2] = state->m_prg_prot;
 }
 
-static void urashima_mcu_run(running_machine *machine)
+static void urashima_mcu_run(running_machine &machine)
 {
-	static UINT16 prg_prot;
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
 
-	if(test_mode)	//service_mode
+	if(state->m_test_mode)	//service_mode
 	{
 		jm_shared_ram[0x300/2] = input_port_read(machine, "KEY0");
 		jm_shared_ram[0x302/2] = input_port_read(machine, "KEY1");
@@ -784,15 +852,17 @@ static void urashima_mcu_run(running_machine *machine)
 		MCU_READ("KEY1", 0x0002, 0x300/2, 0x13);		/*CHI   (trusted)*/
 		MCU_READ("KEY0", 0x0004, 0x300/2, 0x14);		/*START1*/
 	}
-	jm_shared_ram[0x30c/2] = mame_rand(machine) & 0xffff;
-	prg_prot++;
-	if(prg_prot > 0x10) { prg_prot = 0; }
-	jm_shared_ram[0x30e/2] = prg_prot;
+	jm_shared_ram[0x30c/2] = machine.rand() & 0xffff;
+	state->m_prg_prot++;
+	if(state->m_prg_prot > 0x10) { state->m_prg_prot = 0; }
+	jm_shared_ram[0x30e/2] = state->m_prg_prot;
 }
 
-static void second_mcu_run(running_machine *machine)
+static void second_mcu_run(running_machine &machine)
 {
-	if(test_mode)	//service_mode
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
+	if(state->m_test_mode)	//service_mode
 	{
 		jm_shared_ram[0x200/2] = input_port_read(machine, "KEY0");
 		jm_shared_ram[0x202/2] = input_port_read(machine, "KEY1");
@@ -825,13 +895,14 @@ static void second_mcu_run(running_machine *machine)
 
 //      MCU_READ("KEY0", 0x0004, 0x7b8/2, 0x03);        /*START1(correct?)  */
 	}
-	jm_shared_ram[0x20c/2] = mame_rand(machine) & 0xffff; //kakumei2
+	jm_shared_ram[0x20c/2] = machine.rand() & 0xffff; //kakumei2
 
 }
 
 static TIMER_DEVICE_CALLBACK( jalmah_mcu_sim )
 {
-	switch(mcu_prg)
+	jalmah_state *state = timer.machine().driver_data<jalmah_state>();
+	switch(state->m_mcu_prg)
 	{
 		/*
             #define DAIREIKA_MCU (0x11)
@@ -841,12 +912,12 @@ static TIMER_DEVICE_CALLBACK( jalmah_mcu_sim )
             #define KAKUMEI2_MCU (0x22)
             #define SUCHIPI_MCU  (0x23)
         */
-			case MJZOOMIN_MCU: mjzoomin_mcu_run(timer->machine); break;
-			case DAIREIKA_MCU: daireika_mcu_run(timer->machine); break;
-			case URASHIMA_MCU: urashima_mcu_run(timer->machine); break;
+			case MJZOOMIN_MCU: mjzoomin_mcu_run(timer.machine()); break;
+			case DAIREIKA_MCU: daireika_mcu_run(timer.machine()); break;
+			case URASHIMA_MCU: urashima_mcu_run(timer.machine()); break;
 			case KAKUMEI_MCU:
 			case KAKUMEI2_MCU:
-			case SUCHIPI_MCU:  second_mcu_run(timer->machine); break;
+			case SUCHIPI_MCU:  second_mcu_run(timer.machine()); break;
 	}
 }
 
@@ -856,48 +927,49 @@ Basic driver start
 
 ******************************************************************************************/
 
-static UINT8 oki_rom,oki_bank,oki_za;
 
 static WRITE16_HANDLER( jalmah_okirom_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	if(ACCESSING_BITS_0_7)
 	{
-		UINT8 *oki = memory_region(space->machine, "oki");
+		UINT8 *oki = space->machine().region("oki")->base();
 
-		oki_rom = data & 1;
+		state->m_oki_rom = data & 1;
 
 		/* ZA appears to be related to the banking, or maybe kakumei2 uses PAL shuffling and this is for something else? */
-		oki_za = (data & 2) ? 1 : 0;
+		state->m_oki_za = (data & 2) ? 1 : 0;
 
-		memcpy(&oki[0x20000], &oki[(oki_rom * 0x80000) + ((oki_bank+oki_za) * 0x20000) + 0x40000], 0x20000);
+		memcpy(&oki[0x20000], &oki[(state->m_oki_rom * 0x80000) + ((state->m_oki_bank+state->m_oki_za) * 0x20000) + 0x40000], 0x20000);
 	}
 
-	//popmessage("PC=%06x %02x %02x %02x %08x",cpu_get_pc(space->cpu),oki_rom,oki_za,oki_bank,(oki_rom * 0x80000) + ((oki_bank+oki_za) * 0x20000) + 0x40000);
+	//popmessage("PC=%06x %02x %02x %02x %08x",cpu_get_pc(&space->device()),state->m_oki_rom,state->m_oki_za,state->m_oki_bank,(state->m_oki_rom * 0x80000) + ((state->m_oki_bank+state->m_oki_za) * 0x20000) + 0x40000);
 }
 
 static WRITE16_HANDLER( jalmah_okibank_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	if(ACCESSING_BITS_0_7)
 	{
-		UINT8 *oki = memory_region(space->machine, "oki");
+		UINT8 *oki = space->machine().region("oki")->base();
 
-		oki_bank = data & 3;
+		state->m_oki_bank = data & 3;
 
-		memcpy(&oki[0x20000], &oki[(oki_rom * 0x80000) + ((oki_bank+oki_za) * 0x20000) + 0x40000], 0x20000);
+		memcpy(&oki[0x20000], &oki[(state->m_oki_rom * 0x80000) + ((state->m_oki_bank+state->m_oki_za) * 0x20000) + 0x40000], 0x20000);
 	}
 
-	//popmessage("PC=%06x %02x %02x %02x %08x",cpu_get_pc(space->cpu),oki_rom,oki_za,oki_bank,(oki_rom * 0x80000) + ((oki_bank+oki_za) * 0x20000) + 0x40000);
+	//popmessage("PC=%06x %02x %02x %02x %08x",cpu_get_pc(&space->device()),state->m_oki_rom,state->m_oki_za,state->m_oki_bank,(state->m_oki_rom * 0x80000) + ((state->m_oki_bank+state->m_oki_za) * 0x20000) + 0x40000);
 }
 
 static WRITE16_HANDLER( jalmah_flip_screen_w )
 {
 	/*---- ----x flip screen*/
-	flip_screen_set(space->machine, data & 1);
+	flip_screen_set(space->machine(), data & 1);
 
 //  popmessage("%04x",data);
 }
 
-static ADDRESS_MAP_START( jalmah, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( jalmah, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x080002, 0x080003) AM_READ_PORT("DSW")
@@ -909,19 +981,19 @@ static ADDRESS_MAP_START( jalmah, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x080018, 0x080019) AM_WRITE(jalmah_okibank_w)
 	AM_RANGE(0x08001a, 0x08001b) AM_WRITE(jalmah_okirom_w)
 /**/AM_RANGE(0x080020, 0x08003f) AM_RAM_WRITE(jalmah_scroll_w)
-	AM_RANGE(0x080040, 0x080041) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x080040, 0x080041) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	//       0x084000, 0x084001  ?
-	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16) /* Palette RAM */
-	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(sc0_vram_w) AM_BASE(&sc0_vram)
-	AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(sc1_vram_w) AM_BASE(&sc1_vram)
-	AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(sc2_vram_w) AM_BASE(&sc2_vram)
-	AM_RANGE(0x09c000, 0x09ffff) AM_RAM_WRITE(sc3_vram_w) AM_BASE(&sc3_vram)
-	AM_RANGE(0x0f0000, 0x0f0fff) AM_RAM AM_BASE(&jm_shared_ram)/*shared with MCU*/
+	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram) /* Palette RAM */
+	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(sc0_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc0_vram)
+	AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(sc1_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc1_vram)
+	AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(sc2_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc2_vram)
+	AM_RANGE(0x09c000, 0x09ffff) AM_RAM_WRITE(sc3_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc3_vram)
+	AM_RANGE(0x0f0000, 0x0f0fff) AM_RAM AM_BASE_MEMBER(jalmah_state, m_jm_shared_ram)/*shared with MCU*/
 	AM_RANGE(0x0f1000, 0x0fffff) AM_RAM /*Work Ram*/
-	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&jm_mcu_code)/*extra RAM for MCU code prg (NOT ON REAL HW!!!)*/
+	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE_MEMBER(jalmah_state, m_jm_mcu_code)/*extra RAM for MCU code prg (NOT ON REAL HW!!!)*/
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( urashima, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( urashima, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x080002, 0x080003) AM_READ_PORT("DSW")
@@ -933,21 +1005,21 @@ static ADDRESS_MAP_START( urashima, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x080018, 0x080019) AM_WRITE(jalmah_okibank_w)
 	AM_RANGE(0x08001a, 0x08001b) AM_WRITE(jalmah_okirom_w)
 /**/AM_RANGE(0x08001c, 0x08001d) AM_RAM_WRITE(urashima_bank_w)
-	AM_RANGE(0x080040, 0x080041) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x080040, 0x080041) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	//       0x084000, 0x084001  ?
-	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16) /* Palette RAM */
-	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(urashima_sc0_vram_w) AM_BASE(&sc0_vram)
+	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram) /* Palette RAM */
+	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(urashima_sc0_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc0_vram)
 	AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(urashima_sc0_vram_w)
 	AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(urashima_sc0_vram_w)
-//  AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(urashima_sc1_vram_w) AM_BASE(&sc1_vram)/*unused*/
-//  AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(urashima_sc2_vram_w) AM_BASE(&sc2_vram)/*unused*/
+//  AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(urashima_sc1_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc1_vram)/*unused*/
+//  AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(urashima_sc2_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc2_vram)/*unused*/
 	/*$9c000-$9cfff Video Registers*/
 /**/AM_RANGE(0x09c000, 0x09dfff) AM_WRITE(urashima_vregs_w)
-/**///AM_RANGE(0x09c480, 0x09c49f) AM_READ(SMH_RAM) AM_WRITE(urashima_sc2vregs_w)
-	AM_RANGE(0x09e000, 0x0a1fff) AM_RAM_WRITE(urashima_sc3_vram_w) AM_BASE(&sc3_vram)
-	AM_RANGE(0x0f0000, 0x0f0fff) AM_RAM AM_BASE(&jm_shared_ram)/*shared with MCU*/
+/**///AM_RANGE(0x09c480, 0x09c49f) AM_RAM_WRITE(urashima_sc2vregs_w)
+	AM_RANGE(0x09e000, 0x0a1fff) AM_RAM_WRITE(urashima_sc3_vram_w) AM_BASE_MEMBER(jalmah_state, m_sc3_vram)
+	AM_RANGE(0x0f0000, 0x0f0fff) AM_RAM AM_BASE_MEMBER(jalmah_state, m_jm_shared_ram)/*shared with MCU*/
 	AM_RANGE(0x0f1000, 0x0fffff) AM_RAM /*Work Ram*/
-	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&jm_mcu_code)/*extra RAM for MCU code prg (NOT ON REAL HW!!!)*/
+	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE_MEMBER(jalmah_state, m_jm_mcu_code)/*extra RAM for MCU code prg (NOT ON REAL HW!!!)*/
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( common )
@@ -1283,66 +1355,65 @@ GFXDECODE_END
 
 static MACHINE_RESET ( jalmah )
 {
-	respcount = 0;
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	state->m_respcount = 0;
 	/*check if we are into service or normal mode*/
-	switch(mcu_prg)
+	switch(state->m_mcu_prg)
 	{
 		case MJZOOMIN_MCU:
 		case DAIREIKA_MCU:
-			test_mode = (~(input_port_read(machine, "SYSTEM")) & 0x0008) ? (1) : (0);
+			state->m_test_mode = (~(input_port_read(machine, "SYSTEM")) & 0x0008) ? (1) : (0);
 			break;
 		case URASHIMA_MCU:
-			test_mode = ((~(input_port_read(machine, "SYSTEM")) & 0x0008) || (~(input_port_read(machine, "DSW")) & 0x8000)) ? (1) : (0);
+			state->m_test_mode = ((~(input_port_read(machine, "SYSTEM")) & 0x0008) || (~(input_port_read(machine, "DSW")) & 0x8000)) ? (1) : (0);
 			break;
 		case KAKUMEI_MCU:
 		case KAKUMEI2_MCU:
 		case SUCHIPI_MCU:
-			test_mode = (~(input_port_read(machine, "DSW")) & 0x0004) ? (1) : (0);
+			state->m_test_mode = (~(input_port_read(machine, "DSW")) & 0x0004) ? (1) : (0);
 			break;
 	}
 }
 
-static MACHINE_DRIVER_START( jalmah )
-	MDRV_CPU_ADD("maincpu" , M68000, 12000000) /* 68000-8 */
-	MDRV_CPU_PROGRAM_MAP(jalmah)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+static MACHINE_CONFIG_START( jalmah, jalmah_state )
+	MCFG_CPU_ADD("maincpu" , M68000, 12000000) /* 68000-8 */
+	MCFG_CPU_PROGRAM_MAP(jalmah)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
 	//M50747 MCU
 
-	MDRV_GFXDECODE(jalmah)
+	MCFG_GFXDECODE(jalmah)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(jalmah)
 
-	MDRV_PALETTE_LENGTH(0x400)
-	MDRV_MACHINE_RESET(jalmah)
+	MCFG_PALETTE_LENGTH(0x400)
+	MCFG_MACHINE_RESET(jalmah)
 
-	MDRV_VIDEO_START(jalmah)
-	MDRV_VIDEO_UPDATE(jalmah)
+	MCFG_VIDEO_START(jalmah)
 
-	MDRV_TIMER_ADD_PERIODIC("mcusim", jalmah_mcu_sim, HZ(10000)) // not real, but for simulating the MCU
+	MCFG_TIMER_ADD_PERIODIC("mcusim", jalmah_mcu_sim, attotime::from_hz(10000)) // not real, but for simulating the MCU
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("oki", OKIM6295, 4000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_OKIM6295_ADD("oki", 4000000, OKIM6295_PIN7_LOW)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( urashima )
-	MDRV_IMPORT_FROM(jalmah)
+static MACHINE_CONFIG_DERIVED( urashima, jalmah )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(urashima)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(urashima)
 
-	MDRV_GFXDECODE(urashima)
+	MCFG_GFXDECODE(urashima)
 
-	MDRV_VIDEO_START(urashima)
-	MDRV_VIDEO_UPDATE(urashima)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(urashima)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(urashima)
+MACHINE_CONFIG_END
 
 /*
 
@@ -1426,7 +1497,7 @@ ROM_START( daireika )
 	ROM_LOAD( "mj12.bin", 0x20000, 0x20000, CRC(236f809f) SHA1(9e15dd8a810a9d4f7f75f084d6bd277ea7d0e40a) )
 
 	ROM_REGION( 0x10000, "gfx2", 0 ) /* BG1 */
-	ROM_COPY( "gfx1", 	  0x10000, 0x00000, 0x10000 )/*mj12.bin*/
+	ROM_COPY( "gfx1",	  0x10000, 0x00000, 0x10000 )/*mj12.bin*/
 
 	ROM_REGION( 0x220, "user1", 0 ) /* Proms */
 	ROM_LOAD( "mj15.bpr", 0x000, 0x100, CRC(ebac41f9) SHA1(9d1629d977849663392cbf03a3ddf76665f88608) )
@@ -1453,7 +1524,7 @@ ROM_START( mjzoomin )
 
 	ROM_REGION( 0x140000, "oki", ROMREGION_ERASEFF ) /* Samples */
 	ROM_LOAD( "zoomin-3.bin", 0x40000, 0x80000, CRC(07d7b8cd) SHA1(e05ce80ffb945b04f93f8c49d0c840b0bff6310b) )
-	ROM_COPY( "oki" ,  		  0x40000, 0x00000, 0x40000 )
+	ROM_COPY( "oki" ,		  0x40000, 0x00000, 0x40000 )
 
 	ROM_REGION( 0x20000, "gfx1", 0 ) /* BG0 */
 	ROM_LOAD( "zoomin14.bin", 0x00000, 0x20000, CRC(4e32aa45) SHA1(450a3449ca8b4f0dfe8b62cceaee9366eaf3dc3d) )
@@ -1530,7 +1601,7 @@ ROM_START( kakumei2 )
 
 	ROM_REGION( 0x140000, "oki", ROMREGION_ERASEFF ) /* Samples */
 	ROM_LOAD( "92000-01.3", 0x040000, 0x80000, CRC(4b0ed440) SHA1(11961d217a41f92b60d5083a5e346c245f7db620) )
-	ROM_COPY( "oki" ,  		0x040000, 0x00000, 0x40000 )
+	ROM_COPY( "oki" ,		0x040000, 0x00000, 0x40000 )
 
 	ROM_REGION( 0x20000, "gfx1", 0 ) /* BG0 */
 	ROM_LOAD( "mj-8956.14", 0x00000, 0x20000, CRC(2b2fe999) SHA1(d9d601e2c008791f5bff6e7b1340f754dd094201) )
@@ -1647,6 +1718,7 @@ MCU code snippets
 
 static READ16_HANDLER( urashima_mcu_r )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	static const int resp[] = {	0x99, 0xd8, 0x00,
 							0x2a, 0x6a, 0x00,
 							0x9c, 0xd8, 0x00,
@@ -1659,10 +1731,10 @@ static READ16_HANDLER( urashima_mcu_r )
 							0x21, 0x61, 0x00 };
 	int res;
 
-	res = resp[respcount++];
-	if (respcount >= sizeof(resp)/sizeof(resp[0])) respcount = 0;
+	res = resp[state->m_respcount++];
+	if (state->m_respcount >= sizeof(resp)/sizeof(resp[0])) state->m_respcount = 0;
 
-//  logerror("%04x: mcu_r %02x\n",cpu_get_pc(space->cpu),res);
+//  logerror("%04x: mcu_r %02x\n",cpu_get_pc(&space->device()),res);
 
 	return res;
 }
@@ -1672,6 +1744,9 @@ data value is REQ under mjzoomin video test menu.It is related to the MCU?
 */
 static WRITE16_HANDLER( urashima_mcu_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
+	UINT16 *jm_mcu_code = state->m_jm_mcu_code;
 	if(ACCESSING_BITS_0_7 && data)
 	{
 		/*******************************************************
@@ -1786,83 +1861,84 @@ static WRITE16_HANDLER( urashima_mcu_w )
 		jm_mcu_code[0x1052/2] = 0x17E0;
 		jm_mcu_code[0x1054/2] = 0x33C6;
 		jm_mcu_code[0x1056/2] = 0x0010;
- 		jm_mcu_code[0x1058/2] = 0x17B0;
- 		jm_mcu_code[0x105a/2] = 0x3C39;
- 		jm_mcu_code[0x105c/2] = 0x000F;
- 		jm_mcu_code[0x105e/2] = 0x201A;
- 		jm_mcu_code[0x1060/2] = 0x3A86;
- 		jm_mcu_code[0x1062/2] = 0x6700;
- 		jm_mcu_code[0x1064/2] = 0x0074;
- 		jm_mcu_code[0x1066/2] = 0x33C2;
- 		jm_mcu_code[0x1068/2] = 0x0010;
- 		jm_mcu_code[0x106a/2] = 0x17FE;
- 		jm_mcu_code[0x106c/2] = 0x33C1;
- 		jm_mcu_code[0x106e/2] = 0x0010;
- 		jm_mcu_code[0x1070/2] = 0x17FC;
- 		jm_mcu_code[0x1072/2] = 0x23C8;
- 		jm_mcu_code[0x1074/2] = 0x0010;
- 		jm_mcu_code[0x1076/2] = 0x17F0;
-	 	jm_mcu_code[0x1078/2] = 0x23C9;
-	 	jm_mcu_code[0x107a/2] = 0x0010;
-	 	jm_mcu_code[0x107c/2] = 0x17D0;
-	 	jm_mcu_code[0x107e/2] = 0x41F9;
-	 	jm_mcu_code[0x1080/2] = 0x0002;
-	 	jm_mcu_code[0x1082/2] = 0xA2C0;
-	 	jm_mcu_code[0x1084/2] = 0x3c15;
-	 	jm_mcu_code[0x1086/2] = 0xd1fc;
- 		jm_mcu_code[0x1088/2] = 0x0000;
- 		jm_mcu_code[0x108a/2] = 0x0040;
- 		jm_mcu_code[0x108c/2] = 0x5346;
- 		jm_mcu_code[0x108e/2] = 0x6704;
- 		jm_mcu_code[0x1090/2] = 0x4e71;
- 		jm_mcu_code[0x1092/2] = 0x60F2;
- 		jm_mcu_code[0x1094/2] = 0x23c8;
- 		jm_mcu_code[0x1096/2] = 0x0010;
- 		jm_mcu_code[0x1098/2] = 0x17a0;//store here the A0 reg,1017a0
- 		jm_mcu_code[0x109a/2] = 0xd3fc;
- 		jm_mcu_code[0x109c/2] = 0x0000;
- 		jm_mcu_code[0x109e/2] = 0x0200;
- 		jm_mcu_code[0x10a0/2] = 0x720F;
- 		jm_mcu_code[0x10a2/2] = 0x740F;
- 		jm_mcu_code[0x10a4/2] = 0x2050;
- 		jm_mcu_code[0x10a6/2] = 0x32D8;
- 		jm_mcu_code[0x10a8/2] = 0x51CA;
- 		jm_mcu_code[0x10aa/2] = 0xFFFC;
- 		jm_mcu_code[0x10ac/2] = 0x2079;//1017a0,not 1017f0
- 		jm_mcu_code[0x10ae/2] = 0x0010;
- 		jm_mcu_code[0x10b0/2] = 0x17a0;
- 		jm_mcu_code[0x10b2/2] = 0xD0FC;
- 		jm_mcu_code[0x10b4/2] = 0x0004;
- 		jm_mcu_code[0x10b6/2] = 0x23c8;
- 		jm_mcu_code[0x10b8/2] = 0x0010;
- 		jm_mcu_code[0x10ba/2] = 0x17a0;
- 		jm_mcu_code[0x10bc/2] = 0x51C9;
- 		jm_mcu_code[0x10be/2] = 0xffe4;
- 		jm_mcu_code[0x10c0/2] = 0x3439;
- 		jm_mcu_code[0x10c2/2] = 0x0010;
- 		jm_mcu_code[0x10c4/2] = 0x17FE;
- 		jm_mcu_code[0x10c6/2] = 0x3239;
- 		jm_mcu_code[0x10c8/2] = 0x0010;
- 		jm_mcu_code[0x10ca/2] = 0x17FC;
- 		jm_mcu_code[0x10cc/2] = 0x2079;
- 		jm_mcu_code[0x10ce/2] = 0x0010;
- 		jm_mcu_code[0x10d0/2] = 0x17F0;
- 		jm_mcu_code[0x10d2/2] = 0x2279;
- 		jm_mcu_code[0x10d4/2] = 0x0010;
- 		jm_mcu_code[0x10d6/2] = 0x17D0;
- 		jm_mcu_code[0x10d8/2] = 0x2A79;
- 		jm_mcu_code[0x10da/2] = 0x0010;
- 		jm_mcu_code[0x10dc/2] = 0x17c0;
- 		jm_mcu_code[0x10de/2] = 0x3C39;
- 		jm_mcu_code[0x10e0/2] = 0x0010;
- 		jm_mcu_code[0x10e2/2] = 0x17B0;
- 		jm_mcu_code[0x10e4/2] = 0x6000;
- 		jm_mcu_code[0x10e6/2] = 0xFF26;
+		jm_mcu_code[0x1058/2] = 0x17B0;
+		jm_mcu_code[0x105a/2] = 0x3C39;
+		jm_mcu_code[0x105c/2] = 0x000F;
+		jm_mcu_code[0x105e/2] = 0x201A;
+		jm_mcu_code[0x1060/2] = 0x3A86;
+		jm_mcu_code[0x1062/2] = 0x6700;
+		jm_mcu_code[0x1064/2] = 0x0074;
+		jm_mcu_code[0x1066/2] = 0x33C2;
+		jm_mcu_code[0x1068/2] = 0x0010;
+		jm_mcu_code[0x106a/2] = 0x17FE;
+		jm_mcu_code[0x106c/2] = 0x33C1;
+		jm_mcu_code[0x106e/2] = 0x0010;
+		jm_mcu_code[0x1070/2] = 0x17FC;
+		jm_mcu_code[0x1072/2] = 0x23C8;
+		jm_mcu_code[0x1074/2] = 0x0010;
+		jm_mcu_code[0x1076/2] = 0x17F0;
+		jm_mcu_code[0x1078/2] = 0x23C9;
+		jm_mcu_code[0x107a/2] = 0x0010;
+		jm_mcu_code[0x107c/2] = 0x17D0;
+		jm_mcu_code[0x107e/2] = 0x41F9;
+		jm_mcu_code[0x1080/2] = 0x0002;
+		jm_mcu_code[0x1082/2] = 0xA2C0;
+		jm_mcu_code[0x1084/2] = 0x3c15;
+		jm_mcu_code[0x1086/2] = 0xd1fc;
+		jm_mcu_code[0x1088/2] = 0x0000;
+		jm_mcu_code[0x108a/2] = 0x0040;
+		jm_mcu_code[0x108c/2] = 0x5346;
+		jm_mcu_code[0x108e/2] = 0x6704;
+		jm_mcu_code[0x1090/2] = 0x4e71;
+		jm_mcu_code[0x1092/2] = 0x60F2;
+		jm_mcu_code[0x1094/2] = 0x23c8;
+		jm_mcu_code[0x1096/2] = 0x0010;
+		jm_mcu_code[0x1098/2] = 0x17a0;//store here the A0 reg,1017a0
+		jm_mcu_code[0x109a/2] = 0xd3fc;
+		jm_mcu_code[0x109c/2] = 0x0000;
+		jm_mcu_code[0x109e/2] = 0x0200;
+		jm_mcu_code[0x10a0/2] = 0x720F;
+		jm_mcu_code[0x10a2/2] = 0x740F;
+		jm_mcu_code[0x10a4/2] = 0x2050;
+		jm_mcu_code[0x10a6/2] = 0x32D8;
+		jm_mcu_code[0x10a8/2] = 0x51CA;
+		jm_mcu_code[0x10aa/2] = 0xFFFC;
+		jm_mcu_code[0x10ac/2] = 0x2079;//1017a0,not 1017f0
+		jm_mcu_code[0x10ae/2] = 0x0010;
+		jm_mcu_code[0x10b0/2] = 0x17a0;
+		jm_mcu_code[0x10b2/2] = 0xD0FC;
+		jm_mcu_code[0x10b4/2] = 0x0004;
+		jm_mcu_code[0x10b6/2] = 0x23c8;
+		jm_mcu_code[0x10b8/2] = 0x0010;
+		jm_mcu_code[0x10ba/2] = 0x17a0;
+		jm_mcu_code[0x10bc/2] = 0x51C9;
+		jm_mcu_code[0x10be/2] = 0xffe4;
+		jm_mcu_code[0x10c0/2] = 0x3439;
+		jm_mcu_code[0x10c2/2] = 0x0010;
+		jm_mcu_code[0x10c4/2] = 0x17FE;
+		jm_mcu_code[0x10c6/2] = 0x3239;
+		jm_mcu_code[0x10c8/2] = 0x0010;
+		jm_mcu_code[0x10ca/2] = 0x17FC;
+		jm_mcu_code[0x10cc/2] = 0x2079;
+		jm_mcu_code[0x10ce/2] = 0x0010;
+		jm_mcu_code[0x10d0/2] = 0x17F0;
+		jm_mcu_code[0x10d2/2] = 0x2279;
+		jm_mcu_code[0x10d4/2] = 0x0010;
+		jm_mcu_code[0x10d6/2] = 0x17D0;
+		jm_mcu_code[0x10d8/2] = 0x2A79;
+		jm_mcu_code[0x10da/2] = 0x0010;
+		jm_mcu_code[0x10dc/2] = 0x17c0;
+		jm_mcu_code[0x10de/2] = 0x3C39;
+		jm_mcu_code[0x10e0/2] = 0x0010;
+		jm_mcu_code[0x10e2/2] = 0x17B0;
+		jm_mcu_code[0x10e4/2] = 0x6000;
+		jm_mcu_code[0x10e6/2] = 0xFF26;
 	}
 }
 
 static READ16_HANDLER( daireika_mcu_r )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	static const int resp[] = {	0x99, 0xd8, 0x00,
 							0x2a, 0x6a, 0x00,
 							0x9c, 0xd8, 0x00,
@@ -1875,10 +1951,10 @@ static READ16_HANDLER( daireika_mcu_r )
 							0x21, 0x61, 0x00 };
 	int res;
 
-	res = resp[respcount++];
-	if (respcount >= sizeof(resp)/sizeof(resp[0])) respcount = 0;
+	res = resp[state->m_respcount++];
+	if (state->m_respcount >= sizeof(resp)/sizeof(resp[0])) state->m_respcount = 0;
 
-//  logerror("%04x: mcu_r %02x\n",cpu_get_pc(space->cpu),res);
+//  logerror("%04x: mcu_r %02x\n",cpu_get_pc(&space->device()),res);
 
 	return res;
 }
@@ -1887,11 +1963,14 @@ static READ16_HANDLER( daireika_mcu_r )
 data value is REQ under mjzoomin video test menu.It is related to the MCU?
 */
 static const UINT16 dai_mcu_code[0x11] = { 0x33c5, 0x0010, 0x07fe, 0x3a39,0x000f,0x000c,0xda86,0x0245,
-  									       0x003f, 0x33c5, 0x000f, 0x000c,0x3a39,0x0010,0x07fe,0x4e75    };
+									       0x003f, 0x33c5, 0x000f, 0x000c,0x3a39,0x0010,0x07fe,0x4e75    };
 
 static WRITE16_HANDLER( daireika_mcu_w )
 {
-	static UINT16 i;
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
+	UINT16 *jm_mcu_code = state->m_jm_mcu_code;
+	UINT16 i;
 
 	if(ACCESSING_BITS_0_7 && data)
 	{
@@ -1946,7 +2025,7 @@ static WRITE16_HANDLER( daireika_mcu_w )
         *******************************************************/
 		jm_shared_ram[0x00c6/2] = 0x6000;
 		jm_shared_ram[0x00c8/2] = 0x0008;//bra +$8,needed because we have only two bytes here
-		             			   //and we need three...
+		            			   //and we need three...
 		jm_shared_ram[0x00d0/2] = 0x4ef9;
 		jm_shared_ram[0x00d2/2] = 0x0010;
 		jm_shared_ram[0x00d4/2] = 0x0000;//jmp $100000
@@ -2034,11 +2113,11 @@ static WRITE16_HANDLER( daireika_mcu_w )
 		jm_shared_ram[0x0128/2] = 0x0010;
 		jm_shared_ram[0x012a/2] = 0x8980;
 
-		//pri $f0590
+		//state->m_pri $f0590
 		jm_mcu_code[0x8980/2] = 0x33fc;
 		jm_mcu_code[0x8982/2] = 0x0006;
 		jm_mcu_code[0x8984/2] = 0x000f;
-		jm_mcu_code[0x8986/2] = 0x0590; //move.w #$6,$f0590 (pri n)
+		jm_mcu_code[0x8986/2] = 0x0590; //move.w #$6,$f0590 (state->m_pri n)
 		jm_mcu_code[0x8988/2] = 0x4df9;
 		jm_mcu_code[0x898a/2] = 0x0009;
 		jm_mcu_code[0x898c/2] = 0xc000; //lea.w #9c000,A6
@@ -2141,6 +2220,7 @@ static WRITE16_HANDLER( daireika_mcu_w )
 
 static READ16_HANDLER( mjzoomin_mcu_r )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	static const int resp[] = {	0x9c, 0xd8, 0x00,
 							0x2a, 0x6a, 0x00,
 							0x99, 0xd8, 0x00,
@@ -2152,10 +2232,10 @@ static READ16_HANDLER( mjzoomin_mcu_r )
 							0x21, 0x61, 0x00 };
 	int res;
 
-	res = resp[respcount++];
-	if (respcount >= sizeof(resp)/sizeof(resp[0])) respcount = 0;
+	res = resp[state->m_respcount++];
+	if (state->m_respcount >= sizeof(resp)/sizeof(resp[0])) state->m_respcount = 0;
 
-//  logerror("%04x: mcu_r %02x\n",cpu_get_pc(space->cpu),res);
+//  logerror("%04x: mcu_r %02x\n",cpu_get_pc(&space->device()),res);
 
 	return res;
 }
@@ -2165,6 +2245,9 @@ data value is REQ under mjzoomin video test menu.It is related to the MCU?
 */
 static WRITE16_HANDLER( mjzoomin_mcu_w )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
+	UINT16 *jm_shared_ram = state->m_jm_shared_ram;
+	UINT16 *jm_mcu_code = state->m_jm_mcu_code;
 	if(ACCESSING_BITS_0_7 && data)
 	{
 		/******************************************************
@@ -2276,6 +2359,7 @@ static WRITE16_HANDLER( mjzoomin_mcu_w )
 
 static READ16_HANDLER( kakumei_mcu_r )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	static const int resp[] = {	0x8a, 0xd8, 0x00,
 							0x3c, 0x7c, 0x00,
 							0x99, 0xd8, 0x00,
@@ -2287,16 +2371,17 @@ static READ16_HANDLER( kakumei_mcu_r )
 							0x3e, 0x7e, 0x00 };
 	int res;
 
-	res = resp[respcount++];
-	if (respcount >= sizeof(resp)/sizeof(resp[0])) respcount = 0;
+	res = resp[state->m_respcount++];
+	if (state->m_respcount >= sizeof(resp)/sizeof(resp[0])) state->m_respcount = 0;
 
-//  popmessage("%04x: mcu_r %02x",cpu_get_pc(space->cpu),res);
+//  popmessage("%04x: mcu_r %02x",cpu_get_pc(&space->device()),res);
 
 	return res;
 }
 
 static READ16_HANDLER( suchipi_mcu_r )
 {
+	jalmah_state *state = space->machine().driver_data<jalmah_state>();
 	static const int resp[] = {	0x8a, 0xd8, 0x00,
 							0x3c, 0x7c, 0x00,
 							0x99, 0xd8, 0x00,
@@ -2308,57 +2393,63 @@ static READ16_HANDLER( suchipi_mcu_r )
 							0x3e, 0x7e, 0x00 };
 	int res;
 
-	res = resp[respcount++];
-	if (respcount >= sizeof(resp)/sizeof(resp[0])) respcount = 0;
+	res = resp[state->m_respcount++];
+	if (state->m_respcount >= sizeof(resp)/sizeof(resp[0])) state->m_respcount = 0;
 
-//  popmessage("%04x: mcu_r %02x",cpu_get_pc(space->cpu),res);
+//  popmessage("%04x: mcu_r %02x",cpu_get_pc(&space->device()),res);
 
 	return res;
 }
 
 static DRIVER_INIT( urashima )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80004, 0x80005, 0, 0, urashima_mcu_r );
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80012, 0x80013, 0, 0, urashima_mcu_w );
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80004, 0x80005, FUNC(urashima_mcu_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x80012, 0x80013, FUNC(urashima_mcu_w) );
 
-	mcu_prg = 0x12;
+	state->m_mcu_prg = 0x12;
 }
 
 static DRIVER_INIT( daireika )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80004, 0x80005, 0, 0, daireika_mcu_r );
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80012, 0x80013, 0, 0, daireika_mcu_w );
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80004, 0x80005, FUNC(daireika_mcu_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x80012, 0x80013, FUNC(daireika_mcu_w) );
 
-	mcu_prg = 0x11;
+	state->m_mcu_prg = 0x11;
 }
 
 static DRIVER_INIT( mjzoomin )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80004, 0x80005, 0, 0, mjzoomin_mcu_r );
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80012, 0x80013, 0, 0, mjzoomin_mcu_w );
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80004, 0x80005, FUNC(mjzoomin_mcu_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x80012, 0x80013, FUNC(mjzoomin_mcu_w) );
 
-	mcu_prg = 0x13;
+	state->m_mcu_prg = 0x13;
 }
 
 static DRIVER_INIT( kakumei )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80004, 0x80005, 0, 0, kakumei_mcu_r );
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80004, 0x80005, FUNC(kakumei_mcu_r) );
 
-	mcu_prg = 0x21;
+	state->m_mcu_prg = 0x21;
 }
 
 static DRIVER_INIT( kakumei2 )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80004, 0x80005, 0, 0, kakumei_mcu_r );
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80004, 0x80005, FUNC(kakumei_mcu_r) );
 
-	mcu_prg = 0x22;
+	state->m_mcu_prg = 0x22;
 }
 
 static DRIVER_INIT( suchipi )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80004, 0x80005, 0, 0, suchipi_mcu_r );
+	jalmah_state *state = machine.driver_data<jalmah_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80004, 0x80005, FUNC(suchipi_mcu_r) );
 
-	mcu_prg = 0x23;
+	state->m_mcu_prg = 0x23;
 }
 
 /*First version of the MCU*/

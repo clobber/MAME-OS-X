@@ -1,73 +1,102 @@
-/***************************************************************************
+/*******************************************************************************
 
-Block Hole (GX973) (c) 1989 Konami
+    Block Hole (GX973) (c) 1989 Konami
 
-driver by Nicola Salmoria
+    driver by Nicola Salmoria
 
-Notes:
-Quarth works, but Block Hole crashes when it reaches the title screen. An
-interrupt happens, and after rti the ROM bank is not the same as before so
-it jumps to garbage code.
-If you want to see this happen, place a breakpoint at 0x8612, and trace
-after that.
-The code is almost identical in the two versions, it looks like Quarth is
-working just because luckily the interrupt doesn't happen at that point.
-It seems that the interrupt handler trashes the selected ROM bank and forces
-it to 0. To prevent crashes, I only generate interrupts when the ROM bank is
-already 0. There might be another interrupt enable register, but I haven't
-found it.
+    Notes:
+    Quarth works, but Block Hole crashes when it reaches the title screen. An
+    interrupt happens, and after rti the ROM bank is not the same as before so
+    it jumps to garbage code.
+    If you want to see this happen, place a breakpoint at 0x8612, and trace
+    after that.
+    The code is almost identical in the two versions, it looks like Quarth is
+    working just because luckily the interrupt doesn't happen at that point.
+    It seems that the interrupt handler trashes the selected ROM bank and forces
+    it to 0. To prevent crashes, I only generate interrupts when the ROM bank is
+    already 0. There might be another interrupt enable register, but I haven't
+    found it.
 
-***************************************************************************/
+*******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/konami/konami.h" /* for the callback and the firq irq definition */
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "sound/2151intf.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
+#include "includes/blockhl.h"
 
 /* prototypes */
-static MACHINE_RESET( blockhl );
 static KONAMI_SETLINES_CALLBACK( blockhl_banking );
-
-
-VIDEO_START( blockhl );
-VIDEO_UPDATE( blockhl );
-
-static int palette_selected;
-static UINT8 *ram;
-static int rombank;
 
 static INTERRUPT_GEN( blockhl_interrupt )
 {
-	if (K052109_is_IRQ_enabled() && rombank == 0)	/* kludge to prevent crashes */
-		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
+	blockhl_state *state = device->machine().driver_data<blockhl_state>();
+
+	if (k052109_is_irq_enabled(state->m_k052109) && state->m_rombank == 0)	/* kludge to prevent crashes */
+		device_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
 
 static READ8_HANDLER( bankedram_r )
 {
-	if (palette_selected)
-		return paletteram[offset];
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
+
+	if (state->m_palette_selected)
+		return space->machine().generic.paletteram.u8[offset];
 	else
-		return ram[offset];
+		return state->m_ram[offset];
 }
 
 static WRITE8_HANDLER( bankedram_w )
 {
-	if (palette_selected)
-		paletteram_xBBBBBGGGGGRRRRR_be_w(space,offset,data);
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
+
+	if (state->m_palette_selected)
+		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 	else
-		ram[offset] = data;
+		state->m_ram[offset] = data;
 }
 
 static WRITE8_HANDLER( blockhl_sh_irqtrigger_w )
 {
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 
+/* special handlers to combine 052109 & 051960 */
+static READ8_HANDLER( k052109_051960_r )
+{
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+	if (k052109_get_rmrd_line(state->m_k052109) == CLEAR_LINE)
+	{
+		if (offset >= 0x3800 && offset < 0x3808)
+			return k051937_r(state->m_k051960, offset - 0x3800);
+		else if (offset < 0x3c00)
+			return k052109_r(state->m_k052109, offset);
+		else
+			return k051960_r(state->m_k051960, offset - 0x3c00);
+	}
+	else
+		return k052109_r(state->m_k052109, offset);
+}
+
+static WRITE8_HANDLER( k052109_051960_w )
+{
+	blockhl_state *state = space->machine().driver_data<blockhl_state>();
+
+	if (offset >= 0x3800 && offset < 0x3808)
+		k051937_w(state->m_k051960, offset - 0x3800, data);
+	else if (offset < 0x3c00)
+		k052109_w(state->m_k052109, offset, data);
+	else
+		k051960_w(state->m_k051960, offset - 0x3c00, data);
+}
+
+
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1f84, 0x1f84) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1f88, 0x1f88) AM_WRITE(blockhl_sh_irqtrigger_w)
 	AM_RANGE(0x1f8c, 0x1f8c) AM_WRITE(watchdog_reset_w)
@@ -76,18 +105,18 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f96, 0x1f96) AM_READ_PORT("P2")
 	AM_RANGE(0x1f97, 0x1f97) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1f98, 0x1f98) AM_READ_PORT("DSW2")
-	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(K052109_051960_r, K052109_051960_w)
+	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 	AM_RANGE(0x4000, 0x57ff) AM_RAM
-	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE(&ram)
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_MEMBER(blockhl_state, m_ram)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
-	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xe00c, 0xe00d) AM_WRITENOP		/* leftover from missing 007232? */
 ADDRESS_MAP_END
 
@@ -146,40 +175,85 @@ INPUT_PORTS_END
 
 ***************************************************************************/
 
-static MACHINE_DRIVER_START( blockhl )
+static const k052109_interface blockhl_k052109_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	blockhl_tile_callback
+};
+
+static const k051960_interface blockhl_k051960_intf =
+{
+	"gfx2", 1,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	blockhl_sprite_callback
+};
+
+static MACHINE_START( blockhl )
+{
+	blockhl_state *state = machine.driver_data<blockhl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x2000);
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
+
+	state->save_item(NAME(state->m_palette_selected));
+	state->save_item(NAME(state->m_rombank));
+}
+
+static MACHINE_RESET( blockhl )
+{
+	blockhl_state *state = machine.driver_data<blockhl_state>();
+
+	konami_configure_set_lines(machine.device("maincpu"), blockhl_banking);
+
+	state->m_palette_selected = 0;
+	state->m_rombank = 0;
+}
+
+static MACHINE_CONFIG_START( blockhl, blockhl_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", KONAMI,3000000)		/* Konami custom 052526 */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", blockhl_interrupt)
+	MCFG_CPU_ADD("maincpu", KONAMI,3000000)		/* Konami custom 052526 */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", blockhl_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545)
-	MDRV_CPU_PROGRAM_MAP(audio_map)
+	MCFG_CPU_ADD("audiocpu", Z80, 3579545)
+	MCFG_CPU_PROGRAM_MAP(audio_map)
 
-	MDRV_MACHINE_RESET(blockhl)
+	MCFG_MACHINE_START(blockhl)
+	MCFG_MACHINE_RESET(blockhl)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE_STATIC(blockhl)
 
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(blockhl)
-	MDRV_VIDEO_UPDATE(blockhl)
+	MCFG_VIDEO_START(blockhl)
+
+	MCFG_K052109_ADD("k052109", blockhl_k052109_intf)
+	MCFG_K051960_ADD("k051960", blockhl_k051960_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
-	MDRV_SOUND_ROUTE(0, "mono", 0.60)
-	MDRV_SOUND_ROUTE(1, "mono", 0.60)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
+	MCFG_SOUND_ROUTE(0, "mono", 0.60)
+	MCFG_SOUND_ROUTE(1, "mono", 0.60)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -189,7 +263,7 @@ MACHINE_DRIVER_END
 ***************************************************************************/
 
 ROM_START( blockhl )
-	ROM_REGION( 0x18800, "maincpu", 0 ) /* code + banked roms + space for banked RAM */
+	ROM_REGION( 0x18000, "maincpu", 0 ) /* code + banked roms + space for banked RAM */
 	ROM_LOAD( "973l02.e21", 0x10000, 0x08000, CRC(e14f849a) SHA1(d44cf178cc98998b72ed32c6e20b6ebdf1f97579) )
 	ROM_CONTINUE(           0x08000, 0x08000 )
 
@@ -213,7 +287,7 @@ ROM_START( blockhl )
 ROM_END
 
 ROM_START( quarth )
-	ROM_REGION( 0x18800, "maincpu", 0 ) /* code + banked roms + space for banked RAM */
+	ROM_REGION( 0x18000, "maincpu", 0 ) /* code + banked roms + space for banked RAM */
 	ROM_LOAD( "973j02.e21", 0x10000, 0x08000, CRC(27a90118) SHA1(51309385b93db29b9277d14252166c4ea1746303) )
 	ROM_CONTINUE(           0x08000, 0x08000 )
 
@@ -245,47 +319,30 @@ ROM_END
 
 static KONAMI_SETLINES_CALLBACK( blockhl_banking )
 {
-	UINT8 *RAM = memory_region(device->machine, "maincpu");
-	int offs;
+	blockhl_state *state = device->machine().driver_data<blockhl_state>();
 
 	/* bits 0-1 = ROM bank */
-	rombank = lines & 0x03;
-	offs = 0x10000 + (lines & 0x03) * 0x2000;
-	memory_set_bankptr(device->machine, 1,&RAM[offs]);
+	state->m_rombank = lines & 0x03;
+	memory_set_bank(device->machine(), "bank1", state->m_rombank);
 
 	/* bits 3/4 = coin counters */
-	coin_counter_w(0,lines & 0x08);
-	coin_counter_w(1,lines & 0x10);
+	coin_counter_w(device->machine(), 0, lines & 0x08);
+	coin_counter_w(device->machine(), 1, lines & 0x10);
 
 	/* bit 5 = select palette RAM or work RAM at 5800-5fff */
-	palette_selected = ~lines & 0x20;
+	state->m_palette_selected = ~lines & 0x20;
 
 	/* bit 6 = enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line( ( lines & 0x40 ) ? ASSERT_LINE : CLEAR_LINE );
+	k052109_set_rmrd_line(state->m_k052109, (lines & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 7 used but unknown */
 
 	/* other bits unknown */
 
-	if ((lines & 0x84) != 0x80) logerror("%04x: setlines %02x\n",cpu_get_pc(device),lines);
-}
-
-static MACHINE_RESET( blockhl )
-{
-	UINT8 *RAM = memory_region(machine, "maincpu");
-
-	konami_configure_set_lines(cputag_get_cpu(machine, "maincpu"), blockhl_banking);
-
-	paletteram = &RAM[0x18000];
+	if ((lines & 0x84) != 0x80)
+		logerror("%04x: setlines %02x\n", cpu_get_pc(device), lines);
 }
 
 
-static DRIVER_INIT( blockhl )
-{
-	konami_rom_deinterleave_2(machine, "gfx1");
-	konami_rom_deinterleave_2(machine, "gfx2");
-}
-
-
-GAME( 1989, blockhl, 0,       blockhl, blockhl, blockhl, ROT0, "Konami", "Block Hole", 0 )
-GAME( 1989, quarth,  blockhl, blockhl, blockhl, blockhl, ROT0, "Konami", "Quarth (Japan)", 0 )
+GAME( 1989, blockhl, 0,       blockhl, blockhl, 0, ROT0, "Konami", "Block Hole", GAME_SUPPORTS_SAVE )
+GAME( 1989, quarth,  blockhl, blockhl, blockhl, 0, ROT0, "Konami", "Quarth (Japan)", GAME_SUPPORTS_SAVE )

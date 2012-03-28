@@ -338,100 +338,104 @@ C - uses sub board with support for player 3 and 4 controls
 
 ***********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/2151intf.h"
 #include "sound/namco.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
 #include "includes/namcos1.h"
-
-static int dac0_value, dac1_value, dac0_gain, dac1_gain;
 
 
 /**********************************************************************/
 
 static WRITE8_HANDLER( namcos1_sub_firq_w )
 {
-	cputag_set_input_line(space->machine, "sub", M6809_FIRQ_LINE, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "sub", M6809_FIRQ_LINE, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cpu_set_input_line(space->cpu, 0, CLEAR_LINE);
+	device_set_input_line(&space->device(), 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( firq_ack_w )
 {
-	cpu_set_input_line(space->cpu, M6809_FIRQ_LINE, CLEAR_LINE);
+	device_set_input_line(&space->device(), M6809_FIRQ_LINE, CLEAR_LINE);
 }
 
 
 
 static READ8_HANDLER( dsw_r )
 {
-	int ret = input_port_read(space->machine, "DIPSW");
+	int ret = input_port_read(space->machine(), "DIPSW");
 	if (!(offset & 2)) ret >>= 4;
 	return 0xf0 | ret;
 }
 
 static WRITE8_HANDLER( namcos1_coin_w )
 {
-	coin_lockout_global_w(~data & 1);
-	coin_counter_w(0,data & 2);
-	coin_counter_w(1,data & 4);
+	coin_lockout_global_w(space->machine(), ~data & 1);
+	coin_counter_w(space->machine(), 0,data & 2);
+	coin_counter_w(space->machine(), 1,data & 4);
 }
 
-static void namcos1_update_DACs(running_machine *machine)
+static void namcos1_update_DACs(running_machine &machine)
 {
-	dac_signed_data_16_w(devtag_get_device(machine, "dac"),0x8000 + (dac0_value * dac0_gain) + (dac1_value * dac1_gain));
+	namcos1_state *state = machine.driver_data<namcos1_state>();
+	dac_signed_data_16_w(machine.device("dac"),0x8000 + (state->m_dac0_value * state->m_dac0_gain) + (state->m_dac1_value * state->m_dac1_gain));
 }
 
-void namcos1_init_DACs(void)
+void namcos1_init_DACs(running_machine &machine)
 {
-	dac0_value = 0;
-	dac1_value = 0;
-	dac0_gain=0x80;
-	dac1_gain=0x80;
+	namcos1_state *state = machine.driver_data<namcos1_state>();
+	state->m_dac0_value = 0;
+	state->m_dac1_value = 0;
+	state->m_dac0_gain=0x80;
+	state->m_dac1_gain=0x80;
 }
 
 static WRITE8_HANDLER( namcos1_dac_gain_w )
 {
+	namcos1_state *state = space->machine().driver_data<namcos1_state>();
 	int value;
 
 	/* DAC0 (bits 0,2) */
 	value = (data & 1) | ((data >> 1) & 2); /* GAIN0,GAIN1 */
-	dac0_gain = 0x20 * (value+1);
+	state->m_dac0_gain = 0x20 * (value+1);
 
 	/* DAC1 (bits 3,4) */
 	value = (data >> 3) & 3; /* GAIN2,GAIN3 */
-	dac1_gain = 0x20 * (value+1);
+	state->m_dac1_gain = 0x20 * (value+1);
 
-	namcos1_update_DACs(space->machine);
+	namcos1_update_DACs(space->machine());
 }
 
 static WRITE8_HANDLER( namcos1_dac0_w )
 {
-	dac0_value = data - 0x80; /* shift zero point */
-	namcos1_update_DACs(space->machine);
+	namcos1_state *state = space->machine().driver_data<namcos1_state>();
+	state->m_dac0_value = data - 0x80; /* shift zero point */
+	namcos1_update_DACs(space->machine());
 }
 
 static WRITE8_HANDLER( namcos1_dac1_w )
 {
-	dac1_value = data - 0x80; /* shift zero point */
-	namcos1_update_DACs(space->machine);
+	namcos1_state *state = space->machine().driver_data<namcos1_state>();
+	state->m_dac1_value = data - 0x80; /* shift zero point */
+	namcos1_update_DACs(space->machine());
 }
 
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK(1)
-	AM_RANGE(0x2000, 0x3fff) AM_RAMBANK(2)
-	AM_RANGE(0x4000, 0x5fff) AM_RAMBANK(3)
-	AM_RANGE(0x6000, 0x7fff) AM_RAMBANK(4)
-	AM_RANGE(0x8000, 0x9fff) AM_RAMBANK(5)
-	AM_RANGE(0xa000, 0xbfff) AM_RAMBANK(6)
-	AM_RANGE(0xc000, 0xdfff) AM_RAMBANK(7)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK("bank1")
+	AM_RANGE(0x2000, 0x3fff) AM_RAMBANK("bank2")
+	AM_RANGE(0x4000, 0x5fff) AM_RAMBANK("bank3")
+	AM_RANGE(0x6000, 0x7fff) AM_RAMBANK("bank4")
+	AM_RANGE(0x8000, 0x9fff) AM_RAMBANK("bank5")
+	AM_RANGE(0xa000, 0xbfff) AM_RAMBANK("bank6")
+	AM_RANGE(0xc000, 0xdfff) AM_RAMBANK("bank7")
 	AM_RANGE(0xe000, 0xefff) AM_WRITE(namcos1_bankswitch_w)
 	AM_RANGE(0xf000, 0xf000) AM_WRITE(namcos1_cpu_control_w)
 	AM_RANGE(0xf200, 0xf200) AM_WRITE(namcos1_watchdog_w)
@@ -440,34 +444,34 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(firq_ack_w)
 	AM_RANGE(0xfa00, 0xfa00) AM_WRITE(namcos1_sub_firq_w) // asserts FIRQ on CPU1
 	AM_RANGE(0xfc00, 0xfc01) AM_WRITE(namcos1_subcpu_bank_w)
-	AM_RANGE(0xe000, 0xffff) AM_ROMBANK(8)
+	AM_RANGE(0xe000, 0xffff) AM_ROMBANK("bank8")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK(9)
-	AM_RANGE(0x2000, 0x3fff) AM_RAMBANK(10)
-	AM_RANGE(0x4000, 0x5fff) AM_RAMBANK(11)
-	AM_RANGE(0x6000, 0x7fff) AM_RAMBANK(12)
-	AM_RANGE(0x8000, 0x9fff) AM_RAMBANK(13)
-	AM_RANGE(0xa000, 0xbfff) AM_RAMBANK(14)
-	AM_RANGE(0xc000, 0xdfff) AM_RAMBANK(15)
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAMBANK("bank9")
+	AM_RANGE(0x2000, 0x3fff) AM_RAMBANK("bank10")
+	AM_RANGE(0x4000, 0x5fff) AM_RAMBANK("bank11")
+	AM_RANGE(0x6000, 0x7fff) AM_RAMBANK("bank12")
+	AM_RANGE(0x8000, 0x9fff) AM_RAMBANK("bank13")
+	AM_RANGE(0xa000, 0xbfff) AM_RAMBANK("bank14")
+	AM_RANGE(0xc000, 0xdfff) AM_RAMBANK("bank15")
 	AM_RANGE(0xe000, 0xefff) AM_WRITE(namcos1_bankswitch_w)
 //  AM_RANGE(0xf000, 0xf000) AM_WRITENOP // IO Chip
 	AM_RANGE(0xf200, 0xf200) AM_WRITE(namcos1_watchdog_w)
 //  AM_RANGE(0xf400, 0xf400) AM_WRITENOP // ?
 	AM_RANGE(0xf600, 0xf600) AM_WRITE(irq_ack_w)
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(firq_ack_w)
-	AM_RANGE(0xe000, 0xffff) AM_ROMBANK(16)
+	AM_RANGE(0xe000, 0xffff) AM_ROMBANK("bank16")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK(17)	/* Banked ROMs */
-	AM_RANGE(0x4000, 0x4001) AM_DEVREAD("ym", ym2151_status_port_r)
-	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
-	AM_RANGE(0x5000, 0x53ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_MIRROR(0x400) AM_BASE(&namco_wavedata) /* PSG ( Shared ) */
-	AM_RANGE(0x7000, 0x77ff) AM_RAMBANK(18)	/* TRIRAM (shared) */
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank17")	/* Banked ROMs */
+	AM_RANGE(0x4000, 0x4001) AM_DEVREAD("ymsnd", ym2151_status_port_r)
+	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x5000, 0x53ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_MIRROR(0x400) /* PSG ( Shared ) */
+	AM_RANGE(0x7000, 0x77ff) AM_RAMBANK("bank18")	/* TRIRAM (shared) */
 	AM_RANGE(0x8000, 0x9fff) AM_RAM	/* Sound RAM 3 */
 	AM_RANGE(0xc000, 0xc001) AM_WRITE(namcos1_sound_bankswitch_w) /* ROM bank selector */
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(namcos1_watchdog_w)
@@ -476,16 +480,16 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r, hd63701_internal_registers_w)
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r, m6801_io_w)
 	AM_RANGE(0x0080, 0x00ff) AM_RAM /* built in RAM */
 	AM_RANGE(0x1000, 0x1003) AM_READ(dsw_r)
 	AM_RANGE(0x1400, 0x1400) AM_READ_PORT("CONTROL0")
 	AM_RANGE(0x1401, 0x1401) AM_READ_PORT("CONTROL1")
-	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK(20) /* banked ROM */
+	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK("bank20") /* banked ROM */
 	AM_RANGE(0xc000, 0xc000) AM_WRITE(namcos1_mcu_patch_w)	/* kludge! see notes */
-	AM_RANGE(0xc000, 0xc7ff) AM_RAMBANK(19)	/* TRIRAM (shared) */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) /* EEPROM */
+	AM_RANGE(0xc000, 0xc7ff) AM_RAMBANK("bank19")	/* TRIRAM (shared) */
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE("nvram") /* EEPROM */
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(namcos1_dac0_w)
 	AM_RANGE(0xd400, 0xd400) AM_WRITE(namcos1_dac1_w)
 	AM_RANGE(0xd800, 0xd800) AM_WRITE(namcos1_mcu_bankswitch_w) /* ROM bank selector */
@@ -493,9 +497,9 @@ static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_port_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ_PORT("COIN") AM_WRITE(namcos1_coin_w)
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READWRITE(SMH_NOP, namcos1_dac_gain_w)
+static ADDRESS_MAP_START( mcu_port_map, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ_PORT("COIN") AM_WRITE(namcos1_coin_w)
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READNOP AM_WRITE(namcos1_dac_gain_w)
 ADDRESS_MAP_END
 
 
@@ -1055,9 +1059,9 @@ GFXDECODE_END
 
 
 
-static void namcos1_sound_interrupt( const device_config *device, int irq )
+static void namcos1_sound_interrupt( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2151_interface ym2151_config =
@@ -1077,66 +1081,65 @@ static const namco_interface namco_config =
     LPF info : Fco = 3.3KHz , g = -12dB/oct
 */
 
-static MACHINE_DRIVER_START( ns1 )
+static MACHINE_CONFIG_START( ns1, namcos1_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809,49152000/32)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("maincpu", M6809,49152000/32)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_CPU_ADD("sub", M6809,49152000/32)
-	MDRV_CPU_PROGRAM_MAP(sub_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("sub", M6809,49152000/32)
+	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_CPU_ADD("audiocpu", M6809,49152000/32)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("audiocpu", M6809,49152000/32)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_CPU_ADD("mcu",HD63701,49152000/8)
-	MDRV_CPU_PROGRAM_MAP(mcu_map)
-	MDRV_CPU_IO_MAP(mcu_port_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("mcu",HD63701,49152000/8)
+	MCFG_CPU_PROGRAM_MAP(mcu_map)
+	MCFG_CPU_IO_MAP(mcu_port_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
 	// heavy sync required to prevent CPUs from fighting for video RAM access and going into deadlocks
-	MDRV_QUANTUM_TIME(HZ(38400))
+	MCFG_QUANTUM_TIME(attotime::from_hz(38400))
 
-	MDRV_MACHINE_RESET(namcos1)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_MACHINE_RESET(namcos1)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60.606060)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(9 + 8*8, 9 + 44*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60.606060)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 64*8)
+	MCFG_SCREEN_VISIBLE_AREA(9 + 8*8, 9 + 44*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(namcos1)
+	MCFG_SCREEN_VBLANK_STATIC(namcos1)
 
-	MDRV_GFXDECODE(namcos1)
-	MDRV_PALETTE_LENGTH(0x2000)
+	MCFG_GFXDECODE(namcos1)
+	MCFG_PALETTE_LENGTH(0x2000)
 
-	MDRV_VIDEO_START(namcos1)
-	MDRV_VIDEO_UPDATE(namcos1)
-	MDRV_VIDEO_EOF(namcos1)
+	MCFG_VIDEO_START(namcos1)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579580)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579580)
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048/2)
-	MDRV_SOUND_CONFIG(namco_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
+	MCFG_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048/2)
+	MCFG_SOUND_CONFIG(namco_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -1506,11 +1509,41 @@ ROM_START( quester )
 	ROM_LOAD( "qs1_o1.bin",         0x20000, 0x10000, CRC(e4aab0ca) SHA1(e4765dd369b02492dbb9955cc082f24665a01635) )
 ROM_END
 
+ROM_START( questers )
+	ROM_REGION( 0x2c000, "audiocpu", 0 )       /* 176k for the sound cpu */
+	ROM_LOAD( "qs1_s0.bin",         0x0c000, 0x10000, CRC(c2ef3af9) SHA1(aa0766aad450660e216d817e41e030141e8d1f48) )
+
+	ROM_REGION( 0x400000, "user1", 0 ) /* 4M for ROMs */
+	/* 000000-07ffff empty */
+	/* 080000-0fffff empty */
+	/* 100000-17ffff empty */
+	/* 180000-1fffff empty */
+	/* 200000-27ffff empty */
+	ROM_LOAD_512( "qs2_p5.bin",      0x280000, CRC(15661fe7) SHA1(e3071981231dd84407d1cc90f3b248d2989406b3) )
+	ROM_LOAD_512( "qs2_p6.bin",      0x300000, CRC(19e0fc20) SHA1(bc824dd7f88ccfa2e97ae05897e6535cf6876fab) )
+	ROM_LOAD_512( "qs2_p7.bin",      0x380000, CRC(4f6ad716) SHA1(759b4eee1a24029efc2e813a648f6fbc22a17fab) )
+
+	ROM_REGION( 0xd0000, "mcu", 0 )       /* the MCU & voice */
+	ROM_LOAD( "cus64-64a1.mcu",     0x0f000, 0x01000, CRC(ffb5c0bd) SHA1(7a38c0cc2553c627f4ec507fb6e807cf7d537c02) ) /* internal 63701 MCU code */
+	ROM_LOAD_HS( "qs1_v0.bin",      0x10000, 0x10000, CRC(6a2f3038) SHA1(00870da9b7f65536ff052c32da2d553f8c6b994b) )
+
+	ROM_REGION( 0x20000, "gfx1", 0 )  /* character mask */
+	ROM_LOAD( "qs1_c8.bin",         0x00000, 0x10000, CRC(06730d54) SHA1(53d79c27e2f1b192b1de781b6b5024eb1e8126ad) )
+
+	ROM_REGION( 0x100000, "gfx2", 0 ) /* characters */
+	ROM_LOAD( "qs1_c0.bin",         0x00000, 0x20000, CRC(ca69bd7a) SHA1(98130f06e3d7b480b76bf28a4e252b4aaa1e1b3e) )
+	ROM_LOAD( "qs1_c1.bin",         0x20000, 0x20000, CRC(d660ba71) SHA1(738d225c0e2b91c785fde0c33a0520a672933659) )
+	ROM_LOAD( "qs1_c2.bin",         0x40000, 0x20000, CRC(4686f656) SHA1(8628a18bf7154b8edaf7cfbee2d8881a28690bff) )
+
+	ROM_REGION( 0x100000, "gfx3", 0 ) /* sprites */
+	ROM_LOAD( "qs1_o0.bin",         0x00000, 0x10000, CRC(e24f0bf1) SHA1(31f37f853fe27c24cfeaa059f8959dfea37911cb) )
+	ROM_LOAD( "qs1_o1.bin",         0x20000, 0x10000, CRC(e4aab0ca) SHA1(e4765dd369b02492dbb9955cc082f24665a01635) )
+ROM_END
 /* Pac-Mania */
 ROM_START( pacmania )
 	ROM_REGION( 0x2c000, "audiocpu", 0 )       /* 176k for the sound cpu */
-	ROM_LOAD( "pnx_s0.bin",         0x0c000, 0x10000, CRC(c10370fa) SHA1(f819a31075d3c8df5deee2919cd446b9e678c47d) )
-	ROM_LOAD( "pnx_s1.bin",         0x1c000, 0x10000, CRC(f761ed5a) SHA1(1487932c86a6094ed01d5032904fd7ae3435d09c) )
+	ROM_LOAD( "pn2_s0.bin",         0x0c000, 0x10000, CRC(c10370fa) SHA1(f819a31075d3c8df5deee2919cd446b9e678c47d) )
+	ROM_LOAD( "pn2_s1.bin",         0x1c000, 0x10000, CRC(f761ed5a) SHA1(1487932c86a6094ed01d5032904fd7ae3435d09c) )
 
 	ROM_REGION( 0x400000, "user1", 0 ) /* 4M for ROMs */
 	/* 000000-07ffff empty */
@@ -1520,14 +1553,14 @@ ROM_START( pacmania )
 	/* 200000-27ffff empty */
 	/* 280000-2fffff empty */
 	ROM_LOAD_1024( "pn_prg-6.bin",    0x300000, CRC(fe94900c) SHA1(5ce726baafc5ed24ea4cae33232c97637afb486b) )
-	ROM_LOAD_512 ( "pnx_p7.bin",      0x380000, CRC(462fa4fd) SHA1(b27bee1ac64ac204c85703c3822de7dbda11b75e) )
+	ROM_LOAD_512 ( "pn2_p7.bin",      0x380000, CRC(462fa4fd) SHA1(b27bee1ac64ac204c85703c3822de7dbda11b75e) )
 
 	ROM_REGION( 0xd0000, "mcu", 0 )       /* the MCU & voice */
 	ROM_LOAD( "cus64-64a1.mcu",     0x0f000, 0x01000, CRC(ffb5c0bd) SHA1(7a38c0cc2553c627f4ec507fb6e807cf7d537c02) ) /* internal 63701 MCU code */
-	ROM_LOAD_HS( "pnx_v0.bin",      0x10000, 0x10000, CRC(1ad5788f) SHA1(f6b1ccdcc3db11c0ab83e3ff24e772cd2b491468) )
+	ROM_LOAD_HS( "pn2_v0.bin",      0x10000, 0x10000, CRC(1ad5788f) SHA1(f6b1ccdcc3db11c0ab83e3ff24e772cd2b491468) )
 
 	ROM_REGION( 0x20000, "gfx1", 0 )  /* character mask */
-	ROM_LOAD( "pn1_c8.bin",         0x00000, 0x10000, CRC(f3afd65d) SHA1(51daefd8685b49c464130b9e7d93e31cfdda724e) )
+	ROM_LOAD( "pn2_c8.bin",         0x00000, 0x10000, CRC(f3afd65d) SHA1(51daefd8685b49c464130b9e7d93e31cfdda724e) )
 
 	ROM_REGION( 0x100000, "gfx2", 0 ) /* characters */
 	ROM_LOAD( "pn_chr-0.bin",       0x00000, 0x20000, CRC(7c57644c) SHA1(77d9cc9ffbed47a941e4c5e5645d7d1126f6c302) )
@@ -2530,43 +2563,6 @@ ROM_START( soukobdx )
 	ROM_LOAD( "sb1_obj0.bin",       0x00000, 0x10000, CRC(ed810da4) SHA1(b3172b50b15d0e2fd40d38d32abf4de22b6f7a85) )
 ROM_END
 
-
-/*
-Puzzle Club
-Yunsung, 2000
-
-PCB Layout
-----------
-
-YS-2113
-|----------------------------------------------|
-|ROM1.128 ROM2.137 ROM3.7  62256  ROM5.97      |
-|  6116 Z80  6295  ROM4.2  62256  ROM6.95      |
-|  YMXXXX   16MHz     PAL         ROM7.105     |
-|  YM3014             PAL  PAL    ROM8.83      |
-|          62256    68000         ROM9.82      |
-|          62256           6116     14.38383MHz|
-|                          6116   PAL     PAL  |
-|J           6116   QL2003        PAL          |
-|A           6116                 PAL          |
-|M           6116   QL12X16B      PAL          |
-|M DIP1      6116                 PAL          |
-|A DIP2                                        |
-|            62256  QL2003                     |
-|            62256                             |
-|                                              |
-|  ROM11.166  ROM10.167                        |
-|                   QL2003        PAL          |
-|  ROM13.164  ROM12.165           PAL          |
-|----------------------------------------------|
-Notes:
-      68000 clock : 16.000MHz
-      Z80 clock   : 4.000MHz (16/4)
-      M6295 clock : 1.000MHz (16/16). Sample Rate = 1000000 / 132
-      YMXXXX clock: 4.000MHz (16/4). Chip is either YM2151 or YM3812
-      VSync       : 60Hz
-*/
-
 ROM_START( puzlclub )
 	ROM_REGION( 0x2c000, "audiocpu", 0 )       /* 176k for the sound cpu */
 	ROM_LOAD( "pc1_s0.bin",         0x0c000, 0x10000, CRC(44737c02) SHA1(bcacfed1c3522d6ecddd3ac79ded620e5334df35) )
@@ -2716,9 +2712,10 @@ GAME( 1987, youkaidk, shadowld, ns1,     shadowld, shadowld, ROT180, "Namco", "Y
 GAME( 1987, youkaidko,shadowld, ns1,     shadowld, shadowld, ROT180, "Namco", "Yokai Douchuuki (Japan old version)", 0 )
 GAME( 1987, dspirit,  0,        ns1,     dspirit,  dspirit,  ROT90,  "Namco", "Dragon Spirit (new version)", 0 )
 GAME( 1987, dspirito, dspirit,  ns1,     dspirit,  dspirit,  ROT90,  "Namco", "Dragon Spirit (old version)", 0 )
-GAME( 1987, dspirita, dspirit,  ns1,     dspirit,  dspirit,  ROT90,  "Namco", "Dragon Spirit (Atari license)", 0 )
+GAME( 1987, dspirita, dspirit,  ns1,     dspirit,  dspirit,  ROT90,  "Namco (Atari license)", "Dragon Spirit (Atari license)", 0 )
 GAME( 1987, blazer,   0,        ns1,     ns1,      blazer,   ROT90,  "Namco", "Blazer (Japan)", 0 )
 GAME( 1987, quester,  0,        ns1,     quester,  quester,  ROT90,  "Namco", "Quester (Japan)", 0 )
+GAME( 1987, questers, quester,  ns1,     quester,  quester,  ROT90,  "Namco", "Quester Special Edition (Japan)", 0 )
 GAME( 1987, pacmania, 0,        ns1,     pacmania, pacmania, ROT270, "Namco", "Pac-Mania", 0 )
 GAME( 1987, pacmaniaj,pacmania, ns1,     pacmania, pacmania, ROT90,  "Namco", "Pac-Mania (Japan)", 0 )
 GAME( 1987, galaga88, 0,        ns1,     galaga88, galaga88, ROT270, "Namco", "Galaga '88", 0 )

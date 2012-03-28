@@ -22,8 +22,6 @@
 #ifndef __CP1610_H__
 #define __CP1610_H__
 
-#include "cpuintrf.h"
-
 enum
 {
 	CP1610_R0=1, CP1610_R1, CP1610_R2, CP1610_R3,
@@ -36,8 +34,7 @@ enum
 #define CP1610_INT_INTR		INPUT_LINE_NMI		/* Non-Maskable */
 
 
-CPU_GET_INFO( cp1610 );
-#define CPU_CP1610 CPU_GET_INFO_NAME( cp1610 )
+DECLARE_LEGACY_CPU_DEVICE(CP1610, cp1610);
 
 CPU_DISASSEMBLE( cp1610 );
 

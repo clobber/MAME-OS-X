@@ -1,162 +1,155 @@
 /***************************************************************************
 
-Gradius 3 (GX945) (c) 1989 Konami
+    Gradius 3 (GX945) (c) 1989 Konami
 
-driver by Nicola Salmoria
+    driver by Nicola Salmoria
 
-This board uses the well known 052109 051962 custom gfx chips, however unlike
-all other games they fetch gfx data from RAM. The gfx ROMs are memory mapped
-on cpu B and the needed parts are copied to RAM at run time.
-To handle this efficiently in MAME, some changes would be required to the
-tilemap system and to video/konamiic.c. For the time being, I'm kludging
-my way in.
-There's also something wrong in the way tile banks are implemented in
-konamiic.c. They don't seem to be used by this game.
+    This board uses the well known 052109 051962 custom gfx chips, however unlike
+    all other games they fetch gfx data from RAM. The gfx ROMs are memory mapped
+    on cpu B and the needed parts are copied to RAM at run time.
+    To handle this efficiently in MAME, some changes would be required to the
+    tilemap system and to video/konamiic.c. For the time being, I'm kludging
+    my way in.
+    There's also something wrong in the way tile banks are implemented in
+    konamiic.c. They don't seem to be used by this game.
 
-2009-03:
-Added dsw locations and verified factory setting based on Guru's notes
+    2009-03:
+    Added dsw locations and verified factory setting based on Guru's notes
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
-#include "video/konamiic.h"
+#include "emu.h"
+#include "video/konicdev.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
 #include "sound/k007232.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
+#include "includes/gradius3.h"
 
-extern UINT16 *gradius3_gfxram;
-extern int gradius3_priority;
-VIDEO_START( gradius3 );
-READ16_HANDLER( gradius3_gfxrom_r );
-WRITE16_HANDLER( gradius3_gfxram_w );
-VIDEO_UPDATE( gradius3 );
-
-
-
-static READ16_HANDLER( K052109_halfword_r )
+static READ16_HANDLER( k052109_halfword_r )
 {
-	return K052109_r(space,offset);
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+	return k052109_r(state->m_k052109, offset);
 }
 
-static WRITE16_HANDLER( K052109_halfword_w )
+static WRITE16_HANDLER( k052109_halfword_w )
 {
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+
 	if (ACCESSING_BITS_0_7)
-		K052109_w(space,offset,data & 0xff);
+		k052109_w(state->m_k052109, offset, data & 0xff);
 
 	/* is this a bug in the game or something else? */
 	if (!ACCESSING_BITS_0_7)
-		K052109_w(space,offset,(data >> 8) & 0xff);
-//      logerror("%06x half %04x = %04x\n",cpu_get_pc(space->cpu),offset,data);
+		k052109_w(state->m_k052109, offset, (data >> 8) & 0xff);
+//      logerror("%06x half %04x = %04x\n",cpu_get_pc(&space->device()),offset,data);
 }
 
-static READ16_HANDLER( K051937_halfword_r )
+static READ16_HANDLER( k051937_halfword_r )
 {
-	return K051937_r(space,offset);
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+	return k051937_r(state->m_k051960, offset);
 }
 
-static WRITE16_HANDLER( K051937_halfword_w )
+static WRITE16_HANDLER( k051937_halfword_w )
 {
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+
 	if (ACCESSING_BITS_0_7)
-		K051937_w(space,offset,data & 0xff);
+		k051937_w(state->m_k051960, offset, data & 0xff);
 }
 
-static READ16_HANDLER( K051960_halfword_r )
+static READ16_HANDLER( k051960_halfword_r )
 {
-	return K051960_r(space,offset);
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+	return k051960_r(state->m_k051960, offset);
 }
 
-static WRITE16_HANDLER( K051960_halfword_w )
+static WRITE16_HANDLER( k051960_halfword_w )
 {
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
 	if (ACCESSING_BITS_0_7)
-		K051960_w(space,offset,data & 0xff);
-}
-
-
-
-static int irqAen,irqBmask;
-
-
-static MACHINE_RESET( gradius3 )
-{
-	/* start with cpu B halted */
-	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
-	irqAen = 0;
-	irqBmask = 0;
+		k051960_w(state->m_k051960, offset, data & 0xff);
 }
 
 static WRITE16_HANDLER( cpuA_ctrl_w )
 {
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+
 	if (ACCESSING_BITS_8_15)
 	{
 		data >>= 8;
 
 		/* bits 0-1 are coin counters */
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_counter_w(space->machine(), 0, data & 0x01);
+		coin_counter_w(space->machine(), 1, data & 0x02);
 
 		/* bit 2 selects layer priority */
-		gradius3_priority = data & 0x04;
+		state->m_priority = data & 0x04;
 
 		/* bit 3 enables cpu B */
-		cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, (data & 0x08) ? CLEAR_LINE : ASSERT_LINE);
+		device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (data & 0x08) ? CLEAR_LINE : ASSERT_LINE);
 
 		/* bit 5 enables irq */
-		irqAen = data & 0x20;
+		state->m_irqAen = data & 0x20;
 
 		/* other bits unknown */
-//logerror("%06x: write %04x to c0000\n",cpu_get_pc(space->cpu),data);
+	//logerror("%06x: write %04x to c0000\n",cpu_get_pc(&space->device()),data);
 	}
 }
 
 static WRITE16_HANDLER( cpuB_irqenable_w )
 {
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+
 	if (ACCESSING_BITS_8_15)
-		irqBmask = (data >> 8) & 0x07;
+		state->m_irqBmask = (data >> 8) & 0x07;
 }
 
 static INTERRUPT_GEN( cpuA_interrupt )
 {
-	if (irqAen)
-		cpu_set_input_line(device, 2, HOLD_LINE);
+	gradius3_state *state = device->machine().driver_data<gradius3_state>();
+	if (state->m_irqAen)
+		device_set_input_line(device, 2, HOLD_LINE);
 }
 
-static INTERRUPT_GEN( cpuB_interrupt )
+
+static TIMER_DEVICE_CALLBACK( gradius3_sub_scanline )
 {
-	if (cpu_getiloops(device) & 1)	/* ??? */
-	{
-		if (irqBmask & 2)
-			cpu_set_input_line(device, 2, HOLD_LINE);
-	}
-	else
-	{
-		if (irqBmask & 1)
-			cpu_set_input_line(device, 1, HOLD_LINE);
-	}
+	gradius3_state *state = timer.machine().driver_data<gradius3_state>();
+	int scanline = param;
+
+	if(scanline == 240 && state->m_irqBmask & 1) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "sub", 1, HOLD_LINE);
+
+	if(scanline ==  16 && state->m_irqBmask & 2) // sprite end DMA irq
+		cputag_set_input_line(timer.machine(), "sub", 2, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( cpuB_irqtrigger_w )
 {
-	if (irqBmask & 4)
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+
+	if (state->m_irqBmask & 4)
 	{
-logerror("%04x trigger cpu B irq 4 %02x\n",cpu_get_pc(space->cpu),data);
-		cputag_set_input_line(space->machine, "sub", 4, HOLD_LINE);
+		logerror("%04x trigger cpu B irq 4 %02x\n",cpu_get_pc(&space->device()),data);
+		device_set_input_line(state->m_subcpu, 4, HOLD_LINE);
 	}
 	else
-logerror("%04x MISSED cpu B irq 4 %02x\n",cpu_get_pc(space->cpu),data);
+		logerror("%04x MISSED cpu B irq 4 %02x\n",cpu_get_pc(&space->device()),data);
 }
 
 static WRITE16_HANDLER( sound_command_w )
 {
 	if (ACCESSING_BITS_8_15)
-		soundlatch_w(space,0,(data >> 8) & 0xff);
+		soundlatch_w(space, 0, (data >> 8) & 0xff);
 }
 
 static WRITE16_HANDLER( sound_irq_w )
 {
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+	gradius3_state *state = space->machine().driver_data<gradius3_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bank_w )
@@ -166,15 +159,15 @@ static WRITE8_DEVICE_HANDLER( sound_bank_w )
 	/* banks # for the 007232 (chip 1) */
 	bank_A = ((data >> 0) & 0x03);
 	bank_B = ((data >> 2) & 0x03);
-	k007232_set_bank( device, bank_A, bank_B );
+	k007232_set_bank(device, bank_A, bank_B);
 }
 
 
 
-static ADDRESS_MAP_START( gradius3_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gradius3_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM
-	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_WRITE(cpuA_ctrl_w)	/* halt cpu B, irq enable, priority, coin counters, other? */
 	AM_RANGE(0x0c8000, 0x0c8001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x0c8002, 0x0c8003) AM_READ_PORT("P1")
@@ -186,31 +179,31 @@ static ADDRESS_MAP_START( gradius3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0e0000, 0x0e0001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x0e8000, 0x0e8001) AM_WRITE(sound_command_w)
 	AM_RANGE(0x0f0000, 0x0f0001) AM_WRITE(sound_irq_w)
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x14c000, 0x153fff) AM_READWRITE(K052109_halfword_r, K052109_halfword_w)
-	AM_RANGE(0x180000, 0x19ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_BASE(&gradius3_gfxram) AM_SHARE(2)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x14c000, 0x153fff) AM_READWRITE(k052109_halfword_r, k052109_halfword_w)
+	AM_RANGE(0x180000, 0x19ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_BASE_MEMBER(gradius3_state, m_gfxram) AM_SHARE("share2")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( gradius3_map2, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( gradius3_map2, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x140000, 0x140001) AM_WRITE(cpuB_irqenable_w)
-	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x24c000, 0x253fff) AM_READWRITE(K052109_halfword_r, K052109_halfword_w)
-	AM_RANGE(0x280000, 0x29ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_SHARE(2)
-	AM_RANGE(0x2c0000, 0x2c000f) AM_READWRITE(K051937_halfword_r, K051937_halfword_w)
-	AM_RANGE(0x2c0800, 0x2c0fff) AM_READWRITE(K051960_halfword_r, K051960_halfword_w)
+	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x24c000, 0x253fff) AM_READWRITE(k052109_halfword_r, k052109_halfword_w)
+	AM_RANGE(0x280000, 0x29ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_SHARE("share2")
+	AM_RANGE(0x2c0000, 0x2c000f) AM_READWRITE(k051937_halfword_r, k051937_halfword_w)
+	AM_RANGE(0x2c0800, 0x2c0fff) AM_READWRITE(k051960_halfword_r, k051960_halfword_w)
 	AM_RANGE(0x400000, 0x5fffff) AM_READ(gradius3_gfxrom_r)		/* gfx ROMs are mapped here, and copied to RAM */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( gradius3_s_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gradius3_s_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("konami", sound_bank_w)				/* 007232 bankswitch */
+	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("k007232", sound_bank_w)				/* 007232 bankswitch */
 	AM_RANGE(0xf010, 0xf010) AM_READ(soundlatch_r)
-	AM_RANGE(0xf020, 0xf02d) AM_DEVREADWRITE("konami", k007232_r, k007232_w)
-	AM_RANGE(0xf030, 0xf031) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xf020, 0xf02d) AM_DEVREADWRITE("k007232", k007232_r, k007232_w)
+	AM_RANGE(0xf030, 0xf031) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -273,11 +266,10 @@ static INPUT_PORTS_START( gradius3 )
 INPUT_PORTS_END
 
 
-
-static void volume_callback(const device_config *device, int v)
+static void volume_callback(device_t *device, int v)
 {
-	k007232_set_volume(device,0,(v >> 4) * 0x11,0);
-	k007232_set_volume(device,1,0,(v & 0x0f) * 0x11);
+	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
+	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
 }
 
 static const k007232_interface k007232_config =
@@ -287,54 +279,102 @@ static const k007232_interface k007232_config =
 
 
 
-static MACHINE_DRIVER_START( gradius3 )
+static const k052109_interface gradius3_k052109_intf =
+{
+	"gfx1", 0,
+	GRADIUS3_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_NONE,
+	gradius3_tile_callback
+};
+
+static const k051960_interface gradius3_k051960_intf =
+{
+	"gfx2", 1,
+	GRADIUS3_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	gradius3_sprite_callback
+};
+
+static MACHINE_START( gradius3 )
+{
+	gradius3_state *state = machine.driver_data<gradius3_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_k007232 = machine.device("k007232");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
+
+	state->save_item(NAME(state->m_irqAen));
+	state->save_item(NAME(state->m_irqBmask));
+	state->save_item(NAME(state->m_priority));
+}
+
+static MACHINE_RESET( gradius3 )
+{
+	gradius3_state *state = machine.driver_data<gradius3_state>();
+
+	/* start with cpu B halted */
+	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
+	state->m_irqAen = 0;
+	state->m_irqBmask = 0;
+	state->m_priority = 0;
+
+}
+
+static MACHINE_CONFIG_START( gradius3, gradius3_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000)	/* 10 MHz */
-	MDRV_CPU_PROGRAM_MAP(gradius3_map)
-	MDRV_CPU_VBLANK_INT("screen", cpuA_interrupt)
+	MCFG_CPU_ADD("maincpu", M68000, 10000000)	/* 10 MHz */
+	MCFG_CPU_PROGRAM_MAP(gradius3_map)
+	MCFG_CPU_VBLANK_INT("screen", cpuA_interrupt)
 
-	MDRV_CPU_ADD("sub", M68000, 10000000)	/* 10 MHz */
-	MDRV_CPU_PROGRAM_MAP(gradius3_map2)
-	MDRV_CPU_VBLANK_INT_HACK(cpuB_interrupt,2)	/* has three interrupt vectors, 1 2 and 4 */
-								/* 4 is triggered by cpu A, the others are unknown but */
-								/* required for the game to run. */
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545)
-	MDRV_CPU_PROGRAM_MAP(gradius3_s_map)
+	MCFG_CPU_ADD("sub", M68000, 10000000)	/* 10 MHz */
+	MCFG_CPU_PROGRAM_MAP(gradius3_map2)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", gradius3_sub_scanline, "screen", 0, 1) /* has three interrupt vectors, 1 2 and 4 */
+																				/* 4 is triggered by cpu A, the others are unknown but */
+																				/* required for the game to run. */
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_CPU_ADD("audiocpu", Z80, 3579545)
+	MCFG_CPU_PROGRAM_MAP(gradius3_s_map)
 
-	MDRV_MACHINE_RESET(gradius3)
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+
+	MCFG_MACHINE_START(gradius3)
+	MCFG_MACHINE_RESET(gradius3)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE_STATIC(gradius3)
 
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(gradius3)
-	MDRV_VIDEO_UPDATE(gradius3)
+	MCFG_VIDEO_START(gradius3)
+
+	MCFG_K052109_ADD("k052109", gradius3_k052109_intf)
+	MCFG_K051960_ADD("k051960", gradius3_k051960_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("konami", K007232, 3579545)
-	MDRV_SOUND_CONFIG(k007232_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.20)
-	MDRV_SOUND_ROUTE(0, "rspeaker", 0.20)
-	MDRV_SOUND_ROUTE(1, "lspeaker", 0.20)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.20)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("k007232", K007232, 3579545)
+	MCFG_SOUND_CONFIG(k007232_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.20)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 0.20)
+	MCFG_SOUND_ROUTE(1, "lspeaker", 0.20)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.20)
+MACHINE_CONFIG_END
 
 
 
@@ -380,7 +420,7 @@ ROM_START( gradius3 )
 	ROM_REGION( 0x0100, "proms", 0 )
 	ROM_LOAD( "945l14.j28",				0x0000, 0x0100, CRC(c778c189) SHA1(847eaf379ba075c25911c6f83dd63ff390534f60) )	/* priority encoder (not used) */
 
-	ROM_REGION( 0x80000, "konami", 0 )	/* 007232 samples */
+	ROM_REGION( 0x80000, "k007232", 0 )	/* 007232 samples */
 	ROM_LOAD( "945_a10.b15",			0x00000, 0x40000, CRC(1d083e10) SHA1(b116f133a7647ef7a6c373aff00e9622d9954b61) )
 	ROM_LOAD( "945_l11a.c18",			0x40000, 0x20000, CRC(6043f4eb) SHA1(1c2e9ace1cfdde504b7b6158e3c3f54dc5ae33d4) )
 	ROM_LOAD( "945_l11b.c20",			0x60000, 0x20000, CRC(89ea3baf) SHA1(8edcbaa7969185cfac48c02559826d1b8b081f3f) )
@@ -422,7 +462,7 @@ ROM_START( gradius3a )
 	ROM_REGION( 0x0100, "proms", 0 )
 	ROM_LOAD( "945l14.j28",				0x0000, 0x0100, CRC(c778c189) SHA1(847eaf379ba075c25911c6f83dd63ff390534f60) )	/* priority encoder (not used) */
 
-	ROM_REGION( 0x80000, "konami", 0 )	/* 007232 samples */
+	ROM_REGION( 0x80000, "k007232", 0 )	/* 007232 samples */
 	ROM_LOAD( "945_a10.b15",			0x00000, 0x40000, CRC(1d083e10) SHA1(b116f133a7647ef7a6c373aff00e9622d9954b61) )
 	ROM_LOAD( "945_l11a.c18",			0x40000, 0x20000, CRC(6043f4eb) SHA1(1c2e9ace1cfdde504b7b6158e3c3f54dc5ae33d4) )
 	ROM_LOAD( "945_l11b.c20",			0x60000, 0x20000, CRC(89ea3baf) SHA1(8edcbaa7969185cfac48c02559826d1b8b081f3f) )
@@ -464,20 +504,14 @@ ROM_START( gradius3e )
 	ROM_REGION( 0x0100, "proms", 0 )
 	ROM_LOAD( "945l14.j28",				0x0000, 0x0100, CRC(c778c189) SHA1(847eaf379ba075c25911c6f83dd63ff390534f60) )	/* priority encoder (not used) */
 
-	ROM_REGION( 0x80000, "konami", 0 )	/* 007232 samples */
+	ROM_REGION( 0x80000, "k007232", 0 )	/* 007232 samples */
 	ROM_LOAD( "945_a10.b15",			0x00000, 0x40000, CRC(1d083e10) SHA1(b116f133a7647ef7a6c373aff00e9622d9954b61) )
 	ROM_LOAD( "945_l11a.c18",			0x40000, 0x20000, CRC(6043f4eb) SHA1(1c2e9ace1cfdde504b7b6158e3c3f54dc5ae33d4) )
 	ROM_LOAD( "945_l11b.c20",			0x60000, 0x20000, CRC(89ea3baf) SHA1(8edcbaa7969185cfac48c02559826d1b8b081f3f) )
 ROM_END
 
 
-static DRIVER_INIT( gradius3 )
-{
-	konami_rom_deinterleave_2(machine, "gfx2");
-}
 
-
-
-GAME( 1989, gradius3, 0,        gradius3, gradius3, gradius3, ROT0, "Konami", "Gradius III (Japan)", 0 )
-GAME( 1989, gradius3a, gradius3, gradius3, gradius3, gradius3, ROT0, "Konami", "Gradius III (Asia)", 0 )
-GAME( 1989, gradius3e, gradius3, gradius3, gradius3, gradius3, ROT0, "Konami", "Gradius III (World ?)", 0 )
+GAME( 1989, gradius3,  0,        gradius3, gradius3, 0, ROT0, "Konami", "Gradius III (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, gradius3a, gradius3, gradius3, gradius3, 0, ROT0, "Konami", "Gradius III (Asia)", GAME_SUPPORTS_SAVE )
+GAME( 1989, gradius3e, gradius3, gradius3, gradius3, 0, ROT0, "Konami", "Gradius III (World ?)", GAME_SUPPORTS_SAVE )

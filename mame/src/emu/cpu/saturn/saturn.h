@@ -45,7 +45,6 @@ HP38G             09/??/95              1LT8             Yorke
 #ifndef __SATURN_H__
 #define _SATURN_H
 
-#include "cpuintrf.h"
 
 #define SATURN_INT_NONE	0
 #define SATURN_INT_IRQ	1
@@ -54,14 +53,14 @@ HP38G             09/??/95              1LT8             Yorke
 typedef struct _saturn_cpu_core saturn_cpu_core;
 struct _saturn_cpu_core
 {
-	void (*out)(const device_config*,int);
-	int (*in)(const device_config*);
-	void (*reset)(const device_config*);
-	void (*config)(const device_config*,int v);
-	void (*unconfig)(const device_config*,int v);
-	int (*id)(const device_config*);
-	void (*crc)(const device_config*,int addr, int data);
-	void (*rsi)(const device_config*);
+	void (*out)(device_t*,int);
+	int (*in)(device_t*);
+	void (*reset)(device_t*);
+	void (*config)(device_t*,int v);
+	void (*unconfig)(device_t*,int v);
+	int (*id)(device_t*);
+	void (*crc)(device_t*,int addr, int data);
+	void (*rsi)(device_t*);
 };
 
 enum
@@ -88,7 +87,6 @@ enum
 
 CPU_DISASSEMBLE( saturn );
 
-CPU_GET_INFO( saturn );
-#define CPU_SATURN CPU_GET_INFO_NAME( saturn )
+DECLARE_LEGACY_CPU_DEVICE(SATURN, saturn);
 
 #endif /* __SATURN_H__ */

@@ -1,5 +1,5 @@
 /*
-DJ Boy (c)1989 Kanako
+DJ Boy (c)1989 Kaneko
 
 Hardware has many similarities to Airbusters.
 
@@ -10,34 +10,18 @@ Self Test has two parts:
 - CPU0 manages sprites, which are also used to display text
         irq (0x10) - timing/watchdog
         irq (0x30) - processes sprites
-        nmi: wakes up this cpu
+        nmi: wakes up this CPU
 
 - CPU1 manages the protection device, palette, and tilemap(s)
-        nmi: resets this cpu
+        nmi: resets this CPU
         irq: game update
 
 - CPU2 manages sound chips
         irq: update music
         nmi: handle sound command
 
-- The "BEAST" protection device has access to dipswitches and player inputs.
+- The "BEAST" protection device has access to DIP switches and player inputs.
 
-Genre: Scrolling Fighter
-Orientation: Horizontal
-Type: Raster: Standard Resolution
-CRT: Color
-Conversion Class: JAMMA
-Number of Simultaneous Players: 2
-Maximum number of Players: 2
-Gameplay: Joint
-Control Panel Layout: Multiple Player
-Joystick: 8-way
-Buttons: 3 - Punch, Kick, Jump
-Sound: Amplified Mono (one channel) - Stereo sound is available
-through a 4-pin header (voice of Wolfman Jack!!)
-
-DJ Boy
-1990, Kaneko / American Sammy Corp.
 
 PCB Layout
 ----------
@@ -65,9 +49,8 @@ BS
 |----------------------------------------------|
 
 Notes:
-      D780C-2 - Z80 CPU. clock 6.000MHz [12/2] (for all 3 Z80 CPUs)
-      BEAST   - DIP40 Microcontroller, 8xxx series (8041/8042/8751 etc).
-                     Clock 6.000MHz on pins 18 & 19
+      D780C-2 - Z80 CPU. Clock 6.000MHz [12/2] (for all 3 Z80 CPUs)
+      BEAST   - OKI MSM80C51F microcontroller with internal ROM. Clock 6.000MHz on pins 18 & 19
                 chip is stamped 'KANEKO Beast (C)Intel '80 (C)KANEKO 1988'
       YM2203  - Yamaha YM2203, clock 3.000MHz [12/4]
       6295    - OKI M6295, clock 1.500MHz [12/8]. Sample rate (Hz) = 12000000 / 8 / 165
@@ -153,531 +136,56 @@ Notes:
                 |--------------------------------------------|
 */
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
+#include "cpu/mcs51/mcs51.h"
 #include "sound/2203intf.h"
 #include "sound/okim6295.h"
 #include "video/kan_pand.h"
+#include "includes/djboy.h"
 
-/* public functions from video/djboy.h */
-extern void djboy_set_videoreg( UINT8 data );
-extern WRITE8_HANDLER( djboy_scrollx_w );
-extern WRITE8_HANDLER( djboy_scrolly_w );
-extern WRITE8_HANDLER( djboy_videoram_w );
-extern WRITE8_HANDLER( djboy_paletteram_w );
-extern VIDEO_START( djboy );
-extern VIDEO_UPDATE( djboy );
-extern VIDEO_EOF( djboy );
-
-/******************************************************************************/
 
 /* KANEKO BEAST state */
 
-#define PROT_OUTPUT_BUFFER_SIZE 8
-
-static int prot_busy_count;
-static UINT8 prot_output_buffer[PROT_OUTPUT_BUFFER_SIZE];
-static int prot_available_data_count;
-static int prot_offs; /* internal state */
-static UINT8 prot_ram[0x80]; /* internal RAM */
-static UINT8 prot_param[8];
-
-static int coin;
-static int complete;
-static int lives[2];
-static int addr;
-static int bankxor;
-
-static enum
-{
-	eDJBOY_ATTRACT_HIGHSCORE,
-	eDJBOY_ATTRACT_TITLE,
-	eDJBOY_ATTRACT_GAMEPLAY,
-	eDJBOY_PRESS_P1_START,
-	eDJBOY_PRESS_P1_OR_P2_START,
-	eDJBOY_ACTIVE_GAMEPLAY
-} mDjBoyState;
-
-static enum
-{
-	ePROT_NORMAL,
-	ePROT_WRITE_BYTES,
-	ePROT_WRITE_BYTE,
-	ePROT_READ_BYTES,
-	ePROT_WAIT_DSW1_WRITEBACK,
-	ePROT_WAIT_DSW2_WRITEBACK,
-	ePROT_STORE_PARAM
-} prot_mode;
-
-static void
-ProtectionOut( int i, UINT8 data )
-{
-	if( prot_available_data_count == i )
-	{
-		prot_output_buffer[prot_available_data_count++] = data;
-	}
-	else
-	{
-		logerror( "prot_output_buffer overflow!\n" );
-		exit(1);
-	}
-} /* ProtectionOut */
-
-static int
-GetLives( running_machine *machine )
-{
-	int dsw = input_port_read(machine, "DSW2");
-	switch( dsw&0x30 )
-	{
-	case 0x10: return 3;
-	case 0x00: return 5;
-	case 0x20: return 7;
-	case 0x30: return 9;
-	}
-	return 0;
-} /* GetLives */
-
-static WRITE8_HANDLER( coinplus_w )
-{
-	int dsw = input_port_read(space->machine, "DSW1");
-	coin_counter_w( 0, data&1 );
-	coin_counter_w( 1, data&2 );
-	if( data&1 )
-	{ /* TODO: coinage adjustments */
-		logerror( "COIN A+\n" );
-		switch( (dsw&0x30)>>4 )
-		{
-		case 0: coin += 4; break; /* 1 coin, 1 credit */
-		case 1: coin += 8; break; /* 1 coin, 2 credits */
-		case 2: coin += 2; break; /* 2 coins, 1 credit */
-		case 3: coin += 6; break; /* 2 coins, 3 credits */
-		}
-	}
-	if( data&2 )
-	{
-		logerror( "COIN B+\n" );
-		switch( (dsw&0xc0)>>6 )
-		{
-		case 0: coin += 4; break; /* 1 coin, 1 credit */
-		case 1: coin += 8; break; /* 1 coin, 2 credits */
-		case 2: coin += 2; break; /* 2 coins, 1 credit */
-		case 3: coin += 6; break; /* 2 coins, 3 credits */
-		}
-	}
-} /* coinplus_w */
-
-static void
-OutputProtectionState( running_machine *machine, int i, int type )
-{
-	int io = ~input_port_read(machine, "IN0");
-	int dat = 0x00;
-
-	switch( mDjBoyState )
-	{
-	case eDJBOY_ATTRACT_HIGHSCORE:
-		if( coin>=4 )
-		{
-			dat = 0x01;
-			mDjBoyState = eDJBOY_PRESS_P1_START;
-			logerror( "COIN UP\n" );
-		}
-		else if( complete )
-		{
-			dat = 0x06;
-			mDjBoyState = eDJBOY_ATTRACT_TITLE;
-		}
-		break;
-
-	case eDJBOY_ATTRACT_TITLE:
-		if( coin>=4 )
-		{
-			dat = 0x01;
-			mDjBoyState = eDJBOY_PRESS_P1_START;
-			logerror( "COIN UP\n" );
-		}
-		else if( complete )
-		{
-			dat = 0x15;
-			mDjBoyState = eDJBOY_ATTRACT_GAMEPLAY;
-		}
-		break;
-
-	case eDJBOY_ATTRACT_GAMEPLAY:
-		if( coin>=4 )
-		{
-			dat = 0x01;
-			mDjBoyState = eDJBOY_PRESS_P1_START;
-			logerror( "COIN UP\n" );
-		}
-		else if( complete )
-		{
-			dat = 0x0b;
-			mDjBoyState = eDJBOY_ATTRACT_HIGHSCORE;
-		}
-		break;
-
-	case eDJBOY_PRESS_P1_START:
-		if( io&1 )
-		{ /* p1 start */
-			dat = 0x16;
-			mDjBoyState = eDJBOY_ACTIVE_GAMEPLAY;
-			logerror( "P1 START\n" );
-		}
-		else if( coin>=8 )
-		{
-			dat = 0x05;
-			mDjBoyState = eDJBOY_PRESS_P1_OR_P2_START;
-			logerror( "COIN2 UP\n" );
-		}
-		break;
-
-	case eDJBOY_PRESS_P1_OR_P2_START:
-		if( io&1 )
-		{ /* p1 start */
-			dat = 0x16;
-			mDjBoyState = eDJBOY_ACTIVE_GAMEPLAY;
-			lives[0] = GetLives(machine);
-			logerror( "P1 START!\n" );
-			coin-=4;
-		}
-		else if( io&2 )
-		{ /* p2 start */
-			dat = 0x0a;
-			mDjBoyState = eDJBOY_ACTIVE_GAMEPLAY;
-			lives[0] = GetLives(machine);
-			lives[1] = GetLives(machine);
-			logerror( "P2 START!\n" );
-			coin-=8;
-		}
-		break;
-
-	case eDJBOY_ACTIVE_GAMEPLAY:
-		if( lives[0]==0 && lives[1]==0 && complete )
-		{ /* continue countdown complete */
-			dat = 0x0f;
-			logerror( "countdown complete!\n" );
-			mDjBoyState = eDJBOY_ATTRACT_HIGHSCORE;
-		}
-		else if( coin>=4 )
-		{
-			if( (io&1) && lives[0]==0 )
-			{
-				dat = 0x12; /* continue (P1) */
-				lives[0] = GetLives(machine);
-				mDjBoyState = eDJBOY_ACTIVE_GAMEPLAY;
-				coin-=4;
-				logerror( "P1 CONTINUE!\n" );
-			}
-			else if( (io&2) && lives[1]==0 )
-			{
-				dat = 0x08; /* continue (P2) */
-				lives[1] = GetLives(machine);
-				mDjBoyState = eDJBOY_ACTIVE_GAMEPLAY;
-				coin-=4;
-				logerror( "P2 CONTINUE!\n" );
-			}
-		}
-		break;
-	}
-	complete = 0;
-	ProtectionOut( i, dat );
-} /* OutputProtectionState */
-
-static void
-CommonProt( running_machine *machine, int i, int type )
-{
-	int displayedCredits = coin/4;
-	if( displayedCredits>9 )
-	{
-		displayedCredits = 9;
-	}
-	ProtectionOut( i++, displayedCredits );
-	ProtectionOut( i++, input_port_read(machine, "IN0") ); /* COIN/START */
-	OutputProtectionState( machine, i, type );
-} /* CommonProt */
-
 static WRITE8_HANDLER( beast_data_w )
 {
-	prot_busy_count = 1;
+	djboy_state *state = space->machine().driver_data<djboy_state>();
 
-	logerror( "0x%04x: prot_w(0x%02x)\n", cpu_get_pc(space->cpu), data );
-
-	watchdog_reset_w(space,0,0);
-
-	if( prot_mode == ePROT_WAIT_DSW1_WRITEBACK )
-	{
-		logerror( "[DSW1_WRITEBACK]\n" );
-		ProtectionOut( 0, input_port_read(space->machine, "DSW2") ); /* DSW2 */
-		prot_mode = ePROT_WAIT_DSW2_WRITEBACK;
-	}
-	else if( prot_mode == ePROT_WAIT_DSW2_WRITEBACK )
-	{
-		logerror( "[DSW2_WRITEBACK]\n" );
-		prot_mode = ePROT_STORE_PARAM;
-		prot_offs = 0;
-	}
-	else if( prot_mode == ePROT_STORE_PARAM )
-	{
-		logerror( "prot param[%d]: 0x%02x\n", prot_offs, data );
-		if( prot_offs<8 )
-		{
-			prot_param[prot_offs++] = data;
-		}
-		if( prot_offs == 8 )
-		{
-			prot_mode = ePROT_NORMAL;
-		}
-	}
-	else if( prot_mode == ePROT_WRITE_BYTE )
-	{ /* pc == 0x79cd */
-		prot_ram[(prot_offs++)&0x7f] = data;
-		prot_mode = ePROT_WRITE_BYTES;
-	}
-	else
-	{
-		switch( data )
-		{
-		case 0x00:
-			if( prot_mode == ePROT_WRITE_BYTES )
-			{ /* next byte is data to write to internal prot RAM */
-				prot_mode = ePROT_WRITE_BYTE;
-			}
-			else if( prot_mode == ePROT_READ_BYTES )
-			{ /* request next byte of internal prot RAM */
-				ProtectionOut( 0, prot_ram[(prot_offs++)&0x7f] );
-			}
-			else
-			{
-				logerror( "UNEXPECTED PREFIX!\n" );
-			}
-			break;
-
-		case 0x01: // pc=7389
-			OutputProtectionState( space->machine, 0, 0x01 );
-			break;
-
-		case 0x02:
-			CommonProt( space->machine,0,0x02 );
-			break;
-
-		case 0x03: /* prepare for memory write to protection device ram (pc == 0x7987) */ // -> 0x02
-			logerror( "[WRITE BYTES]\n" );
-			prot_mode = ePROT_WRITE_BYTES;
-			prot_offs = 0;
-			break;
-
-		case 0x04:
-			ProtectionOut( 0,0 ); // ?
-			ProtectionOut( 1,0 ); // ?
-			ProtectionOut( 2,0 ); // ?
-			ProtectionOut( 3,0 ); // ?
-			CommonProt(    space->machine, 4,0x04 );
-			break;
-
-		case 0x05: /* 0x71f4 */
-			ProtectionOut( 0,input_port_read(space->machine, "IN1") ); // to $42
-			ProtectionOut( 1,0 ); // ?
-			ProtectionOut( 2,input_port_read(space->machine, "IN2") ); // to $43
-			ProtectionOut( 3,0 ); // ?
-			ProtectionOut( 4,0 ); // ?
-			CommonProt(    space->machine, 5,0x05 );
-			break;
-
-		case 0x07:
-			CommonProt( space->machine, 0,0x07 );
-			break;
-
-		case 0x08: /* pc == 0x727a */
-			ProtectionOut( 0,input_port_read(space->machine, "IN0") ); /* COIN/START */
-			ProtectionOut( 1,input_port_read(space->machine, "IN1") ); /* JOY1 */
-			ProtectionOut( 2,input_port_read(space->machine, "IN2") ); /* JOY2 */
-			ProtectionOut( 3,input_port_read(space->machine, "DSW1") ); /* DSW1 */
-			ProtectionOut( 4,input_port_read(space->machine, "DSW2") ); /* DSW2 */
-			CommonProt(    space->machine, 5, 0x08 );
-			break;
-
-		case 0x09:
-			ProtectionOut( 0,0 ); // ?
-			ProtectionOut( 1,0 ); // ?
-			ProtectionOut( 2,0 ); // ?
-			CommonProt(    space->machine, 3, 0x09 );
-			break;
-
-		case 0x0a:
-			CommonProt( space->machine,0,0x0a );
-			break;
-
-		case 0x0c:
-			CommonProt( space->machine,1,0x0c );
-			break;
-
-		case 0x0d:
-			CommonProt( space->machine,2,0x0d );
-			break;
-
-		case 0xfe: /* prepare for memory read from protection device ram (pc == 0x79ee, 0x7a3f) */
-			if( prot_mode == ePROT_WRITE_BYTES )
-			{
-				prot_mode = ePROT_READ_BYTES;
-				logerror( "[READ BYTES]\n" );
-			}
-			else
-			{
-				prot_mode = ePROT_WRITE_BYTES;
-				logerror( "[WRITE BYTES*]\n" );
-			}
-			prot_offs = 0;
-			break;
-
-		case 0xff: /* read DSW (pc == 0x714d) */
-			ProtectionOut( 0,input_port_read(space->machine, "DSW1") ); /* DSW1 */
-			prot_mode = ePROT_WAIT_DSW1_WRITEBACK;
-			break;
-
-		case 0xa9: /* 1-player game: P1 dies
-                         2-player game: P2 dies */
-			if( lives[0]>0 && lives[1]>0 )
-			{
-				lives[1]--;
-				logerror( "%02x P2 DIE(%d)\n", data, lives[1] );
-			}
-			else if( lives[0]>0 )
-			{
-				lives[0]--;
-				logerror( "%02x P1 DIE(%d)\n", data, lives[0] );
-			}
-			else
-			{
-				logerror( "%02x COMPLETE.\n", data );
-				complete = 0xa9;
-			}
-			break;
-
-		case 0x92: /* p2 lost life; in 2-p game, P1 died */
-			if( lives[0]>0 && lives[1]>0 )
-			{
-				lives[0]--;
-				logerror( "%02x P1 DIE(%d)\n", data, lives[0] );
-			}
-			else if( lives[1]>0 )
-			{
-				lives[1]--;
-				logerror( "%02x P2 DIE (%d)\n", data, lives[1] );
-			}
-			else
-			{
-				logerror( "%02x COMPLETE.\n", data );
-				complete = 0x92;
-			}
-			break;
-
-		case 0xa3: /* p2 bonus life */
-			lives[1]++;
-			logerror( "%02x P2 BONUS(%d)\n", data, lives[1] );
-			break;
-
-		case 0xa5: /* p1 bonus life */
-			lives[0]++;
-			logerror( "%02x P1 BONUS(%d)\n", data, lives[0] );
-			break;
-
-		case 0xad: /* 1p game start ack */
-			logerror( "%02x 1P GAME START\n", data );
-			break;
-
-		case 0xb0: /* 1p+2p game start ack */
-			logerror( "%02x 1P+2P GAME START\n", data );
-			break;
-
-		case 0xb3: /* 1p continue ack */
-			logerror( "%02x 1P CONTINUE\n", data );
-			break;
-
-		case 0xb7: /* 2p continue ack */
-			logerror( "%02x 2P CONTINUE\n", data );
-			break;
-
-		default:
-		case 0x97:
-		case 0x9a:
-			logerror( "!!0x%04x: prot_w(0x%02x)\n", cpu_get_pc(space->cpu), data );
-			break;
-		}
-	}
-} /* beast_data_w */
+	state->m_data_to_beast = data;
+	state->m_z80_to_beast_full = 1;
+	state->m_beast_int0_l = 0;
+	device_set_input_line(state->m_beast, INPUT_LINE_IRQ0, ASSERT_LINE);
+}
 
 static READ8_HANDLER( beast_data_r )
-{ /* port#4 */
-	UINT8 data = 0x00;
-	if( prot_available_data_count )
-	{
-		int i;
-		data = prot_output_buffer[0];
-		prot_available_data_count--;
-		for( i=0; i<prot_available_data_count; i++ )
-		{
-			prot_output_buffer[i] = prot_output_buffer[i+1];
-		}
-	}
-	else
-	{
-		logerror( "prot_r: data expected!\n" );
-	}
-	logerror( "0x%04x: prot_r() == 0x%02x\n", cpu_get_pc(space->cpu), data );
-	return data;
-} /* beast_data_r */
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	state->m_beast_to_z80_full = 0;
+	return state->m_data_to_z80;
+}
 
 static READ8_HANDLER( beast_status_r )
-{ /* port 0xc */
-	UINT8 result = 0;
-	if( prot_busy_count )
-	{
-		prot_busy_count--;
-		result |= 1<<3;
-	}
-	if( !prot_available_data_count )
-	{
-		result |= 1<<2;
-	}
-	return result;
-} /* beast_status_r */
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+	return (!state->m_beast_to_z80_full << 2) | (state->m_z80_to_beast_full << 3);
+}
 
 /******************************************************************************/
-static DRIVER_INIT( djboy )
-{
-	coin = 0;
-	complete = 0;
-	memset(lives, 0, sizeof(lives));
-	addr = 0xff;
-	bankxor = 0x00;
-}
-
-static DRIVER_INIT( djboyj )
-{
-	DRIVER_INIT_CALL( djboy );
-	bankxor = 0x1f;
-}
 
 static WRITE8_HANDLER( trigger_nmi_on_cpu0 )
 {
-	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( cpu0_bankswitch_w )
 {
-	unsigned char *RAM = memory_region(space->machine, "maincpu");
-	data ^= bankxor;
-	memory_set_bankptr(space->machine, 4,&RAM[0x10000]); /* unsure if/how this area is banked */
-	if( data < 4 )
-	{
-		RAM = &RAM[0x2000 * data];
-	}
-	else
-	{
-		RAM = &RAM[0x10000 + 0x2000 * (data-4)];
-	}
-	memory_set_bankptr(space->machine, 1,RAM);
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	data ^= state->m_bankxor;
+	memory_set_bank(space->machine(), "bank1", data);
+	memory_set_bank(space->machine(), "bank4", 0); /* unsure if/how this area is banked */
 }
 
 /******************************************************************************/
@@ -690,109 +198,211 @@ static WRITE8_HANDLER( cpu0_bankswitch_w )
  */
 static WRITE8_HANDLER( cpu1_bankswitch_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "cpu1");
-	djboy_set_videoreg( data );
-	switch( data&0xf )
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+	state->m_videoreg = data;
+
+	switch (data & 0xf)
 	{
 	/* bs65.5y */
-	case 0x00: memory_set_bankptr(space->machine, 2,&RAM[0x00000]); break;
-	case 0x01: memory_set_bankptr(space->machine, 2,&RAM[0x04000]); break;
-	case 0x02: memory_set_bankptr(space->machine, 2,&RAM[0x10000]); break;
-	case 0x03: memory_set_bankptr(space->machine, 2,&RAM[0x14000]); break;
+	case 0x00:
+	case 0x01:
+	case 0x02:
+	case 0x03:
+		memory_set_bank(space->machine(), "bank2", (data & 0xf));
+		break;
 
 	/* bs101.6w */
-	case 0x08: memory_set_bankptr(space->machine, 2,&RAM[0x18000]); break;
-	case 0x09: memory_set_bankptr(space->machine, 2,&RAM[0x1c000]); break;
-	case 0x0a: memory_set_bankptr(space->machine, 2,&RAM[0x20000]); break;
-	case 0x0b: memory_set_bankptr(space->machine, 2,&RAM[0x24000]); break;
-	case 0x0c: memory_set_bankptr(space->machine, 2,&RAM[0x28000]); break;
-	case 0x0d: memory_set_bankptr(space->machine, 2,&RAM[0x2c000]); break;
-	case 0x0e: memory_set_bankptr(space->machine, 2,&RAM[0x30000]); break;
-	case 0x0f: memory_set_bankptr(space->machine, 2,&RAM[0x34000]); break;
+	case 0x08:
+	case 0x09:
+	case 0x0a:
+	case 0x0b:
+	case 0x0c:
+	case 0x0d:
+	case 0x0e:
+	case 0x0f:
+		memory_set_bank(space->machine(), "bank2", (data & 0xf) - 4);
+		break;
 
 	default:
 		break;
 	}
 }
 
-/******************************************************************************/
-
-static WRITE8_HANDLER( trigger_nmi_on_sound_cpu2 )
+static WRITE8_HANDLER( coin_count_w )
 {
-	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "cpu2", INPUT_LINE_NMI, PULSE_LINE);
-} /* trigger_nmi_on_sound_cpu2 */
-
-static WRITE8_HANDLER( cpu2_bankswitch_w )
-{
-	UINT8 *RAM = memory_region(space->machine, "cpu2");
-
-	if( data < 3 )
-	{
-		RAM = &RAM[0x04000 * data];
-	}
-	else
-	{
-		RAM = &RAM[0x10000 + 0x4000 * (data - 3)];
-	}
-	memory_set_bankptr(space->machine, 3, RAM);
+	coin_counter_w(space->machine(), 0, data & 1);
+	coin_counter_w(space->machine(), 1, data & 2);
 }
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( cpu0_am, ADDRESS_SPACE_PROGRAM, 8 )
+static WRITE8_HANDLER( trigger_nmi_on_sound_cpu2 )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+	soundlatch_w(space, 0, data);
+	device_set_input_line(state->m_cpu2, INPUT_LINE_NMI, PULSE_LINE);
+} /* trigger_nmi_on_sound_cpu2 */
+
+static WRITE8_HANDLER( cpu2_bankswitch_w )
+{
+	memory_set_bank(space->machine(), "bank3", data);	// shall we check data<0x07?
+}
+
+/******************************************************************************/
+
+static ADDRESS_MAP_START( cpu0_am, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xafff) AM_ROMBANK(4)
-	AM_RANGE(0xb000, 0xbfff) AM_READWRITE( pandora_spriteram_r, pandora_spriteram_w )
-	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK(1)
-	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x8000, 0xafff) AM_ROMBANK("bank4")
+	AM_RANGE(0xb000, 0xbfff) AM_DEVREADWRITE("pandora", pandora_spriteram_r, pandora_spriteram_w)
+	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu0_port_am, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu0_port_am, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(cpu0_bankswitch_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( cpu1_am, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu1_am, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(2)
-	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(djboy_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(djboy_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
+	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(djboy_videoram_w) AM_BASE_MEMBER(djboy_state, m_videoram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(djboy_paletteram_w) AM_BASE_MEMBER(djboy_state, m_paletteram)
 	AM_RANGE(0xd400, 0xd8ff) AM_RAM
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu1_port_am, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu1_port_am, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(cpu1_bankswitch_w)
 	AM_RANGE(0x02, 0x02) AM_WRITE(trigger_nmi_on_sound_cpu2)
-	AM_RANGE(0x04, 0x04) AM_READWRITE(beast_data_r,beast_data_w)
+	AM_RANGE(0x04, 0x04) AM_READWRITE(beast_data_r, beast_data_w)
 	AM_RANGE(0x06, 0x06) AM_WRITE(djboy_scrolly_w)
 	AM_RANGE(0x08, 0x08) AM_WRITE(djboy_scrollx_w)
 	AM_RANGE(0x0a, 0x0a) AM_WRITE(trigger_nmi_on_cpu0)
 	AM_RANGE(0x0c, 0x0c) AM_READ(beast_status_r)
-	AM_RANGE(0x0e, 0x0e) AM_WRITE(coinplus_w)
+	AM_RANGE(0x0e, 0x0e) AM_WRITE(coin_count_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( cpu2_am, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu2_am, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(3)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu2_port_am, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu2_port_am, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(cpu2_bankswitch_w)
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x04, 0x04) AM_READ(soundlatch_r)
-	AM_RANGE(0x06, 0x06) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x07, 0x07) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x06, 0x06) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x07, 0x07) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
+ADDRESS_MAP_END
+
+/******************************************************************************/
+
+static READ8_HANDLER( beast_p0_r )
+{
+	// ?
+	return 0;
+}
+
+static WRITE8_HANDLER( beast_p0_w )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	if (!BIT(state->m_beast_p0, 1) && BIT(data, 1))
+	{
+		state->m_beast_to_z80_full = 1;
+		state->m_data_to_z80 = state->m_beast_p1;
+	}
+
+	if (BIT(data, 0) == 1)
+		state->m_z80_to_beast_full = 0;
+
+	state->m_beast_p0 = data;
+}
+
+static READ8_HANDLER( beast_p1_r )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	if (BIT(state->m_beast_p0, 0) == 0)
+		return state->m_data_to_beast;
+	else
+		return 0; // ?
+}
+
+static WRITE8_HANDLER( beast_p1_w )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	if (data == 0xff)
+	{
+		state->m_beast_int0_l = 1;
+		device_set_input_line(state->m_beast, INPUT_LINE_IRQ0, CLEAR_LINE);
+	}
+
+	state->m_beast_p1 = data;
+}
+
+static READ8_HANDLER( beast_p2_r )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	switch ((state->m_beast_p0 >> 2) & 3)
+	{
+		case 0: return input_port_read(space->machine(), "IN1");
+		case 1: return input_port_read(space->machine(), "IN2");
+		case 2: return input_port_read(space->machine(), "IN0");
+		default: return 0xff;
+	}
+}
+
+static WRITE8_HANDLER( beast_p2_w )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+	state->m_beast_p2 = data;
+}
+
+static READ8_HANDLER( beast_p3_r )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	UINT8 dsw = 0;
+	UINT8 dsw1 = ~input_port_read(space->machine(), "DSW1");
+	UINT8 dsw2 = ~input_port_read(space->machine(), "DSW2");
+
+	switch ((state->m_beast_p0 >> 5) & 3)
+	{
+		case 0: dsw = (BIT(dsw2, 4) << 3) | (BIT(dsw2, 0) << 2) | (BIT(dsw1, 4) << 1) | BIT(dsw1, 0); break;
+		case 1: dsw = (BIT(dsw2, 5) << 3) | (BIT(dsw2, 1) << 2) | (BIT(dsw1, 5) << 1) | BIT(dsw1, 1); break;
+		case 2: dsw = (BIT(dsw2, 6) << 3) | (BIT(dsw2, 2) << 2) | (BIT(dsw1, 6) << 1) | BIT(dsw1, 2); break;
+		case 3: dsw = (BIT(dsw2, 7) << 3) | (BIT(dsw2, 3) << 2) | (BIT(dsw1, 7) << 1) | BIT(dsw1, 3); break;
+	}
+	return (dsw << 4) | (state->m_beast_int0_l << 2) | (state->m_beast_to_z80_full << 3);
+}
+
+static WRITE8_HANDLER( beast_p3_w )
+{
+	djboy_state *state = space->machine().driver_data<djboy_state>();
+
+	state->m_beast_p3 = data;
+	device_set_input_line(state->m_cpu1, INPUT_LINE_RESET, data & 2 ? CLEAR_LINE : ASSERT_LINE);
+}
+/* Program/data maps are defined in the 8051 core */
+
+static ADDRESS_MAP_START( djboy_mcu_io_map, AS_IO, 8 )
+	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P0) AM_READWRITE(beast_p0_r, beast_p0_w)
+	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_READWRITE(beast_p1_r, beast_p1_w)
+	AM_RANGE(MCS51_PORT_P2, MCS51_PORT_P2) AM_READWRITE(beast_p2_r, beast_p2_w)
+	AM_RANGE(MCS51_PORT_P3, MCS51_PORT_P3) AM_READWRITE(beast_p3_r, beast_p3_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
@@ -829,49 +439,50 @@ static INPUT_PORTS_START( djboy )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW1:1") /* Manual states "CAUTION  !! .... Don't use ." */
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Service_Mode ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Unknown ) )
+	PORT_SERVICE_DIPLOC(  0x04, IP_ACTIVE_HIGH, "SW1:3" )
+//  PORT_DIPNAME( 0x04, 0x00, DEF_STR( Service_Mode ) ) PORT_DIPLOCATION("SW1:3")
+//  PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+//  PORT_DIPSETTING(    0x04, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW1:4")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW1:5,6")
 	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW1:7,8")
 	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x01, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Bonus" )
+	PORT_DIPNAME( 0x0c, 0x00, "Bonus Levels (in thousands)" ) PORT_DIPLOCATION("SW2:3,4")
 	PORT_DIPSETTING(    0x00, "10,30,50,70,90" )
 	PORT_DIPSETTING(    0x04, "10,20,30,40,50,60,70,80,90" )
 	PORT_DIPSETTING(    0x08, "20,50" )
 	PORT_DIPSETTING(    0x0c, DEF_STR( None ) )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:5,6")
 	PORT_DIPSETTING(    0x10, "3" )
 	PORT_DIPSETTING(    0x00, "5" )
 	PORT_DIPSETTING(    0x20, "7" )
 	PORT_DIPSETTING(    0x30, "9" )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Stereo Sound" )
+	PORT_DIPNAME( 0x80, 0x80, "Stereo Sound" )		PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -901,76 +512,147 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static INTERRUPT_GEN( djboy_interrupt )
-{ /* CPU1 uses interrupt mode 2. For now, just alternate the two interrupts. */
-	addr ^= 0x02;
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, addr);
+/* Main Z80 uses IM2 */
+static TIMER_DEVICE_CALLBACK( djboy_scanline )
+{
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xfd);
+
+	/* Pandora "sprite end dma" irq? TODO: timing is clearly off, attract mode relies on this */
+	if(scanline == 64)
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xff);
 }
 
-static MACHINE_DRIVER_START( djboy )
-	MDRV_CPU_ADD("maincpu", Z80,6000000)
-	MDRV_CPU_PROGRAM_MAP(cpu0_am)
-	MDRV_CPU_IO_MAP(cpu0_port_am)
-	MDRV_CPU_VBLANK_INT_HACK(djboy_interrupt,2)
+static const kaneko_pandora_interface djboy_pandora_config =
+{
+	"screen",	/* screen tag */
+	0,	/* gfx_region */
+	0, 0	/* x_offs, y_offs */
+};
 
-	MDRV_CPU_ADD("cpu1", Z80,6000000)
-	MDRV_CPU_PROGRAM_MAP(cpu1_am)
-	MDRV_CPU_IO_MAP(cpu1_port_am)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("cpu2", Z80, 6000000)
-	MDRV_CPU_PROGRAM_MAP(cpu2_am)
-	MDRV_CPU_IO_MAP(cpu2_port_am)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_START( djboy )
+{
+	djboy_state *state = machine.driver_data<djboy_state>();
+	UINT8 *MAIN = machine.region("maincpu")->base();
+	UINT8 *CPU1 = machine.region("cpu1")->base();
+	UINT8 *CPU2 = machine.region("cpu2")->base();
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	memory_configure_bank(machine, "bank1", 0, 4,  &MAIN[0x00000], 0x2000);
+	memory_configure_bank(machine, "bank1", 4, 28, &MAIN[0x10000], 0x2000);
+	memory_configure_bank(machine, "bank2", 0, 2,  &CPU1[0x00000], 0x4000);
+	memory_configure_bank(machine, "bank2", 2, 10, &CPU1[0x10000], 0x4000);
+	memory_configure_bank(machine, "bank3", 0, 3,  &CPU2[0x00000], 0x4000);
+	memory_configure_bank(machine, "bank3", 3, 5,  &CPU2[0x10000], 0x4000);
+	memory_configure_bank(machine, "bank4", 0, 1,  &MAIN[0x10000], 0x3000); /* unsure if/how this area is banked */
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	state->m_maincpu = machine.device("maincpu");
+	state->m_cpu1 = machine.device("cpu1");
+	state->m_cpu2 = machine.device("cpu2");
+	state->m_beast = machine.device("beast");
+	state->m_pandora = machine.device("pandora");
 
-	MDRV_GFXDECODE(djboy)
-	MDRV_PALETTE_LENGTH(0x200)
+	state->save_item(NAME(state->m_videoreg));
+	state->save_item(NAME(state->m_scrollx));
+	state->save_item(NAME(state->m_scrolly));
 
-	MDRV_VIDEO_START(djboy)
-	MDRV_VIDEO_UPDATE(djboy)
-	MDRV_VIDEO_EOF(djboy)
+	/* Kaneko BEAST */
+	state->save_item(NAME(state->m_data_to_beast));
+	state->save_item(NAME(state->m_data_to_z80));
+	state->save_item(NAME(state->m_beast_to_z80_full));
+	state->save_item(NAME(state->m_z80_to_beast_full));
+	state->save_item(NAME(state->m_beast_int0_l));
+	state->save_item(NAME(state->m_beast_p0));
+	state->save_item(NAME(state->m_beast_p1));
+	state->save_item(NAME(state->m_beast_p2));
+	state->save_item(NAME(state->m_beast_p3));
+}
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+static MACHINE_RESET( djboy )
+{
+	djboy_state *state = machine.driver_data<djboy_state>();
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	state->m_videoreg = 0;
+	state->m_scrollx = 0;
+	state->m_scrolly = 0;
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 12000000 / 8)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	state->m_beast_int0_l = 1;
+	state->m_beast_to_z80_full = 0;
+	state->m_z80_to_beast_full = 0;
+}
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 12000000 / 8)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_START( djboy, djboy_state )
+
+	MCFG_CPU_ADD("maincpu", Z80, 6000000)
+	MCFG_CPU_PROGRAM_MAP(cpu0_am)
+	MCFG_CPU_IO_MAP(cpu0_port_am)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", djboy_scanline, "screen", 0, 1)
+
+	MCFG_CPU_ADD("cpu1", Z80, 6000000)
+	MCFG_CPU_PROGRAM_MAP(cpu1_am)
+	MCFG_CPU_IO_MAP(cpu1_port_am)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_CPU_ADD("cpu2", Z80, 6000000)
+	MCFG_CPU_PROGRAM_MAP(cpu2_am)
+	MCFG_CPU_IO_MAP(cpu2_port_am)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_CPU_ADD("beast", I80C51, 6000000)
+	MCFG_CPU_IO_MAP(djboy_mcu_io_map)
+
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+
+	MCFG_MACHINE_START(djboy)
+	MCFG_MACHINE_RESET(djboy)
+
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(57.5)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_UPDATE_STATIC(djboy)
+	MCFG_SCREEN_VBLANK_STATIC(djboy)
+
+	MCFG_GFXDECODE(djboy)
+	MCFG_PALETTE_LENGTH(0x200)
+
+	MCFG_KANEKO_PANDORA_ADD("pandora", djboy_pandora_config)
+
+	MCFG_VIDEO_START(djboy)
+
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ymsnd", YM2203, 3000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+
+	MCFG_OKIM6295_ADD("oki1", 12000000 / 8, OKIM6295_PIN7_LOW)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+
+	MCFG_OKIM6295_ADD("oki2", 12000000 / 8, OKIM6295_PIN7_LOW)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 ROM_START( djboy )
 	ROM_REGION( 0x48000, "maincpu", 0 )
-	ROM_LOAD( "bs64.4b",  0x00000, 0x08000, CRC(b77aacc7) SHA1(78100d4695738a702f13807526eb1bcac759cce3) )
+	ROM_LOAD( "bs64.4b",   0x00000, 0x08000, CRC(b77aacc7) SHA1(78100d4695738a702f13807526eb1bcac759cce3) )
 	ROM_CONTINUE( 0x10000, 0x18000 )
-	ROM_LOAD( "bs100.4d", 0x28000, 0x20000, CRC(081e8af8) SHA1(3589dab1cf31b109a40370b4db1f31785023e2ed) )
+	ROM_LOAD( "bs100.4d",  0x28000, 0x20000, CRC(081e8af8) SHA1(3589dab1cf31b109a40370b4db1f31785023e2ed) )
 
 	ROM_REGION( 0x38000, "cpu1", 0 )
-	ROM_LOAD( "bs65.5y",  0x00000, 0x08000, CRC(0f1456eb) SHA1(62ed48c0d71c1fabbb3f6ada60381f57f692cef8) )
+	ROM_LOAD( "bs65.5y",   0x00000, 0x08000, CRC(0f1456eb) SHA1(62ed48c0d71c1fabbb3f6ada60381f57f692cef8) )
 	ROM_CONTINUE( 0x10000, 0x08000 )
-	ROM_LOAD( "bs101.6w", 0x18000, 0x20000, CRC(a7c85577) SHA1(8296b96d5f69f6c730b7ed77fa8c93496b33529c) )
+	ROM_LOAD( "bs101.6w",  0x18000, 0x20000, CRC(a7c85577) SHA1(8296b96d5f69f6c730b7ed77fa8c93496b33529c) )
 
 	ROM_REGION( 0x24000, "cpu2", 0 ) /* sound */
-	ROM_LOAD( "bs200.8c", 0x00000, 0x0c000, CRC(f6c19e51) SHA1(82193f71122df07cce0a7f057a87b89eb2d587a1) )
+	ROM_LOAD( "bs200.8c",  0x00000, 0x0c000, CRC(f6c19e51) SHA1(82193f71122df07cce0a7f057a87b89eb2d587a1) )
 	ROM_CONTINUE( 0x10000, 0x14000 )
 
-	ROM_REGION( 0x1000, "mcu", 0 ) /* i8751 microcontroller */
-	ROM_LOAD( "i8751_beast", 0x00000, 0x1000, NO_DUMP )
+	ROM_REGION( 0x1000, "beast", 0 ) /* MSM80C51F microcontroller */
+	ROM_LOAD( "beast.9s", 0x00000, 0x1000, CRC(ebe0f5f3) SHA1(6081343c9b4510c4c16b71f6340266a1f76170ac) ) /* Internal ROM image */
 
 	ROM_REGION( 0x200000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD( "bs000.1h", 0x000000, 0x80000, CRC(be4bf805) SHA1(a73c564575fe89d26225ca8ec2d98b6ac319ac18) )
@@ -992,21 +674,21 @@ ROM_END
 
 ROM_START( djboya )
 	ROM_REGION( 0x48000, "maincpu", 0 )
-	ROM_LOAD( "bs19s.rom",  0x00000, 0x08000, CRC(17ce9f6c) SHA1(a0c1832b05dc46991e8949067ca0278f5498835f) )
+	ROM_LOAD( "bs19s.rom", 0x00000, 0x08000, CRC(17ce9f6c) SHA1(a0c1832b05dc46991e8949067ca0278f5498835f) )
 	ROM_CONTINUE( 0x10000, 0x18000 )
-	ROM_LOAD( "bs100.4d", 0x28000, 0x20000, CRC(081e8af8) SHA1(3589dab1cf31b109a40370b4db1f31785023e2ed) )
+	ROM_LOAD( "bs100.4d",  0x28000, 0x20000, CRC(081e8af8) SHA1(3589dab1cf31b109a40370b4db1f31785023e2ed) )
 
 	ROM_REGION( 0x38000, "cpu1", 0 )
-	ROM_LOAD( "bs15s.rom",  0x00000, 0x08000, CRC(e6f966b2) SHA1(f9df16035a8b09d87eb70315b216892e25d99b03) )
+	ROM_LOAD( "bs15s.rom", 0x00000, 0x08000, CRC(e6f966b2) SHA1(f9df16035a8b09d87eb70315b216892e25d99b03) )
 	ROM_CONTINUE( 0x10000, 0x08000 )
-	ROM_LOAD( "bs101.6w", 0x18000, 0x20000, CRC(a7c85577) SHA1(8296b96d5f69f6c730b7ed77fa8c93496b33529c) )
+	ROM_LOAD( "bs101.6w",  0x18000, 0x20000, CRC(a7c85577) SHA1(8296b96d5f69f6c730b7ed77fa8c93496b33529c) )
 
 	ROM_REGION( 0x24000, "cpu2", 0 ) /* sound */
-	ROM_LOAD( "bs200.8c", 0x00000, 0x0c000, CRC(f6c19e51) SHA1(82193f71122df07cce0a7f057a87b89eb2d587a1) )
+	ROM_LOAD( "bs200.8c",  0x00000, 0x0c000, CRC(f6c19e51) SHA1(82193f71122df07cce0a7f057a87b89eb2d587a1) )
 	ROM_CONTINUE( 0x10000, 0x14000 )
 
-	ROM_REGION( 0x1000, "mcu", 0 ) /* i8751 microcontroller */
-	ROM_LOAD( "i8751_beast", 0x00000, 0x1000, NO_DUMP )
+	ROM_REGION( 0x1000, "beast", 0 ) /* MSM80C51F microcontroller */
+	ROM_LOAD( "beast.9s", 0x00000, 0x1000, CRC(ebe0f5f3) SHA1(6081343c9b4510c4c16b71f6340266a1f76170ac) ) /* Internal ROM image */
 
 	ROM_REGION( 0x200000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD( "bs000.1h", 0x000000, 0x80000, CRC(be4bf805) SHA1(a73c564575fe89d26225ca8ec2d98b6ac319ac18) )
@@ -1028,21 +710,21 @@ ROM_END
 
 ROM_START( djboyj )
 	ROM_REGION( 0x48000, "maincpu", 0 )
-	ROM_LOAD( "bs12.4b",  0x00000, 0x08000, CRC(0971523e) SHA1(f90cd02cedf8632f4b651de7ea75dc8c0e682f6e) )
+	ROM_LOAD( "bs12.4b",   0x00000, 0x08000, CRC(0971523e) SHA1(f90cd02cedf8632f4b651de7ea75dc8c0e682f6e) )
 	ROM_CONTINUE( 0x10000, 0x18000 )
-	ROM_LOAD( "bs100.4d", 0x28000, 0x20000, CRC(081e8af8) SHA1(3589dab1cf31b109a40370b4db1f31785023e2ed) )
+	ROM_LOAD( "bs100.4d",  0x28000, 0x20000, CRC(081e8af8) SHA1(3589dab1cf31b109a40370b4db1f31785023e2ed) )
 
 	ROM_REGION( 0x38000, "cpu1", 0 )
-	ROM_LOAD( "bs13.5y",  0x00000, 0x08000, CRC(5c3f2f96) SHA1(bb7ee028a2d8d3c76a78a29fba60bcc36e9399f5) )
+	ROM_LOAD( "bs13.5y",   0x00000, 0x08000, CRC(5c3f2f96) SHA1(bb7ee028a2d8d3c76a78a29fba60bcc36e9399f5) )
 	ROM_CONTINUE( 0x10000, 0x08000 )
-	ROM_LOAD( "bs101.6w", 0x18000, 0x20000, CRC(a7c85577) SHA1(8296b96d5f69f6c730b7ed77fa8c93496b33529c) )
+	ROM_LOAD( "bs101.6w",  0x18000, 0x20000, CRC(a7c85577) SHA1(8296b96d5f69f6c730b7ed77fa8c93496b33529c) )
 
 	ROM_REGION( 0x24000, "cpu2", 0 ) /* sound */
-	ROM_LOAD( "bs200.8c", 0x00000, 0x0c000, CRC(f6c19e51) SHA1(82193f71122df07cce0a7f057a87b89eb2d587a1) )
+	ROM_LOAD( "bs200.8c",  0x00000, 0x0c000, CRC(f6c19e51) SHA1(82193f71122df07cce0a7f057a87b89eb2d587a1) )
 	ROM_CONTINUE( 0x10000, 0x14000 )
 
-	ROM_REGION( 0x1000, "mcu", 0 ) /* i8751 microcontroller */
-	ROM_LOAD( "i8751_beast", 0x00000, 0x1000, NO_DUMP )
+	ROM_REGION( 0x1000, "beast", 0 ) /* MSM80C51F microcontroller */
+	ROM_LOAD( "beast.9s", 0x00000, 0x1000, CRC(ebe0f5f3) SHA1(6081343c9b4510c4c16b71f6340266a1f76170ac) ) /* Internal ROM image */
 
 	ROM_REGION( 0x200000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD( "bs000.1h", 0x000000, 0x80000, CRC(be4bf805) SHA1(a73c564575fe89d26225ca8ec2d98b6ac319ac18) )
@@ -1063,8 +745,19 @@ ROM_START( djboyj )
 ROM_END
 
 
+static DRIVER_INIT( djboy )
+{
+	djboy_state *state = machine.driver_data<djboy_state>();
+	state->m_bankxor = 0x00;
+}
+
+static DRIVER_INIT( djboyj )
+{
+	djboy_state *state = machine.driver_data<djboy_state>();
+	state->m_bankxor = 0x1f;
+}
 
 /*     YEAR, NAME,  PARENT, MACHINE, INPUT, INIT, MNTR,  COMPANY, FULLNAME, FLAGS */
-GAME( 1989, djboy,  0,      djboy,   djboy, djboy,    ROT0, "Kaneko (American Sammy license)", "DJ Boy (set 1)", 0) // Sammy & Williams logos in FG ROM
-GAME( 1989, djboya, djboy,  djboy,   djboy, djboy,    ROT0, "Kaneko (American Sammy license)", "DJ Boy (set 2)", 0) // Sammy & Williams logos in FG ROM
-GAME( 1989, djboyj, djboy,  djboy,   djboy, djboyj,   ROT0, "Kaneko (Sega license)", "DJ Boy (Japan)", 0 ) // Sega logo in FG ROM
+GAME( 1989, djboy,  0,      djboy,   djboy, djboy,    ROT0, "Kaneko (American Sammy license)", "DJ Boy (set 1)", GAME_SUPPORTS_SAVE) // Sammy & Williams logos in FG ROM
+GAME( 1989, djboya, djboy,  djboy,   djboy, djboy,    ROT0, "Kaneko (American Sammy license)", "DJ Boy (set 2)", GAME_SUPPORTS_SAVE) // Sammy & Williams logos in FG ROM
+GAME( 1989, djboyj, djboy,  djboy,   djboy, djboyj,   ROT0, "Kaneko (Sega license)", "DJ Boy (Japan)", GAME_SUPPORTS_SAVE ) // Sega logo in FG ROM

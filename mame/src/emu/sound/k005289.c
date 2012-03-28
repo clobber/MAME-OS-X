@@ -25,8 +25,7 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "k005289.h"
 
 #define FREQBASEBITS	16
@@ -61,17 +60,15 @@ struct _k005289_state
 	int k005289_A_latch,k005289_B_latch;
 };
 
-INLINE k005289_state *get_safe_token(const device_config *device)
+INLINE k005289_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_K005289);
-	return (k005289_state *)device->token;
+	assert(device->type() == K005289);
+	return (k005289_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 /* build a table to divide by the number of voices */
-static void make_mixer_table(running_machine *machine, k005289_state *info, int voices)
+static void make_mixer_table(running_machine &machine, k005289_state *info, int voices)
 {
 	int count = voices * 128;
 	int i;
@@ -166,17 +163,17 @@ static DEVICE_START( k005289 )
 	voice = info->channel_list;
 
 	/* get stream channels */
-	info->rate = device->clock/16;
-	info->stream = stream_create(device, 0, 1, info->rate, info, K005289_update);
-	info->mclock = device->clock;
+	info->rate = device->clock()/16;
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 1, info->rate, info, K005289_update);
+	info->mclock = device->clock();
 
 	/* allocate a pair of buffers to mix into - 1 second's worth should be more than enough */
-	info->mixer_buffer = auto_alloc_array(device->machine, short, 2 * info->rate);
+	info->mixer_buffer = auto_alloc_array(device->machine(), short, 2 * info->rate);
 
 	/* build the mixer table */
-	make_mixer_table(device->machine, info, 2);
+	make_mixer_table(device->machine(), info, 2);
 
-	info->sound_prom = device->region;
+	info->sound_prom = *device->region();
 
 	/* reset all the voices */
 	voice[0].frequency = 0;
@@ -196,7 +193,7 @@ static void k005289_recompute(k005289_state *info)
 {
 	k005289_sound_channel *voice = info->channel_list;
 
-	stream_update(info->stream); 	/* update the streams */
+	info->stream->update();	/* update the streams */
 
 	voice[0].frequency = info->k005289_A_frequency;
 	voice[1].frequency = info->k005289_B_frequency;
@@ -276,3 +273,5 @@ DEVICE_GET_INFO( k005289 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(K005289, k005289);

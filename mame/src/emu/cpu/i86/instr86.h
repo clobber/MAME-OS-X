@@ -10,7 +10,7 @@
 
 // file will be included in all cpu variants
 // put non i86 instructions in own files (i286, i386, nec)
-// function renaming will be added when neccessary
+// function renaming will be added when necessary
 // timing value should move to separate array
 
 static void PREFIX86(_add_br8)(i8086_state *cpustate);
@@ -28,6 +28,9 @@ static void PREFIX86(_or_r16w)(i8086_state *cpustate);
 static void PREFIX86(_or_ald8)(i8086_state *cpustate);
 static void PREFIX86(_or_axd16)(i8086_state *cpustate);
 static void PREFIX86(_push_cs)(i8086_state *cpustate);
+#ifndef I80286
+static void PREFIX86(_pop_cs)(i8086_state *cpustate);
+#endif
 static void PREFIX86(_adc_br8)(i8086_state *cpustate);
 static void PREFIX86(_adc_wr16)(i8086_state *cpustate);
 static void PREFIX86(_adc_r8b)(i8086_state *cpustate);
@@ -140,6 +143,9 @@ static void PREFIX86(_mov_wsreg)(i8086_state *cpustate);
 static void PREFIX86(_lea)(i8086_state *cpustate);
 static void PREFIX86(_mov_sregw)(i8086_state *cpustate);
 static void PREFIX86(_invalid)(i8086_state *cpustate);
+#ifndef I80286
+static void PREFIX86(_invalid_2b)(i8086_state *cpustate);
+#endif
 static void PREFIX86(_popw)(i8086_state *cpustate);
 static void PREFIX86(_nop)(i8086_state *cpustate);
 static void PREFIX86(_xchg_axcx)(i8086_state *cpustate);

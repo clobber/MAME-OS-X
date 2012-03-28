@@ -1,88 +1,70 @@
-/***************************************************************************
+/*********************************************************************************
 
-Zero Zone memory map
+    Zero Zone memory map
 
-driver by Brad Oliver
+    driver by Brad Oliver
 
-CPU 1 : 68000, uses irq 1
+    CPU 1 : 68000, uses irq 1
 
-0x000000 - 0x01ffff : ROM
-0x080000 - 0x08000f : input ports and dipswitches
-0x088000 - 0x0881ff : palette RAM, 256 total colors
-0x09ce00 - 0x09d9ff : video ram, 48x32
-0x0c0000 - 0x0cffff : RAM
-0x0f8000 - 0x0f87ff : RAM (unused?)
+    0x000000 - 0x01ffff : ROM
+    0x080000 - 0x08000f : input ports and dipswitches
+    0x088000 - 0x0881ff : palette RAM, 256 total colors
+    0x09ce00 - 0x09d9ff : video ram, 48x32
+    0x0c0000 - 0x0cffff : RAM
+    0x0f8000 - 0x0f87ff : RAM (unused?)
 
-Stephh's notes :
+    Stephh's notes :
 
-  IMO, the game only has 2 buttons (1 to rotate the pieces and 1 for help).
-  The 3rd button (when the Dip Switch is activated) subs one "line"
-  (0x0c0966 for player 1 and 0x0c1082 for player 2) each time it is pressed.
-  As I don't see why such thing would REALLY exist, I've added the
-  IPF_CHEAT flag for the Dip Switch and the 3rd button of each player.
+      IMO, the game only has 2 buttons (1 to rotate the pieces and 1 for help).
+      The 3rd button (when the Dip Switch is activated) subs one "line"
+      (0x0c0966 for player 1 and 0x0c1082 for player 2) each time it is pressed.
+      As I don't see why such thing would REALLY exist, I've added the
+      IPF_CHEAT flag for the Dip Switch and the 3rd button of each player.
 
-TODO:
-    * adpcm samples don't seem to be playing at the proper tempo - too fast?
+    TODO:
+        * adpcm samples don't seem to be playing at the proper tempo - too fast?
 
 
-***************************************************************************/
-#include "driver.h"
+*********************************************************************************/
+
+#define ADDRESS_MAP_MODERN
+
+#include "emu.h"
+#include "includes/zerozone.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
-VIDEO_START( zerozone );
-VIDEO_UPDATE( zerozone );
-WRITE16_HANDLER( zerozone_tilemap_w );
-WRITE16_HANDLER( zerozone_tilebank_w );
 
-extern UINT16 *zerozone_videoram;
-
-static READ16_HANDLER( zerozone_input_r )
-{
-	switch (offset)
-	{
-		case 0x00:
-			return input_port_read(space->machine, "SYSTEM");
-		case 0x01:
-			return input_port_read(space->machine, "INPUTS");
-		case 0x04:
-			return input_port_read(space->machine, "DSWB");
-		case 0x05:
-			return input_port_read(space->machine, "DSWA");
-	}
-
-logerror("CPU #0 PC %06x: warning - read unmapped memory address %06x\n",cpu_get_pc(space->cpu),0x800000+offset);
-
-	return 0x00;
-}
-
-
-static WRITE16_HANDLER( zerozone_sound_w )
+WRITE16_MEMBER( zerozone_state::sound_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
 		soundlatch_w(space, offset, data >> 8);
-		cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+		device_set_input_line_and_vector(m_audiocpu, 0, HOLD_LINE, 0xff);
 	}
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16, zerozone_state )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x080000, 0x08000f) AM_READ(zerozone_input_r)
-	AM_RANGE(0x084000, 0x084001) AM_WRITE(zerozone_sound_w)
-	AM_RANGE(0x088000, 0x0881ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x080000, 0x080001) AM_READ_PORT("SYSTEM")
+	AM_RANGE(0x080002, 0x080003) AM_READ_PORT("INPUTS")
+	AM_RANGE(0x080008, 0x080009) AM_READ_PORT("DSWB")
+	AM_RANGE(0x08000a, 0x08000b) AM_READ_PORT("DSWA")
+	AM_RANGE(0x084000, 0x084001) AM_WRITE(sound_w)
+	AM_RANGE(0x088000, 0x0881ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_SHARE("paletteram")
 	AM_RANGE(0x098000, 0x098001) AM_RAM		/* Watchdog? */
-	AM_RANGE(0x09ce00, 0x09ffff) AM_RAM_WRITE(zerozone_tilemap_w) AM_BASE(&zerozone_videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0x0b4000, 0x0b4001) AM_WRITE(zerozone_tilebank_w)
+	AM_RANGE(0x09ce00, 0x09ffff) AM_RAM_WRITE(tilemap_w) AM_SHARE("videoram")
+	AM_RANGE(0x0b4000, 0x0b4001) AM_WRITE(tilebank_w)
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM
 	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM		/* Never read from */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8, zerozone_state )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_device, read, write)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -173,39 +155,45 @@ static GFXDECODE_START( zerozone )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( zerozone )
+void zerozone_state::machine_start()
+{
+	save_item(NAME(m_tilebank));
+}
+
+void zerozone_state::machine_reset()
+{
+	m_tilebank = 0;
+}
+
+static MACHINE_CONFIG_START( zerozone, zerozone_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000)	/* 10 MHz */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 10000000)	/* 10 MHz */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 1000000)	/* 1 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, 1000000)	/* 1 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 47*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_UPDATE_DRIVER(zerozone_state, screen_update)
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 47*8-1, 2*8, 30*8-1)
 
-	MDRV_GFXDECODE(zerozone)
-	MDRV_PALETTE_LENGTH(256)
-
-	MDRV_VIDEO_START(zerozone)
-	MDRV_VIDEO_UPDATE(zerozone)
+	MCFG_GFXDECODE(zerozone)
+	MCFG_PALETTE_LENGTH(256)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -249,5 +237,5 @@ ROM_START( lvgirl94 )
 ROM_END
 
 
-GAME( 1993, zerozone, 0, zerozone, zerozone, 0, ROT0, "Comad", "Zero Zone", 0 )
-GAME( 1994, lvgirl94, 0, zerozone, zerozone, 0, ROT0, "Comad", "Las Vegas Girl (Girl '94)", 0 )
+GAME( 1993, zerozone, 0, zerozone, zerozone, 0, ROT0, "Comad", "Zero Zone", GAME_SUPPORTS_SAVE )
+GAME( 1994, lvgirl94, 0, zerozone, zerozone, 0, ROT0, "Comad", "Las Vegas Girl (Girl '94)", GAME_SUPPORTS_SAVE )

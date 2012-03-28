@@ -11,8 +11,8 @@
 
 /*----------- defined in machine/slapstic.c -----------*/
 
-void slapstic_init(running_machine *machine, int chip);
+void slapstic_init(running_machine &machine, int chip);
 void slapstic_reset(void);
 
 int slapstic_bank(void);
-int slapstic_tweak(const address_space *space, offs_t offset);
+int slapstic_tweak(address_space *space, offs_t offset);

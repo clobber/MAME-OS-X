@@ -23,16 +23,17 @@
         * War of the Worlds
         * Boxing Bugs
         * QB-3
+        * Space Ship
 
     To do:
         * look into bad sample latency
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/vector.h"
 #include "cpu/ccpu/ccpu.h"
-#include "cinemat.h"
+#include "includes/cinemat.h"
 #include "rendlay.h"
 
 #include "armora.lh"
@@ -40,17 +41,6 @@
 #include "solarq.lh"
 
 #define MASTER_CLOCK			XTAL_19_923MHz
-
-
-
-static UINT16 *rambase;
-
-static UINT8 coin_detected;
-static UINT8 coin_last_reset;
-
-static UINT8 mux_select;
-static int gear;
-
 
 
 /*************************************
@@ -61,20 +51,22 @@ static int gear;
 
 static MACHINE_START( cinemat )
 {
-	state_save_register_global(machine, coin_detected);
-	state_save_register_global(machine, coin_last_reset);
-	state_save_register_global(machine, mux_select);
+	cinemat_state *state = machine.driver_data<cinemat_state>();
+	state_save_register_global(machine, state->m_coin_detected);
+	state_save_register_global(machine, state->m_coin_last_reset);
+	state_save_register_global(machine, state->m_mux_select);
 }
 
 
 MACHINE_RESET( cinemat )
 {
+	cinemat_state *state = machine.driver_data<cinemat_state>();
 	/* reset the coin states */
-	coin_detected = 0;
-	coin_last_reset = 0;
+	state->m_coin_detected = 0;
+	state->m_coin_last_reset = 0;
 
 	/* reset mux select */
-	mux_select = 0;
+	state->m_mux_select = 0;
 }
 
 
@@ -87,14 +79,14 @@ MACHINE_RESET( cinemat )
 
 static READ8_HANDLER( inputs_r )
 {
-	return (input_port_read(space->machine, "INPUTS") >> offset) & 1;
+	return (input_port_read(space->machine(), "INPUTS") >> offset) & 1;
 }
 
 
 static READ8_HANDLER( switches_r )
 {
 	static const UINT8 switch_shuffle[8] = { 2,5,4,3,0,1,6,7 };
-	return (input_port_read(space->machine, "SWITCHES") >> switch_shuffle[offset]) & 1;
+	return (input_port_read(space->machine(), "SWITCHES") >> switch_shuffle[offset]) & 1;
 }
 
 
@@ -107,15 +99,17 @@ static READ8_HANDLER( switches_r )
 
 static INPUT_CHANGED( coin_inserted )
 {
+	cinemat_state *state = field.machine().driver_data<cinemat_state>();
 	/* on the falling edge of a new coin, set the coin_detected flag */
 	if (newval == 0)
-		coin_detected = 1;
+		state->m_coin_detected = 1;
 }
 
 
 static READ8_HANDLER( coin_input_r )
 {
-	return !coin_detected;
+	cinemat_state *state = space->machine().driver_data<cinemat_state>();
+	return !state->m_coin_detected;
 }
 
 
@@ -128,16 +122,18 @@ static READ8_HANDLER( coin_input_r )
 
 static WRITE8_HANDLER( coin_reset_w )
 {
+	cinemat_state *state = space->machine().driver_data<cinemat_state>();
 	/* on the rising edge of a coin reset, clear the coin_detected flag */
-	if (coin_last_reset != data && data != 0)
-		coin_detected = 0;
-	coin_last_reset = data;
+	if (state->m_coin_last_reset != data && data != 0)
+		state->m_coin_detected = 0;
+	state->m_coin_last_reset = data;
 }
 
 
 static WRITE8_HANDLER( mux_select_w )
 {
-	mux_select = data;
+	cinemat_state *state = space->machine().driver_data<cinemat_state>();
+	state->m_mux_select = data;
 	cinemat_sound_control_w(space, 0x07, data);
 }
 
@@ -149,14 +145,15 @@ static WRITE8_HANDLER( mux_select_w )
  *
  *************************************/
 
-static UINT8 joystick_read(const device_config *device)
+static UINT8 joystick_read(device_t *device)
 {
-	if (mame_get_phase(device->machine) != MAME_PHASE_RUNNING)
+	cinemat_state *state = device->machine().driver_data<cinemat_state>();
+	if (device->machine().phase() != MACHINE_PHASE_RUNNING)
 		return 0;
 	else
 	{
 		int xval = (INT16)(cpu_get_reg(device, CCPU_X) << 4) >> 4;
-		return (input_port_read_safe(device->machine, mux_select ? "ANALOGX" : "ANALOGY", 0) - xval) < 0x800;
+		return (input_port_read_safe(device->machine(), state->m_mux_select ? "ANALOGX" : "ANALOGY", 0) - xval) < 0x800;
 	}
 }
 
@@ -174,7 +171,7 @@ static READ8_HANDLER( speedfrk_wheel_r )
 	int delta_wheel;
 
     /* the shift register is cleared once per 'frame' */
-    delta_wheel = (INT8)input_port_read(space->machine, "WHEEL") / 8;
+    delta_wheel = (INT8)input_port_read(space->machine(), "WHEEL") / 8;
     if (delta_wheel > 3)
         delta_wheel = 3;
     else if (delta_wheel < -3)
@@ -186,17 +183,18 @@ static READ8_HANDLER( speedfrk_wheel_r )
 
 static READ8_HANDLER( speedfrk_gear_r )
 {
-	int gearval = input_port_read(space->machine, "GEAR");
+	cinemat_state *state = space->machine().driver_data<cinemat_state>();
+	int gearval = input_port_read(space->machine(), "GEAR");
 
 	/* check the fake gear input port and determine the bit settings for the gear */
 	if ((gearval & 0x0f) != 0x0f)
-        gear = gearval & 0x0f;
+        state->m_gear = gearval & 0x0f;
 
 	/* add the start key into the mix -- note that it overlaps 4th gear */
-	if (!(input_port_read(space->machine, "INPUTS") & 0x80))
-        gear &= ~0x08;
+	if (!(input_port_read(space->machine(), "INPUTS") & 0x80))
+        state->m_gear &= ~0x08;
 
-	return (gear >> offset) & 1;
+	return (state->m_gear >> offset) & 1;
 }
 
 
@@ -239,9 +237,9 @@ static READ8_HANDLER( sundance_inputs_r )
 {
 	/* handle special keys first */
 	if (sundance_port_map[offset].portname)
-		return (input_port_read(space->machine, sundance_port_map[offset].portname) & sundance_port_map[offset].bitmask) ? 0 : 1;
+		return (input_port_read(space->machine(), sundance_port_map[offset].portname) & sundance_port_map[offset].bitmask) ? 0 : 1;
 	else
-		return (input_port_read(space->machine, "INPUTS") >> offset) & 1;
+		return (input_port_read(space->machine(), "INPUTS") >> offset) & 1;
 }
 
 
@@ -254,8 +252,9 @@ static READ8_HANDLER( sundance_inputs_r )
 
 static READ8_HANDLER( boxingb_dial_r )
 {
-	int value = input_port_read(space->machine, "DIAL");
-	if (!mux_select) offset += 4;
+	cinemat_state *state = space->machine().driver_data<cinemat_state>();
+	int value = input_port_read(space->machine(), "DIAL");
+	if (!state->m_mux_select) offset += 4;
 	return (value >> offset) & 1;
 }
 
@@ -269,8 +268,8 @@ static READ8_HANDLER( boxingb_dial_r )
 
 static READ8_HANDLER( qb3_frame_r )
 {
-	attotime next_update = video_screen_get_time_until_update(space->machine->primary_screen);
-	attotime frame_period = video_screen_get_frame_period(space->machine->primary_screen);
+	attotime next_update = space->machine().primary_screen->time_until_update();
+	attotime frame_period = space->machine().primary_screen->frame_period();
 	int percent = next_update.attoseconds / (frame_period.attoseconds / 100);
 
 	/* note this is just an approximation... */
@@ -280,7 +279,7 @@ static READ8_HANDLER( qb3_frame_r )
 
 static WRITE8_HANDLER( qb3_ram_bank_w )
 {
-	memory_set_bank(space->machine, 1, cpu_get_reg(cputag_get_cpu(space->machine, "maincpu"), CCPU_P) & 3);
+	memory_set_bank(space->machine(), "bank1", cpu_get_reg(space->machine().device("maincpu"), CCPU_P) & 3);
 }
 
 
@@ -291,38 +290,38 @@ static WRITE8_HANDLER( qb3_ram_bank_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( program_map_4k, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_map_4k, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfff)
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( program_map_8k, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_map_8k, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x0fff) AM_MIRROR(0x1000) AM_ROM
 	AM_RANGE(0x2000, 0x2fff) AM_MIRROR(0x1000) AM_ROM AM_REGION("maincpu", 0x1000)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( program_map_16k, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_map_16k, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( program_map_32k, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_map_32k, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( data_map, ADDRESS_SPACE_DATA, 16 )
+static ADDRESS_MAP_START( data_map, AS_DATA, 16 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( data_map_qb3, ADDRESS_SPACE_DATA, 16 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAMBANK(1) AM_BASE(&rambase)
+static ADDRESS_MAP_START( data_map_qb3, AS_DATA, 16 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAMBANK("bank1") AM_BASE_MEMBER(cinemat_state, m_rambase)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x0f) AM_READ(inputs_r)
 	AM_RANGE(0x10, 0x16) AM_READ(switches_r)
 	AM_RANGE(0x17, 0x17) AM_READ(coin_input_r)
@@ -363,8 +362,8 @@ static INPUT_PORTS_START( spacewar )
 	PORT_DIPNAME( 0x03, 0x00,  "Time" )
 	PORT_DIPSETTING(    0x03, "0:45/coin" )
 	PORT_DIPSETTING(    0x00, "1:00/coin" )
-	PORT_DIPSETTING( 	0x01, "1:30/coin" )
-	PORT_DIPSETTING( 	0x02, "2:00/coin" )
+	PORT_DIPSETTING(	0x01, "1:30/coin" )
+	PORT_DIPSETTING(	0x02, "2:00/coin" )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
@@ -373,6 +372,21 @@ static INPUT_PORTS_START( spacewar )
 	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_CHANGED(coin_inserted, 0)
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( spaceshp )
+	PORT_INCLUDE(spacewar )
+
+	PORT_MODIFY("SWITCHES")
+	PORT_DIPNAME( 0x03, 0x00, "Time" ) PORT_DIPLOCATION("SW1:!4,!3")
+	PORT_DIPSETTING(	0x00, "1:00/coin" )
+	PORT_DIPSETTING(	0x01, "1:30/coin" )
+	PORT_DIPSETTING(	0x02, "2:00/coin" )
+	PORT_DIPSETTING(	0x03, "2:30/coin" )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW1:!1" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW1:!2" )
 INPUT_PORTS_END
 
 
@@ -976,64 +990,59 @@ static const ccpu_config config_jmi =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( cinemat_nojmi_4k )
+static MACHINE_CONFIG_START( cinemat_nojmi_4k, cinemat_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", CCPU, MASTER_CLOCK/4)
-	MDRV_CPU_CONFIG(config_nojmi)
-	MDRV_CPU_PROGRAM_MAP(program_map_4k)
-	MDRV_CPU_DATA_MAP(data_map)
-	MDRV_CPU_IO_MAP(io_map)
+	MCFG_CPU_ADD("maincpu", CCPU, MASTER_CLOCK/4)
+	MCFG_CPU_CONFIG(config_nojmi)
+	MCFG_CPU_PROGRAM_MAP(program_map_4k)
+	MCFG_CPU_DATA_MAP(data_map)
+	MCFG_CPU_IO_MAP(io_map)
 
-	MDRV_MACHINE_START(cinemat)
-	MDRV_MACHINE_RESET(cinemat)
+	MCFG_MACHINE_START(cinemat)
+	MCFG_MACHINE_RESET(cinemat)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
 
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(MASTER_CLOCK/4/16/16/16/16/2)
-	MDRV_SCREEN_SIZE(1024, 768)
-	MDRV_SCREEN_VISIBLE_AREA(0, 1023, 0, 767)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(MASTER_CLOCK/4/16/16/16/16/2)
+	MCFG_SCREEN_SIZE(1024, 768)
+	MCFG_SCREEN_VISIBLE_AREA(0, 1023, 0, 767)
+	MCFG_SCREEN_UPDATE_STATIC(cinemat)
 
-	MDRV_VIDEO_START(cinemat_bilevel)
-	MDRV_VIDEO_UPDATE(cinemat)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( cinemat_jmi_4k )
-	MDRV_IMPORT_FROM(cinemat_nojmi_4k)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CONFIG(config_jmi)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(cinemat_bilevel)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cinemat_nojmi_8k )
-	MDRV_IMPORT_FROM(cinemat_nojmi_4k)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(program_map_8k)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( cinemat_jmi_4k, cinemat_nojmi_4k )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(config_jmi)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cinemat_jmi_8k )
-	MDRV_IMPORT_FROM(cinemat_jmi_4k)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(program_map_8k)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( cinemat_nojmi_8k, cinemat_nojmi_4k )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(program_map_8k)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cinemat_jmi_16k )
-	MDRV_IMPORT_FROM(cinemat_jmi_4k)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(program_map_16k)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( cinemat_jmi_8k, cinemat_jmi_4k )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(program_map_8k)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cinemat_jmi_32k )
-	MDRV_IMPORT_FROM(cinemat_jmi_4k)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(program_map_32k)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( cinemat_jmi_16k, cinemat_jmi_4k )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(program_map_16k)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( cinemat_jmi_32k, cinemat_jmi_4k )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(program_map_32k)
+MACHINE_CONFIG_END
 
 
 
@@ -1044,116 +1053,101 @@ MACHINE_DRIVER_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( spacewar )
-	MDRV_IMPORT_FROM(cinemat_nojmi_4k)
-	MDRV_IMPORT_FROM(spacewar_sound)
-	MDRV_VIDEO_UPDATE(spacewar)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( spacewar, cinemat_nojmi_4k )
+	MCFG_FRAGMENT_ADD(spacewar_sound)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(spacewar)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( barrier )
-	MDRV_IMPORT_FROM(cinemat_jmi_4k)
-	MDRV_IMPORT_FROM(barrier_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( barrier, cinemat_jmi_4k )
+	MCFG_FRAGMENT_ADD(barrier_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( speedfrk )
-	MDRV_IMPORT_FROM(cinemat_nojmi_8k)
-	MDRV_IMPORT_FROM(speedfrk_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( speedfrk, cinemat_nojmi_8k )
+	MCFG_FRAGMENT_ADD(speedfrk_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( starhawk )
-	MDRV_IMPORT_FROM(cinemat_jmi_4k)
-	MDRV_IMPORT_FROM(starhawk_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( starhawk, cinemat_jmi_4k )
+	MCFG_FRAGMENT_ADD(starhawk_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( sundance )
-	MDRV_IMPORT_FROM(cinemat_jmi_8k)
-	MDRV_IMPORT_FROM(sundance_sound)
-	MDRV_VIDEO_START(cinemat_16level)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( sundance, cinemat_jmi_8k )
+	MCFG_FRAGMENT_ADD(sundance_sound)
+	MCFG_VIDEO_START(cinemat_16level)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tailg )
-	MDRV_IMPORT_FROM(cinemat_nojmi_8k)
-	MDRV_IMPORT_FROM(tailg_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( tailg, cinemat_nojmi_8k )
+	MCFG_FRAGMENT_ADD(tailg_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( warrior )
-	MDRV_IMPORT_FROM(cinemat_jmi_8k)
-	MDRV_IMPORT_FROM(warrior_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( warrior, cinemat_jmi_8k )
+	MCFG_FRAGMENT_ADD(warrior_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( armora )
-	MDRV_IMPORT_FROM(cinemat_jmi_16k)
-	MDRV_IMPORT_FROM(armora_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( armora, cinemat_jmi_16k )
+	MCFG_FRAGMENT_ADD(armora_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ripoff )
-	MDRV_IMPORT_FROM(cinemat_jmi_8k)
-	MDRV_IMPORT_FROM(ripoff_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( ripoff, cinemat_jmi_8k )
+	MCFG_FRAGMENT_ADD(ripoff_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( starcas )
-	MDRV_IMPORT_FROM(cinemat_jmi_8k)
-	MDRV_IMPORT_FROM(starcas_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( starcas, cinemat_jmi_8k )
+	MCFG_FRAGMENT_ADD(starcas_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( solarq )
-	MDRV_IMPORT_FROM(cinemat_jmi_16k)
-	MDRV_IMPORT_FROM(solarq_sound)
-	MDRV_VIDEO_START(cinemat_64level)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( solarq, cinemat_jmi_16k )
+	MCFG_FRAGMENT_ADD(solarq_sound)
+	MCFG_VIDEO_START(cinemat_64level)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( boxingb )
-	MDRV_IMPORT_FROM(cinemat_jmi_32k)
-	MDRV_IMPORT_FROM(boxingb_sound)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 1024, 0, 788)
-	MDRV_VIDEO_START(cinemat_color)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( boxingb, cinemat_jmi_32k )
+	MCFG_FRAGMENT_ADD(boxingb_sound)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024, 0, 788)
+	MCFG_VIDEO_START(cinemat_color)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wotw )
-	MDRV_IMPORT_FROM(cinemat_jmi_16k)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 1120, 0, 767)
-	MDRV_IMPORT_FROM(wotw_sound)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( wotw, cinemat_jmi_16k )
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0, 1120, 0, 767)
+	MCFG_FRAGMENT_ADD(wotw_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wotwc )
-	MDRV_IMPORT_FROM(cinemat_jmi_16k)
-	MDRV_IMPORT_FROM(wotwc_sound)
-	MDRV_VIDEO_START(cinemat_color)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( wotwc, cinemat_jmi_16k )
+	MCFG_FRAGMENT_ADD(wotwc_sound)
+	MCFG_VIDEO_START(cinemat_color)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( demon )
-	MDRV_IMPORT_FROM(cinemat_jmi_16k)
-	MDRV_IMPORT_FROM(demon_sound)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 1024, 0, 805)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( demon, cinemat_jmi_16k )
+	MCFG_FRAGMENT_ADD(demon_sound)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024, 0, 805)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qb3 )
-	MDRV_IMPORT_FROM(cinemat_jmi_32k)
-	MDRV_IMPORT_FROM(qb3_sound)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_DATA_MAP(data_map_qb3)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 1120, 0, 780)
-	MDRV_VIDEO_START(cinemat_qb3color)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( qb3, cinemat_jmi_32k )
+	MCFG_FRAGMENT_ADD(qb3_sound)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_DATA_MAP(data_map_qb3)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0, 1120, 0, 780)
+	MCFG_VIDEO_START(cinemat_qb3color)
+MACHINE_CONFIG_END
 
 
 
@@ -1180,6 +1174,27 @@ ROM_START( spacewar )
 	ROM_LOAD16_BYTE( "spacewar.2r", 0x0001, 0x0800, CRC(4f21328b) SHA1(8889f1a9353d6bb1e1078829c1ba77557853739b) )
 
 	CCPU_PROMS
+ROM_END
+
+
+ROM_START( spaceshp )
+	ROM_REGION( 0x1000, "maincpu", 0 )
+	ROMX_LOAD( "pr08.61", 0x0000, 0x0400, CRC(556c4ff4) SHA1(c8c1f3e5fe7bf48ecaa92dabf376adfd6a0a9b72), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr07.63", 0x0000, 0x0400, CRC(ba7747d1) SHA1(e9eb9de07ad5a306f815ee0d8371c64f8f242de6), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+	ROMX_LOAD( "pr04.83", 0x0001, 0x0400, CRC(19966799) SHA1(ffadb6cbcf4e4c4a60a251eb239eddc7d1030e6e), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr03.85", 0x0001, 0x0400, CRC(d6557503) SHA1(c226fdf85236558208942e43bcc3ce5af7e3d588), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+	ROMX_LOAD( "pr10.62", 0x0800, 0x0400, CRC(3ee163f9) SHA1(30269158434fb66049620bbac5f1c9b878416468), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr09.64", 0x0800, 0x0400, CRC(7946086c) SHA1(09d5435bc602a10ddd4206fd546f5b758e746cb2), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+	ROMX_LOAD( "pr06.84", 0x0801, 0x0400, CRC(f19c8eb0) SHA1(80f66d00caaf258232ea5e6adf515899abf53896), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr05.86", 0x0801, 0x0400, CRC(3dbc6360) SHA1(8d59dfee6e02ec29f755cc1c85ae236621009715), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+
+	ROM_REGION( 0x1a0, "proms", 0 )
+	ROM_LOAD( "pr13.139", 0x0000, 0x0100, CRC(9edbf536) SHA1(036ad8a231284e05f44b1106d38fc0c7e041b6e8) )
+	ROM_LOAD( "pr17.138", 0x0100, 0x0020, CRC(29dbfb87) SHA1(d8c40ab010b2ea30f29b2c443819e2b69f376c04) )
+	ROM_LOAD( "pr18.137", 0x0120, 0x0020, CRC(98b7bd46) SHA1(fd7d0cac8783964bac36918e0ffcc07e2ea2081a) )
+	ROM_LOAD( "pr19.136", 0x0140, 0x0020, CRC(07492cda) SHA1(32df9148797c23f70db47b840139c40e046dd710) )
+	ROM_LOAD( "pr20.72" , 0x0160, 0x0020, CRC(791ec9e1) SHA1(6f7fcce4aa3be9020595235568381588adaab88e) )
+	ROM_LOAD( "pr21.143", 0x0180, 0x0020, CRC(a481ca71) SHA1(ce145d61686f600cc16b77febfd5c783bf8c13b0) )
 ROM_END
 
 
@@ -1344,7 +1359,13 @@ ROM_END
 ROM_START( spaceftr )
 	ROM_REGION( 0x2000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "fortrest7.7t", 0x0000, 0x0800, CRC(65d0a225) SHA1(e1fbee5ff42dd040ab2e90bbe2189fcb76d6167e) )
-	ROM_LOAD16_BYTE( "fortresp7.7p", 0x0001, 0x0800, BAD_DUMP CRC(1a32aed6) SHA1(89c16a33288265e06e6fbd8426ba4ee9d81c221f) )
+
+	/* The original fortresp7.7p ROM image was a bad dump, a comparison showed only two bytes difference between it
+    and starcast.p7 from starcas1. A disassembly proved that the two affected bytes resulted in bogus opcodes, which
+    ultimately caused the game to fail. The current ROM taken from starcas1 can be assumed to be equal to a correct
+    dump of fortresp7.7p. The BAD_DUMP flag is kept in just to be sure. */
+	ROM_LOAD16_BYTE( "fortresp7.7p", 0x0001, 0x0800, BAD_DUMP CRC(d8f58d9a) SHA1(abba459431dcacc75099b0d340b957be71b89cfd) ) // taken from starcas1, read note above
+
 	ROM_LOAD16_BYTE( "fortresu7.7u", 0x1000, 0x0800, CRC(13b0287c) SHA1(366a23fd10684975bd5ee190e5227e47a0298ad5) )
 	ROM_LOAD16_BYTE( "fortresr7.7r", 0x1001, 0x0800, CRC(a2c1ed52) SHA1(ed9743f44ee98c9e7c2a6819ec681af7c7a97fc9) )
 
@@ -1437,37 +1458,39 @@ ROM_END
 
 static DRIVER_INIT( speedfrk )
 {
-	gear = 0xe;
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x03, 0, 0, speedfrk_wheel_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x04, 0x06, 0, 0, speedfrk_gear_r);
+	cinemat_state *state = machine.driver_data<cinemat_state>();
+	state->m_gear = 0xe;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x00, 0x03, FUNC(speedfrk_wheel_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x04, 0x06, FUNC(speedfrk_gear_r));
 }
 
 
 static DRIVER_INIT( sundance )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x0f, 0, 0, sundance_inputs_r);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x00, 0x0f, FUNC(sundance_inputs_r));
 }
 
 
 static DRIVER_INIT( tailg )
 {
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x07, 0x07, 0, 0, mux_select_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x07, 0x07, FUNC(mux_select_w));
 }
 
 
 static DRIVER_INIT( boxingb )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x0c, 0x0f, 0, 0, boxingb_dial_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x07, 0x07, 0, 0, mux_select_w);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x0c, 0x0f, FUNC(boxingb_dial_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x07, 0x07, FUNC(mux_select_w));
 }
 
 
 static DRIVER_INIT( qb3 )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, qb3_frame_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x00, 0, 0, qb3_ram_bank_w);
+	cinemat_state *state = machine.driver_data<cinemat_state>();
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x0f, 0x0f, FUNC(qb3_frame_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x00, 0x00, FUNC(qb3_ram_bank_w));
 
-	memory_configure_bank(machine, 1, 0, 4, rambase, 0x100*2);
+	memory_configure_bank(machine, "bank1", 0, 4, state->m_rambase, 0x100*2);
 }
 
 
@@ -1479,6 +1502,7 @@ static DRIVER_INIT( qb3 )
  *************************************/
 
 GAME( 1977, spacewar, 0,       spacewar, spacewar, 0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Space Wars", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1978, spaceshp, spacewar,spacewar, spaceshp, 0,        ORIENTATION_FLIP_Y,   "Cinematronics (Sega license)", "Space Ship", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, barrier,  0,       barrier,  barrier,  0,        ORIENTATION_FLIP_X ^ ROT270, "Vectorbeam", "Barrier", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, speedfrk, 0,       speedfrk, speedfrk, speedfrk, ORIENTATION_FLIP_Y,   "Vectorbeam", "Speed Freak", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, starhawk, 0,       starhawk, starhawk, 0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Hawk", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
@@ -1487,17 +1511,17 @@ GAMEL(1979, tailg,    0,       tailg,    tailg,    tailg,    ORIENTATION_FLIP_Y,
 GAME( 1979, warrior,  0,       warrior,  warrior,  0,        ORIENTATION_FLIP_Y,   "Vectorbeam", "Warrior", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAMEL(1980, armora,   0,       armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Armor Attack", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
 GAMEL(1980, armorap,  armora,  armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Armor Attack (prototype)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
-GAMEL(1980, armorar,  armora,  armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics (Rock-ola license)", "Armor Attack (Rock-ola)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
+GAMEL(1980, armorar,  armora,  armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics (Rock-Ola license)", "Armor Attack (Rock-Ola)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
 GAME( 1980, ripoff,   0,       ripoff,   ripoff,   0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Rip Off", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAMEL(1980, starcas,  0,       starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Castle (version 3)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1980, starcas1, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Castle (older)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1980, starcasp, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Castle (prototype)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1980, starcase, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics (Mottoeis license)", "Star Castle (Mottoeis)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
-GAMEL(1980, stellcas, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "bootleg", "Stellar Castle (Elettronolo)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
-GAMEL(1981, spaceftr, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Zaccaria", "Space Fortress (Zaccaria)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING, layout_starcas )
+GAMEL(1980, stellcas, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "bootleg (Elettronolo)", "Stellar Castle (Elettronolo)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
+GAMEL(1981, spaceftr, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics (Zaccaria license)", "Space Fortress (Zaccaria)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1981, solarq,   0,       solarq,   solarq,   0,        ORIENTATION_FLIP_Y ^ ORIENTATION_FLIP_X, "Cinematronics", "Solar Quest", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_solarq )
 GAME( 1981, boxingb,  0,       boxingb,  boxingb,  boxingb,  ORIENTATION_FLIP_Y,   "Cinematronics", "Boxing Bugs", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, wotw,     0,       wotw,     wotw,     0,        ORIENTATION_FLIP_Y,   "Cinematronics", "War of the Worlds", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, wotwc,    wotw,    wotwc,    wotw,     0,        ORIENTATION_FLIP_Y,   "Cinematronics", "War of the Worlds (color)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1982, demon,    0,       demon,    demon,    0,        ORIENTATION_FLIP_Y,   "Rock-ola", "Demon", GAME_SUPPORTS_SAVE )
-GAME( 1982, qb3,      0,       qb3,      qb3,      qb3,      ORIENTATION_FLIP_Y,   "Rock-ola", "QB-3 (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1982, demon,    0,       demon,    demon,    0,        ORIENTATION_FLIP_Y,   "Rock-Ola", "Demon", GAME_SUPPORTS_SAVE )
+GAME( 1982, qb3,      0,       qb3,      qb3,      qb3,      ORIENTATION_FLIP_Y,   "Rock-Ola", "QB-3 (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )

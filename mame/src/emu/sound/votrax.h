@@ -3,10 +3,11 @@
 #ifndef __VOTRAX_H__
 #define __VOTRAX_H__
 
-WRITE8_DEVICE_HANDLER( votrax_w );
-int votrax_status_r(const device_config *device);
+#include "devlegcy.h"
 
-DEVICE_GET_INFO( votrax );
-#define SOUND_VOTRAX DEVICE_GET_INFO_NAME( votrax )
+WRITE8_DEVICE_HANDLER( votrax_w );
+int votrax_status_r(device_t *device);
+
+DECLARE_LEGACY_SOUND_DEVICE(VOTRAX, votrax);
 
 #endif /* __VOTRAX_H__ */

@@ -4,330 +4,216 @@
 
     Machine configuration macros and functions.
 
-    Copyright Nicola Salmoria and the MAME Team.
-    Visit http://mamedev.org for licensing and usage restrictions.
+****************************************************************************
+
+    Copyright Aaron Giles
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in
+          the documentation and/or other materials provided with the
+          distribution.
+        * Neither the name 'MAME' nor the names of its contributors may be
+          used to endorse or promote products derived from this software
+          without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
+    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
+    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "devintrf.h"
+#include "emu.h"
+#include "emuopts.h"
 #include <ctype.h>
 
-#if defined(_MSC_VER)
-#pragma optimize ("", off)
-#endif
 
+//**************************************************************************
+//  MACHINE CONFIGURATIONS
+//**************************************************************************
 
+//-------------------------------------------------
+//  machine_config - constructor
+//-------------------------------------------------
 
-/***************************************************************************
-    FUNCTION PROTOTYPES
-***************************************************************************/
-
-static void machine_config_detokenize(machine_config *config, const machine_config_token *tokens, const device_config *owner, int depth);
-
-
-
-/***************************************************************************
-    MACHINE CONFIGURATIONS
-***************************************************************************/
-
-/*-------------------------------------------------
-    remove_device - remove the head device from
-    the given configuration
--------------------------------------------------*/
-
-INLINE void remove_device(device_config **listheadptr, const char *tag)
+machine_config::machine_config(const game_driver &gamedrv, emu_options &options)
+	: m_minimum_quantum(attotime::zero),
+	  m_perfect_cpu_quantum(NULL),
+	  m_watchdog_vblank_count(0),
+	  m_watchdog_time(attotime::zero),
+	  m_nvram_handler(NULL),
+	  m_memcard_handler(NULL),
+	  m_video_attributes(0),
+	  m_gfxdecodeinfo(NULL),
+	  m_total_colors(0),
+	  m_default_layout(NULL),
+	  m_gamedrv(gamedrv),
+	  m_options(options),
+	  m_root_device(NULL)
 {
-	device_config *device = (device_config *)device_list_find_by_tag(*listheadptr, tag);
-	device_custom_config_func custom;
+	// construct the config
+	(*gamedrv.machine_config)(*this, NULL);
 
-	assert(device != NULL);
-
-	/* call the custom config free function first */
-	custom = (device_custom_config_func)devtype_get_info_fct(device->type, DEVINFO_FCT_CUSTOM_CONFIG);
-	if (custom != NULL)
-		(*custom)(device, MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_FREE, NULL);
-
-	/* remove the device from the list */
-	device_list_remove(listheadptr, tag);
-}
-
-
-
-/***************************************************************************
-    MACHINE CONFIGURATIONS
-***************************************************************************/
-
-/*-------------------------------------------------
-    machine_config_alloc - allocate a new
-    machine configuration and populate it using
-    the supplied constructor
--------------------------------------------------*/
-
-machine_config *machine_config_alloc(const machine_config_token *tokens)
-{
-	machine_config *config;
-
-	/* allocate a new configuration object */
-	config = alloc_clear_or_die(machine_config);
-
-	/* parse tokens into the config */
-	machine_config_detokenize(config, tokens, NULL, 0);
-	return config;
-}
-
-
-/*-------------------------------------------------
-    machine_config_free - release memory allocated
-    for a machine configuration
--------------------------------------------------*/
-
-void machine_config_free(machine_config *config)
-{
-	/* release the device list */
-	while (config->devicelist != NULL)
-		remove_device(&config->devicelist, config->devicelist->tag);
-
-	/* release the configuration itself */
-	free(config);
-}
-
-
-/*-------------------------------------------------
-    machine_config_detokenize - detokenize a
-    machine config
--------------------------------------------------*/
-
-static void machine_config_detokenize(machine_config *config, const machine_config_token *tokens, const device_config *owner, int depth)
-{
-	UINT32 entrytype = MCONFIG_TOKEN_INVALID;
-	astring *tempstring = astring_alloc();
-	device_config *device = NULL;
-
-	/* loop over tokens until we hit the end */
-	while (entrytype != MCONFIG_TOKEN_END)
+	bool is_selected_driver = strcmp(gamedrv.name,options.system_name())==0;
+	// intialize slot devices - make sure that any required devices have been allocated
+	slot_interface_iterator slotiter(root_device());
+    for (device_slot_interface *slot = slotiter.first(); slot != NULL; slot = slotiter.next())
 	{
-		device_custom_config_func custom;
-		int size, offset, bits;
-		UINT32 data32, clock;
-		device_type devtype;
-		const char *tag;
-		UINT64 data64;
-
-		/* unpack the token from the first entry */
-		TOKEN_GET_UINT32_UNPACK1(tokens, entrytype, 8);
-		switch (entrytype)
+		const slot_interface *intf = slot->get_slot_interfaces();
+		if (intf != NULL)
 		{
-			/* end */
-			case MCONFIG_TOKEN_END:
-				break;
+			device_t &owner = slot->device();
+			const char *selval = options.value(owner.tag()+1);
+			if (!is_selected_driver || !options.exists(owner.tag()+1))
+				selval = slot->get_default_card(*this, options);
 
-			/* including */
-			case MCONFIG_TOKEN_INCLUDE:
-				machine_config_detokenize(config, TOKEN_GET_PTR(tokens, tokenptr), owner, depth + 1);
-				break;
-
-			/* device management */
-			case MCONFIG_TOKEN_DEVICE_ADD:
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT64_UNPACK2(tokens, entrytype, 8, clock, 32);
-				devtype = TOKEN_GET_PTR(tokens, devtype);
-				tag = TOKEN_GET_STRING(tokens);
-				device = device_list_add(&config->devicelist, owner, devtype, device_build_tag(tempstring, owner, tag), clock);
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_REMOVE:
-				tag = TOKEN_GET_STRING(tokens);
-				remove_device(&config->devicelist, device_build_tag(tempstring, owner, tag));
-				device = NULL;
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_MODIFY:
-				tag = TOKEN_GET_STRING(tokens);
-				device = (device_config *)device_list_find_by_tag(config->devicelist, device_build_tag(tempstring, owner, tag));
-				if (device == NULL)
-					fatalerror("Unable to find device: tag=%s\n", astring_c(tempstring));
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_CLOCK:
-				assert(device != NULL);
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT64_UNPACK2(tokens, entrytype, 8, device->clock, 32);
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_MAP:
-				assert(device != NULL);
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, data32, 8);
-				device->address_map[data32] = TOKEN_GET_PTR(tokens, addrmap);
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_CONFIG:
-				assert(device != NULL);
-				device->static_config = TOKEN_GET_PTR(tokens, voidptr);
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_1:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_2:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_3:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_4:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_5:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_6:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_7:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_8:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_9:
-			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_FREE:
-				assert(device != NULL);
-				custom = (device_custom_config_func)devtype_get_info_fct(device->type, DEVINFO_FCT_CUSTOM_CONFIG);
-				assert(custom != NULL);
-				tokens = (*custom)(device, entrytype, tokens);
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_CONFIG_DATA32:
-				assert(device != NULL);
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK3(tokens, entrytype, 8, size, 4, offset, 12);
-				data32 = TOKEN_GET_UINT32(tokens);
-				switch (size)
+			if (selval != NULL && strlen(selval) != 0)
+			{
+				bool found = false;
+				for (int i = 0; intf[i].name != NULL; i++)
 				{
-					case 1: *(UINT8 *) ((UINT8 *)device->inline_config + offset) = data32; break;
-					case 2: *(UINT16 *)((UINT8 *)device->inline_config + offset) = data32; break;
-					case 4: *(UINT32 *)((UINT8 *)device->inline_config + offset) = data32; break;
+					if (strcmp(selval, intf[i].name) == 0)
+					{
+						device_t *new_dev = device_add(&owner, intf[i].name, intf[i].devtype, 0);
+						found = true;
+						const char *def = slot->get_default_card(*this, options);
+						if (def != NULL && strcmp(def, selval) == 0)
+							device_t::static_set_input_default(*new_dev, slot->input_ports_defaults());
+					}
 				}
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_CONFIG_DATA64:
-				assert(device != NULL);
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK3(tokens, entrytype, 8, size, 4, offset, 12);
-				TOKEN_EXTRACT_UINT64(tokens, data64);
-				switch (size)
-				{
-					case 1: *(UINT8 *) ((UINT8 *)device->inline_config + offset) = data64; break;
-					case 2: *(UINT16 *)((UINT8 *)device->inline_config + offset) = data64; break;
-					case 4: *(UINT32 *)((UINT8 *)device->inline_config + offset) = data64; break;
-					case 8: *(UINT64 *)((UINT8 *)device->inline_config + offset) = data64; break;
-				}
-				break;
-
-			case MCONFIG_TOKEN_DEVICE_CONFIG_DATAFP32:
-				assert(device != NULL);
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK4(tokens, entrytype, 8, size, 4, bits, 6, offset, 12);
-				data32 = TOKEN_GET_UINT32(tokens);
-				switch (size)
-				{
-					case 4: *(float *)((UINT8 *)device->inline_config + offset) = (float)(INT32)data32 / (float)(1 << bits); break;
-					case 8: *(double *)((UINT8 *)device->inline_config + offset) = (double)(INT32)data32 / (double)(1 << bits); break;
-				}
-				break;
-
-
-			/* core parameters */
-			case MCONFIG_TOKEN_DRIVER_DATA:
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, config->driver_data_size, 24);
-				break;
-
-			case MCONFIG_TOKEN_QUANTUM_TIME:
-				TOKEN_EXTRACT_UINT64(tokens, data64);
-				config->minimum_quantum = UINT64_ATTOTIME_TO_ATTOTIME(data64);
-				break;
-
-			case MCONFIG_TOKEN_QUANTUM_PERFECT_CPU:
-				config->perfect_cpu_quantum = TOKEN_GET_STRING(tokens);
-				break;
-
-			case MCONFIG_TOKEN_WATCHDOG_VBLANK:
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, config->watchdog_vblank_count, 24);
-				break;
-
-			case MCONFIG_TOKEN_WATCHDOG_TIME:
-				TOKEN_EXTRACT_UINT64(tokens, data64);
-				config->watchdog_time = UINT64_ATTOTIME_TO_ATTOTIME(data64);
-				break;
-
-			/* core functions */
-			case MCONFIG_TOKEN_MACHINE_START:
-				config->machine_start = TOKEN_GET_PTR(tokens, machine_start);
-				break;
-
-			case MCONFIG_TOKEN_MACHINE_RESET:
-				config->machine_reset = TOKEN_GET_PTR(tokens, machine_reset);
-				break;
-
-			case MCONFIG_TOKEN_NVRAM_HANDLER:
-				config->nvram_handler = TOKEN_GET_PTR(tokens, nvram_handler);
-				break;
-
-			case MCONFIG_TOKEN_MEMCARD_HANDLER:
-				config->memcard_handler = TOKEN_GET_PTR(tokens, memcard_handler);
-				break;
-
-			/* core video parameters */
-			case MCONFIG_TOKEN_VIDEO_ATTRIBUTES:
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, config->video_attributes, 24);
-				break;
-
-			case MCONFIG_TOKEN_GFXDECODE:
-				config->gfxdecodeinfo = TOKEN_GET_PTR(tokens, gfxdecode);
-				break;
-
-			case MCONFIG_TOKEN_PALETTE_LENGTH:
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, config->total_colors, 24);
-				break;
-
-			case MCONFIG_TOKEN_DEFAULT_LAYOUT:
-				config->default_layout = TOKEN_GET_STRING(tokens);
-				break;
-
-			/* core video functions */
-			case MCONFIG_TOKEN_PALETTE_INIT:
-				config->init_palette = TOKEN_GET_PTR(tokens, palette_init);
-				break;
-
-			case MCONFIG_TOKEN_VIDEO_START:
-				config->video_start = TOKEN_GET_PTR(tokens, video_start);
-				break;
-
-			case MCONFIG_TOKEN_VIDEO_RESET:
-				config->video_reset = TOKEN_GET_PTR(tokens, video_reset);
-				break;
-
-			case MCONFIG_TOKEN_VIDEO_EOF:
-				config->video_eof = TOKEN_GET_PTR(tokens, video_eof);
-				break;
-
-			case MCONFIG_TOKEN_VIDEO_UPDATE:
-				config->video_update = TOKEN_GET_PTR(tokens, video_update);
-				break;
-
-			/* core sound functions */
-			case MCONFIG_TOKEN_SOUND_START:
-				config->sound_start = TOKEN_GET_PTR(tokens, sound_start);
-				break;
-
-			case MCONFIG_TOKEN_SOUND_RESET:
-				config->sound_reset = TOKEN_GET_PTR(tokens, sound_reset);
-				break;
-
-			default:
-				fatalerror("Invalid token %d in machine config\n", entrytype);
-				break;
+				if (!found)
+					throw emu_fatalerror("Unknown slot option '%s' in slot '%s'", selval, owner.tag()+1);
+			}
 		}
 	}
 
-	/* if we are the outermost level, process any device-specific machine configurations */
-	if (depth == 0)
-		for (device = config->devicelist; device != NULL; device = device->next)
-		{
-			tokens = (const machine_config_token *)device_get_info_ptr(device, DEVINFO_PTR_MACHINE_CONFIG);
-			if (tokens != NULL)
-				machine_config_detokenize(config, tokens, device, depth + 1);
-		}
+	// when finished, set the game driver
+	driver_device::static_set_game(*m_root_device, gamedrv);
 
-	astring_free(tempstring);
+	// then notify all devices that their configuration is complete
+	device_iterator iter(root_device());
+	for (device_t *device = iter.first(); device != NULL; device = iter.next())
+		if (!device->configured())
+			device->config_complete();
+}
+
+
+//-------------------------------------------------
+//  ~machine_config - destructor
+//-------------------------------------------------
+
+machine_config::~machine_config()
+{
+	global_free(m_root_device);
+}
+
+
+//-------------------------------------------------
+//  first_screen - return a pointer to the first
+//  screen device
+//-------------------------------------------------
+
+screen_device *machine_config::first_screen() const
+{
+	screen_device_iterator iter(root_device());
+	return iter.first();
+}
+
+
+//-------------------------------------------------
+//  device_add - configuration helper to add a
+//  new device
+//-------------------------------------------------
+
+device_t *machine_config::device_add(device_t *owner, const char *tag, device_type type, UINT32 clock)
+{
+	// if there's an owner, let the owner do the work
+	if (owner != NULL)
+		return owner->add_subdevice(type, tag, clock);
+
+	// otherwise, allocate the device directly
+	assert(m_root_device == NULL);
+	m_root_device = (*type)(*this, tag, owner, clock);
+
+	// apply any machine configuration owned by the device now
+	machine_config_constructor additions = m_root_device->machine_config_additions();
+	if (additions != NULL)
+		(*additions)(*this, m_root_device);
+	return m_root_device;
+}
+
+
+//-------------------------------------------------
+//  device_replace - configuration helper to
+//  replace one device with a new device
+//-------------------------------------------------
+
+device_t *machine_config::device_replace(device_t *owner, const char *tag, device_type type, UINT32 clock)
+{
+	// find the original device by this name (must exist)
+	assert(owner != NULL);
+	device_t *device = owner->subdevice(tag);
+	if (device == NULL)
+	{
+		mame_printf_warning("Warning: attempting to replace non-existent device '%s'\n", tag);
+		return device_add(owner, tag, type, clock);
+	}
+
+	// let the device's owner do the work
+	return device->owner()->replace_subdevice(*device, type, tag, clock);
+}
+
+
+//-------------------------------------------------
+//  device_remove - configuration helper to
+//  remove a device
+//-------------------------------------------------
+
+device_t *machine_config::device_remove(device_t *owner, const char *tag)
+{
+	// find the original device by this name (must exist)
+	assert(owner != NULL);
+	device_t *device = owner->subdevice(tag);
+	if (device == NULL)
+	{
+		mame_printf_warning("Warning: attempting to remove non-existent device '%s'\n", tag);
+		return NULL;
+	}
+
+	// let the device's owner do the work
+	device->owner()->remove_subdevice(*device);
+	return NULL;
+}
+
+
+//-------------------------------------------------
+//  device_find - configuration helper to
+//  locate a device
+//-------------------------------------------------
+
+device_t *machine_config::device_find(device_t *owner, const char *tag)
+{
+	// find the original device by this name (must exist)
+	assert(owner != NULL);
+	device_t *device = owner->subdevice(tag);
+	assert(device != NULL);
+	if (device == NULL)
+		throw emu_fatalerror("Unable to find device '%s'\n", tag);
+
+	// return the device
+	return device;
 }

@@ -1,6 +1,7 @@
 #ifndef NAMCO52_H
 #define NAMCO52_H
 
+#include "devlegcy.h"
 #include "sound/discrete.h"
 #include "devcb.h"
 
@@ -16,17 +17,15 @@ struct _namco_52xx_interface
 };
 
 
-#define MDRV_NAMCO_52XX_ADD(_tag, _clock, _interface) \
-	MDRV_DEVICE_ADD(_tag, NAMCO_52XX, _clock) \
-	MDRV_DEVICE_CONFIG(_interface)
+#define MCFG_NAMCO_52XX_ADD(_tag, _clock, _interface) \
+	MCFG_DEVICE_ADD(_tag, NAMCO_52XX, _clock) \
+	MCFG_DEVICE_CONFIG(_interface)
 
 
 WRITE8_DEVICE_HANDLER( namco_52xx_write );
 
 
-/* device get info callback */
-#define NAMCO_52XX DEVICE_GET_INFO_NAME(namco_52xx)
-DEVICE_GET_INFO( namco_52xx );
+DECLARE_LEGACY_DEVICE(NAMCO_52XX, namco_52xx);
 
 
 /* discrete nodes */

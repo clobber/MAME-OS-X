@@ -135,37 +135,18 @@ Updates by Bryan McPhail, 12/12/2004:
     exactly synchronised in practice.  This is currently hacked in MAME
     by raising the VBLANK bit a scanline early.
 
-
-TODO:
-    - 68705 microcontroller not dumped, patched out.
-
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6805/m6805.h"
 #include "sound/2203intf.h"
+#include "includes/xain.h"
 
 #define MASTER_CLOCK		XTAL_12MHz
 #define CPU_CLOCK			MASTER_CLOCK / 8
 #define MCU_CLOCK			MASTER_CLOCK / 4
-#define PIXEL_CLOCK		MASTER_CLOCK / 2
-
-static int vblank;
-
-VIDEO_UPDATE( xain );
-VIDEO_START( xain );
-WRITE8_HANDLER( xain_scrollxP0_w );
-WRITE8_HANDLER( xain_scrollyP0_w );
-WRITE8_HANDLER( xain_scrollxP1_w );
-WRITE8_HANDLER( xain_scrollyP1_w );
-WRITE8_HANDLER( xain_charram_w );
-WRITE8_HANDLER( xain_bgram0_w );
-WRITE8_HANDLER( xain_bgram1_w );
-WRITE8_HANDLER( xain_flipscreen_w );
-
-extern UINT8 *xain_charram, *xain_bgram0, *xain_bgram1, xain_pri;
+#define PIXEL_CLOCK			MASTER_CLOCK / 2
 
 
 /*
@@ -194,55 +175,57 @@ INLINE int scanline_to_vcount(int scanline)
 
 static TIMER_DEVICE_CALLBACK( xain_scanline )
 {
+	xain_state *state = timer.machine().driver_data<xain_state>();
 	int scanline = param;
-	int screen_height = video_screen_get_height(timer->machine->primary_screen);
+	int screen_height = timer.machine().primary_screen->height();
 	int vcount_old = scanline_to_vcount((scanline == 0) ? screen_height - 1 : scanline - 1);
 	int vcount = scanline_to_vcount(scanline);
 
 	/* update to the current point */
 	if (scanline > 0)
 	{
-		video_screen_update_partial(timer->machine->primary_screen, scanline - 1);
+		timer.machine().primary_screen->update_partial(scanline - 1);
 	}
 
 	/* FIRQ (IMS) fires every on every 8th scanline (except 0) */
 	if (!(vcount_old & 8) && (vcount & 8))
 	{
-		cputag_set_input_line(timer->machine, "maincpu", M6809_FIRQ_LINE, ASSERT_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", M6809_FIRQ_LINE, ASSERT_LINE);
 	}
 
 	/* NMI fires on scanline 248 (VBL) and is latched */
 	if (vcount == 0xf8)
 	{
-		cputag_set_input_line(timer->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
 	}
 
 	/* VBLANK input bit is held high from scanlines 248-255 */
 	if (vcount >= 248-1)	// -1 is a hack - see notes above
 	{
-		vblank = 1;
+		state->m_vblank = 1;
 	}
 	else
 	{
-		vblank = 0;
+		state->m_vblank = 0;
 	}
 }
 
 static WRITE8_HANDLER( xainCPUA_bankswitch_w )
 {
-	xain_pri = data & 0x7;
-	memory_set_bank(space->machine, 1, (data >> 3) & 1);
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_pri = data & 0x7;
+	memory_set_bank(space->machine(), "bank1", (data >> 3) & 1);
 }
 
 static WRITE8_HANDLER( xainCPUB_bankswitch_w )
 {
-	memory_set_bank(space->machine, 2, data & 1);
+	memory_set_bank(space->machine(), "bank2", data & 1);
 }
 
 static WRITE8_HANDLER( xain_sound_command_w )
 {
 	soundlatch_w(space,offset,data);
-	cputag_set_input_line(space->machine, "audiocpu", M6809_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", M6809_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( xain_main_irq_w )
@@ -250,92 +233,224 @@ static WRITE8_HANDLER( xain_main_irq_w )
 	switch (offset)
 	{
 	case 0: /* 0x3a09 - NMI clear */
-		cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
 		break;
 	case 1: /* 0x3a0a - FIRQ clear */
-		cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", M6809_FIRQ_LINE, CLEAR_LINE);
 		break;
 	case 2: /* 0x3a0b - IRQ clear */
-		cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", M6809_IRQ_LINE, CLEAR_LINE);
 		break;
 	case 3: /* 0x3a0c - IRQB assert */
-		cputag_set_input_line(space->machine, "sub", M6809_IRQ_LINE, ASSERT_LINE);
+		cputag_set_input_line(space->machine(), "sub", M6809_IRQ_LINE, ASSERT_LINE);
 		break;
 	}
 }
 
 static WRITE8_HANDLER( xain_irqA_assert_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", M6809_IRQ_LINE, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( xain_irqB_clear_w )
 {
-	cputag_set_input_line(space->machine, "sub", M6809_IRQ_LINE, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "sub", M6809_IRQ_LINE, CLEAR_LINE);
 }
 
 static READ8_HANDLER( xain_68705_r )
 {
-//  logerror("read 68705\n");
-	return 0x4d;	/* fake P5 checksum test pass */
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_mcu_ready = 1;
+	return state->m_from_mcu;
 }
 
 static WRITE8_HANDLER( xain_68705_w )
 {
-//  logerror("write %02x to 68705\n",data);
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_from_main = data;
+	state->m_mcu_accept = 0;
+
+	if (space->machine().device("mcu") != NULL)
+		cputag_set_input_line(space->machine(), "mcu", 0, ASSERT_LINE);
 }
 
 static CUSTOM_INPUT( xain_vblank_r )
 {
-	return vblank;
+	xain_state *state = field.machine().driver_data<xain_state>();
+	return state->m_vblank;
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(xain_charram_w) AM_BASE(&xain_charram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(xain_bgram1_w) AM_BASE(&xain_bgram1)
-	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(xain_bgram0_w) AM_BASE(&xain_bgram0)
-	AM_RANGE(0x3800, 0x397f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+/***************************************************************************
+
+    MC68705P5 I/O
+
+***************************************************************************/
+
+READ8_HANDLER( xain_68705_port_a_r )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	return (state->m_port_a_out & state->m_ddr_a) | (state->m_port_a_in & ~state->m_ddr_a);
+}
+
+WRITE8_HANDLER( xain_68705_port_a_w )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_port_a_out = data;
+}
+
+WRITE8_HANDLER( xain_68705_ddr_a_w )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_ddr_a = data;
+}
+
+READ8_HANDLER( xain_68705_port_b_r )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	return (state->m_port_b_out & state->m_ddr_b) | (state->m_port_b_in & ~state->m_ddr_b);
+}
+
+WRITE8_HANDLER( xain_68705_port_b_w )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	if ((state->m_ddr_b & 0x02) && (~data & 0x02))
+	{
+		state->m_port_a_in = state->m_from_main;
+	}
+	/* Rising edge of PB1 */
+	else if ((state->m_ddr_b & 0x02) && (~state->m_port_b_out & 0x02) && (data & 0x02))
+	{
+		state->m_mcu_accept = 1;
+		cputag_set_input_line(space->machine(), "mcu", 0, CLEAR_LINE);
+	}
+
+	/* Rising edge of PB2 */
+	if ((state->m_ddr_b & 0x04) && (~state->m_port_b_out & 0x04) && (data & 0x04))
+	{
+		state->m_mcu_ready = 0;
+		state->m_from_mcu = state->m_port_a_out;
+	}
+
+	state->m_port_b_out = data;
+}
+
+WRITE8_HANDLER( xain_68705_ddr_b_w )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_ddr_b = data;
+}
+
+READ8_HANDLER( xain_68705_port_c_r )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_port_c_in = 0;
+
+	if (!state->m_mcu_accept)
+		state->m_port_c_in |= 0x01;
+	if (state->m_mcu_ready)
+		state->m_port_c_in |= 0x02;
+
+	return (state->m_port_c_out & state->m_ddr_c) | (state->m_port_c_in & ~state->m_ddr_c);
+}
+
+WRITE8_HANDLER( xain_68705_port_c_w )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_port_c_out = data;
+}
+
+WRITE8_HANDLER( xain_68705_ddr_c_w )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_ddr_c = data;
+}
+
+static CUSTOM_INPUT( mcu_status_r )
+{
+	xain_state *state = field.machine().driver_data<xain_state>();
+	UINT8 res = 0;
+
+	if (field.machine().device("mcu") != NULL)
+	{
+		if (state->m_mcu_ready == 1)
+			res |= 0x01;
+		if (state->m_mcu_accept == 1)
+			res |= 0x02;
+	}
+	else
+	{
+		return 3;
+	}
+
+	return res;
+}
+
+READ8_HANDLER( mcu_comm_reset_r )
+{
+	xain_state *state = space->machine().driver_data<xain_state>();
+	state->m_mcu_ready = 1;
+	state->m_mcu_accept = 1;
+
+	if (space->machine().device("mcu") != NULL)
+		cputag_set_input_line(space->machine(), "mcu", 0, CLEAR_LINE);
+
+	return 0xff;
+}
+
+
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(xain_charram_w) AM_BASE_MEMBER(xain_state, m_charram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(xain_bgram1_w) AM_BASE_MEMBER(xain_state, m_bgram1)
+	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(xain_bgram0_w) AM_BASE_MEMBER(xain_state, m_bgram0)
+	AM_RANGE(0x3800, 0x397f) AM_RAM AM_BASE_SIZE_MEMBER(xain_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x3a00, 0x3a00) AM_READ_PORT("P1")
 	AM_RANGE(0x3a00, 0x3a01) AM_WRITE(xain_scrollxP1_w)
 	AM_RANGE(0x3a01, 0x3a01) AM_READ_PORT("P2")
 	AM_RANGE(0x3a02, 0x3a02) AM_READ_PORT("DSW0")
 	AM_RANGE(0x3a02, 0x3a03) AM_WRITE(xain_scrollyP1_w)
 	AM_RANGE(0x3a03, 0x3a03) AM_READ_PORT("DSW1")
-	AM_RANGE(0x3a04, 0x3a04) AM_READ(xain_68705_r)	/* from the 68705 */
+	AM_RANGE(0x3a04, 0x3a04) AM_READ(xain_68705_r)
 	AM_RANGE(0x3a04, 0x3a05) AM_WRITE(xain_scrollxP0_w)
 	AM_RANGE(0x3a05, 0x3a05) AM_READ_PORT("VBLANK")
-//  AM_RANGE(0x3a06, 0x3a06) AM_READNOP  /* ?? read (and discarded) on startup. Maybe reset the 68705 */
+	AM_RANGE(0x3a06, 0x3a06) AM_READ(mcu_comm_reset_r)
 	AM_RANGE(0x3a06, 0x3a07) AM_WRITE(xain_scrollyP0_w)
 	AM_RANGE(0x3a08, 0x3a08) AM_WRITE(xain_sound_command_w)
 	AM_RANGE(0x3a09, 0x3a0c) AM_WRITE(xain_main_irq_w)
 	AM_RANGE(0x3a0d, 0x3a0d) AM_WRITE(xain_flipscreen_w)
-	AM_RANGE(0x3a0e, 0x3a0e) AM_WRITE(xain_68705_w)	/* to 68705 */
+	AM_RANGE(0x3a0e, 0x3a0e) AM_WRITE(xain_68705_w)
 	AM_RANGE(0x3a0f, 0x3a0f) AM_WRITE(xainCPUA_bankswitch_w)
-	AM_RANGE(0x3c00, 0x3dff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0x3e00, 0x3fff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split2_w) AM_BASE(&paletteram_2)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x3c00, 0x3dff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x3e00, 0x3fff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split2_w) AM_BASE_GENERIC(paletteram2)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu_map_B, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE(1)
+static ADDRESS_MAP_START( cpu_map_B, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(xain_irqA_assert_w)
 	AM_RANGE(0x2800, 0x2800) AM_WRITE(xain_irqB_clear_w)
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(xainCPUB_bankswitch_w)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(2)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank2")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-#if 0
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
+	AM_RANGE(0x0000, 0x0000) AM_READWRITE(xain_68705_port_a_r, xain_68705_port_a_w)
+	AM_RANGE(0x0001, 0x0001) AM_READWRITE(xain_68705_port_b_r, xain_68705_port_b_w)
+	AM_RANGE(0x0002, 0x0002) AM_READWRITE(xain_68705_port_c_r, xain_68705_port_c_w)
+	AM_RANGE(0x0004, 0x0004) AM_WRITE(xain_68705_ddr_a_w)
+	AM_RANGE(0x0005, 0x0005) AM_WRITE(xain_68705_ddr_b_w)
+	AM_RANGE(0x0006, 0x0006) AM_WRITE(xain_68705_ddr_c_w)
+//  AM_RANGE(0x0008, 0x0008) AM_READWRITE(m68705_tdr_r, m68705_tdr_w)
+//  AM_RANGE(0x0009, 0x0009) AM_READWRITE(m68705_tcr_r, m68705_tcr_w)
 	AM_RANGE(0x0010, 0x007f) AM_RAM
 	AM_RANGE(0x0080, 0x07ff) AM_ROM
 ADDRESS_MAP_END
-#endif
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x1000, 0x1000) AM_READ(soundlatch_r)
 	AM_RANGE(0x2800, 0x2801) AM_DEVWRITE("ym1", ym2203_w)
@@ -366,56 +481,55 @@ static INPUT_PORTS_START( xsleena )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 
 	PORT_START("DSW0")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW1:1,2")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW1:3,4")
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:5")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Allow_Continue ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("SW1:6")
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Game_Time ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Game_Time ) )	PORT_DIPLOCATION("SW2:3,4")
 	PORT_DIPSETTING(    0x0c, "Slow" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x04, "Fast" )
 	PORT_DIPSETTING(    0x00, "Very Fast" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:5,6")
 	PORT_DIPSETTING(    0x30, "20k 70k and every 70k" )
 	PORT_DIPSETTING(    0x20, "30k 80k and every 80k" )
 	PORT_DIPSETTING(    0x10, "20k and 80k" )
 	PORT_DIPSETTING(    0x00, "30k and 80k" )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:7,8")
 	PORT_DIPSETTING(    0xc0, "3")
 	PORT_DIPSETTING(    0x80, "4")
 	PORT_DIPSETTING(    0x40, "6")
-	PORT_DIPSETTING(    0x00, "Infinite (Cheat")
+	PORT_DIPSETTING(    0x00, "Infinite (Cheat)")
 
 	PORT_START("VBLANK")
 	PORT_BIT( 0x03, IP_ACTIVE_LOW,  IPT_UNUSED )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_COIN3 )
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )	/* when 0, 68705 is ready to send data */
-	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )	/* when 1, 68705 is ready to receive data */
+	PORT_BIT( 0x18, IP_ACTIVE_HIGH, IPT_SPECIAL) PORT_CUSTOM(mcu_status_r, NULL)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(xain_vblank_r, NULL)	/* VBLANK */
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW,  IPT_UNUSED )
 INPUT_PORTS_END
@@ -452,9 +566,9 @@ GFXDECODE_END
 
 
 /* handler called by the 2203 emulator when the internal timers cause an IRQ */
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -469,59 +583,63 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( xsleena )
 {
-	memory_configure_bank(machine, 1, 0, 2, memory_region(machine, "maincpu") + 0x4000, 0xc000);
-	memory_configure_bank(machine, 2, 0, 2, memory_region(machine, "sub")  + 0x4000, 0xc000);
-	memory_set_bank(machine, 1, 0);
-	memory_set_bank(machine, 2, 0);
+	memory_configure_bank(machine, "bank1", 0, 2, machine.region("maincpu")->base() + 0x4000, 0xc000);
+	memory_configure_bank(machine, "bank2", 0, 2, machine.region("sub")->base()  + 0x4000, 0xc000);
+	memory_set_bank(machine, "bank1", 0);
+	memory_set_bank(machine, "bank2", 0);
 }
 
-static MACHINE_DRIVER_START( xsleena )
+static MACHINE_CONFIG_START( xsleena, xain_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, CPU_CLOCK)	/* Confirmed 1.5MHz */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_TIMER_ADD_SCANLINE("scantimer", xain_scanline, "screen", 0, 1)
+	MCFG_CPU_ADD("maincpu", M6809, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", xain_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("sub", M6809, CPU_CLOCK)	/* Confirmed 1.5MHz */
-	MDRV_CPU_PROGRAM_MAP(cpu_map_B)
+	MCFG_CPU_ADD("sub", M6809, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(cpu_map_B)
 
-	MDRV_CPU_ADD("audiocpu", M6809, CPU_CLOCK)	/* Confirmed 1.5MHz */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", M6809, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-//  MDRV_CPU_ADD("mcu", M68705, MCU_CLOCK)    /* Confirmed 3MHz */
-//  MDRV_CPU_PROGRAM_MAP(mcu_map)
+	MCFG_CPU_ADD("mcu", M68705, MCU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(mcu_map)
 
-	MDRV_MACHINE_START(xsleena)
+	MCFG_MACHINE_START(xsleena)
 
-	MDRV_QUANTUM_PERFECT_CPU("maincpu")
+	MCFG_QUANTUM_PERFECT_CPU("maincpu")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 8, 248)	/* based on ddragon driver */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 8, 248)	/* based on ddragon driver */
+	MCFG_SCREEN_UPDATE_STATIC(xain)
 
-	MDRV_GFXDECODE(xain)
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_GFXDECODE(xain)
+	MCFG_PALETTE_LENGTH(512)
 
-	MDRV_VIDEO_START(xain)
-	MDRV_VIDEO_UPDATE(xain)
+	MCFG_VIDEO_START(xain)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym1", YM2203, 3000000)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.50)
-	MDRV_SOUND_ROUTE(1, "mono", 0.50)
-	MDRV_SOUND_ROUTE(2, "mono", 0.50)
-	MDRV_SOUND_ROUTE(3, "mono", 0.40)
+	MCFG_SOUND_ADD("ym1", YM2203, MCU_CLOCK)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.50)
+	MCFG_SOUND_ROUTE(1, "mono", 0.50)
+	MCFG_SOUND_ROUTE(2, "mono", 0.50)
+	MCFG_SOUND_ROUTE(3, "mono", 0.40)
 
-	MDRV_SOUND_ADD("ym2", YM2203, 3000000)
-	MDRV_SOUND_ROUTE(0, "mono", 0.50)
-	MDRV_SOUND_ROUTE(1, "mono", 0.50)
-	MDRV_SOUND_ROUTE(2, "mono", 0.50)
-	MDRV_SOUND_ROUTE(3, "mono", 0.40)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ym2", YM2203, MCU_CLOCK)
+	MCFG_SOUND_ROUTE(0, "mono", 0.50)
+	MCFG_SOUND_ROUTE(1, "mono", 0.50)
+	MCFG_SOUND_ROUTE(2, "mono", 0.50)
+	MCFG_SOUND_ROUTE(3, "mono", 0.40)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( xsleenab, xsleena )
+	MCFG_DEVICE_REMOVE("mcu")
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -544,8 +662,8 @@ ROM_START( xsleena )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "s-3.4s",       0x8000, 0x8000, CRC(a5318cb8) SHA1(35fb28c5598e39f22552bb036ae356b78422f080) )
 
-//  ROM_REGION( 0x800, "cpu3", 0 )
-//  ROM_LOAD( "pz-0.113",       0x000, 0x800, CRC(0) SHA1(0) )
+    ROM_REGION( 0x800, "mcu", 0 )
+    ROM_LOAD( "p1-0.113",     0x000, 0x800, CRC(a432a907) SHA1(4708a40e3a82dec2c5a64bc5da884a37d503cb6b) )
 
 	ROM_REGION( 0x08000, "gfx1", 0 )
 	ROM_LOAD( "s-12.8b",      0x00000, 0x8000, CRC(83c00dd8) SHA1(8e9b19281039b63072270c7a63d9fb30cda570fd) ) /* chars */
@@ -649,8 +767,8 @@ ROM_START( solarwar )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "s-3.4s",       0x8000, 0x8000, CRC(a5318cb8) SHA1(35fb28c5598e39f22552bb036ae356b78422f080) )
 
-//  ROM_REGION( 0x800, "cpu3", 0 )
-//  ROM_LOAD( "pz-0.113",       0x000, 0x800, CRC(0) SHA1(0) )
+    ROM_REGION( 0x800, "mcu", 0 )
+    ROM_LOAD( "p1-0.113",     0x000, 0x800, CRC(a432a907) SHA1(4708a40e3a82dec2c5a64bc5da884a37d503cb6b) )
 
 	ROM_REGION( 0x08000, "gfx1", 0 )
 	ROM_LOAD( "s-12.8b",      0x00000, 0x8000, CRC(83c00dd8) SHA1(8e9b19281039b63072270c7a63d9fb30cda570fd) ) /* chars */
@@ -690,33 +808,6 @@ ROM_START( solarwar )
 ROM_END
 
 
-static DRIVER_INIT( xsleena )
-{
-	UINT8 *RAM = memory_region(machine, "maincpu");
-
-	/* do the same patch as the bootleg xsleena */
-	RAM[0xd488] = 0x12;
-	RAM[0xd489] = 0x12;
-	RAM[0xd48a] = 0x12;
-	RAM[0xd48b] = 0x12;
-	RAM[0xd48c] = 0x12;
-	RAM[0xd48d] = 0x12;
-}
-
-static DRIVER_INIT( solarwar )
-{
-	UINT8 *RAM = memory_region(machine, "maincpu");
-
-	/* do the same patch as the bootleg xsleena */
-	RAM[0xd47e] = 0x12;
-	RAM[0xd47f] = 0x12;
-	RAM[0xd480] = 0x12;
-	RAM[0xd481] = 0x12;
-	RAM[0xd482] = 0x12;
-	RAM[0xd483] = 0x12;
-}
-
-
-GAME( 1986, xsleena,  0,       xsleena, xsleena, xsleena,  ROT0, "Technos Japan", "Xain'd Sleena", 0 )
-GAME( 1986, xsleenab, xsleena, xsleena, xsleena, 0,        ROT0, "bootleg", "Xain'd Sleena (bootleg)", 0 )
-GAME( 1986, solarwar, xsleena, xsleena, xsleena, solarwar, ROT0, "[Technos Japan] Taito (Memetron license)", "Solar-Warrior", 0 )
+GAME( 1986, xsleena,  0,       xsleena,  xsleena, 0, ROT0, "Technos Japan", "Xain'd Sleena", 0 )
+GAME( 1986, xsleenab, xsleena, xsleenab, xsleena, 0, ROT0, "bootleg", "Xain'd Sleena (bootleg)", 0 )
+GAME( 1986, solarwar, xsleena, xsleena,  xsleena, 0, ROT0, "Technos Japan / Taito (Memetron license)", "Solar-Warrior", 0 )

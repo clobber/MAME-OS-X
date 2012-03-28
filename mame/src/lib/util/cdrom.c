@@ -47,6 +47,8 @@
 
 #include "cdrom.h"
 
+#include <stdlib.h>
+#include "chdcd.h"
 
 
 /***************************************************************************
@@ -72,9 +74,11 @@ struct _cdrom_file
 {
 	chd_file *			chd;				/* CHD file */
 	cdrom_toc			cdtoc;				/* TOC for the CD */
+	chdcd_track_input_info track_info;		/* track info */
 	UINT32				hunksectors;		/* sectors per hunk */
 	UINT32				cachehunk;			/* which hunk is cached */
 	UINT8 *				cache;				/* cache of the current hunk */
+	core_file *			fhandle[CD_MAX_TRACKS];/* file handle */
 };
 
 
@@ -119,6 +123,78 @@ INLINE UINT32 physical_to_chd_lba(cdrom_file *file, UINT32 physlba, UINT32 *trac
 /***************************************************************************
     BASE FUNCTIONALITY
 ***************************************************************************/
+
+cdrom_file *cdrom_open(const char *inputfile)
+{
+	int i;
+	cdrom_file *file;
+	UINT32 physofs;
+
+	/* allocate memory for the CD-ROM file */
+	file = (cdrom_file *)malloc(sizeof(cdrom_file));
+	if (file == NULL)
+		return NULL;
+
+	/* setup the CDROM module and get the disc info */
+	chd_error err = chdcd_parse_toc(inputfile, &file->cdtoc, &file->track_info);
+	if (err != CHDERR_NONE)
+	{
+		fprintf(stderr, "Error reading input file: %s\n", chd_error_string(err));
+		return NULL;
+	}
+
+	/* fill in the data */
+	file->chd = NULL;
+	file->hunksectors = 1;
+	file->cachehunk = -1;
+
+	LOG(("CD has %d tracks\n", file->cdtoc.numtrks));
+
+	for (i = 0; i < file->cdtoc.numtrks; i++)
+	{
+		file_error filerr = core_fopen(file->track_info.fname[i], OPEN_FLAG_READ, &file->fhandle[i]);
+		if (filerr != FILERR_NONE)
+		{
+			fprintf(stderr, "Unable to open file: %s\n", file->track_info.fname[i]);
+			return NULL;
+		}
+	}
+	/* calculate the starting frame for each track, keeping in mind that CHDMAN
+       pads tracks out with extra frames to fit hunk size boundries
+    */
+	physofs = 0;
+	for (i = 0; i < file->cdtoc.numtrks; i++)
+	{
+		file->cdtoc.tracks[i].physframeofs = physofs;
+		file->cdtoc.tracks[i].chdframeofs = 0;
+
+		physofs += file->cdtoc.tracks[i].frames;
+
+		LOG(("Track %02d is format %d subtype %d datasize %d subsize %d frames %d extraframes %d physofs %d chdofs %d\n", i+1,
+			file->cdtoc.tracks[i].trktype,
+			file->cdtoc.tracks[i].subtype,
+			file->cdtoc.tracks[i].datasize,
+			file->cdtoc.tracks[i].subsize,
+			file->cdtoc.tracks[i].frames,
+			file->cdtoc.tracks[i].extraframes,
+			file->cdtoc.tracks[i].physframeofs,
+			file->cdtoc.tracks[i].chdframeofs));
+	}
+
+	/* fill out dummy entries for the last track to help our search */
+	file->cdtoc.tracks[i].physframeofs = physofs;
+	file->cdtoc.tracks[i].chdframeofs = 0;
+
+	/* allocate a cache */
+	file->cache = (UINT8 *)malloc(CD_FRAME_SIZE);
+	if (file->cache == NULL)
+	{
+		free(file);
+		return NULL;
+	}
+
+	return file;
+}
 
 /*-------------------------------------------------
     cdrom_open - "open" a CD-ROM file from an
@@ -213,6 +289,15 @@ void cdrom_close(cdrom_file *file)
 	/* free the cache */
 	if (file->cache)
 		free(file->cache);
+
+	if (file->chd == NULL)
+	{
+		for (int i = 0; i < file->cdtoc.numtrks; i++)
+		{
+			core_fclose(file->fhandle[i]);
+		}
+	}
+
 	free(file);
 }
 
@@ -231,6 +316,7 @@ UINT32 cdrom_read_data(cdrom_file *file, UINT32 lbasector, void *buffer, UINT32 
 {
 	UINT32 tracktype, tracknum, sectoroffs;
 	chd_error err;
+	static const UINT8 syncbytes[12] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00};
 
 	if (file == NULL)
 		return 0;
@@ -248,15 +334,31 @@ UINT32 cdrom_read_data(cdrom_file *file, UINT32 lbasector, void *buffer, UINT32 
 	}
 	else
 	{
-		/* return 2048 bytes of mode 1 data from a 2352 byte mode 1 or 2 raw sector */
-		if ((datatype == CD_TRACK_MODE1) && ((tracktype == CD_TRACK_MODE1_RAW) || (tracktype == CD_TRACK_MODE2_RAW)))
+		/* return 2048 bytes of mode 1 data from a 2352 byte mode 1 raw sector */
+		if ((datatype == CD_TRACK_MODE1) && (tracktype == CD_TRACK_MODE1_RAW))
 		{
 			memcpy(buffer, &file->cache[(sectoroffs * CD_FRAME_SIZE) + 16], 2048);
 			return 1;
 		}
 
-		/* return 2048 bytes of mode 1 data from a mode2 form1 sector */
-		if ((datatype == CD_TRACK_MODE1) && (tracktype == CD_TRACK_MODE2_FORM1))
+		/* return 2352 byte mode 1 raw sector from 2048 bytes of mode 1 data */
+		if ((datatype == CD_TRACK_MODE1_RAW) && (tracktype == CD_TRACK_MODE1))
+		{
+			UINT8 *bufptr = (UINT8 *)buffer;
+			UINT32 msf = lba_to_msf(lbasector);
+
+			memcpy(bufptr, syncbytes, 12);
+			bufptr[12] = msf>>16;
+			bufptr[13] = msf>>8;
+			bufptr[14] = msf&0xff;
+			bufptr[15] = 1;	// mode 1
+			memcpy(bufptr+16, &file->cache[(sectoroffs * CD_FRAME_SIZE)], 2048);
+			LOG(("CDROM: promotion of mode1/form1 sector to mode1 raw is not complete!\n"));
+			return 1;
+		}
+
+		/* return 2048 bytes of mode 1 data from a mode2 form1 or raw sector */
+		if ((datatype == CD_TRACK_MODE1) && ((tracktype == CD_TRACK_MODE2_FORM1)||(tracktype == CD_TRACK_MODE2_RAW)))
 		{
 			memcpy(buffer, &file->cache[(sectoroffs * CD_FRAME_SIZE) + 24], 2048);
 			return 1;
@@ -412,6 +514,91 @@ const cdrom_toc *cdrom_get_toc(cdrom_file *file)
 ***************************************************************************/
 
 /*-------------------------------------------------
+    cdrom_get_info_from_type_string
+    take a string and convert it into track type
+    and track data size
+-------------------------------------------------*/
+
+static void cdrom_get_info_from_type_string(const char *typestring, UINT32 *trktype, UINT32 *datasize)
+{
+	if (!strcmp(typestring, "MODE1"))
+	{
+		*trktype = CD_TRACK_MODE1;
+		*datasize = 2048;
+	}
+	else if (!strcmp(typestring, "MODE1/2048"))
+	{
+		*trktype = CD_TRACK_MODE1;
+		*datasize = 2048;
+	}
+	else if (!strcmp(typestring, "MODE1_RAW"))
+	{
+		*trktype = CD_TRACK_MODE1_RAW;
+		*datasize = 2352;
+	}
+	else if (!strcmp(typestring, "MODE1/2352"))
+	{
+		*trktype = CD_TRACK_MODE1_RAW;
+		*datasize = 2352;
+	}
+	else if (!strcmp(typestring, "MODE2"))
+	{
+		*trktype = CD_TRACK_MODE2;
+		*datasize = 2336;
+	}
+	else if (!strcmp(typestring, "MODE2/2336"))
+	{
+		*trktype = CD_TRACK_MODE2;
+		*datasize = 2336;
+	}
+	else if (!strcmp(typestring, "MODE2_FORM1"))
+	{
+		*trktype = CD_TRACK_MODE2_FORM1;
+		*datasize = 2048;
+	}
+	else if (!strcmp(typestring, "MODE2/2048"))
+	{
+		*trktype = CD_TRACK_MODE2_FORM1;
+		*datasize = 2048;
+	}
+	else if (!strcmp(typestring, "MODE2_FORM2"))
+	{
+		*trktype = CD_TRACK_MODE2_FORM2;
+		*datasize = 2324;
+	}
+	else if (!strcmp(typestring, "MODE2/2324"))
+	{
+		*trktype = CD_TRACK_MODE2_FORM2;
+		*datasize = 2324;
+	}
+	else if (!strcmp(typestring, "MODE2_FORM_MIX"))
+	{
+		*trktype = CD_TRACK_MODE2_FORM_MIX;
+		*datasize = 2336;
+	}
+	else if (!strcmp(typestring, "MODE2/2336"))
+	{
+		*trktype = CD_TRACK_MODE2_FORM_MIX;
+		*datasize = 2336;
+	}
+	else if (!strcmp(typestring, "MODE2_RAW"))
+	{
+		*trktype = CD_TRACK_MODE2_RAW;
+		*datasize = 2352;
+	}
+	else if (!strcmp(typestring, "MODE2/2352"))
+	{
+		*trktype = CD_TRACK_MODE2_RAW;
+		*datasize = 2352;
+	}
+	else if (!strcmp(typestring, "AUDIO"))
+	{
+		*trktype = CD_TRACK_AUDIO;
+		*datasize = 2352;
+	}
+}
+
+/*-------------------------------------------------
     cdrom_convert_type_string_to_track_info -
     take a string and convert it into track type
     and track data size
@@ -419,48 +606,19 @@ const cdrom_toc *cdrom_get_toc(cdrom_file *file)
 
 void cdrom_convert_type_string_to_track_info(const char *typestring, cdrom_track_info *info)
 {
-	if (!strcmp(typestring, "MODE1"))
-	{
-		info->trktype = CD_TRACK_MODE1;
-		info->datasize = 2048;
-	}
-	else if (!strcmp(typestring, "MODE1_RAW"))
-	{
-		info->trktype = CD_TRACK_MODE1_RAW;
-		info->datasize = 2352;
-	}
-	else if (!strcmp(typestring, "MODE2"))
-	{
-		info->trktype = CD_TRACK_MODE2;
-		info->datasize = 2336;
-	}
-	else if (!strcmp(typestring, "MODE2_FORM1"))
-	{
-		info->trktype = CD_TRACK_MODE2_FORM1;
-		info->datasize = 2048;
-	}
-	else if (!strcmp(typestring, "MODE2_FORM2"))
-	{
-		info->trktype = CD_TRACK_MODE2_FORM2;
-		info->datasize = 2324;
-	}
-	else if (!strcmp(typestring, "MODE2_FORM_MIX"))
-	{
-		info->trktype = CD_TRACK_MODE2_FORM_MIX;
-		info->datasize = 2336;
-	}
-	else if (!strcmp(typestring, "MODE2_RAW"))
-	{
-		info->trktype = CD_TRACK_MODE2_RAW;
-		info->datasize = 2352;
-	}
-	else if (!strcmp(typestring, "AUDIO"))
-	{
-		info->trktype = CD_TRACK_AUDIO;
-		info->datasize = 2352;
-	}
+	cdrom_get_info_from_type_string(typestring, &info->trktype, &info->datasize);
 }
 
+/*-------------------------------------------------
+    cdrom_convert_type_string_to_pregap_info -
+    take a string and convert it into pregap type
+    and pregap data size
+-------------------------------------------------*/
+
+void cdrom_convert_type_string_to_pregap_info(const char *typestring, cdrom_track_info *info)
+{
+	cdrom_get_info_from_type_string(typestring, &info->pgtype, &info->pgdatasize);
+}
 
 /*-------------------------------------------------
     cdrom_convert_subtype_string_to_track_info -
@@ -482,15 +640,34 @@ void cdrom_convert_subtype_string_to_track_info(const char *typestring, cdrom_tr
 	}
 }
 
+/*-------------------------------------------------
+    cdrom_convert_subtype_string_to_pregap_info -
+    take a string and convert it into track subtype
+    and track subcode data size
+-------------------------------------------------*/
+
+void cdrom_convert_subtype_string_to_pregap_info(const char *typestring, cdrom_track_info *info)
+{
+	if (!strcmp(typestring, "RW"))
+	{
+		info->pgsub = CD_SUB_NORMAL;
+		info->pgsubsize = 96;
+	}
+	else if (!strcmp(typestring, "RW_RAW"))
+	{
+		info->pgsub = CD_SUB_RAW;
+		info->pgsubsize = 96;
+	}
+}
 
 /*-------------------------------------------------
     cdrom_get_type_string - get the string
     associated with the given type
 -------------------------------------------------*/
 
-const char *cdrom_get_type_string(const cdrom_track_info *info)
+const char *cdrom_get_type_string(UINT32 trktype)
 {
-	switch (info->trktype)
+	switch (trktype)
 	{
 		case CD_TRACK_MODE1:			return "MODE1";
 		case CD_TRACK_MODE1_RAW:		return "MODE1_RAW";
@@ -510,9 +687,9 @@ const char *cdrom_get_type_string(const cdrom_track_info *info)
     associated with the given subcode type
 -------------------------------------------------*/
 
-const char *cdrom_get_subtype_string(const cdrom_track_info *info)
+const char *cdrom_get_subtype_string(UINT32 subtype)
 {
-	switch (info->subtype)
+	switch (subtype)
 	{
 		case CD_SUB_NORMAL:				return "RW";
 		case CD_SUB_RAW:				return "RW_RAW";
@@ -545,9 +722,32 @@ static chd_error read_sector_into_cache(cdrom_file *file, UINT32 lbasector, UINT
 	/* if we haven't cached this hunk, read it now */
 	if (file->cachehunk != hunknum)
 	{
-		err = chd_read(file->chd, hunknum, file->cache);
-		if (err != CHDERR_NONE)
-			return err;
+		if (file->chd) {
+			err = chd_read(file->chd, hunknum, file->cache);
+			if (err != CHDERR_NONE)
+				return err;
+		} else {
+			core_file *srcfile = file->fhandle[*tracknum];
+
+			UINT64 sourcefileoffset = file->track_info.offset[*tracknum];
+			int bytespersector = file->cdtoc.tracks[*tracknum].datasize + file->cdtoc.tracks[*tracknum].subsize;
+
+			sourcefileoffset += chdsector * bytespersector;
+
+			core_fseek(srcfile, sourcefileoffset, SEEK_SET);
+			core_fread(srcfile, file->cache, bytespersector);
+
+			if (file->track_info.swap[*tracknum])
+			{
+				for (int swapindex = 0; swapindex < 2352; swapindex += 2 )
+				{
+					int swaptemp = file->cache[ swapindex ];
+					file->cache[ swapindex ] = file->cache[ swapindex + 1 ];
+					file->cache[ swapindex + 1 ] = swaptemp;
+				}
+			}
+		}
+
 		file->cachehunk = hunknum;
 	}
 	return CHDERR_NONE;
@@ -564,29 +764,45 @@ chd_error cdrom_parse_metadata(chd_file *chd, cdrom_toc *toc)
 	static UINT32 oldmetadata[CD_METADATA_WORDS], *mrp;
 	const chd_header *header = chd_get_header(chd);
 	UINT32 hunksectors = header->hunkbytes / CD_FRAME_SIZE;
-	char metadata[256];
+	char metadata[512];
 	chd_error err;
 	int i;
 
 	/* start with no tracks */
 	for (toc->numtrks = 0; toc->numtrks < CD_MAX_TRACKS; toc->numtrks++)
 	{
-		int tracknum = -1, frames = 0, hunks;
-		char type[11], subtype[11];
+		int tracknum = -1, frames = 0, hunks, pregap, postgap;
+		char type[16], subtype[16], pgtype[16], pgsub[16];
 		cdrom_track_info *track;
+
+		pregap = postgap = 0;
 
 		/* fetch the metadata for this track */
 		err = chd_get_metadata(chd, CDROM_TRACK_METADATA_TAG, toc->numtrks, metadata, sizeof(metadata), NULL, NULL, NULL);
-		if (err != CHDERR_NONE)
-			break;
-
-		/* parse the metadata */
-		type[0] = subtype[0] = 0;
-		if (sscanf(metadata, CDROM_TRACK_METADATA_FORMAT, &tracknum, type, subtype, &frames) != 4)
-			return CHDERR_INVALID_DATA;
-		if (tracknum == 0 || tracknum > CD_MAX_TRACKS)
-			return CHDERR_INVALID_DATA;
-		track = &toc->tracks[tracknum - 1];
+		if (err == CHDERR_NONE)
+		{
+			/* parse the metadata */
+			type[0] = subtype[0] = 0;
+			if (sscanf(metadata, CDROM_TRACK_METADATA_FORMAT, &tracknum, type, subtype, &frames) != 4)
+				return CHDERR_INVALID_DATA;
+			if (tracknum == 0 || tracknum > CD_MAX_TRACKS)
+				return CHDERR_INVALID_DATA;
+			track = &toc->tracks[tracknum - 1];
+		}
+		else
+		{
+			err = chd_get_metadata(chd, CDROM_TRACK_METADATA2_TAG, toc->numtrks, metadata, sizeof(metadata), NULL, NULL, NULL);
+			if (err != CHDERR_NONE)
+				break;
+			/* parse the metadata */
+			type[0] = subtype[0] = 0;
+			pregap = postgap = 0;
+			if (sscanf(metadata, CDROM_TRACK_METADATA2_FORMAT, &tracknum, type, subtype, &frames, &pregap, pgtype, pgsub, &postgap) != 8)
+				return CHDERR_INVALID_DATA;
+			if (tracknum == 0 || tracknum > CD_MAX_TRACKS)
+				return CHDERR_INVALID_DATA;
+			track = &toc->tracks[tracknum - 1];
+		}
 
 		/* extract the track type and determine the data size */
 		track->trktype = CD_TRACK_MODE1;
@@ -604,6 +820,18 @@ chd_error cdrom_parse_metadata(chd_file *chd, cdrom_toc *toc)
 		track->frames = frames;
 		hunks = (frames + hunksectors - 1) / hunksectors;
 		track->extraframes = hunks * hunksectors - frames;
+
+		/* set the pregap info */
+		track->pregap = pregap;
+		track->pgtype = CD_TRACK_MODE1;
+		track->pgsub = CD_SUB_NONE;
+		track->pgdatasize = 0;
+		track->pgsubsize = 0;
+		cdrom_convert_type_string_to_pregap_info(pgtype, track);
+		cdrom_convert_subtype_string_to_pregap_info(pgsub, track);
+
+        /* set the postgap info */
+        track->postgap = postgap;
 	}
 
 	/* if we got any tracks this way, we're done */
@@ -660,11 +888,13 @@ chd_error cdrom_write_metadata(chd_file *chd, const cdrom_toc *toc)
 	/* write the metadata */
 	for (i = 0; i < toc->numtrks; i++)
 	{
-		char metadata[256];
-		sprintf(metadata, CDROM_TRACK_METADATA_FORMAT, i + 1, cdrom_get_type_string(&toc->tracks[i]),
-				cdrom_get_subtype_string(&toc->tracks[i]), toc->tracks[i].frames);
+		char metadata[512];
+		sprintf(metadata, CDROM_TRACK_METADATA2_FORMAT, i + 1, cdrom_get_type_string(toc->tracks[i].trktype),
+				cdrom_get_subtype_string(toc->tracks[i].subtype), toc->tracks[i].frames, toc->tracks[i].pregap,
+				cdrom_get_type_string(toc->tracks[i].pgtype), cdrom_get_subtype_string(toc->tracks[i].pgsub),
+				toc->tracks[i].postgap);
 
-		err = chd_set_metadata(chd, CDROM_TRACK_METADATA_TAG, i, metadata, strlen(metadata) + 1, CHD_MDFLAGS_CHECKSUM);
+		err = chd_set_metadata(chd, CDROM_TRACK_METADATA2_TAG, i, metadata, strlen(metadata) + 1, CHD_MDFLAGS_CHECKSUM);
 		if (err != CHDERR_NONE)
 			return err;
 	}

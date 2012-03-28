@@ -3,8 +3,8 @@
  * Nov 2008, Derrick Renaud
  ************************************************************************/
 
-#include "driver.h"
-#include "m79amb.h"
+#include "emu.h"
+#include "includes/m79amb.h"
 #include "sound/discrete.h"
 
 #define	TIME_OF_9602(r, c)				(0.34 * (r) * (c) * (1.0 + 1.0 / (r)))
@@ -154,13 +154,13 @@ DISCRETE_SOUND_START( m79amb )
      ************************************************/
 	DISCRETE_ONESHOT(NODE_20,
 				M79AMB_BOOM_EN,				/* TRIG */
-				1, 							/* AMPL */
+				1,							/* AMPL */
 				TIME_OF_9602_WITH_DIODE(M79AMB_R2, M79AMB_C2),
 				DISC_ONESHOT_REDGE | DISC_ONESHOT_RETRIG | DISC_OUT_ACTIVE_HIGH)
 	DISCRETE_RCDISC2(NODE_21,
 				NODE_20,					/* Q1 base */
 				0,							/* Q1 off, C3 discharges */
-				M79AMB_R9 + M79AMB_R10,		/* discharges thru amp/filter circuit */
+				M79AMB_R9 + M79AMB_R10,		/* discharges through amp/filter circuit */
 				12,							/* Q1 on, C3 charges */
 				M79AMB_R6,					/* Q2 on  */
 				M79AMB_C3)					/* controls amplitude */
@@ -175,13 +175,13 @@ DISCRETE_SOUND_START( m79amb )
      ************************************************/
 	DISCRETE_ONESHOT(NODE_30,
 				M79AMB_THUD_EN,			/* TRIG */
-				1, 						/* AMPL */
+				1,						/* AMPL */
 				TIME_OF_9602_WITH_DIODE(M79AMB_R12, M79AMB_C8),
 				DISC_ONESHOT_REDGE | DISC_ONESHOT_RETRIG | DISC_OUT_ACTIVE_HIGH)
 	DISCRETE_RCDISC2(NODE_31,
 				NODE_30,					/* Q4 base */
 				0,							/* Q4 off, C9 discharges */
-				M79AMB_R19 + M79AMB_R20,	/* discharges thru amp/filter circuit */
+				M79AMB_R19 + M79AMB_R20,	/* discharges through amp/filter circuit */
 				12,							/* Q4 on, C9 charges */
 				M79AMB_R16,					/* Q5 on  */
 				M79AMB_C9)					/* controls amplitude */
@@ -196,13 +196,13 @@ DISCRETE_SOUND_START( m79amb )
      ************************************************/
 	DISCRETE_ONESHOT(NODE_40,
 				M79AMB_SHOT_EN,			/* TRIG */
-				1, 						/* AMPL */
+				1,						/* AMPL */
 				TIME_OF_9602_WITH_DIODE(M79AMB_R22, M79AMB_C14),
 				DISC_ONESHOT_REDGE | DISC_ONESHOT_RETRIG | DISC_OUT_ACTIVE_HIGH)
 	DISCRETE_RCDISC2(NODE_41,
 				NODE_40,					/* Q7 base */
 				0,							/* Q7 off, C15 discharges */
-				M79AMB_R29 + M79AMB_R30,	/* discharges thru amp/filter circuit */
+				M79AMB_R29 + M79AMB_R30,	/* discharges through amp/filter circuit */
 				12,							/* Q7 on, C15 charges */
 				M79AMB_R26,					/* Q8 on  */
 				M79AMB_C15)					/* controls amplitude */
@@ -247,7 +247,7 @@ DISCRETE_SOUND_START( m79amb )
 				DISC_566_OUT_DC | DISC_566_OUT_TRIANGLE)
 	DISCRETE_ONOFF(NODE_61,
 				M79AMB_TANK_TRUCK_JEEP_EN,		/* Q16, Q17 */
-	  			NODE_60)
+				NODE_60)
 	DISCRETE_CRFILTER(NODE_62,
 				NODE_61, M79AMB_R48 + M79AMB_R49, M79AMB_C26)
 	DISCRETE_GAIN(NODE_63, NODE_62, RES_VOLTAGE_DIVIDER(M79AMB_R48, M79AMB_R49))

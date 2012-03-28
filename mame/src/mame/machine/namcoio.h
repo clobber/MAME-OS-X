@@ -1,32 +1,57 @@
-#ifndef NAMCOIO_H
-#define NAMCOIO_H
+#ifndef __NAMCOIO_H__
+#define __NAMCOIO_H__
 
-#include "devintrf.h"
+#include "devlegcy.h"
 
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
-enum
+typedef struct _namcoio_interface namcoio_interface;
+struct _namcoio_interface
 {
-	NAMCOIO_56XX,
-	NAMCOIO_58XX,
-	NAMCOIO_59XX,
-	NAMCOIO_62XX
+	devcb_read8 in[4];
+	devcb_write8 out[2];
+
+	device_t *device;
 };
 
-#define MAX_NAMCOIO 8
+DECLARE_LEGACY_DEVICE(NAMCO56XX, namcoio);
+#define NAMCO58XX NAMCO56XX
+#define NAMCO59XX NAMCO56XX
+
+/***************************************************************************
+    DEVICE CONFIGURATION MACROS
+***************************************************************************/
+
+#define MCFG_NAMCO56XX_ADD(_tag, _interface) \
+	MCFG_DEVICE_ADD(_tag, NAMCO56XX, 0) \
+	MCFG_DEVICE_CONFIG(_interface)
+
+#define MCFG_NAMCO58XX_ADD(_tag, _interface) \
+	MCFG_DEVICE_ADD(_tag, NAMCO58XX, 0) \
+	MCFG_DEVICE_CONFIG(_interface)
+
+#define MCFG_NAMCO59XX_ADD(_tag, _interface) \
+	MCFG_DEVICE_ADD(_tag, NAMCO59XX, 0) \
+	MCFG_DEVICE_CONFIG(_interface)
 
 
-struct namcoio_interface
-{
-	read8_space_func in[4];	/* read handlers for ports A-D */
-	write8_space_func out[2];	/* write handlers for ports A-B */
-};
+/***************************************************************************
+    DEVICE I/O FUNCTIONS
+***************************************************************************/
+
+READ8_DEVICE_HANDLER( namcoio_r );
+WRITE8_DEVICE_HANDLER( namcoio_w );
+
+WRITE_LINE_DEVICE_HANDLER( namcoio_set_reset_line );
+READ_LINE_DEVICE_HANDLER( namcoio_read_reset_line );
 
 
-READ8_HANDLER( namcoio_r );
-WRITE8_HANDLER( namcoio_w );
-void namcoio_init(running_machine *machine, int chipnum, int type, const struct namcoio_interface *intf, const char *device);
-void namcoio_set_reset_line(int chipnum, int state);
-void namcoio_set_irq_line(running_machine *machine, int chipnum, int state);
+/* these must be used in the single drivers, inside a timer */
+void namco_customio_56xx_run(device_t *device);
+void namco_customio_58xx_run(device_t *device);
+void namco_customio_59xx_run(device_t *device);
 
 
-#endif
+#endif	/* __NAMCOIO_H__ */

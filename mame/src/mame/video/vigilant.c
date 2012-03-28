@@ -14,45 +14,30 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "includes/vigilant.h"
 
 
-static const rectangle bottomvisiblearea =
-{
-	16*8, 48*8-1,
-	6*8, 32*8-1
-};
-
-//UINT8 *vigilant_paletteram;
-//UINT8 *vigilant_sprite_paletteram;
-
-static int horiz_scroll_low=0;
-static int horiz_scroll_high=0;
-static int rear_horiz_scroll_low=0;
-static int rear_horiz_scroll_high=0;
-static int rear_color=0;
-static int rear_disable;
-
-static int rear_refresh;
-
-static bitmap_t *bg_bitmap;
+static const rectangle bottomvisiblearea(16*8, 48*8-1, 6*8, 32*8-1);
 
 
 VIDEO_START( vigilant )
 {
-	bg_bitmap = auto_bitmap_alloc(machine,512*4,256,video_screen_get_format(machine->primary_screen));
+	vigilant_state *state = machine.driver_data<vigilant_state>();
+	state->m_bg_bitmap = auto_bitmap_ind16_alloc(machine,512*4,256);
 }
 
 
 VIDEO_RESET( vigilant )
 {
-	horiz_scroll_low = 0;
-	horiz_scroll_high = 0;
-	rear_horiz_scroll_low = 0;
-	rear_horiz_scroll_high = 0;
-	rear_color = 0;
-	rear_disable = 1;
-	rear_refresh = 1;
+	vigilant_state *state = machine.driver_data<vigilant_state>();
+	state->m_horiz_scroll_low = 0;
+	state->m_horiz_scroll_high = 0;
+	state->m_rear_horiz_scroll_low = 0;
+	state->m_rear_horiz_scroll_high = 0;
+	state->m_rear_color = 0;
+	state->m_rear_disable = 1;
+	state->m_rear_refresh = 1;
 }
 
 
@@ -62,8 +47,9 @@ VIDEO_RESET( vigilant )
  There are three background ROMs, each one contains a 512x256 picture.
  Redraw them if the palette changes.
  **************************************************************************/
-static void update_background(running_machine *machine)
+static void update_background(running_machine &machine)
 {
+	vigilant_state *state = machine.driver_data<vigilant_state>();
 	int row,col,page;
 	int charcode;
 
@@ -77,8 +63,8 @@ static void update_background(running_machine *machine)
 		{
 			for( col=0; col<512; col+=32 )
 			{
-				drawgfx_opaque(bg_bitmap,
-						0,machine->gfx[2],
+				drawgfx_opaque(*state->m_bg_bitmap,
+						state->m_bg_bitmap->cliprect(),machine.gfx[2],
 						charcode,
 						row < 128 ? 0 : 1,
 						0,0,
@@ -110,16 +96,16 @@ WRITE8_HANDLER( vigilant_paletteram_w )
 	int bank,r,g,b;
 
 
-	paletteram[offset] = data;
+	space->machine().generic.paletteram.u8[offset] = data;
 
 	bank = offset & 0x400;
 	offset &= 0xff;
 
-	r = (paletteram[bank + offset + 0x000] << 3) & 0xFF;
-	g = (paletteram[bank + offset + 0x100] << 3) & 0xFF;
-	b = (paletteram[bank + offset + 0x200] << 3) & 0xFF;
+	r = (space->machine().generic.paletteram.u8[bank + offset + 0x000] << 3) & 0xFF;
+	g = (space->machine().generic.paletteram.u8[bank + offset + 0x100] << 3) & 0xFF;
+	b = (space->machine().generic.paletteram.u8[bank + offset + 0x200] << 3) & 0xFF;
 
-	palette_set_color(space->machine, (bank >> 2) + offset,MAKE_RGB(r,g,b));
+	palette_set_color(space->machine(), (bank >> 2) + offset,MAKE_RGB(r,g,b));
 }
 
 
@@ -132,10 +118,11 @@ WRITE8_HANDLER( vigilant_paletteram_w )
  **************************************************************************/
 WRITE8_HANDLER( vigilant_horiz_scroll_w )
 {
+	vigilant_state *state = space->machine().driver_data<vigilant_state>();
 	if (offset==0)
-		horiz_scroll_low = data;
+		state->m_horiz_scroll_low = data;
 	else
-		horiz_scroll_high = (data & 0x01) * 256;
+		state->m_horiz_scroll_high = (data & 0x01) * 256;
 }
 
 /***************************************************************************
@@ -146,10 +133,11 @@ WRITE8_HANDLER( vigilant_horiz_scroll_w )
 ***************************************************************************/
 WRITE8_HANDLER( vigilant_rear_horiz_scroll_w )
 {
+	vigilant_state *state = space->machine().driver_data<vigilant_state>();
 	if (offset==0)
-		rear_horiz_scroll_low = data;
+		state->m_rear_horiz_scroll_low = data;
 	else
-		rear_horiz_scroll_high = (data & 0x07) * 256;
+		state->m_rear_horiz_scroll_high = (data & 0x07) * 256;
 }
 
 /***************************************************************************
@@ -169,8 +157,9 @@ WRITE8_HANDLER( vigilant_rear_horiz_scroll_w )
  **************************************************************************/
 WRITE8_HANDLER( vigilant_rear_color_w )
 {
-	rear_disable = data & 0x40;
-	rear_color = (data & 0x0d);
+	vigilant_state *state = space->machine().driver_data<vigilant_state>();
+	state->m_rear_disable = data & 0x40;
+	state->m_rear_color = (data & 0x0d);
 }
 
 /***************************************************************************
@@ -179,13 +168,15 @@ WRITE8_HANDLER( vigilant_rear_color_w )
  ???
  **************************************************************************/
 
-static void draw_foreground(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int priority, int opaque )
+static void draw_foreground(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int priority, int opaque )
 {
+	vigilant_state *state = machine.driver_data<vigilant_state>();
+	UINT8 *videoram = state->m_videoram;
 	int offs;
-	int scroll = -(horiz_scroll_low + horiz_scroll_high);
+	int scroll = -(state->m_horiz_scroll_low + state->m_horiz_scroll_high);
 
 
-	for (offs = 0; offs<videoram_size; offs+=2 )
+	for (offs = 0; offs < 0x1000; offs += 2)
 	{
 		int sy = 8 * ((offs/2) / 64);
 		int sx = 8 * ((offs/2) % 64);
@@ -201,7 +192,7 @@ static void draw_foreground(running_machine *machine, bitmap_t *bitmap, const re
 				{
 					sx = (sx + scroll) & 0x1ff;
 
-					drawgfx_transmask(bitmap,&bottomvisiblearea,machine->gfx[0],
+					drawgfx_transmask(bitmap,bottomvisiblearea,machine.gfx[0],
 							tile_number,
 							color,
 							0,0,
@@ -214,7 +205,7 @@ static void draw_foreground(running_machine *machine, bitmap_t *bitmap, const re
 			if (sy >= 48)
 				sx = (sx + scroll) & 0x1ff;
 
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 					tile_number,
 					color,
 					0,0,
@@ -226,26 +217,29 @@ static void draw_foreground(running_machine *machine, bitmap_t *bitmap, const re
 
 
 
-static void draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_background(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	int scrollx = 0x17a + 16*8 - (rear_horiz_scroll_low + rear_horiz_scroll_high);
+	vigilant_state *state = machine.driver_data<vigilant_state>();
+	int scrollx = 0x17a + 16*8 - (state->m_rear_horiz_scroll_low + state->m_rear_horiz_scroll_high);
 
 
-	if (rear_refresh)
+	if (state->m_rear_refresh)
 	{
 		update_background(machine);
-		rear_refresh=0;
+		state->m_rear_refresh=0;
 	}
 
-	copyscrollbitmap(bitmap,bg_bitmap,1,&scrollx,0,0,&bottomvisiblearea);
+	copyscrollbitmap(bitmap,*state->m_bg_bitmap,1,&scrollx,0,0,bottomvisiblearea);
 }
 
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect)
 {
+	vigilant_state *state = machine.driver_data<vigilant_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 8)
+	for (offs = 0;offs < state->m_spriteram_size;offs += 8)
 	{
 		int code,color,sx,sy,flipx,flipy,h,y;
 
@@ -267,7 +261,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 			if (flipy) c += h-1-y;
 			else c += y;
 
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					c,
 					color,
 					flipx,flipy,
@@ -276,11 +270,13 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 	}
 }
 
-VIDEO_UPDATE( kikcubic )
+SCREEN_UPDATE_IND16( kikcubic )
 {
+	vigilant_state *state = screen.machine().driver_data<vigilant_state>();
+	UINT8 *videoram = state->m_videoram;
 	int offs;
 
-	for (offs = 0; offs<videoram_size; offs+=2 )
+	for (offs = 0; offs < 0x1000; offs += 2)
 	{
 		int sy = 8 * ((offs/2) / 64);
 		int sx = 8 * ((offs/2) % 64);
@@ -288,19 +284,20 @@ VIDEO_UPDATE( kikcubic )
 		int color = (attributes & 0xF0) >> 4;
 		int tile_number = videoram[offs] | ((attributes & 0x0F) << 8);
 
-		drawgfx_opaque(bitmap,cliprect,screen->machine->gfx[0],
+		drawgfx_opaque(bitmap,cliprect,screen.machine().gfx[0],
 				tile_number,
 				color,
 				0,0,
 				sx,sy);
 	}
 
-	draw_sprites(screen->machine,bitmap,cliprect);
+	draw_sprites(screen.machine(),bitmap,cliprect);
 	return 0;
 }
 
-VIDEO_UPDATE( vigilant )
+SCREEN_UPDATE_IND16( vigilant )
 {
+	vigilant_state *state = screen.machine().driver_data<vigilant_state>();
 	int i;
 
 	/* copy the background palette */
@@ -309,31 +306,31 @@ VIDEO_UPDATE( vigilant )
 		int r,g,b;
 
 
-		r = (paletteram[0x400 + 16 * rear_color + i] << 3) & 0xFF;
-		g = (paletteram[0x500 + 16 * rear_color + i] << 3) & 0xFF;
-		b = (paletteram[0x600 + 16 * rear_color + i] << 3) & 0xFF;
+		r = (screen.machine().generic.paletteram.u8[0x400 + 16 * state->m_rear_color + i] << 3) & 0xFF;
+		g = (screen.machine().generic.paletteram.u8[0x500 + 16 * state->m_rear_color + i] << 3) & 0xFF;
+		b = (screen.machine().generic.paletteram.u8[0x600 + 16 * state->m_rear_color + i] << 3) & 0xFF;
 
-		palette_set_color(screen->machine,512 + i,MAKE_RGB(r,g,b));
+		palette_set_color(screen.machine(),512 + i,MAKE_RGB(r,g,b));
 
-		r = (paletteram[0x400 + 16 * rear_color + 32 + i] << 3) & 0xFF;
-		g = (paletteram[0x500 + 16 * rear_color + 32 + i] << 3) & 0xFF;
-		b = (paletteram[0x600 + 16 * rear_color + 32 + i] << 3) & 0xFF;
+		r = (screen.machine().generic.paletteram.u8[0x400 + 16 * state->m_rear_color + 32 + i] << 3) & 0xFF;
+		g = (screen.machine().generic.paletteram.u8[0x500 + 16 * state->m_rear_color + 32 + i] << 3) & 0xFF;
+		b = (screen.machine().generic.paletteram.u8[0x600 + 16 * state->m_rear_color + 32 + i] << 3) & 0xFF;
 
-		palette_set_color(screen->machine,512 + 16 + i,MAKE_RGB(r,g,b));
+		palette_set_color(screen.machine(),512 + 16 + i,MAKE_RGB(r,g,b));
 	}
 
-	if (rear_disable)	 /* opaque foreground */
+	if (state->m_rear_disable)	 /* opaque foreground */
 	{
-		draw_foreground(screen->machine,bitmap,cliprect,0,1);
-		draw_sprites(screen->machine,bitmap,&bottomvisiblearea);
-		draw_foreground(screen->machine,bitmap,cliprect,1,0);
+		draw_foreground(screen.machine(),bitmap,cliprect,0,1);
+		draw_sprites(screen.machine(),bitmap,bottomvisiblearea);
+		draw_foreground(screen.machine(),bitmap,cliprect,1,0);
 	}
 	else
 	{
-		draw_background(screen->machine,bitmap,cliprect);
-		draw_foreground(screen->machine,bitmap,cliprect,0,0);
-		draw_sprites(screen->machine,bitmap,&bottomvisiblearea);
-		draw_foreground(screen->machine,bitmap,cliprect,1,0); // priority tiles
+		draw_background(screen.machine(),bitmap,cliprect);
+		draw_foreground(screen.machine(),bitmap,cliprect,0,0);
+		draw_sprites(screen.machine(),bitmap,bottomvisiblearea);
+		draw_foreground(screen.machine(),bitmap,cliprect,1,0); // priority tiles
 	}
 	return 0;
 }

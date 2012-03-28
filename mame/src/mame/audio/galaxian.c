@@ -20,9 +20,9 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "streams.h"
-#include "includes/galaxian.h"
+#include "emu.h"
+#include "sound/discrete.h"
+#include "audio/galaxian.h"
 
 /*************************************
  *
@@ -177,16 +177,16 @@ static const discrete_mixer_desc galaxian_bck_mixer_desc =
 static const discrete_lfsr_desc galaxian_lfsr =
 {
 	DISC_CLK_IS_FREQ,
-	17,			          	/* Bit Length */
-	0,			          	/* Reset Value */
-	4,			          	/* Use Bit 10 (QC of second LS164) as F0 input 0 */
-	16,			          	/* Use Bit 23 (QH of third LS164) as F0 input 1 */
+	17,			        	/* Bit Length */
+	0,			        	/* Reset Value */
+	4,			        	/* Use Bit 10 (QC of second LS164) as F0 input 0 */
+	16,			        	/* Use Bit 23 (QH of third LS164) as F0 input 1 */
 	DISC_LFSR_XOR_INV_IN1,	/* F0 is XOR */
-	DISC_LFSR_IN0,	  		/* F1 is inverted F0*/
-	DISC_LFSR_REPLACE,	  	/* F2 replaces the shifted register contents */
-	0x000001,		      	/* Everything is shifted into the first bit only */
+	DISC_LFSR_IN0,			/* F1 is inverted F0*/
+	DISC_LFSR_REPLACE,		/* F2 replaces the shifted register contents */
+	0x000001,		    	/* Everything is shifted into the first bit only */
 	DISC_LFSR_FLAG_OUTPUT_F0, /* Output is result of F0 */
-	0			          	/* Output bit */
+	0			        	/* Output bit */
 };
 
 static const discrete_mixer_desc galaxian_mixerpre_desc =
@@ -479,22 +479,22 @@ WRITE8_DEVICE_HANDLER( galaxian_sound_w )
  *
  *************************************/
 
-MACHINE_DRIVER_START( galaxian_audio )
+MACHINE_CONFIG_FRAGMENT( galaxian_audio )
 
-	MDRV_SOUND_START(galaxian)
+	MCFG_SOUND_START(galaxian)
 
-	MDRV_SOUND_ADD(GAL_AUDIO, DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(galaxian)
+	MCFG_SOUND_ADD(GAL_AUDIO, DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(galaxian)
 
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-MACHINE_DRIVER_START( mooncrst_audio )
+MACHINE_CONFIG_FRAGMENT( mooncrst_audio )
 
-	MDRV_SOUND_START(galaxian)
+	MCFG_SOUND_START(galaxian)
 
-	MDRV_SOUND_ADD(GAL_AUDIO, DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(mooncrst)
+	MCFG_SOUND_ADD(GAL_AUDIO, DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(mooncrst)
 
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END

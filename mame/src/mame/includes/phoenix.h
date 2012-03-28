@@ -1,10 +1,31 @@
+#include "devlegcy.h"
 #include "devcb.h"
 #include "sound/discrete.h"
 
 
+class phoenix_state : public driver_device
+{
+public:
+	phoenix_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram_pg[2];
+	UINT8 m_videoram_pg_index;
+	UINT8 m_palette_bank;
+	UINT8 m_cocktail_mode;
+	UINT8 m_pleiads_protection_question;
+	UINT8 m_survival_protection_value;
+	int m_survival_sid_value;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_bg_tilemap;
+	UINT8 m_survival_input_latches[2];
+	UINT8 m_survival_input_readc;
+};
+
+
 /*----------- video timing  -----------*/
 
-#define MASTER_CLOCK		 	XTAL_11MHz
+#define MASTER_CLOCK			XTAL_11MHz
 
 #define PIXEL_CLOCK				(MASTER_CLOCK/2)
 #define CPU_CLOCK				(PIXEL_CLOCK)
@@ -17,43 +38,12 @@
 
 /*----------- defined in audio/phoenix.c -----------*/
 
-SOUND_START( phoenix );
-
 DISCRETE_SOUND_EXTERN( phoenix );
 
 WRITE8_DEVICE_HANDLER( phoenix_sound_control_a_w );
 WRITE8_DEVICE_HANDLER( phoenix_sound_control_b_w );
 
-DEVICE_GET_INFO( phoenix_sound );
-#define SOUND_PHOENIX DEVICE_GET_INFO_NAME(phoenix_sound)
-
-/*----------- defined in audio/pleiads.c -----------*/
-
-WRITE8_HANDLER( pleiads_sound_control_a_w );
-WRITE8_HANDLER( pleiads_sound_control_b_w );
-WRITE8_HANDLER( pleiads_sound_control_c_w );
-
-DEVICE_GET_INFO( pleiads_sound );
-#define SOUND_PLEIADS DEVICE_GET_INFO_NAME(pleiads_sound)
-
-DEVICE_GET_INFO( naughtyb_sound );
-#define SOUND_NAUGHTYB DEVICE_GET_INFO_NAME(naughtyb_sound)
-
-DEVICE_GET_INFO( popflame_sound );
-#define SOUND_POPFLAME DEVICE_GET_INFO_NAME(popflame_sound)
-
-/*----------- defined in video/naughtyb.c -----------*/
-
-extern UINT8 *naughtyb_videoram2;
-extern UINT8 *naughtyb_scrollreg;
-extern int naughtyb_cocktail;
-
-WRITE8_HANDLER( naughtyb_videoreg_w );
-WRITE8_HANDLER( popflame_videoreg_w );
-
-VIDEO_START( naughtyb );
-PALETTE_INIT( naughtyb );
-VIDEO_UPDATE( naughtyb );
+DECLARE_LEGACY_SOUND_DEVICE(PHOENIX, phoenix_sound);
 
 
 /*----------- defined in video/phoenix.c -----------*/
@@ -62,7 +52,7 @@ PALETTE_INIT( phoenix );
 PALETTE_INIT( survival );
 PALETTE_INIT( pleiads );
 VIDEO_START( phoenix );
-VIDEO_UPDATE( phoenix );
+SCREEN_UPDATE_IND16( phoenix );
 
 WRITE8_HANDLER( phoenix_videoram_w );
 WRITE8_HANDLER( phoenix_videoreg_w );

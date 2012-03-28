@@ -3,12 +3,14 @@
   Fast Freddie/Jump Coaster hardware
   driver by Zsolt Vasvari
 
+  TODO:
+  - remove protection hack
+
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
-#include "fastfred.h"
+#include "includes/fastfred.h"
 #include "sound/ay8910.h"
 
 
@@ -19,7 +21,7 @@
 // to change if a different ROM set ever surfaces.
 static READ8_HANDLER( fastfred_custom_io_r )
 {
-    switch (cpu_get_pc(space->cpu))
+    switch (cpu_get_pc(&space->device()))
     {
     case 0x03c0: return 0x9d;
     case 0x03e6: return 0x9f;
@@ -45,14 +47,14 @@ static READ8_HANDLER( fastfred_custom_io_r )
     case 0x7b58: return 0x20;
     }
 
-    logerror("Uncaught custom I/O read %04X at %04X\n", 0xc800+offset, cpu_get_pc(space->cpu));
+    logerror("Uncaught custom I/O read %04X at %04X\n", 0xc800+offset, cpu_get_pc(&space->device()));
     return 0x00;
 }
 
 static READ8_HANDLER( flyboy_custom1_io_r )
 {
 
-	switch (cpu_get_pc(space->cpu))
+	switch (cpu_get_pc(&space->device()))
 	{
 	 case 0x049d: return 0xad;	/* compare */
 	 case 0x04b9:			/* compare with 0x9e ??? When ??? */
@@ -73,14 +75,14 @@ static READ8_HANDLER( flyboy_custom1_io_r )
 	 return 0x00;
 	}
 
-	logerror("Uncaught custom I/O read %04X at %04X\n", 0xc085+offset, cpu_get_pc(space->cpu));
+	logerror("Uncaught custom I/O read %04X at %04X\n", 0xc085+offset, cpu_get_pc(&space->device()));
 	return 0x00;
 }
 
 static READ8_HANDLER( flyboy_custom2_io_r )
 {
 
-	switch (cpu_get_pc(space->cpu))
+	switch (cpu_get_pc(&space->device()))
 	{
 	 case 0x0395: return 0xf7;	/* $C900 compare         */
 	 case 0x03f5:			/* $c8fd                 */
@@ -98,7 +100,7 @@ static READ8_HANDLER( flyboy_custom2_io_r )
 	 return 0x00;
 	}
 
-	logerror("Uncaught custom I/O read %04X at %04X\n", 0xc8fb+offset, cpu_get_pc(space->cpu));
+	logerror("Uncaught custom I/O read %04X at %04X\n", 0xc8fb+offset, cpu_get_pc(&space->device()));
 	return 0x00;
 }
 
@@ -110,63 +112,85 @@ static READ8_HANDLER( jumpcoas_custom_io_r )
 	return 0x00;
 }
 
+static READ8_HANDLER( boggy84_custom_io_r )
+{
+	if (offset == 0x100)  return 0x6a;
+
+	return 0x00;
+}
+
 /*
     Imago sprites DMA
 */
 
-static UINT8 imago_sprites[0x800*3];
-static UINT16 imago_sprites_address;
-static UINT8 imago_sprites_bank = 0;
 
 static MACHINE_START( imago )
 {
-	gfx_element_set_source(machine->gfx[1], imago_sprites);
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	gfx_element_set_source(machine.gfx[1], state->m_imago_sprites);
 }
 
 static WRITE8_HANDLER( imago_dma_irq_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, data & 1 ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, data & 1 ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( imago_sprites_bank_w )
 {
-	imago_sprites_bank = (data & 2) >> 1;
+	fastfred_state *state = space->machine().driver_data<fastfred_state>();
+	state->m_imago_sprites_bank = (data & 2) >> 1;
 }
 
 static WRITE8_HANDLER( imago_sprites_dma_w )
 {
-	UINT8 *rom = (UINT8 *)memory_region(space->machine, "gfx2");
+	fastfred_state *state = space->machine().driver_data<fastfred_state>();
+	UINT8 *rom = (UINT8 *)space->machine().region("gfx2")->base();
 	UINT8 sprites_data;
 
-	sprites_data = rom[imago_sprites_address + 0x2000*0 + imago_sprites_bank * 0x1000];
-	imago_sprites[offset + 0x800*0] = sprites_data;
+	sprites_data = rom[state->m_imago_sprites_address + 0x2000*0 + state->m_imago_sprites_bank * 0x1000];
+	state->m_imago_sprites[offset + 0x800*0] = sprites_data;
 
-	sprites_data = rom[imago_sprites_address + 0x2000*1 + imago_sprites_bank * 0x1000];
-	imago_sprites[offset + 0x800*1] = sprites_data;
+	sprites_data = rom[state->m_imago_sprites_address + 0x2000*1 + state->m_imago_sprites_bank * 0x1000];
+	state->m_imago_sprites[offset + 0x800*1] = sprites_data;
 
-	sprites_data = rom[imago_sprites_address + 0x2000*2 + imago_sprites_bank * 0x1000];
-	imago_sprites[offset + 0x800*2] = sprites_data;
+	sprites_data = rom[state->m_imago_sprites_address + 0x2000*2 + state->m_imago_sprites_bank * 0x1000];
+	state->m_imago_sprites[offset + 0x800*2] = sprites_data;
 
-	gfx_element_mark_dirty(space->machine->gfx[1], offset/32);
+	gfx_element_mark_dirty(space->machine().gfx[1], offset/32);
 }
 
 static READ8_HANDLER( imago_sprites_offset_r )
 {
-	imago_sprites_address = offset;
+	fastfred_state *state = space->machine().driver_data<fastfred_state>();
+	state->m_imago_sprites_address = offset;
 	return 0xff; //not really used
 }
 
-static ADDRESS_MAP_START( fastfred_map, ADDRESS_SPACE_PROGRAM, 8 )
+static WRITE8_HANDLER( nmi_mask_w )
+{
+	fastfred_state *state = space->machine().driver_data<fastfred_state>();
+
+	state->m_nmi_mask = data & 1;
+}
+
+static WRITE8_HANDLER( sound_nmi_mask_w )
+{
+	fastfred_state *state = space->machine().driver_data<fastfred_state>();
+
+	state->m_sound_nmi_mask = data & 1;
+}
+
+static ADDRESS_MAP_START( fastfred_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xd000, 0xd3ff) AM_MIRROR(0x400) AM_RAM_WRITE(fastfred_videoram_w) AM_BASE(&fastfred_videoram)
-	AM_RANGE(0xd800, 0xd83f) AM_RAM_WRITE(fastfred_attributes_w) AM_BASE(&fastfred_attributesram)
-	AM_RANGE(0xd840, 0xd85f) AM_RAM AM_BASE(&fastfred_spriteram) AM_SIZE(&fastfred_spriteram_size)
+	AM_RANGE(0xd000, 0xd3ff) AM_MIRROR(0x400) AM_RAM_WRITE(fastfred_videoram_w) AM_BASE_MEMBER(fastfred_state, m_videoram)
+	AM_RANGE(0xd800, 0xd83f) AM_RAM_WRITE(fastfred_attributes_w) AM_BASE_MEMBER(fastfred_state, m_attributesram)
+	AM_RANGE(0xd840, 0xd85f) AM_RAM AM_BASE_MEMBER(fastfred_state, m_spriteram) AM_SIZE_MEMBER(fastfred_state, m_spriteram_size)
 	AM_RANGE(0xd860, 0xdbff) AM_RAM // Unused, but initialized
-	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("BUTTONS") AM_WRITEONLY AM_BASE(&fastfred_background_color)
+	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("BUTTONS") AM_WRITEONLY AM_BASE_MEMBER(fastfred_state, m_background_color)
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("JOYS")
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("DSW") AM_WRITENOP
-	AM_RANGE(0xf001, 0xf001) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xf001, 0xf001) AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xf002, 0xf002) AM_WRITE(fastfred_colorbank1_w)
 	AM_RANGE(0xf003, 0xf003) AM_WRITE(fastfred_colorbank2_w)
 	AM_RANGE(0xf004, 0xf004) AM_WRITE(fastfred_charbank1_w)
@@ -179,20 +203,20 @@ static ADDRESS_MAP_START( fastfred_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( jumpcoas_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jumpcoas_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xd000, 0xd03f) AM_RAM_WRITE(fastfred_attributes_w) AM_BASE(&fastfred_attributesram)
-	AM_RANGE(0xd040, 0xd05f) AM_RAM AM_BASE(&fastfred_spriteram) AM_SIZE(&fastfred_spriteram_size)
+	AM_RANGE(0xd000, 0xd03f) AM_RAM_WRITE(fastfred_attributes_w) AM_BASE_MEMBER(fastfred_state, m_attributesram)
+	AM_RANGE(0xd040, 0xd05f) AM_RAM AM_BASE_MEMBER(fastfred_state, m_spriteram) AM_SIZE_MEMBER(fastfred_state, m_spriteram_size)
 	AM_RANGE(0xd060, 0xd3ff) AM_RAM
-	AM_RANGE(0xd800, 0xdbff) AM_MIRROR(0x400) AM_RAM_WRITE(fastfred_videoram_w) AM_BASE(&fastfred_videoram)
-	AM_RANGE(0xe000, 0xe000) AM_WRITE(SMH_RAM) AM_BASE(&fastfred_background_color)
+	AM_RANGE(0xd800, 0xdbff) AM_MIRROR(0x400) AM_RAM_WRITE(fastfred_videoram_w) AM_BASE_MEMBER(fastfred_state, m_videoram)
+	AM_RANGE(0xe000, 0xe000) AM_WRITEONLY AM_BASE_MEMBER(fastfred_state, m_background_color)
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("DSW1")
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("DSW2")
 	AM_RANGE(0xe802, 0xe802) AM_READ_PORT("BUTTONS")
 	AM_RANGE(0xe803, 0xe803) AM_READ_PORT("JOYS")
 	AM_RANGE(0xf000, 0xf000) AM_WRITENOP // Unused, but initialized
-	AM_RANGE(0xf001, 0xf001) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xf001, 0xf001) AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xf002, 0xf002) AM_WRITE(fastfred_colorbank1_w)
 	AM_RANGE(0xf003, 0xf003) AM_WRITE(fastfred_colorbank2_w)
 	AM_RANGE(0xf004, 0xf004) AM_WRITE(fastfred_charbank1_w)
@@ -202,26 +226,26 @@ static ADDRESS_MAP_START( jumpcoas_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf116, 0xf116) AM_WRITE(fastfred_flip_screen_x_w)
 	AM_RANGE(0xf117, 0xf117) AM_WRITE(fastfred_flip_screen_y_w)
 	//AM_RANGE(0xf800, 0xf800) AM_READ(watchdog_reset_r)  // Why doesn't this work???
-	AM_RANGE(0xf800, 0xf801) AM_DEVREADWRITE("ay8910.1", SMH_NOP, ay8910_address_data_w)
+	AM_RANGE(0xf800, 0xf801) AM_READNOP AM_DEVWRITE("ay8910.1", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( imago_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( imago_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x1fff) AM_READ(imago_sprites_offset_r)
 	AM_RANGE(0x2000, 0x6fff) AM_ROM
 	AM_RANGE(0xb000, 0xb3ff) AM_RAM // same fg videoram (which one of the 2 is really used?)
 	AM_RANGE(0xb800, 0xbfff) AM_RAM_WRITE(imago_sprites_dma_w)
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(imago_fg_videoram_w) AM_BASE(&imago_fg_videoram)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(fastfred_videoram_w) AM_BASE(&fastfred_videoram)
-	AM_RANGE(0xd800, 0xd83f) AM_RAM_WRITE(fastfred_attributes_w) AM_BASE(&fastfred_attributesram)
-	AM_RANGE(0xd840, 0xd85f) AM_RAM AM_BASE(&fastfred_spriteram) AM_SIZE(&fastfred_spriteram_size)
+	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(imago_fg_videoram_w) AM_BASE_MEMBER(fastfred_state, m_imago_fg_videoram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(fastfred_videoram_w) AM_BASE_MEMBER(fastfred_state, m_videoram)
+	AM_RANGE(0xd800, 0xd83f) AM_RAM_WRITE(fastfred_attributes_w) AM_BASE_MEMBER(fastfred_state, m_attributesram)
+	AM_RANGE(0xd840, 0xd85f) AM_RAM AM_BASE_MEMBER(fastfred_state, m_spriteram) AM_SIZE_MEMBER(fastfred_state, m_spriteram_size)
 	AM_RANGE(0xd860, 0xd8ff) AM_RAM // Unused, but initialized
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("BUTTONS")
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("JOYS")
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("DSW") AM_WRITENOP // writes 1 when level starts, 0 when game over
-	AM_RANGE(0xf001, 0xf001) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xf001, 0xf001) AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xf002, 0xf002) AM_WRITE(fastfred_colorbank1_w)
 	AM_RANGE(0xf003, 0xf003) AM_WRITE(fastfred_colorbank2_w)
 	AM_RANGE(0xf004, 0xf004) AM_WRITE(imago_dma_irq_w)
@@ -230,14 +254,14 @@ static ADDRESS_MAP_START( imago_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf007, 0xf007) AM_WRITE(fastfred_flip_screen_y_w)
 	AM_RANGE(0xf400, 0xf400) AM_WRITENOP // writes 0 or 2
 	AM_RANGE(0xf401, 0xf401) AM_WRITE(imago_sprites_bank_w)
-	AM_RANGE(0xf800, 0xf800) AM_READWRITE(SMH_NOP, soundlatch_w)
+	AM_RANGE(0xf800, 0xf800) AM_READNOP AM_WRITE(soundlatch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
-	AM_RANGE(0x3000, 0x3000) AM_READWRITE(soundlatch_r, interrupt_enable_w)
-	AM_RANGE(0x4000, 0x4000) AM_WRITE(SMH_RAM)  // Reset PSG's
+	AM_RANGE(0x3000, 0x3000) AM_READWRITE(soundlatch_r, sound_nmi_mask_w)
+	AM_RANGE(0x4000, 0x4000) AM_WRITEONLY  // Reset PSG's
 	AM_RANGE(0x5000, 0x5001) AM_DEVWRITE("ay8910.1", ay8910_address_data_w)
 	AM_RANGE(0x6000, 0x6001) AM_DEVWRITE("ay8910.2", ay8910_address_data_w)
 	AM_RANGE(0x7000, 0x7000) AM_READNOP // only for Imago, read but not used
@@ -608,75 +632,88 @@ GFXDECODE_END
 
 #define CLOCK 18432000  /* The crystal is 18.432MHz */
 
+static INTERRUPT_GEN( vblank_irq )
+{
+	fastfred_state *state = device->machine().driver_data<fastfred_state>();
 
-static MACHINE_DRIVER_START( fastfred )
+	if(state->m_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static INTERRUPT_GEN( sound_timer_irq )
+{
+	fastfred_state *state = device->machine().driver_data<fastfred_state>();
+
+	if(state->m_sound_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static MACHINE_CONFIG_START( fastfred, fastfred_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, CLOCK/6)     /* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(fastfred_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, CLOCK/6)     /* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(fastfred_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80, CLOCK/12)	 /* 1.536 MHz */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,4)
+	MCFG_CPU_ADD("audiocpu", Z80, CLOCK/12)	 /* 1.536 MHz */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(sound_timer_irq,4*60)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))	//CLOCK/16/60
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))	//CLOCK/16/60
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(fastfred)
 
-	MDRV_GFXDECODE(fastfred)
-	MDRV_PALETTE_LENGTH(32*8)
+	MCFG_GFXDECODE(fastfred)
+	MCFG_PALETTE_LENGTH(32*8)
 
-	MDRV_PALETTE_INIT(fastfred)
-	MDRV_VIDEO_START(fastfred)
-	MDRV_VIDEO_UPDATE(fastfred)
+	MCFG_PALETTE_INIT(fastfred)
+	MCFG_VIDEO_START(fastfred)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay8910.1", AY8910, CLOCK/12)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay8910.1", AY8910, CLOCK/12)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay8910.2", AY8910, CLOCK/12)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay8910.2", AY8910, CLOCK/12)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( jumpcoas )
+static MACHINE_CONFIG_DERIVED( jumpcoas, fastfred )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(fastfred)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(jumpcoas_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(jumpcoas_map)
 
-	MDRV_DEVICE_REMOVE("audiocpu")
+	MCFG_DEVICE_REMOVE("audiocpu")
 
 	/* video hardware */
-	MDRV_GFXDECODE(jumpcoas)
+	MCFG_GFXDECODE(jumpcoas)
 
 	/* sound hardware */
-	MDRV_DEVICE_REMOVE("ay8910.2")
-MACHINE_DRIVER_END
+	MCFG_DEVICE_REMOVE("ay8910.2")
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( imago )
+static MACHINE_CONFIG_DERIVED( imago, fastfred )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(fastfred)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(imago_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(imago_map)
 
-	MDRV_MACHINE_START(imago)
+	MCFG_MACHINE_START(imago)
 
 	/* video hardware */
-	MDRV_PALETTE_LENGTH(256+64+2) /* 256 for characters, 64 for the stars and 2 for the web */
-	MDRV_GFXDECODE(imago)
+	MCFG_PALETTE_LENGTH(256+64+2) /* 256 for characters, 64 for the stars and 2 for the web */
+	MCFG_GFXDECODE(imago)
 
-	MDRV_VIDEO_START(imago)
-	MDRV_VIDEO_UPDATE(imago)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(imago)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(imago)
+MACHINE_CONFIG_END
 
 #undef CLOCK
 
@@ -826,6 +863,24 @@ ROM_END
 
 ROM_START( boggy84 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "p1.d1", 0x0000, 0x2000, CRC(722cc0ec) SHA1(7daacffd9dfcbc8a441485943e45cc8958d19167) )
+	ROM_LOAD( "p2.d2", 0x2000, 0x2000, CRC(6c096798) SHA1(74ea860ef10cb566bcb07d67e6c79f542a66de91) )
+	ROM_LOAD( "p3.d3", 0x4000, 0x2000, CRC(9da59104) SHA1(167af18d50d99e66111e4ebd52d0dd86d5d6d391) )
+	ROM_LOAD( "p4.d4", 0x6000, 0x2000, CRC(73ef6807) SHA1(3144285019ab5cc7f2e1ba0a31956964ea1c706c) )
+
+	ROM_REGION( 0x3000, "gfx1", 0 )
+	ROM_LOAD( "g1.h10", 0x0000, 0x1000, CRC(f4238c68) SHA1(a14cedb126e49e40bab6f46870af64c04ccb01f4) )
+	ROM_LOAD( "g2.h11", 0x1000, 0x1000, CRC(ce285bd2) SHA1(61e58920553f56448e76d859c1b0f316f299363f) )
+	ROM_LOAD( "g3.h12", 0x2000, 0x1000, CRC(02f5f4fa) SHA1(d28dc23cd3a39bb483d05b59869ed2300e5e77a7) )
+
+	ROM_REGION( 0x0300, "proms", 0 )
+	ROM_LOAD( "r.e10", 0x0000, 0x0100, CRC(f3862912) SHA1(128ba48202299ef5852f08fd0f910d8e9f68f22c) )
+	ROM_LOAD( "g.e11", 0x0100, 0x0100, CRC(80b87220) SHA1(7bd81060b986d5cd4a27dc8a9394423959deaa05) )
+	ROM_LOAD( "b.e12", 0x0200, 0x0100, CRC(52b7f445) SHA1(6395ac705a35e602a355cbf700025ff917e89b37) )
+ROM_END
+
+ROM_START( boggy84b )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "cpurom1.bin", 0x0000, 0x2000, CRC(665266c0) SHA1(7785a7d710948718236f9be4b3e2a3fdc00662a5) )
 	ROM_LOAD( "cpurom2.bin", 0x2000, 0x2000, CRC(6c096798) SHA1(74ea860ef10cb566bcb07d67e6c79f542a66de91) )
 	ROM_LOAD( "cpurom3.bin", 0x4000, 0x2000, CRC(9da59104) SHA1(167af18d50d99e66111e4ebd52d0dd86d5d6d391) )
@@ -953,45 +1008,64 @@ ROM_END
 
 static DRIVER_INIT( flyboy )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc085, 0xc099, 0, 0, flyboy_custom1_io_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc8fb, 0xc900, 0, 0, flyboy_custom2_io_r);
-	fastfred_hardware_type = 1;
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc085, 0xc099, FUNC(flyboy_custom1_io_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc8fb, 0xc900, FUNC(flyboy_custom2_io_r));
+	state->m_hardware_type = 1;
 }
 
 static DRIVER_INIT( flyboyb )
 {
-	fastfred_hardware_type = 1;
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	state->m_hardware_type = 1;
 }
 
 static DRIVER_INIT( fastfred )
 {
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc800, 0xcfff, 0, 0, fastfred_custom_io_r, (write8_space_func)SMH_NOP);
-	fastfred_hardware_type = 1;
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc800, 0xcfff, FUNC(fastfred_custom_io_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xc800, 0xcfff);
+	state->m_hardware_type = 1;
 }
 
 static DRIVER_INIT( jumpcoas )
 {
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc800, 0xcfff, 0, 0, jumpcoas_custom_io_r, (write8_space_func)SMH_NOP);
-	fastfred_hardware_type = 0;
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc800, 0xcfff, FUNC(jumpcoas_custom_io_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xc800, 0xcfff);
+	state->m_hardware_type = 0;
+}
+
+static DRIVER_INIT( boggy84b )
+{
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc800, 0xcfff, FUNC(jumpcoas_custom_io_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xc800, 0xcfff);
+	state->m_hardware_type = 2;
 }
 
 static DRIVER_INIT( boggy84 )
 {
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc800, 0xcfff, 0, 0, jumpcoas_custom_io_r, (write8_space_func)SMH_NOP);
-	fastfred_hardware_type = 2;
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc800, 0xcfff, FUNC(boggy84_custom_io_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0xc800, 0xcfff);
+	state->m_hardware_type = 2;
 }
+
 
 static DRIVER_INIT( imago )
 {
-	fastfred_hardware_type = 3;
+	fastfred_state *state = machine.driver_data<fastfred_state>();
+	state->m_hardware_type = 3;
 }
 
 GAME( 1982, flyboy,   0,        fastfred, flyboy,   flyboy,   ROT90, "Kaneko", "Fly-Boy", 0 )
 GAME( 1982, flyboyb,  flyboy,   fastfred, flyboy,   flyboyb,  ROT90, "bootleg", "Fly-Boy (bootleg)", 0 )
-GAME( 1982, fastfred, flyboy,   fastfred, fastfred, fastfred, ROT90, "Atari", "Fast Freddie", 0 )
+GAME( 1982, fastfred, flyboy,   fastfred, fastfred, fastfred, ROT90, "Kaneko (Atari license)", "Fast Freddie", 0 )
 GAME( 1983, jumpcoas, 0,        jumpcoas, jumpcoas, jumpcoas, ROT90, "Kaneko", "Jump Coaster", 0 )
-GAME( 1983, jumpcoast,jumpcoas, jumpcoas, jumpcoas, jumpcoas, ROT90, "Taito", "Jump Coaster (Taito)", 0 )
-GAME( 1983, boggy84,  0,        jumpcoas, boggy84,  boggy84,  ROT90, "bootleg", "Boggy '84", 0 )
+GAME( 1983, jumpcoast,jumpcoas, jumpcoas, jumpcoas, jumpcoas, ROT90, "Kaneko (Taito license)", "Jump Coaster (Taito)", 0 )
+GAME( 1983, boggy84,  0,        jumpcoas, boggy84,  boggy84,  ROT90, "Kaneko", "Boggy '84", 0 )
+GAME( 1983, boggy84b, boggy84,  jumpcoas, boggy84,  boggy84b, ROT90, "bootleg (Eddie's Games)", "Boggy '84 (bootleg)", 0 )
 GAME( 1986, redrobin, 0,        fastfred, redrobin, flyboyb,  ROT90, "Elettronolo", "Red Robin", 0 )
-GAME( 1984, imago,	  0,		imago,    imago,    imago,    ROT90, "Acom", "Imago (cocktail set)", 0 )
-GAME( 1983, imagoa,	  imago,	imago,    imagoa,   imago,    ROT90, "Acom", "Imago (no cocktail set)", 0 )
+GAME( 1984, imago,    0,        imago,    imago,    imago,    ROT90, "Acom", "Imago (cocktail set)", 0 )
+GAME( 1983, imagoa,   imago,    imago,    imagoa,   imago,    ROT90, "Acom", "Imago (no cocktail set)", 0 )

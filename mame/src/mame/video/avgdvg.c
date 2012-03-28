@@ -11,7 +11,7 @@
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "avgdvg.h"
 #include "video/vector.h"
 
@@ -22,11 +22,10 @@
  *
  *************************************/
 
-UINT8 *tempest_colorram;
-UINT8 *mhavoc_colorram;
-UINT16 *quantum_colorram;
+UINT8 *avgdvg_vectorram;
+size_t avgdvg_vectorram_size;
 
-UINT16 *quantum_vectorram;
+UINT8 *avgdvg_colorram;
 
 
 
@@ -57,8 +56,7 @@ UINT16 *quantum_vectorram;
  *
  *************************************/
 
-typedef struct _vgvector vgvector;
-struct _vgvector
+struct vgvector
 {
 	int x; int y;
 	rgb_t color;
@@ -67,10 +65,10 @@ struct _vgvector
 	int status;
 };
 
-typedef struct _vgdata vgdata;
-struct _vgdata
+struct vgdata
 {
-	running_machine *machine;
+	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
+	void set_machine(running_machine &machine) { m_machine = &machine; }
 
 	UINT16 pc;
 	UINT8 sp;
@@ -109,6 +107,9 @@ struct _vgdata
 	INT32 clipy_min;
 	INT32 clipx_max;
 	INT32 clipy_max;
+
+private:
+	running_machine *m_machine;
 };
 
 typedef struct _vgconf vgconf;
@@ -171,9 +172,13 @@ static void avg_apply_flipping(int *x, int *y)
  *
  *************************************/
 
-static void vg_flush (running_machine *machine)
+static void vg_flush (running_machine &machine)
 {
-	int i;
+	int i = 0;
+
+	while (vectbuf[i].status == VGCLIP)
+		i++;
+	vector_add_point(machine, vectbuf[i].x, vectbuf[i].y, vectbuf[i].color, 0);
 
 	for (i = 0; i < nvect; i++)
 	{
@@ -225,7 +230,7 @@ static void dvg_data(vgdata *vg)
 	/*
      * DVG uses low bit of state for address
      */
-	vg->data = vectorram[(vg->pc << 1) | (vg->state_latch & 1)];
+	vg->data = avgdvg_vectorram[(vg->pc << 1) | (vg->state_latch & 1)];
 }
 
 static UINT8 dvg_state_addr(vgdata *vg)
@@ -460,17 +465,17 @@ static int dvg_latch0(vgdata *vg)
 
 static void avg_data(vgdata *vg)
 {
-	vg->data = vectorram[vg->pc ^ 1];
+	vg->data = avgdvg_vectorram[vg->pc ^ 1];
 }
 
 static void starwars_data(vgdata *vg)
 {
-	vg->data = vectorram[vg->pc];
+	vg->data = avgdvg_vectorram[vg->pc];
 }
 
 static void quantum_data(vgdata *vg)
 {
-	vg->data = quantum_vectorram[vg->pc >> 1];
+	vg->data = ((UINT16 *)avgdvg_vectorram)[vg->pc >> 1];
 }
 
 static void mhavoc_data(vgdata *vg)
@@ -479,12 +484,12 @@ static void mhavoc_data(vgdata *vg)
 
 	if (vg->pc & 0x2000)
 	{
-		bank = &memory_region(vg->machine, "alpha")[0x18000];
+		bank = &vg->machine().region("alpha")->base()[0x18000];
 		vg->data = bank[(vg->map << 13) | ((vg->pc ^ 1) & 0x1fff)];
 	}
 	else
 	{
-		vg->data = vectorram[vg->pc ^ 1];
+		vg->data = avgdvg_vectorram[vg->pc ^ 1];
 	}
 }
 
@@ -506,7 +511,7 @@ static int avg_latch0(vgdata *vg)
 static int quantum_st2st3(vgdata *vg)
 {
 	/* Quantum doesn't decode latch0 or latch2 but ST2 and ST3 are fed
-     * into the address controller which incremets the PC
+     * into the address controller which increments the PC
      */
 	vg->pc++;
 	return 0;
@@ -544,7 +549,7 @@ static int bzone_latch1(vgdata *vg)
 	/*
      * Battle Zone has clipping hardware. We need to remember the
      * position of the beam when the analog switches hst or lst get
-     * turened off.
+     * turned off.
      */
 
 	if (vg->hst == 0)
@@ -755,7 +760,7 @@ static int avg_common_strobe2(vgdata *vg)
                  */
 
 				vector_clear_list();
-				vg_flush(vg->machine);
+				vg_flush(vg->machine());
 			}
 		}
 		else
@@ -808,7 +813,7 @@ static int mhavoc_strobe2(vgdata *vg)
 					| ((vg->dvy >> 1) & 2)
 					| ((vg->dvy << 1) & 4)
 					| ((vg->dvy << 2) & 8)
-					| ((mame_rand(vg->machine) & 0x7) << 4);
+					| ((vg->machine().rand() & 0x7) << 4);
 			}
 			else
 			{
@@ -830,6 +835,8 @@ static int tempest_strobe2(vgdata *vg)
 {
 	if ((OP2 == 0) && (vg->dvy12 == 0))
 	{
+		/* Contrary to previous documentation in MAME,
+        Tempest does not have the vg->enspkl bit. */
 		if (vg->dvy & 0x800)
 			vg->color = vg->dvy & 0xf;
 		else
@@ -956,7 +963,7 @@ static int tempest_strobe3(vgdata *vg)
 
 	if ((vg->op & 5) == 0)
 	{
-		data = tempest_colorram[vg->color];
+		data = avgdvg_colorram[vg->color];
 		bit3 = (~data >> 3) & 1;
 		bit2 = (~data >> 2) & 1;
 		bit1 = (~data >> 1) & 1;
@@ -1009,7 +1016,7 @@ static int mhavoc_strobe3(vgdata *vg)
 			{
 				vg->xpos += dx/2;
 				vg->ypos -= dy/2;
-				data = mhavoc_colorram[0xf +
+				data = avgdvg_colorram[0xf +
 									   (((vg->spkl_shift & 1) << 3)
 										| (vg->spkl_shift & 4)
 										| ((vg->spkl_shift & 0x10) >> 3)
@@ -1037,7 +1044,7 @@ static int mhavoc_strobe3(vgdata *vg)
 		{
 			vg->xpos += (dx * cycles) >> 4;
 			vg->ypos -= (dy * cycles) >> 4;
-			data = mhavoc_colorram[vg->color];
+			data = avgdvg_colorram[vg->color];
 
 			bit3 = (~data >> 3) & 1;
 			bit2 = (~data >> 2) & 1;
@@ -1088,7 +1095,7 @@ static int quantum_strobe3(vgdata *vg)
 
 	if ((vg->op & 5) == 0)
 	{
-		data = quantum_colorram[vg->color];
+		data = ((UINT16 *)avgdvg_colorram)[vg->color];
 		bit3 = (~data >> 3) & 1;
 		bit2 = (~data >> 2) & 1;
 		bit1 = (~data >> 1) & 1;
@@ -1129,6 +1136,19 @@ static void avg_vggo(vgdata *vg)
 {
 	vg->pc = 0;
 	vg->sp = 0;
+}
+
+static void tempest_vggo(vgdata *vg)
+{
+	vg->pc = 0;
+	vg->sp = 0;
+	/*
+     * Tempest and Quantum trigger VGGO from time to time even though
+     * the VG runs in an endless loop for these games (see
+     * avg_common_strobe2). If we don't discard all vectors in the
+     * current buffer at this point, the screen starts flickering.
+     */
+	nvect = 0;
 }
 
 static void dvg_vggo(vgdata *vg)
@@ -1186,9 +1206,9 @@ static TIMER_CALLBACK( vg_set_halt_callback )
 static TIMER_CALLBACK( run_state_machine )
 {
 	int cycles = 0;
-	UINT8 *state_prom = memory_region(machine, "user1");
+	UINT8 *state_prom = machine.region("user1")->base();
 
-  	while (cycles < VGSLICE)
+	while (cycles < VGSLICE)
 	{
 		/* Get next state */
 		vg->state_latch = (vg->state_latch & 0x10)
@@ -1205,13 +1225,13 @@ static TIMER_CALLBACK( run_state_machine )
 
 		/* If halt flag was set, let CPU catch up before we make halt visible */
 		if (vg->halt && !(vg->state_latch & 0x10))
-			timer_adjust_oneshot(vg_halt_timer, attotime_mul(ATTOTIME_IN_HZ(MASTER_CLOCK), cycles), 1);
+			vg_halt_timer->adjust(attotime::from_hz(MASTER_CLOCK) * cycles, 1);
 
 		vg->state_latch = (vg->halt << 4) | (vg->state_latch & 0xf);
 		cycles += 8;
 	}
 
-	timer_adjust_oneshot(vg_run_timer, attotime_mul(ATTOTIME_IN_HZ(MASTER_CLOCK), cycles), 0);
+	vg_run_timer->adjust(attotime::from_hz(MASTER_CLOCK) * cycles);
 }
 
 
@@ -1221,13 +1241,6 @@ static TIMER_CALLBACK( run_state_machine )
  *
  ************************************/
 
-#ifdef UNUSED_FUNCTION
-int avgdvg_done(void)
-{
-	return vg->sync_halt;
-}
-#endif
-
 CUSTOM_INPUT( avgdvg_done_r )
 {
 	return vg->sync_halt ? 0x01 : 0x00;
@@ -1235,6 +1248,8 @@ CUSTOM_INPUT( avgdvg_done_r )
 
 WRITE8_HANDLER( avgdvg_go_w )
 {
+	vgc->vggo(vg);
+
 	if (vg->sync_halt && (nvect > 10))
 	{
 		/*
@@ -1244,11 +1259,10 @@ WRITE8_HANDLER( avgdvg_go_w )
          */
 		vector_clear_list();
 	}
-	vg_flush(space->machine);
+	vg_flush(space->machine());
 
-	vgc->vggo(vg);
 	vg_set_halt(0);
-	timer_adjust_oneshot(vg_run_timer, attotime_zero, 0);
+	vg_run_timer->adjust(attotime::zero);
 }
 
 WRITE16_HANDLER( avgdvg_go_word_w )
@@ -1276,7 +1290,7 @@ WRITE16_HANDLER( avgdvg_reset_word_w )
 
 MACHINE_RESET( avgdvg )
 {
-	avgdvg_reset_w (cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM),0,0);
+	avgdvg_reset_w (machine.device("maincpu")->memory().space(AS_PROGRAM),0,0);
 }
 
 
@@ -1372,7 +1386,7 @@ static const vgconf avg_tempest =
 	},
 	avg_state_addr,
 	avg_data,
-	avg_vggo,
+	tempest_vggo,
 	avg_vgrst
 };
 
@@ -1408,7 +1422,7 @@ static const vgconf avg_quantum =
 	},
 	avg_state_addr,
 	quantum_data,
-	avg_vggo,
+	tempest_vggo,
 	avg_vgrst
 };
 
@@ -1436,7 +1450,7 @@ static const vgconf avg_tomcat =
  *
  ************************************/
 
-static void register_state (running_machine *machine)
+static void register_state (running_machine &machine)
 {
 	state_save_register_item(machine, "AVG", NULL, 0, vg->pc);
 	state_save_register_item(machine, "AVG", NULL, 0, vg->sp);
@@ -1472,28 +1486,28 @@ static void register_state (running_machine *machine)
 
 	state_save_register_item(machine, "AVG", NULL, 0, flip_x);
 	state_save_register_item(machine, "AVG", NULL, 0, flip_y);
-
+	state_save_register_item_pointer(machine, "AVG", NULL, 0, avgdvg_vectorram, avgdvg_vectorram_size);
 }
 
 static VIDEO_START( avg_common )
 {
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine.primary_screen->visible_area();
 
 	vg = &vgd;
-	vg->machine = machine;
+	vg->set_machine(machine);
 
-	xmin = visarea->min_x;
-	ymin = visarea->min_y;
-	xmax = visarea->max_x;
-	ymax = visarea->max_y;
+	xmin = visarea.min_x;
+	ymin = visarea.min_y;
+	xmax = visarea.max_x;
+	ymax = visarea.max_y;
 
 	xcenter = ((xmax - xmin) / 2) << 16;
 	ycenter = ((ymax - ymin) / 2) << 16;
 
 	flip_x = flip_y = 0;
 
-	vg_halt_timer = timer_alloc(machine, vg_set_halt_callback, NULL);
-	vg_run_timer = timer_alloc(machine, run_state_machine, NULL);
+	vg_halt_timer = machine.scheduler().timer_alloc(FUNC(vg_set_halt_callback));
+	vg_run_timer = machine.scheduler().timer_alloc(FUNC(run_state_machine));
 
 	/*
      * The x and y DACs use 10 bit of the counter values which are in
@@ -1509,21 +1523,19 @@ static VIDEO_START( avg_common )
 
 VIDEO_START( dvg )
 {
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine.primary_screen->visible_area();
 
 	vgc = &dvg_default;
 	vg = &vgd;
-	vg->machine = machine;
+	vg->set_machine(machine);
 
-	xmin = visarea->min_x;
-	ymin = visarea->min_y;
+	xmin = visarea.min_x;
+	ymin = visarea.min_y;
 
-	vg_halt_timer = timer_alloc(machine, vg_set_halt_callback, NULL);
-	vg_run_timer = timer_alloc(machine, run_state_machine, NULL);
+	vg_halt_timer = machine.scheduler().timer_alloc(FUNC(vg_set_halt_callback));
+	vg_run_timer = machine.scheduler().timer_alloc(FUNC(run_state_machine));
 
 	register_state (machine);
-
-	state_save_register_item_pointer(machine, "AVG", NULL, 0, vectorram, vectorram_size);
 
 	VIDEO_START_CALL(vector);
 }
@@ -1532,8 +1544,6 @@ VIDEO_START( avg )
 {
 	vgc = &avg_default;
 	VIDEO_START_CALL(avg_common);
-
-	state_save_register_item_pointer(machine, "AVG", NULL, 0, vectorram, vectorram_size);
 }
 
 VIDEO_START( avg_starwars )
@@ -1546,24 +1556,18 @@ VIDEO_START( avg_tempest )
 {
 	vgc = &avg_tempest;
 	VIDEO_START_CALL(avg_common);
-
-	state_save_register_item_pointer(machine, "AVG", NULL, 0, vectorram, vectorram_size);
 }
 
 VIDEO_START( avg_mhavoc )
 {
 	vgc = &avg_mhavoc;
 	VIDEO_START_CALL(avg_common);
-
-	state_save_register_item_pointer(machine, "AVG", NULL, 0, vectorram, vectorram_size);
 }
 
 VIDEO_START( avg_bzone )
 {
 	vgc = &avg_bzone;
 	VIDEO_START_CALL(avg_common);
-
-	state_save_register_item_pointer(machine, "AVG", NULL, 0, vectorram, vectorram_size);
 }
 
 VIDEO_START( avg_quantum )

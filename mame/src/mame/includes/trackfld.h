@@ -4,28 +4,36 @@
 
 ***************************************************************************/
 
-#include "sound/msm5205.h"
 
-/*----------- defined in audio/trackfld.c -----------*/
+class trackfld_state : public driver_device
+{
+public:
+	trackfld_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-WRITE8_HANDLER( konami_sh_irqtrigger_w );
-READ8_HANDLER( trackfld_sh_timer_r );
-READ8_DEVICE_HANDLER( trackfld_speech_r );
-WRITE8_DEVICE_HANDLER( trackfld_sound_w );
-READ8_HANDLER( hyperspt_sh_timer_r );
-WRITE8_DEVICE_HANDLER( hyperspt_sound_w );
-WRITE8_HANDLER( konami_SN76496_latch_w );
-WRITE8_DEVICE_HANDLER( konami_SN76496_w );
+	/* memory pointers */
+	UINT8 *  m_videoram;
+	UINT8 *  m_colorram;
+	UINT8 *  m_scroll;
+	UINT8 *  m_scroll2;
+	UINT8 *  m_spriteram;
+	UINT8 *  m_spriteram2;
+	size_t   m_spriteram_size;
 
-/*----------- defined in drivers/trackfld.c -----------*/
-extern const msm5205_interface hyprolyb_msm5205_config;
-extern WRITE8_HANDLER( hyprolyb_adpcm_w );
-ADDRESS_MAP_EXTERN( hyprolyb_adpcm_map, 8 );
+	/* video-related */
+	tilemap_t  *m_bg_tilemap;
+	int      m_bg_bank;
+	int      m_sprite_bank1;
+	int      m_sprite_bank2;
+	int      m_old_gfx_bank;					// needed by atlantol
+	int		 m_sprites_gfx_banked;
+
+	UINT8    m_irq_mask;
+	UINT8    m_yieartf_nmi_mask;
+};
+
 
 /*----------- defined in video/trackfld.c -----------*/
-
-extern UINT8 *trackfld_scroll;
-extern UINT8 *trackfld_scroll2;
 
 WRITE8_HANDLER( trackfld_videoram_w );
 WRITE8_HANDLER( trackfld_colorram_w );
@@ -34,4 +42,6 @@ WRITE8_HANDLER( atlantol_gfxbank_w );
 
 PALETTE_INIT( trackfld );
 VIDEO_START( trackfld );
-VIDEO_UPDATE( trackfld );
+SCREEN_UPDATE_IND16( trackfld );
+VIDEO_START( atlantol );
+

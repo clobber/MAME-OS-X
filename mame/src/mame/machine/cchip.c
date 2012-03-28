@@ -5,7 +5,7 @@
 This file contains routines to interface with the Taito Controller Chip
 (or "Command Chip") version 1. It's currently used by Superman and Mega
 Blast. [Further cchip emulation is in machine/rainbow.c, machine/volfied.c,
-drivers/opwolf.c]
+drivers/opwolf.c and drivers/taito_f2.c]
 
 According to Richard Bush, the C-Chip is an encrypted Z80 which communicates
 with the main board as a protection feature.
@@ -27,17 +27,9 @@ necessary cycles to the cchip to switch banks.
 
 This code requires that the player & coin inputs be in input ports 2-4.
 
-
-Mega Blast
-----------
-
-C-Chip simply used as RAM, the game doesn't even bother to change banks.
-It does read the chip id though. The dump is confirmed to be from an
-original board.
-
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/cchip.h"
 
 static UINT16 current_bank = 0;
@@ -91,14 +83,14 @@ WRITE16_HANDLER( cchip1_ram_w )
 	{
 		cc_port = data;
 
-		coin_lockout_w(1, data & 0x08);
-		coin_lockout_w(0, data & 0x04);
-		coin_counter_w(1, data & 0x02);
-		coin_counter_w(0, data & 0x01);
+		coin_lockout_w(space->machine(), 1, data & 0x08);
+		coin_lockout_w(space->machine(), 0, data & 0x04);
+		coin_counter_w(space->machine(), 1, data & 0x02);
+		coin_counter_w(space->machine(), 0, data & 0x01);
 	}
 	else
 	{
-logerror("cchip1_w pc: %06x bank %02x offset %04x: %02x\n",cpu_get_pc(space->cpu),current_bank,offset,data);
+logerror("cchip1_w pc: %06x bank %02x offset %04x: %02x\n",cpu_get_pc(&space->device()),current_bank,offset,data);
 	}
 }
 
@@ -125,9 +117,9 @@ READ16_HANDLER( cchip1_ram_r )
 	{
 		switch (offset)
 		{
-		case 0x00: return input_port_read(space->machine, "IN0");    /* Player 1 controls + START1 */
-		case 0x01: return input_port_read(space->machine, "IN1");    /* Player 2 controls + START2 */
-		case 0x02: return input_port_read(space->machine, "IN2");    /* COINn + SERVICE1 + TILT */
+		case 0x00: return input_port_read(space->machine(), "IN0");    /* Player 1 controls + START1 */
+		case 0x01: return input_port_read(space->machine(), "IN1");    /* Player 2 controls + START2 */
+		case 0x02: return input_port_read(space->machine(), "IN2");    /* COINn + SERVICE1 + TILT */
 		case 0x03: return cc_port;
 		}
 	}
@@ -155,30 +147,3 @@ READ16_HANDLER( cchip1_ram_r )
 logerror("cchip1_r bank: %02x offset: %04x\n",current_bank,offset);
 	return 0;
 }
-
-
-/* Mega Blast */
-
-UINT16 *cchip2_ram;
-
-WRITE16_HANDLER( cchip2_word_w )
-{
-    logerror("cchip2_w pc: %06x offset %04x: %02x\n", cpu_get_pc(space->cpu), offset, data);
-
-    COMBINE_DATA(&cchip2_ram[offset]);
-}
-
-READ16_HANDLER( cchip2_word_r )
-{
-	/* C-Chip ID */
-
-	if (offset == 0x401)
-	{
-		return 0x01;
-	}
-
-	logerror("cchip2_r offset: %04x\n", offset);
-
-	return cchip2_ram[offset];
-}
-

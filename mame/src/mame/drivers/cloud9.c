@@ -90,33 +90,17 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/pokey.h"
-#include "cloud9.h"
+#include "includes/cloud9.h"
 
 
-#define MASTER_CLOCK	(10000000)
+#define MASTER_CLOCK          (10000000)
 
-#define PIXEL_CLOCK		(MASTER_CLOCK/2)
-#define HTOTAL			(320)
-#define VTOTAL			(256)
-
-
-
-/*************************************
- *
- *  Globals
- *
- *************************************/
-
-static UINT8 *nvram_stage;
-static const UINT8 *syncprom;
-static UINT8 irq_state;
-static emu_timer *irq_timer;
-
-static int cloud9_vblank_start;
-static int cloud9_vblank_end;
+#define PIXEL_CLOCK           (MASTER_CLOCK/2)
+#define HTOTAL                (320)
+#define VTOTAL                (256)
 
 
 
@@ -126,27 +110,30 @@ static int cloud9_vblank_end;
  *
  *************************************/
 
-INLINE void schedule_next_irq(running_machine *machine, int curscanline)
+INLINE void schedule_next_irq(running_machine &machine, int curscanline)
 {
+	cloud9_state *state = machine.driver_data<cloud9_state>();
+
 	/* IRQ is clocked by /32V, so every 64 scanlines */
 	curscanline = (curscanline + 64) & 255;
 
 	/* next one at the start of this scanline */
-	timer_adjust_oneshot(irq_timer, video_screen_get_time_until_pos(machine->primary_screen, curscanline, 0), curscanline);
+	state->m_irq_timer->adjust(machine.primary_screen->time_until_pos(curscanline), curscanline);
 }
 
 
 static TIMER_CALLBACK( clock_irq )
 {
+	cloud9_state *state = machine.driver_data<cloud9_state>();
 	/* assert the IRQ if not already asserted */
-	if (!irq_state)
+	if (!state->m_irq_state)
 	{
-		cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
-		irq_state = 1;
+		device_set_input_line(state->m_maincpu, 0, ASSERT_LINE);
+		state->m_irq_state = 1;
 	}
 
 	/* force an update now */
-	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
+	machine.primary_screen->update_partial(machine.primary_screen->vpos());
 
 	/* find the next edge */
 	schedule_next_irq(machine, param);
@@ -155,8 +142,9 @@ static TIMER_CALLBACK( clock_irq )
 
 static CUSTOM_INPUT( get_vblank )
 {
-	int scanline = video_screen_get_vpos(field->port->machine->primary_screen);
-	return (~syncprom[scanline & 0xff] >> 1) & 1;
+	cloud9_state *state = field.machine().driver_data<cloud9_state>();
+	int scanline = field.machine().primary_screen->vpos();
+	return (~state->m_syncprom[scanline & 0xff] >> 1) & 1;
 }
 
 
@@ -169,51 +157,46 @@ static CUSTOM_INPUT( get_vblank )
 
 static MACHINE_START( cloud9 )
 {
+	cloud9_state *state = machine.driver_data<cloud9_state>();
 	rectangle visarea;
 
 	/* initialize globals */
-	syncprom = memory_region(machine, "proms") + 0x000;
+	state->m_syncprom = machine.region("proms")->base() + 0x000;
 
 	/* find the start of VBLANK in the SYNC PROM */
-	for (cloud9_vblank_start = 0; cloud9_vblank_start < 256; cloud9_vblank_start++)
-		if ((syncprom[(cloud9_vblank_start - 1) & 0xff] & 2) != 0 && (syncprom[cloud9_vblank_start] & 2) == 0)
+	for (state->m_vblank_start = 0; state->m_vblank_start < 256; state->m_vblank_start++)
+		if ((state->m_syncprom[(state->m_vblank_start - 1) & 0xff] & 2) != 0 && (state->m_syncprom[state->m_vblank_start] & 2) == 0)
 			break;
-	if (cloud9_vblank_start == 0)
-		cloud9_vblank_start = 256;
+	if (state->m_vblank_start == 0)
+		state->m_vblank_start = 256;
 
 	/* find the end of VBLANK in the SYNC PROM */
-	for (cloud9_vblank_end = 0; cloud9_vblank_end < 256; cloud9_vblank_end++)
-		if ((syncprom[(cloud9_vblank_end - 1) & 0xff] & 2) == 0 && (syncprom[cloud9_vblank_end] & 2) != 0)
+	for (state->m_vblank_end = 0; state->m_vblank_end < 256; state->m_vblank_end++)
+		if ((state->m_syncprom[(state->m_vblank_end - 1) & 0xff] & 2) == 0 && (state->m_syncprom[state->m_vblank_end] & 2) != 0)
 			break;
 
 	/* can't handle the wrapping case */
-	assert(cloud9_vblank_end < cloud9_vblank_start);
+	assert(state->m_vblank_end < state->m_vblank_start);
 
 	/* reconfigure the visible area to match */
-	visarea.min_x = 0;
-	visarea.max_x = 255;
-	visarea.min_y = cloud9_vblank_end + 1;
-	visarea.max_y = cloud9_vblank_start;
-	video_screen_configure(machine->primary_screen, 320, 256, &visarea, HZ_TO_ATTOSECONDS(PIXEL_CLOCK) * VTOTAL * HTOTAL);
+	visarea.set(0, 255, state->m_vblank_end + 1, state->m_vblank_start);
+	machine.primary_screen->configure(320, 256, visarea, HZ_TO_ATTOSECONDS(PIXEL_CLOCK) * VTOTAL * HTOTAL);
 
 	/* create a timer for IRQs and set up the first callback */
-	irq_timer = timer_alloc(machine, clock_irq, NULL);
-	irq_state = 0;
+	state->m_irq_timer = machine.scheduler().timer_alloc(FUNC(clock_irq));
+	state->m_irq_state = 0;
 	schedule_next_irq(machine, 0-64);
 
-	/* allocate backing memory for the NVRAM */
-	generic_nvram = auto_alloc_array(machine, UINT8, generic_nvram_size);
-
 	/* setup for save states */
-	state_save_register_global(machine, irq_state);
-	state_save_register_global_pointer(machine, generic_nvram, generic_nvram_size);
+	state->save_item(NAME(state->m_irq_state));
 }
 
 
 static MACHINE_RESET( cloud9 )
 {
+	cloud9_state *state = machine.driver_data<cloud9_state>();
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	irq_state = 0;
+	state->m_irq_state = 0;
 }
 
 
@@ -226,29 +209,30 @@ static MACHINE_RESET( cloud9 )
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	if (irq_state)
+	cloud9_state *state = space->machine().driver_data<cloud9_state>();
+	if (state->m_irq_state)
 	{
-		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
-		irq_state = 0;
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
+		state->m_irq_state = 0;
 	}
 }
 
 
 static WRITE8_HANDLER( cloud9_led_w )
 {
-	set_led_status(offset, ~data & 0x80);
+	set_led_status(space->machine(), offset, ~data & 0x80);
 }
 
 
 static WRITE8_HANDLER( cloud9_coin_counter_w )
 {
-	coin_counter_w(offset, data & 0x80);
+	coin_counter_w(space->machine(), offset, data & 0x80);
 }
 
 
 static READ8_HANDLER( leta_r )
 {
-	return input_port_read(space->machine, offset ? "TRACKX" : "TRACKY");
+	return input_port_read(space->machine(), offset ? "TRACKX" : "TRACKY");
 }
 
 
@@ -259,37 +243,21 @@ static READ8_HANDLER( leta_r )
  *
  *************************************/
 
-static NVRAM_HANDLER( cloud9 )
-{
-	if (read_or_write)
-	{
-		/* on power down, the EAROM is implicitly stored */
-		memcpy(generic_nvram, nvram_stage, generic_nvram_size);
-		mame_fwrite(file, generic_nvram, generic_nvram_size);
-	}
-	else if (file)
-		mame_fread(file, generic_nvram, generic_nvram_size);
-	else
-		memset(generic_nvram, 0, generic_nvram_size);
-}
-
-
 static WRITE8_HANDLER( nvram_recall_w )
 {
-	memcpy(nvram_stage, generic_nvram, generic_nvram_size);
+	cloud9_state *state = space->machine().driver_data<cloud9_state>();
+	state->m_nvram->recall(0);
+	state->m_nvram->recall(1);
+	state->m_nvram->recall(0);
 }
 
 
 static WRITE8_HANDLER( nvram_store_w )
 {
-	memcpy(generic_nvram, nvram_stage, generic_nvram_size);
-}
-
-
-static READ8_HANDLER( nvram_r )
-{
-	/* only a single XD2212 for 4 bits of NVRAM */
-	return nvram_stage[offset] | 0xf0;
+	cloud9_state *state = space->machine().driver_data<cloud9_state>();
+	state->m_nvram->store(0);
+	state->m_nvram->store(1);
+	state->m_nvram->store(0);
 }
 
 
@@ -300,14 +268,14 @@ static READ8_HANDLER( nvram_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( cloud9_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cloud9_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0001) AM_WRITE(cloud9_bitmode_addr_w)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(cloud9_bitmode_r, cloud9_bitmode_w)
-	AM_RANGE(0x0000, 0x4fff) AM_READWRITE(SMH_BANK(1), cloud9_videoram_w)
-	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x0000, 0x4fff) AM_ROMBANK("bank1") AM_WRITE(cloud9_videoram_w)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_BASE_MEMBER(cloud9_state, m_spriteram)
 	AM_RANGE(0x5400, 0x547f) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x5480, 0x54ff) AM_WRITE(irq_ack_w)
-	AM_RANGE(0x5500, 0x557f) AM_RAM_WRITE(cloud9_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x5500, 0x557f) AM_RAM_WRITE(cloud9_paletteram_w) AM_BASE_MEMBER(cloud9_state, m_paletteram)
 	AM_RANGE(0x5580, 0x5587) AM_MIRROR(0x0078) AM_WRITE(cloud9_video_control_w)
 	AM_RANGE(0x5600, 0x5601) AM_MIRROR(0x0078) AM_WRITE(cloud9_coin_counter_w)
 	AM_RANGE(0x5602, 0x5603) AM_MIRROR(0x0078) AM_WRITE(cloud9_led_w)
@@ -318,7 +286,7 @@ static ADDRESS_MAP_START( cloud9_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x5900, 0x5903) AM_MIRROR(0x007c) AM_READ(leta_r)
 	AM_RANGE(0x5a00, 0x5a0f) AM_MIRROR(0x00f0) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x5b00, 0x5b0f) AM_MIRROR(0x00f0) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x5c00, 0x5cff) AM_MIRROR(0x0300) AM_READWRITE(nvram_r, SMH_RAM) AM_BASE(&nvram_stage) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x5c00, 0x5cff) AM_MIRROR(0x0300) AM_DEVREADWRITE_MODERN("nvram", x2212_device, read, write)
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -455,41 +423,41 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( cloud9 )
+static MACHINE_CONFIG_START( cloud9, cloud9_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
-	MDRV_CPU_PROGRAM_MAP(cloud9_map)
+	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
+	MCFG_CPU_PROGRAM_MAP(cloud9_map)
 
-	MDRV_MACHINE_START(cloud9)
-	MDRV_MACHINE_RESET(cloud9)
-	MDRV_NVRAM_HANDLER(cloud9)
-	MDRV_WATCHDOG_VBLANK_INIT(8)
+	MCFG_MACHINE_START(cloud9)
+	MCFG_MACHINE_RESET(cloud9)
+	MCFG_WATCHDOG_VBLANK_INIT(8)
+
+	MCFG_X2212_ADD_AUTOSAVE("nvram")
 
 	/* video hardware */
-	MDRV_GFXDECODE(cloud9)
-	MDRV_PALETTE_LENGTH(64)
+	MCFG_GFXDECODE(cloud9)
+	MCFG_PALETTE_LENGTH(64)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE((float)PIXEL_CLOCK / (float)VTOTAL / (float)HTOTAL)
-	MDRV_SCREEN_SIZE(HTOTAL, VTOTAL)
-	MDRV_SCREEN_VBLANK_TIME(0)			/* VBLANK is handled manually */
-	MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 231)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE((float)PIXEL_CLOCK / (float)VTOTAL / (float)HTOTAL)
+	MCFG_SCREEN_SIZE(HTOTAL, VTOTAL)
+	MCFG_SCREEN_VBLANK_TIME(0)			/* VBLANK is handled manually */
+	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 231)
+	MCFG_SCREEN_UPDATE_STATIC(cloud9)
 
-	MDRV_VIDEO_START(cloud9)
-	MDRV_VIDEO_UPDATE(cloud9)
+	MCFG_VIDEO_START(cloud9)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK/8)
-	MDRV_SOUND_CONFIG(pokey_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK/8)
+	MCFG_SOUND_CONFIG(pokey_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 

@@ -1,4 +1,4 @@
-#include "driver.h"
+#include "emu.h"
 #include "video/vdc.h"
 
 /* VDC segments */
@@ -46,7 +46,7 @@ typedef struct {
 	pair	vce_address;			/* Current address in the palette */
 	pair	vce_data[512];			/* Palette data */
 	int		current_bitmap_line;	/* The current line in the display we are on */
-	bitmap_t	*bmp;
+	bitmap_ind16	*bmp;
 }VCE;
 
 typedef struct {
@@ -70,16 +70,16 @@ static VPC vpc;
 
 /* Function prototypes */
 
-static void vdc_advance_line(running_machine *machine, int which);
-static void draw_black_line(running_machine *machine, int line);
+static void vdc_advance_line(running_machine &machine, int which);
+static void draw_black_line(running_machine &machine, int line);
 static void draw_overscan_line(int line);
 static void draw_sgx_overscan_line(int line);
 static void pce_refresh_line(int which, int line, int external_input, UINT8 *drawn, UINT16 *line_buffer);
-static void pce_refresh_sprites(running_machine *machine, int which, int line, UINT8 *drawn, UINT16 *line_buffer);
-static void vdc_do_dma(running_machine *machine, int which);
-static void vpc_init( running_machine *machine );
+static void pce_refresh_sprites(running_machine &machine, int which, int line, UINT8 *drawn, UINT16 *line_buffer);
+static void vdc_do_dma(running_machine &machine, int which);
+static void vpc_init( running_machine &machine );
 
-INTERRUPT_GEN( pce_interrupt )
+TIMER_DEVICE_CALLBACK( pce_interrupt )
 {
 	/* Draw the last scanline */
 	if ( vce.current_bitmap_line >= 14 && vce.current_bitmap_line < 14 + 242 )
@@ -96,7 +96,7 @@ INTERRUPT_GEN( pce_interrupt )
                otherwise is 2 + sprite# */
 			UINT8 drawn[VDC_WPF];
 			/* our line buffer */
-			UINT16 *line_buffer = BITMAP_ADDR16( vce.bmp, vce.current_bitmap_line, 86 );
+			UINT16 *line_buffer = &vce.bmp->pix16(vce.current_bitmap_line, 86 );
 
 			/* clear our priority/sprite collision detection buffer. */
 			memset(drawn, 0, VDC_WPF);
@@ -109,22 +109,22 @@ INTERRUPT_GEN( pce_interrupt )
 			/* Draw VDC #0 sprite layer */
 			if(vdc[0].vdc_data[CR].w & CR_SB)
 			{
-				pce_refresh_sprites(device->machine, 0, vdc[0].current_segment_line, drawn, line_buffer);
+				pce_refresh_sprites(timer.machine(), 0, vdc[0].current_segment_line, drawn, line_buffer);
 			}
 		}
 	}
 	else
 	{
 		/* We are in one of the blanking areas */
-		draw_black_line(device->machine, vce.current_bitmap_line );
+		draw_black_line(timer.machine(), vce.current_bitmap_line );
 	}
 
 	/* bump current scanline */
 	vce.current_bitmap_line = ( vce.current_bitmap_line + 1 ) % VDC_LPF;
-	vdc_advance_line(device->machine, 0 );
+	vdc_advance_line(timer.machine(), 0 );
 }
 
-INTERRUPT_GEN( sgx_interrupt )
+TIMER_DEVICE_CALLBACK( sgx_interrupt )
 {
 	/* Draw the last scanline */
 	if ( vce.current_bitmap_line >= 14 && vce.current_bitmap_line < 14 + 242 )
@@ -156,7 +156,7 @@ INTERRUPT_GEN( sgx_interrupt )
 			/* Draw VDC #0 sprite layer */
 			if(vdc[0].vdc_data[CR].w & CR_SB)
 			{
-				pce_refresh_sprites(device->machine, 0, vdc[0].current_segment_line, drawn[0], temp_buffer[0]);
+				pce_refresh_sprites(timer.machine(), 0, vdc[0].current_segment_line, drawn[0], temp_buffer[0]);
 			}
 
 			/* Draw VDC #1 background layer */
@@ -165,10 +165,10 @@ INTERRUPT_GEN( sgx_interrupt )
 			/* Draw VDC #1 sprite layer */
 			if ( vdc[1].vdc_data[CR].w & CR_SB )
 			{
-				pce_refresh_sprites(device->machine, 1, vdc[1].current_segment_line, drawn[1], temp_buffer[1]);
+				pce_refresh_sprites(timer.machine(), 1, vdc[1].current_segment_line, drawn[1], temp_buffer[1]);
 			}
 
-			line_buffer = BITMAP_ADDR16( vce.bmp, vce.current_bitmap_line, 86 );
+			line_buffer = &vce.bmp->pix16(vce.current_bitmap_line, 86 );
 			/* Combine the output of both VDCs */
 			for( i = 0; i < 512; i++ )
 			{
@@ -269,16 +269,16 @@ INTERRUPT_GEN( sgx_interrupt )
 	else
 	{
 		/* We are in one of the blanking areas */
-		draw_black_line(device->machine, vce.current_bitmap_line );
+		draw_black_line(timer.machine(), vce.current_bitmap_line );
 	}
 
 	/* bump current scanline */
 	vce.current_bitmap_line = ( vce.current_bitmap_line + 1 ) % VDC_LPF;
-	vdc_advance_line(device->machine, 0 );
-	vdc_advance_line(device->machine, 1 );
+	vdc_advance_line(timer.machine(), 0 );
+	vdc_advance_line(timer.machine(), 1 );
 }
 
-static void vdc_advance_line(running_machine *machine, int which)
+static void vdc_advance_line(running_machine &machine, int which)
 {
 	int ret = 0;
 
@@ -423,7 +423,7 @@ VIDEO_START( pce )
 	memset(vdc[1].vram, 0, 0x10000);
 
 	/* create display bitmap */
-	vce.bmp = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	vce.bmp = auto_bitmap_ind16_alloc(machine, machine.primary_screen->width(), machine.primary_screen->height());
 
 	vdc[0].inc = 1;
 	vdc[1].inc = 1;
@@ -432,19 +432,19 @@ VIDEO_START( pce )
 }
 
 
-VIDEO_UPDATE( pce )
+SCREEN_UPDATE_IND16( pce )
 {
 	/* copy our rendering buffer to the display */
-	copybitmap (bitmap,vce.bmp,0,0,0,0,cliprect);
+	copybitmap (bitmap,*vce.bmp,0,0,0,0,cliprect);
 	return 0;
 }
 
-static void draw_black_line(running_machine *machine, int line)
+static void draw_black_line(running_machine &machine, int line)
 {
 	int i;
 
 	/* our line buffer */
-	UINT16 *line_buffer = BITMAP_ADDR16( vce.bmp, line, 0 );
+	UINT16 *line_buffer = &vce.bmp->pix16(line);
 
 	for( i=0; i< VDC_WPF; i++ )
 		line_buffer[i] = get_black_pen( machine );
@@ -458,7 +458,7 @@ static void draw_overscan_line(int line)
 	int color_base = vce.vce_control & 0x80 ? 512 : 0;
 
 	/* our line buffer */
-	UINT16 *line_buffer = BITMAP_ADDR16( vce.bmp, line, 0 );
+	UINT16 *line_buffer = &vce.bmp->pix16(line);
 
 	for ( i = 0; i < VDC_WPF; i++ )
 		line_buffer[i] = color_base + vce.vce_data[0x100].w;
@@ -472,7 +472,7 @@ static void draw_sgx_overscan_line(int line)
 	int color_base = vce.vce_control & 0x80 ? 512 : 0;
 
 	/* our line buffer */
-	UINT16 *line_buffer = BITMAP_ADDR16( vce.bmp, line, 0 );
+	UINT16 *line_buffer = &vce.bmp->pix16(line);
 
 	for ( i = 0; i < VDC_WPF; i++ )
 		line_buffer[i] = color_base + vce.vce_data[0].w;
@@ -508,7 +508,7 @@ static UINT8 vram_read(int which, offs_t offset)
 }
 
 
-static void vdc_w( running_machine *machine, int which, offs_t offset, UINT8 data )
+static void vdc_w( running_machine &machine, int which, offs_t offset, UINT8 data )
 {
 	switch(offset&3)
 	{
@@ -596,14 +596,14 @@ static void vdc_w( running_machine *machine, int which, offs_t offset, UINT8 dat
 	}
 }
 
-static UINT8 vdc_r( running_machine *machine, int which, offs_t offset )
+static UINT8 vdc_r( running_machine &machine, int which, offs_t offset )
 {
 	int temp = 0;
 	switch(offset & 3)
 	{
 		case 0x00:
 			temp = vdc[which].status;
-			vdc[which].status &= ~(VDC_VD | VDC_RR | VDC_CR | VDC_OR | VDC_DS);
+			vdc[which].status &= ~(VDC_VD | VDC_DV | VDC_DS | VDC_RR | VDC_OR | VDC_CR);
 			cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
 			break;
 
@@ -622,10 +622,10 @@ static UINT8 vdc_r( running_machine *machine, int which, offs_t offset )
 	return (temp);
 }
 
-WRITE8_HANDLER( vdc_0_w ) {	vdc_w( space->machine, 0, offset, data ); }
-WRITE8_HANDLER( vdc_1_w ) {	vdc_w( space->machine, 1, offset, data ); }
-READ8_HANDLER( vdc_0_r ) {	return vdc_r( space->machine, 0, offset ); }
-READ8_HANDLER( vdc_1_r ) {	return vdc_r( space->machine, 1, offset ); }
+WRITE8_HANDLER( vdc_0_w ) {	vdc_w( space->machine(), 0, offset, data ); }
+WRITE8_HANDLER( vdc_1_w ) {	vdc_w( space->machine(), 1, offset, data ); }
+READ8_HANDLER( vdc_0_r ) {	return vdc_r( space->machine(), 0, offset ); }
+READ8_HANDLER( vdc_1_r ) {	return vdc_r( space->machine(), 1, offset ); }
 
 PALETTE_INIT( vce )
 {
@@ -824,7 +824,7 @@ static void conv_obj(int which, int i, int l, int hf, int vf, char *buf)
 	}
 }
 
-static void pce_refresh_sprites(running_machine *machine, int which, int line, UINT8 *drawn, UINT16 *line_buffer)
+static void pce_refresh_sprites(running_machine &machine, int which, int line, UINT8 *drawn, UINT16 *line_buffer)
 {
     int i;
 	UINT8 sprites_drawn = 0;
@@ -876,9 +876,12 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 			sprites_drawn++;
 			if(sprites_drawn > 16)
 			{
-				vdc[which].status |= VDC_OR;
 				if(vdc[which].vdc_data[CR].w & CR_OV)
+				{
+					/* note: flag is set only if irq is taken, Mizubaku Daibouken relies on this behaviour */
+					vdc[which].status |= VDC_OR;
 					cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+				}
 				continue;  /* Should cause an interrupt */
 			}
 
@@ -897,7 +900,7 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 					if(((obj_x + x) < (vdc[which].physical_width)) && ((obj_x + x) >= 0))
 					{
 						if ( buf[x] )
-						 {
+						{
 							if( drawn[pixel_x] < 2 )
 							{
 								if( priority || drawn[pixel_x] == 0 )
@@ -991,9 +994,12 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 				sprites_drawn++;
 				if( sprites_drawn > 16 )
 				{
-					vdc[which].status |= VDC_OR;
 					if(vdc[which].vdc_data[CR].w&CR_OV)
+					{
+						/* note: flag is set only if irq is taken, Mizubaku Daibouken relies on this behaviour */
+						vdc[which].status |= VDC_OR;
 						cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+					}
 				}
 				else
 				{
@@ -1024,7 +1030,7 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 								}
 								/* Check for sprite #0 collision */
 								else if ( drawn[pixel_x] == 2 )
-								 {
+								{
 									if(vdc[which].vdc_data[CR].w & CR_CC)
 										cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 									vdc[which].status |= VDC_CR;
@@ -1046,7 +1052,7 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 	}
 }
 
-static void vdc_do_dma(running_machine *machine, int which)
+static void vdc_do_dma(running_machine &machine, int which)
 {
 	int src = vdc[which].vdc_data[SOUR].w;
 	int dst = vdc[which].vdc_data[DESR].w;
@@ -1177,9 +1183,9 @@ READ8_HANDLER( vpc_r )
 	return data;
 }
 
-static void vpc_init( running_machine *machine )
+static void vpc_init( running_machine &machine )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	vpc_w( space, 0, 0x11 );
 	vpc_w( space, 1, 0x11 );
 	vpc.window1.w = 0;

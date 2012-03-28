@@ -132,7 +132,7 @@ Notes:
       H     - 12 pin connector for power input
       J     - 15 pin connector
       G     - 22-way edge connector
-      B31-12 thru B31-17 - PALs
+      B31-12 to B31-17 - PALs
 
 
 K9100162A
@@ -174,8 +174,8 @@ OBJECT BOARD
 |                  MB81461 MB81461 MB81461 MB81461             |
 |--------------------------------------------------------------|
 Notes:
-      B31-04 thru 06 - 234000 mask ROM (DIP40)
-      B31-18 thru 24 - PALs
+      B31-04 to 06   - 234000 mask ROM (DIP40)
+      B31-18 to 24   - PALs
       MB81461        - 64kx4 dual-port DRAM (ZIP24)
       TMM2064        - 8kx8 SRAM (DIP28)
 
@@ -245,13 +245,15 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
   - Region stored at 0x01fffe.w
   - Sets :
-      * 'ninjaw' : region = 0x0003
+      * 'ninjaw'  : region = 0x0003
+      * 'ninjawu' : region = 0x0004
       * 'ninjawj' : region = 0x0000
   - Coinage relies on the region (code at 0x0013bc) :
       * 0x0000 (Japan), 0x0001 (?) and 0x0002 (US) use TAITO_COINAGE_JAPAN_OLD
-      * 0x0003 (World) and 0x0004 (licenced to xxx) use TAITO_COINAGE_WORLD
+      * 0x0003 (World) and 0x0004 (licensed to xxx) use TAITO_COINAGE_WORLD
   - Notice screen only if region = 0x0000
   - According to the manual, DSWB bit 6 determines continue pricing :
+                                                   ("Not Used" on Japanese manual)
 
     PORT_DIPNAME( 0x40, 0x00, DEF_STR( Continue_Price ) ) PORT_DIPLOCATION("SW2:7")
     PORT_DIPSETTING(    0x40, DEF_STR( 1C_1C ) )
@@ -273,7 +275,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
       * 'darius2' : region = 0x0001
   - Coinage relies on the region (code at 0x00f37a) :
       * 0x0000 (?), 0x0001 (Japan) and 0x0002 (US) use TAITO_COINAGE_JAPAN_OLD
-      * 0x0002 (US, licenced to ROMSTAR) uses slighlty different TAITO_COINAGE_US :
+      * 0x0002 (US, licensed to ROMSTAR) uses slighlty different TAITO_COINAGE_US :
         4C_3C instead of 4C_1C, same other settings otherwise
       * 0x0003 (World) uses TAITO_COINAGE_WORLD
   - Texts and game name rely on the region :
@@ -310,43 +312,40 @@ rumbling on a subwoofer in the cabinet.)
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "taitoipt.h"
 #include "cpu/m68000/m68000.h"
 #include "video/taitoic.h"
+#include "machine/taitoio.h"
 #include "audio/taitosnd.h"
 #include "sound/2610intf.h"
 #include "sound/flt_vol.h"
+#include "includes/taitoipt.h"
+#include "includes/ninjaw.h"
 
 extern const char layout_darius[];
 
-static MACHINE_START( ninjaw );
-static MACHINE_RESET( ninjaw );
-
-VIDEO_START( ninjaw );
-VIDEO_UPDATE( ninjaw );
-
-static UINT16 cpua_ctrl;
-
-static void parse_control(running_machine *machine)	/* assumes Z80 sandwiched between 68Ks */
+static void parse_control( running_machine &machine )	/* assumes Z80 sandwiched between 68Ks */
 {
 	/* bit 0 enables cpu B */
 	/* however this fails when recovering from a save state
        if cpu B is disabled !! */
-	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, (cpua_ctrl &0x1) ? CLEAR_LINE : ASSERT_LINE);
+	ninjaw_state *state = machine.driver_data<ninjaw_state>();
+	device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (state->m_cpua_ctrl & 0x1) ? CLEAR_LINE : ASSERT_LINE);
 
 }
 
 static WRITE16_HANDLER( cpua_ctrl_w )
 {
+	ninjaw_state *state = space->machine().driver_data<ninjaw_state>();
+
 	if ((data &0xff00) && ((data &0xff) == 0))
-		data = data >> 8;	/* for Wgp */
-	cpua_ctrl = data;
+		data = data >> 8;
+	state->m_cpua_ctrl = data;
 
-	parse_control(space->machine);
+	parse_control(space->machine());
 
-	logerror("CPU #0 PC %06x: write %04x to cpu control\n",cpu_get_pc(space->cpu),data);
+	logerror("CPU #0 PC %06x: write %04x to cpu control\n", cpu_get_pc(&space->device()), data);
 }
 
 
@@ -354,132 +353,157 @@ static WRITE16_HANDLER( cpua_ctrl_w )
             SOUND
 *****************************************/
 
-static INT32 banknum;
-
-static void reset_sound_region(running_machine *machine)
+static void reset_sound_region( running_machine &machine )
 {
-	memory_set_bankptr(machine,  10, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
+	ninjaw_state *state = machine.driver_data<ninjaw_state>();
+	memory_set_bank(machine, "bank10", state->m_banknum);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	banknum = (data - 1) & 7;
-	reset_sound_region(space->machine);
+	ninjaw_state *state = space->machine().driver_data<ninjaw_state>();
+
+	state->m_banknum = data & 7;
+	reset_sound_region(space->machine());
 }
 
 static WRITE16_HANDLER( ninjaw_sound_w )
 {
+	ninjaw_state *state = space->machine().driver_data<ninjaw_state>();
+
 	if (offset == 0)
-		taitosound_port_w (space, 0, data & 0xff);
+		tc0140syt_port_w(state->m_tc0140syt, 0, data & 0xff);
 	else if (offset == 1)
-		taitosound_comm_w (space, 0, data & 0xff);
+		tc0140syt_comm_w(state->m_tc0140syt, 0, data & 0xff);
 
 #ifdef MAME_DEBUG
 	if (data & 0xff00)
-		popmessage("ninjaw_sound_w to high byte: %04x",data);
+		popmessage("ninjaw_sound_w to high byte: %04x", data);
 #endif
 }
 
 static READ16_HANDLER( ninjaw_sound_r )
 {
+	ninjaw_state *state = space->machine().driver_data<ninjaw_state>();
+
 	if (offset == 1)
-		return ((taitosound_comm_r (space, 0) & 0xff));
-	else return 0;
+		return ((tc0140syt_comm_r(state->m_tc0140syt, 0) & 0xff));
+	else
+		return 0;
 }
 
 
 /**** sound pan control ****/
-static int ninjaw_pandata[4];
+
 static WRITE8_HANDLER( ninjaw_pancontrol )
 {
-	static const char *const fltname[] = { "2610.1.l", "2610.1.r", "2610.2.l", "2610.2.r" };
-	offset = offset&3;
-	ninjaw_pandata[offset] = (float)data * (100.f / 255.0f);
-	//popmessage(" pan %02x %02x %02x %02x", ninjaw_pandata[0], ninjaw_pandata[1], ninjaw_pandata[2], ninjaw_pandata[3] );
-	flt_volume_set_volume(devtag_get_device(space->machine, fltname[offset]), ninjaw_pandata[offset] / 100.0);
+	ninjaw_state *state = space->machine().driver_data<ninjaw_state>();
+	device_t *flt = NULL;
+	offset &= 3;
+
+	switch (offset)
+	{
+		case 0: flt = state->m_2610_1l; break;
+		case 1: flt = state->m_2610_1r; break;
+		case 2: flt = state->m_2610_2l; break;
+		case 3: flt = state->m_2610_2r; break;
+	}
+
+	state->m_pandata[offset] = (float)data * (100.f / 255.0f);
+	//popmessage(" pan %02x %02x %02x %02x", state->m_pandata[0], state->m_pandata[1], state->m_pandata[2], state->m_pandata[3] );
+	flt_volume_set_volume(flt, state->m_pandata[offset] / 100.0);
 }
 
+
+static WRITE16_HANDLER( tc0100scn_triple_screen_w )
+{
+	ninjaw_state *state = space->machine().driver_data<ninjaw_state>();
+
+	tc0100scn_word_w(state->m_tc0100scn_1, offset, data, mem_mask);
+	tc0100scn_word_w(state->m_tc0100scn_2, offset, data, mem_mask);
+	tc0100scn_word_w(state->m_tc0100scn_3, offset, data, mem_mask);
+}
 
 /***********************************************************
              MEMORY STRUCTURES
 ***********************************************************/
 
-static ADDRESS_MAP_START( ninjaw_master_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( ninjaw_master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM														/* main ram */
-	AM_RANGE(0x200000, 0x200001) AM_READWRITE8(TC0220IOC_portreg_r,TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(TC0220IOC_port_r,TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x200000, 0x200001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x210000, 0x210001) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x220000, 0x220003) AM_READWRITE(ninjaw_sound_r,ninjaw_sound_w)
-	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE(2) AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x280000, 0x293fff) AM_READWRITE(TC0100SCN_word_0_r,TC0100SCN_triple_screen_w)	/* tilemaps (1st screen/all screens) */
-	AM_RANGE(0x2a0000, 0x2a000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r,TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0x2c0000, 0x2d3fff) AM_READWRITE(TC0100SCN_word_1_r,TC0100SCN_word_1_w)		/* tilemaps (2nd screen) */
-	AM_RANGE(0x2e0000, 0x2e000f) AM_READWRITE(TC0100SCN_ctrl_word_1_r,TC0100SCN_ctrl_word_1_w)
-	AM_RANGE(0x300000, 0x313fff) AM_READWRITE(TC0100SCN_word_2_r,TC0100SCN_word_2_w)		/* tilemaps (3rd screen) */
-	AM_RANGE(0x320000, 0x32000f) AM_READWRITE(TC0100SCN_ctrl_word_2_r,TC0100SCN_ctrl_word_2_w)
-	AM_RANGE(0x340000, 0x340007) AM_READWRITE(TC0110PCR_word_r,TC0110PCR_step1_word_w)		/* palette (1st screen) */
-	AM_RANGE(0x350000, 0x350007) AM_READWRITE(TC0110PCR_word_1_r,TC0110PCR_step1_word_1_w)	/* palette (2nd screen) */
-	AM_RANGE(0x360000, 0x360007) AM_READWRITE(TC0110PCR_word_2_r,TC0110PCR_step1_word_2_w)	/* palette (3rd screen) */
+	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE("share2") AM_BASE_SIZE_MEMBER(ninjaw_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x280000, 0x293fff) AM_DEVREAD("tc0100scn_1", tc0100scn_word_r) AM_WRITE(tc0100scn_triple_screen_w)	/* tilemaps (1st screen/all screens) */
+	AM_RANGE(0x2a0000, 0x2a000f) AM_DEVREADWRITE("tc0100scn_1", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x2c0000, 0x2d3fff) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_word_r, tc0100scn_word_w)		/* tilemaps (2nd screen) */
+	AM_RANGE(0x2e0000, 0x2e000f) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x300000, 0x313fff) AM_DEVREADWRITE("tc0100scn_3", tc0100scn_word_r, tc0100scn_word_w)		/* tilemaps (3rd screen) */
+	AM_RANGE(0x320000, 0x32000f) AM_DEVREADWRITE("tc0100scn_3", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x340000, 0x340007) AM_DEVREADWRITE("tc0110pcr_1", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (1st screen) */
+	AM_RANGE(0x350000, 0x350007) AM_DEVREADWRITE("tc0110pcr_2", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (2nd screen) */
+	AM_RANGE(0x360000, 0x360007) AM_DEVREADWRITE("tc0110pcr_3", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (3rd screen) */
 ADDRESS_MAP_END
 
 // NB there could be conflicts between which cpu writes what to the
 // palette, as our interleaving won't match the original board.
 
-static ADDRESS_MAP_START( ninjaw_slave_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( ninjaw_slave_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM	/* main ram */
-	AM_RANGE(0x200000, 0x200001) AM_READWRITE8(TC0220IOC_portreg_r,TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(TC0220IOC_port_r,TC0220IOC_port_w, 0x00ff)
-	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE(2)
-	AM_RANGE(0x280000, 0x293fff) AM_READWRITE(TC0100SCN_word_0_r,TC0100SCN_triple_screen_w)	/* tilemaps (1st screen/all screens) */
-	AM_RANGE(0x340000, 0x340007) AM_READWRITE(TC0110PCR_word_r,TC0110PCR_step1_word_w)		/* palette (1st screen) */
-	AM_RANGE(0x350000, 0x350007) AM_READWRITE(TC0110PCR_word_1_r,TC0110PCR_step1_word_1_w)	/* palette (2nd screen) */
-	AM_RANGE(0x360000, 0x360007) AM_READWRITE(TC0110PCR_word_2_r,TC0110PCR_step1_word_2_w)	/* palette (3rd screen) */
+	AM_RANGE(0x200000, 0x200001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
+	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x280000, 0x293fff) AM_DEVREAD("tc0100scn_1", tc0100scn_word_r) AM_WRITE(tc0100scn_triple_screen_w)	/* tilemaps (1st screen/all screens) */
+	AM_RANGE(0x340000, 0x340007) AM_DEVREADWRITE("tc0110pcr_1", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (1st screen) */
+	AM_RANGE(0x350000, 0x350007) AM_DEVREADWRITE("tc0110pcr_2", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (2nd screen) */
+	AM_RANGE(0x360000, 0x360007) AM_DEVREADWRITE("tc0110pcr_3", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (3rd screen) */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( darius2_master_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( darius2_master_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM							/* main ram */
-	AM_RANGE(0x200000, 0x200001) AM_READWRITE8(TC0220IOC_portreg_r,TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(TC0220IOC_port_r,TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x200000, 0x200001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x210000, 0x210001) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x220000, 0x220003) AM_READWRITE(ninjaw_sound_r,ninjaw_sound_w)
-	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE(2) AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x280000, 0x293fff) AM_READWRITE(TC0100SCN_word_0_r,TC0100SCN_triple_screen_w)	/* tilemaps (1st screen/all screens) */
-	AM_RANGE(0x2a0000, 0x2a000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r,TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0x2c0000, 0x2d3fff) AM_READWRITE(TC0100SCN_word_1_r,TC0100SCN_word_1_w)		/* tilemaps (2nd screen) */
-	AM_RANGE(0x2e0000, 0x2e000f) AM_READWRITE(TC0100SCN_ctrl_word_1_r,TC0100SCN_ctrl_word_1_w)
-	AM_RANGE(0x300000, 0x313fff) AM_READWRITE(TC0100SCN_word_2_r,TC0100SCN_word_2_w)		/* tilemaps (3rd screen) */
-	AM_RANGE(0x320000, 0x32000f) AM_READWRITE(TC0100SCN_ctrl_word_2_r,TC0100SCN_ctrl_word_2_w)
-	AM_RANGE(0x340000, 0x340007) AM_READWRITE(TC0110PCR_word_r,TC0110PCR_step1_word_w)		/* palette (1st screen) */
-	AM_RANGE(0x350000, 0x350007) AM_READWRITE(TC0110PCR_word_1_r,TC0110PCR_step1_word_1_w)	/* palette (2nd screen) */
-	AM_RANGE(0x360000, 0x360007) AM_READWRITE(TC0110PCR_word_2_r,TC0110PCR_step1_word_2_w)	/* palette (3rd screen) */
+	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE("share2") AM_BASE_SIZE_MEMBER(ninjaw_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x280000, 0x293fff) AM_DEVREAD("tc0100scn_1", tc0100scn_word_r) AM_WRITE(tc0100scn_triple_screen_w)	/* tilemaps (1st screen/all screens) */
+	AM_RANGE(0x2a0000, 0x2a000f) AM_DEVREADWRITE("tc0100scn_1", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x2c0000, 0x2d3fff) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_word_r, tc0100scn_word_w)		/* tilemaps (2nd screen) */
+	AM_RANGE(0x2e0000, 0x2e000f) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x300000, 0x313fff) AM_DEVREADWRITE("tc0100scn_3", tc0100scn_word_r, tc0100scn_word_w)		/* tilemaps (3rd screen) */
+	AM_RANGE(0x320000, 0x32000f) AM_DEVREADWRITE("tc0100scn_3", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x340000, 0x340007) AM_DEVREADWRITE("tc0110pcr_1", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (1st screen) */
+	AM_RANGE(0x350000, 0x350007) AM_DEVREADWRITE("tc0110pcr_2", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (2nd screen) */
+	AM_RANGE(0x360000, 0x360007) AM_DEVREADWRITE("tc0110pcr_3", tc0110pcr_word_r, tc0110pcr_step1_word_w)		/* palette (3rd screen) */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( darius2_slave_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( darius2_slave_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM														/* main ram */
-	AM_RANGE(0x200000, 0x200001) AM_READWRITE8(TC0220IOC_portreg_r,TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(TC0220IOC_port_r,TC0220IOC_port_w, 0x00ff)
-	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE(2)
-	AM_RANGE(0x280000, 0x293fff) AM_READWRITE(TC0100SCN_word_0_r,TC0100SCN_triple_screen_w)	/* tilemaps (1st screen/all screens) */
+	AM_RANGE(0x200000, 0x200001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
+	AM_RANGE(0x240000, 0x24ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x260000, 0x263fff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x280000, 0x293fff) AM_DEVREAD("tc0100scn_1", tc0100scn_word_r) AM_WRITE(tc0100scn_triple_screen_w)	/* tilemaps (1st screen/all screens) */
 ADDRESS_MAP_END
 
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( ninjaw_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ninjaw_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(10)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r,ym2610_w)
-	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
-	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r,taitosound_slave_comm_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r,ym2610_w)
+	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_DEVWRITE("tc0140syt", tc0140syt_slave_port_w)
+	AM_RANGE(0xe201, 0xe201) AM_DEVREADWRITE("tc0140syt", tc0140syt_slave_comm_r,tc0140syt_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITE(ninjaw_pancontrol) /* pan */
 	AM_RANGE(0xea00, 0xea00) AM_READNOP
 	AM_RANGE(0xee00, 0xee00) AM_WRITENOP /* ? */
@@ -550,9 +574,9 @@ static INPUT_PORTS_START( darius2 )
 
 	/* 0x200000 (port 0) -> 0x0c2002 (-$5ffe,A5) and 0x0c2006 (-$5ffa,A5) */
 	PORT_MODIFY("DSWA")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:1")    /* code at 0x00c20e */
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x01, 0x01, "Difficulty Enhancement" ) PORT_DIPLOCATION("SW1:1")    /* code at 0x00c20e */
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) ) // Easy  Medium  Hard  Hardest  // Japan factory default = "Off"
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )  // Easy- Medium+ Hard+ Hardest+ // "Easy-" is easier than "Easy". "Medium+","Hard+" and "hardest+" are harder than "Medium","Hard" and "hardest".
 	PORT_DIPNAME( 0x02, 0x02, "Auto Fire" ) PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x00, "Fast" )
@@ -624,9 +648,10 @@ GFXDECODE_END
 **************************************************************/
 
 /* handler called by the YM2610 emulator when the internal timers cause an IRQ */
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	ninjaw_state *state = device->machine().driver_data<ninjaw_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -647,9 +672,9 @@ static DEVICE_START( subwoofer )
 	/* The 150 Hz is a common top frequency played by a generic */
 	/* subwoofer, the real Arcade Machine may differs */
 
-	mixer_set_lowpass_frequency(0,20);
-	mixer_set_lowpass_frequency(1,20);
-	mixer_set_lowpass_frequency(2,20);
+	mixer_set_lowpass_frequency(0, 20);
+	mixer_set_lowpass_frequency(1, 20);
+	mixer_set_lowpass_frequency(2, 20);
 
 	return 0;
 }
@@ -667,7 +692,8 @@ static DEVICE_GET_INFO( subwoofer )
 	}
 }
 
-#define SOUND_SUBWOOFER DEVICE_GET_INFO_NAME(subwoofer)
+DECLARE_LEGACY_SOUND_DEVICE(SUBWOOFER, subwoofer);
+DEFINE_LEGACY_SOUND_DEVICE(SUBWOOFER, subwoofer);
 #endif
 
 
@@ -681,150 +707,262 @@ to the scrolling background.
 Darius2: arbitrary interleaving of 10 to keep cpus synced.
 *************************************************************/
 
-static MACHINE_DRIVER_START( ninjaw )
+static const tc0100scn_interface darius2_tc0100scn_intf_l =
+{
+	"lscreen",
+	1, 3,		/* gfxnum, txnum */
+	22, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0100scn_interface darius2_tc0100scn_intf_m =
+{
+	"mscreen",
+	2, 3,		/* gfxnum, txnum */
+	22, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	2, 1
+};
+
+static const tc0100scn_interface darius2_tc0100scn_intf_r =
+{
+	"rscreen",
+	2, 3,		/* gfxnum, txnum */
+	22, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	4, 1
+};
+
+static const tc0110pcr_interface darius2_tc0110pcr_intf_l = {	0	/* pal_offs / 0x1000 */	};
+static const tc0110pcr_interface darius2_tc0110pcr_intf_m = {	1	/* pal_offs / 0x1000 */	};
+static const tc0110pcr_interface darius2_tc0110pcr_intf_r = {	2	/* pal_offs / 0x1000 */	};
+
+static const tc0220ioc_interface ninjaw_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
+static const tc0140syt_interface ninjaw_tc0140syt_intf =
+{
+	"maincpu", "audiocpu"
+};
+
+
+static void ninjaw_postload(running_machine &machine)
+{
+	parse_control(machine);
+	reset_sound_region(machine);
+}
+
+static MACHINE_START( ninjaw )
+{
+	ninjaw_state *state = machine.driver_data<ninjaw_state>();
+
+	memory_configure_bank(machine, "bank10", 0, 8, machine.region("audiocpu")->base() + 0xc000, 0x4000);
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_tc0140syt = machine.device("tc0140syt");
+	state->m_tc0100scn_1 = machine.device("tc0100scn_1");
+	state->m_tc0100scn_2 = machine.device("tc0100scn_2");
+	state->m_tc0100scn_3 = machine.device("tc0100scn_3");
+
+	state->m_lscreen = machine.device("lscreen");
+	state->m_mscreen = machine.device("mscreen");
+	state->m_rscreen = machine.device("rscreen");
+
+	state->m_2610_1l = machine.device("2610.1.l");
+	state->m_2610_1r = machine.device("2610.1.r");
+	state->m_2610_2l = machine.device("2610.2.l");
+	state->m_2610_2r = machine.device("2610.2.r");
+
+	state->save_item(NAME(state->m_cpua_ctrl));
+	state->save_item(NAME(state->m_banknum));
+	state->save_item(NAME(state->m_pandata));
+	machine.save().register_postload(save_prepost_delegate(FUNC(ninjaw_postload), &machine));
+}
+
+static MACHINE_RESET( ninjaw )
+{
+	ninjaw_state *state = machine.driver_data<ninjaw_state>();
+	state->m_cpua_ctrl = 0xff;
+	state->m_banknum = 0;
+	memset(state->m_pandata, 0, sizeof(state->m_pandata));
+
+	/**** mixer control enable ****/
+	machine.sound().system_enable(true);	/* mixer enabled */
+}
+
+static MACHINE_CONFIG_START( ninjaw, ninjaw_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000,16000000/2)	/* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(ninjaw_master_map)
-	MDRV_CPU_VBLANK_INT("lscreen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000,16000000/2)	/* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(ninjaw_master_map)
+	MCFG_CPU_VBLANK_INT("lscreen", irq4_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80,16000000/4)	/* 16/4 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(ninjaw_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80,16000000/4)	/* 16/4 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(ninjaw_sound_map)
 
-	MDRV_CPU_ADD("sub", M68000,16000000/2)	/* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(ninjaw_slave_map)
-	MDRV_CPU_VBLANK_INT("lscreen", irq4_line_hold)
+	MCFG_CPU_ADD("sub", M68000,16000000/2)	/* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(ninjaw_slave_map)
+	MCFG_CPU_VBLANK_INT("lscreen", irq4_line_hold)
 
-	MDRV_QUANTUM_TIME(HZ(6000))	/* CPU slices */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* CPU slices */
 
-	MDRV_MACHINE_START(ninjaw)
-	MDRV_MACHINE_RESET(ninjaw)
+	MCFG_MACHINE_START(ninjaw)
+	MCFG_MACHINE_RESET(ninjaw)
+
+	MCFG_TC0220IOC_ADD("tc0220ioc", ninjaw_io_intf)
 
 	/* video hardware */
-	MDRV_GFXDECODE(ninjaw)
-	MDRV_PALETTE_LENGTH(4096*3)
-	MDRV_DEFAULT_LAYOUT(layout_darius)
+	MCFG_GFXDECODE(ninjaw)
+	MCFG_PALETTE_LENGTH(4096*3)
+	MCFG_DEFAULT_LAYOUT(layout_darius)
 
-	MDRV_SCREEN_ADD("lscreen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_ADD("lscreen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ninjaw_left)
 
-	MDRV_SCREEN_ADD("mscreen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_ADD("mscreen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ninjaw_middle)
 
-	MDRV_SCREEN_ADD("rscreen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_ADD("rscreen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ninjaw_right)
 
-	MDRV_VIDEO_START(ninjaw)
-	MDRV_VIDEO_UPDATE(ninjaw)
+	MCFG_VIDEO_START(ninjaw)
+
+	MCFG_TC0100SCN_ADD("tc0100scn_1", darius2_tc0100scn_intf_l)
+	MCFG_TC0100SCN_ADD("tc0100scn_2", darius2_tc0100scn_intf_m)
+	MCFG_TC0100SCN_ADD("tc0100scn_3", darius2_tc0100scn_intf_r)
+	MCFG_TC0110PCR_ADD("tc0110pcr_1", darius2_tc0110pcr_intf_l)
+	MCFG_TC0110PCR_ADD("tc0110pcr_2", darius2_tc0110pcr_intf_m)
+	MCFG_TC0110PCR_ADD("tc0110pcr_3", darius2_tc0110pcr_intf_r)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
-	MDRV_SOUND_CONFIG(ym2610_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
-	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
-	MDRV_SOUND_ROUTE(1, "2610.1.l", 1.0)
-	MDRV_SOUND_ROUTE(1, "2610.1.r", 1.0)
-	MDRV_SOUND_ROUTE(2, "2610.2.l", 1.0)
-	MDRV_SOUND_ROUTE(2, "2610.2.r", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM2610, 16000000/2)
+	MCFG_SOUND_CONFIG(ym2610_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker",  0.25)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 0.25)
+	MCFG_SOUND_ROUTE(1, "2610.1.l", 1.0)
+	MCFG_SOUND_ROUTE(1, "2610.1.r", 1.0)
+	MCFG_SOUND_ROUTE(2, "2610.2.l", 1.0)
+	MCFG_SOUND_ROUTE(2, "2610.2.r", 1.0)
 
-	MDRV_SOUND_ADD("2610.1.l", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ADD("2610.1.r", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-	MDRV_SOUND_ADD("2610.2.l", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ADD("2610.2.r", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.1.l", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.1.r", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.2.l", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.2.r", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-//  MDRV_SOUND_ADD("subwoofer", SUBWOOFER, 0)
-MACHINE_DRIVER_END
+//  MCFG_SOUND_ADD("subwoofer", SUBWOOFER, 0)
+
+	MCFG_TC0140SYT_ADD("tc0140syt", ninjaw_tc0140syt_intf)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( darius2 )
+static MACHINE_CONFIG_START( darius2, ninjaw_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000,16000000/2)	/* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(darius2_master_map)
-	MDRV_CPU_VBLANK_INT("lscreen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000,16000000/2)	/* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(darius2_master_map)
+	MCFG_CPU_VBLANK_INT("lscreen", irq4_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80,16000000/4)	/* 4 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(ninjaw_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80,16000000/4)	/* 4 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(ninjaw_sound_map)
 
-	MDRV_CPU_ADD("sub", M68000,16000000/2)	/* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(darius2_slave_map)
-	MDRV_CPU_VBLANK_INT("lscreen", irq4_line_hold)
+	MCFG_CPU_ADD("sub", M68000,16000000/2)	/* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(darius2_slave_map)
+	MCFG_CPU_VBLANK_INT("lscreen", irq4_line_hold)
 
-	MDRV_QUANTUM_TIME(HZ(6000))	/* CPU slices */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* CPU slices */
 
-	MDRV_MACHINE_START(ninjaw)
-	MDRV_MACHINE_RESET(ninjaw)
+	MCFG_MACHINE_START(ninjaw)
+	MCFG_MACHINE_RESET(ninjaw)
+
+	MCFG_TC0220IOC_ADD("tc0220ioc", ninjaw_io_intf)
 
 	/* video hardware */
-	MDRV_GFXDECODE(ninjaw)
-	MDRV_PALETTE_LENGTH(4096*3)
-	MDRV_DEFAULT_LAYOUT(layout_darius)
+	MCFG_GFXDECODE(ninjaw)
+	MCFG_PALETTE_LENGTH(4096*3)
+	MCFG_DEFAULT_LAYOUT(layout_darius)
 
-	MDRV_SCREEN_ADD("lscreen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_ADD("lscreen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ninjaw_left)
 
-	MDRV_SCREEN_ADD("mscreen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_ADD("mscreen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ninjaw_middle)
 
-	MDRV_SCREEN_ADD("rscreen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_ADD("rscreen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 3*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ninjaw_right)
 
-	MDRV_VIDEO_START(ninjaw)
-	MDRV_VIDEO_UPDATE(ninjaw)
+	MCFG_VIDEO_START(ninjaw)
+
+	MCFG_TC0100SCN_ADD("tc0100scn_1", darius2_tc0100scn_intf_l)
+	MCFG_TC0100SCN_ADD("tc0100scn_2", darius2_tc0100scn_intf_m)
+	MCFG_TC0100SCN_ADD("tc0100scn_3", darius2_tc0100scn_intf_r)
+	MCFG_TC0110PCR_ADD("tc0110pcr_1", darius2_tc0110pcr_intf_l)
+	MCFG_TC0110PCR_ADD("tc0110pcr_2", darius2_tc0110pcr_intf_m)
+	MCFG_TC0110PCR_ADD("tc0110pcr_3", darius2_tc0110pcr_intf_r)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
-	MDRV_SOUND_CONFIG(ym2610_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
-	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
-	MDRV_SOUND_ROUTE(1, "2610.1.l", 1.0)
-	MDRV_SOUND_ROUTE(1, "2610.1.r", 1.0)
-	MDRV_SOUND_ROUTE(2, "2610.2.l", 1.0)
-	MDRV_SOUND_ROUTE(2, "2610.2.r", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM2610, 16000000/2)
+	MCFG_SOUND_CONFIG(ym2610_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker",  0.25)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 0.25)
+	MCFG_SOUND_ROUTE(1, "2610.1.l", 1.0)
+	MCFG_SOUND_ROUTE(1, "2610.1.r", 1.0)
+	MCFG_SOUND_ROUTE(2, "2610.2.l", 1.0)
+	MCFG_SOUND_ROUTE(2, "2610.2.r", 1.0)
 
-	MDRV_SOUND_ADD("2610.1.l", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ADD("2610.1.r", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-	MDRV_SOUND_ADD("2610.2.l", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ADD("2610.2.r", FILTER_VOLUME, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.1.l", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.1.r", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.2.l", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ADD("2610.2.r", FILTER_VOLUME, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-//  MDRV_SOUND_ADD("subwoofer", SUBWOOFER, 0)
-MACHINE_DRIVER_END
+//  MCFG_SOUND_ADD("subwoofer", SUBWOOFER, 0)
+
+	MCFG_TC0140SYT_ADD("tc0140syt", ninjaw_tc0140syt_intf)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -833,8 +971,8 @@ MACHINE_DRIVER_END
 
 ROM_START( ninjaw )
 	ROM_REGION( 0xc0000, "maincpu", 0 )	/* 256K for 68000 CPUA code */
-	ROM_LOAD16_BYTE( "b31-45",    0x00000, 0x10000, CRC(107902c3) SHA1(026f71a918059e3374ae262304a2ee1270f5c5bd) )
-	ROM_LOAD16_BYTE( "b31-47",    0x00001, 0x10000, CRC(bd536b1e) SHA1(39c86cbb3a33fc77a0141b5648a1aca862e0a5fd) )
+	ROM_LOAD16_BYTE( "b31_45.35", 0x00000, 0x10000, CRC(107902c3) SHA1(026f71a918059e3374ae262304a2ee1270f5c5bd) )
+	ROM_LOAD16_BYTE( "b31_47.32", 0x00001, 0x10000, CRC(bd536b1e) SHA1(39c86cbb3a33fc77a0141b5648a1aca862e0a5fd) )
 	ROM_LOAD16_BYTE( "b31_29.34", 0x20000, 0x10000, CRC(f2941a37) SHA1(cf1f231d9caddc903116a8b654f49181ca459697) )
 	ROM_LOAD16_BYTE( "b31_27.31", 0x20001, 0x10000, CRC(2f3ff642) SHA1(7d6775b51d96b459b163d8fde2385b0e3f5242ca) )
 
@@ -874,12 +1012,68 @@ ROM_START( ninjaw )
 //  ROM_LOAD( "b31-01.28", 0x00000, 0x80000, CRC(8e8237a7) SHA1(3e181a153d9b4b7f6a620614ea9022285583a5b5) ) /* SCR (screen 3) */
 //  ROM_LOAD( "b31-02.29", 0x80000, 0x80000, CRC(4c3b4e33) SHA1(f99b379be1af085bf102d4d7cf35803e002fe80b) )
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b31-09.18", 0x000000, 0x80000, CRC(60a73382) SHA1(0ddeb86fcd4d19a58e62bf8564f996d17e36e5c5) )
 	ROM_LOAD( "b31-10.17", 0x080000, 0x80000, CRC(c6434aef) SHA1(3348ce87882e3f668aa85bbb517975ec1fc9b6fd) )
 	ROM_LOAD( "b31-11.16", 0x100000, 0x80000, CRC(8da531d4) SHA1(525dfab0a0729e9fb6f0e4c8187bf4ce16321b20) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
+	ROM_LOAD( "b31-08.19", 0x000000, 0x80000, CRC(a0a1f87d) SHA1(6b0f8094f3a3ef1ced76984e333e22a17c51af29) )
+
+	ROM_REGION( 0x01000, "user1", 0 )	/* unknown roms */
+	ROM_LOAD( "b31-25.38", 0x00000, 0x200, CRC(a0b4ba48) SHA1(dc9a46366a0cbf63a609f177c3d3ba9675416662) )
+	ROM_LOAD( "b31-26.58", 0x00000, 0x200, CRC(13e5fe15) SHA1(c973c7965954a2a0b427908f099592ed89cf0ff0) )
+ROM_END
+
+ROM_START( ninjawu )
+	ROM_REGION( 0xc0000, "maincpu", 0 )	/* 256K for 68000 CPUA code */
+	ROM_LOAD16_BYTE( "b31_49.35", 0x00000, 0x10000, CRC(d38b6391) SHA1(4711e059531566b779e95619c47621fdbfba2e56) )
+	ROM_LOAD16_BYTE( "b31_48.32", 0x00001, 0x10000, CRC(4b5bb3d8) SHA1(b0e2059e0fe682ef8152690d93392bdd4fda8149) )
+	ROM_LOAD16_BYTE( "b31_29.34", 0x20000, 0x10000, CRC(f2941a37) SHA1(cf1f231d9caddc903116a8b654f49181ca459697) )
+	ROM_LOAD16_BYTE( "b31_27.31", 0x20001, 0x10000, CRC(2f3ff642) SHA1(7d6775b51d96b459b163d8fde2385b0e3f5242ca) )
+
+	ROM_LOAD16_BYTE( "b31_41.5", 0x40000, 0x20000, CRC(0daef28a) SHA1(7c7e16b0eebc589ab99f62ddb98b372596ff5ae6) )	/* data roms ? */
+	ROM_LOAD16_BYTE( "b31_39.2", 0x40001, 0x20000, CRC(e9197c3c) SHA1(a7f0ef2b3c4258c09edf05284fec45832a8fb147) )
+	ROM_LOAD16_BYTE( "b31_40.6", 0x80000, 0x20000, CRC(2ce0f24e) SHA1(39632397ac7e8457607c32c31fccf1c08d4b2621) )
+	ROM_LOAD16_BYTE( "b31_38.3", 0x80001, 0x20000, CRC(bc68cd99) SHA1(bb31ea589339c9f9b61e312e1024b5c8410cdb43) )
+
+	ROM_REGION( 0x60000, "sub", 0 )	/* 384K for 68000 CPUB code */
+	ROM_LOAD16_BYTE( "b31_33.87", 0x00000, 0x10000, CRC(6ce9af44) SHA1(486e332af238c211c3f64f7ead114282661687c4) )
+	ROM_LOAD16_BYTE( "b31_36.97", 0x00001, 0x10000, CRC(ba20b0d4) SHA1(fb3dcb7681a95087afac9aa9393765d786243486) )
+	ROM_LOAD16_BYTE( "b31_32.86", 0x20000, 0x10000, CRC(e6025fec) SHA1(071f83a9ddebe67bd6c6c2505318e177895163ee) )
+	ROM_LOAD16_BYTE( "b31_35.96", 0x20001, 0x10000, CRC(70d9a89f) SHA1(20f846beb052fd8cddcf00c3e42e3304e102a87b) )
+	ROM_LOAD16_BYTE( "b31_31.85", 0x40000, 0x10000, CRC(837f47e2) SHA1(88d596f01566456ba18a01afd0a6a7c121d3ca88) )
+	ROM_LOAD16_BYTE( "b31_34.95", 0x40001, 0x10000, CRC(d6b5fb2a) SHA1(e3ae0d7ec62740465a90e4939b10341d3866d860) )
+
+	ROM_REGION( 0x2c000, "audiocpu", 0 )	/* sound cpu */
+	ROM_LOAD( "b31_37.11",  0x00000, 0x04000, CRC(0ca5799d) SHA1(6485dde076d15b69b9ee65880dda57ad4f8d129c) )
+	ROM_CONTINUE(           0x10000, 0x1c000 )  /* banked stuff */
+
+	ROM_REGION( 0x100000, "gfx1", 0 )
+	ROM_LOAD( "b31-01.23", 0x00000, 0x80000, CRC(8e8237a7) SHA1(3e181a153d9b4b7f6a620614ea9022285583a5b5) )	/* SCR (screen 1) */
+	ROM_LOAD( "b31-02.24", 0x80000, 0x80000, CRC(4c3b4e33) SHA1(f99b379be1af085bf102d4d7cf35803e002fe80b) )
+
+	ROM_REGION( 0x200000, "gfx2", 0 )
+	ROM_LOAD( "b31-07.176", 0x000000, 0x80000, CRC(33568cdb) SHA1(87abf56bbbd3659a1bd3e6ce9e43176be7950b41) )	/* OBJ */
+	ROM_LOAD( "b31-06.175", 0x080000, 0x80000, CRC(0d59439e) SHA1(54d844492888e7fe2c3bc61afe64f8d47fdee8dc) )
+	ROM_LOAD( "b31-05.174", 0x100000, 0x80000, CRC(0a1fc9fb) SHA1(a5d6975fd4f7e689c8cafd7c9cd3787797955779) )
+	ROM_LOAD( "b31-04.173", 0x180000, 0x80000, CRC(2e1e4cb5) SHA1(4733cfc015a68e021108a9e1e8ea807b0e7eac7a) )
+
+	ROM_REGION( 0x100000, "gfx3", 0 )
+	ROM_COPY( "gfx1", 0x000000, 0x000000, 0x100000 )	/* SCR (screens 2+) */
+
+/* The actual board duplicates the SCR gfx roms for 2nd/3rd TC0100SCN */
+//  ROM_LOAD( "b31-01.26", 0x00000, 0x80000, CRC(8e8237a7) SHA1(3e181a153d9b4b7f6a620614ea9022285583a5b5) ) /* SCR (screen 2) */
+//  ROM_LOAD( "b31-02.27", 0x80000, 0x80000, CRC(4c3b4e33) SHA1(f99b379be1af085bf102d4d7cf35803e002fe80b) )
+//  ROM_LOAD( "b31-01.28", 0x00000, 0x80000, CRC(8e8237a7) SHA1(3e181a153d9b4b7f6a620614ea9022285583a5b5) ) /* SCR (screen 3) */
+//  ROM_LOAD( "b31-02.29", 0x80000, 0x80000, CRC(4c3b4e33) SHA1(f99b379be1af085bf102d4d7cf35803e002fe80b) )
+
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
+	ROM_LOAD( "b31-09.18", 0x000000, 0x80000, CRC(60a73382) SHA1(0ddeb86fcd4d19a58e62bf8564f996d17e36e5c5) )
+	ROM_LOAD( "b31-10.17", 0x080000, 0x80000, CRC(c6434aef) SHA1(3348ce87882e3f668aa85bbb517975ec1fc9b6fd) )
+	ROM_LOAD( "b31-11.16", 0x100000, 0x80000, CRC(8da531d4) SHA1(525dfab0a0729e9fb6f0e4c8187bf4ce16321b20) )
+
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b31-08.19", 0x000000, 0x80000, CRC(a0a1f87d) SHA1(6b0f8094f3a3ef1ced76984e333e22a17c51af29) )
 
 	ROM_REGION( 0x01000, "user1", 0 )	/* unknown roms */
@@ -930,12 +1124,12 @@ ROM_START( ninjawj )
 //  ROM_LOAD( "b31-01.28", 0x00000, 0x80000, CRC(8e8237a7) SHA1(3e181a153d9b4b7f6a620614ea9022285583a5b5) ) /* SCR (screen 3) */
 //  ROM_LOAD( "b31-02.29", 0x80000, 0x80000, CRC(4c3b4e33) SHA1(f99b379be1af085bf102d4d7cf35803e002fe80b) )
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b31-09.18", 0x000000, 0x80000, CRC(60a73382) SHA1(0ddeb86fcd4d19a58e62bf8564f996d17e36e5c5) )
 	ROM_LOAD( "b31-10.17", 0x080000, 0x80000, CRC(c6434aef) SHA1(3348ce87882e3f668aa85bbb517975ec1fc9b6fd) )
 	ROM_LOAD( "b31-11.16", 0x100000, 0x80000, CRC(8da531d4) SHA1(525dfab0a0729e9fb6f0e4c8187bf4ce16321b20) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b31-08.19", 0x000000, 0x80000, CRC(a0a1f87d) SHA1(6b0f8094f3a3ef1ced76984e333e22a17c51af29) )
 
 	ROM_REGION( 0x01000, "user1", 0 )	/* unknown roms */
@@ -978,41 +1172,19 @@ ROM_START( darius2 )
 	ROM_REGION( 0x100000, "gfx3", 0 )
 	ROM_COPY( "gfx1", 0x000000, 0x000000, 0x100000 )	/* SCR (screens 2+) */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c07-10.95", 0x00000, 0x80000, CRC(4bbe0ed9) SHA1(081b73c4e4d4fa548445e5548573099bcb1e9213) )
 	ROM_LOAD( "c07-11.96", 0x80000, 0x80000, CRC(3c815699) SHA1(0471ff5b0c0da905267f2cee52fd68c8661cccc9) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c07-12.107", 0x00000, 0x80000, CRC(e0b71258) SHA1(0258e308b643d723475824752ebffc4ea29d1ac4) )
 ROM_END
-
-static STATE_POSTLOAD( ninjaw_postload )
-{
-	parse_control(machine);
-	reset_sound_region(machine);
-}
-
-static MACHINE_START( ninjaw )
-{
-	cpua_ctrl = 0xff;
-	banknum = -1;
-	memset(ninjaw_pandata, 0, sizeof(ninjaw_pandata));
-
-	state_save_register_global(machine, cpua_ctrl);
-	state_save_register_global(machine, banknum);
-	state_save_register_postload(machine, ninjaw_postload, NULL);
-}
-
-static MACHINE_RESET( ninjaw )
-{
-  /**** mixer control enable ****/
-  sound_global_enable( machine, 1 );	/* mixer enabled */
-}
 
 
 /* Working Games */
 
-GAME( 1987, ninjaw,   0,      ninjaw,  ninjaw,   0,  ROT0, "Taito Corporation Japan", "The Ninja Warriors (World)", 0 )
-GAME( 1987, ninjawj,  ninjaw, ninjaw,  ninjawj,  0,  ROT0, "Taito Corporation", "The Ninja Warriors (Japan)", 0 )
-GAME( 1989, darius2,  0,      darius2, darius2,  0,  ROT0, "Taito Corporation", "Darius II (Japan)", 0 )
-
+//    YEAR, NAME,    PARENT, MACHINE, INPUT,   INIT,MONITOR,COMPANY,FULLNAME,FLAGS
+GAME( 1987, ninjaw,  0,      ninjaw,  ninjaw,  0,   ROT0,   "Taito Corporation Japan",   "The Ninja Warriors (World)", 0 )
+GAME( 1987, ninjawj, ninjaw, ninjaw,  ninjawj, 0,   ROT0,   "Taito Corporation",         "The Ninja Warriors (Japan)", 0 )
+GAME( 1987, ninjawu, ninjaw, ninjaw,  ninjaw,  0,   ROT0,   "Taito Corporation America (licensed to Romstar)", "The Ninja Warriors (US)", 0 ) /* Uses same coinage as World, see notes */
+GAME( 1989, darius2, 0,      darius2, darius2, 0,   ROT0,   "Taito Corporation",         "Darius II (triple screen) (Japan)", 0 )

@@ -1,48 +1,48 @@
 /* Free Kick Video Hardware */
 
-#include "driver.h"
-
-static tilemap *freek_tilemap;
-UINT8 *freek_videoram;
+#include "emu.h"
+#include "includes/freekick.h"
 
 
 static TILE_GET_INFO( get_freek_tile_info )
 {
-	int tileno,palno;
+	freekick_state *state = machine.driver_data<freekick_state>();
+	int tileno, palno;
 
-	tileno = freek_videoram[tile_index]+((freek_videoram[tile_index+0x400]&0xe0)<<3);
-	palno=freek_videoram[tile_index+0x400]&0x1f;
-	SET_TILE_INFO(0,tileno,palno,0);
+	tileno = state->m_videoram[tile_index] + ((state->m_videoram[tile_index + 0x400] & 0xe0) << 3);
+	palno = state->m_videoram[tile_index + 0x400] & 0x1f;
+	SET_TILE_INFO(0, tileno, palno, 0);
 }
 
 
-
-VIDEO_START(freekick)
+VIDEO_START( freekick )
 {
-	freek_tilemap = tilemap_create(machine, get_freek_tile_info,tilemap_scan_rows, 8, 8,32,32);
+	freekick_state *state = machine.driver_data<freekick_state>();
+	state->m_freek_tilemap = tilemap_create(machine, get_freek_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
-
 
 
 WRITE8_HANDLER( freek_videoram_w )
 {
-	freek_videoram[offset] = data;
-	tilemap_mark_tile_dirty(freek_tilemap,offset&0x3ff);
+	freekick_state *state = space->machine().driver_data<freekick_state>();
+	state->m_videoram[offset] = data;
+	state->m_freek_tilemap->mark_tile_dirty(offset & 0x3ff);
 }
 
-static void gigas_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void gigas_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	freekick_state *state = machine.driver_data<freekick_state>();
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
 	{
-		int xpos = spriteram[offs + 3];
-		int ypos = spriteram[offs + 2];
-		int code = spriteram[offs + 0]|( (spriteram[offs + 1]&0x20) <<3 );
+		int xpos = state->m_spriteram[offs + 3];
+		int ypos = state->m_spriteram[offs + 2];
+		int code = state->m_spriteram[offs + 0] | ((state->m_spriteram[offs + 1] & 0x20) << 3);
 
 		int flipx = 0;
 		int flipy = 0;
-		int color = spriteram[offs + 1] & 0x1f;
+		int color = state->m_spriteram[offs + 1] & 0x1f;
 
 		if (flip_screen_x_get(machine))
 		{
@@ -55,7 +55,7 @@ static void gigas_draw_sprites(running_machine *machine, bitmap_t *bitmap, const
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 				code,
 				color,
 				flipx,flipy,
@@ -64,19 +64,20 @@ static void gigas_draw_sprites(running_machine *machine, bitmap_t *bitmap, const
 }
 
 
-static void pbillrd_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void pbillrd_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	freekick_state *state = machine.driver_data<freekick_state>();
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
 	{
-		int xpos = spriteram[offs + 3];
-		int ypos = spriteram[offs + 2];
-		int code = spriteram[offs + 0];
+		int xpos = state->m_spriteram[offs + 3];
+		int ypos = state->m_spriteram[offs + 2];
+		int code = state->m_spriteram[offs + 0];
 
-		int flipx = 0;//spriteram[offs + 0] & 0x80; //?? unused ?
-		int flipy = 0;//spriteram[offs + 0] & 0x40;
-		int color = spriteram[offs + 1] & 0x0f;
+		int flipx = 0;//state->m_spriteram[offs + 0] & 0x80; //?? unused ?
+		int flipy = 0;//state->m_spriteram[offs + 0] & 0x40;
+		int color = state->m_spriteram[offs + 1] & 0x0f;
 
 		if (flip_screen_x_get(machine))
 		{
@@ -89,7 +90,7 @@ static void pbillrd_draw_sprites(running_machine *machine, bitmap_t *bitmap, con
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 				code,
 				color,
 				flipx,flipy,
@@ -99,19 +100,20 @@ static void pbillrd_draw_sprites(running_machine *machine, bitmap_t *bitmap, con
 
 
 
-static void freekick_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void freekick_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	freekick_state *state = machine.driver_data<freekick_state>();
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
 	{
-		int xpos = spriteram[offs + 3];
-		int ypos = spriteram[offs + 0];
-		int code = spriteram[offs + 1]+ ((spriteram[offs + 2] & 0x20) << 3);
+		int xpos = state->m_spriteram[offs + 3];
+		int ypos = state->m_spriteram[offs + 0];
+		int code = state->m_spriteram[offs + 1] + ((state->m_spriteram[offs + 2] & 0x20) << 3);
 
-		int flipx = spriteram[offs + 2] & 0x80;	//?? unused ?
-		int flipy = spriteram[offs + 2] & 0x40;
-		int color = spriteram[offs + 2] & 0x1f;
+		int flipx = state->m_spriteram[offs + 2] & 0x80;	//?? unused ?
+		int flipy = state->m_spriteram[offs + 2] & 0x40;
+		int color = state->m_spriteram[offs + 2] & 0x1f;
 
 		if (flip_screen_x_get(machine))
 		{
@@ -124,7 +126,7 @@ static void freekick_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 				code,
 				color,
 				flipx,flipy,
@@ -132,23 +134,26 @@ static void freekick_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 	}
 }
 
-VIDEO_UPDATE(gigas)
+SCREEN_UPDATE_IND16( gigas )
 {
-	tilemap_draw(bitmap,cliprect,freek_tilemap,0,0);
-	gigas_draw_sprites(screen->machine,bitmap,cliprect);
+	freekick_state *state = screen.machine().driver_data<freekick_state>();
+	state->m_freek_tilemap->draw(bitmap, cliprect, 0, 0);
+	gigas_draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }
 
-VIDEO_UPDATE(pbillrd)
+SCREEN_UPDATE_IND16( pbillrd )
 {
-	tilemap_draw(bitmap,cliprect,freek_tilemap,0,0);
-	pbillrd_draw_sprites(screen->machine,bitmap,cliprect);
+	freekick_state *state = screen.machine().driver_data<freekick_state>();
+	state->m_freek_tilemap->draw(bitmap, cliprect, 0, 0);
+	pbillrd_draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }
 
-VIDEO_UPDATE(freekick)
+SCREEN_UPDATE_IND16( freekick )
 {
-	tilemap_draw(bitmap,cliprect,freek_tilemap,0,0);
-	freekick_draw_sprites(screen->machine,bitmap,cliprect);
+	freekick_state *state = screen.machine().driver_data<freekick_state>();
+	state->m_freek_tilemap->draw(bitmap, cliprect, 0, 0);
+	freekick_draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }

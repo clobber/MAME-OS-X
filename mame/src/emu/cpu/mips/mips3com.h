@@ -11,22 +11,22 @@
 #ifndef __MIPS3COM_H__
 #define __MIPS3COM_H__
 
-#include "cpuintrf.h"
 #include "mips3.h"
 #include "cpu/vtlb.h"
-#include "timer.h"
 
 
 /***************************************************************************
     CONSTANTS
 ***************************************************************************/
 
+#define MIPS3_USE_DRC
+
 /* core parameters */
 #define MIPS3_MIN_PAGE_SHIFT		12
 #define MIPS3_MIN_PAGE_SIZE			(1 << MIPS3_MIN_PAGE_SHIFT)
 #define MIPS3_MIN_PAGE_MASK			(MIPS3_MIN_PAGE_SIZE - 1)
 #define MIPS3_MAX_PADDR_SHIFT		32
-#define MIPS3_TLB_ENTRIES			48
+#define MIPS3_MAX_TLB_ENTRIES		48
 
 /* cycle parameters */
 #define MIPS3_COUNT_READ_CYCLES		250
@@ -151,10 +151,10 @@ typedef enum _mips3_flavor mips3_flavor;
 #define FSREG			((op >> 11) & 31)
 #define FDREG			((op >> 6) & 31)
 
-#define IS_SINGLE(o) 	(((o) & (1 << 21)) == 0)
-#define IS_DOUBLE(o) 	(((o) & (1 << 21)) != 0)
+#define IS_SINGLE(o)	(((o) & (1 << 21)) == 0)
+#define IS_DOUBLE(o)	(((o) & (1 << 21)) != 0)
 #define IS_FLOAT(o) 	(((o) & (1 << 23)) == 0)
-#define IS_INTEGRAL(o) 	(((o) & (1 << 23)) != 0)
+#define IS_INTEGRAL(o)	(((o) & (1 << 23)) != 0)
 
 #define SIMMVAL			((INT16)op)
 #define UIMMVAL			((UINT16)op)
@@ -196,14 +196,19 @@ struct _mips3_state
 
 	/* internal stuff */
 	mips3_flavor	flavor;
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *	device;
+	address_space *program;
+	direct_read_data *direct;
 	UINT32			system_clock;
 	UINT32			cpu_clock;
 	UINT64			count_zero_time;
 	UINT32			compare_armed;
 	emu_timer *		compare_int_timer;
+
+	/* derived info based on flavor */
+	UINT32			pfnmask;
+	UINT8			tlbentries;
 
 	/* memory accesses */
 	UINT8			bigendian;
@@ -215,7 +220,7 @@ struct _mips3_state
 
 	/* MMU */
 	vtlb_state *	vtlb;
-	mips3_tlb_entry tlb[MIPS3_TLB_ENTRIES];
+	mips3_tlb_entry tlb[MIPS3_MAX_TLB_ENTRIES];
 
 	/* for use by specific implementations */
 	mips3imp_state *impstate;
@@ -227,7 +232,7 @@ struct _mips3_state
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-void mips3com_init(mips3_state *mips, mips3_flavor flavor, int bigendian, const device_config *device, cpu_irq_callback irqcallback);
+void mips3com_init(mips3_state *mips, mips3_flavor flavor, int bigendian, legacy_cpu_device *device, device_irq_callback irqcallback);
 void mips3com_exit(mips3_state *mips);
 
 void mips3com_reset(mips3_state *mips);
@@ -235,7 +240,7 @@ offs_t mips3com_dasm(mips3_state *mips, char *buffer, offs_t pc, const UINT8 *op
 void mips3com_update_cycle_counting(mips3_state *mips);
 
 void mips3com_asid_changed(mips3_state *mips);
-int mips3com_translate_address(mips3_state *mips, int space, int intention, offs_t *address);
+int mips3com_translate_address(mips3_state *mips, address_spacenum space, int intention, offs_t *address);
 void mips3com_tlbr(mips3_state *mips);
 void mips3com_tlbwi(mips3_state *mips);
 void mips3com_tlbwr(mips3_state *mips);

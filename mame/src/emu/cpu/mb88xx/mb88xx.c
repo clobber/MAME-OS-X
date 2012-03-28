@@ -13,6 +13,7 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "mb88xx.h"
 
@@ -72,25 +73,24 @@ struct _mb88_state
 
     /* IRQ handling */
     UINT8 pending_interrupt;
-    cpu_irq_callback irqcallback;
-    const device_config *device;
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    device_irq_callback irqcallback;
+    legacy_cpu_device *device;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
     int icount;
 };
 
-INLINE mb88_state *get_safe_token(const device_config *device)
+INLINE mb88_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_MB88 ||
-		   cpu_get_type(device) == CPU_MB8841 ||
-		   cpu_get_type(device) == CPU_MB8842 ||
-		   cpu_get_type(device) == CPU_MB8843 ||
-		   cpu_get_type(device) == CPU_MB8844);
-	return (mb88_state *)device->token;
+	assert(device->type() == MB88 ||
+		   device->type() == MB8841 ||
+		   device->type() == MB8842 ||
+		   device->type() == MB8843 ||
+		   device->type() == MB8844);
+	return (mb88_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static TIMER_CALLBACK( serial_timer );
@@ -99,13 +99,13 @@ static TIMER_CALLBACK( serial_timer );
     MACROS
 ***************************************************************************/
 
-#define READOP(a) 			(memory_decrypted_read_byte(cpustate->program, a))
+#define READOP(a)			(cpustate->direct->read_decrypted_byte(a))
 
-#define RDMEM(a)			(memory_read_byte_8be(cpustate->data, a))
-#define WRMEM(a,v)			(memory_write_byte_8be(cpustate->data, (a), (v)))
+#define RDMEM(a)			(cpustate->data->read_byte(a))
+#define WRMEM(a,v)			(cpustate->data->write_byte((a), (v)))
 
-#define READPORT(a)			(memory_read_byte_8be(cpustate->io, a))
-#define WRITEPORT(a,v)		(memory_write_byte_8be(cpustate->io, (a), (v)))
+#define READPORT(a)			(cpustate->io->read_byte(a))
+#define WRITEPORT(a,v)		(cpustate->io->write_byte((a), (v)))
 
 #define TEST_ST()			(cpustate->st & 1)
 #define TEST_ZF()			(cpustate->zf & 1)
@@ -136,44 +136,45 @@ static CPU_INIT( mb88 )
 {
 	mb88_state *cpustate = get_safe_token(device);
 
-	if ( device->static_config )
+	if ( device->static_config() )
 	{
-		const mb88_cpu_core *_config = (const mb88_cpu_core*)device->static_config;
+		const mb88_cpu_core *_config = (const mb88_cpu_core*)device->static_config();
 		cpustate->PLA = _config->PLA_config;
 	}
 
 	cpustate->irqcallback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
-	cpustate->serial = timer_alloc(device->machine, serial_timer, (void *)device);
+	cpustate->serial = device->machine().scheduler().timer_alloc(FUNC(serial_timer), (void *)device);
 
-	state_save_register_device_item(device, 0, cpustate->PC);
-	state_save_register_device_item(device, 0, cpustate->PA);
-	state_save_register_device_item(device, 0, cpustate->SP[0]);
-	state_save_register_device_item(device, 0, cpustate->SP[1]);
-	state_save_register_device_item(device, 0, cpustate->SP[2]);
-	state_save_register_device_item(device, 0, cpustate->SP[3]);
-	state_save_register_device_item(device, 0, cpustate->SI);
-	state_save_register_device_item(device, 0, cpustate->A);
-	state_save_register_device_item(device, 0, cpustate->X);
-	state_save_register_device_item(device, 0, cpustate->Y);
-	state_save_register_device_item(device, 0, cpustate->st);
-	state_save_register_device_item(device, 0, cpustate->zf);
-	state_save_register_device_item(device, 0, cpustate->cf);
-	state_save_register_device_item(device, 0, cpustate->vf);
-	state_save_register_device_item(device, 0, cpustate->sf);
-	state_save_register_device_item(device, 0, cpustate->nf);
-	state_save_register_device_item(device, 0, cpustate->pio);
-	state_save_register_device_item(device, 0, cpustate->TH);
-	state_save_register_device_item(device, 0, cpustate->TL);
-	state_save_register_device_item(device, 0, cpustate->TP);
-	state_save_register_device_item(device, 0, cpustate->ctr);
-	state_save_register_device_item(device, 0, cpustate->SB);
-	state_save_register_device_item(device, 0, cpustate->SBcount);
-	state_save_register_device_item(device, 0, cpustate->pending_interrupt);
+	device->save_item(NAME(cpustate->PC));
+	device->save_item(NAME(cpustate->PA));
+	device->save_item(NAME(cpustate->SP[0]));
+	device->save_item(NAME(cpustate->SP[1]));
+	device->save_item(NAME(cpustate->SP[2]));
+	device->save_item(NAME(cpustate->SP[3]));
+	device->save_item(NAME(cpustate->SI));
+	device->save_item(NAME(cpustate->A));
+	device->save_item(NAME(cpustate->X));
+	device->save_item(NAME(cpustate->Y));
+	device->save_item(NAME(cpustate->st));
+	device->save_item(NAME(cpustate->zf));
+	device->save_item(NAME(cpustate->cf));
+	device->save_item(NAME(cpustate->vf));
+	device->save_item(NAME(cpustate->sf));
+	device->save_item(NAME(cpustate->nf));
+	device->save_item(NAME(cpustate->pio));
+	device->save_item(NAME(cpustate->TH));
+	device->save_item(NAME(cpustate->TL));
+	device->save_item(NAME(cpustate->TP));
+	device->save_item(NAME(cpustate->ctr));
+	device->save_item(NAME(cpustate->SB));
+	device->save_item(NAME(cpustate->SBcount));
+	device->save_item(NAME(cpustate->pending_interrupt));
 }
 
 static CPU_RESET( mb88 )
@@ -209,14 +210,14 @@ static CPU_RESET( mb88 )
 
 static TIMER_CALLBACK( serial_timer )
 {
-	mb88_state *cpustate = get_safe_token((const device_config *)ptr);
+	mb88_state *cpustate = get_safe_token((cpu_device *)ptr);
 
 	cpustate->SBcount++;
 
 	/* if we get too many interrupts with no servicing, disable the timer
        until somebody does something */
 	if (cpustate->SBcount >= SERIAL_DISABLE_THRESH)
-		timer_adjust_oneshot(cpustate->serial, attotime_never, 0);
+		cpustate->serial->adjust(attotime::never);
 
 	/* only read if not full; this is needed by the Namco 52xx to ensure that
        the program can write to S and recover the value even if serial is enabled */
@@ -260,9 +261,9 @@ static void update_pio_enable( mb88_state *cpustate, UINT8 newpio )
 	if ((cpustate->pio ^ newpio) & 0x30)
 	{
 		if ((newpio & 0x30) == 0)
-			timer_adjust_oneshot(cpustate->serial, attotime_never, 0);
+			cpustate->serial->adjust(attotime::never);
 		else if ((newpio & 0x30) == 0x20)
-			timer_adjust_periodic(cpustate->serial, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE), 0, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE));
+			cpustate->serial->adjust(attotime::from_hz(cpustate->device->clock() / SERIAL_PRESCALE), 0, attotime::from_hz(cpustate->device->clock() / SERIAL_PRESCALE));
 		else
 			fatalerror("mb88xx: update_pio_enable set serial enable to unsupported value %02X\n", newpio & 0x30);
 	}
@@ -302,26 +303,38 @@ static void update_pio( mb88_state *cpustate, int cycles )
 	/* process pending interrupts */
 	if (cpustate->pending_interrupt & cpustate->pio)
 	{
-		/* if we have a live external source, call the irqcallback */
-		if (cpustate->pending_interrupt & cpustate->pio & INT_CAUSE_EXTERNAL)
-			(*cpustate->irqcallback)(cpustate->device, 0);
-
-		cpustate->pending_interrupt = 0;
-
 		cpustate->SP[cpustate->SI] = GETPC();
 		cpustate->SP[cpustate->SI] |= TEST_CF() << 15;
 		cpustate->SP[cpustate->SI] |= TEST_ZF() << 14;
 		cpustate->SP[cpustate->SI] |= TEST_ST() << 13;
 		cpustate->SI = ( cpustate->SI + 1 ) & 3;
-		cpustate->PC = 0x02;
+
+		/* the datasheet doesn't mention interrupt vectors but
+        the Arabian MCU program expects the following */
+		if (cpustate->pending_interrupt & cpustate->pio & INT_CAUSE_EXTERNAL)
+		{
+			/* if we have a live external source, call the irqcallback */
+			(*cpustate->irqcallback)(cpustate->device, 0);
+			cpustate->PC = 0x02;
+		}
+		else if (cpustate->pending_interrupt & cpustate->pio & INT_CAUSE_TIMER)
+		{
+			cpustate->PC = 0x04;
+		}
+		else if (cpustate->pending_interrupt & cpustate->pio & INT_CAUSE_SERIAL)
+		{
+			cpustate->PC = 0x06;
+		}
+
 		cpustate->PA = 0x00;
 		cpustate->st = 1;
+		cpustate->pending_interrupt = 0;
 
 		CYCLES(3); /* ? */
 	}
 }
 
-void mb88_external_clock_w(const device_config *device, int state)
+void mb88_external_clock_w(device_t *device, int state)
 {
 	mb88_state *cpustate = get_safe_token(device);
 	if (state != cpustate->ctr)
@@ -338,8 +351,6 @@ void mb88_external_clock_w(const device_config *device, int state)
 static CPU_EXECUTE( mb88 )
 {
 	mb88_state *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	while (cpustate->icount > 0)
 	{
@@ -596,7 +607,7 @@ static CPU_EXECUTE( mb88 )
 
 			case 0x24: /* tstr ZCS:..x */
 				arg = READPORT( MB88_PORTR0+(cpustate->Y/4) );
-				cpustate->st = ( arg & ( 1 << (cpustate->Y%4) ) ) ? 1 : 0;
+				cpustate->st = ( arg & ( 1 << (cpustate->Y%4) ) ) ? 0 : 1;
 				break;
 
 			case 0x25: /* tsti ZCS:..x */
@@ -614,7 +625,7 @@ static CPU_EXECUTE( mb88 )
 				{
 					/* re-enable the timer if we disabled it previously */
 					if (cpustate->SBcount >= SERIAL_DISABLE_THRESH)
-						timer_adjust_periodic(cpustate->serial, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE), 0, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE));
+						cpustate->serial->adjust(attotime::from_hz(cpustate->device->clock() / SERIAL_PRESCALE), 0, attotime::from_hz(cpustate->device->clock() / SERIAL_PRESCALE));
 					cpustate->SBcount = 0;
 				}
 				cpustate->sf = 0;
@@ -682,7 +693,7 @@ static CPU_EXECUTE( mb88 )
 
 			case 0x38: case 0x39: case 0x3a: case 0x3b: /* tbit ZCS:... */
 				arg = RDMEM(GETEA());
-				cpustate->st = ( arg & (1 << (opcode&3) ) ) ? 1 : 0;
+				cpustate->st = ( arg & (1 << (opcode&3) ) ) ? 0 : 1;
 				break;
 
 			case 0x3c: /* rti ZCS:... */
@@ -732,11 +743,11 @@ static CPU_EXECUTE( mb88 )
 
 			case 0x48:	case 0x49:	case 0x4a:	case 0x4b: /* tstD ZCS:..x */
 				arg = READPORT(MB88_PORTR2);
-				cpustate->st = (arg & (1 << (opcode&3))) ? 1 : 0;
+				cpustate->st = (arg & (1 << (opcode&3))) ? 0 : 1;
 				break;
 
 			case 0x4c:	case 0x4d:	case 0x4e:	case 0x4f: /* tba ZCS:..x */
-				cpustate->st = (cpustate->A & (1 << (opcode&3))) ? 1 : 0;
+				cpustate->st = (cpustate->A & (1 << (opcode&3))) ? 0 : 1;
 				break;
 
 			case 0x50:	case 0x51:	case 0x52:	case 0x53: /* xd ZCS:x.. */
@@ -857,27 +868,25 @@ static CPU_EXECUTE( mb88 )
 		/* update interrupts, serial and timer flags */
 		update_pio(cpustate, oc);
 	}
-
-	return cycles - cpustate->icount;
 }
 
 /***************************************************************************
     ADDRESS MAPS
 ***************************************************************************/
 
-static ADDRESS_MAP_START(program_10bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_10bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0x3ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(program_11bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_11bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0x7ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_6bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_6bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0x3f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_7bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_7bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0x7f) AM_RAM
 ADDRESS_MAP_END
 
@@ -926,7 +935,7 @@ static CPU_SET_INFO( mb88 )
 
 CPU_GET_INFO( mb88 )
 {
-	mb88_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mb88_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -942,23 +951,23 @@ CPU_GET_INFO( mb88 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 3;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 11;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 7;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 3;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 11;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 7;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 3;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + MB88_IRQ_LINE:	info->i = cpustate->pending_interrupt ? ASSERT_LINE : CLEAR_LINE; break;
 
 		case CPUINFO_INT_PREVIOUSPC:					/* not implemented */					break;
 
 		case CPUINFO_INT_PC:							info->i = GETPC();						break;
-		case CPUINFO_INT_REGISTER + MB88_PC: 			info->i = cpustate->PC;						break;
-		case CPUINFO_INT_REGISTER + MB88_PA: 			info->i = cpustate->PA;						break;
+		case CPUINFO_INT_REGISTER + MB88_PC:			info->i = cpustate->PC;						break;
+		case CPUINFO_INT_REGISTER + MB88_PA:			info->i = cpustate->PA;						break;
 		case CPUINFO_INT_REGISTER + MB88_FLAGS:			info->i = 0;
 				if (TEST_ST()) info->i |= 0x01;
 				if (TEST_ZF()) info->i |= 0x02;
@@ -968,14 +977,14 @@ CPU_GET_INFO( mb88 )
 				if (TEST_NF()) info->i |= 0x20;
 				break;
 		case CPUINFO_INT_SP:
-		case CPUINFO_INT_REGISTER + MB88_SI: 			info->i = cpustate->SI;						break;
+		case CPUINFO_INT_REGISTER + MB88_SI:			info->i = cpustate->SI;						break;
 		case CPUINFO_INT_REGISTER + MB88_A: 			info->i = cpustate->A;						break;
 		case CPUINFO_INT_REGISTER + MB88_X: 			info->i = cpustate->X;						break;
 		case CPUINFO_INT_REGISTER + MB88_Y: 			info->i = cpustate->Y;						break;
-		case CPUINFO_INT_REGISTER + MB88_PIO: 			info->i = cpustate->pio;						break;
-		case CPUINFO_INT_REGISTER + MB88_TH: 			info->i = cpustate->TH;						break;
-		case CPUINFO_INT_REGISTER + MB88_TL: 			info->i = cpustate->TL;						break;
-		case CPUINFO_INT_REGISTER + MB88_SB: 			info->i = cpustate->SB;						break;
+		case CPUINFO_INT_REGISTER + MB88_PIO:			info->i = cpustate->pio;						break;
+		case CPUINFO_INT_REGISTER + MB88_TH:			info->i = cpustate->TH;						break;
+		case CPUINFO_INT_REGISTER + MB88_TL:			info->i = cpustate->TL;						break;
+		case CPUINFO_INT_REGISTER + MB88_SB:			info->i = cpustate->SB;						break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(mb88);			break;
@@ -986,8 +995,8 @@ CPU_GET_INFO( mb88 )
 		case CPUINFO_FCT_BURN:							info->burn = NULL;						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(mb88);			break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_11bit); break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_7bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_11bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_7bit); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "MB88xx");				break;
@@ -1034,12 +1043,12 @@ CPU_GET_INFO( mb8841 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 11;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 7;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 11;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 7;					break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_11bit); break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_7bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_11bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_7bit); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "MB8841");				break;
@@ -1053,12 +1062,12 @@ CPU_GET_INFO( mb8842 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 11;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 7;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 11;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 7;					break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_11bit); break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_7bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_11bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_7bit); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "MB8842");				break;
@@ -1072,12 +1081,12 @@ CPU_GET_INFO( mb8843 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 10;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 6;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 10;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 6;					break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_10bit); break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_6bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_10bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_6bit); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "MB8843");				break;
@@ -1091,12 +1100,12 @@ CPU_GET_INFO( mb8844 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 10;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 6;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 10;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 6;					break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_10bit); break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_6bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_10bit); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_6bit); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "MB8844");				break;
@@ -1104,3 +1113,9 @@ CPU_GET_INFO( mb8844 )
 		default:										CPU_GET_INFO_CALL(mb88);			break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(MB88, mb88);
+DEFINE_LEGACY_CPU_DEVICE(MB8841, mb8841);
+DEFINE_LEGACY_CPU_DEVICE(MB8842, mb8842);
+DEFINE_LEGACY_CPU_DEVICE(MB8843, mb8843);
+DEFINE_LEGACY_CPU_DEVICE(MB8844, mb8844);

@@ -26,15 +26,12 @@
     This emulation flips the bits on every byte of the memory map during
     the sp0256_start() call.
 
-    If the memory map contents is modified during execution (becuase of ROM
+    If the memory map contents is modified during execution (accross of ROM
     bank switching) the sp0256_bitrevbuff() call must be called after the
     section of ROM is modified.
 */
 
-#include <math.h>
-#include "sndintrf.h"
-#include "streams.h"
-#include "cpuintrf.h"
+#include "emu.h"
 #include "sp0256.h"
 
 #define CLOCK_DIVIDER (7*6*8)
@@ -58,7 +55,7 @@
 	if( sp->sby_line != line_state )           \
 	{                                          \
 		sp->sby_line = line_state;             \
-		devcb_call_write_line(&sp->sby, sp->sby_line);	\
+		sp->sby(sp->sby_line);	\
 	}                                          \
 }
 
@@ -78,7 +75,7 @@ struct lpc12_t
 typedef struct _sp0256_state sp0256_state;
 struct _sp0256_state
 {
-	const device_config *device;
+	device_t *device;
 	sound_stream  *stream;	        /* MAME core sound stream                       */
 	devcb_resolved_write_line drq;	/* Data request callback                        */
 	devcb_resolved_write_line sby;	/* Standby callback                             */
@@ -134,13 +131,11 @@ static const INT16 qtbl[128] =
     504,    505,    506,    507,    508,    509,    510,    511
 };
 
-INLINE sp0256_state *get_safe_token(const device_config *device)
+INLINE sp0256_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_SP0256);
-	return (sp0256_state *)device->token;
+	assert(device->type() == SP0256);
+	return (sp0256_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -778,7 +773,7 @@ static void sp0256_micro(sp0256_state *sp)
             sp->ald      = 0;
             for (i = 0; i < 16; i++)
                 sp->filt.r[i] = 0;
-            devcb_call_write_line(&sp->drq, 1);
+            sp->drq(1);
         }
 
         /* ---------------------------------------------------------------- */
@@ -1108,7 +1103,7 @@ static STREAM_UPDATE( sp0256_update )
 	sp0256_state *sp = (sp0256_state *)param;
 	stream_sample_t *output = outputs[0];
 	int output_index = 0;
-	int length, did_samp, old_idx;
+	int length, did_samp/*, old_idx*/;
 
 	while( output_index < samples )
 	{
@@ -1139,7 +1134,7 @@ static STREAM_UPDATE( sp0256_update )
 		/*  repeat count holds up and we have room in our scratch buffer.   */
 		/* ---------------------------------------------------------------- */
 		did_samp = 0;
-		old_idx  = sp->sc_head;
+		//old_idx  = sp->sc_head;
 		if (length > 0) do
 		{
 			int do_samp;
@@ -1182,16 +1177,16 @@ static STREAM_UPDATE( sp0256_update )
 
 static DEVICE_START( sp0256 )
 {
-	const sp0256_interface *intf = (const sp0256_interface *)device->static_config;
+	const sp0256_interface *intf = (const sp0256_interface *)device->static_config();
 	sp0256_state *sp = get_safe_token(device);
 
 	sp->device = device;
-	devcb_resolve_write_line(&sp->drq, &intf->lrq_callback, device);
-	devcb_resolve_write_line(&sp->sby, &intf->sby_callback, device);
-	devcb_call_write_line(&sp->drq, 1);
-	devcb_call_write_line(&sp->sby, 1);
+	sp->drq.resolve(intf->lrq_callback, *device);
+	sp->sby.resolve(intf->sby_callback, *device);
+	sp->drq(1);
+	sp->sby(1);
 
-	sp->stream = stream_create(device, 0, 1, device->clock / CLOCK_DIVIDER, sp, sp0256_update);
+	sp->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock() / CLOCK_DIVIDER, sp, sp0256_update);
 
     /* -------------------------------------------------------------------- */
     /*  Configure our internal variables.                                   */
@@ -1201,7 +1196,7 @@ static DEVICE_START( sp0256 )
     /* -------------------------------------------------------------------- */
     /*  Allocate a scratch buffer for generating ~10kHz samples.             */
     /* -------------------------------------------------------------------- */
-    sp->scratch = auto_alloc_array(device->machine, INT16, SCBUF_SIZE);
+    sp->scratch = auto_alloc_array(device->machine(), INT16, SCBUF_SIZE);
     sp->sc_head = sp->sc_tail = 0;
 
     /* -------------------------------------------------------------------- */
@@ -1216,8 +1211,11 @@ static DEVICE_START( sp0256 )
     /* -------------------------------------------------------------------- */
     /*  Setup the ROM.                                                      */
     /* -------------------------------------------------------------------- */
-	sp->rom = device->region;
-	sp0256_bitrevbuff(sp->rom, 0, 0xffff);
+	sp->rom = *device->region();
+	// the rom is not supposed to be reversed first; according to Joe Zbiciak.
+	// see http://forums.bannister.org/ubbthreads.php?ubb=showflat&Number=72385#Post72385
+	// TODO: because of this, check if the bitrev functions are even used anywhere else
+	//sp0256_bitrevbuff(sp->rom, 0, 0xffff);
 }
 
 static void sp0256_reset(sp0256_state *sp)
@@ -1239,7 +1237,7 @@ static void sp0256_reset(sp0256_state *sp)
 	sp->mode     = 0;
 	sp->page     = 0x1000 << 3;
 	sp->silent   = 1;
-	devcb_call_write_line(&sp->drq, 1);
+	sp->drq(1);
 	SET_SBY(1)
 }
 
@@ -1268,10 +1266,17 @@ WRITE8_DEVICE_HANDLER( sp0256_ALD_w )
 	/* ---------------------------------------------------------------- */
 	sp->lrq = 0;
 	sp->ald = (0xFF & data) << 4;
-	devcb_call_write_line(&sp->drq, 0);
+	sp->drq(0);
 	SET_SBY(0)
 
 	return;
+}
+
+READ_LINE_DEVICE_HANDLER( sp0256_sby_r )
+{
+	sp0256_state *sp = get_safe_token(device);
+
+	return sp->sby_line;
 }
 
 READ16_DEVICE_HANDLER( spb640_r )
@@ -1369,3 +1374,5 @@ DEVICE_GET_INFO( sp0256 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(SP0256, sp0256);

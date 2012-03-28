@@ -4,31 +4,54 @@
 
 *************************************************************************/
 
+#include "devlegcy.h"
 #include "sound/discrete.h"
+
+
+class polepos_state : public driver_device
+{
+public:
+	polepos_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 m_steer_last;
+	UINT8 m_steer_delta;
+	INT16 m_steer_accum;
+	INT16 m_last_result;
+	INT8 m_last_signed;
+	UINT8 m_last_unsigned;
+	int m_adc_input;
+	int m_auto_start_mask;
+	UINT16 *m_view16_memory;
+	UINT16 *m_road16_memory;
+	UINT16 *m_alpha16_memory;
+	UINT16 *m_sprite16_memory;
+	UINT16 m_vertical_position_modifier[256];
+	UINT16 m_road16_vscroll;
+	tilemap_t *m_bg_tilemap;
+	tilemap_t *m_tx_tilemap;
+	int m_chacl;
+	UINT16 m_scroll;
+	UINT8 m_main_irq_mask;
+	UINT8 m_sub_irq_mask;
+};
 
 
 /*----------- defined in audio/polepos.c -----------*/
 
-DEVICE_GET_INFO( polepos_sound );
-#define SOUND_POLEPOS DEVICE_GET_INFO_NAME(polepos_sound)
+DECLARE_LEGACY_SOUND_DEVICE(POLEPOS, polepos_sound);
 
-WRITE8_HANDLER( polepos_engine_sound_lsb_w );
-WRITE8_HANDLER( polepos_engine_sound_msb_w );
+WRITE8_DEVICE_HANDLER( polepos_engine_sound_lsb_w );
+WRITE8_DEVICE_HANDLER( polepos_engine_sound_msb_w );
 
 DISCRETE_SOUND_EXTERN( polepos );
 
 
 /*----------- defined in video/polepos.c -----------*/
 
-extern UINT16 *polepos_view16_memory;
-extern UINT16 *polepos_road16_memory;
-extern UINT16 *polepos_alpha16_memory;
-extern UINT16 *polepos_sprite16_memory;
-extern int polepos_gear_bit;
-
 VIDEO_START( polepos );
 PALETTE_INIT( polepos );
-VIDEO_UPDATE( polepos );
+SCREEN_UPDATE_IND16( polepos );
 
 WRITE16_HANDLER( polepos_view16_w );
 WRITE16_HANDLER( polepos_road16_w );

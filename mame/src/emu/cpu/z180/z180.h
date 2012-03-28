@@ -3,7 +3,6 @@
 #ifndef __Z180_H__
 #define __Z180_H__
 
-#include "cpuintrf.h"
 
 enum
 {
@@ -102,9 +101,9 @@ enum
 	Z180_IOCR,		/* 3f I/O control register */
 	Z180_IOLINES,	/* read/write I/O lines */
 
-	Z180_GENPC = REG_GENPC,
-	Z180_GENSP = REG_GENSP,
-	Z180_GENPCBASE = REG_GENPCBASE
+	Z180_GENPC = STATE_GENPC,
+	Z180_GENSP = STATE_GENSP,
+	Z180_GENPCBASE = STATE_GENPCBASE
 };
 
 enum
@@ -124,25 +123,18 @@ enum
 };
 
 
-#define Z180_INT0		0			/* Execute INT1 */
-#define Z180_INT1		1			/* Execute INT1 */
-#define Z180_INT2		2			/* Execute INT2 */
-#define Z180_INT_PRT0	3			/* Internal PRT channel 0 */
-#define Z180_INT_PRT1	4			/* Internal PRT channel 1 */
-#define Z180_INT_DMA0	5			/* Internal DMA channel 0 */
-#define Z180_INT_DMA1	6			/* Internal DMA channel 1 */
-#define Z180_INT_CSIO	7			/* Internal CSI/O */
-#define Z180_INT_ASCI0	8			/* Internal ASCI channel 0 */
-#define Z180_INT_ASCI1	9			/* Internal ASCI channel 1 */
+#define Z180_IRQ0		0			/* Execute IRQ1 */
+#define Z180_IRQ1		1			/* Execute IRQ1 */
+#define Z180_IRQ2		2			/* Execute IRQ2 */
+
 
 #ifdef UNUSED_DEFINITION
 /* MMU mapped memory lookup */
-extern UINT8 z180_readmem(const device_config *device, offs_t offset);
-extern void z180_writemem(const device_config *device, offs_t offset, UINT8 data);
+extern UINT8 z180_readmem(device_t *device, offs_t offset);
+extern void z180_writemem(device_t *device, offs_t offset, UINT8 data);
 #endif
 
-extern CPU_GET_INFO( z180 );
-#define CPU_Z180 CPU_GET_INFO_NAME( z180 )
+DECLARE_LEGACY_CPU_DEVICE(Z180, z180);
 
 CPU_DISASSEMBLE( z180 );
 

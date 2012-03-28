@@ -8,25 +8,18 @@
  * mike@the-coates.com
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/s2650/s2650.h"
-#include "video/s2636.h"
+#include "sound/s2636.h"
 
 #include "tinv2650.lh"
+#include "includes/zac2650.h"
 
-extern UINT8 *zac2650_s2636_0_ram;
-WRITE8_HANDLER( tinvader_videoram_w );
 static WRITE8_HANDLER( tinvader_sound_w );
-READ8_HANDLER( zac_s2636_r );
-WRITE8_HANDLER( zac_s2636_w );
-READ8_HANDLER( tinvader_port_0_r );
 
-VIDEO_START( tinvader );
-VIDEO_UPDATE( tinvader );
-
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x17ff) AM_ROM
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(tinvader_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(tinvader_videoram_w) AM_BASE_MEMBER(zac2650_state, m_videoram)
 	AM_RANGE(0x1c00, 0x1cff) AM_RAM
 	AM_RANGE(0x1d00, 0x1dff) AM_RAM
 	AM_RANGE(0x1e80, 0x1e80) AM_READWRITE(tinvader_port_0_r, tinvader_sound_w)
@@ -34,10 +27,10 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
     AM_RANGE(0x1e82, 0x1e82) AM_READ_PORT("1E82")
 	AM_RANGE(0x1e85, 0x1e85) AM_READ_PORT("1E85")					/* Dodgem Only */
 	AM_RANGE(0x1e86, 0x1e86) AM_READ_PORT("1E86") AM_WRITENOP		/* Dodgem Only */
-	AM_RANGE(0x1f00, 0x1fff) AM_READWRITE(zac_s2636_r, zac_s2636_w) AM_BASE(&zac2650_s2636_0_ram)
+	AM_RANGE(0x1f00, 0x1fff) AM_READWRITE(zac_s2636_r, zac_s2636_w) AM_BASE_MEMBER(zac2650_state, m_s2636_0_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map, AS_IO, 8 )
     AM_RANGE(S2650_SENSE_PORT, S2650_SENSE_PORT) AM_READ_PORT("SENSE")
 ADDRESS_MAP_END
 
@@ -228,40 +221,43 @@ static const gfx_layout s2636_character =
 	1,
 	{ 0 },
 	{ STEP8(0,1) },
-   	{ STEP8(0,8), STEP2(8*8,8) },
+	{ STEP8(0,8), STEP2(8*8,8) },
 	8*8
 };
 
 static GFXDECODE_START( tinvader )
 	GFXDECODE_SCALE( "gfx1", 0, tinvader_character,   0, 2, 3, 3 )
-  	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 4, 3 )	/* dynamic */
-  	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 8, 6 )	/* dynamic */
+	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 4, 3 )	/* dynamic */
+	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 8, 6 )	/* dynamic */
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( tinvader )
+static MACHINE_CONFIG_START( tinvader, zac2650_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", S2650, 3800000/4)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(port_map)
+	MCFG_CPU_ADD("maincpu", S2650, 3800000/4)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(port_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(55)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1041))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(30*24, 32*24)
-	MDRV_SCREEN_VISIBLE_AREA(0, 719, 0, 767)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(55)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1041))
+	MCFG_SCREEN_SIZE(30*24, 32*24)
+	MCFG_SCREEN_VISIBLE_AREA(0, 719, 0, 767)
+	MCFG_SCREEN_UPDATE_STATIC(tinvader)
 
-	MDRV_GFXDECODE(tinvader)
-	MDRV_PALETTE_LENGTH(4)
+	MCFG_GFXDECODE(tinvader)
+	MCFG_PALETTE_LENGTH(4)
 
-	MDRV_PALETTE_INIT(zac2650)
-	MDRV_VIDEO_START(tinvader)
-	MDRV_VIDEO_UPDATE(tinvader)
+	MCFG_PALETTE_INIT(zac2650)
+	MCFG_VIDEO_START(tinvader)
 
 	/* sound hardware */
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("s2636snd", S2636_SOUND, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 static WRITE8_HANDLER( tinvader_sound_w )
 {
@@ -315,6 +311,6 @@ ROM_START( dodgem )
 ROM_END
 
 
-GAME( 1978, sia2650,  0,       tinvader, sinvader, 0, ROT270, "Zaccaria/Zelco", "Super Invader Attack", GAME_NO_SOUND )
-GAMEL(1978, tinv2650, sia2650, tinvader, tinvader, 0, ROT270, "Zaccaria/Zelco", "The Invaders",			GAME_NO_SOUND, layout_tinv2650 )
-GAME( 1979, dodgem,   0,       tinvader, dodgem,   0, ROT0,   "Zaccaria",		"Dodgem",				GAME_NO_SOUND )
+GAME( 1978, sia2650,  0,       tinvader, sinvader, 0, ROT270, "Zelco / Zaccaria", "Super Invader Attack", 0 )
+GAMEL(1978, tinv2650, sia2650, tinvader, tinvader, 0, ROT270, "Zelco / Zaccaria", "The Invaders",         0, layout_tinv2650 )
+GAME( 1979, dodgem,   0,       tinvader, dodgem,   0, ROT0,   "Zaccaria",         "Dodgem",               0 )

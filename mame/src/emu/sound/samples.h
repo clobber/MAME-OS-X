@@ -3,6 +3,8 @@
 #ifndef __SAMPLES_H__
 #define __SAMPLES_H__
 
+#include "devlegcy.h"
+
 typedef struct _loaded_sample loaded_sample;
 struct _loaded_sample
 {
@@ -23,26 +25,27 @@ struct _samples_interface
 {
     int         channels;   /* number of discrete audio channels needed */
     const char *const *samplenames;
-    void        (*start)(const device_config *device);
+    void        (*start)(device_t *device);
 };
 
-#define SAMPLES_START(name) void name(const device_config *device)
+#define SAMPLES_START(name) void name(device_t *device)
 
 
-void sample_start(const device_config *device,int channel,int samplenum,int loop);
-void sample_start_raw(const device_config *device,int channel,const INT16 *sampledata,int samples,int frequency,int loop);
-void sample_set_freq(const device_config *device,int channel,int freq);
-void sample_set_volume(const device_config *device,int channel,float volume);
-void sample_set_pause(const device_config *device,int channel,int pause);
-void sample_stop(const device_config *device,int channel);
-int sample_get_base_freq(const device_config *device,int channel);
-int sample_playing(const device_config *device,int channel);
+void sample_start(device_t *device,int channel,int samplenum,int loop);
+void sample_start_raw(device_t *device,int channel,const INT16 *sampledata,int samples,int frequency,int loop);
+void sample_set_freq(device_t *device,int channel,int freq);
+void sample_set_volume(device_t *device,int channel,float volume);
+void sample_set_pause(device_t *device,int channel,int pause);
+void sample_stop(device_t *device,int channel);
+int sample_get_base_freq(device_t *device,int channel);
+int sample_playing(device_t *device,int channel);
 
 /* helper function that reads samples from disk - this can be used by other */
 /* drivers as well (e.g. a sound chip emulator needing drum samples) */
-loaded_samples *readsamples(running_machine *machine, const char *const *samplenames, const char *name);
+loaded_samples *readsamples(running_machine &machine, const char *const *samplenames, const char *name);
 
-DEVICE_GET_INFO( samples );
-#define SOUND_SAMPLES DEVICE_GET_INFO_NAME( samples )
+DECLARE_LEGACY_SOUND_DEVICE(SAMPLES, samples);
+
+typedef device_type_iterator<&legacy_device_creator<samples_device>, samples_device> samples_device_iterator;
 
 #endif /* __SAMPLES_H__ */

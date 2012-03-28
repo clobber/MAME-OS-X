@@ -6,24 +6,33 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/6532riot.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/tiaintf.h"
 #include "video/tia.h"
 
 
-#define MASTER_CLOCK	3579575
+class tourtabl_state : public driver_device
+{
+public:
+	tourtabl_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+};
+
+
+#define MASTER_CLOCK	XTAL_3_579545MHz
 
 
 static WRITE8_DEVICE_HANDLER( tourtabl_led_w )
 {
-	set_led_status(0, data & 0x40); /* start 1 */
-	set_led_status(1, data & 0x20); /* start 2 */
-	set_led_status(2, data & 0x10); /* start 4 */
-	set_led_status(3, data & 0x80); /* select game */
+	set_led_status(device->machine(), 0, data & 0x40); /* start 1 */
+	set_led_status(device->machine(), 1, data & 0x20); /* start 2 */
+	set_led_status(device->machine(), 2, data & 0x10); /* start 4 */
+	set_led_status(device->machine(), 3, data & 0x80); /* select game */
 
-	coin_lockout_global_w(!(data & 0x80));
+	coin_lockout_global_w(device->machine(), !(data & 0x80));
 }
 
 
@@ -31,7 +40,7 @@ static READ16_HANDLER( tourtabl_read_input_port )
 {
 	static const char *const tianames[] = { "PADDLE4", "PADDLE3", "PADDLE2", "PADDLE1", "TIA_IN4", "TIA_IN5" };
 
-	return input_port_read(space->machine, tianames[offset]);
+	return input_port_read(space->machine(), tianames[offset]);
 }
 
 static READ8_HANDLER( tourtabl_get_databus_contents )
@@ -40,7 +49,7 @@ static READ8_HANDLER( tourtabl_get_databus_contents )
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x0100) AM_READWRITE(tia_r, tia_w)
 	AM_RANGE(0x0080, 0x00ff) AM_MIRROR(0x0100) AM_RAM
 	AM_RANGE(0x0280, 0x029f) AM_DEVREADWRITE("riot1", riot6532_r, riot6532_w)
@@ -53,7 +62,7 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( watchdog_w )
 {
-	watchdog_reset(device->machine);
+	watchdog_reset(device->machine());
 }
 
 static const riot6532_interface r6532_interface_0 =
@@ -165,33 +174,32 @@ static INPUT_PORTS_START( tourtabl )
 INPUT_PORTS_END
 
 
-static MACHINE_DRIVER_START( tourtabl )
+static MACHINE_CONFIG_START( tourtabl, tourtabl_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 3)	/* actually M6507 */
-	MDRV_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 3)	/* actually M6507 */
+	MCFG_CPU_PROGRAM_MAP(main_map)
 
-	MDRV_MACHINE_START(tourtabl)
+	MCFG_MACHINE_START(tourtabl)
 
-	MDRV_RIOT6532_ADD("riot1", MASTER_CLOCK / 3, r6532_interface_0)
-	MDRV_RIOT6532_ADD("riot2", MASTER_CLOCK / 3, r6532_interface_1)
+	MCFG_RIOT6532_ADD("riot1", MASTER_CLOCK / 3, r6532_interface_0)
+	MCFG_RIOT6532_ADD("riot2", MASTER_CLOCK / 3, r6532_interface_1)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS( MASTER_CLOCK, 228, 34, 34 + 160, 262, 46, 46 + 200 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS( MASTER_CLOCK, 228, 34, 34 + 160, 262, 46, 46 + 200 )
+	MCFG_SCREEN_UPDATE_STATIC(tia)
 
-	MDRV_PALETTE_LENGTH(TIA_PALETTE_LENGTH)
-	MDRV_PALETTE_INIT(tia_NTSC)
+	MCFG_PALETTE_LENGTH(TIA_PALETTE_LENGTH)
+	MCFG_PALETTE_INIT(tia_NTSC)
 
-	MDRV_VIDEO_START(tia)
-	MDRV_VIDEO_UPDATE(tia)
+	MCFG_VIDEO_START(tia)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("tia", TIA, MASTER_CLOCK/114)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("tia", TIA, MASTER_CLOCK/114)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( tourtabl )

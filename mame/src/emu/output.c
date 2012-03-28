@@ -9,8 +9,7 @@
 
 ***************************************************************************/
 
-#include "output.h"
-#include "mame.h"
+#include "emu.h"
 #include <zlib.h>
 
 
@@ -63,8 +62,9 @@ static UINT32 uniqueid = 12345;
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void output_pause(running_machine *machine, int pause);
-static void output_exit(running_machine *machine);
+static void output_pause(running_machine &machine);
+static void output_resume(running_machine &machine);
+static void output_exit(running_machine &machine);
 
 
 
@@ -78,7 +78,7 @@ static void output_exit(running_machine *machine);
 
 INLINE const char *copy_string(const char *string)
 {
-	char *newstring = alloc_array_or_die(char, strlen(string) + 1);
+	char *newstring = global_alloc_array(char, strlen(string) + 1);
 	strcpy(newstring, string);
 	return newstring;
 }
@@ -118,7 +118,7 @@ INLINE output_item *find_item(const char *string)
 
 INLINE output_item *create_new_item(const char *outname, INT32 value)
 {
-	output_item *item = alloc_or_die(output_item);
+	output_item *item = global_alloc(output_item);
 	UINT32 hash = get_hash(outname);
 
 	/* fill in the data */
@@ -144,13 +144,14 @@ INLINE output_item *create_new_item(const char *outname, INT32 value)
     output_init - initialize everything
 -------------------------------------------------*/
 
-void output_init(running_machine *machine)
+void output_init(running_machine &machine)
 {
 	/* add pause callback */
-	add_pause_callback(machine, output_pause);
+	machine.add_notifier(MACHINE_NOTIFY_PAUSE, machine_notify_delegate(FUNC(output_pause), &machine));
+	machine.add_notifier(MACHINE_NOTIFY_RESUME, machine_notify_delegate(FUNC(output_resume), &machine));
 
 	/* get a callback when done */
-	add_exit_callback(machine, output_exit);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(output_exit), &machine));
 
 	/* reset the lists */
 	memset(itemtable, 0, sizeof(itemtable));
@@ -162,9 +163,14 @@ void output_init(running_machine *machine)
     output_pause - send pause message
 -------------------------------------------------*/
 
-static void output_pause(running_machine *machine, int pause)
+static void output_pause(running_machine &machine)
 {
-	output_set_value("pause", pause & 1);
+	output_set_value("pause", 1);
+}
+
+static void output_resume(running_machine &machine)
+{
+	output_set_value("pause", 0);
 }
 
 
@@ -172,7 +178,7 @@ static void output_pause(running_machine *machine, int pause)
     output_exit - cleanup on exit
 -------------------------------------------------*/
 
-static void output_exit(running_machine *machine)
+static void output_exit(running_machine &machine)
 {
 	output_notify *notify;
 	output_item *item;
@@ -187,15 +193,15 @@ static void output_exit(running_machine *machine)
 			/* remove all notifiers */
 			for (notify = item->notifylist; notify != NULL; )
 			{
-				output_notify *next = notify->next;
-				free(notify);
-				notify = next;
+				output_notify *next_notify = notify->next;
+				global_free(notify);
+				notify = next_notify;
 			}
 
 			/* free the name and the item */
 			if (item->name != NULL)
-				free((void *)item->name);
-			free(item);
+				global_free(item->name);
+			global_free(item);
 			item = next;
 		}
 
@@ -203,7 +209,7 @@ static void output_exit(running_machine *machine)
 	for (notify = global_notifylist; notify != NULL; )
 	{
 		output_notify *next = notify->next;
-		free(notify);
+		global_free(notify);
 		notify = next;
 	}
 }
@@ -343,7 +349,7 @@ void output_set_notifier(const char *outname, output_notifier_func callback, voi
 	/* find the end of the list and add to it */
 	while (*headptr != NULL)
 		headptr = &(*headptr)->next;
-	*headptr = alloc_or_die(output_notify);
+	*headptr = global_alloc(output_notify);
 
 	/* fill in the new record */
 	(*headptr)->next = NULL;

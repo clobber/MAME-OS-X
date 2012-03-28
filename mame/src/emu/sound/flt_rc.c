@@ -1,24 +1,21 @@
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "flt_rc.h"
 
 typedef struct _filter_rc_state filter_rc_state;
 struct _filter_rc_state
 {
-	const device_config *device;
+	device_t *device;
 	sound_stream *	stream;
 	int				k;
 	int				memory;
 	int				type;
 };
 
-INLINE filter_rc_state *get_safe_token(const device_config *device)
+INLINE filter_rc_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_FILTER_RC);
-	return (filter_rc_state *)device->token;
+	assert(device->type() == FILTER_RC);
+	return (filter_rc_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 const flt_rc_config flt_rc_ac_default = {FLT_RC_AC, 10000, 0, 0, CAP_U(1)};
@@ -86,17 +83,17 @@ static void set_RC_info(filter_rc_state *info, int type, double R1, double R2, d
 
 	/* Cut Frequency = 1/(2*Pi*Req*C) */
 	/* k = (1-(EXP(-TIMEDELTA/RC)))    */
-	info->k = 0x10000 - 0x10000 * (exp(-1 / (Req * C) / info->device->machine->sample_rate));
+	info->k = 0x10000 - 0x10000 * (exp(-1 / (Req * C) / info->device->machine().sample_rate()));
 }
 
 
 static DEVICE_START( filter_rc )
 {
 	filter_rc_state *info = get_safe_token(device);
-	const flt_rc_config *conf = (const flt_rc_config *)device->static_config;
+	const flt_rc_config *conf = (const flt_rc_config *)device->static_config();
 
 	info->device = device;
-	info->stream = stream_create(device, 1, 1, device->machine->sample_rate, info, filter_rc_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 1, 1, device->machine().sample_rate(), info, filter_rc_update);
 	if (conf)
 		set_RC_info(info, conf->type, conf->R1, conf->R2, conf->R3, conf->C);
 	else
@@ -104,11 +101,11 @@ static DEVICE_START( filter_rc )
 }
 
 
-void filter_rc_set_RC(const device_config *device, int type, double R1, double R2, double R3, double C)
+void filter_rc_set_RC(device_t *device, int type, double R1, double R2, double R3, double C)
 {
 	filter_rc_state *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 
 	set_RC_info(info, type, R1, R2, R3, C);
 
@@ -139,3 +136,5 @@ DEVICE_GET_INFO( filter_rc )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(FILTER_RC, filter_rc);

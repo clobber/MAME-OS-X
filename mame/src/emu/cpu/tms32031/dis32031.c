@@ -6,6 +6,7 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "tms32031.h"
 
 
@@ -373,7 +374,7 @@ static void disasm_parallel_storestore(const char *opstring1, const char *opstri
 
 
 
-static unsigned dasm_tms32031(char *buffer, unsigned pc, UINT32 op)
+static unsigned dasm_tms3203x(char *buffer, unsigned pc, UINT32 op)
 {
 	UINT32 flags = 0;
 
@@ -407,13 +408,13 @@ static unsigned dasm_tms32031(char *buffer, unsigned pc, UINT32 op)
 		case 0x017:	disasm_general("NEGF", op, FLOAT, buffer);			break;
 
 		case 0x018:	disasm_general("NEGI", op, INTEGER, buffer);		break;
-		case 0x019:	disasm_general("NOP", op, NODEST, buffer); 			break;
+		case 0x019:	disasm_general("NOP", op, NODEST, buffer);			break;
 		case 0x01a:	disasm_general("NORM", op, FLOAT, buffer);			break;
 		case 0x01b:	disasm_general("NOT", op, INTEGER, buffer);			break;
-		case 0x01c:	disasm_general("POP", op, NOSOURCE, buffer);	 	break;
-		case 0x01d:	disasm_general("POPF", op, NOSOURCE, buffer); 		break;
-		case 0x01e:	disasm_general("PUSH", op, NOSOURCE, buffer); 		break;
-		case 0x01f:	disasm_general("PUSHF", op, NOSOURCE, buffer); 		break;
+		case 0x01c:	disasm_general("POP", op, NOSOURCE, buffer);		break;
+		case 0x01d:	disasm_general("POPF", op, NOSOURCE, buffer);		break;
+		case 0x01e:	disasm_general("PUSH", op, NOSOURCE, buffer);		break;
+		case 0x01f:	disasm_general("PUSHF", op, NOSOURCE, buffer);		break;
 
 		case 0x020:	disasm_general("OR", op, INTEGER | UNSIGNED, buffer);	break;
 		case 0x021:	disasm_general((op & 1) ? "LOPOWER" : "MAXSPEED", op, NOSOURCE | NODEST, buffer); break;
@@ -733,8 +734,8 @@ static unsigned dasm_tms32031(char *buffer, unsigned pc, UINT32 op)
 }
 
 
-CPU_DISASSEMBLE( tms32031 )
+CPU_DISASSEMBLE( tms3203x )
 {
 	UINT32 op = oprom[0] | (oprom[1] << 8) | (oprom[2] << 16) | (oprom[3] << 24);
-    return dasm_tms32031(buffer, pc, op);
+    return dasm_tms3203x(buffer, pc, op);
 }

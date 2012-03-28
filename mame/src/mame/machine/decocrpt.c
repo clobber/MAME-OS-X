@@ -41,8 +41,8 @@ Sotsugyo Shousho        1995
 
 *******************************************************************************/
 
-#include "driver.h"
-#include "decocrpt.h"
+#include "emu.h"
+#include "includes/decocrpt.h"
 
 static const UINT16 xor_masks[16] =
 {
@@ -598,11 +598,11 @@ static const UINT8 deco74_swap_table[0x800] =
 	4,7,2,2,1,3,4,4,1,7,0,2,5,4,7,3,7,6,1,5,6,0,7,4,1,1,5,2,2,6,7,2,
 };
 
-static void deco_decrypt(running_machine *machine,const char *rgntag,const UINT8 *xor_table,const UINT16 *address_table,const UINT8 *swap_table,int remap_only)
+static void deco_decrypt(running_machine &machine,const char *rgntag,const UINT8 *xor_table,const UINT16 *address_table,const UINT8 *swap_table,int remap_only)
 {
-	UINT16 *rom = (UINT16 *)memory_region(machine, rgntag);
-	int len = memory_region_length(machine, rgntag)/2;
-	UINT16 *buffer = alloc_array_or_die(UINT16, len);
+	UINT16 *rom = (UINT16 *)machine.region(rgntag)->base();
+	int len = machine.region(rgntag)->bytes()/2;
+	UINT16 *buffer = auto_alloc_array(machine, UINT16, len);
 	int i;
 
 	/* we work on 16-bit words but data is loaded as 8-bit, so swap bytes on LSB machines */
@@ -610,36 +610,36 @@ static void deco_decrypt(running_machine *machine,const char *rgntag,const UINT8
 		for (i = 0;i < len;i++)
 			rom[i] = BIG_ENDIANIZE_INT16(rom[i]);
 
-		memcpy(buffer,rom,len*2);
+	memcpy(buffer,rom,len*2);
 
-		for (i = 0;i < len;i++)
-		{
-			int addr = (i & ~0x7ff) | address_table[i & 0x7ff];
-			int pat = swap_table[i & 0x7ff];
+	for (i = 0;i < len;i++)
+	{
+		int addr = (i & ~0x7ff) | address_table[i & 0x7ff];
+		int pat = swap_table[i & 0x7ff];
 
-			if (remap_only)
-				rom[i] = buffer[addr];
-			else
-				rom[i] = BITSWAP16(buffer[addr] ^ xor_masks[xor_table[addr & 0x7ff]],
-							swap_patterns[pat][0],
-							swap_patterns[pat][1],
-							swap_patterns[pat][2],
-							swap_patterns[pat][3],
-							swap_patterns[pat][4],
-							swap_patterns[pat][5],
-							swap_patterns[pat][6],
-							swap_patterns[pat][7],
-							swap_patterns[pat][8],
-							swap_patterns[pat][9],
-							swap_patterns[pat][10],
-							swap_patterns[pat][11],
-							swap_patterns[pat][12],
-							swap_patterns[pat][13],
-							swap_patterns[pat][14],
-							swap_patterns[pat][15]);
-		}
+		if (remap_only)
+			rom[i] = buffer[addr];
+		else
+			rom[i] = BITSWAP16(buffer[addr] ^ xor_masks[xor_table[addr & 0x7ff]],
+						swap_patterns[pat][0],
+						swap_patterns[pat][1],
+						swap_patterns[pat][2],
+						swap_patterns[pat][3],
+						swap_patterns[pat][4],
+						swap_patterns[pat][5],
+						swap_patterns[pat][6],
+						swap_patterns[pat][7],
+						swap_patterns[pat][8],
+						swap_patterns[pat][9],
+						swap_patterns[pat][10],
+						swap_patterns[pat][11],
+						swap_patterns[pat][12],
+						swap_patterns[pat][13],
+						swap_patterns[pat][14],
+						swap_patterns[pat][15]);
+	}
 
-		free(buffer);
+	auto_free(machine, buffer);
 
 	/* we work on 16-bit words but data is loaded as 8-bit, so swap bytes on LSB machines */
 	if (ENDIANNESS_NATIVE == ENDIANNESS_LITTLE)
@@ -647,17 +647,17 @@ static void deco_decrypt(running_machine *machine,const char *rgntag,const UINT8
 			rom[i] = BIG_ENDIANIZE_INT16(rom[i]);
 }
 
-void deco56_decrypt_gfx(running_machine *machine, const char *tag)
+void deco56_decrypt_gfx(running_machine &machine, const char *tag)
 {
 	deco_decrypt(machine,tag,deco56_xor_table,deco56_address_table,deco56_swap_table, 0);
 }
 
-void deco74_decrypt_gfx(running_machine *machine, const char *tag)
+void deco74_decrypt_gfx(running_machine &machine, const char *tag)
 {
 	deco_decrypt(machine,tag,deco74_xor_table,deco74_address_table,deco74_swap_table, 0);
 }
 
-void deco56_remap_gfx(running_machine *machine, const char *tag)
+void deco56_remap_gfx(running_machine &machine, const char *tag)
 {
 	// Apply address remap, but not XOR/shift
 	deco_decrypt(machine,tag,deco56_xor_table,deco56_address_table,deco56_swap_table, 1);

@@ -4,7 +4,15 @@
 
 **************************************************************************/
 
-#include "midyunit.h"
+class midtunit_state : public driver_device
+{
+public:
+	midtunit_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		  m_nvram(*this, "nvram") { }
+
+	required_shared_ptr<UINT16>	m_nvram;
+};
 
 /*----------- defined in machine/midtunit.c -----------*/
 
@@ -30,6 +38,8 @@ WRITE16_HANDLER( midtunit_sound_w );
 
 /*----------- defined in video/midtunit.c -----------*/
 
+extern UINT8 *	midtunit_gfx_rom;
+extern size_t	midtunit_gfx_rom_size;
 extern UINT8 midtunit_gfx_rom_large;
 
 VIDEO_START( midtunit );
@@ -47,8 +57,8 @@ READ16_HANDLER( midtunit_vram_r );
 READ16_HANDLER( midtunit_vram_data_r );
 READ16_HANDLER( midtunit_vram_color_r );
 
-void midtunit_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg);
-void midtunit_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg);
+void midtunit_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
+void midtunit_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
 
 WRITE16_HANDLER( midtunit_control_w );
 WRITE16_HANDLER( midwunit_control_w );
@@ -61,5 +71,5 @@ READ16_HANDLER( midxunit_paletteram_r );
 READ16_HANDLER( midtunit_dma_r );
 WRITE16_HANDLER( midtunit_dma_w );
 
-void midtunit_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
-void midxunit_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
+void midtunit_scanline_update(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params);
+void midxunit_scanline_update(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params);

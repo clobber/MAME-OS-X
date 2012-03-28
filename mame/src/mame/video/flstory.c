@@ -5,24 +5,19 @@
   Functions to emulate the video hardware of the machine.
 
 ***************************************************************************/
-#include "driver.h"
+
+#include "emu.h"
 #include "includes/flstory.h"
-
-
-static tilemap *bg_tilemap;
-static int char_bank,palette_bank,flipscreen,gfxctrl;
-
-UINT8 *flstory_scrlram;
-
 
 static TILE_GET_INFO( get_tile_info )
 {
-	int code = videoram[tile_index*2];
-	int attr = videoram[tile_index*2+1];
-	int tile_number = code + ((attr & 0xc0) << 2) + 0x400 + 0x800 * char_bank;
+	flstory_state *state = machine.driver_data<flstory_state>();
+	int code = state->m_videoram[tile_index * 2];
+	int attr = state->m_videoram[tile_index * 2 + 1];
+	int tile_number = code + ((attr & 0xc0) << 2) + 0x400 + 0x800 * state->m_char_bank;
 	int flags = TILE_FLIPYX((attr & 0x18) >> 3);
-	tileinfo->category = (attr & 0x20) >> 5;
-	tileinfo->group = (attr & 0x20) >> 5;
+	tileinfo.category = (attr & 0x20) >> 5;
+	tileinfo.group = (attr & 0x20) >> 5;
 	SET_TILE_INFO(
 			0,
 			tile_number,
@@ -32,8 +27,9 @@ static TILE_GET_INFO( get_tile_info )
 
 static TILE_GET_INFO( victnine_get_tile_info )
 {
-	int code = videoram[tile_index*2];
-	int attr = videoram[tile_index*2+1];
+	flstory_state *state = machine.driver_data<flstory_state>();
+	int code = state->m_videoram[tile_index * 2];
+	int attr = state->m_videoram[tile_index * 2 + 1];
 	int tile_number = ((attr & 0x38) << 5) + code;
 	int flags = ((attr & 0x40) ? TILE_FLIPX : 0) | ((attr & 0x80) ? TILE_FLIPY : 0);
 
@@ -44,118 +40,163 @@ static TILE_GET_INFO( victnine_get_tile_info )
 			flags);
 }
 
+static TILE_GET_INFO( get_rumba_tile_info )
+{
+	flstory_state *state = machine.driver_data<flstory_state>();
+	int code = state->m_videoram[tile_index * 2];
+	int attr = state->m_videoram[tile_index * 2 + 1];
+	int tile_number = code + ((attr & 0xc0) << 2) + 0x400 + 0x800 * state->m_char_bank;
+	int col = (attr & 0x0f);
+
+	tileinfo.category = (attr & 0x20) >> 5;
+	tileinfo.group = (attr & 0x20) >> 5;
+	SET_TILE_INFO(
+			0,
+			tile_number,
+			col,
+			0);
+}
 
 VIDEO_START( flstory )
 {
-	bg_tilemap = tilemap_create( machine, get_tile_info,tilemap_scan_rows,8,8,32,32 );
-//  tilemap_set_transparent_pen( bg_tilemap,15 );
-	tilemap_set_transmask(bg_tilemap,0,0x3fff,0xc000); /* split type 0 has pens 0-13 transparent in front half */
-	tilemap_set_transmask(bg_tilemap,1,0x8000,0x7fff); /* split type 1 has pen 15 transparent in front half */
-	tilemap_set_scroll_cols(bg_tilemap,32);
+	flstory_state *state = machine.driver_data<flstory_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+//  state->m_bg_tilemap->set_transparent_pen(15);
+	state->m_bg_tilemap->set_transmask(0, 0x3fff, 0xc000); /* split type 0 has pens 0-13 transparent in front half */
+	state->m_bg_tilemap->set_transmask(1, 0x8000, 0x7fff); /* split type 1 has pen 15 transparent in front half */
+	state->m_bg_tilemap->set_scroll_cols(32);
 
-	paletteram = auto_alloc_array(machine, UINT8, 0x200);
-	paletteram_2 = auto_alloc_array(machine, UINT8, 0x200);
+	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x200);
+	machine.generic.paletteram2.u8 = auto_alloc_array(machine, UINT8, 0x200);
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x200);
+	state_save_register_global_pointer(machine, machine.generic.paletteram2.u8, 0x200);
+}
+
+VIDEO_START( rumba )
+{
+	flstory_state *state = machine.driver_data<flstory_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_rumba_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+//  state->m_bg_tilemap->set_transparent_pen(15);
+	state->m_bg_tilemap->set_transmask(0, 0x3fff, 0xc000); /* split type 0 has pens 0-13 transparent in front half */
+	state->m_bg_tilemap->set_transmask(1, 0x8000, 0x7fff); /* split type 1 has pen 15 transparent in front half */
+	state->m_bg_tilemap->set_scroll_cols(32);
+
+	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x200);
+	machine.generic.paletteram2.u8 = auto_alloc_array(machine, UINT8, 0x200);
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x200);
+	state_save_register_global_pointer(machine, machine.generic.paletteram2.u8, 0x200);
 }
 
 VIDEO_START( victnine )
 {
-	bg_tilemap = tilemap_create( machine, victnine_get_tile_info,tilemap_scan_rows,8,8,32,32 );
-	tilemap_set_scroll_cols(bg_tilemap,32);
+	flstory_state *state = machine.driver_data<flstory_state>();
+	state->m_bg_tilemap = tilemap_create(machine, victnine_get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap->set_scroll_cols(32);
 
-	paletteram = auto_alloc_array(machine, UINT8, 0x200);
-	paletteram_2 = auto_alloc_array(machine, UINT8, 0x200);
+	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x200);
+	machine.generic.paletteram2.u8 = auto_alloc_array(machine, UINT8, 0x200);
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x200);
+	state_save_register_global_pointer(machine, machine.generic.paletteram2.u8, 0x200);
 }
 
 WRITE8_HANDLER( flstory_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset/2);
+	flstory_state *state = space->machine().driver_data<flstory_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
 }
 
 WRITE8_HANDLER( flstory_palette_w )
 {
+	flstory_state *state = space->machine().driver_data<flstory_state>();
 	if (offset & 0x100)
-		paletteram_xxxxBBBBGGGGRRRR_split2_w(space, (offset & 0xff) + (palette_bank << 8),data);
+		paletteram_xxxxBBBBGGGGRRRR_split2_w(space, (offset & 0xff) + (state->m_palette_bank << 8),data);
 	else
-		paletteram_xxxxBBBBGGGGRRRR_split1_w(space, (offset & 0xff) + (palette_bank << 8),data);
+		paletteram_xxxxBBBBGGGGRRRR_split1_w(space, (offset & 0xff) + (state->m_palette_bank << 8),data);
 }
 
 READ8_HANDLER( flstory_palette_r )
 {
+	flstory_state *state = space->machine().driver_data<flstory_state>();
 	if (offset & 0x100)
-		return paletteram_2[ (offset & 0xff) + (palette_bank << 8) ];
+		return space->machine().generic.paletteram2.u8[ (offset & 0xff) + (state->m_palette_bank << 8) ];
 	else
-		return paletteram  [ (offset & 0xff) + (palette_bank << 8) ];
+		return space->machine().generic.paletteram.u8  [ (offset & 0xff) + (state->m_palette_bank << 8) ];
 }
 
 WRITE8_HANDLER( flstory_gfxctrl_w )
 {
-	if (gfxctrl == data)
+	flstory_state *state = space->machine().driver_data<flstory_state>();
+	if (state->m_gfxctrl == data)
 		return;
-	gfxctrl = data;
+	state->m_gfxctrl = data;
 
-	flipscreen = (~data & 0x01);
-	if (char_bank != ((data & 0x10) >> 4))
+	state->m_flipscreen = (~data & 0x01);
+	if (state->m_char_bank != ((data & 0x10) >> 4))
 	{
-		char_bank = (data & 0x10) >> 4;
-		tilemap_mark_all_tiles_dirty(bg_tilemap);
+		state->m_char_bank = (data & 0x10) >> 4;
+		state->m_bg_tilemap->mark_all_dirty();
 	}
-	palette_bank = (data & 0x20) >> 5;
+	state->m_palette_bank = (data & 0x20) >> 5;
 
-	flip_screen_set(space->machine, flipscreen);
+	flip_screen_set(space->machine(), state->m_flipscreen);
 
-//popmessage("%04x: gfxctrl = %02x\n",cpu_get_pc(space->cpu),data);
+//popmessage("%04x: gfxctrl = %02x\n", cpu_get_pc(&space->device()), data);
 
 }
 
 READ8_HANDLER( victnine_gfxctrl_r )
 {
-	return gfxctrl;
+	flstory_state *state = space->machine().driver_data<flstory_state>();
+	return state->m_gfxctrl;
 }
 
 WRITE8_HANDLER( victnine_gfxctrl_w )
 {
-	if (gfxctrl == data)
+	flstory_state *state = space->machine().driver_data<flstory_state>();
+	if (state->m_gfxctrl == data)
 		return;
-	gfxctrl = data;
+	state->m_gfxctrl = data;
 
-	palette_bank = (data & 0x20) >> 5;
+	state->m_palette_bank = (data & 0x20) >> 5;
 
 	if (data & 0x04)
 	{
-		flipscreen = (data & 0x01);
-		flip_screen_set(space->machine, flipscreen);
+		state->m_flipscreen = (data & 0x01);
+		flip_screen_set(space->machine(), state->m_flipscreen);
 	}
 
-//popmessage("%04x: gfxctrl = %02x\n",cpu_get_pc(space->cpu),data);
+//popmessage("%04x: gfxctrl = %02x\n", cpu_get_pc(&space->device()), data);
 
 }
 
 WRITE8_HANDLER( flstory_scrlram_w )
 {
-	flstory_scrlram[offset] = data;
-	tilemap_set_scrolly(bg_tilemap, offset, data );
+	flstory_state *state = space->machine().driver_data<flstory_state>();
+	state->m_scrlram[offset] = data;
+	state->m_bg_tilemap->set_scrolly(offset, data);
 }
 
 
-static void flstory_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int pri)
+static void flstory_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int pri )
 {
+	flstory_state *state = machine.driver_data<flstory_state>();
 	int i;
 
 	for (i = 0; i < 0x20; i++)
 	{
-		int pr = spriteram[spriteram_size-1 -i];
+		int pr = state->m_spriteram[state->m_spriteram_size - 1 - i];
 		int offs = (pr & 0x1f) * 4;
 
 		if ((pr & 0x80) == pri)
 		{
-			int code,sx,sy,flipx,flipy;
+			int code, sx, sy, flipx, flipy;
 
-			code = spriteram[offs+2] + ((spriteram[offs+1] & 0x30) << 4);
-			sx = spriteram[offs+3];
-			sy = spriteram[offs+0];
+			code = state->m_spriteram[offs + 2] + ((state->m_spriteram[offs + 1] & 0x30) << 4);
+			sx = state->m_spriteram[offs + 3];
+			sy = state->m_spriteram[offs + 0];
 
-			if (flipscreen)
+			if (state->m_flipscreen)
 			{
 				sx = (240 - sx) & 0xff ;
 				sy = sy - 1 ;
@@ -163,54 +204,56 @@ static void flstory_draw_sprites(running_machine *machine, bitmap_t *bitmap, con
 			else
 				sy = 240 - sy - 1 ;
 
-			flipx = ((spriteram[offs+1]&0x40)>>6)^flipscreen;
-			flipy = ((spriteram[offs+1]&0x80)>>7)^flipscreen;
+			flipx = ((state->m_spriteram[offs + 1] & 0x40) >> 6) ^ state->m_flipscreen;
+			flipy = ((state->m_spriteram[offs + 1] & 0x80) >> 7) ^ state->m_flipscreen;
 
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					code,
-					spriteram[offs+1] & 0x0f,
+					state->m_spriteram[offs + 1] & 0x0f,
 					flipx,flipy,
 					sx,sy,15);
 			/* wrap around */
 			if (sx > 240)
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+				drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 						code,
-						spriteram[offs+1] & 0x0f,
+						state->m_spriteram[offs + 1] & 0x0f,
 						flipx,flipy,
 						sx-256,sy,15);
 		}
 	}
 }
 
-VIDEO_UPDATE( flstory )
+SCREEN_UPDATE_IND16( flstory )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0|TILEMAP_DRAW_LAYER1,0);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,1|TILEMAP_DRAW_LAYER1,0);
-	flstory_draw_sprites(screen->machine,bitmap,cliprect,0x00);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0|TILEMAP_DRAW_LAYER0,0);
-	flstory_draw_sprites(screen->machine,bitmap,cliprect,0x80);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,1|TILEMAP_DRAW_LAYER0,0);
+	flstory_state *state = screen.machine().driver_data<flstory_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0 | TILEMAP_DRAW_LAYER1, 0);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 1 | TILEMAP_DRAW_LAYER1, 0);
+	flstory_draw_sprites(screen.machine(), bitmap, cliprect, 0x00);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0 | TILEMAP_DRAW_LAYER0, 0);
+	flstory_draw_sprites(screen.machine(), bitmap, cliprect, 0x80);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 1 | TILEMAP_DRAW_LAYER0, 0);
 	return 0;
 }
 
-static void victnine_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void victnine_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	flstory_state *state = machine.driver_data<flstory_state>();
 	int i;
 
 	for (i = 0; i < 0x20; i++)
 	{
-		int pr = spriteram[spriteram_size-1 -i];
+		int pr = state->m_spriteram[state->m_spriteram_size - 1 - i];
 		int offs = (pr & 0x1f) * 4;
 
 		//if ((pr & 0x80) == pri)
 		{
-			int code,sx,sy,flipx,flipy;
+			int code, sx, sy, flipx, flipy;
 
-			code = spriteram[offs+2] + ((spriteram[offs+1] & 0x20) << 3);
-			sx = spriteram[offs+3];
-			sy = spriteram[offs+0];
+			code = state->m_spriteram[offs + 2] + ((state->m_spriteram[offs + 1] & 0x20) << 3);
+			sx = state->m_spriteram[offs + 3];
+			sy = state->m_spriteram[offs + 0];
 
-			if (flipscreen)
+			if (state->m_flipscreen)
 			{
 				sx = (240 - sx + 1) & 0xff ;
 				sy = sy + 1 ;
@@ -218,28 +261,41 @@ static void victnine_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 			else
 				sy = 240 - sy + 1 ;
 
-			flipx = ((spriteram[offs+1]&0x40)>>6)^flipscreen;
-			flipy = ((spriteram[offs+1]&0x80)>>7)^flipscreen;
+			flipx = ((state->m_spriteram[offs + 1] & 0x40) >> 6) ^ state->m_flipscreen;
+			flipy = ((state->m_spriteram[offs + 1] & 0x80) >> 7) ^ state->m_flipscreen;
 
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+			drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					code,
-					spriteram[offs+1] & 0x0f,
+					state->m_spriteram[offs + 1] & 0x0f,
 					flipx,flipy,
 					sx,sy,15);
 			/* wrap around */
 			if (sx > 240)
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+				drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 						code,
-						spriteram[offs+1] & 0x0f,
+						state->m_spriteram[offs + 1] & 0x0f,
 						flipx,flipy,
 						sx-256,sy,15);
 		}
 	}
 }
 
-VIDEO_UPDATE( victnine )
+SCREEN_UPDATE_IND16( victnine )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	victnine_draw_sprites(screen->machine,bitmap,cliprect);
+	flstory_state *state = screen.machine().driver_data<flstory_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	victnine_draw_sprites(screen.machine(), bitmap, cliprect);
+	return 0;
+}
+
+SCREEN_UPDATE_IND16( rumba )
+{
+	flstory_state *state = screen.machine().driver_data<flstory_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0 | TILEMAP_DRAW_LAYER1, 0);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 1 | TILEMAP_DRAW_LAYER1, 0);
+	victnine_draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0 | TILEMAP_DRAW_LAYER0, 0);
+	victnine_draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 1 | TILEMAP_DRAW_LAYER0, 0);
 	return 0;
 }

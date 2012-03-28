@@ -16,6 +16,23 @@
 #define SUBS_NOISE_RESET		NODE_07
 
 
+class subs_state : public driver_device
+{
+public:
+	subs_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram;
+	UINT8 *m_spriteram;
+	int m_steering_buf1;
+	int m_steering_buf2;
+	int m_steering_val1;
+	int m_steering_val2;
+	int m_last_val_1;
+	int m_last_val_2;
+};
+
+
 /*----------- defined in machine/subs.c -----------*/
 
 MACHINE_RESET( subs );
@@ -41,7 +58,8 @@ DISCRETE_SOUND_EXTERN( subs );
 
 /*----------- defined in video/subs.c -----------*/
 
-VIDEO_UPDATE( subs );
+SCREEN_UPDATE_IND16( subs_left );
+SCREEN_UPDATE_IND16( subs_right );
 
 WRITE8_HANDLER( subs_invert1_w );
 WRITE8_HANDLER( subs_invert2_w );

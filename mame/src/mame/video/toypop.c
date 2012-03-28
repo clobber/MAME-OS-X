@@ -6,14 +6,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-
-UINT8 *toypop_videoram;
-
-static tilemap *bg_tilemap;
-UINT16 *toypop_bg_image;
-static int bitmapflip,palettebank;
-
+#include "emu.h"
+#include "includes/toypop.h"
 
 /***************************************************************************
 
@@ -26,12 +20,10 @@ static int bitmapflip,palettebank;
 
 PALETTE_INIT( toypop )
 {
-	int i;
-
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 256);
+	machine.colortable = colortable_alloc(machine, 256);
 
-	for (i = 0;i < 256;i++)
+	for (int i = 0;i < 256;i++)
 	{
 		int bit0,bit1,bit2,bit3,r,g,b;
 
@@ -54,25 +46,25 @@ PALETTE_INIT( toypop )
 		bit3 = (color_prom[i+0x200] >> 3) & 0x01;
 		b = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r,g,b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r,g,b));
 	}
 
-	for (i = 0;i < 256;i++)
+	for (int i = 0;i < 256;i++)
 	{
 		UINT8 entry;
 
 		// characters
-		colortable_entry_set_value(machine->colortable, i + 0*256, (color_prom[i + 0x300] & 0x0f) | 0x70);
-		colortable_entry_set_value(machine->colortable, i + 1*256, (color_prom[i + 0x300] & 0x0f) | 0xf0);
+		colortable_entry_set_value(machine.colortable, i + 0*256, (color_prom[i + 0x300] & 0x0f) | 0x70);
+		colortable_entry_set_value(machine.colortable, i + 1*256, (color_prom[i + 0x300] & 0x0f) | 0xf0);
 		// sprites
 		entry = color_prom[i + 0x500];
-		colortable_entry_set_value(machine->colortable, i + 2*256, entry);
+		colortable_entry_set_value(machine.colortable, i + 2*256, entry);
 	}
-	for (i = 0;i < 16;i++)
+	for (int i = 0;i < 16;i++)
 	{
 		// background
-		colortable_entry_set_value(machine->colortable, i + 3*256 + 0*16, 0x60 + i);
-		colortable_entry_set_value(machine->colortable, i + 3*256 + 1*16, 0xe0 + i);
+		colortable_entry_set_value(machine.colortable, i + 3*256 + 0*16, 0x60 + i);
+		colortable_entry_set_value(machine.colortable, i + 3*256 + 1*16, 0xe0 + i);
 	}
 }
 
@@ -101,11 +93,12 @@ static TILEMAP_MAPPER( tilemap_scan )
 
 static TILE_GET_INFO( get_tile_info )
 {
-	UINT8 attr = toypop_videoram[tile_index + 0x400];
+	toypop_state *state = machine.driver_data<toypop_state>();
+	UINT8 attr = state->m_videoram[tile_index + 0x400];
 	SET_TILE_INFO(
 			0,
-			toypop_videoram[tile_index],
-			(attr & 0x3f) + 0x40 * palettebank,
+			state->m_videoram[tile_index],
+			(attr & 0x3f) + 0x40 * state->m_palettebank,
 			0);
 }
 
@@ -119,9 +112,10 @@ static TILE_GET_INFO( get_tile_info )
 
 VIDEO_START( toypop )
 {
-	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan,8,8,36,28);
+	toypop_state *state = machine.driver_data<toypop_state>();
+	state->m_bg_tilemap = tilemap_create(machine,get_tile_info,tilemap_scan,8,8,36,28);
 
-	tilemap_set_transparent_pen(bg_tilemap, 0);
+	state->m_bg_tilemap->set_transparent_pen(0);
 }
 
 
@@ -134,59 +128,65 @@ VIDEO_START( toypop )
 
 WRITE8_HANDLER( toypop_videoram_w )
 {
-	toypop_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x3ff);
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset & 0x3ff);
 }
 
 WRITE8_HANDLER( toypop_palettebank_w )
 {
-	if (palettebank != (offset & 1))
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+	if (state->m_palettebank != (offset & 1))
 	{
-		palettebank = offset & 1;
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		state->m_palettebank = offset & 1;
+		space->machine().tilemap().mark_all_dirty();
 	}
 }
 
 WRITE16_HANDLER( toypop_flipscreen_w )
 {
-	bitmapflip = offset & 1;
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+	state->m_bitmapflip = offset & 1;
 }
 
 READ16_HANDLER( toypop_merged_background_r )
 {
+	toypop_state *state = space->machine().driver_data<toypop_state>();
 	int data1, data2;
 
 	// 0x0a0b0c0d is read as 0xabcd
-	data1 = toypop_bg_image[2*offset];
-	data2 = toypop_bg_image[2*offset + 1];
+	data1 = state->m_bg_image[2*offset];
+	data2 = state->m_bg_image[2*offset + 1];
 	return ((data1 & 0xf00) << 4) | ((data1 & 0xf) << 8) | ((data2 & 0xf00) >> 4) | (data2 & 0xf);
 }
 
 WRITE16_HANDLER( toypop_merged_background_w )
 {
+	toypop_state *state = space->machine().driver_data<toypop_state>();
+
 	// 0xabcd is written as 0x0a0b0c0d in the background image
 	if (ACCESSING_BITS_8_15)
-		toypop_bg_image[2*offset] = ((data & 0xf00) >> 8) | ((data & 0xf000) >> 4);
+		state->m_bg_image[2*offset] = ((data & 0xf00) >> 8) | ((data & 0xf000) >> 4);
 
 	if (ACCESSING_BITS_0_7)
-		toypop_bg_image[2*offset+1] = (data & 0xf) | ((data & 0xf0) << 4);
+		state->m_bg_image[2*offset+1] = (data & 0xf) | ((data & 0xf0) << 4);
 }
 
-static void draw_background(bitmap_t *bitmap)
+static void draw_background(running_machine &machine, bitmap_ind16 &bitmap)
 {
-	int offs, x, y;
-	pen_t pen_base = 0x300 + 0x10*palettebank;
+	toypop_state *state = machine.driver_data<toypop_state>();
+	pen_t pen_base = 0x300 + 0x10*state->m_palettebank;
 
 	// copy the background image from RAM (0x190200-0x19FDFF) to bitmap
-	if (bitmapflip)
+	if (state->m_bitmapflip)
 	{
-		offs = 0xFDFE/2;
-		for (y = 0; y < 224; y++)
+		int offs = 0xFDFE/2;
+		for (int y = 0; y < 224; y++)
 		{
-			UINT16 *scanline = BITMAP_ADDR16(bitmap, y, 0);
-			for (x = 0; x < 288; x+=2)
+			UINT16 *scanline = &bitmap.pix16(y);
+			for (int x = 0; x < 288; x+=2)
 			{
-				UINT16 data = toypop_bg_image[offs];
+				UINT16 data = state->m_bg_image[offs];
 				scanline[x]   = pen_base | (data & 0x0f);
 				scanline[x+1] = pen_base | (data >> 8);
 				offs--;
@@ -195,13 +195,13 @@ static void draw_background(bitmap_t *bitmap)
 	}
 	else
 	{
-		offs = 0x200/2;
-		for (y = 0; y < 224; y++)
+		int offs = 0x200/2;
+		for (int y = 0; y < 224; y++)
 		{
-			UINT16 *scanline = BITMAP_ADDR16(bitmap, y, 0);
-			for (x = 0; x < 288; x+=2)
+			UINT16 *scanline = &bitmap.pix16(y);
+			for (int x = 0; x < 288; x+=2)
 			{
-				UINT16 data = toypop_bg_image[offs];
+				UINT16 data = state->m_bg_image[offs];
 				scanline[x]   = pen_base | (data >> 8);
 				scanline[x+1] = pen_base | (data & 0x0f);
 				offs++;
@@ -218,14 +218,68 @@ static void draw_background(bitmap_t *bitmap)
 
 ***************************************************************************/
 
-/* from mappy.c */
-void mappy_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int xoffs, int yoffs, int transcolor);
 
-
-VIDEO_UPDATE( toypop )
+void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, UINT8 *spriteram_base)
 {
-	draw_background(bitmap);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	mappy_draw_sprites(screen->machine, bitmap, cliprect, -31, -8, 0xff);
+	UINT8 *spriteram = spriteram_base + 0x780;
+	UINT8 *spriteram_2 = spriteram + 0x800;
+	UINT8 *spriteram_3 = spriteram_2 + 0x800;
+	enum { xoffs = -31, yoffs = -8 };
+
+	for (int offs = 0;offs < 0x80;offs += 2)
+	{
+		/* is it on? */
+		if ((spriteram_3[offs+1] & 2) == 0)
+		{
+			static const UINT8 gfx_offs[2][2] =
+			{
+				{ 0, 1 },
+				{ 2, 3 }
+			};
+			int sprite = spriteram[offs];
+			int color = spriteram[offs+1];
+			int sx = spriteram_2[offs+1] + 0x100 * (spriteram_3[offs+1] & 1) - 40 + xoffs;
+			int sy = 256 - spriteram_2[offs] + yoffs + 1;	// sprites are buffered and delayed by one scanline
+			int flipx = (spriteram_3[offs] & 0x01);
+			int flipy = (spriteram_3[offs] & 0x02) >> 1;
+			int sizex = (spriteram_3[offs] & 0x04) >> 2;
+			int sizey = (spriteram_3[offs] & 0x08) >> 3;
+
+			sprite &= ~sizex;
+			sprite &= ~(sizey << 1);
+
+			sy -= 16 * sizey;
+			sy = (sy & 0xff) - 32;	// fix wraparound
+
+			if (flip_screen_get(machine))
+			{
+				flipx ^= 1;
+				flipy ^= 1;
+				sy += 40;
+			}
+
+			for (int y = 0;y <= sizey;y++)
+			{
+				for (int x = 0;x <= sizex;x++)
+				{
+					drawgfx_transmask(bitmap,cliprect,machine.gfx[1],
+						sprite + gfx_offs[y ^ (sizey & flipy)][x ^ (sizex & flipx)],
+						color,
+						flipx,flipy,
+						sx + 16*x,sy + 16*y,
+						colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, 0xff));
+				}
+			}
+		}
+	}
+}
+
+
+SCREEN_UPDATE_IND16( toypop )
+{
+	toypop_state *state = screen.machine().driver_data<toypop_state>();
+	draw_background(screen.machine(), bitmap);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
+	draw_sprites(screen.machine(), bitmap, cliprect, state->m_spriteram);
 	return 0;
 }

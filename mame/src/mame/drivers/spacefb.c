@@ -11,6 +11,11 @@
     Known issues/to-do's:
         * Bullet colors are incorrect.  The schematics cannot be right, so
           I am using pure red for now
+
+          "MAME has the bullets and missiles as red, the real pcb shows them as
+           yellow with red tinges, they are overal yellow/orange in appearance."
+           (Andrew Welburn 24/12/10)
+
         * Analog sounds
 
 
@@ -104,9 +109,9 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "spacefb.h"
+#include "includes/spacefb.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/dac.h"
 
@@ -118,15 +123,14 @@
  *
  *************************************/
 
-static emu_timer *interrupt_timer;
-
 
 static TIMER_CALLBACK( interrupt_callback )
 {
+	spacefb_state *state = machine.driver_data<spacefb_state>();
 	int next_vpos;
 
 	/* compute vector and set the interrupt line */
-	int vpos = video_screen_get_vpos(machine->primary_screen);
+	int vpos = machine.primary_screen->vpos();
 	UINT8 vector = 0xc7 | ((vpos & 0x40) >> 2) | ((~vpos & 0x40) >> 3);
 	cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, vector);
 
@@ -136,19 +140,21 @@ static TIMER_CALLBACK( interrupt_callback )
 	else
 		next_vpos = SPACEFB_INT_TRIGGER_COUNT_1;
 
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, next_vpos, 0), 0);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(next_vpos));
 }
 
 
-static void create_interrupt_timer(running_machine *machine)
+static void create_interrupt_timer(running_machine &machine)
 {
-	interrupt_timer = timer_alloc(machine, interrupt_callback, NULL);
+	spacefb_state *state = machine.driver_data<spacefb_state>();
+	state->m_interrupt_timer = machine.scheduler().timer_alloc(FUNC(interrupt_callback));
 }
 
 
-static void start_interrupt_timer(running_machine *machine)
+static void start_interrupt_timer(running_machine &machine)
 {
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, SPACEFB_INT_TRIGGER_COUNT_1, 0), 0);
+	spacefb_state *state = machine.driver_data<spacefb_state>();
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(SPACEFB_INT_TRIGGER_COUNT_1));
 }
 
 
@@ -174,7 +180,7 @@ static MACHINE_START( spacefb )
 
 static MACHINE_RESET( spacefb )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *space = machine.device("maincpu")->memory().space(AS_IO);
 	/* the 3 output ports are cleared on reset */
 	spacefb_port_0_w(space, 0, 0);
 	spacefb_port_1_w(space, 0, 0);
@@ -191,16 +197,16 @@ static MACHINE_RESET( spacefb )
  *
  *************************************/
 
-static ADDRESS_MAP_START( spacefb_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacefb_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_NOP
-	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x3c00) AM_RAM AM_BASE(&spacefb_videoram) AM_SIZE(&spacefb_videoram_size)
+	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x3c00) AM_RAM AM_BASE_MEMBER(spacefb_state, m_videoram) AM_SIZE_MEMBER(spacefb_state, m_videoram_size)
 	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x3000) AM_RAM
 	AM_RANGE(0xc800, 0xcfff) AM_MIRROR(0x3000) AM_NOP
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacefb_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacefb_audio_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3ff)
 	AM_RANGE(0x0000, 0x03ff) AM_ROM
 ADDRESS_MAP_END
@@ -213,7 +219,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( spacefb_main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spacefb_main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2")
@@ -228,7 +234,7 @@ static ADDRESS_MAP_START( spacefb_main_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacefb_audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( spacefb_audio_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_READ(spacefb_audio_p2_r)
 	AM_RANGE(MCS48_PORT_T0, MCS48_PORT_T0) AM_READ(spacefb_audio_t0_r)
@@ -328,34 +334,33 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( spacefb )
+static MACHINE_CONFIG_START( spacefb, spacefb_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, SPACEFB_MAIN_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(spacefb_main_map)
-	MDRV_CPU_IO_MAP(spacefb_main_io_map)
+	MCFG_CPU_ADD("maincpu", Z80, SPACEFB_MAIN_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(spacefb_main_map)
+	MCFG_CPU_IO_MAP(spacefb_main_io_map)
 
-	MDRV_CPU_ADD("audiocpu", I8035, SPACEFB_AUDIO_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(spacefb_audio_map)
-	MDRV_CPU_IO_MAP(spacefb_audio_io_map)
+	MCFG_CPU_ADD("audiocpu", I8035, SPACEFB_AUDIO_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(spacefb_audio_map)
+	MCFG_CPU_IO_MAP(spacefb_audio_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(180))
+	MCFG_QUANTUM_TIME(attotime::from_hz(180))
 
-	MDRV_MACHINE_START(spacefb)
-	MDRV_MACHINE_RESET(spacefb)
+	MCFG_MACHINE_START(spacefb)
+	MCFG_MACHINE_RESET(spacefb)
 
 	/* video hardware */
-	MDRV_VIDEO_START(spacefb)
-	MDRV_VIDEO_UPDATE(spacefb)
+	MCFG_VIDEO_START(spacefb)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_RAW_PARAMS(SPACEFB_PIXEL_CLOCK, SPACEFB_HTOTAL, SPACEFB_HBEND, SPACEFB_HBSTART, SPACEFB_VTOTAL, SPACEFB_VBEND, SPACEFB_VBSTART)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(SPACEFB_PIXEL_CLOCK, SPACEFB_HTOTAL, SPACEFB_HBEND, SPACEFB_HBSTART, SPACEFB_VTOTAL, SPACEFB_VBEND, SPACEFB_VBSTART)
+	MCFG_SCREEN_UPDATE_STATIC(spacefb)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(spacefb_audio)
+	MCFG_FRAGMENT_ADD(spacefb_audio)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -368,20 +373,20 @@ MACHINE_DRIVER_END
 ROM_START( spacefb )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "5e.cpu",      0x0000, 0x0800, CRC(2d406678) SHA1(9dff1980fc5267313f99f9f67d2d83eda8aae00e) )
-	ROM_LOAD( "5f.cpu",      0x0800, 0x0800, CRC(89f0c34a) SHA1(4d8652fb7c4f22ddbac8c2d7ca7df675eaa2a447) )
-	ROM_LOAD( "5h.cpu",      0x1000, 0x0800, CRC(c4bcac3e) SHA1(5364d6fc9d3402b2def163dee7c39fe3fe57eea3) )
-	ROM_LOAD( "5i.cpu",      0x1800, 0x0800, CRC(61c00a65) SHA1(afc93e320478c70b3ddca8375fd648c9f2572dab) )
-	ROM_LOAD( "5j.cpu",      0x2000, 0x0800, CRC(598420b9) SHA1(92ea695177c7297699d1d18f166e98392ef0e0f9) )
-	ROM_LOAD( "5k.cpu",      0x2800, 0x0800, CRC(1713300c) SHA1(9a7b6cc0d79cccadd4988e0e791c1598813b6552) )
-	ROM_LOAD( "5m.cpu",      0x3000, 0x0800, CRC(6286f534) SHA1(c47d0df85a52c774a4bc26351fdae18795062b6e) )
-	ROM_LOAD( "5n.cpu",      0x3800, 0x0800, CRC(1c9f91ee) SHA1(481a309fe9aa9ce6fd18d7d908c18790f594057d) )
+	ROM_LOAD( "tst-c-e.5f",      0x0800, 0x0800, CRC(89f0c34a) SHA1(4d8652fb7c4f22ddbac8c2d7ca7df675eaa2a447) )
+	ROM_LOAD( "tst-c-e.5h",      0x1000, 0x0800, CRC(c4bcac3e) SHA1(5364d6fc9d3402b2def163dee7c39fe3fe57eea3) )
+	ROM_LOAD( "tst-c-e.5i",      0x1800, 0x0800, CRC(61c00a65) SHA1(afc93e320478c70b3ddca8375fd648c9f2572dab) )
+	ROM_LOAD( "tst-c-e.5j",      0x2000, 0x0800, CRC(598420b9) SHA1(92ea695177c7297699d1d18f166e98392ef0e0f9) )
+	ROM_LOAD( "tst-c-e.5k",      0x2800, 0x0800, CRC(1713300c) SHA1(9a7b6cc0d79cccadd4988e0e791c1598813b6552) )
+	ROM_LOAD( "tst-c-e.5m",      0x3000, 0x0800, CRC(6286f534) SHA1(c47d0df85a52c774a4bc26351fdae18795062b6e) )
+	ROM_LOAD( "tst-c-e.5n",      0x3800, 0x0800, CRC(1c9f91ee) SHA1(481a309fe9aa9ce6fd18d7d908c18790f594057d) )
 
 	ROM_REGION( 0x1000, "audiocpu", 0 )
     ROM_LOAD( "ic20.snd",    0x0000, 0x0400, CRC(1c8670b3) SHA1(609124caa11498fc6a6bdf6cdbb8003bbc249dd8) )
 
 	ROM_REGION( 0x1000, "gfx1", 0 )  /* sprites */
-	ROM_LOAD( "5k.vid",      0x0000, 0x0800, CRC(236e1ff7) SHA1(575b8ed9ab054a864207e0fde3ae93cdcafbebf2) )
-	ROM_LOAD( "6k.vid",      0x0800, 0x0800, CRC(bf901a4e) SHA1(71207ad1ca60aa617dbbc3cd2e4e42520b7c8513) )
+	ROM_LOAD( "tst-v-a.5k",      0x0000, 0x0800, CRC(236e1ff7) SHA1(575b8ed9ab054a864207e0fde3ae93cdcafbebf2) )
+	ROM_LOAD( "tst-v-a.6k",      0x0800, 0x0800, CRC(bf901a4e) SHA1(71207ad1ca60aa617dbbc3cd2e4e42520b7c8513) )
 
 	ROM_REGION( 0x0100, "gfx2", 0 )  /* bullets */
 	ROM_LOAD( "4i.vid",      0x0000, 0x0100, CRC(528e8533) SHA1(8e41eee1016c98a4f08acbd902daf8e32aa9d9ab) )
@@ -389,6 +394,60 @@ ROM_START( spacefb )
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "mb7051.3n",   0x0000, 0x0020, CRC(465d07af) SHA1(25e246f7674c25d05e5f6e68db88c15aaa10cee1) )
 ROM_END
+
+
+// pcb is revision 03 and has roms with suffix 'e'
+ROM_START( spacefbe )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "tst-c-e.5e",      0x0000, 0x0800, CRC(77dda05b) SHA1(b8a42632587260509ba023c7e05d252972f90363) ) // only 5e differs to above set, by 2 bytes.
+	ROM_LOAD( "tst-c-e.5f",      0x0800, 0x0800, CRC(89f0c34a) SHA1(4d8652fb7c4f22ddbac8c2d7ca7df675eaa2a447) )
+	ROM_LOAD( "tst-c-e.5h",      0x1000, 0x0800, CRC(c4bcac3e) SHA1(5364d6fc9d3402b2def163dee7c39fe3fe57eea3) )
+	ROM_LOAD( "tst-c-e.5i",      0x1800, 0x0800, CRC(61c00a65) SHA1(afc93e320478c70b3ddca8375fd648c9f2572dab) )
+	ROM_LOAD( "tst-c-e.5j",      0x2000, 0x0800, CRC(598420b9) SHA1(92ea695177c7297699d1d18f166e98392ef0e0f9) )
+	ROM_LOAD( "tst-c-e.5k",      0x2800, 0x0800, CRC(1713300c) SHA1(9a7b6cc0d79cccadd4988e0e791c1598813b6552) )
+	ROM_LOAD( "tst-c-e.5m",      0x3000, 0x0800, CRC(6286f534) SHA1(c47d0df85a52c774a4bc26351fdae18795062b6e) )
+	ROM_LOAD( "tst-c-e.5n",      0x3800, 0x0800, CRC(1c9f91ee) SHA1(481a309fe9aa9ce6fd18d7d908c18790f594057d) )
+
+	ROM_REGION( 0x1000, "audiocpu", 0 )
+    ROM_LOAD( "ic20.snd",    0x0000, 0x0400, CRC(1c8670b3) SHA1(609124caa11498fc6a6bdf6cdbb8003bbc249dd8) )
+
+	ROM_REGION( 0x1000, "gfx1", 0 )  /* sprites */
+	ROM_LOAD( "tst-v-a.5k",      0x0000, 0x0800, CRC(236e1ff7) SHA1(575b8ed9ab054a864207e0fde3ae93cdcafbebf2) )
+	ROM_LOAD( "tst-v-a.6k",      0x0800, 0x0800, CRC(bf901a4e) SHA1(71207ad1ca60aa617dbbc3cd2e4e42520b7c8513) )
+
+	ROM_REGION( 0x0100, "gfx2", 0 )  /* bullets */
+	ROM_LOAD( "4i.vid",      0x0000, 0x0100, CRC(528e8533) SHA1(8e41eee1016c98a4f08acbd902daf8e32aa9d9ab) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "mb7051.3n",   0x0000, 0x0020, CRC(465d07af) SHA1(25e246f7674c25d05e5f6e68db88c15aaa10cee1) )
+ROM_END
+
+// pcb is revision 04 and has roms with suffix 'u'
+ROM_START( spacefbu )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "tst-c-u.5e",      0x0000, 0x0800, CRC(79c3527e) SHA1(5f2d9f3a8b573333e40e78222996f556ed6686ea) )
+	ROM_LOAD( "tst-c-u.5f",      0x0800, 0x0800, CRC(c0973965) SHA1(f0dcd820c0e0766368ef5d58c29ef090fc5cfdef) )
+	ROM_LOAD( "tst-c-u.5h",      0x1000, 0x0800, CRC(02c60ec5) SHA1(43b8553076c7c0e22e0708797c8f3d30fccf82ec) )
+	ROM_LOAD( "tst-c-u.5i",      0x1800, 0x0800, CRC(76fd18c7) SHA1(2db271269b8f810eb93e5e86d59251fe1f43769a) )
+	ROM_LOAD( "tst-c-u.5j",      0x2000, 0x0800, CRC(df52c97c) SHA1(54032c1ed694911079ffa45545b1e63ec8107fc4) )
+	ROM_LOAD( "tst-c-u.5k",      0x2800, 0x0800, CRC(1713300c) SHA1(9a7b6cc0d79cccadd4988e0e791c1598813b6552) )
+	ROM_LOAD( "tst-c-u.5m",      0x3000, 0x0800, CRC(6286f534) SHA1(c47d0df85a52c774a4bc26351fdae18795062b6e) )
+	ROM_LOAD( "tst-c-u.5n",      0x3800, 0x0800, CRC(1c9f91ee) SHA1(481a309fe9aa9ce6fd18d7d908c18790f594057d) )
+
+	ROM_REGION( 0x1000, "audiocpu", 0 )
+    ROM_LOAD( "ic20.snd",    0x0000, 0x0400, CRC(1c8670b3) SHA1(609124caa11498fc6a6bdf6cdbb8003bbc249dd8) )
+
+	ROM_REGION( 0x1000, "gfx1", 0 )  /* sprites */
+	ROM_LOAD( "tst-v-a.5k",      0x0000, 0x0800, CRC(236e1ff7) SHA1(575b8ed9ab054a864207e0fde3ae93cdcafbebf2) )
+	ROM_LOAD( "tst-v-a.6k",      0x0800, 0x0800, CRC(bf901a4e) SHA1(71207ad1ca60aa617dbbc3cd2e4e42520b7c8513) )
+
+	ROM_REGION( 0x0100, "gfx2", 0 )  /* bullets */
+	ROM_LOAD( "4i.vid",      0x0000, 0x0100, CRC(528e8533) SHA1(8e41eee1016c98a4f08acbd902daf8e32aa9d9ab) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "mb7051.3n",   0x0000, 0x0020, CRC(465d07af) SHA1(25e246f7674c25d05e5f6e68db88c15aaa10cee1) )
+ROM_END
+
 
 ROM_START( spacefbg )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -499,8 +558,10 @@ ROM_END
  *
  *************************************/
 
-GAME( 1980, spacefb,  0,       spacefb, spacefb,  0, ROT270, "Nintendo", "Space Firebird (Nintendo)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
-GAME( 1980, spacefbg, spacefb, spacefb, spacefb,  0, ROT270, "Gremlin", "Space Firebird (Gremlin)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
-GAME( 1980, spacebrd, spacefb, spacefb, spacefb,  0, ROT270, "bootleg", "Space Bird (bootleg)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
+GAME( 1980, spacefb,  0,       spacefb, spacefb,  0, ROT270, "Nintendo", "Space Firebird (Nintendo, set 1)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
+GAME( 1980, spacefbu, spacefb, spacefb, spacefb,  0, ROT270, "Nintendo", "Space Firebird (Nintendo, set 2)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
+GAME( 1980, spacefbe, spacefb, spacefb, spacefb,  0, ROT270, "Nintendo", "Space Firebird (Nintendo, set 3)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
+GAME( 1980, spacefbg, spacefb, spacefb, spacefb,  0, ROT270, "Nintendo (Gremlin license)", "Space Firebird (Gremlin)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
+GAME( 1980, spacebrd, spacefb, spacefb, spacefb,  0, ROT270, "bootleg (Karateco)", "Space Bird (bootleg)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
 GAME( 1980, spacefbb, spacefb, spacefb, spacefb,  0, ROT270, "bootleg", "Space Firebird (bootleg)", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )
 GAME( 1980, spacedem, spacefb, spacefb, spacedem, 0, ROT270, "Nintendo (Fortrek license)", "Space Demon", GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND )

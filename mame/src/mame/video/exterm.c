@@ -4,13 +4,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms34010/tms34010.h"
-#include "exterm.h"
-
-
-UINT16 *exterm_master_videoram, *exterm_slave_videoram;
-
+#include "includes/exterm.h"
 
 
 /*************************************
@@ -36,27 +32,31 @@ PALETTE_INIT( exterm )
  *
  *************************************/
 
-void exterm_to_shiftreg_master(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void exterm_to_shiftreg_master(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	memcpy(shiftreg, &exterm_master_videoram[TOWORD(address)], 256 * sizeof(UINT16));
+	exterm_state *state = space->machine().driver_data<exterm_state>();
+	memcpy(shiftreg, &state->m_master_videoram[TOWORD(address)], 256 * sizeof(UINT16));
 }
 
 
-void exterm_from_shiftreg_master(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void exterm_from_shiftreg_master(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	memcpy(&exterm_master_videoram[TOWORD(address)], shiftreg, 256 * sizeof(UINT16));
+	exterm_state *state = space->machine().driver_data<exterm_state>();
+	memcpy(&state->m_master_videoram[TOWORD(address)], shiftreg, 256 * sizeof(UINT16));
 }
 
 
-void exterm_to_shiftreg_slave(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void exterm_to_shiftreg_slave(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	memcpy(shiftreg, &exterm_slave_videoram[TOWORD(address)], 256 * 2 * sizeof(UINT8));
+	exterm_state *state = space->machine().driver_data<exterm_state>();
+	memcpy(shiftreg, &state->m_slave_videoram[TOWORD(address)], 256 * 2 * sizeof(UINT8));
 }
 
 
-void exterm_from_shiftreg_slave(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void exterm_from_shiftreg_slave(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	memcpy(&exterm_slave_videoram[TOWORD(address)], shiftreg, 256 * 2 * sizeof(UINT8));
+	exterm_state *state = space->machine().driver_data<exterm_state>();
+	memcpy(&state->m_slave_videoram[TOWORD(address)], shiftreg, 256 * 2 * sizeof(UINT8));
 }
 
 
@@ -67,23 +67,24 @@ void exterm_from_shiftreg_slave(const address_space *space, UINT32 address, UINT
  *
  *************************************/
 
-void exterm_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+void exterm_scanline_update(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params)
 {
-	UINT16 *bgsrc = &exterm_master_videoram[(params->rowaddr << 8) & 0xff00];
+	exterm_state *state = screen.machine().driver_data<exterm_state>();
+	UINT16 *bgsrc = &state->m_master_videoram[(params->rowaddr << 8) & 0xff00];
 	UINT16 *fgsrc = NULL;
-	UINT16 *dest = BITMAP_ADDR16(bitmap, scanline, 0);
+	UINT16 *dest = &bitmap.pix16(scanline);
 	tms34010_display_params fgparams;
 	int coladdr = params->coladdr;
 	int fgcoladdr = 0;
 	int x;
 
 	/* get parameters for the slave CPU */
-	tms34010_get_display_params(cputag_get_cpu(screen->machine, "slave"), &fgparams);
+	tms34010_get_display_params(screen.machine().device("slave"), &fgparams);
 
 	/* compute info about the slave vram */
 	if (fgparams.enabled && scanline >= fgparams.veblnk && scanline < fgparams.vsblnk && fgparams.heblnk < fgparams.hsblnk)
 	{
-		fgsrc = &exterm_slave_videoram[((fgparams.rowaddr << 8) + (fgparams.yoffset << 7)) & 0xff80];
+		fgsrc = &state->m_slave_videoram[((fgparams.rowaddr << 8) + (fgparams.yoffset << 7)) & 0xff80];
 		fgcoladdr = (fgparams.coladdr >> 1);
 	}
 

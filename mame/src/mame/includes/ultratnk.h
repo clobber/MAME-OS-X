@@ -5,13 +5,25 @@
 *************************************************************************/
 
 
-/*----------- defined in video/ultratnk.c -----------*/
+class ultratnk_state : public driver_device
+{
+public:
+	ultratnk_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-extern int ultratnk_collision[4];
+	UINT8 *m_videoram;
+	int m_da_latch;
+	int m_collision[4];
+	tilemap_t* m_playfield;
+	bitmap_ind16 m_helper;
+};
+
+
+/*----------- defined in video/ultratnk.c -----------*/
 
 PALETTE_INIT( ultratnk );
 VIDEO_START( ultratnk );
-VIDEO_UPDATE( ultratnk );
-VIDEO_EOF( ultratnk );
+SCREEN_UPDATE_IND16( ultratnk );
+SCREEN_VBLANK( ultratnk );
 
 WRITE8_HANDLER( ultratnk_video_ram_w );

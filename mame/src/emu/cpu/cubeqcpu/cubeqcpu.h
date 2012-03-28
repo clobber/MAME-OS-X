@@ -9,8 +9,6 @@
 #ifndef _CUBEQCPU_H
 #define _CUBEQCPU_H
 
-#include "cpuintrf.h"
-
 
 /***************************************************************************
     COMPILE-TIME DEFINITIONS
@@ -118,7 +116,7 @@ enum
     CONFIGURATION STRUCTURE
 ***************************************************************************/
 
-typedef void (*cubeqst_dac_w_func)(const device_config *, UINT16);
+typedef void (*cubeqst_dac_w_func)(device_t *, UINT16);
 
 typedef struct _cubeqst_snd_config cubeqst_snd_config;
 struct _cubeqst_snd_config
@@ -150,18 +148,14 @@ extern WRITE16_DEVICE_HANDLER( cubeqcpu_sndram_w );
 extern READ16_DEVICE_HANDLER( cubeqcpu_rotram_r );
 extern WRITE16_DEVICE_HANDLER( cubeqcpu_rotram_w );
 
-void cubeqcpu_swap_line_banks(const device_config *device);
+void cubeqcpu_swap_line_banks(device_t *device);
 
-void cubeqcpu_clear_stack(const device_config *device);
-UINT8 cubeqcpu_get_ptr_ram_val(const device_config *device, int i);
-UINT32* cubeqcpu_get_stack_ram(const device_config *device);
+void cubeqcpu_clear_stack(device_t *device);
+UINT8 cubeqcpu_get_ptr_ram_val(device_t *device, int i);
+UINT32* cubeqcpu_get_stack_ram(device_t *device);
 
-CPU_GET_INFO( cquestsnd );
-CPU_GET_INFO( cquestrot );
-CPU_GET_INFO( cquestlin );
-
-#define CPU_CQUESTSND CPU_GET_INFO_NAME( cquestsnd )
-#define CPU_CQUESTROT CPU_GET_INFO_NAME( cquestrot )
-#define CPU_CQUESTLIN CPU_GET_INFO_NAME( cquestlin )
+DECLARE_LEGACY_CPU_DEVICE(CQUESTSND, cquestsnd);
+DECLARE_LEGACY_CPU_DEVICE(CQUESTROT, cquestrot);
+DECLARE_LEGACY_CPU_DEVICE(CQUESTLIN, cquestlin);
 
 #endif /* _CUBEQCPU_H */

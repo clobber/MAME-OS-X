@@ -1,38 +1,30 @@
-/* Macross Plus - video
-  see DRIVER file for notes */
+/* video/macrossp.c */
 
-#include "driver.h"
-
-
-UINT32 *macrossp_scra_videoram, *macrossp_scra_videoregs;
-UINT32 *macrossp_scrb_videoram, *macrossp_scrb_videoregs;
-UINT32 *macrossp_scrc_videoram, *macrossp_scrc_videoregs;
-UINT32 *macrossp_text_videoram, *macrossp_text_videoregs;
-UINT32 *macrossp_spriteram;
-
-static UINT32 *spriteram_old,*spriteram_old2;
-
-static tilemap  *macrossp_scra_tilemap, *macrossp_scrb_tilemap,*macrossp_scrc_tilemap, *macrossp_text_tilemap;
+#include "emu.h"
+#include "includes/macrossp.h"
 
 
 /*** SCR A LAYER ***/
 
 WRITE32_HANDLER( macrossp_scra_videoram_w )
 {
-	COMBINE_DATA(&macrossp_scra_videoram[offset]);
+	macrossp_state *state = space->machine().driver_data<macrossp_state>();
 
-	tilemap_mark_tile_dirty(macrossp_scra_tilemap,offset);
+	COMBINE_DATA(&state->m_scra_videoram[offset]);
+
+	state->m_scra_tilemap->mark_tile_dirty(offset);
 }
 
 
 static TILE_GET_INFO( get_macrossp_scra_tile_info )
 {
-	UINT32 attr,tileno,color;
+	macrossp_state *state = machine.driver_data<macrossp_state>();
+	UINT32 attr, tileno, color;
 
-	attr = macrossp_scra_videoram[tile_index];
+	attr = state->m_scra_videoram[tile_index];
 	tileno = attr & 0x0000ffff;
 
-	switch (macrossp_scra_videoregs[0] & 0x00000c00)
+	switch (state->m_scra_videoregs[0] & 0x00000c00)
 	{
 		case 0x00000800:
 			color = (attr & 0x000e0000) >> 15;
@@ -43,31 +35,34 @@ static TILE_GET_INFO( get_macrossp_scra_tile_info )
 			break;
 
 		default:
-			color = mame_rand(machine) & 7;
+			color = machine.rand() & 7;
 			break;
 	}
 
-	SET_TILE_INFO(1,tileno,color,TILE_FLIPYX((attr & 0xc0000000) >> 30));
+	SET_TILE_INFO(1, tileno, color, TILE_FLIPYX((attr & 0xc0000000) >> 30));
 }
 
 /*** SCR B LAYER ***/
 
 WRITE32_HANDLER( macrossp_scrb_videoram_w )
 {
-	COMBINE_DATA(&macrossp_scrb_videoram[offset]);
+	macrossp_state *state = space->machine().driver_data<macrossp_state>();
 
-	tilemap_mark_tile_dirty(macrossp_scrb_tilemap,offset);
+	COMBINE_DATA(&state->m_scrb_videoram[offset]);
+
+	state->m_scrb_tilemap->mark_tile_dirty(offset);
 }
 
 
 static TILE_GET_INFO( get_macrossp_scrb_tile_info )
 {
-	UINT32 attr,tileno,color;
+	macrossp_state *state = machine.driver_data<macrossp_state>();
+	UINT32 attr, tileno, color;
 
-	attr = macrossp_scrb_videoram[tile_index];
+	attr = state->m_scrb_videoram[tile_index];
 	tileno = attr & 0x0000ffff;
 
-	switch (macrossp_scrb_videoregs[0] & 0x00000c00)
+	switch (state->m_scrb_videoregs[0] & 0x00000c00)
 	{
 		case 0x00000800:
 			color = (attr & 0x000e0000) >> 15;
@@ -78,31 +73,34 @@ static TILE_GET_INFO( get_macrossp_scrb_tile_info )
 			break;
 
 		default:
-			color = mame_rand(machine) & 7;
+			color = machine.rand() & 7;
 			break;
 	}
 
-	SET_TILE_INFO(2,tileno,color,TILE_FLIPYX((attr & 0xc0000000) >> 30));
+	SET_TILE_INFO(2, tileno, color, TILE_FLIPYX((attr & 0xc0000000) >> 30));
 }
 
 /*** SCR C LAYER ***/
 
 WRITE32_HANDLER( macrossp_scrc_videoram_w )
 {
-	COMBINE_DATA(&macrossp_scrc_videoram[offset]);
+	macrossp_state *state = space->machine().driver_data<macrossp_state>();
 
-	tilemap_mark_tile_dirty(macrossp_scrc_tilemap,offset);
+	COMBINE_DATA(&state->m_scrc_videoram[offset]);
+
+	state->m_scrc_tilemap->mark_tile_dirty(offset);
 }
 
 
 static TILE_GET_INFO( get_macrossp_scrc_tile_info )
 {
-	UINT32 attr,tileno,color;
+	macrossp_state *state = machine.driver_data<macrossp_state>();
+	UINT32 attr, tileno, color;
 
-	attr = macrossp_scrc_videoram[tile_index];
+	attr = state->m_scrc_videoram[tile_index];
 	tileno = attr & 0x0000ffff;
 
-	switch (macrossp_scrc_videoregs[0] & 0x00000c00)
+	switch (state->m_scrc_videoregs[0] & 0x00000c00)
 	{
 		case 0x00000800:
 			color = (attr & 0x000e0000) >> 15;
@@ -113,69 +111,77 @@ static TILE_GET_INFO( get_macrossp_scrc_tile_info )
 			break;
 
 		default:
-			color = mame_rand(machine) & 7;
+			color = machine.rand() & 7;
 			break;
 	}
 
-	SET_TILE_INFO(3,tileno,color,TILE_FLIPYX((attr & 0xc0000000) >> 30));
+	SET_TILE_INFO(3, tileno, color, TILE_FLIPYX((attr & 0xc0000000) >> 30));
 }
 
 /*** TEXT LAYER ***/
 
 WRITE32_HANDLER( macrossp_text_videoram_w )
 {
-	COMBINE_DATA(&macrossp_text_videoram[offset]);
+	macrossp_state *state = space->machine().driver_data<macrossp_state>();
 
-	tilemap_mark_tile_dirty(macrossp_text_tilemap,offset);
+	COMBINE_DATA(&state->m_text_videoram[offset]);
+
+	state->m_text_tilemap->mark_tile_dirty(offset);
 }
 
 
 static TILE_GET_INFO( get_macrossp_text_tile_info )
 {
+	macrossp_state *state = machine.driver_data<macrossp_state>();
 	UINT32 tileno, colour;
 
-	tileno = macrossp_text_videoram[tile_index] & 0x0000ffff;
-	colour = (macrossp_text_videoram[tile_index] & 0x00fe0000) >> 17;
+	tileno = state->m_text_videoram[tile_index] & 0x0000ffff;
+	colour = (state->m_text_videoram[tile_index] & 0x00fe0000) >> 17;
 
-	SET_TILE_INFO(4,tileno,colour,0);
+	SET_TILE_INFO(4, tileno, colour, 0);
 }
 
 
 
 /*** VIDEO START / UPDATE ***/
 
-VIDEO_START(macrossp)
+VIDEO_START( macrossp )
 {
-	spriteram_old = auto_alloc_array_clear(machine, UINT32, spriteram_size/4);
-	spriteram_old2 = auto_alloc_array_clear(machine, UINT32, spriteram_size/4);
+	macrossp_state *state = machine.driver_data<macrossp_state>();
 
-	macrossp_text_tilemap = tilemap_create(machine, get_macrossp_text_tile_info,tilemap_scan_rows,16,16,64,64);
-	macrossp_scra_tilemap = tilemap_create(machine, get_macrossp_scra_tile_info,tilemap_scan_rows,16,16,64,64);
-	macrossp_scrb_tilemap = tilemap_create(machine, get_macrossp_scrb_tile_info,tilemap_scan_rows,16,16,64,64);
-	macrossp_scrc_tilemap = tilemap_create(machine, get_macrossp_scrc_tile_info,tilemap_scan_rows,16,16,64,64);
+	state->m_spriteram_old = auto_alloc_array_clear(machine, UINT32, state->m_spriteram_size / 4);
+	state->m_spriteram_old2 = auto_alloc_array_clear(machine, UINT32, state->m_spriteram_size / 4);
 
-	tilemap_set_transparent_pen(macrossp_text_tilemap,0);
-	tilemap_set_transparent_pen(macrossp_scra_tilemap,0);
-	tilemap_set_transparent_pen(macrossp_scrb_tilemap,0);
-	tilemap_set_transparent_pen(macrossp_scrc_tilemap,0);
+	state->m_text_tilemap = tilemap_create(machine, get_macrossp_text_tile_info, tilemap_scan_rows, 16, 16, 64, 64);
+	state->m_scra_tilemap = tilemap_create(machine, get_macrossp_scra_tile_info, tilemap_scan_rows, 16, 16, 64, 64);
+	state->m_scrb_tilemap = tilemap_create(machine, get_macrossp_scrb_tile_info, tilemap_scan_rows, 16, 16, 64, 64);
+	state->m_scrc_tilemap = tilemap_create(machine, get_macrossp_scrc_tile_info, tilemap_scan_rows, 16, 16, 64, 64);
 
-	machine->gfx[0]->color_granularity=64;
-	machine->gfx[1]->color_granularity=64;
-	machine->gfx[2]->color_granularity=64;
-	machine->gfx[3]->color_granularity=64;
+	state->m_text_tilemap->set_transparent_pen(0);
+	state->m_scra_tilemap->set_transparent_pen(0);
+	state->m_scrb_tilemap->set_transparent_pen(0);
+	state->m_scrc_tilemap->set_transparent_pen(0);
+
+	machine.gfx[0]->color_granularity = 64;
+	machine.gfx[1]->color_granularity = 64;
+	machine.gfx[2]->color_granularity = 64;
+	machine.gfx[3]->color_granularity = 64;
+
+	state->save_pointer(NAME(state->m_spriteram_old), state->m_spriteram_size / 4);
+	state->save_pointer(NAME(state->m_spriteram_old2), state->m_spriteram_size / 4);
 }
 
 
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int priority )
+static void draw_sprites(running_machine &machine, bitmap_rgb32 &bitmap, const rectangle &cliprect, int priority )
 {
-	const gfx_element *gfx = machine->gfx[0];
-//  UINT32 *source = macrossp_spriteram;
-	UINT32 *source = spriteram_old2; /* buffers by two frames */
-	UINT32 *finish = source + spriteram_size/4;
+	macrossp_state *state = machine.driver_data<macrossp_state>();
+	const gfx_element *gfx = machine.gfx[0];
+	//  UINT32 *source = state->m_spriteram;
+	UINT32 *source = state->m_spriteram_old2; /* buffers by two frames */
+	UINT32 *finish = source + state->m_spriteram_size / 4;
 
-
-	while( source<finish )
+	while (source < finish)
 	{
 
 		/*
@@ -208,8 +214,8 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 		int loopno = 0;
 
-		int xcnt,ycnt;
-		int xoffset,yoffset;
+		int xcnt, ycnt;
+		int xoffset, yoffset;
 
 		int pri = (source[2] & 0x0c000000) >> 26;
 
@@ -226,7 +232,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 					break;
 
 				default:
-					col = mame_rand(machine);
+					col = machine.rand();
 					break;
 			}
 
@@ -234,56 +240,77 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 			if (xpos > 0x1ff) xpos -=0x400;
 			if (ypos > 0x1ff) ypos -=0x400;
 
-			if (!flipx) {
-				if (!flipy) { /* noxflip, noyflip */
+			if (!flipx)
+			{
+				if (!flipy)
+				{
+					/* noxflip, noyflip */
 					yoffset = 0; /* I'm doing this so rounding errors are cumulative, still looks a touch crappy when multiple sprites used together */
-					for (ycnt = 0; ycnt <= high; ycnt++) {
+					for (ycnt = 0; ycnt <= high; ycnt++)
+					{
 						xoffset = 0;
-						for (xcnt = 0; xcnt <= wide; xcnt++) {
+						for (xcnt = 0; xcnt <= wide; xcnt++)
+						{
 							drawgfxzoom_alpha(bitmap,cliprect,gfx,tileno+loopno,col,flipx,flipy,xpos+xoffset,ypos+yoffset,xzoom*0x100,yzoom*0x100,0,alpha);
 
 							xoffset += ((xzoom*16 + (1<<7)) >> 8);
 							loopno++;
 						}
 						yoffset += ((yzoom*16 + (1<<7)) >> 8);
-					}
-				}else{ /* noxflip, flipy */
-					yoffset = ((high*yzoom*16) >> 8);
-					for (ycnt = high; ycnt >= 0; ycnt--) {
-						xoffset = 0;
-						for (xcnt = 0; xcnt <= wide; xcnt++) {
-							drawgfxzoom_alpha(bitmap,cliprect,gfx,tileno+loopno,col,flipx,flipy,xpos+xoffset,ypos+yoffset,xzoom*0x100,yzoom*0x100,0,alpha);
-
-							xoffset += ((xzoom*16 + (1<<7)) >> 8);
-							loopno++;
-						}
-						yoffset -= ((yzoom*16 + (1<<7)) >> 8);
 					}
 				}
-			}else{
-				if (!flipy) { /* xflip, noyflip */
-					yoffset = 0;
-					for (ycnt = 0; ycnt <= high; ycnt++) {
-						xoffset = ((wide*xzoom*16) >> 8);
-						for (xcnt = wide; xcnt >= 0; xcnt--) {
+				else
+				{
+					/* noxflip, flipy */
+					yoffset = ((high * yzoom * 16) >> 8);
+					for (ycnt = high; ycnt >= 0; ycnt--)
+					{
+						xoffset = 0;
+						for (xcnt = 0; xcnt <= wide; xcnt++)
+						{
 							drawgfxzoom_alpha(bitmap,cliprect,gfx,tileno+loopno,col,flipx,flipy,xpos+xoffset,ypos+yoffset,xzoom*0x100,yzoom*0x100,0,alpha);
 
-							xoffset -= ((xzoom*16 + (1<<7)) >> 8);
+							xoffset += ((xzoom * 16 + (1 << 7)) >> 8);
 							loopno++;
 						}
-						yoffset += ((yzoom*16 + (1<<7)) >> 8);
+						yoffset -= ((yzoom * 16 + (1 << 7)) >> 8);
 					}
-				}else{ /* xflip, yflip */
-					yoffset = ((high*yzoom*16) >> 8);
-					for (ycnt = high; ycnt >= 0; ycnt--) {
+				}
+			}
+			else
+			{
+				if (!flipy)
+				{
+					/* xflip, noyflip */
+					yoffset = 0;
+					for (ycnt = 0; ycnt <= high; ycnt++)
+					{
 						xoffset = ((wide*xzoom*16) >> 8);
-						for (xcnt = wide; xcnt >=0 ; xcnt--) {
+						for (xcnt = wide; xcnt >= 0; xcnt--)
+						{
 							drawgfxzoom_alpha(bitmap,cliprect,gfx,tileno+loopno,col,flipx,flipy,xpos+xoffset,ypos+yoffset,xzoom*0x100,yzoom*0x100,0,alpha);
 
-							xoffset -= ((xzoom*16 + (1<<7)) >> 8);
+							xoffset -= ((xzoom * 16 + (1 << 7)) >> 8);
 							loopno++;
 						}
-						yoffset -= ((yzoom*16 + (1<<7)) >> 8);
+						yoffset += ((yzoom * 16 + (1 << 7)) >> 8);
+					}
+				}
+				else
+				{
+					/* xflip, yflip */
+					yoffset = ((high * yzoom * 16) >> 8);
+					for (ycnt = high; ycnt >= 0; ycnt--)
+					{
+						xoffset = ((wide * xzoom * 16) >> 8);
+						for (xcnt = wide; xcnt >=0 ; xcnt--)
+						{
+							drawgfxzoom_alpha(bitmap,cliprect,gfx,tileno+loopno,col,flipx,flipy,xpos+xoffset,ypos+yoffset,xzoom*0x100,yzoom*0x100,0,alpha);
+
+							xoffset -= ((xzoom * 16 + (1 << 7)) >> 8);
+							loopno++;
+						}
+						yoffset -= ((yzoom * 16 + (1 << 7)) >> 8);
 					}
 				}
 			}
@@ -293,33 +320,34 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 }
 
 
-static void draw_layer(bitmap_t *bitmap, const rectangle *cliprect, int layer)
+static void draw_layer( running_machine &machine, bitmap_rgb32 &bitmap, const rectangle &cliprect, int layer )
 {
-	tilemap *tm;
+	macrossp_state *state = machine.driver_data<macrossp_state>();
+	tilemap_t *tm;
 	UINT32 *vr;
 
 	switch (layer)
 	{
 		case 0:
 		default:
-			tm = macrossp_scra_tilemap;
-			vr = macrossp_scra_videoregs;
+			tm = state->m_scra_tilemap;
+			vr = state->m_scra_videoregs;
 			break;
 
 		case 1:
-			tm = macrossp_scrb_tilemap;
-			vr = macrossp_scrb_videoregs;
+			tm = state->m_scrb_tilemap;
+			vr = state->m_scrb_videoregs;
 			break;
 
 		case 2:
-			tm = macrossp_scrc_tilemap;
-			vr = macrossp_scrc_videoregs;
+			tm = state->m_scrc_tilemap;
+			vr = state->m_scrc_videoregs;
 			break;
 	}
 
 	if ((vr[2] & 0xf0000000) == 0xe0000000)	/* zoom enable (guess, surely wrong) */
 	{
-		int startx,starty,inc;
+		int startx, starty, inc;
 
 		startx = (vr[1] & 0x0000ffff) << 16;
 		starty = (vr[1] & 0xffff0000) >> 0;
@@ -330,16 +358,16 @@ static void draw_layer(bitmap_t *bitmap, const rectangle *cliprect, int layer)
 		startx -= (368/2) * inc;
 		starty -= (240/2) * inc;
 
-		tilemap_draw_roz(bitmap,cliprect,tm,
+		tm->draw_roz(bitmap, cliprect,
 				startx,starty,inc,0,0,inc,
 				1,	/* wraparound */
 				0,0);
 	}
 	else
 	{
-		tilemap_set_scrollx( tm, 0, ((vr[0] & 0x000003ff) >> 0 ) );
-		tilemap_set_scrolly( tm, 0, ((vr[0] & 0x03ff0000) >> 16) );
-		tilemap_draw(bitmap,cliprect,tm,0,0);
+		tm->set_scrollx(0, ((vr[0] & 0x000003ff) >> 0 ) );
+		tm->set_scrolly(0, ((vr[0] & 0x03ff0000) >> 16) );
+		tm->draw(bitmap, cliprect, 0, 0);
 	}
 }
 
@@ -359,51 +387,57 @@ static void sortlayers(int *layer,int *pri)
 	SWAP(1,2)
 }
 
-VIDEO_UPDATE(macrossp)
+SCREEN_UPDATE_RGB32( macrossp )
 {
+	macrossp_state *state = screen.machine().driver_data<macrossp_state>();
 	int layers[3],layerpri[3];
 
-
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
 
 	layers[0] = 0;
-	layerpri[0] = (macrossp_scra_videoregs[0] & 0x0000c000) >> 14;
+	layerpri[0] = (state->m_scra_videoregs[0] & 0x0000c000) >> 14;
 	layers[1] = 1;
-	layerpri[1] = (macrossp_scrb_videoregs[0] & 0x0000c000) >> 14;
+	layerpri[1] = (state->m_scrb_videoregs[0] & 0x0000c000) >> 14;
 	layers[2] = 2;
-	layerpri[2] = (macrossp_scrc_videoregs[0] & 0x0000c000) >> 14;
+	layerpri[2] = (state->m_scrc_videoregs[0] & 0x0000c000) >> 14;
 
 	sortlayers(layers, layerpri);
 
-	draw_layer(bitmap,cliprect,layers[0]);
-	draw_sprites(screen->machine,bitmap,cliprect,0);
-	draw_layer(bitmap,cliprect,layers[1]);
-	draw_sprites(screen->machine,bitmap,cliprect,1);
-	draw_layer(bitmap,cliprect,layers[2]);
-	draw_sprites(screen->machine,bitmap,cliprect,2);
-	draw_sprites(screen->machine,bitmap,cliprect,3);
-	tilemap_draw(bitmap,cliprect,macrossp_text_tilemap,0,0);
+	draw_layer(screen.machine(), bitmap, cliprect, layers[0]);
+	draw_sprites(screen.machine(), bitmap, cliprect, 0);
+	draw_layer(screen.machine(), bitmap, cliprect, layers[1]);
+	draw_sprites(screen.machine(), bitmap, cliprect, 1);
+	draw_layer(screen.machine(), bitmap, cliprect, layers[2]);
+	draw_sprites(screen.machine(), bitmap, cliprect, 2);
+	draw_sprites(screen.machine(), bitmap, cliprect, 3);
+	state->m_text_tilemap->draw(bitmap, cliprect, 0, 0);
 
 #if 0
 popmessage	("scra - %08x %08x %08x\nscrb - %08x %08x %08x\nscrc - %08x %08x %08x",
-macrossp_scra_videoregs[0]&0xffff33ff, // yyyyxxxx
-macrossp_scra_videoregs[1], // ??? more scrolling?
-macrossp_scra_videoregs[2], // 08 - 0b
+state->m_scra_videoregs[0]&0xffff33ff, // yyyyxxxx
+state->m_scra_videoregs[1], // ??? more scrolling?
+state->m_scra_videoregs[2], // 08 - 0b
 
-macrossp_scrb_videoregs[0]&0xffff33ff, // 00 - 03
-macrossp_scrb_videoregs[1], // 04 - 07
-macrossp_scrb_videoregs[2], // 08 - 0b
+state->m_scrb_videoregs[0]&0xffff33ff, // 00 - 03
+state->m_scrb_videoregs[1], // 04 - 07
+state->m_scrb_videoregs[2], // 08 - 0b
 
-macrossp_scrc_videoregs[0]&0xffff33ff, // 00 - 03
-macrossp_scrc_videoregs[1], // 04 - 07
-macrossp_scrc_videoregs[2]);// 08 - 0b
+state->m_scrc_videoregs[0]&0xffff33ff, // 00 - 03
+state->m_scrc_videoregs[1], // 04 - 07
+state->m_scrc_videoregs[2]);// 08 - 0b
 #endif
 	return 0;
 }
 
-VIDEO_EOF( macrossp )
+SCREEN_VBLANK( macrossp )
 {
-	/* looks like sprites are *two* frames ahead, like nmk16 */
-	memcpy(spriteram_old2,spriteram_old,spriteram_size);
-	memcpy(spriteram_old,macrossp_spriteram,spriteram_size);
+	// rising edge
+	if (vblank_on)
+	{
+		macrossp_state *state = screen.machine().driver_data<macrossp_state>();
+
+		/* looks like sprites are *two* frames ahead, like nmk16 */
+		memcpy(state->m_spriteram_old2, state->m_spriteram_old, state->m_spriteram_size);
+		memcpy(state->m_spriteram_old, state->m_spriteram, state->m_spriteram_size);
+	}
 }

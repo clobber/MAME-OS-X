@@ -4,26 +4,12 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "crgolf.h"
+#include "emu.h"
+#include "includes/crgolf.h"
 
 
 #define NUM_PENS		(0x20)
 #define VIDEORAM_SIZE	(0x2000 * 3)
-
-
-/* globals */
-UINT8 *crgolf_color_select;
-UINT8 *crgolf_screen_flip;
-UINT8 *crgolf_screen_select;
-UINT8 *crgolf_screenb_enable;
-UINT8 *crgolf_screena_enable;
-
-
-/* local variables */
-static UINT8 *crgolf_videoram_a;
-static UINT8 *crgolf_videoram_b;
-
 
 
 /*************************************
@@ -34,21 +20,24 @@ static UINT8 *crgolf_videoram_b;
 
 WRITE8_HANDLER( crgolf_videoram_w )
 {
-	if (*crgolf_screen_select & 1)
-		crgolf_videoram_b[offset] = data;
+	crgolf_state *state = space->machine().driver_data<crgolf_state>();
+
+	if (*state->m_screen_select & 1)
+		state->m_videoram_b[offset] = data;
 	else
-		crgolf_videoram_a[offset] = data;
+		state->m_videoram_a[offset] = data;
 }
 
 
 READ8_HANDLER( crgolf_videoram_r )
 {
+	crgolf_state *state = space->machine().driver_data<crgolf_state>();
 	UINT8 ret;
 
-	if (*crgolf_screen_select & 1)
-		ret = crgolf_videoram_b[offset];
+	if (*state->m_screen_select & 1)
+		ret = state->m_videoram_b[offset];
 	else
-		ret = crgolf_videoram_a[offset];
+		ret = state->m_videoram_a[offset];
 
 	return ret;
 }
@@ -61,10 +50,10 @@ READ8_HANDLER( crgolf_videoram_r )
  *
  *************************************/
 
-static void get_pens(running_machine *machine, pen_t *pens)
+static void get_pens( running_machine &machine, pen_t *pens )
 {
 	offs_t offs;
-	const UINT8 *prom = memory_region(machine, "proms");
+	const UINT8 *prom = machine.region("proms")->base();
 
 	for (offs = 0; offs < NUM_PENS; offs++)
 	{
@@ -103,13 +92,15 @@ static void get_pens(running_machine *machine, pen_t *pens)
 
 static VIDEO_START( crgolf )
 {
+	crgolf_state *state = machine.driver_data<crgolf_state>();
+
 	/* allocate memory for the two bitmaps */
-	crgolf_videoram_a = auto_alloc_array(machine, UINT8, VIDEORAM_SIZE);
-	crgolf_videoram_b = auto_alloc_array(machine, UINT8, VIDEORAM_SIZE);
+	state->m_videoram_a = auto_alloc_array(machine, UINT8, VIDEORAM_SIZE);
+	state->m_videoram_b = auto_alloc_array(machine, UINT8, VIDEORAM_SIZE);
 
 	/* register for save states */
-	state_save_register_global_pointer(machine, crgolf_videoram_a, VIDEORAM_SIZE);
-	state_save_register_global_pointer(machine, crgolf_videoram_b, VIDEORAM_SIZE);
+	state->save_pointer(NAME(state->m_videoram_a), VIDEORAM_SIZE);
+	state->save_pointer(NAME(state->m_videoram_b), VIDEORAM_SIZE);
 }
 
 
@@ -120,14 +111,15 @@ static VIDEO_START( crgolf )
  *
  *************************************/
 
-static VIDEO_UPDATE( crgolf )
+static SCREEN_UPDATE_RGB32( crgolf )
 {
-	int flip = *crgolf_screen_flip & 1;
+	crgolf_state *state = screen.machine().driver_data<crgolf_state>();
+	int flip = *state->m_screen_flip & 1;
 
 	offs_t offs;
 	pen_t pens[NUM_PENS];
 
-	get_pens(screen->machine, pens);
+	get_pens(screen.machine(), pens);
 
 	/* for each byte in the video RAM */
 	for (offs = 0; offs < VIDEORAM_SIZE / 3; offs++)
@@ -137,12 +129,12 @@ static VIDEO_UPDATE( crgolf )
 		UINT8 y = (offs & 0x1fe0) >> 5;
 		UINT8 x = (offs & 0x001f) << 3;
 
-		UINT8 data_a0 = crgolf_videoram_a[0x2000 | offs];
-		UINT8 data_a1 = crgolf_videoram_a[0x0000 | offs];
-		UINT8 data_a2 = crgolf_videoram_a[0x4000 | offs];
-		UINT8 data_b0 = crgolf_videoram_b[0x2000 | offs];
-		UINT8 data_b1 = crgolf_videoram_b[0x0000 | offs];
-		UINT8 data_b2 = crgolf_videoram_b[0x4000 | offs];
+		UINT8 data_a0 = state->m_videoram_a[0x2000 | offs];
+		UINT8 data_a1 = state->m_videoram_a[0x0000 | offs];
+		UINT8 data_a2 = state->m_videoram_a[0x4000 | offs];
+		UINT8 data_b0 = state->m_videoram_b[0x2000 | offs];
+		UINT8 data_b1 = state->m_videoram_b[0x0000 | offs];
+		UINT8 data_b2 = state->m_videoram_b[0x4000 | offs];
 
 		if (flip)
 		{
@@ -157,10 +149,10 @@ static VIDEO_UPDATE( crgolf )
 			UINT8 data_b = 0;
 			UINT8 data_a = 0;
 
-			if (~*crgolf_screena_enable & 1)
+			if (~*state->m_screena_enable & 1)
 				data_a = ((data_a0 & 0x80) >> 7) | ((data_a1 & 0x80) >> 6) | ((data_a2 & 0x80) >> 5);
 
-			if (~*crgolf_screenb_enable & 1)
+			if (~*state->m_screenb_enable & 1)
 				data_b = ((data_b0 & 0x80) >> 7) | ((data_b1 & 0x80) >> 6) | ((data_b2 & 0x80) >> 5);
 
 			/* screen A has priority over B */
@@ -170,10 +162,10 @@ static VIDEO_UPDATE( crgolf )
 				color = data_b | 0x08;
 
 			/* add HI bit if enabled */
-			if (*crgolf_color_select)
+			if (*state->m_color_select)
 				color = color | 0x10;
 
-			*BITMAP_ADDR32(bitmap, y, x) = pens[color];
+			bitmap.pix32(y, x) = pens[color];
 
 			/* next pixel */
 			data_a0 = data_a0 << 1;
@@ -194,22 +186,19 @@ static VIDEO_UPDATE( crgolf )
 }
 
 
-
 /*************************************
  *
  *  Machine driver
  *
  *************************************/
 
-MACHINE_DRIVER_START( crgolf_video )
+MACHINE_CONFIG_FRAGMENT( crgolf_video )
 
-	MDRV_VIDEO_START(crgolf)
-	MDRV_VIDEO_UPDATE(crgolf)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 255, 8, 247)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(crgolf)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 255, 8, 247)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_UPDATE_STATIC(crgolf)
+MACHINE_CONFIG_END

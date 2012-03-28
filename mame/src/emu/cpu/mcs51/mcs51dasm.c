@@ -33,6 +33,7 @@
  * D52 8052 Disassembler - Copyright Jeffery L. Post
  *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "mcs51.h"
 
@@ -137,10 +138,10 @@ static const struct {
 	{ FEATURE_DS5002FP, 0xd8, "rpctl"	},
 	{ FEATURE_DS5002FP, 0xd9, "rps"		},
 
-	{ FEATURE_I83C751, 	0x98, "i2con"	},
-	{ FEATURE_I83C751, 	0x99, "i2dat"	},
-	{ FEATURE_I83C751, 	0xd8, "i2cfg"	},
-	{ FEATURE_I83C751, 	0xf8, "i2sta"	},	/* read only */
+	{ FEATURE_I83C751,	0x98, "i2con"	},
+	{ FEATURE_I83C751,	0x99, "i2dat"	},
+	{ FEATURE_I83C751,	0xd8, "i2cfg"	},
+	{ FEATURE_I83C751,	0xf8, "i2sta"	},	/* read only */
 
 	/* bit addresses */
 
@@ -251,7 +252,7 @@ static const struct {
 	{ FEATURE_I83C751, 0x1fe, "idle"	},
 	{ FEATURE_I83C751, 0x1ff, "i2sta.7"	},
 
-	/* unkown
+	/* unknown
      * "ibf",    "obf",    "idsm",   "obfc",    e8 - eb
      * "ma0",    "ma1",    "mb0",    "mb1",     ec - ef
      */

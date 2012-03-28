@@ -6,6 +6,17 @@
 
 #include "sound/discrete.h"
 
+class asteroid_state : public driver_device
+{
+public:
+	asteroid_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_ram1;
+	UINT8 *m_ram2;
+};
+
+
 /*----------- defined in machine/asteroid.c -----------*/
 
 INTERRUPT_GEN( asteroid_interrupt );
@@ -23,7 +34,6 @@ WRITE8_HANDLER( astdelux_led_w );
 
 MACHINE_RESET( asteroid );
 
-extern UINT8 *asteroid_ram1, *asteroid_ram2;
 
 /*----------- defined in audio/asteroid.c -----------*/
 

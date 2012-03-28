@@ -7,30 +7,17 @@ driver by Ernesto Corvi
 
 Notes:
 - Sprite colors are wrong (missing colortable?)
+- driver should probably be merged with suprridr.c
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-
-/* from video */
-extern VIDEO_START( timelimt );
-extern PALETTE_INIT( timelimt );
-extern VIDEO_UPDATE( timelimt );
-
-extern WRITE8_HANDLER( timelimt_videoram_w );
-extern WRITE8_HANDLER( timelimt_bg_videoram_w );
-extern WRITE8_HANDLER( timelimt_scroll_y_w );
-extern WRITE8_HANDLER( timelimt_scroll_x_msb_w );
-extern WRITE8_HANDLER( timelimt_scroll_x_lsb_w );
-
-extern UINT8 *timelimt_bg_videoram;
-extern size_t timelimt_bg_videoram_size;
+#include "includes/timelimt.h"
 
 /***************************************************************************/
 
-static int nmi_enabled = 0;
 
 static MACHINE_START( timelimt )
 {
@@ -39,28 +26,30 @@ static MACHINE_START( timelimt )
 
 static MACHINE_RESET( timelimt )
 {
-	nmi_enabled = 0;
+	timelimt_state *state = machine.driver_data<timelimt_state>();
+	state->m_nmi_enabled = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	nmi_enabled = data & 1;	/* bit 0 = nmi enable */
+	timelimt_state *state = space->machine().driver_data<timelimt_state>();
+	state->m_nmi_enabled = data & 1;	/* bit 0 = nmi enable */
 }
 
 static WRITE8_HANDLER( sound_reset_w )
 {
 	if (data & 1)
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, PULSE_LINE);
 }
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM		/* rom */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM		/* ram */
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(timelimt_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)	/* video ram */
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(timelimt_bg_videoram_w) AM_BASE(&timelimt_bg_videoram) AM_SIZE(&timelimt_bg_videoram_size)/* background ram */
-	AM_RANGE(0x9800, 0x98ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* sprite ram */
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(timelimt_videoram_w) AM_BASE_MEMBER(timelimt_state, m_videoram)	/* video ram */
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(timelimt_bg_videoram_w) AM_BASE_MEMBER(timelimt_state, m_bg_videoram) AM_SIZE_MEMBER(timelimt_state, m_bg_videoram_size)/* background ram */
+	AM_RANGE(0x9800, 0x98ff) AM_RAM AM_BASE_SIZE_MEMBER(timelimt_state, m_spriteram, m_spriteram_size)	/* sprite ram */
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW")
@@ -75,17 +64,17 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc804, 0xc804) AM_WRITENOP		/* ???? not used */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(watchdog_reset_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x3800, 0x3bff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(soundlatch_clear_w)
 	AM_RANGE(0x8c, 0x8d) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_address_data_w)
@@ -213,12 +202,6 @@ static const gfx_layout spritelayout =
 static GFXDECODE_START( timelimt )
 	GFXDECODE_ENTRY( "tiles_1", 0, charlayout,   32, 1 )	/* seems correct */
 	GFXDECODE_ENTRY( "tiles_2", 0, charlayout,    0, 1 )	/* seems correct */
-	GFXDECODE_ENTRY( "sprites", 0, spritelayout,  0, 8 )	/* ?? */
-GFXDECODE_END
-
-static GFXDECODE_START( progress )
-	GFXDECODE_ENTRY( "tiles_1", 0, charlayout,   32, 1 )	/* seems correct */
-	GFXDECODE_ENTRY( "tiles_2", 0, charlayout,    0, 1 )	/* seems correct */
 	GFXDECODE_ENTRY( "sprites", 0, spritelayout, 64, 4 )	/* seems correct */
 GFXDECODE_END
 
@@ -234,65 +217,57 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL
 };
 
-static INTERRUPT_GEN( timelimt_irq ) {
-	if ( nmi_enabled )
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+static INTERRUPT_GEN( timelimt_irq )
+{
+	timelimt_state *state = device->machine().driver_data<timelimt_state>();
+	if ( state->m_nmi_enabled )
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 /***************************************************************************/
 
-static MACHINE_DRIVER_START( timelimt )
+static MACHINE_CONFIG_START( timelimt, timelimt_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)	/* 5.000 MHz */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(main_io_map)
-	MDRV_CPU_VBLANK_INT("screen", timelimt_irq)
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)	/* 5.000 MHz */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(main_io_map)
+	MCFG_CPU_VBLANK_INT("screen", timelimt_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80,18432000/6)	/* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sound_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold) /* ? */
+	MCFG_CPU_ADD("audiocpu", Z80,18432000/6)	/* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sound_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold) /* ? */
 
-	MDRV_QUANTUM_TIME(HZ(3000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(3000))
 
-	MDRV_MACHINE_START(timelimt)
-	MDRV_MACHINE_RESET(timelimt)
+	MCFG_MACHINE_START(timelimt)
+	MCFG_MACHINE_RESET(timelimt)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(timelimt)
 
-	MDRV_GFXDECODE(timelimt)
-	MDRV_PALETTE_LENGTH(64)
+	MCFG_GFXDECODE(timelimt)
+	MCFG_PALETTE_LENGTH(64+32)
 
-	MDRV_PALETTE_INIT(timelimt)
-	MDRV_VIDEO_START(timelimt)
-	MDRV_VIDEO_UPDATE(timelimt)
+	MCFG_PALETTE_INIT(timelimt)
+	MCFG_VIDEO_START(timelimt)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 18432000/12)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay1", AY8910, 18432000/12)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 18432000/12)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( progress )
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(timelimt)
-
-	MDRV_GFXDECODE(progress)
-	MDRV_PALETTE_LENGTH(96)
-
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, 18432000/12)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -324,10 +299,10 @@ ROM_START( timelimt )
 	ROM_LOAD( "tl2",    0x2000, 0x2000, CRC(4693b849) SHA1(fbebedde53599fb1eaedc648bd704b321ab096b5) )
 	ROM_LOAD( "tl1",    0x4000, 0x2000, CRC(c4007caf) SHA1(ae05af3319545d5ca98a046bfc100138a5a3ed96) )
 
-	ROM_REGION( 0x0040, "proms", 0 )
+	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "clr.35", 0x0000, 0x0020, CRC(9c9e6073) SHA1(98496175bf19a8cdb0018705bc1a2193b8a782e1) )
-	ROM_LOAD( "clr.48", 0x0020, 0x0020, BAD_DUMP CRC(a0bcac59) SHA1(e5832831b21981363509b79d89766757bd9273b0)  )	/* FIXED BITS (xxxxxx1x) */
-	/* missing a prom? */
+	ROM_LOAD( "clr.48", 0x0020, 0x0020, BAD_DUMP CRC(a0bcac59) SHA1(e5832831b21981363509b79d89766757bd9273b0) )	/* FIXED BITS (xxxxxx1x) */
+	ROM_LOAD( "clr.57", 0x0040, 0x0020, NO_DUMP )	/* missing sprite color prom? */
 ROM_END
 
 ROM_START( progress )
@@ -360,4 +335,4 @@ ROM_START( progress )
 ROM_END
 
 GAME( 1983, timelimt, 0, timelimt, timelimt, 0, ROT90, "Chuo Co. Ltd", "Time Limit", GAME_IMPERFECT_COLORS )
-GAME( 1984, progress, 0, progress, progress, 0, ROT90, "Chuo Co. Ltd", "Progress", 0 )
+GAME( 1984, progress, 0, timelimt, progress, 0, ROT90, "Chuo Co. Ltd", "Progress", 0 )

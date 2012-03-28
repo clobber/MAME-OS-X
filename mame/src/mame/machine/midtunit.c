@@ -4,12 +4,12 @@
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms34010/tms34010.h"
 #include "cpu/m6809/m6809.h"
 #include "audio/williams.h"
 #include "audio/dcs.h"
-#include "midtunit.h"
+#include "includes/midtunit.h"
 
 
 /* compile-time constants */
@@ -30,16 +30,16 @@ static UINT8	chip_type;
 static UINT8	fake_sound_state;
 
 /* protection */
-static UINT8 	mk_prot_index;
-static UINT16 	mk2_prot_data;
+static UINT8	mk_prot_index;
+static UINT16	mk2_prot_data;
 
 static const UINT32 *nbajam_prot_table;
 static UINT16	nbajam_prot_queue[5];
 static UINT8	nbajam_prot_index;
 
 static const UINT8 *jdredd_prot_table;
-static UINT8 	jdredd_prot_index;
-static UINT8 	jdredd_prot_max;
+static UINT8	jdredd_prot_index;
+static UINT8	jdredd_prot_max;
 
 
 
@@ -49,7 +49,7 @@ static UINT8 	jdredd_prot_max;
  *
  *************************************/
 
-static void register_state_saving(running_machine *machine)
+static void register_state_saving(running_machine &machine)
 {
 	state_save_register_global(machine, cmos_write_enable);
 	state_save_register_global(machine, fake_sound_state);
@@ -79,12 +79,13 @@ WRITE16_HANDLER( midtunit_cmos_w )
 {
 	if (1)/*cmos_write_enable)*/
 	{
-		COMBINE_DATA(generic_nvram16+offset);
+		midtunit_state *state = space->machine().driver_data<midtunit_state>();
+		COMBINE_DATA(state->m_nvram+offset);
 		cmos_write_enable = 0;
 	}
 	else
 	{
-		logerror("%08X:Unexpected CMOS W @ %05X\n", cpu_get_pc(space->cpu), offset);
+		logerror("%08X:Unexpected CMOS W @ %05X\n", cpu_get_pc(&space->device()), offset);
 		popmessage("Bad CMOS write");
 	}
 }
@@ -92,7 +93,8 @@ WRITE16_HANDLER( midtunit_cmos_w )
 
 READ16_HANDLER( midtunit_cmos_r )
 {
-	return generic_nvram16[offset];
+	midtunit_state *state = space->machine().driver_data<midtunit_state>();
+	return state->m_nvram[offset];
 }
 
 
@@ -107,7 +109,7 @@ READ16_HANDLER( midtunit_input_r )
 {
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "DSW" };
 
-	return input_port_read(space->machine, portnames[offset]);
+	return input_port_read(space->machine(), portnames[offset]);
 }
 
 
@@ -132,12 +134,12 @@ static const UINT8 mk_prot_values[] =
 
 static READ16_HANDLER( mk_prot_r )
 {
-	logerror("%08X:Protection R @ %05X = %04X\n", cpu_get_pc(space->cpu), offset, mk_prot_values[mk_prot_index] << 9);
+	logerror("%08X:Protection R @ %05X = %04X\n", cpu_get_pc(&space->device()), offset, mk_prot_values[mk_prot_index] << 9);
 
 	/* just in case */
 	if (mk_prot_index >= sizeof(mk_prot_values))
 	{
-		logerror("%08X:Unexpected protection R @ %05X\n", cpu_get_pc(space->cpu), offset);
+		logerror("%08X:Unexpected protection R @ %05X\n", cpu_get_pc(&space->device()), offset);
 		mk_prot_index = 0;
 	}
 
@@ -162,11 +164,11 @@ static WRITE16_HANDLER( mk_prot_w )
 		/* just in case */
 		if (i == sizeof(mk_prot_values))
 		{
-			logerror("%08X:Unhandled protection W @ %05X = %04X\n", cpu_get_pc(space->cpu), offset, data);
+			logerror("%08X:Unhandled protection W @ %05X = %04X\n", cpu_get_pc(&space->device()), offset, data);
 			mk_prot_index = 0;
 		}
 
-		logerror("%08X:Protection W @ %05X = %04X\n", cpu_get_pc(space->cpu), offset, data);
+		logerror("%08X:Protection W @ %05X = %04X\n", cpu_get_pc(&space->device()), offset, data);
 	}
 }
 
@@ -182,7 +184,7 @@ static READ16_HANDLER( mkturbo_prot_r )
 {
 	/* the security GAL overlays a counter of some sort at 0xfffff400 in ROM space.
      * A startup protection check expects to read back two different values in succession */
-	return mame_rand(space->machine);
+	return space->machine().rand();
 }
 
 
@@ -334,7 +336,7 @@ static const UINT8 jdredd_prot_values_80020[] =
 
 static WRITE16_HANDLER( jdredd_prot_w )
 {
-	logerror("%08X:jdredd_prot_w(%04X,%04X)\n", cpu_get_previouspc(space->cpu), offset*16, data);
+	logerror("%08X:jdredd_prot_w(%04X,%04X)\n", cpu_get_previouspc(&space->device()), offset*16, data);
 
 	switch (offset)
 	{
@@ -382,7 +384,7 @@ static READ16_HANDLER( jdredd_prot_r )
 	if (jdredd_prot_table && jdredd_prot_index < jdredd_prot_max)
 		result = jdredd_prot_table[jdredd_prot_index++] << 9;
 
-	logerror("%08X:jdredd_prot_r(%04X) = %04X\n", cpu_get_previouspc(space->cpu), offset*16, result);
+	logerror("%08X:jdredd_prot_r(%04X) = %04X\n", cpu_get_previouspc(&space->device()), offset*16, result);
 	return result;
 }
 
@@ -391,7 +393,7 @@ static READ16_HANDLER( jdredd_prot_r )
 static UINT16 *jdredd_hack;
 static READ16_HANDLER( jdredd_hack_r )
 {
-	if (cpu_get_pc(space->cpu) == 0xFFBA7EB0)
+	if (cpu_get_pc(&space->device()) == 0xFFBA7EB0)
 	{
 		fprintf(stderr, "jdredd_hack_r\n");
 		return 0;
@@ -409,9 +411,9 @@ static READ16_HANDLER( jdredd_hack_r )
  *
  *************************************/
 
-static void init_tunit_generic(running_machine *machine, int sound)
+static void init_tunit_generic(running_machine &machine, int sound)
 {
-	offs_t gfx_chunk = midyunit_gfx_rom_size / 4;
+	offs_t gfx_chunk = midtunit_gfx_rom_size / 4;
 	UINT8 *base;
 	int i;
 
@@ -419,13 +421,13 @@ static void init_tunit_generic(running_machine *machine, int sound)
 	register_state_saving(machine);
 
 	/* load the graphics ROMs -- quadruples */
-	base = memory_region(machine, "gfx1");
-	for (i = 0; i < midyunit_gfx_rom_size; i += 4)
+	base = machine.region("gfx1")->base();
+	for (i = 0; i < midtunit_gfx_rom_size; i += 4)
 	{
-		midyunit_gfx_rom[i + 0] = base[0 * gfx_chunk + i / 4];
-		midyunit_gfx_rom[i + 1] = base[1 * gfx_chunk + i / 4];
-		midyunit_gfx_rom[i + 2] = base[2 * gfx_chunk + i / 4];
-		midyunit_gfx_rom[i + 3] = base[3 * gfx_chunk + i / 4];
+		midtunit_gfx_rom[i + 0] = base[0 * gfx_chunk + i / 4];
+		midtunit_gfx_rom[i + 1] = base[1 * gfx_chunk + i / 4];
+		midtunit_gfx_rom[i + 2] = base[2 * gfx_chunk + i / 4];
+		midtunit_gfx_rom[i + 3] = base[3 * gfx_chunk + i / 4];
 	}
 
 	/* load sound ROMs and set up sound handlers */
@@ -462,23 +464,22 @@ DRIVER_INIT( mktunit )
 	init_tunit_generic(machine, SOUND_ADPCM);
 
 	/* protection */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b00000, 0x1b6ffff, 0, 0, mk_prot_r, mk_prot_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x1b00000, 0x1b6ffff, FUNC(mk_prot_r), FUNC(mk_prot_w));
 
 	/* sound chip protection (hidden RAM) */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfb9c, 0xfbc6, 0, 0, (read8_space_func)SMH_BANK(9), (write8_space_func)SMH_BANK(9));
-	memory_set_bankptr(machine, 9, auto_alloc_array(machine, UINT8, 0x80));
+	machine.device("adpcm")->memory().space(AS_PROGRAM)->install_ram(0xfb9c, 0xfbc6);
 }
 
 DRIVER_INIT( mkturbo )
 {
 	/* protection */
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xfffff400, 0xfffff40f, 0, 0, mkturbo_prot_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xfffff400, 0xfffff40f, FUNC(mkturbo_prot_r));
 
 	DRIVER_INIT_CALL(mktunit);
 }
 
 
-static void init_nbajam_common(running_machine *machine, int te_protection)
+static void init_nbajam_common(running_machine &machine, int te_protection)
 {
 	/* common init */
 	init_tunit_generic(machine, SOUND_ADPCM_LARGE);
@@ -487,21 +488,20 @@ static void init_nbajam_common(running_machine *machine, int te_protection)
 	if (!te_protection)
 	{
 		nbajam_prot_table = nbajam_prot_values;
-		memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b14020, 0x1b2503f, 0, 0, nbajam_prot_r, nbajam_prot_w);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x1b14020, 0x1b2503f, FUNC(nbajam_prot_r), FUNC(nbajam_prot_w));
 	}
 	else
 	{
 		nbajam_prot_table = nbajamte_prot_values;
-		memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b15f40, 0x1b37f5f, 0, 0, nbajam_prot_r, nbajam_prot_w);
-		memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b95f40, 0x1bb7f5f, 0, 0, nbajam_prot_r, nbajam_prot_w);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x1b15f40, 0x1b37f5f, FUNC(nbajam_prot_r), FUNC(nbajam_prot_w));
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x1b95f40, 0x1bb7f5f, FUNC(nbajam_prot_r), FUNC(nbajam_prot_w));
 	}
 
 	/* sound chip protection (hidden RAM) */
 	if (!te_protection)
-		memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbaa, 0xfbd4, 0, 0, (read8_space_func)SMH_BANK(9), (write8_space_func)SMH_BANK(9));
+		machine.device("adpcm")->memory().space(AS_PROGRAM)->install_ram(0xfbaa, 0xfbd4);
 	else
-		memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbec, 0xfc16, 0, 0, (read8_space_func)SMH_BANK(9), (write8_space_func)SMH_BANK(9));
-	memory_set_bankptr(machine, 9, auto_alloc_array(machine, UINT8, 0x80));
+		machine.device("adpcm")->memory().space(AS_PROGRAM)->install_ram(0xfbec, 0xfc16);
 }
 
 DRIVER_INIT( nbajam )
@@ -520,18 +520,19 @@ DRIVER_INIT( jdreddp )
 	init_tunit_generic(machine, SOUND_ADPCM_LARGE);
 
 	/* looks like the watchdog needs to be disabled */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01d81060, 0x01d8107f, 0, 0, (write16_space_func)SMH_NOP);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0x01d81060, 0x01d8107f);
 
 	/* protection */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b00000, 0x1bfffff, 0, 0, jdredd_prot_r, jdredd_prot_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x1b00000, 0x1bfffff, FUNC(jdredd_prot_r), FUNC(jdredd_prot_w));
 
 	/* sound chip protection (hidden RAM) */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbcf, 0xfbf9, 0, 0, (read8_space_func)SMH_BANK(7), (write8_space_func)SMH_BANK(9));
-	memory_set_bankptr(machine, 9, auto_alloc_array(machine, UINT8, 0x80));
+	machine.device("adpcm")->memory().space(AS_PROGRAM)->install_read_bank(0xfbcf, 0xfbf9, "bank7");
+	machine.device("adpcm")->memory().space(AS_PROGRAM)->install_write_bank(0xfbcf, 0xfbf9, "bank9");
+	memory_set_bankptr(machine, "bank9", auto_alloc_array(machine, UINT8, 0x80));
 
 #if ENABLE_ALL_JDREDD_LEVELS
 	/* how about the final levels? */
-	jdredd_hack = memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xFFBA7FF0, 0xFFBA7FFf, 0, 0, jdredd_hack_r);
+	jdredd_hack = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xFFBA7FF0, 0xFFBA7FFf, FUNC(jdredd_hack_r));
 #endif
 }
 
@@ -552,13 +553,13 @@ DRIVER_INIT( mk2 )
 	midtunit_gfx_rom_large = 1;
 
 	/* protection */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00f20c60, 0x00f20c7f, 0, 0, mk2_prot_w);
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00f42820, 0x00f4283f, 0, 0, mk2_prot_w);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01a190e0, 0x01a190ff, 0, 0, mk2_prot_r);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01a191c0, 0x01a191df, 0, 0, mk2_prot_shift_r);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01a3d0c0, 0x01a3d0ff, 0, 0, mk2_prot_r);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01d9d1e0, 0x01d9d1ff, 0, 0, mk2_prot_const_r);
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01def920, 0x01def93f, 0, 0, mk2_prot_const_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00f20c60, 0x00f20c7f, FUNC(mk2_prot_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00f42820, 0x00f4283f, FUNC(mk2_prot_w));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x01a190e0, 0x01a190ff, FUNC(mk2_prot_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x01a191c0, 0x01a191df, FUNC(mk2_prot_shift_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x01a3d0c0, 0x01a3d0ff, FUNC(mk2_prot_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x01d9d1e0, 0x01d9d1ff, FUNC(mk2_prot_const_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x01def920, 0x01def93f, FUNC(mk2_prot_const_r));
 }
 
 
@@ -576,13 +577,13 @@ MACHINE_RESET( midtunit )
 	{
 		case SOUND_ADPCM:
 		case SOUND_ADPCM_LARGE:
-			williams_adpcm_reset_w(1);
-			williams_adpcm_reset_w(0);
+			williams_adpcm_reset_w(machine, 1);
+			williams_adpcm_reset_w(machine, 0);
 			break;
 
 		case SOUND_DCS:
-			dcs_reset_w(1);
-			dcs_reset_w(0);
+			dcs_reset_w(machine, 1);
+			dcs_reset_w(machine, 0);
 			break;
 	}
 }
@@ -597,10 +598,10 @@ MACHINE_RESET( midtunit )
 
 READ16_HANDLER( midtunit_sound_state_r )
 {
-/*  logerror("%08X:Sound status read\n", cpu_get_pc(space->cpu));*/
+/*  logerror("%08X:Sound status read\n", cpu_get_pc(&space->device()));*/
 
 	if (chip_type == SOUND_DCS)
-		return dcs_control_r() >> 4;
+		return dcs_control_r(space->machine()) >> 4;
 
 	if (fake_sound_state)
 	{
@@ -612,10 +613,10 @@ READ16_HANDLER( midtunit_sound_state_r )
 
 READ16_HANDLER( midtunit_sound_r )
 {
-	logerror("%08X:Sound data read\n", cpu_get_pc(space->cpu));
+	logerror("%08X:Sound data read\n", cpu_get_pc(&space->device()));
 
 	if (chip_type == SOUND_DCS)
-		return dcs_data_r() & 0xff;
+		return dcs_data_r(space->machine()) & 0xff;
 
 	return ~0;
 }
@@ -625,7 +626,7 @@ WRITE16_HANDLER( midtunit_sound_w )
 	/* check for out-of-bounds accesses */
 	if (!offset)
 	{
-		logerror("%08X:Unexpected write to sound (lo) = %04X\n", cpu_get_pc(space->cpu), data);
+		logerror("%08X:Unexpected write to sound (lo) = %04X\n", cpu_get_pc(&space->device()), data);
 		return;
 	}
 
@@ -635,17 +636,17 @@ WRITE16_HANDLER( midtunit_sound_w )
 		{
 			case SOUND_ADPCM:
 			case SOUND_ADPCM_LARGE:
-				williams_adpcm_reset_w(~data & 0x100);
-				williams_adpcm_data_w(data & 0xff);
+				williams_adpcm_reset_w(space->machine(), ~data & 0x100);
+				williams_adpcm_data_w(space->machine(), data & 0xff);
 
 				/* the games seem to check for $82 loops, so this should be just barely enough */
 				fake_sound_state = 128;
 				break;
 
 			case SOUND_DCS:
-				logerror("%08X:Sound write = %04X\n", cpu_get_pc(space->cpu), data);
-				dcs_reset_w(~data & 0x100);
-				dcs_data_w(data & 0xff);
+				logerror("%08X:Sound write = %04X\n", cpu_get_pc(&space->device()), data);
+				dcs_reset_w(space->machine(), ~data & 0x100);
+				dcs_data_w(space->machine(), data & 0xff);
 				/* the games seem to check for $82 loops, so this should be just barely enough */
 				fake_sound_state = 128;
 				break;

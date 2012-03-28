@@ -1,34 +1,32 @@
 /***************************************************************************
 
 Mr Do!
-
 driver by Nicola Salmoria
 
+Updated 02/2010 with proper XTAL values thanks to Oliver_A
 
-Video clock: XTAL = 20 MHz
-Horizontal video frequency: HSYNC = XTAL/4/312 = 16.02564103 kHz
-Video frequency: VSYNC = HSYNC/262 = 61.1665688 Hz
-VBlank duration: 1/VSYNC * (70/262) = 4368 us
+PCB Model: 8201
+Main Clock: XTAL = 8.2 MHz
+Video clock: XTAL = 19.6 MHz
+
+Horizontal video frequency: HSYNC = XTAL/4/312 = 15.7051282051 kHz
+Video frequency: VSYNC = HSYNC/262 = 59.94323742 Hz
+VBlank duration: 1/VSYNC * (70/262) = 4457 us
+
+
+The manual for this model clearly shows above values in 'Misc' parts listings.
+There's a chance that certain bootlegs might have the different 8/20 MHz XTALS.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
-
-#define MAIN_CLOCK		XTAL_8MHz
-#define VIDEO_CLOCK		XTAL_20MHz
+#include "includes/mrdo.h"
 
 
-extern UINT8 *mrdo_bgvideoram,*mrdo_fgvideoram;
-WRITE8_HANDLER( mrdo_bgvideoram_w );
-WRITE8_HANDLER( mrdo_fgvideoram_w );
-WRITE8_HANDLER( mrdo_scrollx_w );
-WRITE8_HANDLER( mrdo_scrolly_w );
-WRITE8_HANDLER( mrdo_flipscreen_w );
-PALETTE_INIT( mrdo );
-VIDEO_START( mrdo );
-VIDEO_UPDATE( mrdo );
+#define MAIN_CLOCK		XTAL_8_2MHz
+#define VIDEO_CLOCK		XTAL_19_6MHz
 
 
 
@@ -36,17 +34,17 @@ VIDEO_UPDATE( mrdo );
 /* if a read from this address doesn't return the value it expects. */
 static READ8_HANDLER( mrdo_SECRE_r )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
-	return RAM[ cpu_get_reg(space->cpu, Z80_HL) ];
+	UINT8 *RAM = space->machine().region("maincpu")->base();
+	return RAM[cpu_get_reg(&space->device(), Z80_HL)];
 }
 
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(mrdo_bgvideoram_w) AM_BASE(&mrdo_bgvideoram)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(mrdo_fgvideoram_w) AM_BASE(&mrdo_fgvideoram)
-	AM_RANGE(0x9000, 0x90ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(mrdo_bgvideoram_w) AM_BASE_MEMBER(mrdo_state, m_bgvideoram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(mrdo_fgvideoram_w) AM_BASE_MEMBER(mrdo_state, m_fgvideoram)
+	AM_RANGE(0x9000, 0x90ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(mrdo_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(mrdo_flipscreen_w)	/* screen flip + playfield priority */
 	AM_RANGE(0x9801, 0x9801) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x9802, 0x9802) AM_DEVWRITE("sn2", sn76496_w)
@@ -119,7 +117,7 @@ static INPUT_PORTS_START( mrdo )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	/* settings 0x01 thru 0x05 all give 1 Coin/1 Credit */
+	/* settings 0x01 through 0x05 all give 1 Coin/1 Credit */
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW2:4,3,2,1")
 	PORT_DIPSETTING(    0x60, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
@@ -132,7 +130,7 @@ static INPUT_PORTS_START( mrdo )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	/* settings 0x10 thru 0x50 all give 1 Coin/1 Credit */
+	/* settings 0x10 through 0x50 all give 1 Coin/1 Credit */
 INPUT_PORTS_END
 
 
@@ -167,34 +165,33 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( mrdo )
+static MACHINE_CONFIG_START( mrdo, mrdo_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MAIN_CLOCK/2)	/* 4 MHz */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, MAIN_CLOCK/2)	/* Verified */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(VIDEO_CLOCK/4, 312, 8, 248, 262, 32, 224)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(VIDEO_CLOCK/4, 312, 8, 248, 262, 32, 224)
+	MCFG_SCREEN_UPDATE_STATIC(mrdo)
 
-	MDRV_GFXDECODE(mrdo)
-	MDRV_PALETTE_LENGTH(64*4+16*4)
+	MCFG_GFXDECODE(mrdo)
+	MCFG_PALETTE_LENGTH(64*4+16*4)
 
-	MDRV_PALETTE_INIT(mrdo)
-	MDRV_VIDEO_START(mrdo)
-	MDRV_VIDEO_UPDATE(mrdo)
+	MCFG_PALETTE_INIT(mrdo)
+	MCFG_VIDEO_START(mrdo)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn1", SN76489, MAIN_CLOCK/2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("sn1", U8106, MAIN_CLOCK/2)	/* sn76489-equivalent?, Verified */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn2", SN76489, MAIN_CLOCK/2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("sn2", U8106, MAIN_CLOCK/2)	/* sn76489-equivalent?, Verified */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 

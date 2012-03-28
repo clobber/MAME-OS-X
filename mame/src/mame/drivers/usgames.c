@@ -23,40 +23,32 @@ Sound: AY-3-8912
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "video/mc6845.h"
 #include "sound/ay8910.h"
-
-/* video */
-WRITE8_HANDLER( usgames_videoram_w );
-WRITE8_HANDLER( usgames_charram_w );
-VIDEO_START(usgames);
-PALETTE_INIT(usgames);
-VIDEO_UPDATE(usgames);
-
-
-extern UINT8 *usgames_videoram,*usgames_charram;
+#include "includes/usgames.h"
+#include "machine/nvram.h"
 
 
 static WRITE8_HANDLER( usgames_rombank_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 
 //  logerror ("BANK WRITE? -%02x-\n",data);
 //popmessage("%02x",data);
 
-	memory_set_bankptr(space->machine,  1,&RAM[ 0x10000 + 0x4000 * data] );
+	memory_set_bankptr(space->machine(),  "bank1",&RAM[ 0x10000 + 0x4000 * data] );
 }
 
 static WRITE8_HANDLER( lamps1_w )
 {
 	/* button lamps */
-	set_led_status(0,data & 0x01);
-	set_led_status(1,data & 0x02);
-	set_led_status(2,data & 0x04);
-	set_led_status(3,data & 0x08);
-	set_led_status(4,data & 0x10);
+	set_led_status(space->machine(), 0,data & 0x01);
+	set_led_status(space->machine(), 1,data & 0x02);
+	set_led_status(space->machine(), 2,data & 0x04);
+	set_led_status(space->machine(), 3,data & 0x08);
+	set_led_status(space->machine(), 4,data & 0x10);
 
 	/* bit 5 toggles all the time - extra lamp? */
 }
@@ -68,40 +60,40 @@ static WRITE8_HANDLER( lamps2_w )
 
 
 
-static ADDRESS_MAP_START( usgames_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+static ADDRESS_MAP_START( usgames_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("DSW")
 	AM_RANGE(0x2010, 0x2010) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x2020, 0x2020) AM_WRITE(lamps1_w)
 	AM_RANGE(0x2030, 0x2030) AM_WRITE(lamps2_w)
-	AM_RANGE(0x2040, 0x2040) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0x2040, 0x2040) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
 	AM_RANGE(0x2041, 0x2041) AM_READ_PORT("UNK1")
-	AM_RANGE(0x2041, 0x2041) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x2041, 0x2041) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x2060, 0x2060) AM_WRITE(usgames_rombank_w)
 	AM_RANGE(0x2070, 0x2070) AM_READ_PORT("UNK2")
-	AM_RANGE(0x2400, 0x2401) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(usgames_charram_w) AM_BASE(&usgames_charram)
-	AM_RANGE(0x3000, 0x3fff) AM_RAM_WRITE(usgames_videoram_w) AM_BASE(&usgames_videoram)
-	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(SMH_BANK(1), SMH_ROM)
+	AM_RANGE(0x2400, 0x2401) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(usgames_charram_w) AM_BASE_MEMBER(usgames_state, m_charram)
+	AM_RANGE(0x3000, 0x3fff) AM_RAM_WRITE(usgames_videoram_w) AM_BASE_MEMBER(usgames_state, m_videoram)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( usg185_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("ay", ay8910_address_data_w)
+static ADDRESS_MAP_START( usg185_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x2400, 0x2400) AM_READ_PORT("DSW")
 	AM_RANGE(0x2410, 0x2410) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x2420, 0x2420) AM_WRITE(lamps1_w)
 	AM_RANGE(0x2430, 0x2430) AM_WRITE(lamps2_w)
-	AM_RANGE(0x2440, 0x2440) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0x2440, 0x2440) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
 	AM_RANGE(0x2441, 0x2441) AM_READ_PORT("UNK1")
-	AM_RANGE(0x2441, 0x2441) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x2441, 0x2441) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x2460, 0x2460) AM_WRITE(usgames_rombank_w)
 	AM_RANGE(0x2470, 0x2470) AM_READ_PORT("UNK2")
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(usgames_charram_w) AM_BASE(&usgames_charram)
-	AM_RANGE(0x3000, 0x3fff) AM_RAM_WRITE(usgames_videoram_w) AM_BASE(&usgames_videoram)
-	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(SMH_BANK(1), SMH_ROM)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(usgames_charram_w) AM_BASE_MEMBER(usgames_state, m_charram)
+	AM_RANGE(0x3000, 0x3fff) AM_RAM_WRITE(usgames_videoram_w) AM_BASE_MEMBER(usgames_state, m_videoram)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -237,44 +229,42 @@ static const mc6845_interface mc6845_intf =
 };
 
 
-static MACHINE_DRIVER_START( usg32 )
+static MACHINE_CONFIG_START( usg32, usgames_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, 2000000) /* ?? */
-	MDRV_CPU_PROGRAM_MAP(usgames_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold,5*60) /* ?? */
+	MCFG_CPU_ADD("maincpu", M6809, 2000000) /* ?? */
+	MCFG_CPU_PROGRAM_MAP(usgames_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,5*60) /* ?? */
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(7*8, 57*8-1, 0*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(7*8, 57*8-1, 0*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(usgames)
 
-	MDRV_GFXDECODE(usgames)
-	MDRV_PALETTE_LENGTH(2*256)
+	MCFG_GFXDECODE(usgames)
+	MCFG_PALETTE_LENGTH(2*256)
 
-	MDRV_PALETTE_INIT(usgames)
-	MDRV_VIDEO_START(usgames)
-	MDRV_VIDEO_UPDATE(usgames)
+	MCFG_PALETTE_INIT(usgames)
+	MCFG_VIDEO_START(usgames)
 
-	MDRV_MC6845_ADD("crtc", MC6845, XTAL_18MHz / 16, mc6845_intf)
+	MCFG_MC6845_ADD("crtc", MC6845, XTAL_18MHz / 16, mc6845_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("aysnd", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( usg185 )
-	MDRV_IMPORT_FROM(usg32)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(usg185_map)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( usg185, usg32 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(usg185_map)
+MACHINE_CONFIG_END
 
 
 

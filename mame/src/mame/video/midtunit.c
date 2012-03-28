@@ -4,10 +4,10 @@
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "profiler.h"
 #include "cpu/tms34010/tms34010.h"
-#include "midtunit.h"
+#include "includes/midtunit.h"
 
 
 /* compile-time options */
@@ -40,11 +40,13 @@ enum
 
 
 /* graphics-related variables */
+       UINT8 *	midtunit_gfx_rom;
+       size_t	midtunit_gfx_rom_size;
        UINT8	midtunit_gfx_rom_large;
 static UINT16	midtunit_control;
 
 /* videoram-related variables */
-static UINT32 	gfxbank_offset[2];
+static UINT32	gfxbank_offset[2];
 static UINT16 *	local_videoram;
 static UINT8	videobank_select;
 
@@ -53,8 +55,8 @@ static UINT16	dma_register[18];
 static struct
 {
 	UINT32		offset;			/* source offset, in bits */
-	INT32 		rowbits;		/* source bits to skip each row */
-	INT32 		xpos;			/* x position, clipped */
+	INT32		rowbits;		/* source bits to skip each row */
+	INT32		xpos;			/* x position, clipped */
 	INT32		ypos;			/* y position, clipped */
 	INT32		width;			/* horizontal pixel count */
 	INT32		height;			/* vertical pixel count */
@@ -128,7 +130,7 @@ VIDEO_START( midxunit )
 
 READ16_HANDLER( midtunit_gfxrom_r )
 {
-	UINT8 *base = &midyunit_gfx_rom[gfxbank_offset[(offset >> 21) & 1]];
+	UINT8 *base = &midtunit_gfx_rom[gfxbank_offset[(offset >> 21) & 1]];
 	offset = (offset & 0x01fffff) * 2;
 	return base[offset] | (base[offset + 1] << 8);
 }
@@ -136,7 +138,7 @@ READ16_HANDLER( midtunit_gfxrom_r )
 
 READ16_HANDLER( midwunit_gfxrom_r )
 {
-	UINT8 *base = &midyunit_gfx_rom[gfxbank_offset[0]];
+	UINT8 *base = &midtunit_gfx_rom[gfxbank_offset[0]];
 	offset *= 2;
 	return base[offset] | (base[offset + 1] << 8);
 }
@@ -220,13 +222,13 @@ READ16_HANDLER( midtunit_vram_color_r )
  *
  *************************************/
 
-void midtunit_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void midtunit_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	memcpy(shiftreg, &local_videoram[address >> 3], 2 * 512 * sizeof(UINT16));
 }
 
 
-void midtunit_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void midtunit_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	memcpy(&local_videoram[address >> 3], shiftreg, 2 * 512 * sizeof(UINT16));
 }
@@ -295,9 +297,9 @@ WRITE16_HANDLER( midtunit_paletteram_w )
 {
 	//int newword;
 
-	COMBINE_DATA(&paletteram16[offset]);
-	//newword = paletteram16[offset];
-	palette_set_color_rgb(space->machine, offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	//newword = space->machine().generic.paletteram.u16[offset];
+	palette_set_color_rgb(space->machine(), offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
 
@@ -310,7 +312,7 @@ WRITE16_HANDLER( midxunit_paletteram_w )
 
 READ16_HANDLER( midxunit_paletteram_r )
 {
-	return paletteram16[offset / 2];
+	return space->machine().generic.paletteram.u16[offset / 2];
 }
 
 
@@ -355,7 +357,7 @@ typedef void (*dma_draw_func)(void);
 #define DMA_DRAW_FUNC_BODY(name, bitsperpixel, extractor, xflip, skip, scale, zero, nonzero) \
 {																				\
 	int height = dma_state.height << 8;											\
-	UINT8 *base = midyunit_gfx_rom;													\
+	UINT8 *base = midtunit_gfx_rom;													\
 	UINT32 offset = dma_state.offset;											\
 	UINT16 pal = dma_state.palette;												\
 	UINT16 color = pal | dma_state.color;										\
@@ -456,9 +458,9 @@ typedef void (*dma_draw_func)(void);
 			}																	\
 																				\
 			/* update pointers */												\
-			if (xflip) 															\
+			if (xflip)															\
 				sx = (sx - 1) & XPOSMASK;										\
-			else 																\
+			else																\
 				sx = (sx + 1) & XPOSMASK;										\
 																				\
 			/* advance to the next pixel */										\
@@ -558,22 +560,16 @@ DMA_DRAW_FUNC(prefix##_p0c1_xf, bpp, extract, XFLIP_YES, skip, scale, PIXEL_COPY
 static const dma_draw_func prefix[32] =																			\
 {																											\
 /*  B0:N / B1:N         B0:Y / B1:N         B0:N / B1:Y         B0:Y / B1:Y */								\
-	dma_draw_none,		prefix##_p0,		prefix##_p1,		prefix##_p0p1,		/* no color */ 			\
-	prefix##_c0,		prefix##_c0,		prefix##_c0p1,		prefix##_c0p1,		/* color 0 pixels */ 	\
+	dma_draw_none,		prefix##_p0,		prefix##_p1,		prefix##_p0p1,		/* no color */			\
+	prefix##_c0,		prefix##_c0,		prefix##_c0p1,		prefix##_c0p1,		/* color 0 pixels */	\
 	prefix##_c1,		prefix##_p0c1,		prefix##_c1,		prefix##_p0c1,		/* color non-0 pixels */\
-	prefix##_c0c1,		prefix##_c0c1,		prefix##_c0c1,		prefix##_c0c1,		/* fill */ 				\
+	prefix##_c0c1,		prefix##_c0c1,		prefix##_c0c1,		prefix##_c0c1,		/* fill */				\
 																											\
-	dma_draw_none,		prefix##_p0_xf,		prefix##_p1_xf,		prefix##_p0p1_xf,	/* no color */ 			\
-	prefix##_c0_xf,		prefix##_c0_xf,		prefix##_c0p1_xf,	prefix##_c0p1_xf,	/* color 0 pixels */ 	\
+	dma_draw_none,		prefix##_p0_xf,		prefix##_p1_xf,		prefix##_p0p1_xf,	/* no color */			\
+	prefix##_c0_xf,		prefix##_c0_xf,		prefix##_c0p1_xf,	prefix##_c0p1_xf,	/* color 0 pixels */	\
 	prefix##_c1_xf,		prefix##_p0c1_xf,	prefix##_c1_xf,		prefix##_p0c1_xf,	/* color non-0 pixels */\
-	prefix##_c0c1_xf,	prefix##_c0c1_xf,	prefix##_c0c1_xf,	prefix##_c0c1_xf	/* fill */ 				\
+	prefix##_c0c1_xf,	prefix##_c0c1_xf,	prefix##_c0c1_xf,	prefix##_c0c1_xf	/* fill */				\
 };
-
-
-/* allow for custom blitters */
-#ifdef midtunit_CUSTOM_BLITTERS
-#include "midtblit.c"
-#endif
 
 
 /*** blitter family declarations ***/
@@ -683,11 +679,11 @@ WRITE16_HANDLER( midtunit_dma_w )
 
 	/* high bit triggers action */
 	command = dma_register[DMA_COMMAND];
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 	if (!(command & 0x8000))
 		return;
 
-	profiler_mark_start(PROFILER_USER1);
+	g_profiler.start(PROFILER_USER1);
 
 	/* determine bpp */
 	bpp = (command >> 12) & 7;
@@ -719,7 +715,7 @@ WRITE16_HANDLER( midtunit_dma_w )
 
 if (LOG_DMA)
 {
-	if (input_code_pressed(space->machine, KEYCODE_L))
+	if (space->machine().input().code_pressed(KEYCODE_L))
 	{
 		logerror("DMA command %04X: (bpp=%d skip=%d xflip=%d yflip=%d preskip=%d postskip=%d)\n",
 				command, (command >> 12) & 7, (command >> 7) & 1, (command >> 4) & 1, (command >> 5) & 1, (command >> 8) & 3, (command >> 10) & 3);
@@ -793,9 +789,9 @@ if (LOG_DMA)
 
 	/* signal we're done */
 skipdma:
-	timer_set(space->machine, ATTOTIME_IN_NSEC(41 * pixels), NULL, 0, dma_callback);
+	space->machine().scheduler().timer_set(attotime::from_nsec(41 * pixels), FUNC(dma_callback));
 
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 
@@ -806,10 +802,10 @@ skipdma:
  *
  *************************************/
 
-void midtunit_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+void midtunit_scanline_update(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params)
 {
 	UINT16 *src = &local_videoram[(params->rowaddr << 9) & 0x3fe00];
-	UINT16 *dest = BITMAP_ADDR16(bitmap, scanline, 0);
+	UINT16 *dest = &bitmap.pix16(scanline);
 	int coladdr = params->coladdr << 1;
 	int x;
 
@@ -818,11 +814,11 @@ void midtunit_scanline_update(const device_config *screen, bitmap_t *bitmap, int
 		dest[x] = src[coladdr++ & 0x1ff] & 0x7fff;
 }
 
-void midxunit_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+void midxunit_scanline_update(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params)
 {
 	UINT32 fulladdr = ((params->rowaddr << 16) | params->coladdr) >> 3;
 	UINT16 *src = &local_videoram[fulladdr & 0x3fe00];
-	UINT16 *dest = BITMAP_ADDR16(bitmap, scanline, 0);
+	UINT16 *dest = &bitmap.pix16(scanline);
 	int x;
 
 	/* copy the non-blanked portions of this scanline */

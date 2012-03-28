@@ -3,7 +3,7 @@
  TS 01.05.2006:
 
  - added sprites, bgmap reading and few ixes here and there
-   airraid and cshootre are a bit "playable" ;) without gfx
+   airraid and cshootere are a bit "playable" ;) without gfx
 
 
 Haze's notes :
@@ -14,7 +14,7 @@ Haze's notes :
   - i can't decode the other gfx? rom
   - there don't seem to be any sprites / bg's in ram, interrupts?
   - palette? format isn't understood
-  - the other sets ('cshootre' and 'airraid') need decrypting ..
+  - the other sets ('cshootere' and 'airraid') need decrypting ..
     is the main one protected ? theres a 68705 on it
 
 
@@ -83,43 +83,32 @@ Stephh's notes (based on the game Z80 code and some tests) :
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "audio/seibu.h"
 
-static UINT8* cshooter_txram;
-static tilemap *cshooter_txtilemap;
-static int coin_stat=0;
 
-static UINT8 *mainram;
-
-static void ar_coin_hack(running_machine *machine)
+class cshooter_state : public driver_device
 {
-	if(input_port_read(machine, "COIN") & 1)
-	{
-		if(coin_stat==0)
-		{
-			coin_stat=1;
-			if(mainram[0]==0)
-			{
-				mainram[0]=0x80;
-			}
+public:
+	cshooter_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-			mainram[0x234]++;
+	UINT8* m_txram;
+	tilemap_t *m_txtilemap;
+	UINT8 *m_mainram;
+	int m_coin_stat;
+	int m_counter;
+	UINT8 *m_spriteram;
+	size_t m_spriteram_size;
+};
 
-		}
-	}
-	else
-	{
-		coin_stat=0;
-	}
-}
 
 static TILE_GET_INFO( get_cstx_tile_info )
 {
-	int code = (cshooter_txram[tile_index*2]);
-	int attr = (cshooter_txram[tile_index*2+1]);
+	cshooter_state *state = machine.driver_data<cshooter_state>();
+	int code = (state->m_txram[tile_index*2]);
+	int attr = (state->m_txram[tile_index*2+1]);
 	int rg;
 	rg=0;
 	if (attr & 0x20) rg = 1;
@@ -134,49 +123,53 @@ static TILE_GET_INFO( get_cstx_tile_info )
 
 static WRITE8_HANDLER(cshooter_txram_w)
 {
-	cshooter_txram[offset] = data;
-	tilemap_mark_tile_dirty(cshooter_txtilemap,offset/2);
+	cshooter_state *state = space->machine().driver_data<cshooter_state>();
+	state->m_txram[offset] = data;
+	state->m_txtilemap->mark_tile_dirty(offset/2);
 }
 
 static VIDEO_START(cshooter)
 {
-	cshooter_txtilemap = tilemap_create(machine, get_cstx_tile_info,tilemap_scan_rows, 8,8,32, 32);
-	tilemap_set_transparent_pen(cshooter_txtilemap, 3);
+	cshooter_state *state = machine.driver_data<cshooter_state>();
+	state->m_txtilemap = tilemap_create(machine, get_cstx_tile_info,tilemap_scan_rows, 8,8,32, 32);
+	state->m_txtilemap->set_transparent_pen(3);
 }
 
-static VIDEO_UPDATE(cshooter)
+static SCREEN_UPDATE_IND16(cshooter)
 {
-	bitmap_fill(bitmap, cliprect, 0/*get_black_pen(screen->screen->machine)*/);
-	tilemap_mark_all_tiles_dirty(cshooter_txtilemap);
+	cshooter_state *state = screen.machine().driver_data<cshooter_state>();
+	bitmap.fill(0/*get_black_pen(screen.screen.machine(, cliprect))*/);
+	state->m_txtilemap->mark_all_dirty();
 
 	//sprites
 	{
+		UINT8 *spriteram = state->m_spriteram;
 		int i;
-		for(i=0;i<spriteram_size;i+=4)
+		for(i=0;i<state->m_spriteram_size;i+=4)
 		{
 			if(spriteram[i+3]!=0)
 			{
 				int tile=0x30+((spriteram[i]>>2)&0x1f);
 
-				drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[0],
 							tile,
 							spriteram[i+1],
 							0, 0,
 							spriteram[i+3],spriteram[i+2],3);
 
-				drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[0],
 							tile,
 							spriteram[i+1],
 							0, 0,
 							spriteram[i+3]+8,spriteram[i+2],3);
 
-				drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[0],
 							tile,
 							spriteram[i+1],
 							0, 0,
 							spriteram[i+3]+8,spriteram[i+2]+8,3);
 
-				drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
+				drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[0],
 							tile,
 							spriteram[i+1],
 							0, 0,
@@ -185,40 +178,45 @@ static VIDEO_UPDATE(cshooter)
 		}
 	}
 
-	tilemap_mark_all_tiles_dirty(cshooter_txtilemap);
-	tilemap_draw(bitmap,cliprect,cshooter_txtilemap,0,0);
+	state->m_txtilemap->mark_all_dirty();
+	state->m_txtilemap->draw(bitmap, cliprect, 0,0);
 	return 0;
 }
 
 
 /* main cpu */
 
-static INTERRUPT_GEN( cshooter_interrupt )
+
+static TIMER_DEVICE_CALLBACK( cshooter_scanline )
 {
-	if(cpu_getiloops(device))
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x08);
-	else
-      cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x10);
+	int scanline = param;
 
-	if(mainram!=NULL)
-		ar_coin_hack(device->machine);
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0x10); /* RST 10h */
 
+	if(scanline == 0) // vblank-in irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0x08); /* RST 08h */
 }
 
 
-static int cshooter_counter;
-
 static MACHINE_RESET( cshooter )
 {
-	cshooter_counter = 0;
+	cshooter_state *state = machine.driver_data<cshooter_state>();
+	state->m_counter = 0;
+}
+
+static MACHINE_RESET( airraid )
+{
+	MACHINE_RESET_CALL(seibu_sound);
 }
 
 static READ8_HANDLER ( cshooter_coin_r )
 {
+	cshooter_state *state = space->machine().driver_data<cshooter_state>();
 	/* Even reads must return 0xff - Odd reads must return the contents of input port 5.
        Code at 0x5061 is executed once during P.O.S.T. where there is one read.
        Code at 0x50b4 is then executed each frame (not sure) where there are 2 reads. */
-	return ( (cshooter_counter++ & 1) ? 0xff : input_port_read(space->machine, "COIN") );
+	return ( (state->m_counter++ & 1) ? 0xff : input_port_read(space->machine(), "COIN") );
 }
 
 static WRITE8_HANDLER ( cshooter_c500_w )
@@ -231,34 +229,34 @@ static WRITE8_HANDLER ( cshooter_c700_w )
 
 static WRITE8_HANDLER ( bank_w )
 {
-	memory_set_bankptr(space->machine, 1,&memory_region(space->machine, "user1")[0x4000*((data>>4)&3)]);
+	memory_set_bankptr(space->machine(), "bank1",&space->machine().region("user1")->base()[0x4000*((data>>4)&3)]);
 }
 
 
 static WRITE8_HANDLER(pal_w)
 {
-	paletteram[offset]=data;
+	space->machine().generic.paletteram.u8[offset]=data;
 	offset&=0xff;
-	palette_set_color_rgb(space->machine, offset, pal4bit(paletteram[offset] >> 4), pal4bit(paletteram[offset]), pal4bit(paletteram[offset+0x100]));
+	palette_set_color_rgb(space->machine(), offset, pal4bit(space->machine().generic.paletteram.u8[offset] >> 4), pal4bit(space->machine().generic.paletteram.u8[offset]), pal4bit(space->machine().generic.paletteram.u8[offset+0x100]));
 }
 
 static WRITE8_HANDLER(pal2_w)
 {
-	paletteram[offset]=data;
+	space->machine().generic.paletteram.u8[offset]=data;
 	offset&=0x1ff;
-	palette_set_color_rgb(space->machine, offset, pal4bit(paletteram[offset] >> 4), pal4bit(paletteram[offset]), pal4bit(paletteram[offset+0x200]));
+	palette_set_color_rgb(space->machine(), offset, pal4bit(space->machine().generic.paletteram.u8[offset] >> 4), pal4bit(space->machine().generic.paletteram.u8[offset]), pal4bit(space->machine().generic.paletteram.u8[offset+0x200]));
 }
 
 static READ8_HANDLER(pal_r)
 {
-	return paletteram[offset];
+	return space->machine().generic.paletteram.u8[offset];
 }
 
-static ADDRESS_MAP_START( cshooter_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cshooter_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xafff) AM_READWRITE(SMH_BANK(1), SMH_RAM)
-	AM_RANGE(0xb000, 0xb0ff) AM_READ(SMH_RAM)			// sound related ?
-	AM_RANGE(0xc000, 0xc1ff) AM_WRITE(pal_w) AM_READ(pal_r) AM_BASE(&paletteram)
+	AM_RANGE(0x8000, 0xafff) AM_READ_BANK("bank1") AM_WRITEONLY
+	AM_RANGE(0xb000, 0xb0ff) AM_READONLY			// sound related ?
+	AM_RANGE(0xc000, 0xc1ff) AM_WRITE(pal_w) AM_READ(pal_r) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc200, 0xc200) AM_READ_PORT("IN0")
 	AM_RANGE(0xc201, 0xc201) AM_READ_PORT("IN1")
 	AM_RANGE(0xc202, 0xc202) AM_READ_PORT("IN2")
@@ -269,16 +267,26 @@ static ADDRESS_MAP_START( cshooter_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc600, 0xc600) AM_WRITENOP			// see notes
 	AM_RANGE(0xc700, 0xc700) AM_WRITE(cshooter_c700_w)
 	AM_RANGE(0xc801, 0xc801) AM_WRITENOP			// see notes
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(cshooter_txram_w) AM_BASE(&cshooter_txram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(cshooter_txram_w) AM_BASE_MEMBER(cshooter_state, m_txram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( airraid_map, ADDRESS_SPACE_PROGRAM, 8 )
+static READ8_HANDLER( seibu_sound_comms_r )
+{
+	return seibu_main_word_r(space,offset,0x00ff);
+}
+
+static WRITE8_HANDLER( seibu_sound_comms_w )
+{
+	seibu_main_word_w(space,offset,data,0x00ff);
+}
+
+static ADDRESS_MAP_START( airraid_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_READ(SMH_BANK(1))
-	AM_RANGE(0xb000, 0xb0ff) AM_RAM			// sound related ?
-	AM_RANGE(0xb100, 0xb1ff) AM_RAM//READ(SMH_BANK(1))           // sound related ?
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1") AM_WRITENOP // rld result write-back
+//  AM_RANGE(0xb000, 0xb0ff) AM_RAM
+//  AM_RANGE(0xb100, 0xb1ff) AM_RAM//ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("IN0")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("IN1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("IN2")
@@ -288,32 +296,24 @@ static ADDRESS_MAP_START( airraid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc600, 0xc600) AM_WRITENOP			// see notes
 	AM_RANGE(0xc700, 0xc700) AM_WRITE(cshooter_c700_w)
 	AM_RANGE(0xc801, 0xc801) AM_WRITENOP			// see notes
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(cshooter_txram_w) AM_BASE(&cshooter_txram)
-	AM_RANGE(0xd800, 0xdbff) AM_WRITE(pal2_w) AM_READ(pal_r) AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(cshooter_txram_w) AM_BASE_MEMBER(cshooter_state, m_txram)
+	AM_RANGE(0xd800, 0xdbff) AM_WRITE(pal2_w) AM_READ(pal_r) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xdc11, 0xdc11) AM_WRITE(bank_w)
-	AM_RANGE(0xdc00, 0xddff) AM_RAM
-	AM_RANGE(0xde00, 0xdeff) AM_RAM
-	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_BASE(&mainram)
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xdc00, 0xdc1f) AM_RAM //video registers
+	AM_RANGE(0xde00, 0xde0f) AM_READWRITE(seibu_sound_comms_r,seibu_sound_comms_w)
+	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_BASE_MEMBER(cshooter_state, m_mainram)
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(cshooter_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
 
 /* Sound CPU */
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0xc000, 0xc001) AM_WRITENOP // AM_DEVWRITE("ym1", ym2203_w) ?
 	AM_RANGE(0xc800, 0xc801) AM_WRITENOP // AM_DEVWRITE("ym2", ym2203_w) ?
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( sound_map2, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x4000, 0x4001) AM_WRITENOP // AM_DEVWRITE("ym1", ym2203_w) ?
-	AM_RANGE(0x4008, 0x4009) AM_WRITENOP // AM_DEVWRITE("ym2", ym2203_w) ?
-	AM_RANGE(0x2000, 0x27ff) AM_RAM
-ADDRESS_MAP_END
-
 
 
 static INPUT_PORTS_START( cshooter )
@@ -397,6 +397,14 @@ static INPUT_PORTS_START( cshooter )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( airraid )
+	PORT_INCLUDE( cshooter )
+
+	PORT_MODIFY("COIN")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_IMPULSE(1)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_COIN2 ) PORT_IMPULSE(1)
+	PORT_BIT( 0xfc, IP_ACTIVE_HIGH, IPT_UNUSED )
+INPUT_PORTS_END
 
 static const gfx_layout cshooter_charlayout =
 {
@@ -415,62 +423,59 @@ static GFXDECODE_START( cshooter )
 	GFXDECODE_ENTRY( "gfx1", 128/8, cshooter_charlayout,   0, 64  )
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( cshooter )
-	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		 /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(cshooter_map)
-	MDRV_CPU_VBLANK_INT_HACK(cshooter_interrupt,2)
+static MACHINE_CONFIG_START( cshooter, cshooter_state )
+	MCFG_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		 /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(cshooter_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", cshooter_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80,XTAL_14_31818MHz/4)		 /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80,XTAL_14_31818MHz/4)		 /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MDRV_MACHINE_RESET(cshooter)
+	MCFG_MACHINE_RESET(cshooter)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-1-16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-1-16)
+	MCFG_SCREEN_UPDATE_STATIC(cshooter)
 
-	MDRV_GFXDECODE(cshooter)
-	MDRV_PALETTE_LENGTH(0x1000)
+	MCFG_GFXDECODE(cshooter)
+	MCFG_PALETTE_LENGTH(0x1000)
 
-	MDRV_VIDEO_START(cshooter)
-	MDRV_VIDEO_UPDATE(cshooter)
+	MCFG_VIDEO_START(cshooter)
 
 	/* sound hardware */
 	/* YM2151 and ym3931 seibu custom cpu running at XTAL_14_31818MHz/4 */
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( airraid )
-	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		 /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(airraid_map)
-	MDRV_CPU_VBLANK_INT_HACK(cshooter_interrupt,2)
+static MACHINE_CONFIG_START( airraid, cshooter_state )
+	MCFG_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		 /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(airraid_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", cshooter_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80,XTAL_14_31818MHz/4)		 /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(sound_map2)
+	SEIBU2_AIRRAID_SOUND_SYSTEM_CPU(XTAL_14_31818MHz/4)		 /* verified on pcb */
 
-	MDRV_MACHINE_RESET(cshooter)
+	MCFG_MACHINE_RESET(airraid)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-1-16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-1-16)
+	MCFG_SCREEN_UPDATE_STATIC(cshooter)
 
-	MDRV_GFXDECODE(cshooter)
-	MDRV_PALETTE_LENGTH(0x1000)
+	MCFG_GFXDECODE(cshooter)
+	MCFG_PALETTE_LENGTH(0x1000)
 
-	MDRV_VIDEO_START(cshooter)
-	MDRV_VIDEO_UPDATE(cshooter)
+	MCFG_VIDEO_START(cshooter)
 
 	/* sound hardware */
-	/* YM2151 and ym3931 seibu custom cpu running at XTAL_14_31818MHz/4 */
-MACHINE_DRIVER_END
+	SEIBU_AIRRAID_SOUND_SYSTEM_YM2151_INTERFACE(XTAL_14_31818MHz/4)
+MACHINE_CONFIG_END
 
 
 
@@ -500,7 +505,7 @@ Notes:   LB - CPU board        S-0086-002-0B
          TB - GFX board        S-0087-807
 
          The PCB looks like a prototype, due to the modifications
-         to the PCB. The game is probably licenced from Seibu.
+         to the PCB. The game is probably licensed from Seibu.
 
          The bipolar PROMs are not used for colour.
 
@@ -534,8 +539,9 @@ ROM_START( cshooter )
 	ROM_REGION( 0x10000, "audiocpu", 0 )	// Sub/Sound CPU?
 	ROM_LOAD( "r4",  0x00000, 0x08000, CRC(84fed017) SHA1(9a564c9379eb48569cfba48562889277991864d8) )
 
+	// not hooked up yet (Taito version has this instead of encryption!
 	ROM_REGION( 0x0800, "cpu2", 0 )	/* 2k for the microcontroller */
-	ROM_LOAD( "68705.bin",    0x0000, 0x0800, NO_DUMP )
+	ROM_LOAD( "crshooter.3j",    0x0000, 0x0800, CRC(aae61ce7) SHA1(bb2b9887ec73a5b82604b9b64c533c2242d20d0f) )
 
 	ROM_REGION( 0x02000, "gfx1", 0 )	// TX Layer
 	ROM_LOAD( "r3",  0x00000, 0x02000, CRC(67b50a47) SHA1(b1f4aefc9437edbeefba5371149cc08c0b55c741) )	// only 1 byte difference with 3.f11, bad dump?
@@ -589,6 +595,7 @@ ROM_START( cshootere )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )	// Sub/Sound CPU?
 	ROM_LOAD( "5.6f",  0x00000, 0x02000, CRC(30be398c) SHA1(6c61200ee8888d6270c8cec50423b3b5602c2027) )	// 5.g6
+	ROM_LOAD( "4.7f",  0x08000, 0x08000, CRC(3cd715b4) SHA1(da735fb5d262908ddf7ed7dacdea68899f1723ff) )	// 4.g8
 
 	ROM_REGION( 0x02000, "gfx1",  ROMREGION_INVERT )	// TX Layer
 	ROM_LOAD( "3.f11",  0x00000, 0x02000, CRC(704c26d7) SHA1(e5964f409cbc2c4752e3969f3e84ace08d5ad9cb) )	// only 1 byte difference with R3, bad dump?
@@ -599,8 +606,7 @@ ROM_START( cshootere )
 	ROM_REGION( 0x10000, "user1", 0 )	// Sprites & Backgrounds ?
 	ROM_LOAD( "2.k20",  0x00000, 0x10000, CRC(5812fe72) SHA1(3b28bff6b62a411d2195bb228952db62ad32ef3d) )
 
-	ROM_REGION( 0x08000, "user2", 0 )	// ?? sound ??
-	ROM_LOAD( "4.7f",  0x00000, 0x08000, CRC(3cd715b4) SHA1(da735fb5d262908ddf7ed7dacdea68899f1723ff) )	// 4.g8
+	ROM_REGION( 0x40000, "oki", ROMREGION_ERASEFF )
 ROM_END
 
 /*
@@ -631,6 +637,7 @@ ROM_START( airraid )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )	// Sub/Sound CPU?
 	ROM_LOAD( "5.6f",  0x00000, 0x02000, CRC(30be398c) SHA1(6c61200ee8888d6270c8cec50423b3b5602c2027) )
+	ROM_LOAD( "4.7f",  0x08000, 0x08000, CRC(3cd715b4) SHA1(da735fb5d262908ddf7ed7dacdea68899f1723ff) )
 
 	ROM_REGION( 0x02000, "gfx1", ROMREGION_INVERT )	// TX Layer
 	ROM_LOAD( "3.13e",  0x00000, 0x02000, CRC(672ec0e8) SHA1(a11cd90d6494251ceee3bc7c72f4e7b1580b77e2) )
@@ -641,30 +648,29 @@ ROM_START( airraid )
 	ROM_REGION( 0x10000, "user1", 0 )	// bg maps
 	ROM_LOAD( "2.19j",  0x00000, 0x10000, CRC(842ae6c2) SHA1(0468445e4ab6f42bac786f9a258df3972fd1fde9) )
 
-	ROM_REGION( 0x08000, "user2", 0 )	// ?? sound ??
-	ROM_LOAD( "4.7f",  0x00000, 0x08000, CRC(3cd715b4) SHA1(da735fb5d262908ddf7ed7dacdea68899f1723ff) )
+	ROM_REGION( 0x40000, "oki", ROMREGION_ERASEFF )
 ROM_END
 
 
 static DRIVER_INIT( cshooter )
 {
 	/* temp so it boots */
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	rom[0xa2] = 0x00;
 	rom[0xa3] = 0x00;
 	rom[0xa4] = 0x00;
-	memory_set_bankptr(machine, 1,&memory_region(machine, "user1")[0]);
+	memory_set_bankptr(machine, "bank1",&machine.region("user1")->base()[0]);
 }
 
-static DRIVER_INIT( cshootre )
+static DRIVER_INIT( cshootere )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	int A;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x8000);
 
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, decrypt);
+	space->set_decrypted_region(0x0000, 0x7fff, decrypt);
 
 	for (A = 0x0000;A < 0x8000;A++)
 	{
@@ -691,13 +697,13 @@ static DRIVER_INIT( cshootre )
 			rom[A] = BITSWAP8(rom[A],7,6,1,4,3,2,5,0);
 	}
 
-	memory_set_bankptr(machine, 1,&memory_region(machine, "user1")[0]);
+	memory_set_bankptr(machine, "bank1",&machine.region("user1")->base()[0]);
 	seibu_sound_decrypt(machine,"audiocpu",0x2000);
 }
 
 
 
-GAME( 1987, cshooter,  0,       cshooter, cshooter, cshooter, ROT270, "[Seibu Kaihatsu] (Taito license)",  "Cross Shooter (not encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 1987, cshootere, cshooter, airraid, cshooter, cshootre, ROT270, "[Seibu Kaihatsu] (J.K.H. license)", "Cross Shooter (encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 1987, airraid,   cshooter, airraid, cshooter, cshootre, ROT270, "Seibu Kaihatsu",                    "Air Raid (encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1987, cshooter,  0,       cshooter, cshooter, cshooter,  ROT270, "Seibu Kaihatsu (Taito license)",  "Cross Shooter (not encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1987, cshootere, cshooter, airraid, airraid, cshootere, ROT270, "Seibu Kaihatsu (J.K.H. license)", "Cross Shooter (encrypted)", GAME_NOT_WORKING )
+GAME( 1987, airraid,   cshooter, airraid, airraid, cshootere, ROT270, "Seibu Kaihatsu",                  "Air Raid (encrypted)", GAME_NOT_WORKING )
 

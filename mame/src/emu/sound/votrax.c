@@ -15,8 +15,7 @@ the variable VotraxBaseFrequency, this is defaulted to 8000
 
 **************************************************************************/
 
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "samples.h"
 #include "votrax.h"
 
@@ -24,27 +23,25 @@ the variable VotraxBaseFrequency, this is defaulted to 8000
 typedef struct _votrax_state votrax_state;
 struct _votrax_state
 {
-	const device_config *device;
+	device_t *device;
 	int		stream;
 	int		frequency;		/* Some games (Qbert) change this */
 	int 	volume;
-	sound_stream * 	channel;
+	sound_stream *	channel;
 
 	loaded_sample *sample;
 	UINT32		pos;
 	UINT32		frac;
 	UINT32		step;
 
-	struct  loaded_samples *samples;
+	loaded_samples *samples;
 };
 
-INLINE votrax_state *get_safe_token(const device_config *device)
+INLINE votrax_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_VOTRAX);
-	return (votrax_state *)device->token;
+	assert(device->type() == VOTRAX);
+	return (votrax_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 #define FRAC_BITS		24
@@ -71,7 +68,7 @@ static const char *const VotraxTable[65] =
 
 static STREAM_UPDATE( votrax_update_sound )
 {
-	votrax_state *info = param;
+	votrax_state *info = (votrax_state*) param;
 	stream_sample_t *buffer = outputs[0];
 
 	if (info->sample)
@@ -116,11 +113,11 @@ static DEVICE_START( votrax )
 	votrax_state *votrax = get_safe_token(device);
 
 	votrax->device = device;
-	votrax->samples = readsamples(device->machine,VotraxTable,"votrax");
+	votrax->samples = readsamples(device->machine(),VotraxTable,"votrax");
 	votrax->frequency = 8000;
 	votrax->volume = 230;
 
-	votrax->channel = stream_create(device, 0, 1, device->machine->sample_rate, votrax, votrax_update_sound);
+	votrax->channel = device->machine().sound().stream_alloc(*device, 0, 1, device->machine().sample_rate(), votrax, votrax_update_sound);
 
 	votrax->sample = NULL;
 	votrax->step = 0;
@@ -132,12 +129,12 @@ WRITE8_DEVICE_HANDLER( votrax_w )
 	votrax_state *info = get_safe_token(device);
 	int Phoneme,Intonation;
 
-	stream_update(info->channel);
+	info->channel->update();
 
     Phoneme = data & 0x3F;
     Intonation = data >> 6;
 
-  	logerror("Speech : %s at intonation %d\n",VotraxTable[Phoneme],Intonation);
+	logerror("Speech : %s at intonation %d\n",VotraxTable[Phoneme],Intonation);
 
     if(Phoneme==63)
     	info->sample = NULL;
@@ -147,15 +144,15 @@ WRITE8_DEVICE_HANDLER( votrax_w )
 		info->sample = &info->samples->sample[Phoneme];
 		info->pos = 0;
 		info->frac = 0;
-		info->step = ((INT64)(info->sample->frequency + (256*Intonation)) << FRAC_BITS) / info->device->machine->sample_rate;
-		stream_set_output_gain(info->channel, 0, (info->volume + (8*Intonation)*100/255) / 100.0);
+		info->step = ((INT64)(info->sample->frequency + (256*Intonation)) << FRAC_BITS) / info->device->machine().sample_rate();
+		info->channel->set_output_gain(0, (info->volume + (8*Intonation)*100/255) / 100.0);
 	}
 }
 
-int votrax_status_r(const device_config *device)
+int votrax_status_r(device_t *device)
 {
 	votrax_state *info = get_safe_token(device);
-	stream_update(info->channel);
+	info->channel->update();
     return (info->sample != NULL);
 }
 
@@ -186,3 +183,5 @@ DEVICE_GET_INFO( votrax )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(VOTRAX, votrax);

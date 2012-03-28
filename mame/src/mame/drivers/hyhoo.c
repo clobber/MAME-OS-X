@@ -21,12 +21,13 @@ Memo:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "nb1413m3.h"
+#include "includes/nb1413m3.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
-
+#include "includes/hyhoo.h"
+#include "machine/nvram.h"
 
 #define	SIGNED_DAC	0		// 0:unsigned DAC, 1:signed DAC
 #if SIGNED_DAC
@@ -34,14 +35,6 @@ Memo:
 #else
 #define DAC_WRITE	dac_w
 #endif
-
-
-VIDEO_UPDATE( hyhoo );
-VIDEO_START( hyhoo );
-
-extern UINT8 *hyhoo_clut;
-WRITE8_HANDLER( hyhoo_blitter_w );
-WRITE8_HANDLER( hyhoo_romsel_w );
 
 
 static DRIVER_INIT( hyhoo )
@@ -55,22 +48,22 @@ static DRIVER_INIT( hyhoo2 )
 }
 
 
-static ADDRESS_MAP_START( hyhoo_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hyhoo_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hyhoo_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hyhoo_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
-	AM_RANGE(0x81, 0x81) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x82, 0x83) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x82, 0x83) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x90, 0x90) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x90, 0x97) AM_WRITE(hyhoo_blitter_w)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r, nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r, nb1413m3_sndrombank1_w)
-	AM_RANGE(0xc0, 0xcf) AM_WRITE(SMH_RAM) AM_BASE(&hyhoo_clut)
+	AM_RANGE(0xc0, 0xcf) AM_WRITEONLY AM_BASE_MEMBER(hyhoo_state, m_clut)
 	AM_RANGE(0xd0, 0xd0) AM_READNOP AM_DEVWRITE("dac", DAC_WRITE)		// unknown read
 	AM_RANGE(0xe0, 0xe0) AM_WRITE(hyhoo_romsel_w)
 	AM_RANGE(0xe0, 0xe1) AM_READ(nb1413m3_gfxrom_r)
@@ -252,38 +245,37 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_DRIVER_START( hyhoo )
+static MACHINE_CONFIG_START( hyhoo, hyhoo_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz ?? */
-	MDRV_CPU_PROGRAM_MAP(hyhoo_map)
-	MDRV_CPU_IO_MAP(hyhoo_io_map)
-	MDRV_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz ?? */
+	MCFG_CPU_PROGRAM_MAP(hyhoo_map)
+	MCFG_CPU_IO_MAP(hyhoo_io_map)
+	MCFG_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
 
-	MDRV_MACHINE_RESET(nb1413m3)
-	MDRV_NVRAM_HANDLER(nb1413m3)
+	MCFG_MACHINE_RESET(nb1413m3)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
+	MCFG_SCREEN_UPDATE_STATIC(hyhoo)
 
-	MDRV_VIDEO_START(hyhoo)
-	MDRV_VIDEO_UPDATE(hyhoo)
+	MCFG_VIDEO_START(hyhoo)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1250000)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
+	MCFG_SOUND_ADD("aysnd", AY8910, 1250000)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 ROM_START( hyhoo )

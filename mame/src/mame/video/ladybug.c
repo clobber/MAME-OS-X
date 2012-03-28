@@ -6,21 +6,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/resnet.h"
-
-
-UINT8 *sraider_grid_data;
-static UINT8 sraider_grid_color;
-
-/* Use the Zero Hour star generator board */
-void redclash_set_stars_enable( UINT8 on );
-void redclash_update_stars_state(void);
-void redclash_set_stars_speed( UINT8 speed );
-void redclash_draw_stars(bitmap_t *bitmap, const rectangle *cliprect, UINT8 palette_offset, UINT8 sraider, UINT8 firstx, UINT8 lastx);
-
-static tilemap *bg_tilemap;
-static tilemap *grid_tilemap;
+#include "includes/ladybug.h"
 
 /***************************************************************************
 
@@ -41,8 +29,8 @@ static tilemap *grid_tilemap;
 
 ***************************************************************************/
 
-static void palette_init_common(running_machine *machine, const UINT8 *color_prom, int colortable_size,
-								int r_bit0, int r_bit1, int g_bit0, int g_bit1, int b_bit0, int b_bit1)
+static void palette_init_common( running_machine &machine, const UINT8 *color_prom, int colortable_size,
+								int r_bit0, int r_bit1, int g_bit0, int g_bit1, int b_bit0, int b_bit1 )
 {
 	static const int resistances[2] = { 470, 220 };
 	double rweights[2], gweights[2], bweights[2];
@@ -55,7 +43,7 @@ static void palette_init_common(running_machine *machine, const UINT8 *color_pro
 			2, resistances, bweights, 470, 0);
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, colortable_size);
+	machine.colortable = colortable_alloc(machine, colortable_size);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -78,7 +66,7 @@ static void palette_init_common(running_machine *machine, const UINT8 *color_pro
 		bit1 = (~color_prom[i] >> b_bit1) & 0x01;
 		b = combine_2_weights(bweights, bit0, bit1);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -88,7 +76,7 @@ static void palette_init_common(running_machine *machine, const UINT8 *color_pro
 	for (i = 0; i < 0x20; i++)
 	{
 		UINT8 ctabentry = ((i << 3) & 0x18) | ((i >> 2) & 0x07);
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 
 	/* sprites */
@@ -97,10 +85,10 @@ static void palette_init_common(running_machine *machine, const UINT8 *color_pro
 		UINT8 ctabentry = color_prom[(i - 0x20) >> 1];
 
 		ctabentry = BITSWAP8((color_prom[i - 0x20] >> 0) & 0x0f, 7,6,5,4,0,1,2,3);
-		colortable_entry_set_value(machine->colortable, i + 0x00, ctabentry);
+		colortable_entry_set_value(machine.colortable, i + 0x00, ctabentry);
 
 		ctabentry = BITSWAP8((color_prom[i - 0x20] >> 4) & 0x0f, 7,6,5,4,0,1,2,3);
-		colortable_entry_set_value(machine->colortable, i + 0x20, ctabentry);
+		colortable_entry_set_value(machine.colortable, i + 0x20, ctabentry);
 	}
 }
 
@@ -137,112 +125,43 @@ PALETTE_INIT( sraider )
 		bit0 = ((i - 0x20) >> 0) & 0x01;
 		r = 0x47 * bit0;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	for (i = 0x60; i < 0x80; i++)
-		colortable_entry_set_value(machine->colortable, i, (i - 0x60) + 0x20);
+		colortable_entry_set_value(machine.colortable, i, (i - 0x60) + 0x20);
 
 	/* stationary part of grid */
-	colortable_entry_set_value(machine->colortable, 0x81, 0x40);
+	colortable_entry_set_value(machine.colortable, 0x81, 0x40);
 }
 
 WRITE8_HANDLER( ladybug_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	ladybug_state *state = space->machine().driver_data<ladybug_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( ladybug_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	ladybug_state *state = space->machine().driver_data<ladybug_state>();
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( ladybug_flipscreen_w )
 {
-	if (flip_screen_get(space->machine) != (data & 0x01))
+	if (flip_screen_get(space->machine()) != (data & 0x01))
 	{
-		flip_screen_set(space->machine, data & 0x01);
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		flip_screen_set(space->machine(), data & 0x01);
+		space->machine().tilemap().mark_all_dirty();
 	}
 }
-
-////////////////////////////////////////////////
-/* All this should probably go somewhere else */
-
-/* Sound comm between CPU's */
-static UINT8 sraider_sound_low;
-
-READ8_HANDLER( sraider_sound_low_r )
-{
-	return sraider_sound_low;
-}
-
-static UINT8 sraider_sound_high;
-
-READ8_HANDLER( sraider_sound_high_r )
-{
-	return sraider_sound_high;
-}
-
-WRITE8_HANDLER( sraider_sound_low_w )
-{
-	sraider_sound_low = data;
-}
-
-WRITE8_HANDLER( sraider_sound_high_w )
-{
-	sraider_sound_high = data;
-}
-
-/* Protection? */
-
-READ8_HANDLER( sraider_8005_r )
-{
-	/* This must return X011111X or cpu #1 will hang */
-	/* see code at rst $10 */
-	return 0x3e;
-}
-
-/* Unknown IO */
-
-static UINT8 sraider_wierd_value[8];
-static UINT8 sraider_0x30, sraider_0x38;
-
-WRITE8_HANDLER( sraider_misc_w )
-{
-	switch(offset)
-	{
-		/* These 8 bits are stored in the latch at A7 */
-		case 0x00:
-		case 0x01:
-		case 0x02:
-		case 0x03:
-		case 0x04:
-		case 0x05:
-		case 0x06:
-		case 0x07:
-			sraider_wierd_value[offset&7] = data&1;
-			break;
-		/* These 6 bits are stored in the latch at N7 */
-		case 0x08:
-			sraider_0x30 = data&0x3f;
-			break;
-		/* These 6 bits are stored in the latch at N8 */
-		case 0x10:
-			sraider_0x38 = data&0x3f;
-			break;
-		default:
-			mame_printf_debug("(%04X) write to %02X\n",cpu_get_pc(space->cpu),offset);
-			break;
-	}
-}
-
-////////////////////////////////////////////////////
 
 WRITE8_HANDLER( sraider_io_w )
 {
+	ladybug_state *state = space->machine().driver_data<ladybug_state>();
+
 	// bit7 = flip
 	// bit6 = grid red
 	// bit5 = grid green
@@ -250,15 +169,15 @@ WRITE8_HANDLER( sraider_io_w )
 	// bit3 = enable stars
 	// bit210 = stars speed/dir
 
-	if (flip_screen_get(space->machine) != (data & 0x80))
+	if (flip_screen_get(space->machine()) != (data & 0x80))
 	{
-		flip_screen_set(space->machine, data & 0x80);
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		flip_screen_set(space->machine(), data & 0x80);
+		space->machine().tilemap().mark_all_dirty();
 	}
 
-	sraider_grid_color = data & 0x70;
+	state->m_grid_color = data & 0x70;
 
-	redclash_set_stars_enable((data&0x08)>>3);
+	redclash_set_stars_enable(space->machine(), (data & 0x08) >> 3);
 
 	/*
      * There must be a subtle clocking difference between
@@ -266,13 +185,14 @@ WRITE8_HANDLER( sraider_io_w )
      * hence the -1 here
      */
 
-	redclash_set_stars_speed((data&0x07) - 1);
+	redclash_set_stars_speed(space->machine(), (data & 0x07) - 1);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index] + 32 * (colorram[tile_index] & 0x08);
-	int color = colorram[tile_index] & 0x07;
+	ladybug_state *state = machine.driver_data<ladybug_state>();
+	int code = state->m_videoram[tile_index] + 32 * (state->m_colorram[tile_index] & 0x08);
+	int color = state->m_colorram[tile_index] & 0x07;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -283,7 +203,7 @@ static TILE_GET_INFO( get_grid_tile_info )
 		SET_TILE_INFO(3, tile_index, 0, 0);
 	else
 	{
-		int temp = tile_index/32;
+		int temp = tile_index / 32;
 		tile_index = (31 - temp) * 32 + (tile_index % 32);
 		SET_TILE_INFO(4, tile_index, 0, 0);
 	}
@@ -291,27 +211,33 @@ static TILE_GET_INFO( get_grid_tile_info )
 
 VIDEO_START( ladybug )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	tilemap_set_scroll_rows(bg_tilemap, 32);
-	tilemap_set_transparent_pen(bg_tilemap, 0);
+	ladybug_state *state = machine.driver_data<ladybug_state>();
+
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap->set_scroll_rows(32);
+	state->m_bg_tilemap->set_transparent_pen(0);
 }
 
 VIDEO_START( sraider )
 {
-	grid_tilemap = tilemap_create(machine, get_grid_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	tilemap_set_scroll_rows(grid_tilemap, 32);
-	tilemap_set_transparent_pen(grid_tilemap, 0);
+	ladybug_state *state = machine.driver_data<ladybug_state>();
 
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	tilemap_set_scroll_rows(bg_tilemap, 32);
-	tilemap_set_transparent_pen(bg_tilemap, 0);
+	state->m_grid_tilemap = tilemap_create(machine, get_grid_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_grid_tilemap->set_scroll_rows(32);
+	state->m_grid_tilemap->set_transparent_pen(0);
+
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap->set_scroll_rows(32);
+	state->m_bg_tilemap->set_transparent_pen(0);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	ladybug_state *state = machine.driver_data<ladybug_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = spriteram_size - 2*0x40;offs >= 2*0x40;offs -= 0x40)
+	for (offs = state->m_spriteram_size - 2 * 0x40; offs >= 2 * 0x40; offs -= 0x40)
 	{
 		int i = 0;
 
@@ -338,14 +264,14 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 			if (spriteram[offs + i] & 0x80)
 			{
 				if (spriteram[offs + i] & 0x40)	/* 16x16 */
-					drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+					drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 							(spriteram[offs + i + 1] >> 2) + 4 * (spriteram[offs + i + 2] & 0x10),
 							spriteram[offs + i + 2] & 0x0f,
 							spriteram[offs + i] & 0x20,spriteram[offs + i] & 0x10,
 							spriteram[offs + i + 3],
 							offs / 4 - 8 + (spriteram[offs + i] & 0x0f),0);
 				else	/* 8x8 */
-					drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
+					drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
 							spriteram[offs + i + 1] + 16 * (spriteram[offs + i + 2] & 0x10),
 							spriteram[offs + i + 2] & 0x0f,
 							spriteram[offs + i] & 0x20,spriteram[offs + i] & 0x10,
@@ -356,36 +282,41 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	}
 }
 
-VIDEO_UPDATE( ladybug )
+SCREEN_UPDATE_IND16( ladybug )
 {
+	ladybug_state *state = screen.machine().driver_data<ladybug_state>();
 	int offs;
 
 	// clear the bg bitmap
-	bitmap_fill(bitmap,cliprect,0);
+	bitmap.fill(0, cliprect);
 
 	for (offs = 0; offs < 32; offs++)
 	{
 		int sx = offs % 4;
 		int sy = offs / 4;
 
-		if (flip_screen_get(screen->machine))
-			tilemap_set_scrollx(bg_tilemap, offs, -videoram[32 * sx + sy]);
+		if (flip_screen_get(screen.machine()))
+			state->m_bg_tilemap->set_scrollx(offs, -state->m_videoram[32 * sx + sy]);
 		else
-			tilemap_set_scrollx(bg_tilemap, offs, videoram[32 * sx + sy]);
+			state->m_bg_tilemap->set_scrollx(offs, state->m_videoram[32 * sx + sy]);
 	}
 
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }
 
-VIDEO_EOF( sraider )	/* update starfield position */
+SCREEN_VBLANK( sraider )	/* update starfield position */
 {
-	redclash_update_stars_state();
+	// falling edge
+	if (!vblank_on)
+		redclash_update_stars_state(screen.machine());
 }
 
-VIDEO_UPDATE( sraider )
+SCREEN_UPDATE_IND16( sraider )
 {
+	ladybug_state *state = screen.machine().driver_data<ladybug_state>();
+
 	// this part is boilerplate from ladybug, not sure if hardware does this,
 	// since it's not used
 
@@ -397,48 +328,46 @@ VIDEO_UPDATE( sraider )
 		int sx = offs % 4;
 		int sy = offs / 4;
 
-		if (flip_screen_get(screen->machine))
-			tilemap_set_scrollx(bg_tilemap, offs, -videoram[32 * sx + sy]);
+		if (flip_screen_get(screen.machine()))
+			state->m_bg_tilemap->set_scrollx(offs, -state->m_videoram[32 * sx + sy]);
 		else
-			tilemap_set_scrollx(bg_tilemap, offs, videoram[32 * sx + sy]);
+			state->m_bg_tilemap->set_scrollx(offs, state->m_videoram[32 * sx + sy]);
 	}
 
 	// clear the bg bitmap
-	bitmap_fill(bitmap,cliprect,0);
+	bitmap.fill(0, cliprect);
 
 	// draw the stars
-	if (flip_screen_get(screen->machine))
-		redclash_draw_stars(bitmap,cliprect,0x60,1,0x27,0xff);
+	if (flip_screen_get(screen.machine()))
+		redclash_draw_stars(screen.machine(), bitmap, cliprect, 0x60, 1, 0x27, 0xff);
 	else
-		redclash_draw_stars(bitmap,cliprect,0x60,1,0x00,0xd8);
+		redclash_draw_stars(screen.machine(), bitmap, cliprect, 0x60, 1, 0x00, 0xd8);
 
 	// draw the gridlines
-	colortable_palette_set_color(screen->machine->colortable, 0x40, MAKE_RGB(sraider_grid_color & 0x40 ? 0xff : 0,
-		              					  									 sraider_grid_color & 0x20 ? 0xff : 0,
-		              					  									 sraider_grid_color & 0x10 ? 0xff : 0));
-	tilemap_draw(bitmap, cliprect, grid_tilemap, 0, flip_screen_get(screen->machine));
+	colortable_palette_set_color(screen.machine().colortable, 0x40, MAKE_RGB(state->m_grid_color & 0x40 ? 0xff : 0,
+		            														 state->m_grid_color & 0x20 ? 0xff : 0,
+		            														 state->m_grid_color & 0x10 ? 0xff : 0));
+	state->m_grid_tilemap->draw(bitmap, cliprect, 0, flip_screen_get(screen.machine()));
 
 	for (i = 0; i < 0x100; i++)
 	{
-		if (sraider_grid_data[i] != 0)
+		if (state->m_grid_data[i] != 0)
 		{
 			UINT8 x = i;
+			int height = cliprect.max_y - cliprect.min_y + 1;
 
-			int height = cliprect->max_y - cliprect->min_y + 1;
-
-			if (flip_screen_get(screen->machine))
+			if (flip_screen_get(screen.machine()))
 				x = ~x;
 
-			plot_box(bitmap, x, cliprect->min_y, 1, height, 0x81);
+			bitmap.plot_box(x, cliprect.min_y, 1, height, 0x81);
 		}
 	}
 
 	// now the chars
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, flip_screen_get(screen->machine));
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, flip_screen_get(screen.machine()));
 
 	// now the sprites
-	draw_sprites(screen->machine, bitmap, cliprect);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 
 	return 0;
 }
-

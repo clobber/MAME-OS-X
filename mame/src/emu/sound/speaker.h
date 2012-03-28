@@ -8,29 +8,22 @@
 
 #pragma once
 
-#ifndef __SPEAKER_H__
-#define __SPEAKER_H__
+#ifndef __SOUND_SPEAKER_H__
+#define __SOUND_SPEAKER_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "devlegcy.h"
 
+#define SPEAKER_TAG		"speaker"
 
 typedef struct _speaker_interface speaker_interface;
 struct _speaker_interface
 {
-	int num_level; 	/* optional: number of levels (if not two) */
-	const INT16 *levels; 	/* optional: pointer to level lookup table */
+	int num_level;	/* optional: number of levels (if not two) */
+	const INT16 *levels;	/* optional: pointer to level lookup table */
 };
 
-void speaker_level_w (const device_config *device, int new_level);
+void speaker_level_w (device_t *device, int new_level);
 
-DEVICE_GET_INFO( speaker );
-#define SOUND_SPEAKER DEVICE_GET_INFO_NAME( speaker )
-
-#ifdef __cplusplus
-}
-#endif
-
+DECLARE_LEGACY_SOUND_DEVICE(SPEAKER_SOUND, speaker_sound);
 
 #endif /* __SPEAKER_H__ */

@@ -13,6 +13,7 @@
     Twice as much VRAM.
 
     Todo:
+    - Convert this driver to use proper PC-Engine video.
     - Priority is wrong for the submarine at the end of level 1.
     - There seems to be a bug with a stuck note from the YM2203 FM channel
       at the start of scene 3 and near the ending when your characters are
@@ -20,27 +21,13 @@
 
 **********************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/h6280/h6280.h"
 #include "sound/2203intf.h"
 #include "sound/msm5205.h"
 #include "sound/c6280.h"
+#include "includes/battlera.h"
 
-VIDEO_UPDATE( battlera );
-VIDEO_START( battlera );
-INTERRUPT_GEN( battlera_interrupt );
-
-READ8_HANDLER( HuC6270_register_r );
-WRITE8_HANDLER( HuC6270_register_w );
-//READ8_HANDLER( HuC6270_data_r );
-WRITE8_HANDLER( HuC6270_data_w );
-WRITE8_HANDLER( battlera_palette_w );
-
-READ8_HANDLER( HuC6270_debug_r );
-WRITE8_HANDLER( HuC6270_debug_w );
-
-static int control_port_select;
 
 /******************************************************************************/
 
@@ -49,7 +36,7 @@ static WRITE8_HANDLER( battlera_sound_w )
 	if (offset == 0)
 	{
 		soundlatch_w(space,0,data);
-		cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 	}
 }
 
@@ -57,18 +44,20 @@ static WRITE8_HANDLER( battlera_sound_w )
 
 static WRITE8_HANDLER( control_data_w )
 {
-	control_port_select=data;
+	battlera_state *state = space->machine().driver_data<battlera_state>();
+	state->m_control_port_select=data;
 }
 
 static READ8_HANDLER( control_data_r )
 {
-	switch (control_port_select)
+	battlera_state *state = space->machine().driver_data<battlera_state>();
+	switch (state->m_control_port_select)
 	{
-		case 0xfe: return input_port_read(space->machine, "IN0"); /* Player 1 */
-		case 0xfd: return input_port_read(space->machine, "IN1"); /* Player 2 */
-		case 0xfb: return input_port_read(space->machine, "IN2"); /* Coins */
-		case 0xf7: return input_port_read(space->machine, "DSW2"); /* Dip 2 */
-		case 0xef: return input_port_read(space->machine, "DSW1"); /* Dip 1 */
+		case 0xfe: return input_port_read(space->machine(), "IN0"); /* Player 1 */
+		case 0xfd: return input_port_read(space->machine(), "IN1"); /* Player 2 */
+		case 0xfb: return input_port_read(space->machine(), "IN2"); /* Coins */
+		case 0xf7: return input_port_read(space->machine(), "DSW2"); /* Dip 2 */
+		case 0xef: return input_port_read(space->machine(), "DSW1"); /* Dip 1 */
 	}
 
     return 0xff;
@@ -76,42 +65,42 @@ static READ8_HANDLER( control_data_r )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( battlera_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( battlera_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_READWRITE(HuC6270_debug_r, HuC6270_debug_w) /* Cheat to edit vram data */
 	AM_RANGE(0x1e0800, 0x1e0801) AM_WRITE(battlera_sound_w)
-	AM_RANGE(0x1e1000, 0x1e13ff) AM_WRITE(battlera_palette_w) AM_BASE(&paletteram)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8) /* Main ram */
+	AM_RANGE(0x1e1000, 0x1e13ff) AM_WRITE(battlera_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8") /* Main ram */
 	AM_RANGE(0x1fe000, 0x1fe001) AM_READWRITE(HuC6270_register_r, HuC6270_register_w)
 	AM_RANGE(0x1fe002, 0x1fe003) AM_WRITE(HuC6270_data_w)
 	AM_RANGE(0x1ff000, 0x1ff001) AM_READWRITE(control_data_r, control_data_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( battlera_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( battlera_portmap, AS_IO, 8 )
 	AM_RANGE(0x00, 0x01) AM_WRITE(HuC6270_register_w)
 	AM_RANGE(0x02, 0x03) AM_WRITE(HuC6270_data_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static int msm5205next;
 
-static void battlera_adpcm_int(const device_config *device)
+static void battlera_adpcm_int(device_t *device)
 {
-	static int toggle;
+	battlera_state *state = device->machine().driver_data<battlera_state>();
 
-	msm5205_data_w(device,msm5205next >> 4);
-	msm5205next <<= 4;
+	msm5205_data_w(device,state->m_msm5205next >> 4);
+	state->m_msm5205next <<= 4;
 
-	toggle = 1 - toggle;
-	if (toggle)
-		cputag_set_input_line(device->machine, "audiocpu", 1, HOLD_LINE);
+	state->m_toggle = 1 - state->m_toggle;
+	if (state->m_toggle)
+		cputag_set_input_line(device->machine(), "audiocpu", 1, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( battlera_adpcm_data_w )
 {
-	msm5205next = data;
+	battlera_state *state = space->machine().driver_data<battlera_state>();
+	state->m_msm5205next = data;
 }
 
 static WRITE8_DEVICE_HANDLER( battlera_adpcm_reset_w )
@@ -119,12 +108,12 @@ static WRITE8_DEVICE_HANDLER( battlera_adpcm_reset_w )
 	msm5205_reset_w(device, 0);
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
- 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
-	AM_RANGE(0x040000, 0x040001) AM_DEVWRITE("ym", ym2203_w)
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x000000, 0x00ffff) AM_ROM
+	AM_RANGE(0x040000, 0x040001) AM_DEVWRITE("ymsnd", ym2203_w)
 	AM_RANGE(0x080000, 0x080001) AM_WRITE(battlera_adpcm_data_w)
 	AM_RANGE(0x1fe800, 0x1fe80f) AM_DEVWRITE("c6280", c6280_w)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(7) /* Main ram */
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank7") /* Main ram */
 	AM_RANGE(0x1ff000, 0x1ff001) AM_READ(soundlatch_r) AM_DEVWRITE("msm", battlera_adpcm_reset_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -241,47 +230,47 @@ static const c6280_interface c6280_config =
 	"audiocpu"
 };
 
-static MACHINE_DRIVER_START( battlera )
+static MACHINE_CONFIG_START( battlera, battlera_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", H6280,21477200/3)
-	MDRV_CPU_PROGRAM_MAP(battlera_map)
-	MDRV_CPU_IO_MAP(battlera_portmap)
-	MDRV_CPU_VBLANK_INT_HACK(battlera_interrupt,256) /* 8 prelines, 232 lines, 16 vblank? */
+	MCFG_CPU_ADD("maincpu", H6280,21477200/3)
+	MCFG_CPU_PROGRAM_MAP(battlera_map)
+	MCFG_CPU_IO_MAP(battlera_portmap)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", battlera_irq, "screen", 0, 1) /* 8 prelines, 232 lines, 16 vblank? */
 
-	MDRV_CPU_ADD("audiocpu", H6280,21477200/3)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", H6280,21477200/3)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 30*8-1)
-	MDRV_GFXDECODE(battlera)
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(battlera)
 
-	MDRV_VIDEO_START(battlera)
-	MDRV_VIDEO_UPDATE(battlera)
+	MCFG_GFXDECODE(battlera)
+	MCFG_PALETTE_LENGTH(512)
+
+	MCFG_VIDEO_START(battlera)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2203, 12000000 / 8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM2203, 12000000 / 8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.85)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.85)
+	MCFG_SOUND_ADD("msm", MSM5205, 384000)
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.85)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.85)
 
-	MDRV_SOUND_ADD("c6280", C6280, 21477270/6)
-	MDRV_SOUND_CONFIG(c6280_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("c6280", C6280, 21477270/6)
+	MCFG_SOUND_CONFIG(c6280_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 

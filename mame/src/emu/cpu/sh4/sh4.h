@@ -11,7 +11,6 @@
 #ifndef __SH4_H__
 #define __SH4_H__
 
-#include "cpuintrf.h"
 
 #define SH4_INT_NONE	-1
 enum
@@ -34,15 +33,63 @@ enum
 
 enum
 {
-	SH4_INTC_NMI=23, SH4_INTC_IRLn0, SH4_INTC_IRLn1, SH4_INTC_IRLn2, SH4_INTC_IRLn3, SH4_INTC_IRLn4,
-	SH4_INTC_IRLn5, SH4_INTC_IRLn6, SH4_INTC_IRLn7, SH4_INTC_IRLn8, SH4_INTC_IRLn9, SH4_INTC_IRLnA,
-	SH4_INTC_IRLnB, SH4_INTC_IRLnC, SH4_INTC_IRLnD, SH4_INTC_IRLnE, SH4_INTC_IRL0, SH4_INTC_IRL1,
-	SH4_INTC_IRL2, SH4_INTC_IRL3, SH4_INTC_HUDI, SH4_INTC_GPOI, SH4_INTC_DMTE0, SH4_INTC_DMTE1,
-	SH4_INTC_DMTE2, SH4_INTC_DMTE3, SH4_INTC_DMTE4, SH4_INTC_DMTE5, SH4_INTC_DMTE6, SH4_INTC_DMTE7,
-	SH4_INTC_DMAE, SH4_INTC_TUNI3, SH4_INTC_TUNI4, SH4_INTC_TUNI0, SH4_INTC_TUNI1, SH4_INTC_TUNI2,
-	SH4_INTC_TICPI2, SH4_INTC_ATI, SH4_INTC_PRI, SH4_INTC_CUI, SH4_INTC_SCI1ERI, SH4_INTC_SCI1RXI,
-	SH4_INTC_SCI1TXI, SH4_INTC_SCI1TEI, SH4_INTC_SCIFERI, SH4_INTC_SCIFRXI, SH4_INTC_SCIFBRI,
-	SH4_INTC_SCIFTXI, SH4_INTC_ITI, SH4_INTC_RCMI, SH4_INTC_ROVI
+	SH4_INTC_NMI=23,
+	SH4_INTC_IRLn0,
+	SH4_INTC_IRLn1,
+	SH4_INTC_IRLn2,
+	SH4_INTC_IRLn3,
+	SH4_INTC_IRLn4,
+	SH4_INTC_IRLn5,
+	SH4_INTC_IRLn6,
+	SH4_INTC_IRLn7,
+	SH4_INTC_IRLn8,
+	SH4_INTC_IRLn9,
+	SH4_INTC_IRLnA,
+	SH4_INTC_IRLnB,
+	SH4_INTC_IRLnC,
+	SH4_INTC_IRLnD,
+	SH4_INTC_IRLnE,
+
+	SH4_INTC_IRL0,
+	SH4_INTC_IRL1,
+	SH4_INTC_IRL2,
+	SH4_INTC_IRL3,
+
+	SH4_INTC_HUDI,
+	SH4_INTC_GPOI,
+
+	SH4_INTC_DMTE0,
+	SH4_INTC_DMTE1,
+	SH4_INTC_DMTE2,
+	SH4_INTC_DMTE3,
+	SH4_INTC_DMTE4,
+	SH4_INTC_DMTE5,
+	SH4_INTC_DMTE6,
+	SH4_INTC_DMTE7,
+
+	SH4_INTC_DMAE,
+
+	SH4_INTC_TUNI3,
+	SH4_INTC_TUNI4,
+	SH4_INTC_TUNI0,
+	SH4_INTC_TUNI1,
+	SH4_INTC_TUNI2,
+	SH4_INTC_TICPI2,
+	SH4_INTC_ATI,
+	SH4_INTC_PRI,
+	SH4_INTC_CUI,
+	SH4_INTC_SCI1ERI,
+	SH4_INTC_SCI1RXI,
+
+	SH4_INTC_SCI1TXI,
+	SH4_INTC_SCI1TEI,
+	SH4_INTC_SCIFERI,
+	SH4_INTC_SCIFRXI,
+	SH4_INTC_SCIFBRI,
+	SH4_INTC_SCIFTXI,
+	SH4_INTC_ITI,
+	SH4_INTC_RCMI,
+	SH4_INTC_ROVI
 };
 
 #define SH4_FPU_PZERO 0
@@ -58,9 +105,10 @@ enum
 {
 	SH4_IOPORT_16=8*0,
 	SH4_IOPORT_4=8*1,
+	SH4_IOPORT_DMA=8*2,
 	// future use
-	SH4_IOPORT_SCI=8*2,
-	SH4_IOPORT_SCIF=8*3
+	SH4_IOPORT_SCI=8*3,
+	SH4_IOPORT_SCIF=8*4
 };
 
 struct sh4_config
@@ -77,6 +125,14 @@ struct sh4_config
   int clock;
 };
 
+struct sh4_device_dma
+{
+	UINT32 length;
+	UINT32 size;
+	void *buffer;
+	int channel;
+};
+
 struct sh4_ddt_dma
 {
 	UINT32 source;
@@ -91,16 +147,40 @@ struct sh4_ddt_dma
 
 typedef void (*sh4_ftcsr_callback)(UINT32);
 
-extern CPU_GET_INFO( sh4 );
-#define CPU_SH4 CPU_GET_INFO_NAME( sh4 )
+DECLARE_LEGACY_CPU_DEVICE(SH3LE, sh3);
+DECLARE_LEGACY_CPU_DEVICE(SH3BE, sh3be);
+DECLARE_LEGACY_CPU_DEVICE(SH4LE, sh4);
+DECLARE_LEGACY_CPU_DEVICE(SH4BE, sh4be);
 
 WRITE32_HANDLER( sh4_internal_w );
 READ32_HANDLER( sh4_internal_r );
 
-void sh4_set_frt_input(const device_config *device, int state);
-void sh4_set_irln_input(const device_config *device, int value);
-void sh4_set_ftcsr_callback(const device_config *device, sh4_ftcsr_callback callback);
-void sh4_dma_ddt(const device_config *device, struct sh4_ddt_dma *s);
+WRITE32_HANDLER( sh3_internal_w );
+READ32_HANDLER( sh3_internal_r );
+
+WRITE32_HANDLER( sh3_internal_high_w );
+READ32_HANDLER( sh3_internal_high_r );
+
+
+void sh4_set_frt_input(device_t *device, int state);
+void sh4_set_irln_input(device_t *device, int value);
+void sh4_set_ftcsr_callback(device_t *device, sh4_ftcsr_callback callback);
+int sh4_dma_data(device_t *device, struct sh4_device_dma *s);
+void sh4_dma_ddt(device_t *device, struct sh4_ddt_dma *s);
+
+/***************************************************************************
+    COMPILER-SPECIFIC OPTIONS
+***************************************************************************/
+
+#define SH4DRC_STRICT_VERIFY	0x0001			/* verify all instructions */
+#define SH4DRC_FLUSH_PC			0x0002			/* flush the PC value before each memory access */
+#define SH4DRC_STRICT_PCREL		0x0004			/* do actual loads on MOVLI/MOVWI instead of collapsing to immediates */
+
+#define SH4DRC_COMPATIBLE_OPTIONS	(SH4DRC_STRICT_VERIFY | SH4DRC_FLUSH_PC | SH4DRC_STRICT_PCREL)
+#define SH4DRC_FASTEST_OPTIONS	(0)
+
+void sh4drc_set_options(device_t *device, UINT32 options);
+void sh4drc_add_pcflush(device_t *device, offs_t address);
 
 #endif /* __SH4_H__ */
 

@@ -6,19 +6,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "appoooh.h"
-
-UINT8 *appoooh_fg_videoram,*appoooh_fg_colorram;
-UINT8 *appoooh_bg_videoram,*appoooh_bg_colorram;
-
-#define CHR1_OFST 0x00  /* palette page of char set #1 */
-#define CHR2_OFST 0x10  /* palette page of char set #2 */
-
-static tilemap *fg_tilemap,*bg_tilemap;
-
-static int scroll_x;
-static int priority;
+#include "emu.h"
+#include "includes/appoooh.h"
 
 /***************************************************************************
 
@@ -30,11 +19,12 @@ static int priority;
   Because these hardware is similar.
 
 ***************************************************************************/
+
 PALETTE_INIT( appoooh )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		UINT8 pen;
 		int bit0, bit1, bit2, r, g, b;
@@ -72,7 +62,7 @@ PALETTE_INIT( robowres )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -110,25 +100,27 @@ PALETTE_INIT( robowres )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int code = appoooh_fg_videoram[tile_index] + 256 * ((appoooh_fg_colorram[tile_index]>>5) & 7);
+	appoooh_state *state = machine.driver_data<appoooh_state>();
+	int code = state->m_fg_videoram[tile_index] + 256 * ((state->m_fg_colorram[tile_index] >> 5) & 7);
 
 	SET_TILE_INFO(
 			0,
 			code,
-			appoooh_fg_colorram[tile_index]&0x0f,
-			(appoooh_fg_colorram[tile_index] & 0x10 ) ? TILEMAP_FLIPX : 0
+			state->m_fg_colorram[tile_index] & 0x0f,
+			(state->m_fg_colorram[tile_index] & 0x10 ) ? TILEMAP_FLIPX : 0
 	);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = appoooh_bg_videoram[tile_index] + 256 * ((appoooh_bg_colorram[tile_index]>>5) & 7);
+	appoooh_state *state = machine.driver_data<appoooh_state>();
+	int code = state->m_bg_videoram[tile_index] + 256 * ((state->m_bg_colorram[tile_index] >> 5) & 7);
 
 	SET_TILE_INFO(
 			1,
 			code,
-			appoooh_bg_colorram[tile_index]&0x0f,
-			(appoooh_bg_colorram[tile_index] & 0x10 ) ? TILEMAP_FLIPX : 0
+			state->m_bg_colorram[tile_index] & 0x0f,
+			(state->m_bg_colorram[tile_index] & 0x10 ) ? TILEMAP_FLIPX : 0
 	);
 }
 
@@ -137,56 +129,65 @@ static TILE_GET_INFO( get_bg_tile_info )
   Start the video hardware emulation.
 
 ***************************************************************************/
+
 VIDEO_START( appoooh )
 {
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,32,32);
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,     8,8,32,32);
+	appoooh_state *state = machine.driver_data<appoooh_state>();
 
-	tilemap_set_transparent_pen(fg_tilemap,0);
-	tilemap_set_scrolldy(fg_tilemap,8,8);
-	tilemap_set_scrolldy(bg_tilemap,8,8);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 
-    state_save_register_global(machine, scroll_x);
-    state_save_register_global(machine, priority);
+	state->m_fg_tilemap->set_transparent_pen(0);
+	state->m_fg_tilemap->set_scrolldy(8, 8);
+	state->m_bg_tilemap->set_scrolldy(8, 8);
+
+	state->save_item(NAME(state->m_scroll_x));
+	state->save_item(NAME(state->m_priority));
 }
 
 WRITE8_HANDLER( appoooh_scroll_w )
 {
-	scroll_x = data;
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
+	state->m_scroll_x = data;
 }
 
 
 WRITE8_HANDLER( appoooh_fg_videoram_w )
 {
-	appoooh_fg_videoram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset);
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
+	state->m_fg_videoram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( appoooh_fg_colorram_w )
 {
-	appoooh_fg_colorram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset);
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
+	state->m_fg_colorram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( appoooh_bg_videoram_w )
 {
-	appoooh_bg_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset);
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
+	state->m_bg_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( appoooh_bg_colorram_w )
 {
-	appoooh_bg_colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset);
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
+	state->m_bg_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( appoooh_out_w )
 {
+	appoooh_state *state = space->machine().driver_data<appoooh_state>();
 	/* bit 0 controls NMI */
-	interrupt_enable_w(space,0,data & 0x01);
+	state->m_nmi_mask = data & 1;
 
 	/* bit 1 flip screen */
-	flip_screen_set(space->machine, data & 0x02);
+	flip_screen_set(space->machine(), data & 0x02);
 
 	/* bits 2-3 unknown */
 
@@ -194,36 +195,33 @@ WRITE8_HANDLER( appoooh_out_w )
 	/* TODO: understand how this works, currently the only thing I do is draw */
 	/* the front layer behind sprites when priority == 0, and invert the sprite */
 	/* order when priority == 1 */
-	priority = (data & 0x30) >> 4;
+	state->m_priority = (data & 0x30) >> 4;
 
 	/* bit 6 ROM bank select */
 	{
-		UINT8 *RAM = memory_region(space->machine, "maincpu");
+		UINT8 *RAM = space->machine().region("maincpu")->base();
 
-		memory_set_bankptr(space->machine, 1,&RAM[data&0x40 ? 0x10000 : 0x0a000]);
+		memory_set_bankptr(space->machine(), "bank1",&RAM[data&0x40 ? 0x10000 : 0x0a000]);
 	}
 
 	/* bit 7 unknown (used) */
 }
 
-static void appoooh_draw_sprites(
-		bitmap_t *dest_bmp,
-		const rectangle *cliprect,
-        const gfx_element *gfx,
-        UINT8 *sprite)
+static void appoooh_draw_sprites( bitmap_ind16 &dest_bmp, const rectangle &cliprect, const gfx_element *gfx, UINT8 *sprite )
 {
 	int offs;
-	int flipy = flip_screen_get(gfx->machine);
+	int flipy = flip_screen_get(gfx->machine());
 
-	for (offs = 0x20 - 4;offs >= 0;offs -= 4)
+	for (offs = 0x20 - 4; offs >= 0; offs -= 4)
 	{
-		int sy    = 240 - sprite[offs+0];
-		int code  = (sprite[offs+1]>>2) + ((sprite[offs+2]>>5) & 0x07)*0x40;
-		int color = sprite[offs+2]&0x0f;	/* TODO: bit 4 toggles continuously, what is it? */
-		int sx    = sprite[offs+3];
-		int flipx = sprite[offs+1]&0x01;
+		int sy    = 240 - sprite[offs + 0];
+		int code  = (sprite[offs + 1] >> 2) + ((sprite[offs + 2] >> 5) & 0x07) * 0x40;
+		int color = sprite[offs + 2] & 0x0f;	/* TODO: bit 4 toggles continuously, what is it? */
+		int sx    = sprite[offs + 3];
+		int flipx = sprite[offs + 1] & 0x01;
 
-		if(sx>=248) sx -= 256;
+		if(sx >= 248)
+			sx -= 256;
 
 		if (flipy)
 		{
@@ -237,27 +235,24 @@ static void appoooh_draw_sprites(
 				color,
 				flipx,flipy,
 				sx, sy, 0);
-	 }
+	}
 }
 
-static void robowres_draw_sprites(
-		bitmap_t *dest_bmp,
-		const rectangle *cliprect,
-        const gfx_element *gfx,
-        UINT8 *sprite)
+static void robowres_draw_sprites( bitmap_ind16 &dest_bmp, const rectangle &cliprect, const gfx_element *gfx, UINT8 *sprite )
 {
 	int offs;
-	int flipy = flip_screen_get(gfx->machine);
+	int flipy = flip_screen_get(gfx->machine());
 
-	for (offs = 0x20 - 4;offs >= 0;offs -= 4)
+	for (offs = 0x20 - 4; offs >= 0; offs -= 4)
 	{
-		int sy    = 240 - sprite[offs+0];
-		int code  = 0x200 + (sprite[offs+1]>>2) + ((sprite[offs+2]>>5) & 0x07)*0x40;
-		int color = sprite[offs+2]&0x0f;	/* TODO: bit 4 toggles continuously, what is it? */
-		int sx    = sprite[offs+3];
-		int flipx = sprite[offs+1]&0x01;
+		int sy    = 240 - sprite[offs + 0];
+		int code  = 0x200 + (sprite[offs + 1] >> 2) + ((sprite[offs + 2] >> 5) & 0x07) * 0x40;
+		int color = sprite[offs + 2] & 0x0f;	/* TODO: bit 4 toggles continuously, what is it? */
+		int sx    = sprite[offs + 3];
+		int flipx = sprite[offs + 1] & 0x01;
 
-		if(sx>=248) sx -= 256;
+		if(sx >= 248)
+			sx -= 256;
 
 		if (flipy)
 		{
@@ -271,62 +266,66 @@ static void robowres_draw_sprites(
 				color,
 				flipx,flipy,
 				sx, sy, 0);
-	 }
+	}
 }
 
 
-VIDEO_UPDATE( appoooh )
+SCREEN_UPDATE_IND16( appoooh )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	appoooh_state *state = screen.machine().driver_data<appoooh_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 
-	if (priority == 0)	/* fg behind sprites */
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	if (state->m_priority == 0)	/* fg behind sprites */
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw sprites */
-	if (priority == 1)
+	if (state->m_priority == 1)
 	{
 		/* sprite set #1 */
-		appoooh_draw_sprites( bitmap, cliprect, screen->machine->gfx[2],spriteram);
+		appoooh_draw_sprites(bitmap, cliprect, screen.machine().gfx[2], state->m_spriteram);
 		/* sprite set #2 */
-		appoooh_draw_sprites( bitmap, cliprect, screen->machine->gfx[3],spriteram_2);
+		appoooh_draw_sprites(bitmap, cliprect, screen.machine().gfx[3], state->m_spriteram_2);
 	}
 	else
 	{
 		/* sprite set #2 */
-		appoooh_draw_sprites( bitmap, cliprect, screen->machine->gfx[3],spriteram_2);
+		appoooh_draw_sprites(bitmap, cliprect, screen.machine().gfx[3], state->m_spriteram_2);
 		/* sprite set #1 */
-		appoooh_draw_sprites( bitmap, cliprect, screen->machine->gfx[2],spriteram);
+		appoooh_draw_sprites(bitmap, cliprect, screen.machine().gfx[2], state->m_spriteram);
 	}
 
-	if (priority != 0)	/* fg in front of sprites */
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	if (state->m_priority != 0)	/* fg in front of sprites */
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+
 	return 0;
 }
 
-VIDEO_UPDATE( robowres )
+SCREEN_UPDATE_IND16( robowres )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	appoooh_state *state = screen.machine().driver_data<appoooh_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 
-	if (priority == 0)	/* fg behind sprites */
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	if (state->m_priority == 0)	/* fg behind sprites */
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw sprites */
-	if (priority == 1)
+	if (state->m_priority == 1)
 	{
 		/* sprite set #1 */
-		robowres_draw_sprites( bitmap, cliprect, screen->machine->gfx[2],spriteram);
+		robowres_draw_sprites(bitmap, cliprect, screen.machine().gfx[2], state->m_spriteram);
 		/* sprite set #2 */
-		robowres_draw_sprites( bitmap, cliprect, screen->machine->gfx[3],spriteram_2);
+		robowres_draw_sprites(bitmap, cliprect, screen.machine().gfx[3], state->m_spriteram_2);
 	}
 	else
 	{
 		/* sprite set #2 */
-		robowres_draw_sprites( bitmap, cliprect, screen->machine->gfx[3],spriteram_2);
+		robowres_draw_sprites(bitmap, cliprect, screen.machine().gfx[3], state->m_spriteram_2);
 		/* sprite set #1 */
-		robowres_draw_sprites( bitmap, cliprect, screen->machine->gfx[2],spriteram);
+		robowres_draw_sprites(bitmap, cliprect, screen.machine().gfx[2], state->m_spriteram);
 	}
 
-	if (priority != 0)	/* fg in front of sprites */
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	if (state->m_priority != 0)	/* fg in front of sprites */
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+
 	return 0;
 }

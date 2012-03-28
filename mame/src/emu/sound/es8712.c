@@ -1,6 +1,6 @@
 /**********************************************************************************************
  *
- *  Streaming singe channel ADPCM core for the ES8712 chip
+ *  Streaming single channel ADPCM core for the ES8712 chip
  *  Chip is branded by Excellent Systems, probably OEM'd.
  *
  *  Samples are currently looped, but whether they should and how, is unknown.
@@ -12,10 +12,7 @@
  **********************************************************************************************/
 
 
-#include <math.h>
-
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "es8712.h"
 
 #define MAX_SAMPLE_CHUNK	10000
@@ -50,13 +47,11 @@ static const int index_shift[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
 static int diff_lookup[49*16];
 
 
-INLINE es8712_state *get_safe_token(const device_config *device)
+INLINE es8712_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_ES8712);
-	return (es8712_state *)device->token;
+	assert(device->type() == ES8712);
+	return (es8712_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -193,21 +188,21 @@ static STREAM_UPDATE( es8712_update )
 
 ***********************************************************************************************/
 
-static void es8712_state_save_register(es8712_state *chip, const device_config *device)
+static void es8712_state_save_register(es8712_state *chip, device_t *device)
 {
-	state_save_register_device_item(device, 0, chip->bank_offset);
+	device->save_item(NAME(chip->bank_offset));
 
-	state_save_register_device_item(device, 0, chip->playing);
-	state_save_register_device_item(device, 0, chip->sample);
-	state_save_register_device_item(device, 0, chip->count);
-	state_save_register_device_item(device, 0, chip->signal);
-	state_save_register_device_item(device, 0, chip->step);
+	device->save_item(NAME(chip->playing));
+	device->save_item(NAME(chip->sample));
+	device->save_item(NAME(chip->count));
+	device->save_item(NAME(chip->signal));
+	device->save_item(NAME(chip->step));
 
-	state_save_register_device_item(device, 0, chip->base_offset);
+	device->save_item(NAME(chip->base_offset));
 
-	state_save_register_device_item(device, 0, chip->start);
-	state_save_register_device_item(device, 0, chip->end);
-	state_save_register_device_item(device, 0, chip->repeat);
+	device->save_item(NAME(chip->start));
+	device->save_item(NAME(chip->end));
+	device->save_item(NAME(chip->repeat));
 }
 
 
@@ -229,10 +224,10 @@ static DEVICE_START( es8712 )
 	chip->repeat = 0;
 
 	chip->bank_offset = 0;
-	chip->region_base = device->region;
+	chip->region_base = *device->region();
 
 	/* generate the name and create the stream */
-	chip->stream = stream_create(device, 0, 1, device->clock, chip, es8712_update);
+	chip->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock(), chip, es8712_update);
 
 	/* initialize the rest of the structure */
 	chip->signal = -2;
@@ -255,7 +250,7 @@ static DEVICE_RESET( es8712 )
 	if (chip->playing)
 	{
 		/* update the stream, then turn it off */
-		stream_update(chip->stream);
+		chip->stream->update();
 		chip->playing = 0;
 		chip->repeat = 0;
 	}
@@ -268,10 +263,10 @@ static DEVICE_RESET( es8712 )
 
 *****************************************************************************/
 
-void es8712_set_bank_base(const device_config *device, int base)
+void es8712_set_bank_base(device_t *device, int base)
 {
 	es8712_state *chip = get_safe_token(device);
-	stream_update(chip->stream);
+	chip->stream->update();
 	chip->bank_offset = base;
 }
 
@@ -282,13 +277,13 @@ void es8712_set_bank_base(const device_config *device, int base)
 
 *****************************************************************************/
 
-void es8712_set_frequency(const device_config *device, int frequency)
+void es8712_set_frequency(device_t *device, int frequency)
 {
 	es8712_state *chip = get_safe_token(device);
 
 	/* update the stream and set the new base */
-	stream_update(chip->stream);
-	stream_set_sample_rate(chip->stream, frequency);
+	chip->stream->update();
+	chip->stream->set_sample_rate(frequency);
 }
 
 
@@ -299,7 +294,7 @@ void es8712_set_frequency(const device_config *device, int frequency)
 
 ***********************************************************************************************/
 
-void es8712_play(const device_config *device)
+void es8712_play(device_t *device)
 {
 	es8712_state *chip = get_safe_token(device);
 
@@ -322,12 +317,12 @@ void es8712_play(const device_config *device)
 	/* invalid samples go here */
 	else
 	{
-		logerror("ES871295:'%s' requested to play invalid sample range %06x-%06x\n",device->tag,chip->start,chip->end);
+		logerror("ES871295:'%s' requested to play invalid sample range %06x-%06x\n",device->tag(),chip->start,chip->end);
 
 		if (chip->playing)
 		{
 			/* update the stream */
-			stream_update(chip->stream);
+			chip->stream->update();
 			chip->playing = 0;
 		}
 	}
@@ -411,3 +406,5 @@ DEVICE_GET_INFO( es8712 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(ES8712, es8712);

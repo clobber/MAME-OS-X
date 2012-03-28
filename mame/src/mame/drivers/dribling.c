@@ -25,25 +25,10 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
-#include "dribling.h"
-
-
-
-/*************************************
- *
- *  Global variables
- *
- *************************************/
-
-/* referenced by the video hardware */
-UINT8 dribling_abca;
-
-static UINT8 dr, ds, sh;
-static UINT8 input_mux;
-static UINT8 di;
+#include "includes/dribling.h"
 
 
 
@@ -55,8 +40,9 @@ static UINT8 di;
 
 static INTERRUPT_GEN( dribling_irq_gen )
 {
-	if (di)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	dribling_state *state = device->machine().driver_data<dribling_state>();
+	if (state->m_di)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 
@@ -69,20 +55,24 @@ static INTERRUPT_GEN( dribling_irq_gen )
 
 static READ8_DEVICE_HANDLER( dsr_r )
 {
+	dribling_state *state = device->machine().driver_data<dribling_state>();
+
 	/* return DSR0-7 */
-	return (ds << sh) | (dr >> (8 - sh));
+	return (state->m_ds << state->m_sh) | (state->m_dr >> (8 - state->m_sh));
 }
 
 
 static READ8_DEVICE_HANDLER( input_mux0_r )
 {
+	dribling_state *state = device->machine().driver_data<dribling_state>();
+
 	/* low value in the given bit selects */
-	if (!(input_mux & 0x01))
-		return input_port_read(device->machine, "MUX0");
-	else if (!(input_mux & 0x02))
-		return input_port_read(device->machine, "MUX1");
-	else if (!(input_mux & 0x04))
-		return input_port_read(device->machine, "MUX2");
+	if (!(state->m_input_mux & 0x01))
+		return input_port_read(device->machine(), "MUX0");
+	else if (!(state->m_input_mux & 0x02))
+		return input_port_read(device->machine(), "MUX1");
+	else if (!(state->m_input_mux & 0x04))
+		return input_port_read(device->machine(), "MUX2");
 	return 0xff;
 }
 
@@ -96,15 +86,17 @@ static READ8_DEVICE_HANDLER( input_mux0_r )
 
 static WRITE8_DEVICE_HANDLER( misc_w )
 {
+	dribling_state *state = device->machine().driver_data<dribling_state>();
+
 	/* bit 7 = di */
-	di = (data >> 7) & 1;
-	if (!di)
-		cputag_set_input_line(device->machine, "maincpu", 0, CLEAR_LINE);
+	state->m_di = (data >> 7) & 1;
+	if (!state->m_di)
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
 
 	/* bit 6 = parata */
 
 	/* bit 5 = ab. campo */
-	dribling_abca = (data >> 5) & 1;
+	state->m_abca = (data >> 5) & 1;
 
 	/* bit 4 = ab. a.b.f. */
 	/* bit 3 = n/c */
@@ -112,8 +104,8 @@ static WRITE8_DEVICE_HANDLER( misc_w )
 	/* bit 2 = (9) = PC2 */
 	/* bit 1 = (10) = PC1 */
 	/* bit 0 = (32) = PC0 */
-	input_mux = data & 7;
-	logerror("%s:misc_w(%02X)\n", cpuexec_describe_context(device->machine), data);
+	state->m_input_mux = data & 7;
+	logerror("%s:misc_w(%02X)\n", device->machine().describe_context(), data);
 }
 
 
@@ -121,31 +113,33 @@ static WRITE8_DEVICE_HANDLER( sound_w )
 {
 	/* bit 7 = stop palla */
 	/* bit 6 = contrasto */
-	/* bit 5 = calgio a */
+	/* bit 5 = calcio a */
 	/* bit 4 = fischio */
 	/* bit 3 = calcio b */
 	/* bit 2 = folla a */
 	/* bit 1 = folla m */
 	/* bit 0 = folla b */
-	logerror("%s:sound_w(%02X)\n", cpuexec_describe_context(device->machine), data);
+	logerror("%s:sound_w(%02X)\n", device->machine().describe_context(), data);
 }
 
 
 static WRITE8_DEVICE_HANDLER( pb_w )
 {
 	/* write PB0-7 */
-	logerror("%s:pb_w(%02X)\n", cpuexec_describe_context(device->machine), data);
+	logerror("%s:pb_w(%02X)\n", device->machine().describe_context(), data);
 }
 
 
 static WRITE8_DEVICE_HANDLER( shr_w )
 {
+	dribling_state *state = device->machine().driver_data<dribling_state>();
+
 	/* bit 3 = watchdog */
 	if (data & 0x08)
-		watchdog_reset(device->machine);
+		watchdog_reset(device->machine());
 
 	/* bit 2-0 = SH0-2 */
-	sh = data & 0x07;
+	state->m_sh = data & 0x07;
 }
 
 
@@ -158,24 +152,28 @@ static WRITE8_DEVICE_HANDLER( shr_w )
 
 static READ8_HANDLER( ioread )
 {
+	dribling_state *state = space->machine().driver_data<dribling_state>();
+
 	if (offset & 0x08)
-		return ppi8255_r(devtag_get_device(space->machine, "ppi8255_0"), offset & 3);
+		return ppi8255_r(state->m_ppi_0, offset & 3);
 	else if (offset & 0x10)
-		return ppi8255_r(devtag_get_device(space->machine, "ppi8255_1"), offset & 3);
+		return ppi8255_r(state->m_ppi_1, offset & 3);
 	return 0xff;
 }
 
 
 static WRITE8_HANDLER( iowrite )
 {
+	dribling_state *state = space->machine().driver_data<dribling_state>();
+
 	if (offset & 0x08)
-		ppi8255_w(devtag_get_device(space->machine, "ppi8255_0"), offset & 3, data);
+		ppi8255_w(state->m_ppi_0, offset & 3, data);
 	else if (offset & 0x10)
-		ppi8255_w(devtag_get_device(space->machine, "ppi8255_1"), offset & 3, data);
+		ppi8255_w(state->m_ppi_1, offset & 3, data);
 	else if (offset & 0x40)
 	{
-		dr = ds;
-		ds = data;
+		state->m_dr = state->m_ds;
+		state->m_ds = data;
 	}
 }
 
@@ -215,15 +213,15 @@ static const ppi8255_interface ppi8255_intf[2] =
  *
  *************************************/
 
-static ADDRESS_MAP_START( dribling_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dribling_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x3fff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM AM_BASE_MEMBER(dribling_state, m_videoram)
 	AM_RANGE(0x4000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(dribling_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(dribling_colorram_w) AM_BASE_MEMBER(dribling_state, m_colorram)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xff) AM_READWRITE(ioread, iowrite)
 ADDRESS_MAP_END
@@ -237,7 +235,7 @@ ADDRESS_MAP_END
  *************************************/
 
 static INPUT_PORTS_START( dribling )
-	PORT_START("MUX0")	/* IN0 (mux 0) */
+	PORT_START("MUX0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICKRIGHT_LEFT ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICKRIGHT_RIGHT ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICKRIGHT_DOWN ) PORT_PLAYER(1)
@@ -247,7 +245,7 @@ static INPUT_PORTS_START( dribling )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICKLEFT_DOWN ) PORT_PLAYER(1)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICKLEFT_UP ) PORT_PLAYER(1)
 
-	PORT_START("MUX1")	/* IN0 (mux 1) */
+	PORT_START("MUX1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICKRIGHT_LEFT ) PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICKRIGHT_RIGHT ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICKRIGHT_DOWN ) PORT_PLAYER(2)
@@ -257,7 +255,7 @@ static INPUT_PORTS_START( dribling )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICKLEFT_DOWN ) PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICKLEFT_UP ) PORT_PLAYER(2)
 
-	PORT_START("MUX2")	/* IN0 (mux 2) */
+	PORT_START("MUX2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -265,7 +263,7 @@ static INPUT_PORTS_START( dribling )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )
@@ -285,34 +283,65 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( dribling )
+static MACHINE_START( dribling )
+{
+	dribling_state *state = machine.driver_data<dribling_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_ppi_0 = machine.device("ppi8255_0");
+	state->m_ppi_1 = machine.device("ppi8255_1");
+
+	state->save_item(NAME(state->m_abca));
+	state->save_item(NAME(state->m_di));
+	state->save_item(NAME(state->m_dr));
+	state->save_item(NAME(state->m_ds));
+	state->save_item(NAME(state->m_sh));
+	state->save_item(NAME(state->m_input_mux));
+}
+
+static MACHINE_RESET( dribling )
+{
+	dribling_state *state = machine.driver_data<dribling_state>();
+
+	state->m_abca = 0;
+	state->m_di = 0;
+	state->m_dr = 0;
+	state->m_ds = 0;
+	state->m_sh = 0;
+	state->m_input_mux = 0;
+}
+
+
+static MACHINE_CONFIG_START( dribling, dribling_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)
-	MDRV_CPU_PROGRAM_MAP(dribling_map)
-	MDRV_CPU_IO_MAP(io_map)
-	MDRV_CPU_VBLANK_INT("screen", dribling_irq_gen)
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)
+	MCFG_CPU_PROGRAM_MAP(dribling_map)
+	MCFG_CPU_IO_MAP(io_map)
+	MCFG_CPU_VBLANK_INT("screen", dribling_irq_gen)
 
-	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+
+	MCFG_MACHINE_START(dribling)
+	MCFG_MACHINE_RESET(dribling)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 255, 40, 255)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 255, 40, 255)
+	MCFG_SCREEN_UPDATE_STATIC(dribling)
 
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_PALETTE_INIT(dribling)
-	MDRV_VIDEO_UPDATE(dribling)
+	MCFG_PALETTE_INIT(dribling)
 
 	/* sound hardware */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -367,5 +396,5 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, dribling, 0,        dribling, dribling, 0, ROT0, "Model Racing", "Dribbling", GAME_NO_SOUND )
-GAME( 1983, driblingo,dribling, dribling, dribling, 0, ROT0, "Model Racing (Olympia license)", "Dribbling (Olympia)", GAME_NO_SOUND )
+GAME( 1983, dribling, 0,        dribling, dribling, 0, ROT0, "Model Racing", "Dribbling", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, driblingo,dribling, dribling, dribling, 0, ROT0, "Model Racing (Olympia license)", "Dribbling (Olympia)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )

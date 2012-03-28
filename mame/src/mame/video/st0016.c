@@ -3,24 +3,21 @@
     driver by Tomasz Slanina
 ************************************/
 
-#include "driver.h"
-#include "st0016.h"
+#include "emu.h"
+#include "includes/st0016.h"
 
 UINT8 *st0016_charram;
 static UINT8 *st0016_spriteram,*st0016_paletteram;
 
-UINT8 *macs_ram1,*macs_ram2;
-
 UINT32 st0016_game;
+
+UINT8 macs_cart_slot;
 
 static INT32 st0016_spr_bank,st0016_spr2_bank,st0016_pal_bank,st0016_char_bank;
 static int spr_dx,spr_dy;
 
 static UINT8 st0016_vregs[0xc0];
 static int st0016_ramgfx;
-
-//super eagle shot
-static bitmap_t *speglsht_bitmap;
 
 static const gfx_layout charlayout =
 {
@@ -103,8 +100,8 @@ WRITE8_HANDLER (st0016_palette_ram_w)
 	st0016_paletteram[ST0016_PAL_BANK_SIZE*st0016_pal_bank+offset]=data;
 	val=st0016_paletteram[color*2]+(st0016_paletteram[color*2+1]<<8);
 	if(!color)
-		palette_set_color_rgb(space->machine,UNUSED_PEN,pal5bit(val >> 0),pal5bit(val >> 5),pal5bit(val >> 10)); /* same as color 0 - bg ? */
-	palette_set_color_rgb(space->machine,color,pal5bit(val >> 0),pal5bit(val >> 5),pal5bit(val >> 10));
+		palette_set_color_rgb(space->machine(),UNUSED_PEN,pal5bit(val >> 0),pal5bit(val >> 5),pal5bit(val >> 10)); /* same as color 0 - bg ? */
+	palette_set_color_rgb(space->machine(),color,pal5bit(val >> 0),pal5bit(val >> 5),pal5bit(val >> 10));
 }
 
 READ8_HANDLER(st0016_character_ram_r)
@@ -115,7 +112,7 @@ READ8_HANDLER(st0016_character_ram_r)
 WRITE8_HANDLER(st0016_character_ram_w)
 {
 	st0016_charram[ST0016_CHAR_BANK_SIZE*st0016_char_bank+offset]=data;
-	gfx_element_mark_dirty(space->machine->gfx[st0016_ramgfx], st0016_char_bank);
+	gfx_element_mark_dirty(space->machine().gfx[st0016_ramgfx], st0016_char_bank);
 }
 
 READ8_HANDLER(st0016_vregs_r)
@@ -142,7 +139,7 @@ READ8_HANDLER(st0016_vregs_r)
 	{
 		case 0:
 		case 1:
-			return mame_rand(space->machine);
+			return space->machine().rand();
 	}
 
 	return st0016_vregs[offset];
@@ -189,8 +186,11 @@ WRITE8_HANDLER(st0016_vregs_w)
 		UINT32 srcadr=(st0016_vregs[0xa0]|(st0016_vregs[0xa1]<<8)|(st0016_vregs[0xa2]<<16))<<1;
 		UINT32 dstadr=(st0016_vregs[0xa3]|(st0016_vregs[0xa4]<<8)|(st0016_vregs[0xa5]<<16))<<1;
 		UINT32 length=((st0016_vregs[0xa6]|(st0016_vregs[0xa7]<<8)|((st0016_vregs[0xa8]&0x1f)<<16))+1)<<1;
-		UINT32 srclen = (memory_region_length(space->machine, "maincpu")-0x10000);
-		UINT8 *mem = memory_region(space->machine, "maincpu");
+		UINT32 srclen = (space->machine().region("maincpu")->bytes()-0x10000);
+		UINT8 *mem = space->machine().region("maincpu")->base();
+
+		srcadr += macs_cart_slot*0x400000;
+
 		while(length>0)
 		{
 			if( srcadr < srclen && (dstadr < ST0016_MAX_CHAR_BANK*ST0016_CHAR_BANK_SIZE))
@@ -205,14 +205,14 @@ WRITE8_HANDLER(st0016_vregs_w)
 			{
 				/* samples ? sound dma ? */
 				// speaglsht:  unknown DMA copy : src - 2B6740, dst - 4400, len - 1E400
-				logerror("unknown DMA copy : src - %X, dst - %X, len - %X, PC - %X\n",srcadr,dstadr,length,cpu_get_previouspc(space->cpu));
+				logerror("unknown DMA copy : src - %X, dst - %X, len - %X, PC - %X\n",srcadr,dstadr,length,cpu_get_previouspc(&space->device()));
 				break;
 			}
 		}
 	}
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
 	/*
     object ram :
@@ -257,43 +257,43 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
     */
 
-	gfx_element *gfx = machine->gfx[st0016_ramgfx];
-	int i,j,lx,ly,x,y,code,offset,length,sx,sy,color,flipx,flipy,scrollx,scrolly,plx,ply;
+	gfx_element *gfx = machine.gfx[st0016_ramgfx];
+	int i,j,lx,ly,x,y,code,offset,length,sx,sy,color,flipx,flipy,scrollx,scrolly/*,plx,ply*/;
 
 
 	for(i=0;i<ST0016_SPR_BANK_SIZE*ST0016_MAX_SPR_BANK;i+=8)
 	{
 		x=st0016_spriteram[i+4]+((st0016_spriteram[i+5]&3)<<8);
-  	y=st0016_spriteram[i+6]+((st0016_spriteram[i+7]&3)<<8);
+	y=st0016_spriteram[i+6]+((st0016_spriteram[i+7]&3)<<8);
 
-  	scrollx=(st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+0x40]+256*st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+1+0x40])&0x3ff;
-  	scrolly=(st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+2+0x40]+256*st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+3+0x40])&0x3ff;
+	scrollx=(st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+0x40]+256*st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+1+0x40])&0x3ff;
+	scrolly=(st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+2+0x40]+256*st0016_vregs[(((st0016_spriteram[i+1]&0x0f)>>1)<<2)+3+0x40])&0x3ff;
 
 	if(!ISMACS)
 	{
-	  	if (x & 0x200) x-= 0x400; //sign
-  		if (y & 0x200) y-= 0x400;
+		if (x & 0x200) x-= 0x400; //sign
+		if (y & 0x200) y-= 0x400;
 
-  		if (scrollx & 0x200) scrollx-= 0x400; //sign
-  		if (scrolly & 0x200) scrolly-= 0x400;
-  	}
+		if (scrollx & 0x200) scrollx-= 0x400; //sign
+		if (scrolly & 0x200) scrolly-= 0x400;
+	}
 
-  	if(ISMACS1)
+	if(ISMACS1)
 	{
-	  	if (x & 0x200) x-= 0x400; //sign
-  		if (y & 0x200) y-= 0x2b0;//0x400;
+		if (x & 0x200) x-= 0x400; //sign
+		if (y & 0x200) y-= 0x2b0;//0x400;
 
-  		if (scrollx & 0x200) scrollx-= 0x400; //sign
-  		if (scrolly & 0x200) scrolly-= 0x400;
-  	}
+		if (scrollx & 0x200) scrollx-= 0x400; //sign
+		if (scrolly & 0x200) scrolly-= 0x400;
+	}
 
-  	x+=scrollx;
-  	y+=scrolly;
+	x+=scrollx;
+	y+=scrolly;
 
-  	if(ISMACS)
-  	{
-  		y+=0x20;
-  	}
+	if(ISMACS)
+	{
+		y+=0x20;
+	}
 
 	if( st0016_spriteram[i+3]&0x80) /* end of list */
 		break;
@@ -303,8 +303,8 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 		length=st0016_spriteram[i+0]+1+256*(st0016_spriteram[i+1]&1);
 
-		plx=(st0016_spriteram[i+5]>>2)&0x3;
-		ply=(st0016_spriteram[i+7]>>2)&0x3;
+		//plx=(st0016_spriteram[i+5]>>2)&0x3;
+		//ply=(st0016_spriteram[i+7]>>2)&0x3;
 
 		if(offset<ST0016_SPR_BANK_SIZE*ST0016_MAX_SPR_BANK)
 		{
@@ -347,7 +347,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 					int x0,y0,i0=0;
 					for(x0=(flipx?((1<<lx)-1):0);x0!=(flipx?-1:(1<<lx));x0+=(flipx?-1:1))
 						for(y0=(flipy?((1<<ly)-1):0);y0!=(flipy?-1:(1<<ly));y0+=(flipy?-1:1))
-					 	{
+						{
 							/* custom draw */
 							UINT16 *destline;
 							int yloop,xloop;
@@ -367,7 +367,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 								UINT16 drawypos;
 
 								if (!flipy) {drawypos = ypos+yloop;} else {drawypos = (ypos+8-1)-yloop;}
-								destline = BITMAP_ADDR16(bitmap, drawypos, 0);
+								destline = &bitmap.pix16(drawypos);
 
 								for (xloop=0; xloop<8; xloop++)
 								{
@@ -377,10 +377,10 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 									if (!flipx) { drawxpos = xpos+xloop; } else { drawxpos = (xpos+8-1)-xloop; }
 
-									if (drawxpos > cliprect->max_x)
+									if (drawxpos > cliprect.max_x)
 										drawxpos -= 512; // wrap around
 
-									if ((drawxpos >= cliprect->min_x) && (drawxpos <= cliprect->max_x) && (drawypos >= cliprect->min_y) && (drawypos <= cliprect->max_y) )
+									if (cliprect.contains(drawxpos, drawypos))
 									{
 										if(st0016_spriteram[offset+5]&0x40)
 										{
@@ -408,7 +408,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 									gfxoffs++;
 								}
 							}
-					 	}
+						}
 				}
 				offset+=8;
 				if(offset>=ST0016_SPR_BANK_SIZE*ST0016_MAX_SPR_BANK)
@@ -419,7 +419,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 }
 
 
-void st0016_save_init(running_machine *machine)
+static void st0016_save_init(running_machine &machine)
 {
 	state_save_register_global(machine, st0016_spr_bank);
 	state_save_register_global(machine, st0016_spr2_bank);
@@ -436,19 +436,21 @@ void st0016_save_init(running_machine *machine)
 VIDEO_START( st0016 )
 {
 	int gfx_index=0;
+
+	macs_cart_slot = 0;
 	st0016_charram=auto_alloc_array(machine, UINT8, ST0016_MAX_CHAR_BANK*ST0016_CHAR_BANK_SIZE);
 	st0016_spriteram=auto_alloc_array(machine, UINT8, ST0016_MAX_SPR_BANK*ST0016_SPR_BANK_SIZE);
 	st0016_paletteram=auto_alloc_array(machine, UINT8, ST0016_MAX_PAL_BANK*ST0016_PAL_BANK_SIZE);
 
 	/* find first empty slot to decode gfx */
 	for (gfx_index = 0; gfx_index < MAX_GFX_ELEMENTS; gfx_index++)
-		if (machine->gfx[gfx_index] == 0)
+		if (machine.gfx[gfx_index] == 0)
 			break;
 
 	assert(gfx_index != MAX_GFX_ELEMENTS);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[gfx_index] = gfx_element_alloc(machine, &charlayout, (UINT8 *) st0016_charram, 0x40, 0);
+	machine.gfx[gfx_index] = gfx_element_alloc(machine, &charlayout, (UINT8 *) st0016_charram, 0x40, 0);
 	st0016_ramgfx = gfx_index;
 
 	spr_dx=0;
@@ -457,31 +459,27 @@ VIDEO_START( st0016 )
 	switch(st0016_game&0x3f)
 	{
 		case 0: //renju kizoku
-			video_screen_set_visarea(machine->primary_screen, 0, 40*8-1, 0, 30*8-1);
+			machine.primary_screen->set_visible_area(0, 40*8-1, 0, 30*8-1);
 			spr_dx=0;
 			spr_dy=0;
 		break;
 
 		case 1: //neratte chu!
-			video_screen_set_visarea(machine->primary_screen, 8,41*8-1,0,30*8-1);
+			machine.primary_screen->set_visible_area(8,41*8-1,0,30*8-1);
 			spr_dx=0;
 			spr_dy=8;
 		break;
 
-		case 3: //super eagle shot
-			speglsht_bitmap = auto_bitmap_alloc(machine, 512, 5122, BITMAP_FORMAT_INDEXED16 );
-		break;
-
 		case 4: //mayjinsen 1&2
-			video_screen_set_visarea(machine->primary_screen, 0,32*8-1,0,28*8-1);
+			machine.primary_screen->set_visible_area(0,32*8-1,0,28*8-1);
 		break;
 
 		case 10:
-			video_screen_set_visarea(machine->primary_screen, 0,383,0,255);
+			machine.primary_screen->set_visible_area(0,383,0,255);
 		break;
 
 		case 11:
-			video_screen_set_visarea(machine->primary_screen, 0,383,0,383);
+			machine.primary_screen->set_visible_area(0,383,0,383);
 		break;
 
 	}
@@ -490,9 +488,9 @@ VIDEO_START( st0016 )
 }
 
 
-static void draw_bgmap(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect, int priority)
+static void draw_bgmap(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect, int priority)
 {
-	gfx_element *gfx = machine->gfx[st0016_ramgfx];
+	gfx_element *gfx = machine.gfx[st0016_ramgfx];
 	int j;
 	//for(j=0x40-8;j>=0;j-=8)
 	for(j=0;j<0x40;j+=8)
@@ -502,17 +500,17 @@ static void draw_bgmap(running_machine *machine, bitmap_t *bitmap,const rectangl
 			int x,y,code,color,flipx,flipy;
 			int i=st0016_vregs[j+1]*0x1000;
 			for(x=0;x<32*2;x++)
-	 			for(y=0;y<8*4;y++)
-	 			{
-				 	code=st0016_spriteram[i]+256*st0016_spriteram[i+1];
-	 				color=st0016_spriteram[i+2]&0x3f;
+				for(y=0;y<8*4;y++)
+				{
+					code=st0016_spriteram[i]+256*st0016_spriteram[i+1];
+					color=st0016_spriteram[i+2]&0x3f;
 
-	 				flipx=st0016_spriteram[i+3]&0x80;
+					flipx=st0016_spriteram[i+3]&0x80;
 					flipy=st0016_spriteram[i+3]&0x40;
 
-				 	if(priority)
-				 	{
-				 		drawgfx_transpen(bitmap,cliprect,gfx,
+					if(priority)
+					{
+						drawgfx_transpen(bitmap,cliprect,gfx,
 										code,
 										color,
 										flipx,flipy,
@@ -535,7 +533,7 @@ static void draw_bgmap(running_machine *machine, bitmap_t *bitmap,const rectangl
 								UINT16 drawypos;
 
 								if (!flipy) {drawypos = ypos+yloop;} else {drawypos = (ypos+8-1)-yloop;}
-								destline = BITMAP_ADDR16(bitmap, drawypos, 0);
+								destline = &bitmap.pix16(drawypos);
 
 								for (xloop=0; xloop<8; xloop++)
 								{
@@ -545,10 +543,10 @@ static void draw_bgmap(running_machine *machine, bitmap_t *bitmap,const rectangl
 
 									if (!flipx) { drawxpos = xpos+xloop; } else { drawxpos = (xpos+8-1)-xloop; }
 
-									if (drawxpos > cliprect->max_x)
+									if (drawxpos > cliprect.max_x)
 										drawxpos -= 512; // wrap around
 
-									if ((drawxpos >= cliprect->min_x) && (drawxpos <= cliprect->max_x) && (drawypos >= cliprect->min_y) && (drawypos <= cliprect->max_y) )
+									if (cliprect.contains(drawxpos, drawypos))
 									{
 
 										if(st0016_vregs[j+7]==0x12)
@@ -578,24 +576,26 @@ static void draw_bgmap(running_machine *machine, bitmap_t *bitmap,const rectangl
 
 								}
 							}
-						}
-	 			i+=4;
-	 			}
-	 	}
+					}
+					i+=4;
+				}
+		}
 	}
 }
 
 
-#define PLOT_PIXEL_RGB(x,y,r,g,b)	if(y>=0 && x>=0 && x<512 && y<512) \
-{ \
-		*BITMAP_ADDR32(bitmap, y, x) = (b) | ((g)<<8) | ((r)<<16); \
+void st0016_draw_screen(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+{
+	draw_bgmap(screen.machine(), bitmap,cliprect,0);
+	draw_sprites(screen.machine(), bitmap,cliprect);
+	draw_bgmap(screen.machine(), bitmap,cliprect,1);
 }
 
-VIDEO_UPDATE( st0016 )
+SCREEN_UPDATE_IND16( st0016 )
 {
 
 #ifdef MAME_DEBUG
-	if(input_code_pressed_once(screen->machine, KEYCODE_Z))
+	if(screen.machine().input().code_pressed_once(KEYCODE_Z))
 	{
 		int h,j;
 		FILE *p=fopen("vram.bin","wb");
@@ -607,66 +607,17 @@ VIDEO_UPDATE( st0016 )
 			fprintf(p,"VREG %.4x - %.4x\n",h,st0016_vregs[h]);
 		for(h=0;h<0x1000*ST0016_MAX_SPR_BANK;h+=8)
 		{
-		 	fprintf(p,"%.4x - %.4x - ",h,h>>3);
-		 	for(j=0;j<8;j++)
-		 	 	fprintf(p,"%.2x ",st0016_spriteram[h+j]);
-		 	 fprintf(p,"\n");
+			fprintf(p,"%.4x - %.4x - ",h,h>>3);
+			for(j=0;j<8;j++)
+				fprintf(p,"%.2x ",st0016_spriteram[h+j]);
+			 fprintf(p,"\n");
 		}
 		fclose(p);
 	}
 #endif
 
-	if((st0016_game&0x3f)==3)
-	{
-		//super eagle shot
-		int x,y,dy;
-
-		bitmap_fill(speglsht_bitmap,NULL,0);
-		dy=(speglsht_videoreg&0x20)?(256*512):0; //visible frame
-
-		for(y=0;y<256;y++)
-		{
-			for(x=0;x<512;x++)
-			{
-				int tmp=dy+y*512+x;
-				PLOT_PIXEL_RGB(x-67,y-5,(speglsht_framebuffer[tmp]>>0)&0xff,(speglsht_framebuffer[tmp]>>8)&0xff,(speglsht_framebuffer[tmp]>>16)&0xff);
-			}
-		}
-
-		//draw st0016 gfx to temporary bitmap (indexed 16)
-		draw_bgmap(screen->machine, speglsht_bitmap,cliprect,0);
- 		draw_sprites(screen->machine, speglsht_bitmap,cliprect);
-		draw_bgmap(screen->machine, speglsht_bitmap,cliprect,1);
-
-		//copy temporary bitmap to rgb 32 bit bitmap
-		for(y=cliprect->min_y; y<cliprect->max_y;y++)
-		{
-			UINT16 *srcline = BITMAP_ADDR16(speglsht_bitmap, y, 0);
-			for(x=cliprect->min_x; x<cliprect->max_x;x++)
-			{
-				if(srcline[x])
-				{
-					rgb_t color=palette_get_color(screen->machine, srcline[x]);
-					PLOT_PIXEL_RGB(x,y,RGB_RED(color),RGB_GREEN(color),RGB_BLUE(color));
-				}
-			}
-		}
-	}
-	else
-	{
-		if(ISMACS1)
-		{
-			if(!(input_port_read(screen->machine, "SYS1")&1))	//fake coins - MACS2 system
-			{
-				macs_ram2[0]++;
-			}
-		}
-
-		bitmap_fill(bitmap,cliprect,UNUSED_PEN);
-		draw_bgmap(screen->machine, bitmap,cliprect,0);
- 		draw_sprites(screen->machine, bitmap,cliprect);
-		draw_bgmap(screen->machine, bitmap,cliprect,1);
-	}
+	bitmap.fill(UNUSED_PEN, cliprect);
+	st0016_draw_screen(screen, bitmap, cliprect);
 	return 0;
 }
 

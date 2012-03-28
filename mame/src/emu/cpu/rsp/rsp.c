@@ -4,11 +4,14 @@
     Written by Ville Linde
 */
 
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "rsp.h"
+#include "rspdiv.h"
 
 CPU_DISASSEMBLE( rsp );
+
+#ifndef USE_RSPDRC
 
 #define LOG_INSTRUCTION_EXECUTION		0
 #define SAVE_DISASM						0
@@ -16,10 +19,10 @@ CPU_DISASSEMBLE( rsp );
 #define RSP_TEST_SYNC                   0
 
 #define PRINT_VECREG(x)		mame_printf_debug("V%d: %04X|%04X|%04X|%04X|%04X|%04X|%04X|%04X\n", (x), \
-							(UINT16)R_VREG_S((x),0), (UINT16)R_VREG_S((x),1), \
-							(UINT16)R_VREG_S((x),2), (UINT16)R_VREG_S((x),3), \
-							(UINT16)R_VREG_S((x),4), (UINT16)R_VREG_S((x),5), \
-							(UINT16)R_VREG_S((x),6), (UINT16)R_VREG_S((x),7))
+							(UINT16)VREG_S((x),0), (UINT16)VREG_S((x),1), \
+							(UINT16)VREG_S((x),2), (UINT16)VREG_S((x),3), \
+							(UINT16)VREG_S((x),4), (UINT16)VREG_S((x),5), \
+							(UINT16)VREG_S((x),6), (UINT16)VREG_S((x),7))
 
 #define PRINT_ACCUM(x)     mame_printf_debug("A%d: %08X|%08X\n", (x), \
                             (UINT32)( ( ACCUM(x) >> 32 ) & 0x00000000ffffffff ),    \
@@ -27,253 +30,188 @@ CPU_DISASSEMBLE( rsp );
 
 extern offs_t rsp_dasm_one(char *buffer, offs_t pc, UINT32 op);
 
-
-
-typedef struct
-{
-	UINT64 d[2];
-	//UINT32 l[4];
-	//INT16 s[8];
-	//UINT8 b[16];
-} VECTOR_REG;
-
-typedef struct _rsp_state rsp_state;
-struct _rsp_state
-{
-	const rsp_config *config;
-	FILE *exec_output;
-
-	UINT32 pc;
-	UINT32 r[32];
-	VECTOR_REG v[32];
-	UINT16 flag[4];
-	UINT32 sr;
-    UINT32 step_count;
-
-	INT64 accum[8];
-	INT32 square_root_res;
-	INT32 square_root_high;
-	INT32 reciprocal_res;
-	INT32 reciprocal_high;
-
-	UINT32 ppc;
-	UINT32 nextpc;
-
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
-	int icount;
-};
-
-INLINE rsp_state *get_safe_token(const device_config *device)
+INLINE rsp_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_RSP);
-	return (rsp_state *)device->token;
+	assert(device->type() == RSP);
+	return (rsp_state *)downcast<legacy_cpu_device *>(device)->token();
 }
-
-
-#define RSREG		((op >> 21) & 0x1f)
-#define RTREG		((op >> 16) & 0x1f)
-#define RDREG		((op >> 11) & 0x1f)
-#define SHIFT		((op >> 6) & 0x1f)
-
-#define RSVAL		(cpustate->r[RSREG])
-#define RTVAL		(cpustate->r[RTREG])
-#define RDVAL		(cpustate->r[RDREG])
 
 #define SIMM16		((INT32)(INT16)(op))
 #define UIMM16		((UINT16)(op))
 #define UIMM26		(op & 0x03ffffff)
 
+#define JUMP_ABS(addr)			{ rsp->nextpc = 0x04001000 | (((addr) << 2) & 0xfff); }
+#define JUMP_ABS_L(addr,l)		{ rsp->nextpc = 0x04001000 | (((addr) << 2) & 0xfff); rsp->r[l] = rsp->pc + 4; }
+#define JUMP_REL(offset)		{ rsp->nextpc = 0x04001000 | ((rsp->pc + ((offset) << 2)) & 0xfff); }
+#define JUMP_REL_L(offset,l)	{ rsp->nextpc = 0x04001000 | ((rsp->pc + ((offset) << 2)) & 0xfff); rsp->r[l] = rsp->pc + 4; }
+#define JUMP_PC(addr)			{ rsp->nextpc = 0x04001000 | ((addr) & 0xfff); }
+#define JUMP_PC_L(addr,l)		{ rsp->nextpc = 0x04001000 | ((addr) & 0xfff); rsp->r[l] = rsp->pc + 4; }
+#define LINK(l) 				{ rsp->r[l] = rsp->pc + 4; }
 
-#define JUMP_ABS(addr)			{ cpustate->nextpc = 0x04001000 | (((addr) << 2) & 0xfff); }
-#define JUMP_ABS_L(addr,l)		{ cpustate->nextpc = 0x04001000 | (((addr) << 2) & 0xfff); cpustate->r[l] = cpustate->pc + 4; }
-#define JUMP_REL(offset)		{ cpustate->nextpc = 0x04001000 | ((cpustate->pc + ((offset) << 2)) & 0xfff); }
-#define JUMP_REL_L(offset,l)	{ cpustate->nextpc = 0x04001000 | ((cpustate->pc + ((offset) << 2)) & 0xfff); cpustate->r[l] = cpustate->pc + 4; }
-#define JUMP_PC(addr)			{ cpustate->nextpc = 0x04001000 | ((addr) & 0xfff); }
-#define JUMP_PC_L(addr,l)		{ cpustate->nextpc = 0x04001000 | ((addr) & 0xfff); cpustate->r[l] = cpustate->pc + 4; }
+#define VREG_B(reg, offset)		rsp->v[(reg)].b[(offset)^1]
+#define VREG_S(reg, offset)		rsp->v[(reg)].s[(offset)]
+#define VREG_L(reg, offset)		rsp->v[(reg)].l[(offset)]
 
+#define R_VREG_B(reg, offset)		rsp->v[(reg)].b[(offset)^1]
+#define R_VREG_S(reg, offset)		(INT16)rsp->v[(reg)].s[(offset)]
+#define R_VREG_L(reg, offset)		rsp->v[(reg)].l[(offset)]
 
-#define VDREG		((op >> 6) & 0x1f)
-#define VS1REG		((op >> 11) & 0x1f)
-#define VS2REG		((op >> 16) & 0x1f)
-#define EL			((op >> 21) & 0xf)
+#define W_VREG_B(reg, offset, val)	(rsp->v[(reg)].b[(offset)^1] = val)
+#define W_VREG_S(reg, offset, val)	(rsp->v[(reg)].s[(offset)] = val)
+#define W_VREG_L(reg, offset, val)	(rsp->v[(reg)].l[(offset)] = val)
 
+#define VEC_EL_2(x,z)			(vector_elements[(x)][(z)])
 
-#define S_VREG_B(offset)			(((15 - (offset)) & 0x07) << 3)
-#define S_VREG_S(offset)			(((7 - (offset)) & 0x03) << 4)
-#define S_VREG_L(offset)			(((3 - (offset)) & 0x01) << 5)
+#define ACCUM(x)		rsp->accum[((x))].q
+#define ACCUM_H(x)		rsp->accum[((x))].w[3]
+#define ACCUM_M(x)		rsp->accum[((x))].w[2]
+#define ACCUM_L(x)		rsp->accum[((x))].w[1]
 
-#define M_VREG_B(offset)			((UINT64)0x00FF << S_VREG_B(offset))
-#define M_VREG_S(offset)			((UINT64)0x0000FFFFul << S_VREG_S(offset))
-#define M_VREG_L(offset)			((UINT64)0x00000000FFFFFFFFull << S_VREG_L(offset))
+#define CARRY_FLAG(x)			((rsp->flag[0] & (1 << ((x)))) ? 1 : 0)
+#define CLEAR_CARRY_FLAGS()		{ rsp->flag[0] &= ~0xff; }
+#define SET_CARRY_FLAG(x)		{ rsp->flag[0] |= (1 << ((x))); }
+#define CLEAR_CARRY_FLAG(x)		{ rsp->flag[0] &= ~(1 << ((x))); }
 
-#define R_VREG_B(reg, offset)		((cpustate->v[(reg)].d[(15 - (offset)) >> 3] >> S_VREG_B(offset)) & 0x00FF)
-#define R_VREG_S(reg, offset)		(INT16)((cpustate->v[(reg)].d[(7 - (offset)) >> 2] >> S_VREG_S(offset)) & 0x0000FFFFul)
-#define R_VREG_L(reg, offset)		((cpustate->v[(reg)].d[(3 - (offset)) >> 1] >> S_VREG_L(offset)) & 0x00000000FFFFFFFFull)
+#define COMPARE_FLAG(x)			((rsp->flag[1] & (1 << ((x)))) ? 1 : 0)
+#define CLEAR_COMPARE_FLAGS()	{ rsp->flag[1] &= ~0xff; }
+#define SET_COMPARE_FLAG(x)		{ rsp->flag[1] |= (1 << ((x))); }
+#define CLEAR_COMPARE_FLAG(x)	{ rsp->flag[1] &= ~(1 << ((x))); }
 
-#define W_VREG_B(reg, offset, val)	(cpustate->v[(reg)].d[(15 - (offset)) >> 3] = (cpustate->v[(reg)].d[(15 - (offset)) >> 3] & ~M_VREG_B(offset)) | (M_VREG_B(offset) & ((UINT64)(val) << S_VREG_B(offset))))
-#define W_VREG_S(reg, offset, val)	(cpustate->v[(reg)].d[(7 - (offset)) >> 2] = (cpustate->v[(reg)].d[(7 - (offset)) >> 2] & ~M_VREG_S(offset)) | (M_VREG_S(offset) & ((UINT64)(val) << S_VREG_S(offset))))
-#define W_VREG_L(reg, offset, val)	(cpustate->v[(reg)].d[(3 - (offset)) >> 1] = (cpustate->v[(reg)].d[(3 - (offset)) >> 1] & ~M_VREG_L(offset)) | (M_VREG_L(offset) & ((UINT64)(val) << S_VREG_L(offset))))
+#define ZERO_FLAG(x)			((rsp->flag[0] & (1 << (8+(x)))) ? 1 : 0)
+#define CLEAR_ZERO_FLAGS()		{ rsp->flag[0] &= ~0xff00; }
+#define SET_ZERO_FLAG(x)		{ rsp->flag[0] |= (1 << (8+(x))); }
+#define CLEAR_ZERO_FLAG(x)		{ rsp->flag[0] &= ~(1 << (8+(x))); }
 
+#define EXTENSION_FLAG(x)		((rsp.flag[2] & (1 << ((x)))) ? 1 : 0)
 
-#define VEC_EL_1(x,z)			(vector_elements_1[(x)][(z)])
-#define VEC_EL_2(x,z)			(vector_elements_2[(x)][(z)])
+#define ROPCODE(pc)		rsp->program->read_dword(pc)
 
-
-#define ACCUM(x)				(cpustate->accum[(7-(x))])
-
-#define S_ACCUM_H				(3 << 4)
-#define S_ACCUM_M				(2 << 4)
-#define S_ACCUM_L				(1 << 4)
-
-#define M_ACCUM_H				(((INT64)0x0000FFFF) << S_ACCUM_H)
-#define M_ACCUM_M				(((INT64)0x0000FFFF) << S_ACCUM_M)
-#define M_ACCUM_L				(((INT64)0x0000FFFF) << S_ACCUM_L)
-
-#define R_ACCUM_H(x)			((INT16)((ACCUM(x) >> S_ACCUM_H) & 0x00FFFF))
-#define R_ACCUM_M(x)			((INT16)((ACCUM(x) >> S_ACCUM_M) & 0x00FFFF))
-#define R_ACCUM_L(x)			((INT16)((ACCUM(x) >> S_ACCUM_L) & 0x00FFFF))
-
-#define W_ACCUM_H(x, y)			(ACCUM(x) = (ACCUM(x) & ~M_ACCUM_H) | (M_ACCUM_H & ((INT64)(y) << S_ACCUM_H)))
-#define W_ACCUM_M(x, y)			(ACCUM(x) = (ACCUM(x) & ~M_ACCUM_M) | (M_ACCUM_M & ((INT64)(y) << S_ACCUM_M)))
-#define W_ACCUM_L(x, y)			(ACCUM(x) = (ACCUM(x) & ~M_ACCUM_L) | (M_ACCUM_L & ((INT64)(y) << S_ACCUM_L)))
-
-#define CARRY_FLAG(x)			((cpustate->flag[0] & (1 << ((x)))) ? 1 : 0)
-#define CLEAR_CARRY_FLAGS()		{ cpustate->flag[0] &= ~0xff; }
-#define SET_CARRY_FLAG(x)		{ cpustate->flag[0] |= (1 << ((x))); }
-#define CLEAR_CARRY_FLAG(x)		{ cpustate->flag[0] &= ~(1 << ((x))); }
-
-#define COMPARE_FLAG(x)			((cpustate->flag[1] & (1 << ((x)))) ? 1 : 0)
-#define CLEAR_COMPARE_FLAGS()	{ cpustate->flag[1] &= ~0xff; }
-#define SET_COMPARE_FLAG(x)		{ cpustate->flag[1] |= (1 << ((x))); }
-#define CLEAR_COMPARE_FLAG(x)	{ cpustate->flag[1] &= ~(1 << ((x))); }
-
-#define ZERO_FLAG(x)			((cpustate->flag[0] & (1 << (8+(x)))) ? 1 : 0)
-#define CLEAR_ZERO_FLAGS()		{ cpustate->flag[0] &= ~0xff00; }
-#define SET_ZERO_FLAG(x)		{ cpustate->flag[0] |= (1 << (8+(x))); }
-#define CLEAR_ZERO_FLAG(x)		{ cpustate->flag[0] &= ~(1 << (8+(x))); }
-
-
-#define ROPCODE(pc)		memory_decrypted_read_dword(cpustate->program, pc)
-
-INLINE UINT8 READ8(rsp_state *cpustate, UINT32 address)
+INLINE UINT8 READ8(rsp_state *rsp, UINT32 address)
 {
+	UINT8 ret;
 	address = 0x04000000 | (address & 0xfff);
-	return memory_read_byte_32be(cpustate->program, address);
+	ret = rsp->program->read_byte(address);
+	printf("%04xr%02x\n", address & 0x0000ffff, ret);
+	return ret;
 }
 
-INLINE UINT16 READ16(rsp_state *cpustate, UINT32 address)
+INLINE UINT16 READ16(rsp_state *rsp, UINT32 address)
 {
+	UINT16 ret;
 	address = 0x04000000 | (address & 0xfff);
 
-	if (address & 1)
+	if(address & 1)
 	{
-		//osd_die("RSP: READ16: unaligned %08X at %08X\n", address, cpustate->ppc);
-		return ((memory_read_byte_32be(cpustate->program, address+0) & 0xff) << 8) | (memory_read_byte_32be(cpustate->program, address+1) & 0xff);
+		ret = ((rsp->program->read_byte(address + 0) & 0xff) << 8) | (rsp->program->read_byte(address + 1) & 0xff);
+	}
+	else
+	{
+		ret = rsp->program->read_word(address);
 	}
 
-	return memory_read_word_32be(cpustate->program, address);
+	printf("%04xr%04x\n", address & 0x0000ffff, ret);
+
+	return ret;
 }
 
-INLINE UINT32 READ32(rsp_state *cpustate, UINT32 address)
+INLINE UINT32 READ32(rsp_state *rsp, UINT32 address)
 {
+	UINT32 ret;
 	address = 0x04000000 | (address & 0xfff);
 
-	if (address & 3)
+	if(address & 3)
 	{
-		//osd_die("RSP: READ32: unaligned %08X at %08X\n", address, cpustate->ppc);
-		return ((memory_read_byte_32be(cpustate->program, address + 0) & 0xff) << 24) |
-			   ((memory_read_byte_32be(cpustate->program, address + 1) & 0xff) << 16) |
-			   ((memory_read_byte_32be(cpustate->program, address + 2) & 0xff) << 8) |
-			   ((memory_read_byte_32be(cpustate->program, address + 3) & 0xff) << 0);
+		ret =  ((rsp->program->read_byte(address + 0) & 0xff) << 24) |
+			   ((rsp->program->read_byte(address + 1) & 0xff) << 16) |
+			   ((rsp->program->read_byte(address + 2) & 0xff) << 8) |
+			   ((rsp->program->read_byte(address + 3) & 0xff) << 0);
+	}
+	else
+	{
+		ret = rsp->program->read_dword(address);
 	}
 
-	return memory_read_dword_32be(cpustate->program, address);
+	printf("%04xr%08x\n", address & 0x0000ffff, ret);
+	return ret;
 }
 
-INLINE void WRITE8(rsp_state *cpustate, UINT32 address, UINT8 data)
+INLINE void WRITE8(rsp_state *rsp, UINT32 address, UINT8 data)
 {
 	address = 0x04000000 | (address & 0xfff);
-	memory_write_byte_32be(cpustate->program, address, data);
+	printf("%04x:%02x\n", address & 0x0000ffff, data);
+	rsp->program->write_byte(address, data);
 }
 
-INLINE void WRITE16(rsp_state *cpustate, UINT32 address, UINT16 data)
+INLINE void WRITE16(rsp_state *rsp, UINT32 address, UINT16 data)
 {
 	address = 0x04000000 | (address & 0xfff);
+	printf("%04x:%04x\n", address & 0x0000ffff, data);
 
-	if (address & 1)
+	if(address & 1)
 	{
-		//fatalerror("RSP: WRITE16: unaligned %08X, %04X at %08X\n", address, data, cpustate->ppc);
-		memory_write_byte_32be(cpustate->program, address + 0, (data >> 8) & 0xff);
-		memory_write_byte_32be(cpustate->program, address + 1, (data >> 0) & 0xff);
+		rsp->program->write_byte(address + 0, (data >> 8) & 0xff);
+		rsp->program->write_byte(address + 1, (data >> 0) & 0xff);
 		return;
 	}
 
-	memory_write_word_32be(cpustate->program, address, data);
+	rsp->program->write_word(address, data);
 }
 
-INLINE void WRITE32(rsp_state *cpustate, UINT32 address, UINT32 data)
+INLINE void WRITE32(rsp_state *rsp, UINT32 address, UINT32 data)
 {
 	address = 0x04000000 | (address & 0xfff);
+	printf("%04x:%08x\n", address & 0x0000ffff, data);
 
-	if (address & 3)
+	if(address & 3)
 	{
-		//osd_die("RSP: WRITE32: unaligned %08X, %08X at %08X\n", address, data, cpustate->ppc);
-		memory_write_byte_32be(cpustate->program, address + 0, (data >> 24) & 0xff);
-		memory_write_byte_32be(cpustate->program, address + 1, (data >> 16) & 0xff);
-		memory_write_byte_32be(cpustate->program, address + 2, (data >> 8) & 0xff);
-		memory_write_byte_32be(cpustate->program, address + 3, (data >> 0) & 0xff);
+		rsp->program->write_byte(address + 0, (data >> 24) & 0xff);
+		rsp->program->write_byte(address + 1, (data >> 16) & 0xff);
+		rsp->program->write_byte(address + 2, (data >> 8) & 0xff);
+		rsp->program->write_byte(address + 3, (data >> 0) & 0xff);
 		return;
 	}
 
-	memory_write_dword_32be(cpustate->program, address, data);
+	rsp->program->write_dword(address, data);
 }
 
 /*****************************************************************************/
 
-static UINT32 get_cop0_reg(rsp_state *cpustate, int reg)
+static UINT32 get_cop0_reg(rsp_state *rsp, int reg)
 {
-	if (reg >= 0 && reg < 8)
+	reg &= 0xf;
+	if (reg < 8)
 	{
-		return (cpustate->config->sp_reg_r)(cpustate->program, reg, 0x00000000);
+		return (rsp->config->sp_reg_r)(rsp->device, reg, 0x00000000);
 	}
 	else if (reg >= 8 && reg < 16)
 	{
-		return (cpustate->config->dp_reg_r)(cpustate->program, reg - 8, 0x00000000);
+		return (rsp->config->dp_reg_r)(rsp->device, reg - 8, 0x00000000);
 	}
-	else
-	{
-		fatalerror("RSP: get_cop0_reg: %d", reg);
-	}
+
+	return 0;
 }
 
-static void set_cop0_reg(rsp_state *cpustate, int reg, UINT32 data)
+static void set_cop0_reg(rsp_state *rsp, int reg, UINT32 data)
 {
-	if (reg >= 0 && reg < 8)
+	reg &= 0xf;
+	if (reg < 8)
 	{
-		(cpustate->config->sp_reg_w)(cpustate->program, reg, data, 0x00000000);
+		(rsp->config->sp_reg_w)(rsp->device, reg, data, 0x00000000);
 	}
 	else if (reg >= 8 && reg < 16)
 	{
-		(cpustate->config->dp_reg_w)(cpustate->program, reg - 8, data, 0x00000000);
-	}
-	else
-	{
-		fatalerror("RSP: set_cop0_reg: %d, %08X\n", reg, data);
+		(rsp->config->dp_reg_w)(rsp->device, reg - 8, data, 0x00000000);
 	}
 }
 
-static void unimplemented_opcode(rsp_state *cpustate, UINT32 op)
+static void unimplemented_opcode(rsp_state *rsp, UINT32 op)
 {
-	if ((cpustate->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((rsp->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
 	{
 		char string[200];
-		rsp_dasm_one(string, cpustate->ppc, op);
-		mame_printf_debug("%08X: %s\n", cpustate->ppc, string);
+		rsp_dasm_one(string, rsp->ppc, op);
+		mame_printf_debug("%08X: %s\n", rsp->ppc, string);
 	}
 
 #if SAVE_DISASM
@@ -300,38 +238,18 @@ static void unimplemented_opcode(rsp_state *cpustate, UINT32 op)
 
 		for (i=0; i < 0x1000; i++)
 		{
-			fputc(READ8(cpustate, 0x04000000 + i), dmem);
+			fputc(READ8(rsp, 0x04000000 + i), dmem);
 		}
 		fclose(dmem);
 	}
 #endif
 
-	fatalerror("RSP: unknown opcode %02X (%08X) at %08X\n", op >> 26, op, cpustate->ppc);
+	fatalerror("RSP: unknown opcode %02X (%08X) at %08X\n", op >> 26, op, rsp->ppc);
 }
 
 /*****************************************************************************/
 
-static const int vector_elements_1[16][8] =
-{
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },		// none
-	{ 0, 1, 2, 3, 4, 5, 6 ,7 },		// ???
-	{ 1, 3, 5, 7, 0, 2, 4, 6 },		// 0q
-	{ 0, 2, 4, 6, 1, 3, 5, 7 },		// 1q
-	{ 1, 2, 3, 5, 6, 7, 0, 4 },		// 0h
-	{ 0, 2, 3, 4, 6, 7, 1, 5 },		// 1h
-	{ 0, 1, 3, 4, 5, 7, 2, 6 },		// 2h
-	{ 0, 1, 2, 4, 5, 6, 3, 7 },		// 3h
-	{ 1, 2, 3, 4, 5, 6, 7, 0 },		// 0
-	{ 0, 2, 3, 4, 5, 6, 7, 1 },		// 1
-	{ 0, 1, 3, 4, 5, 6, 7, 2 },		// 2
-	{ 0, 1, 2, 4, 5, 6, 7, 3 },		// 3
-	{ 0, 1, 2, 3, 5, 6, 7, 4 },		// 4
-	{ 0, 1, 2, 3, 4, 6, 7, 5 },		// 5
-	{ 0, 1, 2, 3, 4, 5, 7, 6 },		// 6
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },		// 7
-};
-
-static const int vector_elements_2[16][8] =
+static const int vector_elements[16][8] =
 {
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },		// none
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },		// ???
@@ -353,51 +271,52 @@ static const int vector_elements_2[16][8] =
 
 static CPU_INIT( rsp )
 {
-	rsp_state *cpustate = get_safe_token(device);
-    int regIdx;
-    int accumIdx;
-	cpustate->config = (const rsp_config *)device->static_config;
+	rsp_state *rsp = get_safe_token(device);
+	int regIdx;
+	int accumIdx;
+	rsp->config = (const rsp_config *)device->static_config();
 
 	if (LOG_INSTRUCTION_EXECUTION)
-		cpustate->exec_output = fopen("rsp_execute.txt", "wt");
+		rsp->exec_output = fopen("rsp_execute.txt", "wt");
 
-	cpustate->irq_callback = irqcallback;
-	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	rsp->irq_callback = irqcallback;
+	rsp->device = device;
+	rsp->program = device->space(AS_PROGRAM);
+	rsp->direct = &rsp->program->direct();
 
 #if 1
-    // Inaccurate.  RSP registers power on to a random state...
+	// Inaccurate.  RSP registers power on to a random state...
 	for(regIdx = 0; regIdx < 32; regIdx++ )
 	{
-		cpustate->r[regIdx] = 0;
-		cpustate->v[regIdx].d[0] = 0;
-		cpustate->v[regIdx].d[1] = 0;
+		rsp->r[regIdx] = 0;
+		rsp->v[regIdx].d[0] = 0;
+		rsp->v[regIdx].d[1] = 0;
 	}
-	cpustate->flag[0] = 0;
-	cpustate->flag[1] = 0;
-	cpustate->flag[2] = 0;
-	cpustate->flag[3] = 0;
-	cpustate->square_root_res = 0;
-	cpustate->square_root_high = 0;
-	cpustate->reciprocal_res = 0;
-	cpustate->reciprocal_high = 0;
+	rsp->flag[0] = 0;
+	rsp->flag[1] = 0;
+	rsp->flag[2] = 0;
+	rsp->flag[3] = 0;
+	rsp->square_root_res = 0;
+	rsp->square_root_high = 0;
+	rsp->reciprocal_res = 0;
+	rsp->reciprocal_high = 0;
 #endif
 
-    // ...except for the accumulators.
-    // We're not calling mame_rand() because initializing something with mame_rand()
-    //   makes me retch uncontrollably.
-    for(accumIdx = 0; accumIdx < 8; accumIdx++ )
-    {
-        cpustate->accum[accumIdx] = 0;
-    }
+	// ...except for the accumulators.
+	// We're not calling machine.rand() because initializing something with machine.rand()
+	//   makes me retch uncontrollably.
+	for(accumIdx = 0; accumIdx < 8; accumIdx++ )
+	{
+		rsp->accum[accumIdx].q = 0;
+	}
 
-	cpustate->sr = RSP_STATUS_HALT;
-    cpustate->step_count = 0;
+	rsp->sr = RSP_STATUS_HALT;
+	rsp->step_count = 0;
 }
 
 static CPU_EXIT( rsp )
 {
-	rsp_state *cpustate = get_safe_token(device);
+	rsp_state *rsp = get_safe_token(device);
 
 #if SAVE_DISASM
 	{
@@ -424,7 +343,7 @@ static CPU_EXIT( rsp )
 
 		for (i=0; i < 0x1000; i+=4)
 		{
-			fprintf(dmem, "%08X: %08X\n", 0x04000000 + i, READ32(cpustate, 0x04000000 + i));
+			fprintf(dmem, "%08X: %08X\n", 0x04000000 + i, READ32(rsp, 0x04000000 + i));
 		}
 		fclose(dmem);
 #endif
@@ -432,24 +351,24 @@ static CPU_EXIT( rsp )
 
 		for (i=0; i < 0x1000; i++)
 		{
-			fputc(READ8(cpustate, 0x04000000 + i), dmem);
+			fputc(READ8(rsp, 0x04000000 + i), dmem);
 		}
 		fclose(dmem);
 	}
 #endif
 
-	if (cpustate->exec_output)
-		fclose(cpustate->exec_output);
-	cpustate->exec_output = NULL;
+	if (rsp->exec_output)
+		fclose(rsp->exec_output);
+	rsp->exec_output = NULL;
 }
 
 static CPU_RESET( rsp )
 {
-	rsp_state *cpustate = get_safe_token(device);
-	cpustate->nextpc = ~0;
+	rsp_state *rsp = get_safe_token(device);
+	rsp->nextpc = ~0;
 }
 
-static void handle_lwc2(rsp_state *cpustate, UINT32 op)
+static void handle_lwc2(rsp_state *rsp, UINT32 op)
 {
 	int i, end;
 	UINT32 ea;
@@ -471,8 +390,8 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Load 1 byte to vector byte index
 
-			ea = (base) ? cpustate->r[base] + offset : offset;
-			W_VREG_B(dest, index, READ8(cpustate, ea));
+			ea = (base) ? rsp->r[base] + offset : offset;
+			VREG_B(dest, index) = READ8(rsp, ea);
 			break;
 		}
 		case 0x01:		/* LSV */
@@ -484,13 +403,13 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads 2 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 2) : (offset * 2);
+			ea = (base) ? rsp->r[base] + (offset * 2) : (offset * 2);
 
 			end = index + 2;
 
 			for (i=index; i < end; i++)
 			{
-				W_VREG_B(dest, i, READ8(cpustate, ea));
+				VREG_B(dest, i) = READ8(rsp, ea);
 				ea++;
 			}
 			break;
@@ -504,13 +423,13 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads 4 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 4) : (offset * 4);
+			ea = (base) ? rsp->r[base] + (offset * 4) : (offset * 4);
 
 			end = index + 4;
 
 			for (i=index; i < end; i++)
 			{
-				W_VREG_B(dest, i, READ8(cpustate, ea));
+				VREG_B(dest, i) = READ8(rsp, ea);
 				ea++;
 			}
 			break;
@@ -524,13 +443,13 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads 8 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 8) : (offset * 8);
+			ea = (base) ? rsp->r[base] + (offset * 8) : (offset * 8);
 
 			end = index + 8;
 
 			for (i=index; i < end; i++)
 			{
-				W_VREG_B(dest, i, READ8(cpustate, ea));
+				VREG_B(dest, i) = READ8(rsp, ea);
 				ea++;
 			}
 			break;
@@ -544,14 +463,14 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads up to 16 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			end = index + (16 - (ea & 0xf));
 			if (end > 16) end = 16;
 
 			for (i=index; i < end; i++)
 			{
-				W_VREG_B(dest, i, READ8(cpustate, ea));
+				VREG_B(dest, i) = READ8(rsp, ea);
 				ea++;
 			}
 			break;
@@ -565,7 +484,7 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores up to 16 bytes starting from right side until 16-byte boundary
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			index = 16 - ((ea & 0xf) - index);
 			end = 16;
@@ -573,7 +492,7 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 
 			for (i=index; i < end; i++)
 			{
-				W_VREG_B(dest, i, READ8(cpustate, ea));
+				VREG_B(dest, i) = READ8(rsp, ea);
 				ea++;
 			}
 			break;
@@ -587,11 +506,11 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads a byte as the upper 8 bits of each element
 
-			ea = (base) ? cpustate->r[base] + (offset * 8) : (offset * 8);
+			ea = (base) ? rsp->r[base] + (offset * 8) : (offset * 8);
 
 			for (i=0; i < 8; i++)
 			{
-				W_VREG_S(dest, i, READ8(cpustate, ea + (((16-index) + i) & 0xf)) << 8);
+				VREG_S(dest, i) = READ8(rsp, ea + (((16-index) + i) & 0xf)) << 8;
 			}
 			break;
 		}
@@ -604,11 +523,11 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads a byte as the bits 14-7 of each element
 
-			ea = (base) ? cpustate->r[base] + (offset * 8) : (offset * 8);
+			ea = (base) ? rsp->r[base] + (offset * 8) : (offset * 8);
 
 			for (i=0; i < 8; i++)
 			{
-				W_VREG_S(dest, i, READ8(cpustate, ea + (((16-index) + i) & 0xf)) << 7);
+				VREG_S(dest, i) = READ8(rsp, ea + (((16-index) + i) & 0xf)) << 7;
 			}
 			break;
 		}
@@ -621,11 +540,11 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads a byte as the bits 14-7 of each element, with 2-byte stride
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			for (i=0; i < 8; i++)
 			{
-				W_VREG_S(dest, i, READ8(cpustate, ea + (((16-index) + (i<<1)) & 0xf)) << 7);
+				VREG_S(dest, i) = READ8(rsp, ea + (((16-index) + (i<<1)) & 0xf)) << 7;
 			}
 			break;
 		}
@@ -638,20 +557,15 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Loads a byte as the bits 14-7 of upper or lower quad, with 4-byte stride
 
-			fatalerror("RSP: LFV\n");
-
-			if (index & 0x7)	fatalerror("RSP: LFV: index = %d at %08X\n", index, cpustate->ppc);
-
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			// not sure what happens if 16-byte boundary is crossed...
-			if ((ea & 0xf) > 0)	fatalerror("RSP: LFV: 16-byte boundary crossing at %08X, recheck this!\n", cpustate->ppc);
 
 			end = (index >> 1) + 4;
 
 			for (i=index >> 1; i < end; i++)
 			{
-				W_VREG_S(dest, i, READ8(cpustate, ea) << 7);
+				VREG_S(dest, i) = READ8(rsp, ea) << 7;
 				ea += 4;
 			}
 			break;
@@ -666,16 +580,16 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 			// Loads the full 128-bit vector starting from vector byte index and wrapping to index 0
 			// after byte index 15
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			// not sure what happens if 16-byte boundary is crossed...
-			if ((ea & 0xf) > 0) fatalerror("RSP: LWV: 16-byte boundary crossing at %08X, recheck this!\n", cpustate->ppc);
+			if ((ea & 0xf) > 0) fatalerror("RSP: LWV: 16-byte boundary crossing at %08X, recheck this!\n", rsp->ppc);
 
 			end = (16 - index) + 16;
 
 			for (i=(16 - index); i < end; i++)
 			{
-				W_VREG_B(dest, i & 0xf, READ8(cpustate, ea));
+				VREG_B(dest, i & 0xf) = READ8(rsp, ea);
 				ea += 4;
 			}
 			break;
@@ -701,14 +615,14 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 
 			if (index & 1)	fatalerror("RSP: LTV: index = %d\n", index);
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			ea = ((ea + 8) & ~0xf) + (index & 1);
 			for (i=vs; i < ve; i++)
 			{
 				element = ((8 - (index >> 1) + (i-vs)) << 1);
-				W_VREG_B(i, (element & 0xf), READ8(cpustate, ea));
-				W_VREG_B(i, ((element+1) & 0xf), READ8(cpustate, ea+1));
+				VREG_B(i, (element & 0xf)) = READ8(rsp, ea);
+				VREG_B(i, ((element + 1) & 0xf)) = READ8(rsp, ea + 1);
 
 				ea += 2;
 			}
@@ -717,13 +631,13 @@ static void handle_lwc2(rsp_state *cpustate, UINT32 op)
 
 		default:
 		{
-			unimplemented_opcode(cpustate, op);
+			unimplemented_opcode(rsp, op);
 			break;
 		}
 	}
 }
 
-static void handle_swc2(rsp_state *cpustate, UINT32 op)
+static void handle_swc2(rsp_state *rsp, UINT32 op)
 {
 	int i, end;
 	int eaoffset;
@@ -746,8 +660,8 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores 1 byte from vector byte index
 
-			ea = (base) ? cpustate->r[base] + offset : offset;
-			WRITE8(cpustate, ea, R_VREG_B(dest, index));
+			ea = (base) ? rsp->r[base] + offset : offset;
+			WRITE8(rsp, ea, VREG_B(dest, index));
 			break;
 		}
 		case 0x01:		/* SSV */
@@ -759,13 +673,13 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores 2 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 2) : (offset * 2);
+			ea = (base) ? rsp->r[base] + (offset * 2) : (offset * 2);
 
 			end = index + 2;
 
 			for (i=index; i < end; i++)
 			{
-				WRITE8(cpustate, ea, R_VREG_B(dest, i));
+				WRITE8(rsp, ea, VREG_B(dest, i));
 				ea++;
 			}
 			break;
@@ -779,13 +693,13 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores 4 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 4) : (offset * 4);
+			ea = (base) ? rsp->r[base] + (offset * 4) : (offset * 4);
 
 			end = index + 4;
 
 			for (i=index; i < end; i++)
 			{
-				WRITE8(cpustate, ea, R_VREG_B(dest, i));
+				WRITE8(rsp, ea, VREG_B(dest, i));
 				ea++;
 			}
 			break;
@@ -799,13 +713,13 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores 8 bytes starting from vector byte index
 
-			ea = (base) ? cpustate->r[base] + (offset * 8) : (offset * 8);
+			ea = (base) ? rsp->r[base] + (offset * 8) : (offset * 8);
 
 			end = index + 8;
 
 			for (i=index; i < end; i++)
 			{
-				WRITE8(cpustate, ea, R_VREG_B(dest, i));
+				WRITE8(rsp, ea, VREG_B(dest, i));
 				ea++;
 			}
 			break;
@@ -819,13 +733,13 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores up to 16 bytes starting from vector byte index until 16-byte boundary
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			end = index + (16 - (ea & 0xf));
 
 			for (i=index; i < end; i++)
 			{
-				WRITE8(cpustate, ea, R_VREG_B(dest, i & 0xf));
+				WRITE8(rsp, ea, VREG_B(dest, i & 0xf));
 				ea++;
 			}
 			break;
@@ -840,7 +754,7 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			// Stores up to 16 bytes starting from right side until 16-byte boundary
 
 			int o;
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			end = index + (ea & 0xf);
 			o = (16 - (ea & 0xf)) & 0xf;
@@ -848,7 +762,7 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 
 			for (i=index; i < end; i++)
 			{
-				WRITE8(cpustate, ea, R_VREG_B(dest, ((i + o) & 0xf)));
+				WRITE8(rsp, ea, VREG_B(dest, ((i + o) & 0xf)));
 				ea++;
 			}
 			break;
@@ -862,18 +776,18 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores upper 8 bits of each element
 
-			ea = (base) ? cpustate->r[base] + (offset * 8) : (offset * 8);
+			ea = (base) ? rsp->r[base] + (offset * 8) : (offset * 8);
 			end = index + 8;
 
 			for (i=index; i < end; i++)
 			{
 				if ((i & 0xf) < 8)
 				{
-					WRITE8(cpustate, ea, R_VREG_B(dest, ((i & 0xf) << 1)));
+					WRITE8(rsp, ea, VREG_B(dest, ((i & 0xf) << 1)));
 				}
 				else
 				{
-					WRITE8(cpustate, ea, R_VREG_S(dest, (i & 0x7)) >> 7);
+					WRITE8(rsp, ea, VREG_S(dest, (i & 0x7)) >> 7);
 				}
 				ea++;
 			}
@@ -888,18 +802,18 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores bits 14-7 of each element
 
-			ea = (base) ? cpustate->r[base] + (offset * 8) : (offset * 8);
+			ea = (base) ? rsp->r[base] + (offset * 8) : (offset * 8);
 			end = index + 8;
 
 			for (i=index; i < end; i++)
 			{
 				if ((i & 0xf) < 8)
 				{
-					WRITE8(cpustate, ea, R_VREG_S(dest, (i & 0x7)) >> 7);
+					WRITE8(rsp, ea, VREG_S(dest, (i & 0x7)) >> 7);
 				}
 				else
 				{
-					WRITE8(cpustate, ea, R_VREG_B(dest, ((i & 0x7) << 1)));
+					WRITE8(rsp, ea, VREG_B(dest, ((i & 0x7) << 1)));
 				}
 				ea++;
 			}
@@ -914,14 +828,14 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			//
 			// Stores bits 14-7 of each element, with 2-byte stride
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			for (i=0; i < 8; i++)
 			{
-				UINT8 d = ((R_VREG_B(dest, ((index + (i << 1) + 0) & 0xf))) << 1) |
-						  ((R_VREG_B(dest, ((index + (i << 1) + 1) & 0xf))) >> 7);
+				UINT8 d = ((VREG_B(dest, ((index + (i << 1) + 0) & 0xf))) << 1) |
+						  ((VREG_B(dest, ((index + (i << 1) + 1) & 0xf))) >> 7);
 
-				WRITE8(cpustate, ea, d);
+				WRITE8(rsp, ea, d);
 				ea += 2;
 			}
 			break;
@@ -937,9 +851,9 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 
 			// FIXME: only works for index 0 and index 8
 
-			if (index & 0x7)	mame_printf_debug("RSP: SFV: index = %d at %08X\n", index, cpustate->ppc);
+			if (index & 0x7)	mame_printf_debug("RSP: SFV: index = %d at %08X\n", index, rsp->ppc);
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			eaoffset = ea & 0xf;
 			ea &= ~0xf;
@@ -948,7 +862,7 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 
 			for (i=index >> 1; i < end; i++)
 			{
-				WRITE8(cpustate, ea + (eaoffset & 0xf), R_VREG_S(dest, i) >> 7);
+				WRITE8(rsp, ea + (eaoffset & 0xf), VREG_S(dest, i) >> 7);
 				eaoffset += 4;
 			}
 			break;
@@ -963,7 +877,7 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 			// Stores the full 128-bit vector starting from vector byte index and wrapping to index 0
 			// after byte index 15
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			eaoffset = ea & 0xf;
 			ea &= ~0xf;
@@ -972,7 +886,7 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 
 			for (i=index; i < end; i++)
 			{
-				WRITE8(cpustate, ea + (eaoffset & 0xf), R_VREG_B(dest, i & 0xf));
+				WRITE8(rsp, ea + (eaoffset & 0xf), VREG_B(dest, i & 0xf));
 				eaoffset++;
 			}
 			break;
@@ -993,18 +907,15 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 				ve = 32;
 
 			element = 8 - (index >> 1);
-			if (index & 0x1)	fatalerror("RSP: STV: index = %d at %08X\n", index, cpustate->ppc);
 
-			ea = (base) ? cpustate->r[base] + (offset * 16) : (offset * 16);
-
-			if (ea & 0x1)		fatalerror("RSP: STV: ea = %08X at %08X\n", ea, cpustate->ppc);
+			ea = (base) ? rsp->r[base] + (offset * 16) : (offset * 16);
 
 			eaoffset = (ea & 0xf) + (element * 2);
 			ea &= ~0xf;
 
 			for (i=vs; i < ve; i++)
 			{
-				WRITE16(cpustate, ea + (eaoffset & 0xf), R_VREG_S(i, element & 0x7));
+				WRITE16(rsp, ea + (eaoffset & 0xf), VREG_S(i, element & 0x7));
 				eaoffset += 2;
 				element++;
 			}
@@ -1013,23 +924,23 @@ static void handle_swc2(rsp_state *cpustate, UINT32 op)
 
 		default:
 		{
-			unimplemented_opcode(cpustate, op);
+			unimplemented_opcode(rsp, op);
 			break;
 		}
 	}
 }
 
-INLINE UINT16 SATURATE_ACCUM(rsp_state *cpustate, int accum, int slice, UINT16 negative, UINT16 positive)
+INLINE UINT16 SATURATE_ACCUM(rsp_state *rsp, int accum, int slice, UINT16 negative, UINT16 positive)
 {
-	if ((INT16)R_ACCUM_H(accum) < 0)
+	if ((INT16)ACCUM_H(accum) < 0)
 	{
-		if ((UINT16)(R_ACCUM_H(accum)) != 0xffff)
+		if ((UINT16)(ACCUM_H(accum)) != 0xffff)
 		{
 			return negative;
 		}
 		else
 		{
-			if ((INT16)R_ACCUM_M(accum) >= 0)
+			if ((INT16)ACCUM_M(accum) >= 0)
 			{
 				return negative;
 			}
@@ -1037,24 +948,24 @@ INLINE UINT16 SATURATE_ACCUM(rsp_state *cpustate, int accum, int slice, UINT16 n
 			{
 				if (slice == 0)
 				{
-					return R_ACCUM_L(accum);
+					return ACCUM_L(accum);
 				}
 				else if (slice == 1)
 				{
-					return R_ACCUM_M(accum);
+					return ACCUM_M(accum);
 				}
 			}
 		}
 	}
 	else
 	{
-		if ((UINT16)(R_ACCUM_H(accum)) != 0)
+		if ((UINT16)(ACCUM_H(accum)) != 0)
 		{
 			return positive;
 		}
 		else
 		{
-			if ((INT16)R_ACCUM_M(accum) < 0)
+			if ((INT16)ACCUM_M(accum) < 0)
 			{
 				return positive;
 			}
@@ -1062,11 +973,11 @@ INLINE UINT16 SATURATE_ACCUM(rsp_state *cpustate, int accum, int slice, UINT16 n
 			{
 				if (slice == 0)
 				{
-					return R_ACCUM_L(accum);
+					return ACCUM_L(accum);
 				}
 				else
 				{
-					return R_ACCUM_M(accum);
+					return ACCUM_M(accum);
 				}
 			}
 		}
@@ -1075,39 +986,75 @@ INLINE UINT16 SATURATE_ACCUM(rsp_state *cpustate, int accum, int slice, UINT16 n
 	return 0;
 }
 
-#define WRITEBACK_RESULT() 					\
-	do {									\
-		W_VREG_S(VDREG, 0, vres[0]);			\
-		W_VREG_S(VDREG, 1, vres[1]);			\
-		W_VREG_S(VDREG, 2, vres[2]);			\
-		W_VREG_S(VDREG, 3, vres[3]);			\
-		W_VREG_S(VDREG, 4, vres[4]);			\
-		W_VREG_S(VDREG, 5, vres[5]);			\
-		W_VREG_S(VDREG, 6, vres[6]);			\
-		W_VREG_S(VDREG, 7, vres[7]);			\
-	} while(0)
+INLINE UINT16 SATURATE_ACCUM1(rsp_state *rsp, int accum, UINT16 negative, UINT16 positive)
+{
+	if ((INT16)ACCUM_H(accum) < 0)
+	{
+		if ((UINT16)(ACCUM_H(accum)) != 0xffff)
+		{
+			return negative;
+		}
+		else
+		{
+			if ((INT16)ACCUM_M(accum) >= 0)
+			{
+				return negative;
+			}
+			else
+			{
+        		return ACCUM_M(accum);
+			}
+		}
+	}
+	else
+	{
+		if ((UINT16)(ACCUM_H(accum)) != 0)
+		{
+			return positive;
+		}
+		else
+		{
+			if ((INT16)ACCUM_M(accum) < 0)
+			{
+				return positive;
+			}
+			else
+			{
+        		return ACCUM_M(accum);
+			}
+		}
+	}
+
+	return 0;
+}
+
+#define WRITEBACK_RESULT() {memcpy(&rsp->v[VDREG].s[0], &vres[0], 16);}
 
 #if 0
 static float float_round(float input)
 {
-    INT32 integer = (INT32)input;
-    float fraction = input - (float)integer;
-    float output = 0.0f;
-    if( fraction >= 0.5f )
-    {
-        output = (float)( integer + 1 );
-    }
-    else
-    {
-        output = (float)integer;
-    }
-    return output;
+	INT32 integer = (INT32)input;
+	float fraction = input - (float)integer;
+	float output = 0.0f;
+	if( fraction >= 0.5f )
+	{
+		output = (float)( integer + 1 );
+	}
+	else
+	{
+		output = (float)integer;
+	}
+	return output;
 }
 #endif
 
-static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
+static void handle_vector_ops(rsp_state *rsp, UINT32 op)
 {
 	int i;
+	UINT32 VS1REG = (op >> 11) & 0x1f;
+	UINT32 VS2REG = (op >> 16) & 0x1f;
+	UINT32 VDREG = (op >> 6) & 0x1f;
+	UINT32 EL = (op >> 21) & 0xf;
 	INT16 vres[8];
 
 	// Opcode legend:
@@ -1127,28 +1074,30 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Multiplies signed integer by signed integer * 2
 
+			int sel;
+			INT32 s1, s2;
+			INT64 r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
 				if (s1 == -32768 && s2 == -32768)
 				{
 					// overflow
-					W_ACCUM_H(del, 0);
-					W_ACCUM_M(del, -32768);
-					W_ACCUM_L(del, -32768);
-					vres[del] = 0x7fff;
+					ACCUM_H(i) = 0;
+					ACCUM_M(i) = -32768;
+					ACCUM_L(i) = -32768;
+					vres[i] = 0x7fff;
 				}
 				else
 				{
-					INT64 r =  s1 * s2 * 2;
+					r =  s1 * s2 * 2;
 					r += 0x8000;	// rounding ?
-					W_ACCUM_H(del, (r < 0) ? 0xffff : 0);		// sign-extend to 48-bit
-					W_ACCUM_M(del, (INT16)(r >> 16));
-					W_ACCUM_L(del, (UINT16)(r));
-					vres[del] = R_ACCUM_M(del);
+					ACCUM_H(i) = (r < 0) ? 0xffff : 0;		// sign-extend to 48-bit
+					ACCUM_M(i) = (INT16)(r >> 16);
+					ACCUM_L(i) = (UINT16)(r);
+					vres[i] = ACCUM_M(i);
 				}
 			}
 			WRITEBACK_RESULT();
@@ -1164,30 +1113,32 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// ------------------------------------------------------
 			//
 
+			int sel;
+			INT32 s1, s2;
+			INT64 r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT64 r = s1 * s2 * 2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r = s1 * s2 * 2;
 				r += 0x8000;	// rounding ?
 
-				W_ACCUM_H(del, (UINT16)(r >> 32));
-				W_ACCUM_M(del, (UINT16)(r >> 16));
-				W_ACCUM_L(del, (UINT16)(r));
+				ACCUM_H(i) = (UINT16)(r >> 32);
+				ACCUM_M(i) = (UINT16)(r >> 16);
+				ACCUM_L(i) = (UINT16)(r);
 
 				if (r < 0)
 				{
-					vres[del] = 0;
+					vres[i] = 0;
 				}
-				else if (((INT16)(R_ACCUM_H(del)) ^ (INT16)(R_ACCUM_M(del))) < 0)
+				else if (((INT16)(ACCUM_H(i)) ^ (INT16)(ACCUM_M(i))) < 0)
 				{
-					vres[del] = -1;
+					vres[i] = -1;
 				}
 				else
 				{
-					vres[del] = R_ACCUM_M(del);
+					vres[i] = ACCUM_M(i);
 				}
 			}
 			WRITEBACK_RESULT();
@@ -1205,19 +1156,21 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Stores the higher 16 bits of the 32-bit result to accumulator
 			// The low slice of accumulator is stored into destination element
 
+			int sel;
+			UINT32 s1, s2;
+			UINT32 r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				UINT32 s1 = (UINT32)(UINT16)R_VREG_S(VS1REG, del);
-				UINT32 s2 = (UINT32)(UINT16)R_VREG_S(VS2REG, sel);
-				UINT32 r = s1 * s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (UINT32)(UINT16)VREG_S(VS1REG, i);
+				s2 = (UINT32)(UINT16)VREG_S(VS2REG, sel);
+				r = s1 * s2;
 
-				W_ACCUM_H(del, 0);
-				W_ACCUM_M(del, 0);
-				W_ACCUM_L(del, (UINT16)(r >> 16));
+				ACCUM_H(i) = 0;
+				ACCUM_M(i) = 0;
+				ACCUM_L(i) = (UINT16)(r >> 16);
 
-				vres[del] = R_ACCUM_L(del);
+				vres[i] = ACCUM_L(i);
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1234,19 +1187,21 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// The result is stored into accumulator
 			// The middle slice of accumulator is stored into destination element
 
+			int sel;
+			INT32 s1, s2;
+			INT32 r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (UINT16)R_VREG_S(VS2REG, sel);	// not sign-extended
-				INT32 r =  s1 * s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (UINT16)VREG_S(VS2REG, sel);	// not sign-extended
+				r =  s1 * s2;
 
-				W_ACCUM_H(del, (r < 0) ? 0xffff : 0);		// sign-extend to 48-bit
-				W_ACCUM_M(del, (INT16)(r >> 16));
-				W_ACCUM_L(del, (UINT16)(r));
+				ACCUM_H(i) = (r < 0) ? 0xffff : 0;		// sign-extend to 48-bit
+				ACCUM_M(i) = (INT16)(r >> 16);
+				ACCUM_L(i) = (UINT16)(r);
 
-				vres[del] = R_ACCUM_M(del);
+				vres[i] = ACCUM_M(i);
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1264,19 +1219,21 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// The result is stored into accumulator
 			// The low slice of accumulator is stored into destination element
 
+			int sel;
+			INT32 s1, s2;
+			INT32 r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (UINT16)R_VREG_S(VS1REG, del);		// not sign-extended
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 * s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (UINT16)VREG_S(VS1REG, i);		// not sign-extended
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r = s1 * s2;
 
-				W_ACCUM_H(del, (r < 0) ? 0xffff : 0);		// sign-extend to 48-bit
-				W_ACCUM_M(del, (INT16)(r >> 16));
-				W_ACCUM_L(del, (UINT16)(r));
+				ACCUM_H(i) = (r < 0) ? 0xffff : 0;		// sign-extend to 48-bit
+				ACCUM_M(i) = (INT16)(r >> 16);
+				ACCUM_L(i) = (UINT16)(r);
 
-				vres[del] = R_ACCUM_L(del);
+				vres[i] = ACCUM_L(i);
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1293,21 +1250,23 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// The result is stored into highest 32 bits of accumulator, the low slice is zero
 			// The highest 32 bits of accumulator is saturated into destination element
 
+			int sel;
+			INT32 s1, s2;
+			INT32 r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 * s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r = s1 * s2;
 
-				W_ACCUM_H(del, (INT16)(r >> 16));
-				W_ACCUM_M(del, (UINT16)(r));
-				W_ACCUM_L(del, 0);
+				ACCUM_H(i) = (INT16)(r >> 16);
+				ACCUM_M(i) = (UINT16)(r);
+				ACCUM_L(i) = 0;
 
 				if (r < -32768) r = -32768;
 				if (r >  32767)	r = 32767;
-				vres[del] = (INT16)(r);
+				vres[i] = (INT16)(r);
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1323,19 +1282,21 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Multiplies signed integer by signed integer * 2
 			// The result is added to accumulator
 
+			int sel;
+			INT32 s1, s2;
+			INT32 r;
+			UINT16 res;
 			for (i=0; i < 8; i++)
 			{
-				UINT16 res;
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 * s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r = s1 * s2;
 
-				ACCUM(del) += (INT64)(r) << 17;
-				res = SATURATE_ACCUM(cpustate, del, 1, 0x8000, 0x7fff);
+				ACCUM(i) += (INT64)(r) << 17;
+				res = SATURATE_ACCUM(rsp, i, 1, 0x8000, 0x7fff);
 
-				vres[del] = res;
+				vres[i] = res;
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1349,46 +1310,48 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// ------------------------------------------------------
 			//
 
-			for (i=0; i < 8; i++)
+			UINT16 res;
+			int sel;
+			INT32 s1, s2, r1;
+			UINT32 r2, r3;
+			for (i = 0; i < 8; i++)
 			{
-				UINT16 res;
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT32 r1 = s1 * s2;
-				UINT32 r2 = (UINT16)R_ACCUM_L(del) + ((UINT16)(r1) * 2);
-				UINT32 r3 = (UINT16)R_ACCUM_M(del) + (UINT16)((r1 >> 16) * 2) + (UINT16)(r2 >> 16);
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r1 = s1 * s2;
+				r2 = (UINT16)ACCUM_L(i) + ((UINT16)(r1) * 2);
+				r3 = (UINT16)ACCUM_M(i) + (UINT16)((r1 >> 16) * 2) + (UINT16)(r2 >> 16);
 
-				W_ACCUM_L(del, (UINT16)(r2));
-				W_ACCUM_M(del, (UINT16)(r3));
-				W_ACCUM_H(del, (UINT16)R_ACCUM_H(del) + (UINT16)(r3 >> 16) + (UINT16)(r1 >> 31));
+				ACCUM_L(i) = (UINT16)(r2);
+				ACCUM_M(i) = (UINT16)(r3);
+				ACCUM_H(i) += (UINT16)(r3 >> 16) + (UINT16)(r1 >> 31);
 
-				//res = SATURATE_ACCUM(cpustate, del, 1, 0x0000, 0xffff);
-				if ((INT16)R_ACCUM_H(del) < 0)
+				//res = SATURATE_ACCUM(i, 1, 0x0000, 0xffff);
+				if ((INT16)ACCUM_H(i) < 0)
 				{
 					res = 0;
 				}
 				else
 				{
-					if (R_ACCUM_H(del) != 0)
+					if (ACCUM_H(i) != 0)
 					{
 						res = 0xffff;
 					}
 					else
 					{
-						if ((INT16)R_ACCUM_M(del) < 0)
+						if ((INT16)ACCUM_M(i) < 0)
 						{
 							res = 0xffff;
 						}
 						else
 						{
-							res = R_ACCUM_M(del);
+							res = ACCUM_M(i);
 						}
 					}
 				}
 
-				vres[del] = res;
+				vres[i] = res;
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1405,24 +1368,26 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Adds the higher 16 bits of the 32-bit result to accumulator
 			// The low slice of accumulator is stored into destination element
 
-			for (i=0; i < 8; i++)
+			UINT16 res;
+			int sel;
+			UINT32 s1, s2, r1;
+			UINT32 r2, r3;
+			for (i = 0; i < 8; i++)
 			{
-				UINT16 res;
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				UINT32 s1 = (UINT32)(UINT16)R_VREG_S(VS1REG, del);
-				UINT32 s2 = (UINT32)(UINT16)R_VREG_S(VS2REG, sel);
-				UINT32 r1 = s1 * s2;
-				UINT32 r2 = (UINT16)R_ACCUM_L(del) + (r1 >> 16);
-				UINT32 r3 = (UINT16)R_ACCUM_M(del) + (r2 >> 16);
+				sel = VEC_EL_2(EL, i);
+				s1 = (UINT32)(UINT16)VREG_S(VS1REG, i);
+				s2 = (UINT32)(UINT16)VREG_S(VS2REG, sel);
+				r1 = s1 * s2;
+				r2 = (UINT16)ACCUM_L(i) + (r1 >> 16);
+				r3 = (UINT16)ACCUM_M(i) + (r2 >> 16);
 
-				W_ACCUM_L(del, (UINT16)(r2));
-				W_ACCUM_M(del, (UINT16)(r3));
-				W_ACCUM_H(del, (INT16)R_ACCUM_H(del) + (INT16)(r3 >> 16));
+				ACCUM_L(i) = (UINT16)(r2);
+				ACCUM_M(i) = (UINT16)(r3);
+				ACCUM_H(i) += (INT16)(r3 >> 16);
 
-				res = SATURATE_ACCUM(cpustate, del, 0, 0x0000, 0xffff);
+				res = SATURATE_ACCUM(rsp, i, 0, 0x0000, 0xffff);
 
-				vres[del] = res;
+				vres[i] = res;
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1439,26 +1404,28 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// The result is added into accumulator
 			// The middle slice of accumulator is stored into destination element
 
+			UINT16 res;
+			int sel;
+			UINT32 s1, s2, r1;
+			UINT32 r2, r3;
 			for (i=0; i < 8; i++)
 			{
-				UINT16 res;
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				UINT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				UINT32 s2 = (UINT16)R_VREG_S(VS2REG, sel);	// not sign-extended
-				UINT32 r1 = s1 * s2;
-				UINT32 r2 = (UINT16)R_ACCUM_L(del) + (UINT16)(r1);
-				UINT32 r3 = (UINT16)R_ACCUM_M(del) + (r1 >> 16) + (r2 >> 16);
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (UINT16)VREG_S(VS2REG, sel);	// not sign-extended
+				r1 = s1 * s2;
+				r2 = (UINT16)ACCUM_L(i) + (UINT16)(r1);
+				r3 = (UINT16)ACCUM_M(i) + (r1 >> 16) + (r2 >> 16);
 
-				W_ACCUM_L(del, (UINT16)(r2));
-				W_ACCUM_M(del, (UINT16)(r3));
-				W_ACCUM_H(del, (UINT16)R_ACCUM_H(del) + (UINT16)(r3 >> 16));
+				ACCUM_L(i) = (UINT16)(r2);
+				ACCUM_M(i) = (UINT16)(r3);
+				ACCUM_H(i) += (UINT16)(r3 >> 16);
 				if ((INT32)(r1) < 0)
-					W_ACCUM_H(del, (UINT16)R_ACCUM_H(del) - 1);
+					ACCUM_H(i) -= 1;
 
-				res = SATURATE_ACCUM(cpustate, del, 1, 0x8000, 0x7fff);
+				res = SATURATE_ACCUM(rsp, i, 1, 0x8000, 0x7fff);
 
-				vres[del] = res;
+				vres[i] = res;
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1475,28 +1442,22 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// The result is added into accumulator
 			// The low slice of accumulator is stored into destination element
 
+			INT32 s1, s2;
+			UINT16 res;
+			int sel;
 			for (i=0; i < 8; i++)
 			{
-				UINT16 res;
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (UINT16)R_VREG_S(VS1REG, del);		// not sign-extended
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				UINT32 r1 = s1 * s2;
-				UINT32 r2 = (UINT16)R_ACCUM_L(del) + (UINT16)(r1);
-				UINT32 r3 = (UINT16)R_ACCUM_M(del) + (r1 >> 16) + (r2 >> 16);
+				sel = VEC_EL_2(EL, i);
+				s1 = (UINT16)VREG_S(VS1REG, i);		// not sign-extended
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
 
-				W_ACCUM_L(del, (UINT16)(r2));
-				W_ACCUM_M(del, (UINT16)(r3));
-				W_ACCUM_H(del, (UINT16)R_ACCUM_H(del) + (UINT16)(r3 >> 16));
-				if ((INT32)(r1) < 0)
-					W_ACCUM_H(del, (UINT16)R_ACCUM_H(del) - 1);
+				ACCUM(i) += (INT64)(s1*s2)<<16;
 
-				res = SATURATE_ACCUM(cpustate, del, 0, 0x0000, 0xffff);
-
-				vres[del] = res;
+				res = SATURATE_ACCUM(rsp, i, 0, 0x0000, 0xffff);
+				vres[i] = res;
 			}
 			WRITEBACK_RESULT();
+
 			break;
 		}
 
@@ -1511,22 +1472,23 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// The result is added into highest 32 bits of accumulator, the low slice is zero
 			// The highest 32 bits of accumulator is saturated into destination element
 
-			for (i=0; i < 8; i++)
+			UINT16 res;
+			int sel;
+			INT32 s1, s2;
+			for (i = 0; i < 8; i++)
 			{
-				UINT16 res;
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT64 r = s1 * s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
 
-				ACCUM(del) += (INT64)(r) << 32;
+				rsp->accum[i].l[1] += s1*s2;
 
-				res = SATURATE_ACCUM(cpustate, del, 1, 0x8000, 0x7fff);
+				res = SATURATE_ACCUM1(rsp, i, 0x8000, 0x7fff);
 
-				vres[del] = res;
+				vres[i] = res;
 			}
 			WRITEBACK_RESULT();
+
 			break;
 		}
 
@@ -1541,19 +1503,20 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 
 			// TODO: check VS2REG == VDREG
 
+			int sel;
+			INT32 s1, s2, r;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 + s2 + CARRY_FLAG(del);
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r = s1 + s2 + CARRY_FLAG(i);
 
-				W_ACCUM_L(del, (INT16)(r));
+				ACCUM_L(i) = (INT16)(r);
 
 				if (r > 32767) r = 32767;
 				if (r < -32768) r = -32768;
-				vres[del] = (INT16)(r);
+				vres[i] = (INT16)(r);
 			}
 			CLEAR_ZERO_FLAGS();
 			CLEAR_CARRY_FLAGS();
@@ -1572,20 +1535,21 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 
 			// TODO: check VS2REG == VDREG
 
-			for (i=0; i < 8; i++)
+			int sel;
+			INT32 s1, s2, r;
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (INT32)(INT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (INT32)(INT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 - s2 - CARRY_FLAG(del);
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT32)(INT16)VREG_S(VS1REG, i);
+				s2 = (INT32)(INT16)VREG_S(VS2REG, sel);
+				r = s1 - s2 - CARRY_FLAG(i);
 
-				W_ACCUM_L(del, (INT16)(r));
+				ACCUM_L(i) = (INT16)(r);
 
 				if (r > 32767) r = 32767;
 				if (r < -32768) r = -32768;
 
-				vres[del] = (INT16)(r);
+				vres[i] = (INT16)(r);
 			}
 			CLEAR_ZERO_FLAGS();
 			CLEAR_CARRY_FLAGS();
@@ -1603,34 +1567,35 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Changes the sign of source register 2 if source register 1 is negative and stores
 			// the result to destination register
 
+			int sel;
+			INT16 s1, s2;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT16 s1 = (INT16)R_VREG_S(VS1REG, del);
-				INT16 s2 = (INT16)R_VREG_S(VS2REG, sel);
+				sel = VEC_EL_2(EL, i);
+				s1 = (INT16)VREG_S(VS1REG, i);
+				s2 = (INT16)VREG_S(VS2REG, sel);
 
 				if (s1 < 0)
 				{
 					if (s2 == -32768)
 					{
-						vres[del] = 32767;
+						vres[i] = 32767;
 					}
 					else
 					{
-						vres[del] = -s2;
+						vres[i] = -s2;
 					}
 				}
 				else if (s1 > 0)
 				{
-					vres[del] = s2;
+					vres[i] = s2;
 				}
 				else
 				{
-					vres[del] = 0;
+					vres[i] = 0;
 				}
 
-				W_ACCUM_L(del, vres[del]);
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -1647,23 +1612,24 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 
 			// TODO: check VS2REG = VDREG
 
+			int sel;
+			INT32 s1, s2, r;
 			CLEAR_ZERO_FLAGS();
 			CLEAR_CARRY_FLAGS();
 
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (UINT32)(UINT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (UINT32)(UINT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 + s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (UINT32)(UINT16)VREG_S(VS1REG, i);
+				s2 = (UINT32)(UINT16)VREG_S(VS2REG, sel);
+				r = s1 + s2;
 
-				vres[del] = (INT16)(r);
-				W_ACCUM_L(del, (INT16)(r));
+				vres[i] = (INT16)(r);
+				ACCUM_L(i) = (INT16)(r);
 
 				if (r & 0xffff0000)
 				{
-					SET_CARRY_FLAG(del);
+					SET_CARRY_FLAG(i);
 				}
 			}
 			WRITEBACK_RESULT();
@@ -1681,27 +1647,28 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 
 			// TODO: check VS2REG = VDREG
 
+			int sel;
+			INT32 s1, s2, r;
 			CLEAR_ZERO_FLAGS();
 			CLEAR_CARRY_FLAGS();
 
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT32 s1 = (UINT32)(UINT16)R_VREG_S(VS1REG, del);
-				INT32 s2 = (UINT32)(UINT16)R_VREG_S(VS2REG, sel);
-				INT32 r = s1 - s2;
+				sel = VEC_EL_2(EL, i);
+				s1 = (UINT32)(UINT16)VREG_S(VS1REG, i);
+				s2 = (UINT32)(UINT16)VREG_S(VS2REG, sel);
+				r = s1 - s2;
 
-				vres[del] = (INT16)(r);
-				W_ACCUM_L(del, (UINT16)(r));
+				vres[i] = (INT16)(r);
+				ACCUM_L(i) = (UINT16)(r);
 
 				if ((UINT16)(r) != 0)
 				{
-					SET_ZERO_FLAG(del);
+					SET_ZERO_FLAG(i);
 				}
 				if (r & 0xffff0000)
 				{
-					SET_CARRY_FLAG(del);
+					SET_CARRY_FLAG(i);
 				}
 			}
 			WRITEBACK_RESULT();
@@ -1723,7 +1690,7 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 				{
 					for (i=0; i < 8; i++)
 					{
-						W_VREG_S(VDREG, i, R_ACCUM_H(i));
+						VREG_S(VDREG, i) = ACCUM_H(i);
 					}
 					break;
 				}
@@ -1731,7 +1698,7 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 				{
 					for (i=0; i < 8; i++)
 					{
-						W_VREG_S(VDREG, i, R_ACCUM_M(i));
+						VREG_S(VDREG, i) = ACCUM_M(i);
 					}
 					break;
 				}
@@ -1739,11 +1706,13 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 				{
 					for (i=0; i < 8; i++)
 					{
-						W_VREG_S(VDREG, i, R_ACCUM_L(i));
+						VREG_S(VDREG, i) = ACCUM_L(i);
 					}
 					break;
 				}
-				default:	fatalerror("RSP: VSAW: el = %d\n", EL);
+				default:	//fatalerror("RSP: VSAW: el = %d\n", EL);//???????
+					printf("RSP: VSAW: el = %d\n", EL);//??? ???
+					exit(0);
 			}
 			break;
 		}
@@ -1758,36 +1727,38 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Sets compare flags if elements in VS1 are less than VS2
 			// Moves the element in VS2 to destination vector
 
-			cpustate->flag[1] = 0;
+			int sel;
+			rsp->flag[1] = 0;
 
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
+				sel = VEC_EL_2(EL, i);
 
-				if (R_VREG_S(VS1REG, del) < R_VREG_S(VS2REG, sel))
+				if (VREG_S(VS1REG, i) < VREG_S(VS2REG, sel))
 				{
-					vres[del] = R_VREG_S(VS1REG, del);
-					SET_COMPARE_FLAG(del);
+					SET_COMPARE_FLAG(i);
 				}
-				else if (R_VREG_S(VS1REG, del) == R_VREG_S(VS2REG, sel))
+				else if (VREG_S(VS1REG, i) == VREG_S(VS2REG, sel))
 				{
-					vres[del] = R_VREG_S(VS1REG, del);
-					if (ZERO_FLAG(del) != 0 && CARRY_FLAG(del) != 0)
+					if (ZERO_FLAG(i) == 1 && CARRY_FLAG(i) != 0)
 					{
-						SET_COMPARE_FLAG(del);
+						SET_COMPARE_FLAG(i);
 					}
+				}
+
+				if (COMPARE_FLAG(i))
+				{
+					vres[i] = VREG_S(VS1REG, i);
 				}
 				else
 				{
-					vres[del] = R_VREG_S(VS2REG, sel);
+					vres[i] = VREG_S(VS2REG, sel);
 				}
 
-				W_ACCUM_L(del, vres[del]);
+				ACCUM_L(i) = vres[i];
 			}
 
-			CLEAR_ZERO_FLAGS();
-			CLEAR_CARRY_FLAGS();
+			rsp->flag[0] = 0;
 			WRITEBACK_RESULT();
 			break;
 		}
@@ -1802,27 +1773,26 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Sets compare flags if elements in VS1 are equal with VS2
 			// Moves the element in VS2 to destination vector
 
-			cpustate->flag[1] = 0;
+			int sel;
+			rsp->flag[1] = 0;
 
-			for (i=0; i < 8; i++)
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
+				sel = VEC_EL_2(EL, i);
 
-				vres[del] = R_VREG_S(VS2REG, sel);
-				W_ACCUM_L(del, vres[del]);
-
-				if (R_VREG_S(VS1REG, del) == R_VREG_S(VS2REG, sel))
+				if ((VREG_S(VS1REG, i) == VREG_S(VS2REG, sel)) && ZERO_FLAG(i) == 0)
 				{
-					if (ZERO_FLAG(del) == 0)
-					{
-						SET_COMPARE_FLAG(del);
-					}
+					SET_COMPARE_FLAG(i);
+					vres[i] = VREG_S(VS1REG, i);
 				}
+				else
+				{
+					vres[i] = VREG_S(VS2REG, sel);
+				}
+				ACCUM_L(i) = vres[i];
 			}
 
-			CLEAR_ZERO_FLAGS();
-			CLEAR_CARRY_FLAGS();
+			rsp->flag[0] = 0;
 			WRITEBACK_RESULT();
 			break;
 		}
@@ -1837,31 +1807,36 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Sets compare flags if elements in VS1 are not equal with VS2
 			// Moves the element in VS2 to destination vector
 
-			cpustate->flag[1] = 0;
+			int sel;
+			rsp->flag[1] = 0;
 
-			for (i=0; i < 8; i++)
+			for (i=0; i < 8; i++)//?????????? ????
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
+				sel = VEC_EL_2(EL, i);
 
-				vres[del] = R_VREG_S(VS1REG, del);
-				W_ACCUM_L(del, vres[del]);
-
-				if (R_VREG_S(VS1REG, del) != R_VREG_S(VS2REG, sel))
+				if (VREG_S(VS1REG, i) != VREG_S(VS2REG, sel))
 				{
-					SET_COMPARE_FLAG(del);
+					SET_COMPARE_FLAG(i);
 				}
 				else
 				{
-					if (ZERO_FLAG(del) != 0)
+					if (ZERO_FLAG(i) == 1)
 					{
-						SET_COMPARE_FLAG(del);
+						SET_COMPARE_FLAG(i);
 					}
 				}
+				if (COMPARE_FLAG(i))
+				{
+					vres[i] = VREG_S(VS1REG, i);
+				}
+				else
+				{
+					vres[i] = VREG_S(VS2REG, sel);
+				}
+				ACCUM_L(i) = vres[i];
 			}
 
-			CLEAR_ZERO_FLAGS();
-			CLEAR_CARRY_FLAGS();
+			rsp->flag[0] = 0;
 			WRITEBACK_RESULT();
 			break;
 		}
@@ -1876,39 +1851,38 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// Sets compare flags if elements in VS1 are greater or equal with VS2
 			// Moves the element in VS2 to destination vector
 
-			cpustate->flag[1] = 0;
+			int sel;
+			rsp->flag[1] = 0;
 
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
+				sel = VEC_EL_2(EL, i);
 
-				if (R_VREG_S(VS1REG, del) == R_VREG_S(VS2REG, sel))
+				if (VREG_S(VS1REG, i) == VREG_S(VS2REG, sel))
 				{
-					if (ZERO_FLAG(del) == 0 || CARRY_FLAG(del) == 0)
+					if (ZERO_FLAG(i) == 0 || CARRY_FLAG(i) == 0)
 					{
-						SET_COMPARE_FLAG(del);
+						SET_COMPARE_FLAG(i);
 					}
 				}
-				else if (R_VREG_S(VS1REG, del) > R_VREG_S(VS2REG, sel))
+				else if (VREG_S(VS1REG, i) > VREG_S(VS2REG, sel))
 				{
-					SET_COMPARE_FLAG(del);
+					SET_COMPARE_FLAG(i);
 				}
 
-				if (COMPARE_FLAG(del) != 0)
+				if (COMPARE_FLAG(i) != 0)
 				{
-					vres[del] = R_VREG_S(VS1REG, del);
+					vres[i] = VREG_S(VS1REG, i);
 				}
 				else
 				{
-					vres[del] = R_VREG_S(VS2REG, sel);
+					vres[i] = VREG_S(VS2REG, sel);
 				}
 
-				W_ACCUM_L(del, vres[del]);
+				ACCUM_L(i) = vres[i];
 			}
 
-			CLEAR_ZERO_FLAGS();
-			CLEAR_CARRY_FLAGS();
+			rsp->flag[0] = 0;
 			WRITEBACK_RESULT();
 			break;
 		}
@@ -1922,89 +1896,97 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Vector clip low
 
-			for (i=0; i < 8; i++)
+			int sel;
+			INT16 s1, s2;
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT16 s1 = R_VREG_S(VS1REG, del);
-				INT16 s2 = R_VREG_S(VS2REG, sel);
+				sel = VEC_EL_2(EL, i);
+				s1 = VREG_S(VS1REG, i);
+				s2 = VREG_S(VS2REG, sel);
 
-				if (CARRY_FLAG(del) != 0)
+				if (CARRY_FLAG(i) != 0)
 				{
-					if (ZERO_FLAG(del) != 0)
+
+					if (ZERO_FLAG(i) != 0)
 					{
-						if (COMPARE_FLAG(del) != 0)
+
+						if (COMPARE_FLAG(i) != 0)
 						{
-							W_ACCUM_L(del, -(UINT16)s2);
+							ACCUM_L(i) = -(UINT16)s2;
 						}
 						else
 						{
-							W_ACCUM_L(del, s1);
+							ACCUM_L(i) = s1;
 						}
 					}
-					else
+					else//ZERO_FLAG(i)==0
 					{
-						if (cpustate->flag[2] & (1 << (del)))
+
+						if (rsp->flag[2] & (1 << (i)))
 						{
-							if (((UINT32)(INT16)(s1) + (UINT32)(INT16)(s2)) > 0x10000)
-							{
-								W_ACCUM_L(del, s1);
-								CLEAR_COMPARE_FLAG(del);
+
+							if (((UINT32)(UINT16)(s1) + (UINT32)(UINT16)(s2)) > 0x10000)
+							{//proper fix for Harvest Moon 64, r4
+
+								ACCUM_L(i) = s1;
+								CLEAR_COMPARE_FLAG(i);
 							}
 							else
 							{
-								W_ACCUM_L(del, -((UINT16)s2));
-								SET_COMPARE_FLAG(del);
+
+								ACCUM_L(i) = -((UINT16)s2);
+								SET_COMPARE_FLAG(i);
 							}
 						}
 						else
 						{
-							if (((UINT32)(INT16)(s1) + (UINT32)(INT16)(s2)) != 0)
+							if (((UINT32)(UINT16)(s1) + (UINT32)(UINT16)(s2)) != 0)
 							{
-								W_ACCUM_L(del, s1);
-								CLEAR_COMPARE_FLAG(del);
+								ACCUM_L(i) = s1;
+								CLEAR_COMPARE_FLAG(i);
 							}
 							else
 							{
-								W_ACCUM_L(del, -((UINT16)s2));
-								SET_COMPARE_FLAG(del);
+								ACCUM_L(i) = -((UINT16)s2);
+								SET_COMPARE_FLAG(i);
 							}
 						}
 					}
-				}
-				else
+				}//
+				else//CARRY_FLAG(i)==0
 				{
-					if (ZERO_FLAG(del) != 0)
+
+					if (ZERO_FLAG(i) != 0)
 					{
-						if (cpustate->flag[1] & (1 << (8+del)))
+
+						if (rsp->flag[1] & (1 << (8+i)))
 						{
-							W_ACCUM_L(del, s2);
+							ACCUM_L(i) = s2;
 						}
 						else
 						{
-							W_ACCUM_L(del, s1);
+							ACCUM_L(i) = s1;
 						}
 					}
 					else
 					{
 						if (((INT32)(UINT16)s1 - (INT32)(UINT16)s2) >= 0)
 						{
-							W_ACCUM_L(del, s2);
-							cpustate->flag[1] |= (1 << (8+del));
+							ACCUM_L(i) = s2;
+							rsp->flag[1] |= (1 << (8+i));
 						}
 						else
 						{
-							W_ACCUM_L(del, s1);
-							cpustate->flag[1] &= ~(1 << (8+del));
+							ACCUM_L(i) = s1;
+							rsp->flag[1] &= ~(1 << (8+i));
 						}
 					}
 				}
 
-				vres[del] = R_ACCUM_L(del);
+				vres[i] = ACCUM_L(i);
 			}
-			CLEAR_ZERO_FLAGS();
-			CLEAR_CARRY_FLAGS();
-			cpustate->flag[2] = 0;
+			rsp->flag[0] = 0;
+			rsp->flag[2] = 0;
 			WRITEBACK_RESULT();
 			break;
 		}
@@ -2018,74 +2000,73 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Vector clip high
 
-			CLEAR_ZERO_FLAGS();
-			CLEAR_CARRY_FLAGS();
-			cpustate->flag[1] = 0;
-			cpustate->flag[2] = 0;
+			int sel;
+			INT16 s1, s2;
+			rsp->flag[0] = 0;
+			rsp->flag[1] = 0;
+			rsp->flag[2] = 0;
+			UINT32 vce = 0;
 
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT16 s1 = R_VREG_S(VS1REG, del);
-				INT16 s2 = R_VREG_S(VS2REG, sel);
+				sel = VEC_EL_2(EL, i);
+				s1 = VREG_S(VS1REG, i);
+				s2 = VREG_S(VS2REG, sel);
 
 				if ((s1 ^ s2) < 0)
 				{
-					SET_CARRY_FLAG(del);
+					vce = (s1 + s2 == -1);
+					SET_CARRY_FLAG(i);
 					if (s2 < 0)
 					{
-						cpustate->flag[1] |= (1 << (8+del));
+						rsp->flag[1] |= (1 << (8+i));
 					}
 
 					if (s1 + s2 <= 0)
 					{
-						if (s1 + s2 == -1)
-						{
-							cpustate->flag[2] |= (1 << (del));
-						}
-						SET_COMPARE_FLAG(del);
-						vres[del] = -((UINT16)s2);
+						SET_COMPARE_FLAG(i);
+						vres[i] = -((UINT16)s2);
 					}
 					else
 					{
-						vres[del] = s1;
+						vres[i] = s1;
 					}
 
 					if (s1 + s2 != 0)
 					{
 						if (s1 != ~s2)
 						{
-							SET_ZERO_FLAG(del);
+							SET_ZERO_FLAG(i);
 						}
 					}
-				}
+				}//sign
 				else
 				{
+					vce = 0;
 					if (s2 < 0)
 					{
-						SET_COMPARE_FLAG(del);
+						SET_COMPARE_FLAG(i);
 					}
 					if (s1 - s2 >= 0)
 					{
-						cpustate->flag[1] |= (1 << (8+del));
-						vres[del] = s2;
+						rsp->flag[1] |= (1 << (8+i));
+						vres[i] = s2;
 					}
 					else
 					{
-						vres[del] = s1;
+						vres[i] = s1;
 					}
 
 					if ((s1 - s2) != 0)
 					{
 						if (s1 != ~s2)
 						{
-							SET_ZERO_FLAG(del);
+							SET_ZERO_FLAG(i);
 						}
 					}
 				}
-
-				W_ACCUM_L(del, vres[del]);
+				rsp->flag[2] |= (vce << (i));
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2100,51 +2081,52 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Vector clip reverse
 
-			cpustate->flag[0] = 0;
-			cpustate->flag[1] = 0;
-			cpustate->flag[2] = 0;
+			int sel;
+			INT16 s1, s2;
+			rsp->flag[0] = 0;
+			rsp->flag[1] = 0;
+			rsp->flag[2] = 0;
 
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				INT16 s1 = R_VREG_S(VS1REG, del);
-				INT16 s2 = R_VREG_S(VS2REG, sel);
+				sel = VEC_EL_2(EL, i);
+				s1 = VREG_S(VS1REG, i);
+				s2 = VREG_S(VS2REG, sel);
 
 				if ((INT16)(s1 ^ s2) < 0)
 				{
 					if (s2 < 0)
 					{
-						cpustate->flag[1] |= (1 << (8+del));
+						rsp->flag[1] |= (1 << (8+i));
 					}
 					if ((s1 + s2) <= 0)
 					{
-						W_ACCUM_L(del, ~((UINT16)s2));
-						SET_COMPARE_FLAG(del);
+						ACCUM_L(i) = ~((UINT16)s2);
+						SET_COMPARE_FLAG(i);
 					}
 					else
 					{
-						W_ACCUM_L(del, s1);
+						ACCUM_L(i) = s1;
 					}
 				}
 				else
 				{
 					if (s2 < 0)
 					{
-						SET_COMPARE_FLAG(del);
+						SET_COMPARE_FLAG(i);
 					}
 					if ((s1 - s2) >= 0)
 					{
-						W_ACCUM_L(del, s2);
-						cpustate->flag[1] |= (1 << (8+del));
+						ACCUM_L(i) = s2;
+						rsp->flag[1] |= (1 << (8+i));
 					}
 					else
 					{
-						W_ACCUM_L(del, s1);
+						ACCUM_L(i) = s1;
 					}
 				}
 
-				vres[del] = R_ACCUM_L(del);
+				vres[i] = ACCUM_L(i);
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2159,20 +2141,20 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Merges two vectors according to compare flags
 
-			for (i=0; i < 8; i++)
+			int sel;
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				if (COMPARE_FLAG(del) != 0)
+				sel = VEC_EL_2(EL, i);
+				if (COMPARE_FLAG(i) != 0)
 				{
-					vres[del] = R_VREG_S(VS1REG, del);
+					vres[i] = VREG_S(VS1REG, i);
 				}
 				else
 				{
-					vres[del] = R_VREG_S(VS2REG, VEC_EL_2(EL, sel));
+					vres[i] = VREG_S(VS2REG, sel);//??? ???????????
 				}
 
-				W_ACCUM_L(del, vres[del]);
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2186,12 +2168,12 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Bitwise AND of two vector registers
 
-			for (i=0; i < 8; i++)
+			int sel;
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				vres[del] = R_VREG_S(VS1REG, del) & R_VREG_S(VS2REG, sel);
-				W_ACCUM_L(del, vres[del]);
+				sel = VEC_EL_2(EL, i);
+				vres[i] = VREG_S(VS1REG, i) & VREG_S(VS2REG, sel);
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2205,12 +2187,12 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Bitwise NOT AND of two vector registers
 
-			for (i=0; i < 8; i++)
+			int sel;
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				vres[del] = ~((R_VREG_S(VS1REG, del) & R_VREG_S(VS2REG, sel)));
-				W_ACCUM_L(del, vres[del]);
+				sel = VEC_EL_2(EL, i);
+				vres[i] = ~((VREG_S(VS1REG, i) & VREG_S(VS2REG, sel)));
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2224,12 +2206,12 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Bitwise OR of two vector registers
 
-			for (i=0; i < 8; i++)
+			int sel;
+			for (i = 0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				vres[del] = R_VREG_S(VS1REG, del) | R_VREG_S(VS2REG, sel);
-				W_ACCUM_L(del, vres[del]);
+				sel = VEC_EL_2(EL, i);
+				vres[i] = VREG_S(VS1REG, i) | VREG_S(VS2REG, sel);
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2243,12 +2225,12 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Bitwise NOT OR of two vector registers
 
+			int sel;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				vres[del] = ~((R_VREG_S(VS1REG, del) | R_VREG_S(VS2REG, sel)));
-				W_ACCUM_L(del, vres[del]);
+				sel = VEC_EL_2(EL, i);
+				vres[i] = ~((VREG_S(VS1REG, i) | VREG_S(VS2REG, sel)));
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2262,12 +2244,12 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Bitwise XOR of two vector registers
 
+			int sel;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				vres[del] = R_VREG_S(VS1REG, del) ^ R_VREG_S(VS2REG, sel);
-				W_ACCUM_L(del, vres[del]);
+				sel = VEC_EL_2(EL, i);
+				vres[i] = VREG_S(VS1REG, i) ^ VREG_S(VS2REG, sel);
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2281,12 +2263,12 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Bitwise NOT XOR of two vector registers
 
+			int sel;
 			for (i=0; i < 8; i++)
 			{
-				int del = VEC_EL_1(EL, i);
-				int sel = VEC_EL_2(EL, del);
-				vres[del] = ~((R_VREG_S(VS1REG, del) ^ R_VREG_S(VS2REG, sel)));
-				W_ACCUM_L(del, vres[del]);
+				sel = VEC_EL_2(EL, i);
+				vres[i] = ~((VREG_S(VS1REG, i) ^ VREG_S(VS2REG, sel)));
+				ACCUM_L(i) = vres[i];
 			}
 			WRITEBACK_RESULT();
 			break;
@@ -2300,85 +2282,57 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			// ------------------------------------------------------
 			//
 			// Calculates reciprocal
-
-			int del = (VS1REG & 7);
+			int del = VS1REG & 7;
 			int sel = EL & 7;
-			INT32 rec;
+			INT32 shifter = 0;
 
-			rec = (INT16)(R_VREG_S(VS2REG, sel));
-
-			if (rec == 0)
+			INT32 rec = (INT16)(VREG_S(VS2REG, sel));
+			INT32 datainput = (rec < 0) ? (-rec) : rec;
+			if (datainput)
 			{
-				// divide by zero -> overflow
-				rec = 0x7fffffff;
-			}
-			else
-			{
-				int sign = 0;
-				int exp = 0;
-				int mantissa = 0;
-
-				if (rec < 0)
+				for (i = 0; i < 32; i++)
 				{
-					rec = -rec;	// rec = MINUS rec
-					sign = 1;
-				}
-
-				// restrict to 10-bit mantissa
-				for (i = 15; i >= 0; i--)
-				{
-					if (rec & (1 << i))
+					if (datainput & (1 << ((~i) & 0x1f)))//?.?.??? 31 - i
 					{
-						exp = i;
-						mantissa = (rec << (15 - i)) >> 6;
+						shifter = i;
 						break;
 					}
 				}
-
-				if (mantissa == 0x200)
-				{
-					rec = 0x7fffffff;
-				}
-				else
-				{
-					rec = 0xffffffffU / mantissa;
-
-					//
-					// simulate rounding error
-					//
-					// This has been verified on the real hardware.
-					//
-					// I was able to replicate this exact behaviour by using a five-round
-					// Newton reciprocal method using floorf() on intermediate results
-					// to force the use of IEEE 754 32bit floats.
-					// However, for the sake of portability, we'll use integer arithmetic.
-					//
-					if (rec & 0x800)
-						rec += 1;
-
-					rec <<= 8;
-				}
-
-				// restrict result to 17 significant bits
-				rec &= 0x7fffc000;
-
-				rec >>= exp;
-
-				if (sign)
-				{
-					rec = ~rec;	// rec = BITWISE NOT rec
-				}
 			}
-
-			for (i=0; i < 8; i++)
+			else
 			{
-				int element = VEC_EL_2(EL, i);
-				W_ACCUM_L(i, R_VREG_S(VS2REG, element));
+				shifter = 0x10;
 			}
 
-			cpustate->reciprocal_res = rec;
+			INT32 address = ((datainput << shifter) & 0x7fc00000) >> 22;
+			INT32 fetchval = rsp_divtable[address];
+			INT32 temp = (0x40000000 | (fetchval << 14)) >> ((~shifter) & 0x1f);
+			if (rec < 0)
+			{
+				temp = ~temp;
+			}
+			if (!rec)
+			{
+				temp = 0x7fffffff;
+			}
+			else if (rec == 0xffff8000)
+			{
+				temp = 0xffff0000;
+			}
+			rec = temp;
 
-			W_VREG_S(VDREG, del, (UINT16)(cpustate->reciprocal_res));			// store low part
+			rsp->reciprocal_res = rec;
+			rsp->dp_allowed = 0;
+
+			VREG_S(VDREG, del) = (UINT16)(rec & 0xffff);
+
+			for (i = 0; i < 8; i++)
+			{
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
+			}
+
+
 			break;
 		}
 
@@ -2391,64 +2345,85 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Calculates reciprocal low part
 
-			int del = (VS1REG & 7);
-			int sel = VEC_EL_2(EL, del);
-			INT32 rec;
+			int del = VS1REG & 7;
+			int sel = EL & 7;
+			INT32 shifter = 0;
 
-			rec = ((UINT16)(R_VREG_S(VS2REG, sel)) | ((UINT32)(cpustate->reciprocal_high) << 16));
+			INT32 rec = ((UINT16)(VREG_S(VS2REG, sel)) | ((UINT32)(rsp->reciprocal_high) & 0xffff0000));
 
-			if (rec == 0)
+			INT32 datainput = rec;
+
+			if (rec < 0)
 			{
-				// divide by zero -> overflow
-				rec = 0x7fffffff;
-			}
-			else
-			{
-				int negative = 0;
-				if (rec < 0)
+				if (rsp->dp_allowed)
 				{
-					if (((UINT32)(rec & 0xffff0000) == 0xffff0000) && ((INT16)(rec & 0xffff) < 0))
+					if (rec < -32768)
 					{
-						rec = ~rec+1;
+						datainput = ~datainput;
 					}
 					else
 					{
-						rec = ~rec;
-					}
-					negative = 1;
-				}
-				for (i = 31; i > 0; i--)
-				{
-					if (rec & (1 << i))
-					{
-						rec &= ((0xffc00000) >> (31 - i));
-						i = 0;
+						datainput = -datainput;
 					}
 				}
-				rec = (0x7fffffff / rec);
-				for (i = 31; i > 0; i--)
+				else
 				{
-					if (rec & (1 << i))
-					{
-						rec &= ((0xffff8000) >> (31 - i));
-						i = 0;
-					}
-				}
-				if (negative)
-				{
-					rec = ~rec;
+					datainput = -datainput;
 				}
 			}
 
-			for (i=0; i < 8; i++)
+
+			if (datainput)
 			{
-				int element = VEC_EL_2(EL, i);
-				W_ACCUM_L(i, R_VREG_S(VS2REG, element));
+				for (i = 0; i < 32; i++)
+				{
+					if (datainput & (1 << ((~i) & 0x1f)))//?.?.??? 31 - i
+					{
+						shifter = i;
+						break;
+					}
+				}
+			}
+			else
+			{
+				if (rsp->dp_allowed)
+				{
+					shifter = 0;
+				}
+				else
+				{
+					shifter = 0x10;
+				}
 			}
 
-			cpustate->reciprocal_res = rec;
+			INT32 address = ((datainput << shifter) & 0x7fc00000) >> 22;
+			INT32 fetchval = rsp_divtable[address];
+			INT32 temp = (0x40000000 | (fetchval << 14)) >> ((~shifter) & 0x1f);
+			if (rec < 0)
+			{
+				temp = ~temp;
+			}
+			if (!rec)
+			{
+				temp = 0x7fffffff;
+			}
+			else if (rec == 0xffff8000)
+			{
+				temp = 0xffff0000;
+			}
+			rec = temp;
 
-			W_VREG_S(VDREG, del, (UINT16)(cpustate->reciprocal_res));			// store low part
+			rsp->reciprocal_res = rec;
+			rsp->dp_allowed = 0;
+
+			VREG_S(VDREG, del) = (UINT16)(rec & 0xffff);
+
+			for (i = 0; i < 8; i++)
+			{
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
+			}
+
 			break;
 		}
 
@@ -2461,18 +2436,20 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Calculates reciprocal high part
 
-			int del = (VS1REG & 7);
-			int sel = VEC_EL_2(EL, del);
+			int del = VS1REG & 7;
+			int sel = EL & 7;
 
-			cpustate->reciprocal_high = R_VREG_S(VS2REG, sel);
+			rsp->reciprocal_high = (VREG_S(VS2REG, sel)) << 16;
+			rsp->dp_allowed = 1;
 
-			for (i=0; i < 8; i++)
+			for (i = 0; i < 8; i++)
 			{
-				int element = VEC_EL_2(EL, i);
-				W_ACCUM_L(i, R_VREG_S(VS2REG, element));		// perhaps accumulator is used to store the intermediate values ?
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
 			}
 
-			W_VREG_S(VDREG, del, (INT16)(cpustate->reciprocal_res >> 16));	// store high part
+			VREG_S(VDREG, del) = (INT16)(rsp->reciprocal_res >> 16);
+
 			break;
 		}
 
@@ -2485,8 +2462,79 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Moves element from vector to destination vector
 
-			int element = VS1REG & 7;
-			W_VREG_S(VDREG, element, R_VREG_S(VS2REG, VEC_EL_2(EL, 7-element)));
+			int del = VS1REG & 7;
+			int sel = EL & 7;
+
+			VREG_S(VDREG, del) = VREG_S(VS2REG, sel);
+			for (i = 0; i < 8; i++)
+			{
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
+			}
+			break;
+		}
+
+		case 0x34:		/* VRSQ */
+		{
+			// 31       25  24     20      15      10      5        0
+			// ------------------------------------------------------
+			// | 010010 | 1 | EEEE | SSSSS | ?FFFF | DDDDD | 110100 |
+			// ------------------------------------------------------
+			//
+			// Calculates reciprocal square-root
+
+			int del = VS1REG & 7;
+			int sel = EL & 7;
+			INT32 shifter = 0;
+
+			INT32 rec = (INT16)(VREG_S(VS2REG, sel));
+			INT32 datainput = (rec < 0) ? (-rec) : rec;
+			if (datainput)
+			{
+				for (i = 0; i < 32; i++)
+				{
+					if (datainput & (1 << ((~i) & 0x1f)))//?.?.??? 31 - i
+					{
+						shifter = i;
+						break;
+					}
+				}
+			}
+			else
+			{
+				shifter = 0x10;
+			}
+
+			INT32 address = ((datainput << shifter) & 0x7fc00000) >> 22;
+			address = ((address | 0x200) & 0x3fe) | (shifter & 1);
+
+			INT32 fetchval = rsp_divtable[address];
+			INT32 temp = (0x40000000 | (fetchval << 14)) >> (((~shifter) & 0x1f) >> 1);
+			if (rec < 0)
+			{
+				temp = ~temp;
+			}
+			if (!rec)
+			{
+				temp = 0x7fffffff;
+			}
+			else if (rec == 0xffff8000)
+			{
+				temp = 0xffff0000;
+			}
+			rec = temp;
+
+			rsp->reciprocal_res = rec;
+			rsp->dp_allowed = 0;
+
+			VREG_S(VDREG, del) = (UINT16)(rec & 0xffff);
+
+			for (i = 0; i < 8; i++)
+			{
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
+			}
+
 			break;
 		}
 
@@ -2499,69 +2547,86 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Calculates reciprocal square-root low part
 
-			int del = (VS1REG & 7);
-			int sel = VEC_EL_2(EL, del);
-			INT32 sqr;
+			int del = VS1REG & 7;
+			int sel = EL & 7;
+			INT32 shifter = 0;
 
-			sqr = (UINT16)(R_VREG_S(VS2REG, sel)) | ((UINT32)(cpustate->square_root_high) << 16);
+			INT32 rec = ((UINT16)(VREG_S(VS2REG, sel)) | ((UINT32)(rsp->reciprocal_high) & 0xffff0000));
 
-			if (sqr == 0)
+			INT32 datainput = rec;
+
+			if (rec < 0)
 			{
-				// square root on 0 -> overflow
-				sqr = 0x7fffffff;
-			}
-			else if (sqr == 0xffff8000)
-			{
-				// overflow ?
-				sqr = 0xffff8000;
-			}
-			else
-			{
-				int negative = 0;
-				if (sqr < 0)
+				if (rsp->dp_allowed)
 				{
-					if (((UINT32)(sqr & 0xffff0000) == 0xffff0000) && ((INT16)(sqr & 0xffff) < 0))
+					if (rec < -32768)//VDIV.C,208
 					{
-						sqr = ~sqr+1;
+						datainput = ~datainput;
 					}
 					else
 					{
-						sqr = ~sqr;
-					}
-					negative = 1;
-				}
-				for (i = 31; i > 0; i--)
-				{
-					if (sqr & (1 << i))
-					{
-						sqr &= (0xff800000 >> (31 - i));
-						i = 0;
+						datainput = -datainput;
 					}
 				}
-				sqr = (INT32)(0x7fffffff / sqrt((double)sqr));
-				for (i = 31; i > 0; i--)
+				else
 				{
-					if (sqr & (1 << i))
-					{
-						sqr &= (0xffff8000 >> (31 - i));
-						i = 0;
-					}
-				}
-				if (negative)
-				{
-					sqr = ~sqr;
+					datainput = -datainput;
 				}
 			}
 
-			for (i=0; i < 8; i++)
+			if (datainput)
 			{
-				int element = VEC_EL_2(EL, i);
-				W_ACCUM_L(i, R_VREG_S(VS2REG, element));
+				for (i = 0; i < 32; i++)
+				{
+					if (datainput & (1 << ((~i) & 0x1f)))
+					{
+						shifter = i;
+						break;
+					}
+				}
+			}
+			else
+			{
+				if (rsp->dp_allowed)
+				{
+					shifter = 0;
+				}
+				else
+				{
+					shifter = 0x10;
+				}
 			}
 
-			cpustate->square_root_res = sqr;
+			INT32 address = ((datainput << shifter) & 0x7fc00000) >> 22;
+			address = ((address | 0x200) & 0x3fe) | (shifter & 1);
 
-			W_VREG_S(VDREG, del, (UINT16)(cpustate->square_root_res));			// store low part
+			INT32 fetchval = rsp_divtable[address];
+			INT32 temp = (0x40000000 | (fetchval << 14)) >> (((~shifter) & 0x1f) >> 1);
+			if (rec < 0)
+			{
+				temp = ~temp;
+			}
+			if (!rec)
+			{
+				temp = 0x7fffffff;
+			}
+			else if (rec == 0xffff8000)
+			{
+				temp = 0xffff0000;
+			}
+			rec = temp;
+
+			rsp->reciprocal_res = rec;
+			rsp->dp_allowed = 0;
+
+			VREG_S(VDREG, del) = (UINT16)(rec & 0xffff);
+
+			for (i = 0; i < 8; i++)
+			{
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
+			}
+
 			break;
 		}
 
@@ -2574,53 +2639,64 @@ static void handle_vector_ops(rsp_state *cpustate, UINT32 op)
 			//
 			// Calculates reciprocal square-root high part
 
-			int del = (VS1REG & 7);
-			int sel = VEC_EL_2(EL, del);
+			int del = VS1REG & 7;
+			int sel = EL & 7;
 
-			cpustate->square_root_high = R_VREG_S(VS2REG, sel);
+			rsp->reciprocal_high = (VREG_S(VS2REG, sel)) << 16;
+			rsp->dp_allowed = 1;
 
 			for (i=0; i < 8; i++)
 			{
-				int element = VEC_EL_2(EL, i);
-				W_ACCUM_L(i, R_VREG_S(VS2REG, element));		// perhaps accumulator is used to store the intermediate values ?
+				sel = VEC_EL_2(EL, i);
+				ACCUM_L(i) = VREG_S(VS2REG, sel);
 			}
 
-			W_VREG_S(VDREG, del, (INT16)(cpustate->square_root_res >> 16));	// store high part
+			VREG_S(VDREG, del) = (INT16)(rsp->reciprocal_res >> 16);	// store high part
 			break;
 		}
 
-		default:	unimplemented_opcode(cpustate, op); break;
+		case 0x37:		/* VNOP */
+		{
+			// 31       25  24     20      15      10      5        0
+			// ------------------------------------------------------
+			// | 010010 | 1 | EEEE | SSSSS | ?FFFF | DDDDD | 110111 |
+			// ------------------------------------------------------
+			//
+			// Vector null instruction
+
+			break;
+		}
+
+		default:	unimplemented_opcode(rsp, op); break;
 	}
 }
 
 static CPU_EXECUTE( rsp )
 {
-	rsp_state *cpustate = get_safe_token(device);
+	rsp_state *rsp = get_safe_token(device);
 	UINT32 op;
 
-	cpustate->icount = cycles;
+	rsp->pc = 0x4001000 | (rsp->pc & 0xfff);
 
-	cpustate->pc = 0x4001000 | (cpustate->pc & 0xfff);
-
-	if( cpustate->sr & ( RSP_STATUS_HALT | RSP_STATUS_BROKE ) )
+	if( rsp->sr & ( RSP_STATUS_HALT | RSP_STATUS_BROKE ) )
 	{
-		cpustate->icount = MIN(cpustate->icount, 0);
+		rsp->icount = MIN(rsp->icount, 0);
 	}
 
-	while (cpustate->icount > 0)
+	while (rsp->icount > 0)
 	{
-		cpustate->ppc = cpustate->pc;
-		debugger_instruction_hook(device, cpustate->pc);
+		rsp->ppc = rsp->pc;
+		debugger_instruction_hook(device, rsp->pc);
 
-		op = ROPCODE(cpustate->pc);
-		if (cpustate->nextpc != ~0)
+		op = ROPCODE(rsp->pc);
+		if (rsp->nextpc != ~0)
 		{
-			cpustate->pc = cpustate->nextpc;
-			cpustate->nextpc = ~0;
+			rsp->pc = rsp->nextpc;
+			rsp->nextpc = ~0;
 		}
 		else
 		{
-			cpustate->pc += 4;
+			rsp->pc += 4;
 		}
 
 		switch (op >> 26)
@@ -2639,10 +2715,10 @@ static CPU_EXECUTE( rsp )
 					case 0x09:	/* JALR */		JUMP_PC_L(RSVAL, RDREG); break;
 					case 0x0d:	/* BREAK */
 					{
-						(cpustate->config->sp_set_status)(cpustate->device, 0x3);
-						cpustate->icount = MIN(cpustate->icount, 1);
+						(rsp->config->sp_set_status)(rsp->device, 0x3);
+						rsp->icount = MIN(rsp->icount, 1);
 
-						if (LOG_INSTRUCTION_EXECUTION) fprintf(cpustate->exec_output, "\n---------- break ----------\n\n");
+						if (LOG_INSTRUCTION_EXECUTION) fprintf(rsp->exec_output, "\n---------- break ----------\n\n");
 
 						break;
 					}
@@ -2656,7 +2732,7 @@ static CPU_EXECUTE( rsp )
 					case 0x27:	/* NOR */		if (RDREG) RDVAL = ~(RSVAL | RTVAL); break;
 					case 0x2a:	/* SLT */		if (RDREG) RDVAL = (INT32)RSVAL < (INT32)RTVAL; break;
 					case 0x2b:	/* SLTU */		if (RDREG) RDVAL = (UINT32)RSVAL < (UINT32)RTVAL; break;
-					default:	unimplemented_opcode(cpustate, op); break;
+					default:	unimplemented_opcode(rsp, op); break;
 				}
 				break;
 			}
@@ -2667,8 +2743,9 @@ static CPU_EXECUTE( rsp )
 				{
 					case 0x00:	/* BLTZ */		if ((INT32)(RSVAL) < 0) JUMP_REL(SIMM16); break;
 					case 0x01:	/* BGEZ */		if ((INT32)(RSVAL) >= 0) JUMP_REL(SIMM16); break;
+					case 0x10:	/* BLTZAL */	if ((INT32)(RSVAL) < 0) JUMP_REL_L(SIMM16, 31); break;
 					case 0x11:	/* BGEZAL */	if ((INT32)(RSVAL) >= 0) JUMP_REL_L(SIMM16, 31); break;
-					default:	unimplemented_opcode(cpustate, op); break;
+					default:	unimplemented_opcode(rsp, op); break;
 				}
 				break;
 			}
@@ -2692,9 +2769,9 @@ static CPU_EXECUTE( rsp )
 			{
 				switch ((op >> 21) & 0x1f)
 				{
-					case 0x00:	/* MFC0 */		if (RTREG) RTVAL = get_cop0_reg(cpustate, RDREG); break;
-					case 0x04:	/* MTC0 */		set_cop0_reg(cpustate, RDREG, RTVAL); break;
-					default:	unimplemented_opcode(cpustate, op); break;
+					case 0x00:	/* MFC0 */		if (RTREG) RTVAL = get_cop0_reg(rsp, RDREG); break;
+					case 0x04:	/* MTC0 */		set_cop0_reg(rsp, RDREG, RTVAL); break;
+					default:	unimplemented_opcode(rsp, op); break;
 				}
 				break;
 			}
@@ -2712,8 +2789,8 @@ static CPU_EXECUTE( rsp )
 						//
 
 						int el = (op >> 7) & 0xf;
-						UINT16 b1 = R_VREG_B(VS1REG, (el+0) & 0xf);
-						UINT16 b2 = R_VREG_B(VS1REG, (el+1) & 0xf);
+						UINT16 b1 = VREG_B(RDREG, (el+0) & 0xf);
+						UINT16 b2 = VREG_B(RDREG, (el+1) & 0xf);
 						if (RTREG) RTVAL = (INT32)(INT16)((b1 << 8) | (b2));
 						break;
 					}
@@ -2725,19 +2802,19 @@ static CPU_EXECUTE( rsp )
 						// ------------------------------------------------
 						//
 
-                        if (RTREG)
-                        {
-                            if (RDREG == 2)
-                            {
-                                // Anciliary clipping flags
-                                RTVAL = cpustate->flag[RDREG] & 0x00ff;
-                            }
-                            else
-                            {
-                                // All other flags are 16 bits but sign-extended at retrieval
-                                RTVAL = (UINT32)cpustate->flag[RDREG] | ( ( cpustate->flag[RDREG] & 0x8000 ) ? 0xffff0000 : 0 );
-                            }
-                        }
+						if (RTREG)
+						{
+							if (RDREG == 2)
+							{
+								// Anciliary clipping flags
+								RTVAL = rsp->flag[RDREG] & 0x00ff;
+							}
+							else
+							{
+								// All other flags are 16 bits but sign-extended at retrieval
+								RTVAL = (UINT32)rsp->flag[RDREG] | ( ( rsp->flag[RDREG] & 0x8000 ) ? 0xffff0000 : 0 );
+							}
+						}
 						break;
 					}
 					case 0x04:	/* MTC2 */
@@ -2749,8 +2826,8 @@ static CPU_EXECUTE( rsp )
 						//
 
 						int el = (op >> 7) & 0xf;
-						W_VREG_B(VS1REG, (el+0) & 0xf, (RTVAL >> 8) & 0xff);
-						W_VREG_B(VS1REG, (el+1) & 0xf, (RTVAL >> 0) & 0xff);
+						W_VREG_B(RDREG, (el+0) & 0xf, (RTVAL >> 8) & 0xff);
+						W_VREG_B(RDREG, (el+1) & 0xf, (RTVAL >> 0) & 0xff);
 						break;
 					}
 					case 0x06:	/* CTC2 */
@@ -2761,36 +2838,36 @@ static CPU_EXECUTE( rsp )
 						// ------------------------------------------------
 						//
 
-						cpustate->flag[RDREG] = RTVAL & 0xffff;
+						rsp->flag[RDREG] = RTVAL & 0xffff;
 						break;
 					}
 
 					case 0x10: case 0x11: case 0x12: case 0x13: case 0x14: case 0x15: case 0x16: case 0x17:
 					case 0x18: case 0x19: case 0x1a: case 0x1b: case 0x1c: case 0x1d: case 0x1e: case 0x1f:
 					{
-						handle_vector_ops(cpustate, op);
+						handle_vector_ops(rsp, op);
 						break;
 					}
 
-					default:	unimplemented_opcode(cpustate, op); break;
+					default:	unimplemented_opcode(rsp, op); break;
 				}
 				break;
 			}
 
-			case 0x20:	/* LB */		if (RTREG) RTVAL = (INT32)(INT8)READ8(cpustate, RSVAL + SIMM16); break;
-			case 0x21:	/* LH */		if (RTREG) RTVAL = (INT32)(INT16)READ16(cpustate, RSVAL + SIMM16); break;
-			case 0x23:	/* LW */		if (RTREG) RTVAL = READ32(cpustate, RSVAL + SIMM16); break;
-			case 0x24:	/* LBU */		if (RTREG) RTVAL = (UINT8)READ8(cpustate, RSVAL + SIMM16); break;
-			case 0x25:	/* LHU */		if (RTREG) RTVAL = (UINT16)READ16(cpustate, RSVAL + SIMM16); break;
-			case 0x28:	/* SB */		WRITE8(cpustate, RSVAL + SIMM16, RTVAL); break;
-			case 0x29:	/* SH */		WRITE16(cpustate, RSVAL + SIMM16, RTVAL); break;
-			case 0x2b:	/* SW */		WRITE32(cpustate, RSVAL + SIMM16, RTVAL); break;
-			case 0x32:	/* LWC2 */		handle_lwc2(cpustate, op); break;
-			case 0x3a:	/* SWC2 */		handle_swc2(cpustate, op); break;
+			case 0x20:	/* LB */		if (RTREG) RTVAL = (INT32)(INT8)READ8(rsp, RSVAL + SIMM16); break;
+			case 0x21:	/* LH */		if (RTREG) RTVAL = (INT32)(INT16)READ16(rsp, RSVAL + SIMM16); break;
+			case 0x23:	/* LW */		if (RTREG) RTVAL = READ32(rsp, RSVAL + SIMM16); break;
+			case 0x24:	/* LBU */		if (RTREG) RTVAL = (UINT8)READ8(rsp, RSVAL + SIMM16); break;
+			case 0x25:	/* LHU */		if (RTREG) RTVAL = (UINT16)READ16(rsp, RSVAL + SIMM16); break;
+			case 0x28:	/* SB */		WRITE8(rsp, RSVAL + SIMM16, RTVAL); break;
+			case 0x29:	/* SH */		WRITE16(rsp, RSVAL + SIMM16, RTVAL); break;
+			case 0x2b:	/* SW */		WRITE32(rsp, RSVAL + SIMM16, RTVAL); break;
+			case 0x32:	/* LWC2 */		handle_lwc2(rsp, op); break;
+			case 0x3a:	/* SWC2 */		handle_swc2(rsp, op); break;
 
 			default:
 			{
-				unimplemented_opcode(cpustate, op);
+				unimplemented_opcode(rsp, op);
 				break;
 			}
 		}
@@ -2801,67 +2878,65 @@ static CPU_EXECUTE( rsp )
 			static UINT32 prev_regs[32];
 			static VECTOR_REG prev_vecs[32];
 			char string[200];
-			rsp_dasm_one(string, cpustate->ppc, op);
+			rsp_dasm_one(string, rsp->ppc, op);
 
-			fprintf(cpustate->exec_output, "%08X: %s", cpustate->ppc, string);
+			fprintf(rsp->exec_output, "%08X: %s", rsp->ppc, string);
 
 			l = strlen(string);
 			if (l < 36)
 			{
 				for (i=l; i < 36; i++)
 				{
-					fprintf(cpustate->exec_output, " ");
+					fprintf(rsp->exec_output, " ");
 				}
 			}
 
-			fprintf(cpustate->exec_output, "| ");
+			fprintf(rsp->exec_output, "| ");
 
 			for (i=0; i < 32; i++)
 			{
-				if (cpustate->r[i] != prev_regs[i])
+				if (rsp->r[i] != prev_regs[i])
 				{
-					fprintf(cpustate->exec_output, "R%d: %08X ", i, cpustate->r[i]);
+					fprintf(rsp->exec_output, "R%d: %08X ", i, rsp->r[i]);
 				}
-				prev_regs[i] = cpustate->r[i];
+				prev_regs[i] = rsp->r[i];
 			}
 
 			for (i=0; i < 32; i++)
 			{
-				if (cpustate->v[i].d[0] != prev_vecs[i].d[0] || cpustate->v[i].d[1] != prev_vecs[i].d[1])
+				if (rsp->v[i].d[0] != prev_vecs[i].d[0] || rsp->v[i].d[1] != prev_vecs[i].d[1])
 				{
-					fprintf(cpustate->exec_output, "V%d: %04X|%04X|%04X|%04X|%04X|%04X|%04X|%04X ", i,
-					(UINT16)R_VREG_S(i,0), (UINT16)R_VREG_S(i,1), (UINT16)R_VREG_S(i,2), (UINT16)R_VREG_S(i,3), (UINT16)R_VREG_S(i,4), (UINT16)R_VREG_S(i,5), (UINT16)R_VREG_S(i,6), (UINT16)R_VREG_S(i,7));
+					fprintf(rsp->exec_output, "V%d: %04X|%04X|%04X|%04X|%04X|%04X|%04X|%04X ", i,
+					(UINT16)VREG_S(i,0), (UINT16)VREG_S(i,1), (UINT16)VREG_S(i,2), (UINT16)VREG_S(i,3), (UINT16)VREG_S(i,4), (UINT16)VREG_S(i,5), (UINT16)VREG_S(i,6), (UINT16)VREG_S(i,7));
 				}
-				prev_vecs[i].d[0] = cpustate->v[i].d[0];
-				prev_vecs[i].d[1] = cpustate->v[i].d[1];
+				prev_vecs[i].d[0] = rsp->v[i].d[0];
+				prev_vecs[i].d[1] = rsp->v[i].d[1];
 			}
 
-			fprintf(cpustate->exec_output, "\n");
+			fprintf(rsp->exec_output, "\n");
 
 		}
 
-		--cpustate->icount;
+		--rsp->icount;
 
-		if( cpustate->sr & RSP_STATUS_SSTEP )
+		if( rsp->sr & RSP_STATUS_SSTEP )
 		{
-            if( cpustate->step_count )
-            {
-                cpustate->step_count--;
-            }
-            else
-            {
-                cpustate->sr |= RSP_STATUS_BROKE;
-            }
+			if( rsp->step_count )
+			{
+				rsp->step_count--;
+			}
+			else
+			{
+				rsp->sr |= RSP_STATUS_BROKE;
+			}
 		}
 
-		if( cpustate->sr & ( RSP_STATUS_HALT | RSP_STATUS_BROKE ) )
+		if( rsp->sr & ( RSP_STATUS_HALT | RSP_STATUS_BROKE ) )
 		{
-			cpustate->icount = MIN(cpustate->icount, 0);
+			rsp->icount = MIN(rsp->icount, 0);
 		}
 
 	}
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -2871,63 +2946,63 @@ static CPU_EXECUTE( rsp )
 
 static CPU_SET_INFO( rsp )
 {
-	rsp_state *cpustate = get_safe_token(device);
+	rsp_state *rsp = get_safe_token(device);
 
 	switch (state)
 	{
 		/* --- the following bits of info are set as 64-bit signed integers --- */
 		case CPUINFO_INT_PC:
-        case CPUINFO_INT_REGISTER + RSP_PC:             cpustate->pc = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R0:             cpustate->r[0] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R1:             cpustate->r[1] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R2:             cpustate->r[2] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R3:             cpustate->r[3] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R4:             cpustate->r[4] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R5:             cpustate->r[5] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R6:             cpustate->r[6] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R7:             cpustate->r[7] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R8:             cpustate->r[8] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R9:             cpustate->r[9] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R10:            cpustate->r[10] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R11:            cpustate->r[11] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R12:            cpustate->r[12] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R13:            cpustate->r[13] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R14:            cpustate->r[14] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R15:            cpustate->r[15] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R16:            cpustate->r[16] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R17:            cpustate->r[17] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R18:            cpustate->r[18] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R19:            cpustate->r[19] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R20:            cpustate->r[20] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R21:            cpustate->r[21] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R22:            cpustate->r[22] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R23:            cpustate->r[23] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R24:            cpustate->r[24] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R25:            cpustate->r[25] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R26:            cpustate->r[26] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R27:            cpustate->r[27] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R28:            cpustate->r[28] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R29:            cpustate->r[29] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_R30:            cpustate->r[30] = info->i;        break;
-        case CPUINFO_INT_SP:
-        case CPUINFO_INT_REGISTER + RSP_R31:            cpustate->r[31] = info->i;        break;
-        case CPUINFO_INT_REGISTER + RSP_SR:             cpustate->sr = info->i;           break;
-        case CPUINFO_INT_REGISTER + RSP_NEXTPC:         cpustate->nextpc = info->i;       break;
-        case CPUINFO_INT_REGISTER + RSP_STEPCNT:        cpustate->step_count = info->i;   break;
+		case CPUINFO_INT_REGISTER + RSP_PC:             rsp->pc = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R0:             rsp->r[0] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R1:             rsp->r[1] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R2:             rsp->r[2] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R3:             rsp->r[3] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R4:             rsp->r[4] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R5:             rsp->r[5] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R6:             rsp->r[6] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R7:             rsp->r[7] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R8:             rsp->r[8] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R9:             rsp->r[9] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R10:            rsp->r[10] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R11:            rsp->r[11] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R12:            rsp->r[12] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R13:            rsp->r[13] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R14:            rsp->r[14] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R15:            rsp->r[15] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R16:            rsp->r[16] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R17:            rsp->r[17] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R18:            rsp->r[18] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R19:            rsp->r[19] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R20:            rsp->r[20] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R21:            rsp->r[21] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R22:            rsp->r[22] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R23:            rsp->r[23] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R24:            rsp->r[24] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R25:            rsp->r[25] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R26:            rsp->r[26] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R27:            rsp->r[27] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R28:            rsp->r[28] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R29:            rsp->r[29] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_R30:            rsp->r[30] = info->i;        break;
+		case CPUINFO_INT_SP:
+		case CPUINFO_INT_REGISTER + RSP_R31:            rsp->r[31] = info->i;        break;
+		case CPUINFO_INT_REGISTER + RSP_SR:             rsp->sr = info->i;           break;
+		case CPUINFO_INT_REGISTER + RSP_NEXTPC:         rsp->nextpc = info->i;       break;
+		case CPUINFO_INT_REGISTER + RSP_STEPCNT:        rsp->step_count = info->i;   break;
 	}
 }
 
 CPU_GET_INFO( rsp )
 {
-	rsp_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	rsp_state *rsp = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch(state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_CONTEXT_SIZE:					info->i = sizeof(rsp_state);					break;
+		case CPUINFO_INT_CONTEXT_SIZE:					info->i = sizeof(rsp_state);			break;
 		case CPUINFO_INT_INPUT_LINES:					info->i = 1;							break;
 		case CPUINFO_INT_DEFAULT_IRQ_VECTOR:			info->i = 0;							break;
-		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_LITTLE;					break;
+		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;				break;
 		case CPUINFO_INT_CLOCK_MULTIPLIER:				info->i = 1;							break;
 		case CPUINFO_INT_CLOCK_DIVIDER:					info->i = 1;							break;
 		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:			info->i = 4;							break;
@@ -2935,59 +3010,59 @@ CPU_GET_INFO( rsp )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 
-		case CPUINFO_INT_PREVIOUSPC:					info->i = cpustate->ppc;						break;
+		case CPUINFO_INT_PREVIOUSPC:					info->i = rsp->ppc;						break;
 
 		case CPUINFO_INT_PC:	/* intentional fallthrough */
-		case CPUINFO_INT_REGISTER + RSP_PC:				info->i = cpustate->pc;						break;
+		case CPUINFO_INT_REGISTER + RSP_PC:				info->i = rsp->pc;						break;
 
-		case CPUINFO_INT_REGISTER + RSP_R0:				info->i = cpustate->r[0];						break;
-		case CPUINFO_INT_REGISTER + RSP_R1:				info->i = cpustate->r[1];						break;
-		case CPUINFO_INT_REGISTER + RSP_R2:				info->i = cpustate->r[2];						break;
-		case CPUINFO_INT_REGISTER + RSP_R3:				info->i = cpustate->r[3];						break;
-		case CPUINFO_INT_REGISTER + RSP_R4:				info->i = cpustate->r[4];						break;
-		case CPUINFO_INT_REGISTER + RSP_R5:				info->i = cpustate->r[5];						break;
-		case CPUINFO_INT_REGISTER + RSP_R6:				info->i = cpustate->r[6];						break;
-		case CPUINFO_INT_REGISTER + RSP_R7:				info->i = cpustate->r[7];						break;
-		case CPUINFO_INT_REGISTER + RSP_R8:				info->i = cpustate->r[8];						break;
-		case CPUINFO_INT_REGISTER + RSP_R9:				info->i = cpustate->r[9];						break;
-		case CPUINFO_INT_REGISTER + RSP_R10:			info->i = cpustate->r[10];					break;
-		case CPUINFO_INT_REGISTER + RSP_R11:			info->i = cpustate->r[11];					break;
-		case CPUINFO_INT_REGISTER + RSP_R12:			info->i = cpustate->r[12];					break;
-		case CPUINFO_INT_REGISTER + RSP_R13:			info->i = cpustate->r[13];					break;
-		case CPUINFO_INT_REGISTER + RSP_R14:			info->i = cpustate->r[14];					break;
-		case CPUINFO_INT_REGISTER + RSP_R15:			info->i = cpustate->r[15];					break;
-		case CPUINFO_INT_REGISTER + RSP_R16:			info->i = cpustate->r[16];					break;
-		case CPUINFO_INT_REGISTER + RSP_R17:			info->i = cpustate->r[17];					break;
-		case CPUINFO_INT_REGISTER + RSP_R18:			info->i = cpustate->r[18];					break;
-		case CPUINFO_INT_REGISTER + RSP_R19:			info->i = cpustate->r[19];					break;
-		case CPUINFO_INT_REGISTER + RSP_R20:			info->i = cpustate->r[20];					break;
-		case CPUINFO_INT_REGISTER + RSP_R21:			info->i = cpustate->r[21];					break;
-		case CPUINFO_INT_REGISTER + RSP_R22:			info->i = cpustate->r[22];					break;
-		case CPUINFO_INT_REGISTER + RSP_R23:			info->i = cpustate->r[23];					break;
-		case CPUINFO_INT_REGISTER + RSP_R24:			info->i = cpustate->r[24];					break;
-		case CPUINFO_INT_REGISTER + RSP_R25:			info->i = cpustate->r[25];					break;
-		case CPUINFO_INT_REGISTER + RSP_R26:			info->i = cpustate->r[26];					break;
-		case CPUINFO_INT_REGISTER + RSP_R27:			info->i = cpustate->r[27];					break;
-		case CPUINFO_INT_REGISTER + RSP_R28:			info->i = cpustate->r[28];					break;
-		case CPUINFO_INT_REGISTER + RSP_R29:			info->i = cpustate->r[29];					break;
-		case CPUINFO_INT_REGISTER + RSP_R30:			info->i = cpustate->r[30];					break;
+		case CPUINFO_INT_REGISTER + RSP_R0:				info->i = rsp->r[0];						break;
+		case CPUINFO_INT_REGISTER + RSP_R1:				info->i = rsp->r[1];						break;
+		case CPUINFO_INT_REGISTER + RSP_R2:				info->i = rsp->r[2];						break;
+		case CPUINFO_INT_REGISTER + RSP_R3:				info->i = rsp->r[3];						break;
+		case CPUINFO_INT_REGISTER + RSP_R4:				info->i = rsp->r[4];						break;
+		case CPUINFO_INT_REGISTER + RSP_R5:				info->i = rsp->r[5];						break;
+		case CPUINFO_INT_REGISTER + RSP_R6:				info->i = rsp->r[6];						break;
+		case CPUINFO_INT_REGISTER + RSP_R7:				info->i = rsp->r[7];						break;
+		case CPUINFO_INT_REGISTER + RSP_R8:				info->i = rsp->r[8];						break;
+		case CPUINFO_INT_REGISTER + RSP_R9:				info->i = rsp->r[9];						break;
+		case CPUINFO_INT_REGISTER + RSP_R10:			info->i = rsp->r[10];					break;
+		case CPUINFO_INT_REGISTER + RSP_R11:			info->i = rsp->r[11];					break;
+		case CPUINFO_INT_REGISTER + RSP_R12:			info->i = rsp->r[12];					break;
+		case CPUINFO_INT_REGISTER + RSP_R13:			info->i = rsp->r[13];					break;
+		case CPUINFO_INT_REGISTER + RSP_R14:			info->i = rsp->r[14];					break;
+		case CPUINFO_INT_REGISTER + RSP_R15:			info->i = rsp->r[15];					break;
+		case CPUINFO_INT_REGISTER + RSP_R16:			info->i = rsp->r[16];					break;
+		case CPUINFO_INT_REGISTER + RSP_R17:			info->i = rsp->r[17];					break;
+		case CPUINFO_INT_REGISTER + RSP_R18:			info->i = rsp->r[18];					break;
+		case CPUINFO_INT_REGISTER + RSP_R19:			info->i = rsp->r[19];					break;
+		case CPUINFO_INT_REGISTER + RSP_R20:			info->i = rsp->r[20];					break;
+		case CPUINFO_INT_REGISTER + RSP_R21:			info->i = rsp->r[21];					break;
+		case CPUINFO_INT_REGISTER + RSP_R22:			info->i = rsp->r[22];					break;
+		case CPUINFO_INT_REGISTER + RSP_R23:			info->i = rsp->r[23];					break;
+		case CPUINFO_INT_REGISTER + RSP_R24:			info->i = rsp->r[24];					break;
+		case CPUINFO_INT_REGISTER + RSP_R25:			info->i = rsp->r[25];					break;
+		case CPUINFO_INT_REGISTER + RSP_R26:			info->i = rsp->r[26];					break;
+		case CPUINFO_INT_REGISTER + RSP_R27:			info->i = rsp->r[27];					break;
+		case CPUINFO_INT_REGISTER + RSP_R28:			info->i = rsp->r[28];					break;
+		case CPUINFO_INT_REGISTER + RSP_R29:			info->i = rsp->r[29];					break;
+		case CPUINFO_INT_REGISTER + RSP_R30:			info->i = rsp->r[30];					break;
 		case CPUINFO_INT_SP:
-		case CPUINFO_INT_REGISTER + RSP_R31:			info->i = cpustate->r[31];					break;
-		case CPUINFO_INT_REGISTER + RSP_SR:             info->i = cpustate->sr;                       break;
-		case CPUINFO_INT_REGISTER + RSP_NEXTPC:         info->i = cpustate->nextpc;                   break;
-        case CPUINFO_INT_REGISTER + RSP_STEPCNT:        info->i = cpustate->step_count;               break;
+		case CPUINFO_INT_REGISTER + RSP_R31:			info->i = rsp->r[31];					break;
+		case CPUINFO_INT_REGISTER + RSP_SR:             info->i = rsp->sr;                       break;
+		case CPUINFO_INT_REGISTER + RSP_NEXTPC:         info->i = rsp->nextpc;                   break;
+		case CPUINFO_INT_REGISTER + RSP_STEPCNT:        info->i = rsp->step_count;               break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(rsp);			break;
@@ -2997,7 +3072,7 @@ CPU_GET_INFO( rsp )
 		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(rsp);			break;
 		case CPUINFO_FCT_BURN:							info->burn = NULL;						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(rsp);			break;
-		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;				break;
+		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &rsp->icount;				break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "RSP");					break;
@@ -3008,42 +3083,62 @@ CPU_GET_INFO( rsp )
 
 		case CPUINFO_STR_FLAGS:							strcpy(info->s, " ");					break;
 
-		case CPUINFO_STR_REGISTER + RSP_PC:				sprintf(info->s, "PC: %08X", cpustate->pc);	break;
+		case CPUINFO_STR_REGISTER + RSP_PC:				sprintf(info->s, "PC: %08X", rsp->pc);	break;
 
-		case CPUINFO_STR_REGISTER + RSP_R0:				sprintf(info->s, "R0: %08X", cpustate->r[0]); break;
-		case CPUINFO_STR_REGISTER + RSP_R1:				sprintf(info->s, "R1: %08X", cpustate->r[1]); break;
-		case CPUINFO_STR_REGISTER + RSP_R2:				sprintf(info->s, "R2: %08X", cpustate->r[2]); break;
-		case CPUINFO_STR_REGISTER + RSP_R3:				sprintf(info->s, "R3: %08X", cpustate->r[3]); break;
-		case CPUINFO_STR_REGISTER + RSP_R4:				sprintf(info->s, "R4: %08X", cpustate->r[4]); break;
-		case CPUINFO_STR_REGISTER + RSP_R5:				sprintf(info->s, "R5: %08X", cpustate->r[5]); break;
-		case CPUINFO_STR_REGISTER + RSP_R6:				sprintf(info->s, "R6: %08X", cpustate->r[6]); break;
-		case CPUINFO_STR_REGISTER + RSP_R7:				sprintf(info->s, "R7: %08X", cpustate->r[7]); break;
-		case CPUINFO_STR_REGISTER + RSP_R8:				sprintf(info->s, "R8: %08X", cpustate->r[8]); break;
-		case CPUINFO_STR_REGISTER + RSP_R9:				sprintf(info->s, "R9: %08X", cpustate->r[9]); break;
-		case CPUINFO_STR_REGISTER + RSP_R10:			sprintf(info->s, "R10: %08X", cpustate->r[10]); break;
-		case CPUINFO_STR_REGISTER + RSP_R11:			sprintf(info->s, "R11: %08X", cpustate->r[11]); break;
-		case CPUINFO_STR_REGISTER + RSP_R12:			sprintf(info->s, "R12: %08X", cpustate->r[12]); break;
-		case CPUINFO_STR_REGISTER + RSP_R13:			sprintf(info->s, "R13: %08X", cpustate->r[13]); break;
-		case CPUINFO_STR_REGISTER + RSP_R14:			sprintf(info->s, "R14: %08X", cpustate->r[14]); break;
-		case CPUINFO_STR_REGISTER + RSP_R15:			sprintf(info->s, "R15: %08X", cpustate->r[15]); break;
-		case CPUINFO_STR_REGISTER + RSP_R16:			sprintf(info->s, "R16: %08X", cpustate->r[16]); break;
-		case CPUINFO_STR_REGISTER + RSP_R17:			sprintf(info->s, "R17: %08X", cpustate->r[17]); break;
-		case CPUINFO_STR_REGISTER + RSP_R18:			sprintf(info->s, "R18: %08X", cpustate->r[18]); break;
-		case CPUINFO_STR_REGISTER + RSP_R19:			sprintf(info->s, "R19: %08X", cpustate->r[19]); break;
-		case CPUINFO_STR_REGISTER + RSP_R20:			sprintf(info->s, "R20: %08X", cpustate->r[20]); break;
-		case CPUINFO_STR_REGISTER + RSP_R21:			sprintf(info->s, "R21: %08X", cpustate->r[21]); break;
-		case CPUINFO_STR_REGISTER + RSP_R22:			sprintf(info->s, "R22: %08X", cpustate->r[22]); break;
-		case CPUINFO_STR_REGISTER + RSP_R23:			sprintf(info->s, "R23: %08X", cpustate->r[23]); break;
-		case CPUINFO_STR_REGISTER + RSP_R24:			sprintf(info->s, "R24: %08X", cpustate->r[24]); break;
-		case CPUINFO_STR_REGISTER + RSP_R25:			sprintf(info->s, "R25: %08X", cpustate->r[25]); break;
-		case CPUINFO_STR_REGISTER + RSP_R26:			sprintf(info->s, "R26: %08X", cpustate->r[26]); break;
-		case CPUINFO_STR_REGISTER + RSP_R27:			sprintf(info->s, "R27: %08X", cpustate->r[27]); break;
-		case CPUINFO_STR_REGISTER + RSP_R28:			sprintf(info->s, "R28: %08X", cpustate->r[28]); break;
-		case CPUINFO_STR_REGISTER + RSP_R29:			sprintf(info->s, "R29: %08X", cpustate->r[29]); break;
-		case CPUINFO_STR_REGISTER + RSP_R30:			sprintf(info->s, "R30: %08X", cpustate->r[30]); break;
-		case CPUINFO_STR_REGISTER + RSP_R31:			sprintf(info->s, "R31: %08X", cpustate->r[31]); break;
-		case CPUINFO_STR_REGISTER + RSP_SR:             sprintf(info->s, "SR: %08X",  cpustate->sr);    break;
-		case CPUINFO_STR_REGISTER + RSP_NEXTPC:         sprintf(info->s, "NPC: %08X", cpustate->nextpc);break;
-        case CPUINFO_STR_REGISTER + RSP_STEPCNT:        sprintf(info->s, "STEP: %d",  cpustate->step_count);  break;
+		case CPUINFO_STR_REGISTER + RSP_R0:				sprintf(info->s, "R0: %08X", rsp->r[0]); break;
+		case CPUINFO_STR_REGISTER + RSP_R1:				sprintf(info->s, "R1: %08X", rsp->r[1]); break;
+		case CPUINFO_STR_REGISTER + RSP_R2:				sprintf(info->s, "R2: %08X", rsp->r[2]); break;
+		case CPUINFO_STR_REGISTER + RSP_R3:				sprintf(info->s, "R3: %08X", rsp->r[3]); break;
+		case CPUINFO_STR_REGISTER + RSP_R4:				sprintf(info->s, "R4: %08X", rsp->r[4]); break;
+		case CPUINFO_STR_REGISTER + RSP_R5:				sprintf(info->s, "R5: %08X", rsp->r[5]); break;
+		case CPUINFO_STR_REGISTER + RSP_R6:				sprintf(info->s, "R6: %08X", rsp->r[6]); break;
+		case CPUINFO_STR_REGISTER + RSP_R7:				sprintf(info->s, "R7: %08X", rsp->r[7]); break;
+		case CPUINFO_STR_REGISTER + RSP_R8:				sprintf(info->s, "R8: %08X", rsp->r[8]); break;
+		case CPUINFO_STR_REGISTER + RSP_R9:				sprintf(info->s, "R9: %08X", rsp->r[9]); break;
+		case CPUINFO_STR_REGISTER + RSP_R10:			sprintf(info->s, "R10: %08X", rsp->r[10]); break;
+		case CPUINFO_STR_REGISTER + RSP_R11:			sprintf(info->s, "R11: %08X", rsp->r[11]); break;
+		case CPUINFO_STR_REGISTER + RSP_R12:			sprintf(info->s, "R12: %08X", rsp->r[12]); break;
+		case CPUINFO_STR_REGISTER + RSP_R13:			sprintf(info->s, "R13: %08X", rsp->r[13]); break;
+		case CPUINFO_STR_REGISTER + RSP_R14:			sprintf(info->s, "R14: %08X", rsp->r[14]); break;
+		case CPUINFO_STR_REGISTER + RSP_R15:			sprintf(info->s, "R15: %08X", rsp->r[15]); break;
+		case CPUINFO_STR_REGISTER + RSP_R16:			sprintf(info->s, "R16: %08X", rsp->r[16]); break;
+		case CPUINFO_STR_REGISTER + RSP_R17:			sprintf(info->s, "R17: %08X", rsp->r[17]); break;
+		case CPUINFO_STR_REGISTER + RSP_R18:			sprintf(info->s, "R18: %08X", rsp->r[18]); break;
+		case CPUINFO_STR_REGISTER + RSP_R19:			sprintf(info->s, "R19: %08X", rsp->r[19]); break;
+		case CPUINFO_STR_REGISTER + RSP_R20:			sprintf(info->s, "R20: %08X", rsp->r[20]); break;
+		case CPUINFO_STR_REGISTER + RSP_R21:			sprintf(info->s, "R21: %08X", rsp->r[21]); break;
+		case CPUINFO_STR_REGISTER + RSP_R22:			sprintf(info->s, "R22: %08X", rsp->r[22]); break;
+		case CPUINFO_STR_REGISTER + RSP_R23:			sprintf(info->s, "R23: %08X", rsp->r[23]); break;
+		case CPUINFO_STR_REGISTER + RSP_R24:			sprintf(info->s, "R24: %08X", rsp->r[24]); break;
+		case CPUINFO_STR_REGISTER + RSP_R25:			sprintf(info->s, "R25: %08X", rsp->r[25]); break;
+		case CPUINFO_STR_REGISTER + RSP_R26:			sprintf(info->s, "R26: %08X", rsp->r[26]); break;
+		case CPUINFO_STR_REGISTER + RSP_R27:			sprintf(info->s, "R27: %08X", rsp->r[27]); break;
+		case CPUINFO_STR_REGISTER + RSP_R28:			sprintf(info->s, "R28: %08X", rsp->r[28]); break;
+		case CPUINFO_STR_REGISTER + RSP_R29:			sprintf(info->s, "R29: %08X", rsp->r[29]); break;
+		case CPUINFO_STR_REGISTER + RSP_R30:			sprintf(info->s, "R30: %08X", rsp->r[30]); break;
+		case CPUINFO_STR_REGISTER + RSP_R31:			sprintf(info->s, "R31: %08X", rsp->r[31]); break;
+		case CPUINFO_STR_REGISTER + RSP_SR:             sprintf(info->s, "SR: %08X",  rsp->sr);    break;
+		case CPUINFO_STR_REGISTER + RSP_NEXTPC:         sprintf(info->s, "NPC: %08X", rsp->nextpc);break;
+		case CPUINFO_STR_REGISTER + RSP_STEPCNT:        sprintf(info->s, "STEP: %d",  rsp->step_count);  break;
 	}
 }
+
+void rspdrc_flush_drc_cache(device_t *device)
+{
+}
+
+void rspdrc_set_options(device_t *device, UINT32 options)
+{
+}
+
+void rspdrc_add_imem(device_t *device, UINT32 *base)
+{
+}
+
+void rspdrc_add_dmem(device_t *device, UINT32 *base)
+{
+}
+
+DEFINE_LEGACY_CPU_DEVICE(RSP, rsp);
+
+#endif // USE_RSPDRC

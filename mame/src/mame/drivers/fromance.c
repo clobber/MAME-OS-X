@@ -39,42 +39,12 @@ Memo:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "fromance.h"
 #include "sound/ay8910.h"
 #include "sound/2413intf.h"
 #include "sound/msm5205.h"
-
-
-/* Local variables */
-static UINT8 fromance_directionflag;
-static UINT8 fromance_commanddata;
-static UINT8 fromance_portselect;
-
-static UINT8 fromance_adpcm_reset;
-static UINT8 fromance_adpcm_data;
-static UINT8 fromance_vclk_left;
-
-
-
-/*************************************
- *
- *  Machine init
- *
- *************************************/
-
-static MACHINE_RESET( fromance )
-{
-	fromance_directionflag = 0;
-	fromance_commanddata = 0;
-	fromance_portselect = 0;
-
-	fromance_adpcm_reset = 0;
-	fromance_adpcm_data = 0;
-	fromance_vclk_left = 0;
-}
-
+#include "includes/fromance.h"
 
 
 /*************************************
@@ -85,44 +55,55 @@ static MACHINE_RESET( fromance )
 
 static READ8_HANDLER( fromance_commanddata_r )
 {
-	return fromance_commanddata;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	return state->m_commanddata;
 }
 
 
 static TIMER_CALLBACK( deferred_commanddata_w )
 {
-	fromance_commanddata = param;
-	fromance_directionflag = 1;
+	fromance_state *state = machine.driver_data<fromance_state>();
+	state->m_commanddata = param;
+	state->m_directionflag = 1;
 }
 
 
 static WRITE8_HANDLER( fromance_commanddata_w )
 {
 	/* do this on a timer to let the slave CPU synchronize */
-	timer_call_after_resynch(space->machine, NULL, data, deferred_commanddata_w);
+	space->machine().scheduler().synchronize(FUNC(deferred_commanddata_w), data);
 }
 
 
 static READ8_HANDLER( fromance_busycheck_main_r )
 {
-	/* set a timer to force synchronization after the read */
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	fromance_state *state = space->machine().driver_data<fromance_state>();
 
-	if (!fromance_directionflag) return 0x00;		// standby
-	else return 0xff;								// busy
+	/* set a timer to force synchronization after the read */
+	space->machine().scheduler().synchronize();
+
+	if (!state->m_directionflag)
+		return 0x00;		// standby
+	else
+		return 0xff;		// busy
 }
 
 
 static READ8_HANDLER( fromance_busycheck_sub_r )
 {
-	if (fromance_directionflag) return 0xff;		// standby
-	else return 0x00;								// busy
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+
+	if (state->m_directionflag)
+		return 0xff;		// standby
+	else
+		return 0x00;		// busy
 }
 
 
 static WRITE8_HANDLER( fromance_busycheck_sub_w )
 {
-	fromance_directionflag = 0;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_directionflag = 0;
 }
 
 
@@ -135,9 +116,7 @@ static WRITE8_HANDLER( fromance_busycheck_sub_w )
 
 static WRITE8_HANDLER( fromance_rombank_w )
 {
-	UINT8 *ROM = memory_region(space->machine, "sub");
-
-	memory_set_bankptr(space->machine, 1, &ROM[0x010000 + (0x4000 * data)]);
+	memory_set_bank(space->machine(), "bank1", data);
 }
 
 
@@ -150,8 +129,9 @@ static WRITE8_HANDLER( fromance_rombank_w )
 
 static WRITE8_DEVICE_HANDLER( fromance_adpcm_reset_w )
 {
-	fromance_adpcm_reset = (data & 0x01);
-	fromance_vclk_left = 0;
+	fromance_state *state = device->machine().driver_data<fromance_state>();
+	state->m_adpcm_reset = (data & 0x01);
+	state->m_vclk_left = 0;
 
 	msm5205_reset_w(device, !(data & 0x01));
 }
@@ -159,28 +139,31 @@ static WRITE8_DEVICE_HANDLER( fromance_adpcm_reset_w )
 
 static WRITE8_HANDLER( fromance_adpcm_w )
 {
-	fromance_adpcm_data = data;
-	fromance_vclk_left = 2;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_adpcm_data = data;
+	state->m_vclk_left = 2;
 }
 
 
-static void fromance_adpcm_int(const device_config *device)
+static void fromance_adpcm_int( device_t *device )
 {
+	fromance_state *state = device->machine().driver_data<fromance_state>();
+
 	/* skip if we're reset */
-	if (!fromance_adpcm_reset)
+	if (!state->m_adpcm_reset)
 		return;
 
 	/* clock the data through */
-	if (fromance_vclk_left)
+	if (state->m_vclk_left)
 	{
-		msm5205_data_w(device, (fromance_adpcm_data >> 4));
-		fromance_adpcm_data <<= 4;
-		fromance_vclk_left--;
+		msm5205_data_w(device, (state->m_adpcm_data >> 4));
+		state->m_adpcm_data <<= 4;
+		state->m_vclk_left--;
 	}
 
 	/* generate an NMI if we're out of data */
-	if (!fromance_vclk_left)
-		cputag_set_input_line(device->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);
+	if (!state->m_vclk_left)
+		device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -193,24 +176,26 @@ static void fromance_adpcm_int(const device_config *device)
 
 static WRITE8_HANDLER( fromance_portselect_w )
 {
-	fromance_portselect = data;
+	fromance_state *state = space->machine().driver_data<fromance_state>();
+	state->m_portselect = data;
 }
 
 
 static READ8_HANDLER( fromance_keymatrix_r )
 {
+	fromance_state *state = space->machine().driver_data<fromance_state>();
 	int ret = 0xff;
 
-	if (fromance_portselect & 0x01)
-		ret &= input_port_read(space->machine, "KEY1");
-	if (fromance_portselect & 0x02)
-		ret &= input_port_read(space->machine, "KEY2");
-	if (fromance_portselect & 0x04)
-		ret &= input_port_read(space->machine, "KEY3");
-	if (fromance_portselect & 0x08)
-		ret &= input_port_read(space->machine, "KEY4");
-	if (fromance_portselect & 0x10)
-		ret &= input_port_read(space->machine, "KEY5");
+	if (state->m_portselect & 0x01)
+		ret &= input_port_read(space->machine(), "KEY1");
+	if (state->m_portselect & 0x02)
+		ret &= input_port_read(space->machine(), "KEY2");
+	if (state->m_portselect & 0x04)
+		ret &= input_port_read(space->machine(), "KEY3");
+	if (state->m_portselect & 0x08)
+		ret &= input_port_read(space->machine(), "KEY4");
+	if (state->m_portselect & 0x10)
+		ret &= input_port_read(space->machine(), "KEY5");
 
 	return ret;
 }
@@ -236,7 +221,7 @@ static WRITE8_HANDLER( fromance_coinctr_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( nekkyoku_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nekkyoku_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("SERVICE") AM_WRITE(fromance_portselect_w)
@@ -247,7 +232,7 @@ static ADDRESS_MAP_START( nekkyoku_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf005, 0xf005) AM_READ_PORT("DSW1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fromance_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fromance_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0x9e89, 0x9e89) AM_READNOP			// unknown (idolmj)
@@ -267,17 +252,17 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( nekkyoku_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nekkyoku_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xefff) AM_READWRITE(fromance_videoram_r, fromance_videoram_w)
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xffff) AM_READWRITE(fromance_paletteram_r, fromance_paletteram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fromance_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( fromance_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xcfff) AM_READWRITE(fromance_paletteram_r, fromance_paletteram_w)
 	AM_RANGE(0xd000, 0xffff) AM_READWRITE(fromance_videoram_r, fromance_videoram_w)
@@ -291,7 +276,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( nekkyoku_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( nekkyoku_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -302,10 +287,10 @@ static ADDRESS_MAP_START( nekkyoku_sub_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xe6, 0xe6) AM_READWRITE(fromance_commanddata_r, fromance_busycheck_sub_w)
 	AM_RANGE(0xe7, 0xe7) AM_DEVWRITE("msm", fromance_adpcm_reset_w)
 	AM_RANGE(0xe8, 0xe8) AM_WRITE(fromance_adpcm_w)
-	AM_RANGE(0xe9, 0xea) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0xe9, 0xea) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( idolmj_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( idolmj_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -316,10 +301,10 @@ static ADDRESS_MAP_START( idolmj_sub_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x26, 0x26) AM_READWRITE(fromance_commanddata_r, fromance_busycheck_sub_w)
 	AM_RANGE(0x27, 0x27) AM_DEVWRITE("msm", fromance_adpcm_reset_w)
 	AM_RANGE(0x28, 0x28) AM_WRITE(fromance_adpcm_w)
-	AM_RANGE(0x29, 0x2a) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x29, 0x2a) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fromance_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( fromance_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITE(fromance_crtc_data_w)
 	AM_RANGE(0x11, 0x11) AM_WRITE(fromance_crtc_register_w)
@@ -330,7 +315,7 @@ static ADDRESS_MAP_START( fromance_sub_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x26, 0x26) AM_READWRITE(fromance_commanddata_r, fromance_busycheck_sub_w)
 	AM_RANGE(0x27, 0x27) AM_DEVWRITE("msm", fromance_adpcm_reset_w)
 	AM_RANGE(0x28, 0x28) AM_WRITE(fromance_adpcm_w)
-	AM_RANGE(0x2a, 0x2b) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x2a, 0x2b) AM_DEVWRITE("ymsnd", ym2413_w)
 ADDRESS_MAP_END
 
 
@@ -973,118 +958,168 @@ static const msm5205_interface msm5205_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( nekkyoku )
+static MACHINE_START( fromance )
+{
+	fromance_state *state = machine.driver_data<fromance_state>();
+	UINT8 *ROM = machine.region("sub")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 0x100, &ROM[0x10000], 0x4000);
+
+	state->m_subcpu = machine.device("sub");
+
+	state->save_item(NAME(state->m_directionflag));
+	state->save_item(NAME(state->m_commanddata));
+	state->save_item(NAME(state->m_portselect));
+
+	state->save_item(NAME(state->m_adpcm_reset));
+	state->save_item(NAME(state->m_adpcm_data));
+	state->save_item(NAME(state->m_vclk_left));
+
+	/* video-related elements are saved in VIDEO_START */
+}
+
+static MACHINE_RESET( fromance )
+{
+	fromance_state *state = machine.driver_data<fromance_state>();
+	int i;
+
+	state->m_directionflag = 0;
+	state->m_commanddata = 0;
+	state->m_portselect = 0;
+
+	state->m_adpcm_reset = 0;
+	state->m_adpcm_data = 0;
+	state->m_vclk_left = 0;
+
+	state->m_flipscreen_old = -1;
+	state->m_scrollx_ofs = 0x159;
+	state->m_scrolly_ofs = 0x10;
+
+	state->m_selected_videoram = state->m_selected_paletteram = 0;
+	state->m_scrollx[0] = 0;
+	state->m_scrollx[1] = 0;
+	state->m_scrolly[0] = 0;
+	state->m_scrolly[1] = 0;
+	state->m_gfxreg = 0;
+	state->m_flipscreen = 0;
+	state->m_crtc_register = 0;
+
+	for (i = 0; i < 0x10; i++)
+		state->m_crtc_data[i] = 0;
+}
+
+static MACHINE_CONFIG_START( nekkyoku, fromance_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80,12000000/2)		/* 6.00 Mhz ? */
-	MDRV_CPU_PROGRAM_MAP(nekkyoku_main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80,12000000/2)		/* 6.00 Mhz ? */
+	MCFG_CPU_PROGRAM_MAP(nekkyoku_main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", Z80,12000000/2)		/* 6.00 Mhz ? */
-	MDRV_CPU_PROGRAM_MAP(nekkyoku_sub_map)
-	MDRV_CPU_IO_MAP(nekkyoku_sub_io_map)
+	MCFG_CPU_ADD("sub", Z80,12000000/2)		/* 6.00 Mhz ? */
+	MCFG_CPU_PROGRAM_MAP(nekkyoku_sub_map)
+	MCFG_CPU_IO_MAP(nekkyoku_sub_io_map)
 
-	MDRV_MACHINE_RESET(fromance)
+	MCFG_MACHINE_START(fromance)
+	MCFG_MACHINE_RESET(fromance)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE_STATIC(fromance)
 
-	MDRV_GFXDECODE(fromance)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(fromance)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(nekkyoku)
-	MDRV_VIDEO_UPDATE(fromance)
+	MCFG_VIDEO_START(nekkyoku)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 12000000/6)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("aysnd", AY8910, 12000000/6)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("msm", MSM5205, 384000)
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( idolmj )
+static MACHINE_CONFIG_START( idolmj, fromance_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80,12000000/2)		/* 6.00 Mhz ? */
-	MDRV_CPU_PROGRAM_MAP(fromance_main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80,12000000/2)		/* 6.00 Mhz ? */
+	MCFG_CPU_PROGRAM_MAP(fromance_main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", Z80,12000000/2)		/* 6.00 Mhz ? */
-	MDRV_CPU_PROGRAM_MAP(fromance_sub_map)
-	MDRV_CPU_IO_MAP(idolmj_sub_io_map)
+	MCFG_CPU_ADD("sub", Z80,12000000/2)		/* 6.00 Mhz ? */
+	MCFG_CPU_PROGRAM_MAP(fromance_sub_map)
+	MCFG_CPU_IO_MAP(idolmj_sub_io_map)
 
-	MDRV_MACHINE_RESET(fromance)
+	MCFG_MACHINE_START(fromance)
+	MCFG_MACHINE_RESET(fromance)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE_STATIC(fromance)
 
-	MDRV_GFXDECODE(fromance)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(fromance)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(fromance)
-	MDRV_VIDEO_UPDATE(fromance)
+	MCFG_VIDEO_START(fromance)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 12000000/6)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("aysnd", AY8910, 12000000/6)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("msm", MSM5205, 384000)
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( fromance )
+static MACHINE_CONFIG_START( fromance, fromance_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80,12000000/2)		/* 6.00 Mhz ? */
-	MDRV_CPU_PROGRAM_MAP(fromance_main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80,12000000/2)		/* 6.00 Mhz ? */
+	MCFG_CPU_PROGRAM_MAP(fromance_main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", Z80,12000000/2)		/* 6.00 Mhz ? */
-	MDRV_CPU_PROGRAM_MAP(fromance_sub_map)
-	MDRV_CPU_IO_MAP(fromance_sub_io_map)
+	MCFG_CPU_ADD("sub", Z80,12000000/2)		/* 6.00 Mhz ? */
+	MCFG_CPU_PROGRAM_MAP(fromance_sub_map)
+	MCFG_CPU_IO_MAP(fromance_sub_io_map)
 
-	MDRV_MACHINE_RESET(fromance)
+	MCFG_MACHINE_START(fromance)
+	MCFG_MACHINE_RESET(fromance)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 352-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE_STATIC(fromance)
 
-	MDRV_GFXDECODE(fromance)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(fromance)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(fromance)
-	MDRV_VIDEO_UPDATE(fromance)
+	MCFG_VIDEO_START(fromance)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
+	MCFG_SOUND_ADD("ymsnd", YM2413, 3579545)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("msm", MSM5205, 384000)
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_CONFIG_END
 
 
 
@@ -1099,7 +1134,7 @@ ROM_START( nekkyoku )
 	ROM_LOAD( "1-ic1a.bin",  0x000000, 0x008000, CRC(bb52d959) SHA1(1dfeb108879978dbcc1398e64b26c36505bee6d0) )
 	ROM_LOAD( "2-ic2a.bin",  0x008000, 0x008000, CRC(61848d8b) SHA1(72048c53e4364544ca8a79e213db9d02b7b4778f) )
 
-	ROM_REGION( 0x210000, "sub", 0 )
+	ROM_REGION( 0x410000, "sub", 0 )
 	ROM_LOAD( "3-ic3a.bin",  0x000000, 0x008000, CRC(a13da011) SHA1(601180f65ba42b7b1b6b058c0eccf88af1b430ca) )
 	ROM_LOAD( "ic4a.bin",    0x010000, 0x080000, CRC(1cc4d31b) SHA1(6ea8ec3d6b3bbffbbab3460e9c5dae74195eafc6) )
 	ROM_LOAD( "ic5a.bin",    0x090000, 0x080000, CRC(8b0945a1) SHA1(c52f77d817c687afa0cd93e7725cdf2021158a11) )
@@ -1299,11 +1334,11 @@ ROM_END
  *
  *************************************/
 
-GAME( 1988, nekkyoku,        0, nekkyoku, nekkyoku, 0, ROT0, "Video System Co.", "Rettou Juudan Nekkyoku Janshi - Higashi Nippon Hen (Japan)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1988, idolmj,          0, idolmj,   idolmj,   0, ROT0, "System Service", "Idol-Mahjong Housoukyoku (Japan)", 0 )
-GAME( 1989, mjnatsu,         0, fromance, mjnatsu,  0, ROT0, "Video System Co.", "Mahjong Natsu Monogatari (Japan)", 0 )
-GAME( 1989, natsuiro,  mjnatsu, fromance, mjnatsu,  0, ROT0, "Video System Co.", "Natsuiro Mahjong (Japan)", 0 )
-GAME( 1989, mfunclub,        0, fromance, mfunclub, 0, ROT0, "Video System Co.", "Mahjong Fun Club - Idol Saizensen (Japan)", 0 )
-GAME( 1990, daiyogen,        0, fromance, daiyogen, 0, ROT0, "Video System Co.", "Mahjong Daiyogen (Japan)", 0 )
-GAME( 1991, nmsengen,        0, fromance, nmsengen, 0, ROT0, "Video System Co.", "Nekketsu Mahjong Sengen! AFTER 5 (Japan)", 0 )
-GAME( 1991, fromance,        0, fromance, fromance, 0, ROT0, "Video System Co.", "Idol-Mahjong Final Romance (Japan)", 0 )
+GAME( 1988, nekkyoku,  0,       nekkyoku, nekkyoku, 0, ROT0, "Video System Co.", "Rettou Juudan Nekkyoku Janshi - Higashi Nippon Hen (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1988, idolmj,    0,       idolmj,   idolmj,   0, ROT0, "System Service", "Idol-Mahjong Housoukyoku (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, mjnatsu,   0,       fromance, mjnatsu,  0, ROT0, "Video System Co.", "Mahjong Natsu Monogatari (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, natsuiro,  mjnatsu, fromance, mjnatsu,  0, ROT0, "Video System Co.", "Natsuiro Mahjong (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, mfunclub,  0,       fromance, mfunclub, 0, ROT0, "Video System Co.", "Mahjong Fun Club - Idol Saizensen (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1990, daiyogen,  0,       fromance, daiyogen, 0, ROT0, "Video System Co.", "Mahjong Daiyogen (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1991, nmsengen,  0,       fromance, nmsengen, 0, ROT0, "Video System Co.", "Nekketsu Mahjong Sengen! AFTER 5 (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1991, fromance,  0,       fromance, fromance, 0, ROT0, "Video System Co.", "Idol-Mahjong Final Romance (Japan)", GAME_SUPPORTS_SAVE )

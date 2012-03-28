@@ -19,22 +19,13 @@ blocken:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/okim6295.h"
 #include "sound/2612intf.h"
-
-extern UINT16 *shangha3_ram;
-extern size_t shangha3_ram_size;
-extern int shangha3_do_shadows;
-
-WRITE16_HANDLER( shangha3_flipscreen_w );
-WRITE16_HANDLER( shangha3_gfxlist_addr_w );
-WRITE16_HANDLER( shangha3_blitter_go_w );
-VIDEO_START( shangha3 );
-VIDEO_UPDATE( shangha3 );
+#include "includes/shangha3.h"
 
 
 
@@ -53,22 +44,22 @@ write    read
 */
 static READ16_HANDLER( shangha3_prot_r )
 {
-	static int count;
+	shangha3_state *state = space->machine().driver_data<shangha3_state>();
 	static const int result[] = { 0x0,0x1,0x3,0x7,0xf,0xe,0xc,0x8,0x0};
 
-	logerror("PC %04x: read 20004e\n",cpu_get_pc(space->cpu));
+	logerror("PC %04x: read 20004e\n",cpu_get_pc(&space->device()));
 
-	return result[count++ % 9];
+	return result[state->m_prot_count++ % 9];
 }
 static WRITE16_HANDLER( shangha3_prot_w )
 {
-	logerror("PC %04x: write %02x to 20004e\n",cpu_get_pc(space->cpu),data);
+	logerror("PC %04x: write %02x to 20004e\n",cpu_get_pc(&space->device()),data);
 }
 
 
 static READ16_HANDLER( heberpop_gfxrom_r )
 {
-	UINT8 *ROM = memory_region(space->machine, "gfx1");
+	UINT8 *ROM = space->machine().region("gfx1")->base();
 
 	return ROM[2*offset] | (ROM[2*offset+1] << 8);
 }
@@ -79,10 +70,10 @@ static WRITE16_HANDLER( shangha3_coinctrl_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_lockout_w(0,~data & 0x0400);
-		coin_lockout_w(1,~data & 0x0400);
-		coin_counter_w(0,data & 0x0100);
-		coin_counter_w(1,data & 0x0200);
+		coin_lockout_w(space->machine(), 0,~data & 0x0400);
+		coin_lockout_w(space->machine(), 1,~data & 0x0400);
+		coin_counter_w(space->machine(), 0,data & 0x0100);
+		coin_counter_w(space->machine(), 1,data & 0x0200);
 	}
 }
 
@@ -91,12 +82,12 @@ static WRITE16_HANDLER( heberpop_coinctrl_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		/* the sound ROM bank is selected by the main CPU! */
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"),(data & 0x08) ? 0x40000 : 0x00000);
+		space->machine().device<okim6295_device>("oki")->set_bank_base((data & 0x08) ? 0x40000 : 0x00000);
 
-		coin_lockout_w(0,~data & 0x04);
-		coin_lockout_w(1,~data & 0x04);
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_lockout_w(space->machine(), 0,~data & 0x04);
+		coin_lockout_w(space->machine(), 1,~data & 0x04);
+		coin_counter_w(space->machine(), 0,data & 0x01);
+		coin_counter_w(space->machine(), 1,data & 0x02);
 	}
 }
 
@@ -105,12 +96,12 @@ static WRITE16_HANDLER( blocken_coinctrl_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		/* the sound ROM bank is selected by the main CPU! */
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), ((data >> 4) & 3) * 0x40000);
+		space->machine().device<okim6295_device>("oki")->set_bank_base(((data >> 4) & 3) * 0x40000);
 
-		coin_lockout_w(0,~data & 0x04);
-		coin_lockout_w(1,~data & 0x04);
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_lockout_w(space->machine(), 0,~data & 0x04);
+		coin_lockout_w(space->machine(), 1,~data & 0x04);
+		coin_counter_w(space->machine(), 0,data & 0x01);
+		coin_counter_w(space->machine(), 1,data & 0x02);
 	}
 }
 
@@ -120,33 +111,33 @@ static WRITE16_HANDLER( heberpop_sound_command_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data & 0xff);
-		cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);	/* RST 38h */
+		cputag_set_input_line_and_vector(space->machine(), "audiocpu", 0, HOLD_LINE, 0xff);	/* RST 38h */
 	}
 }
 
 
 
-static ADDRESS_MAP_START( shangha3_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( shangha3_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x200002, 0x200003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x200008, 0x200009) AM_WRITE(shangha3_blitter_go_w)
 	AM_RANGE(0x20000a, 0x20000b) AM_WRITENOP	/* irq ack? */
 	AM_RANGE(0x20000c, 0x20000d) AM_WRITE(shangha3_coinctrl_w)
-	AM_RANGE(0x20001e, 0x20001f) AM_DEVREAD8("ay", ay8910_r, 0x00ff)
-	AM_RANGE(0x20002e, 0x20002f) AM_DEVWRITE8("ay", ay8910_data_w, 0x00ff)
-	AM_RANGE(0x20003e, 0x20003f) AM_DEVWRITE8("ay", ay8910_address_w, 0x00ff)
+	AM_RANGE(0x20001e, 0x20001f) AM_DEVREAD8("aysnd", ay8910_r, 0x00ff)
+	AM_RANGE(0x20002e, 0x20002f) AM_DEVWRITE8("aysnd", ay8910_data_w, 0x00ff)
+	AM_RANGE(0x20003e, 0x20003f) AM_DEVWRITE8("aysnd", ay8910_address_w, 0x00ff)
 	AM_RANGE(0x20004e, 0x20004f) AM_READWRITE(shangha3_prot_r,shangha3_prot_w)
-	AM_RANGE(0x20006e, 0x20006f) AM_DEVREADWRITE8("oki", okim6295_r,okim6295_w, 0x00ff)
-	AM_RANGE(0x300000, 0x30ffff) AM_RAM AM_BASE(&shangha3_ram) AM_SIZE(&shangha3_ram_size)	/* gfx & work ram */
+	AM_RANGE(0x20006e, 0x20006f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x300000, 0x30ffff) AM_RAM AM_BASE_SIZE_MEMBER(shangha3_state, m_ram, m_ram_size)	/* gfx & work ram */
 	AM_RANGE(0x340000, 0x340001) AM_WRITE(shangha3_flipscreen_w)
 	AM_RANGE(0x360000, 0x360001) AM_WRITE(shangha3_gfxlist_addr_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( heberpop_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( heberpop_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x200002, 0x200003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x200004, 0x200005) AM_READ_PORT("DSW")
@@ -154,13 +145,13 @@ static ADDRESS_MAP_START( heberpop_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x20000a, 0x20000b) AM_WRITENOP	/* irq ack? */
 	AM_RANGE(0x20000c, 0x20000d) AM_WRITE(heberpop_coinctrl_w)
 	AM_RANGE(0x20000e, 0x20000f) AM_WRITE(heberpop_sound_command_w)
-	AM_RANGE(0x300000, 0x30ffff) AM_RAM AM_BASE(&shangha3_ram) AM_SIZE(&shangha3_ram_size)	/* gfx & work ram */
+	AM_RANGE(0x300000, 0x30ffff) AM_RAM AM_BASE_SIZE_MEMBER(shangha3_state, m_ram, m_ram_size)	/* gfx & work ram */
 	AM_RANGE(0x340000, 0x340001) AM_WRITE(shangha3_flipscreen_w)
 	AM_RANGE(0x360000, 0x360001) AM_WRITE(shangha3_gfxlist_addr_w)
 	AM_RANGE(0x800000, 0xb7ffff) AM_READ(heberpop_gfxrom_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( blocken_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( blocken_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x100002, 0x100003) AM_READ_PORT("SYSTEM")
@@ -169,23 +160,23 @@ static ADDRESS_MAP_START( blocken_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x10000a, 0x10000b) AM_WRITENOP	/* irq ack? */
 	AM_RANGE(0x10000c, 0x10000d) AM_WRITE(blocken_coinctrl_w)
 	AM_RANGE(0x10000e, 0x10000f) AM_WRITE(heberpop_sound_command_w)
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x300000, 0x30ffff) AM_RAM AM_BASE(&shangha3_ram) AM_SIZE(&shangha3_ram_size)	/* gfx & work ram */
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x300000, 0x30ffff) AM_RAM AM_BASE_SIZE_MEMBER(shangha3_state, m_ram, m_ram_size)	/* gfx & work ram */
 	AM_RANGE(0x340000, 0x340001) AM_WRITE(shangha3_flipscreen_w)
 	AM_RANGE(0x360000, 0x360001) AM_WRITE(shangha3_gfxlist_addr_w)
 	AM_RANGE(0x800000, 0xb7ffff) AM_READ(heberpop_gfxrom_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( heberpop_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( heberpop_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( heberpop_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( heberpop_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym3438_r, ym3438_w)
-	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym3438_r, ym3438_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xc0, 0xc0) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -465,9 +456,9 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL
 };
 
-static void irqhandler(const device_config *device, int linestate)
+static void irqhandler(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_NMI, linestate);
+	cputag_set_input_line(device->machine(), "audiocpu", INPUT_LINE_NMI, linestate);
 }
 
 static const ym3438_interface ym3438_config =
@@ -476,122 +467,116 @@ static const ym3438_interface ym3438_config =
 };
 
 
-static MACHINE_DRIVER_START( shangha3 )
+static MACHINE_CONFIG_START( shangha3, shangha3_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 8000000)
-	MDRV_CPU_PROGRAM_MAP(shangha3_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 8000000)
+	MCFG_CPU_PROGRAM_MAP(shangha3_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(24*16, 16*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*16, 24*16-1, 1*16, 15*16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(24*16, 16*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*16, 24*16-1, 1*16, 15*16-1)
+	MCFG_SCREEN_UPDATE_STATIC(shangha3)
 
-	MDRV_GFXDECODE(shangha3)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(shangha3)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(shangha3)
-	MDRV_VIDEO_UPDATE(shangha3)
+	MCFG_VIDEO_START(shangha3)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( heberpop )
+static MACHINE_CONFIG_START( heberpop, shangha3_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 8000000)
-	MDRV_CPU_PROGRAM_MAP(heberpop_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 8000000)
+	MCFG_CPU_PROGRAM_MAP(heberpop_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 6000000)	/* 6 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(heberpop_sound_map)
-	MDRV_CPU_IO_MAP(heberpop_sound_io_map)	/* NMI triggered by YM3438 */
+	MCFG_CPU_ADD("audiocpu", Z80, 6000000)	/* 6 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(heberpop_sound_map)
+	MCFG_CPU_IO_MAP(heberpop_sound_io_map)	/* NMI triggered by YM3438 */
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(24*16, 16*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*16, 24*16-1, 1*16, 15*16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(24*16, 16*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*16, 24*16-1, 1*16, 15*16-1)
+	MCFG_SCREEN_UPDATE_STATIC(shangha3)
 
-	MDRV_GFXDECODE(shangha3)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(shangha3)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(shangha3)
-	MDRV_VIDEO_UPDATE(shangha3)
+	MCFG_VIDEO_START(shangha3)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3438, 8000000)
-	MDRV_SOUND_CONFIG(ym3438_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.40)
-	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM3438, 8000000)
+	MCFG_SOUND_CONFIG(ym3438_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.40)
+	MCFG_SOUND_ROUTE(1, "mono", 0.40)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( blocken )
+static MACHINE_CONFIG_START( blocken, shangha3_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 8000000)
-	MDRV_CPU_PROGRAM_MAP(blocken_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 8000000)
+	MCFG_CPU_PROGRAM_MAP(blocken_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 6000000)	/* 6 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(heberpop_sound_map)
-	MDRV_CPU_IO_MAP(heberpop_sound_io_map)	/* NMI triggered by YM3438 */
+	MCFG_CPU_ADD("audiocpu", Z80, 6000000)	/* 6 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(heberpop_sound_map)
+	MCFG_CPU_IO_MAP(heberpop_sound_io_map)	/* NMI triggered by YM3438 */
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(24*16, 16*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*16, 24*16-1, 1*16, 15*16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(24*16, 16*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*16, 24*16-1, 1*16, 15*16-1)
+	MCFG_SCREEN_UPDATE_STATIC(shangha3)
 
-	MDRV_GFXDECODE(shangha3)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(shangha3)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(shangha3)
-	MDRV_VIDEO_UPDATE(shangha3)
+	MCFG_VIDEO_START(shangha3)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3438, 8000000)
-	MDRV_SOUND_CONFIG(ym3438_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.40)
-	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM3438, 8000000)
+	MCFG_SOUND_CONFIG(ym3438_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.40)
+	MCFG_SOUND_ROUTE(1, "mono", 0.40)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -650,7 +635,7 @@ ROM_START( blocken )
 	/* 280000-37ffff empty */
 
 	ROM_REGION( 0x80000, "samples", 0 )	/* samples for M6295 */
- 	ROM_LOAD( "ic53.bin",     0x0000, 0x80000, CRC(86108c56) SHA1(aa405fa2eec5cc178ef6226f229a12dac09504f0) )
+	ROM_LOAD( "ic53.bin",     0x0000, 0x80000, CRC(86108c56) SHA1(aa405fa2eec5cc178ef6226f229a12dac09504f0) )
 
 	ROM_REGION( 0x100000, "oki", 0 )
 	/* $00000-$20000 stays the same in all sound banks, */
@@ -669,15 +654,18 @@ ROM_END
 
 static DRIVER_INIT( shangha3 )
 {
-	shangha3_do_shadows = 1;
+	shangha3_state *state = machine.driver_data<shangha3_state>();
+
+	state->m_do_shadows = 1;
 }
 
 static DRIVER_INIT( heberpop )
 {
-	shangha3_do_shadows = 0;
+	shangha3_state *state = machine.driver_data<shangha3_state>();
+
+	state->m_do_shadows = 0;
 }
 
 GAME( 1993, shangha3, 0, shangha3, shangha3, shangha3, ROT0, "Sunsoft", "Shanghai III (Japan)", 0 )
 GAME( 1994, heberpop, 0, heberpop, heberpop, heberpop, ROT0, "Sunsoft / Atlus", "Hebereke no Popoon (Japan)", 0 )
 GAME( 1994, blocken,  0, blocken,  blocken,  heberpop, ROT0, "KID / Visco", "Blocken (Japan)", 0 )
-

@@ -7,7 +7,7 @@
 
 **********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "tms9927.h"
 
 
@@ -35,7 +35,7 @@ struct _tms9927_state
 {
 	/* driver-controlled state */
 	const tms9927_interface *intf;
-	const device_config *screen;
+	screen_device *screen;
 	const UINT8 *selfload;
 
 	/* live state */
@@ -43,7 +43,7 @@ struct _tms9927_state
 	UINT8	reg[9];
 	UINT8	start_datarow;
 	UINT8	reset;
-	UINT8 	hpixels_per_column;
+	UINT8	hpixels_per_column;
 
 	/* derived state; no need to save */
 	UINT8	valid_config;
@@ -52,30 +52,29 @@ struct _tms9927_state
 };
 
 
-static STATE_POSTLOAD( tms9927_state_save_postload );
+static void tms9927_state_save_postload(tms9927_state *state);
 static void recompute_parameters(tms9927_state *tms, int postload);
 
 
-tms9927_interface tms9927_null_interface = { 0 };
+const tms9927_interface tms9927_null_interface = { 0 };
 
 
 /* makes sure that the passed in device is the right type */
-INLINE tms9927_state *get_safe_token(const device_config *device)
+INLINE tms9927_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == TMS9927);
-	return (tms9927_state *)device->token;
+	assert(device->type() == TMS9927);
+	return (tms9927_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
-static STATE_POSTLOAD( tms9927_state_save_postload )
+static void tms9927_state_save_postload(tms9927_state *state)
 {
-	recompute_parameters((tms9927_state *)param, TRUE);
+	recompute_parameters(state, TRUE);
 }
 
 
-static void generic_access(const device_config *device, offs_t offset)
+static void generic_access(device_t *device, offs_t offset)
 {
 	tms9927_state *tms = get_safe_token(device);
 
@@ -103,21 +102,21 @@ static void generic_access(const device_config *device, offs_t offset)
 		case 0x0a:	/* Reset */
 			if (!tms->reset)
 			{
-				video_screen_update_now(tms->screen);
+				tms->screen->update_now();
 				tms->reset = TRUE;
 			}
 			break;
 
 		case 0x0b:	/* Up scroll */
 mame_printf_debug("Up scroll\n");
-			video_screen_update_now(tms->screen);
+			tms->screen->update_now();
 			tms->start_datarow = (tms->start_datarow + 1) % DATA_ROWS_PER_FRAME(tms);
 			break;
 
 		case 0x0e:	/* Start timing chain */
 			if (tms->reset)
 			{
-				video_screen_update_now(tms->screen);
+				tms->screen->update_now();
 				tms->reset = FALSE;
 				recompute_parameters(tms, FALSE);
 			}
@@ -175,30 +174,30 @@ READ8_DEVICE_HANDLER( tms9927_r )
 }
 
 
-int tms9927_screen_reset(const device_config *device)
+int tms9927_screen_reset(device_t *device)
 {
 	tms9927_state *tms = get_safe_token(device);
 	return tms->reset;
 }
 
 
-int tms9927_upscroll_offset(const device_config *device)
+int tms9927_upscroll_offset(device_t *device)
 {
 	tms9927_state *tms = get_safe_token(device);
 	return tms->start_datarow;
 }
 
 
-int tms9927_cursor_bounds(const device_config *device, rectangle *bounds)
+int tms9927_cursor_bounds(device_t *device, rectangle &bounds)
 {
 	tms9927_state *tms = get_safe_token(device);
 	int cursorx = CURSOR_CHAR_ADDRESS(tms);
 	int cursory = CURSOR_ROW_ADDRESS(tms);
 
-	bounds->min_x = cursorx * tms->hpixels_per_column;
-	bounds->max_x = bounds->min_x + tms->hpixels_per_column - 1;
-	bounds->min_y = cursory * SCANS_PER_DATA_ROW(tms);
-	bounds->max_y = bounds->min_y + SCANS_PER_DATA_ROW(tms) - 1;
+	bounds.min_x = cursorx * tms->hpixels_per_column;
+	bounds.max_x = bounds.min_x + tms->hpixels_per_column - 1;
+	bounds.min_y = cursory * SCANS_PER_DATA_ROW(tms);
+	bounds.max_y = bounds.min_y + SCANS_PER_DATA_ROW(tms) - 1;
 
 	return (cursorx < HCOUNT(tms) && cursory <= LAST_DISP_DATA_ROW(tms));
 }
@@ -241,14 +240,11 @@ static void recompute_parameters(tms9927_state *tms, int postload)
 
 	/* create a visible area */
 	/* fix me: how do the offsets fit in here? */
-	visarea.min_x = 0;
-	visarea.max_x = tms->visible_hpix - 1;
-	visarea.min_y = 0;
-	visarea.max_y = tms->visible_vpix - 1;
+	visarea.set(0, tms->visible_hpix - 1, 0, tms->visible_vpix - 1);
 
 	refresh = HZ_TO_ATTOSECONDS(tms->clock) * tms->total_hpix * tms->total_vpix;
 
-	video_screen_configure(tms->screen, tms->total_hpix, tms->total_vpix, &visarea, refresh);
+	tms->screen->configure(tms->total_hpix, tms->total_vpix, visarea, refresh);
 }
 
 
@@ -259,39 +255,38 @@ static DEVICE_START( tms9927 )
 
 	/* validate arguments */
 	assert(device != NULL);
-	assert(device->tag != NULL);
 
-	tms->intf = (const tms9927_interface *)device->static_config;
+	tms->intf = (const tms9927_interface *)device->static_config();
 
 	if (tms->intf != NULL)
 	{
-		assert(device->clock > 0);
+		assert(device->clock() > 0);
 		assert(tms->intf->hpixels_per_column > 0);
 
 		/* copy the initial parameters */
-		tms->clock = device->clock;
+		tms->clock = device->clock();
 		tms->hpixels_per_column = tms->intf->hpixels_per_column;
 
 		/* get the screen device */
-		tms->screen = devtag_get_device(device->machine, tms->intf->screen_tag);
+		tms->screen = downcast<screen_device *>(device->machine().device(tms->intf->screen_tag));
 		assert(tms->screen != NULL);
 
 		/* get the self-load PROM */
 		if (tms->intf->selfload_region != NULL)
 		{
-			tms->selfload = memory_region(device->machine, tms->intf->selfload_region);
+			tms->selfload = device->machine().region(tms->intf->selfload_region)->base();
 			assert(tms->selfload != NULL);
 		}
 	}
 
 	/* register for state saving */
-	state_save_register_postload(device->machine, tms9927_state_save_postload, tms);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(tms9927_state_save_postload), tms));
 
-	state_save_register_device_item(device, 0, tms->clock);
-	state_save_register_device_item_array(device, 0, tms->reg);
-	state_save_register_device_item(device, 0, tms->start_datarow);
-	state_save_register_device_item(device, 0, tms->reset);
-	state_save_register_device_item(device, 0, tms->hpixels_per_column);
+	device->save_item(NAME(tms->clock));
+	device->save_item(NAME(tms->reg));
+	device->save_item(NAME(tms->start_datarow));
+	device->save_item(NAME(tms->reset));
+	device->save_item(NAME(tms->hpixels_per_column));
 }
 
 
@@ -320,7 +315,6 @@ DEVICE_GET_INFO( tms9927 )
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(tms9927_state);			break;
 		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;								break;
-		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_PERIPHERAL;			break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(tms9927);	break;
@@ -362,3 +356,9 @@ DEVICE_GET_INFO( crt5057 )
 		default:										DEVICE_GET_INFO_CALL(tms9927);				break;
 	}
 }
+
+
+DEFINE_LEGACY_DEVICE(TMS9927, tms9927);
+DEFINE_LEGACY_DEVICE(CRT5027, crt5027);
+DEFINE_LEGACY_DEVICE(CRT5037, crt5037);
+DEFINE_LEGACY_DEVICE(CRT5057, crt5057);

@@ -6,50 +6,37 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/konami/konami.h"
 #include "cpu/z80/z80.h"
 #include "sound/3812intf.h"
 #include "sound/k007232.h"
 #include "sound/k051649.h"
-#include "konamipt.h"
+#include "video/konicdev.h"
+#include "includes/konamipt.h"
+#include "includes/hcastle.h"
 
-PALETTE_INIT( hcastle );
-VIDEO_UPDATE( hcastle );
-VIDEO_START( hcastle );
-
-extern UINT8 *hcastle_pf1_videoram,*hcastle_pf2_videoram;
-
-WRITE8_HANDLER( hcastle_pf1_video_w );
-WRITE8_HANDLER( hcastle_pf2_video_w );
-READ8_HANDLER( hcastle_gfxbank_r );
-WRITE8_HANDLER( hcastle_gfxbank_w );
-WRITE8_HANDLER( hcastle_pf1_control_w );
-WRITE8_HANDLER( hcastle_pf2_control_w );
 
 static WRITE8_HANDLER( hcastle_bankswitch_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
-	int bankaddress;
-
-	bankaddress = 0x10000 + (data & 0x1f) * 0x2000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bank(space->machine(), "bank1", data & 0x1f);
 }
 
 static WRITE8_HANDLER( hcastle_soundirq_w )
 {
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE );
+	hcastle_state *state = space->machine().driver_data<hcastle_state>();
+	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( hcastle_coin_w )
 {
-	coin_counter_w(0,data & 0x40);
-	coin_counter_w(1,data & 0x80);
+	coin_counter_w(space->machine(), 0, data & 0x40);
+	coin_counter_w(space->machine(), 1, data & 0x80);
 }
 
 
 
-static ADDRESS_MAP_START( hcastle_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hcastle_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0007) AM_WRITE(hcastle_pf1_control_w)
 	AM_RANGE(0x0020, 0x003f) AM_RAM	/* rowscroll? */
 	AM_RANGE(0x0200, 0x0207) AM_WRITE(hcastle_pf2_control_w)
@@ -65,13 +52,13 @@ static ADDRESS_MAP_START( hcastle_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0414, 0x0414) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0415, 0x0415) AM_READ_PORT("DSW2")
 	AM_RANGE(0x0418, 0x0418) AM_READWRITE(hcastle_gfxbank_r, hcastle_gfxbank_w)
-	AM_RANGE(0x0600, 0x06ff) AM_RAM AM_BASE(&paletteram)
+	AM_RANGE(0x0600, 0x06ff) AM_RAM AM_BASE_MEMBER(hcastle_state, m_paletteram)
 	AM_RANGE(0x0700, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x2fff) AM_RAM_WRITE(hcastle_pf1_video_w) AM_BASE(&hcastle_pf1_videoram)
-	AM_RANGE(0x3000, 0x3fff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x4000, 0x4fff) AM_RAM_WRITE(hcastle_pf2_video_w) AM_BASE(&hcastle_pf2_videoram)
-	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_BASE(&spriteram_2) AM_SIZE(&spriteram_2_size)
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM_WRITE(hcastle_pf1_video_w) AM_BASE_MEMBER(hcastle_state, m_pf1_videoram)
+	AM_RANGE(0x3000, 0x3fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x4000, 0x4fff) AM_RAM_WRITE(hcastle_pf2_video_w) AM_BASE_MEMBER(hcastle_state, m_pf2_videoram)
+	AM_RANGE(0x5000, 0x5fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -84,14 +71,15 @@ static WRITE8_DEVICE_HANDLER( sound_bank_w )
 	k007232_set_bank(device, bank_A, bank_B );
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x9800, 0x987f) AM_DEVWRITE("konami2", k051649_waveform_w)
-	AM_RANGE(0x9880, 0x9889) AM_DEVWRITE("konami2", k051649_frequency_w)
-	AM_RANGE(0x988a, 0x988e) AM_DEVWRITE("konami2", k051649_volume_w)
-	AM_RANGE(0x988f, 0x988f) AM_DEVWRITE("konami2", k051649_keyonoff_w)
-	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x9800, 0x987f) AM_DEVREADWRITE("konami2", k051649_waveform_r, k051649_waveform_w)
+	AM_RANGE(0x9880, 0x9889) AM_DEVWRITE(    "konami2", k051649_frequency_w)
+	AM_RANGE(0x988a, 0x988e) AM_DEVWRITE(    "konami2", k051649_volume_w)
+	AM_RANGE(0x988f, 0x988f) AM_DEVWRITE(    "konami2", k051649_keyonoff_w)
+	AM_RANGE(0x98e0, 0x98ff) AM_DEVREADWRITE("konami2", k051649_test_r, k051649_test_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("konami1", k007232_r, k007232_w)
 	AM_RANGE(0xc000, 0xc000) AM_DEVWRITE("konami1", sound_bank_w) /* 7232 bankswitch */
 	AM_RANGE(0xd000, 0xd000) AM_READ(soundlatch_r)
@@ -167,15 +155,16 @@ GFXDECODE_END
 
 /*****************************************************************************/
 
-static void irqhandler(const device_config *device, int linestate)
+static void irqhandler(device_t *device, int linestate)
 {
-//  cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
+//  hcastle_state *state = device->machine().driver_data<hcastle_state>();
+//  cputag_set_input_line(state->m_audiocpu, 0, linestate);
 }
 
-static void volume_callback(const device_config *device, int v)
+static void volume_callback(device_t *device, int v)
 {
-	k007232_set_volume(device,0,(v >> 4) * 0x11,0);
-	k007232_set_volume(device,1,0,(v & 0x0f) * 0x11);
+	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
+	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
 }
 
 static const k007232_interface k007232_config =
@@ -188,48 +177,82 @@ static const ym3812_interface ym3812_config =
 	irqhandler
 };
 
-static MACHINE_DRIVER_START( hcastle )
+static MACHINE_START( hcastle )
+{
+	hcastle_state *state = machine.driver_data<hcastle_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 16, &ROM[0x10000], 0x2000);
+
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007121_1 = machine.device("k007121_1");
+	state->m_k007121_2 = machine.device("k007121_2");
+
+	state->save_item(NAME(state->m_pf2_bankbase));
+	state->save_item(NAME(state->m_pf1_bankbase));
+	state->save_item(NAME(state->m_gfx_bank));
+	state->save_item(NAME(state->m_old_pf1));
+	state->save_item(NAME(state->m_old_pf2));
+}
+
+static MACHINE_RESET( hcastle )
+{
+	hcastle_state *state = machine.driver_data<hcastle_state>();
+
+	state->m_pf2_bankbase = 0;
+	state->m_pf1_bankbase = 0;
+	state->m_gfx_bank = 0;
+	state->m_old_pf1 = -1;
+	state->m_old_pf2 = -1;
+}
+
+static MACHINE_CONFIG_START( hcastle, hcastle_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", KONAMI, 3000000)	/* Derived from 24 MHz clock */
-	MDRV_CPU_PROGRAM_MAP(hcastle_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", KONAMI, 3000000)	/* Derived from 24 MHz clock */
+	MCFG_CPU_PROGRAM_MAP(hcastle_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, 3579545)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+
+	MCFG_MACHINE_START(hcastle)
+	MCFG_MACHINE_RESET(hcastle)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(59)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* frames per second verified by comparison with real board */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(59)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* frames per second verified by comparison with real board */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(hcastle)
 
-	MDRV_GFXDECODE(hcastle)
-	MDRV_PALETTE_LENGTH(2*8*16*16)
+	MCFG_GFXDECODE(hcastle)
+	MCFG_PALETTE_LENGTH(2*8*16*16)
 
-	MDRV_PALETTE_INIT(hcastle)
-	MDRV_VIDEO_START(hcastle)
-	MDRV_VIDEO_UPDATE(hcastle)
+	MCFG_PALETTE_INIT(hcastle)
+	MCFG_VIDEO_START(hcastle)
+
+	MCFG_K007121_ADD("k007121_1")
+	MCFG_K007121_ADD("k007121_2")
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("konami1", K007232, 3579545)
-	MDRV_SOUND_CONFIG(k007232_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.44)
-	MDRV_SOUND_ROUTE(1, "mono", 0.50)
+	MCFG_SOUND_ADD("konami1", K007232, 3579545)
+	MCFG_SOUND_CONFIG(k007232_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.44)
+	MCFG_SOUND_ROUTE(1, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ym", YM3812, 3579545)
-	MDRV_SOUND_CONFIG(ym3812_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+	MCFG_SOUND_ADD("ymsnd", YM3812, 3579545)
+	MCFG_SOUND_CONFIG(ym3812_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
-	MDRV_SOUND_ADD("konami2", K051649, 3579545/2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.45)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("konami2", K051649, 3579545/2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.45)
+MACHINE_CONFIG_END
 
 /***************************************************************************/
 
@@ -343,7 +366,7 @@ ROM_END
 
 
 
-GAME( 1988, hcastle,  0,       hcastle, hcastle, 0, ROT0, "Konami", "Haunted Castle (version M)", 0 )
-GAME( 1988, hcastleo, hcastle, hcastle, hcastle, 0, ROT0, "Konami", "Haunted Castle (version K)", 0 )
-GAME( 1988, hcastlej, hcastle, hcastle, hcastle, 0, ROT0, "Konami", "Akuma-Jou Dracula (Japan version P)", 0 )
-GAME( 1988, hcastljo, hcastle, hcastle, hcastle, 0, ROT0, "Konami", "Akuma-Jou Dracula (Japan version N)", 0 )
+GAME( 1988, hcastle,  0,       hcastle, hcastle, 0, ROT0, "Konami", "Haunted Castle (version M)", GAME_SUPPORTS_SAVE )
+GAME( 1988, hcastleo, hcastle, hcastle, hcastle, 0, ROT0, "Konami", "Haunted Castle (version K)", GAME_SUPPORTS_SAVE )
+GAME( 1988, hcastlej, hcastle, hcastle, hcastle, 0, ROT0, "Konami", "Akuma-Jou Dracula (Japan version P)", GAME_SUPPORTS_SAVE )
+GAME( 1988, hcastljo, hcastle, hcastle, hcastle, 0, ROT0, "Konami", "Akuma-Jou Dracula (Japan version N)", GAME_SUPPORTS_SAVE )

@@ -4,15 +4,10 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/tms34061.h"
 #include "cpu/m6809/m6809.h"
-#include "capbowl.h"
-
-UINT8 *capbowl_rowaddress;
-
-static offs_t blitter_addr;
-
+#include "includes/capbowl.h"
 
 
 /*************************************
@@ -21,9 +16,10 @@ static offs_t blitter_addr;
  *
  *************************************/
 
-static void generate_interrupt(running_machine *machine, int state)
+static void generate_interrupt( running_machine &machine, int state )
 {
-	cputag_set_input_line(machine, "maincpu", M6809_FIRQ_LINE, state);
+	capbowl_state *driver = machine.driver_data<capbowl_state>();
+	device_set_input_line(driver->m_maincpu, M6809_FIRQ_LINE, state);
 }
 
 static const struct tms34061_interface tms34061intf =
@@ -58,6 +54,7 @@ VIDEO_START( capbowl )
 
 WRITE8_HANDLER( capbowl_tms34061_w )
 {
+	capbowl_state *state = space->machine().driver_data<capbowl_state>();
 	int func = (offset >> 8) & 3;
 	int col = offset & 0xff;
 
@@ -67,12 +64,13 @@ WRITE8_HANDLER( capbowl_tms34061_w )
 		col ^= 2;
 
 	/* Row address (RA0-RA8) is not dependent on the offset */
-	tms34061_w(space, col, *capbowl_rowaddress, func, data);
+	tms34061_w(space, col, *state->m_rowaddress, func, data);
 }
 
 
 READ8_HANDLER( capbowl_tms34061_r )
 {
+	capbowl_state *state = space->machine().driver_data<capbowl_state>();
 	int func = (offset >> 8) & 3;
 	int col = offset & 0xff;
 
@@ -82,7 +80,7 @@ READ8_HANDLER( capbowl_tms34061_r )
 		col ^= 2;
 
 	/* Row address (RA0-RA8) is not dependent on the offset */
-	return tms34061_r(space, col, *capbowl_rowaddress, func);
+	return tms34061_r(space, col, *state->m_rowaddress, func);
 }
 
 
@@ -95,22 +93,24 @@ READ8_HANDLER( capbowl_tms34061_r )
 
 WRITE8_HANDLER( bowlrama_blitter_w )
 {
+	capbowl_state *state = space->machine().driver_data<capbowl_state>();
+
 	switch (offset)
 	{
 		case 0x08:	  /* Write address high byte (only 2 bits used) */
-			blitter_addr = (blitter_addr & ~0xff0000) | (data << 16);
+			state->m_blitter_addr = (state->m_blitter_addr & ~0xff0000) | (data << 16);
 			break;
 
 		case 0x17:    /* Write address mid byte (8 bits)   */
-			blitter_addr = (blitter_addr & ~0x00ff00) | (data << 8);
+			state->m_blitter_addr = (state->m_blitter_addr & ~0x00ff00) | (data << 8);
 			break;
 
 		case 0x18:	  /* Write Address low byte (8 bits)   */
-			blitter_addr = (blitter_addr & ~0x0000ff) | (data << 0);
+			state->m_blitter_addr = (state->m_blitter_addr & ~0x0000ff) | (data << 0);
 			break;
 
 		default:
-			logerror("PC=%04X Write to unsupported blitter address %02X Data=%02X\n", cpu_get_pc(space->cpu), offset, data);
+			logerror("PC=%04X Write to unsupported blitter address %02X Data=%02X\n", cpu_get_pc(&space->device()), offset, data);
 			break;
 	}
 }
@@ -118,7 +118,8 @@ WRITE8_HANDLER( bowlrama_blitter_w )
 
 READ8_HANDLER( bowlrama_blitter_r )
 {
-	UINT8 data = memory_region(space->machine, "gfx1")[blitter_addr];
+	capbowl_state *state = space->machine().driver_data<capbowl_state>();
+	UINT8 data = space->machine().region("gfx1")->base()[state->m_blitter_addr];
 	UINT8 result = 0;
 
 	switch (offset)
@@ -137,11 +138,11 @@ READ8_HANDLER( bowlrama_blitter_r )
 		/* Read data and increment address */
 		case 4:
 			result = data;
-			blitter_addr = (blitter_addr + 1) & 0x3ffff;
+			state->m_blitter_addr = (state->m_blitter_addr + 1) & 0x3ffff;
 			break;
 
 		default:
-			logerror("PC=%04X Read from unsupported blitter address %02X\n", cpu_get_pc(space->cpu), offset);
+			logerror("PC=%04X Read from unsupported blitter address %02X\n", cpu_get_pc(&space->device()), offset);
 			break;
 	}
 
@@ -156,7 +157,7 @@ READ8_HANDLER( bowlrama_blitter_r )
  *
  *************************************/
 
-INLINE rgb_t pen_for_pixel(UINT8 *src, UINT8 pix)
+INLINE rgb_t pen_for_pixel( UINT8 *src, UINT8 pix )
 {
 	return MAKE_RGB(pal4bit(src[(pix << 1) + 0] >> 0),
 					pal4bit(src[(pix << 1) + 1] >> 4),
@@ -164,7 +165,7 @@ INLINE rgb_t pen_for_pixel(UINT8 *src, UINT8 pix)
 }
 
 
-VIDEO_UPDATE( capbowl )
+SCREEN_UPDATE_RGB32( capbowl )
 {
 	struct tms34061_display state;
 	int x, y;
@@ -175,17 +176,17 @@ VIDEO_UPDATE( capbowl )
 	/* if we're blanked, just fill with black */
 	if (state.blanked)
 	{
-		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+		bitmap.fill(get_black_pen(screen.machine()), cliprect);
 		return 0;
 	}
 
 	/* now regenerate the bitmap */
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
 	{
 		UINT8 *src = &state.vram[256 * y];
-		UINT32 *dest = BITMAP_ADDR32(bitmap, y, 0);
+		UINT32 *dest = &bitmap.pix32(y);
 
-		for (x = cliprect->min_x & ~1; x <= cliprect->max_x; x += 2)
+		for (x = cliprect.min_x & ~1; x <= cliprect.max_x; x += 2)
 		{
 			UINT8 pix = src[32 + (x / 2)];
 			*dest++ = pen_for_pixel(src, pix >> 4);

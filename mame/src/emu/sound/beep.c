@@ -11,9 +11,8 @@
 
 ****************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "sound/beep.h"
-#include "streams.h"
 
 
 #define BEEP_RATE			48000
@@ -21,7 +20,7 @@
 typedef struct _beep_state beep_state;
 struct _beep_state
 {
-	sound_stream *stream; 	/* stream number */
+	sound_stream *stream;	/* stream number */
 	int enable; 			/* enable beep */
 	int frequency;			/* set frequency - this can be changed using the appropiate function */
 	int incr;				/* initial wave state */
@@ -29,13 +28,11 @@ struct _beep_state
 };
 
 
-INLINE beep_state *get_safe_token(const device_config *device)
+INLINE beep_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_BEEP);
-	return (beep_state *)device->token;
+	assert(device->type() == BEEP);
+	return (beep_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -95,7 +92,7 @@ static DEVICE_START( beep )
 {
 	beep_state *pBeep = get_safe_token(device);
 
-	pBeep->stream = stream_create(device, 0, 1, BEEP_RATE, pBeep, beep_sound_update );
+	pBeep->stream = device->machine().sound().stream_alloc(*device, 0, 1, BEEP_RATE, pBeep, beep_sound_update );
 	pBeep->enable = 0;
 	pBeep->frequency = 3250;
 	pBeep->incr = 0;
@@ -110,7 +107,7 @@ static DEVICE_START( beep )
  *
  *************************************/
 
-void beep_set_state(const device_config *device, int on)
+void beep_set_state(device_t *device, int on)
 {
 	beep_state *info = get_safe_token(device);
 
@@ -118,7 +115,7 @@ void beep_set_state(const device_config *device, int on)
 	if (info->enable == on)
 		return;
 
-	stream_update(info->stream);
+	info->stream->update();
 
 	info->enable = on;
 	/* restart wave from beginning */
@@ -134,14 +131,14 @@ void beep_set_state(const device_config *device, int on)
  *
  *************************************/
 
-void beep_set_frequency(const device_config *device,int frequency)
+void beep_set_frequency(device_t *device,int frequency)
 {
 	beep_state *info = get_safe_token(device);
 
 	if (info->frequency == frequency)
 		return;
 
-	stream_update(info->stream);
+	info->stream->update();
 	info->frequency = frequency;
 	info->signal = 0x07fff;
 	info->incr = 0;
@@ -155,15 +152,15 @@ void beep_set_frequency(const device_config *device,int frequency)
  *
  *************************************/
 
-void beep_set_volume(const device_config *device, int volume)
+void beep_set_volume(device_t *device, int volume)
 {
 	beep_state *info = get_safe_token(device);
 
-	stream_update(info->stream);
+	info->stream->update();
 
 	volume = 100 * volume / 7;
 
-	sound_set_output_gain(device, 0, volume);
+	downcast<beep_device *>(device)->set_output_gain(0, volume);
 }
 
 
@@ -190,3 +187,6 @@ DEVICE_GET_INFO( beep )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright The MESS Team"); break;
 	}
 }
+
+
+DEFINE_LEGACY_SOUND_DEVICE(BEEP, beep);

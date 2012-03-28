@@ -6,7 +6,7 @@ To Do: add filters
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/discrete.h"
 #include "machine/6821pia.h"
 #include "includes/spiders.h"
@@ -174,8 +174,9 @@ DISCRETE_SOUND_END
 
 WRITE8_DEVICE_HANDLER( spiders_audio_command_w )
 {
-	pia6821_set_input_a(device, data & 0xf8, 0);
-	pia6821_ca1_w(device, 0, data  & 0x80 ? 1 : 0);
+	pia6821_device *pia = downcast<pia6821_device *>(device);
+	pia->set_a_input(data & 0xf8, 0);
+	pia->ca1_w(data & 0x80 ? 1 : 0);
 }
 
 
@@ -200,10 +201,10 @@ WRITE8_DEVICE_HANDLER( spiders_audio_ctrl_w )
 }
 
 
-MACHINE_DRIVER_START( spiders_audio )
+MACHINE_CONFIG_FRAGMENT( spiders_audio )
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(spiders)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(spiders)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END

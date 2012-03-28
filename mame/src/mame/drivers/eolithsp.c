@@ -8,24 +8,24 @@
   this could probably be done a bit better using timers
 */
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "includes/eolithsp.h"
+#include "includes/eolith.h"
 
 static int eolith_speedup_address;
 static int eolith_speedup_resume_scanline;
 static int eolith_vblank = 0;
 static int eolith_scanline = 0;
 
-void eolith_speedup_read(const address_space *space)
+void eolith_speedup_read(address_space *space)
 {
 	/* for debug */
-//  if ((cpu_get_pc(space->cpu)!=eolith_speedup_address) && (eolith_vblank!=1) )
-//      printf("%s:eolith speedup_read data %02x\n",cpuexec_describe_context(space->machine), eolith_vblank);
+  //if ((cpu_get_pc(&space->device())!=eolith_speedup_address) && (eolith_vblank!=1) )
+  //    printf("%s:eolith speedup_read data %02x\n",space->machine().describe_context(), eolith_vblank);
 
-	if (cpu_get_pc(space->cpu)==eolith_speedup_address && eolith_vblank==0 && eolith_scanline < eolith_speedup_resume_scanline)
+	if (cpu_get_pc(&space->device())==eolith_speedup_address && eolith_vblank==0 && eolith_scanline < eolith_speedup_resume_scanline)
 	{
-		cpu_spinuntil_trigger(space->cpu, 1000);
+		device_spin_until_trigger(&space->device(), 1000);
 	}
 
 }
@@ -39,26 +39,29 @@ static const struct
 } eolith_speedup_table[] =
 {
 	/* eolith.c */
-	{ "ironfort", 0x40020854, 239 },
-	{ "hidnctch", 0x4000bba0, 239 },
-	{ "raccoon",  0x40008204, 239 },
-	{ "puzzlekg", 0x40029458, 239 },
-	{ "hidctch2", 0x40009524, 239 },
-	{ "landbrk",  0x40023574, 239 },
-	{ "landbrka", 0x4002446c, 239 },
-	{ "nhidctch", 0x40012778, 239 },
-	{ "hidctch3", 0x4001f6a0, 239 },
-	{ "fort2b",   0x000081e0, 239 },
-	{ "fort2ba",  0x000081e0, 239 },
+	{ "ironfort", 0x40020854, 240 },
+	{ "hidnctch", 0x4000bba0, 240 },
+	{ "raccoon",  0x40008204, 240 },
+	{ "puzzlekg", 0x40029458, 240 },
+	{ "hidctch2", 0x40009524, 240 },
+	{ "hidctch2a",0x40029B58, 240 },
+	{ "landbrk",  0x40023574, 240 },
+	{ "landbrka", 0x4002446c, 240 },
+	{ "nhidctch", 0x40012778, 240 },
+	{ "hidctch3", 0x4001f6a0, 240 },
+	{ "fort2b",   0x000081e0, 240 },
+	{ "fort2ba",  0x000081e0, 240 },
+	{ "penfan",   0x4001FA66, 240 },
+	{ "candy",	  0x4001990C, 240 },
 	/* eolith16.c */
-	{ "klondkp",  0x0001a046, 239 },
+	{ "klondkp",  0x0001a046, 240 },
 	/* vegaeo.c */
-	{ "crazywar",  0x00008cf8, 239 },
+	{ "crazywar",  0x00008cf8, 240 },
 	{ NULL, 0, 0 }
 };
 
 
-void init_eolith_speedup(running_machine *machine)
+void init_eolith_speedup(running_machine &machine)
 {
 	int n_game = 0;
 	eolith_speedup_address = 0;
@@ -66,7 +69,7 @@ void init_eolith_speedup(running_machine *machine)
 
 	while( eolith_speedup_table[ n_game ].s_name != NULL )
 	{
-		if( strcmp( machine->gamedrv->name, eolith_speedup_table[ n_game ].s_name ) == 0 )
+		if( strcmp( machine.system().name, eolith_speedup_table[ n_game ].s_name ) == 0 )
 		{
 			eolith_speedup_address = eolith_speedup_table[ n_game ].speedup_address;
 			eolith_speedup_resume_scanline = eolith_speedup_table[ n_game ].speedup_resume_scanline;
@@ -77,21 +80,19 @@ void init_eolith_speedup(running_machine *machine)
 }
 
 /* todo, use timers instead! */
-INTERRUPT_GEN( eolith_speedup )
+TIMER_DEVICE_CALLBACK( eolith_speedup )
 {
-	eolith_scanline = 261 -  cpu_getiloops(device);
-
-	if (eolith_scanline==0)
+	if (param==0)
 	{
 		eolith_vblank = 0;
 	}
 
-	if (eolith_scanline==eolith_speedup_resume_scanline)
+	if (param==eolith_speedup_resume_scanline)
 	{
-		cpuexec_trigger(device->machine, 1000);
+		timer.machine().scheduler().trigger(1000);
 	}
 
-	if (eolith_scanline==240)
+	if (param==240)
 	{
 		eolith_vblank = 1;
 	}
@@ -99,5 +100,23 @@ INTERRUPT_GEN( eolith_speedup )
 
 CUSTOM_INPUT( eolith_speedup_getvblank )
 {
-	return eolith_vblank&1;
+
+//  printf("%s:eolith speedup_read data %02x\n",field.machine().describe_context(), eolith_vblank);
+
+
+	return (field.machine().primary_screen->vpos() >= 240);
+}
+
+// StealSee doesn't use interrupts, just the vblank
+CUSTOM_INPUT( stealsee_speedup_getvblank )
+{
+	eolith_state *state = field.machine().driver_data<eolith_state>();
+
+	int pc = cpu_get_pc(state->m_maincpu);
+
+	if (pc==0x400081ec)
+		if(!eolith_vblank)
+			device_eat_cycles(state->m_maincpu, 500);
+
+	return (field.machine().primary_screen->vpos() >= 240);
 }

@@ -9,7 +9,7 @@
 ***************************************************************************/
 
 //Build OAM
-static void CX4_op00_00(running_machine *machine)
+static void CX4_op00_00(running_machine &machine)
 {
 	INT32 i;
 
@@ -44,6 +44,7 @@ static void CX4_op00_00(running_machine *machine)
 	offset = (cx4.ram[0x626] & 3) * 2;
 	srcptr = 0x220;
 
+	address_space *space = machine.device<cpu_device>("maincpu")->space(AS_PROGRAM);
 	for(i = cx4.ram[0x620]; i > 0 && sprcount > 0; i--, srcptr += 16)
 	{
 		UINT32 spraddr = CX4_readl(srcptr + 7);
@@ -53,38 +54,38 @@ static void CX4_op00_00(running_machine *machine)
 		sprname = cx4.ram[srcptr + 5];
 		sprattr = cx4.ram[srcptr + 4] | cx4.ram[srcptr + 6];
 
-		if(memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr))
+		if(space->read_byte(spraddr))
 		{
 			INT16 x, y;
 			INT32 sprcnt;
-			for(sprcnt = memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr++); sprcnt > 0 && sprcount > 0; sprcnt--, spraddr += 4)
+			for(sprcnt = space->read_byte(spraddr++); sprcnt > 0 && sprcount > 0; sprcnt--, spraddr += 4)
 			{
-				x = (INT8)memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr + 1);
+				x = (INT8)space->read_byte(spraddr + 1);
 				if(sprattr & 0x40)
 				{
-					x = -x - ((memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr) & 0x20) ? 16 : 8);
+					x = -x - ((space->read_byte(spraddr) & 0x20) ? 16 : 8);
 				}
 				x += sprx;
 				if(x >= -16 && x <= 272)
 				{
-					y = (INT8)memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr + 2);
+					y = (INT8)space->read_byte(spraddr + 2);
 					if(sprattr & 0x80)
 					{
-						y = -y - ((memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr) & 0x20) ? 16 : 8);
+						y = -y - ((space->read_byte(spraddr) & 0x20) ? 16 : 8);
 					}
 					y += spry;
 					if(y >= -16 && y <= 224)
 					{
 						cx4.ram[oamptr    ] = (UINT8)x;
 						cx4.ram[oamptr + 1] = (UINT8)y;
-						cx4.ram[oamptr + 2] = sprname + memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr + 3);
-						cx4.ram[oamptr + 3] = sprattr ^ (memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr) & 0xc0);
+						cx4.ram[oamptr + 2] = sprname + space->read_byte(spraddr + 3);
+						cx4.ram[oamptr + 3] = sprattr ^ (space->read_byte(spraddr) & 0xc0);
 						cx4.ram[oamptr2] &= ~(3 << offset);
 						if(x & 0x100)
 						{
 							cx4.ram[oamptr2] |= 1 << offset;
 						}
-						if(memory_read_byte(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), spraddr) & 0x20)
+						if(space->read_byte(spraddr) & 0x20)
 						{
 							cx4.ram[oamptr2] |= 2 << offset;
 						}
@@ -132,7 +133,7 @@ static void CX4_op00_03(void)
 }
 
 //Transform Lines
-static void CX4_op00_05(running_machine *machine)
+static void CX4_op00_05(running_machine &machine)
 {
 	INT32 i;
 	UINT32 ptr = 0, ptr2 = 0;
@@ -184,13 +185,13 @@ static void CX4_op00_07(void)
 }
 
 //Draw Wireframe
-static void CX4_op00_08(running_machine *machine)
+static void CX4_op00_08(running_machine &machine)
 {
 	CX4_C4DrawWireFrame(machine);
 }
 
 //Disintegrate
-static void CX4_op00_0b(running_machine *machine)
+static void CX4_op00_0b(running_machine &machine)
 {
 	UINT8  width, height;
 	UINT32 startx, starty;
@@ -240,7 +241,7 @@ static void CX4_op00_0b(running_machine *machine)
 }
 
 //Bitplane Wave
-static void CX4_op00_0c(running_machine *machine)
+static void CX4_op00_0c(running_machine &machine)
 {
 	int i, j;
 	UINT32 destptr = 0;

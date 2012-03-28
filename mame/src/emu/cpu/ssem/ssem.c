@@ -4,7 +4,7 @@
     Written by MooglyGuy
 */
 
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "ssem.h"
 
@@ -21,18 +21,16 @@ struct _ssem_state
     UINT32 a;
     UINT32 halt;
 
-    const device_config *device;
-    const address_space *program;
+    legacy_cpu_device *device;
+    address_space *program;
     int icount;
 };
 
-INLINE ssem_state *get_safe_token(const device_config *device)
+INLINE ssem_state *get_safe_token(device_t *device)
 {
     assert(device != NULL);
-    assert(device->token != NULL);
-    assert(device->type == CPU);
-    assert(cpu_get_type(device) == CPU_SSEM);
-    return (ssem_state *)device->token;
+    assert(device->type() == SSEM);
+    return (ssem_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define INSTR       ((op >> 13) & 7)
@@ -61,9 +59,43 @@ INLINE UINT32 reverse(UINT32 v)
     return v;
 }
 
+INLINE UINT32 READ32(ssem_state *cpustate, UINT32 address)
+{
+    UINT32 v = 0;
+    // The MAME core does not have a good way of specifying a minimum datum size that is more than
+    // 8 bits in width.  The minimum datum width on the SSEM is 32 bits, so we need to quadruple
+    // the address value to get the appropriate byte index.
+    address <<= 2;
+
+    v |= cpustate->program->read_byte(address + 0) << 24;
+    v |= cpustate->program->read_byte(address + 1) << 16;
+    v |= cpustate->program->read_byte(address + 2) <<  8;
+    v |= cpustate->program->read_byte(address + 3) <<  0;
+
+    return reverse(v);
+}
+
+INLINE void WRITE32(ssem_state *cpustate, UINT32 address, UINT32 data)
+{
+    UINT32 v = reverse(data);
+
+    // The MAME core does not have a good way of specifying a minimum datum size that is more than
+    // 8 bits in width.  The minimum datum width on the SSEM is 32 bits, so we need to quadruple
+    // the address value to get the appropriate byte index.
+    address <<= 2;
+
+    cpustate->program->write_byte(address + 0, (v >> 24) & 0x000000ff);
+    cpustate->program->write_byte(address + 1, (v >> 16) & 0x000000ff);
+    cpustate->program->write_byte(address + 2, (v >>  8) & 0x000000ff);
+    cpustate->program->write_byte(address + 3, (v >>  0) & 0x000000ff);
+    return;
+}
+
+/*****************************************************************************/
+
 static void unimplemented_opcode(ssem_state *cpustate, UINT32 op)
 {
-    if((cpustate->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
+    if((cpustate->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
     {
         char string[200];
         ssem_dasm_one(string, cpustate->pc-1, op);
@@ -80,9 +112,9 @@ static void unimplemented_opcode(ssem_state *cpustate, UINT32 op)
         {
             for(i = 0; i < 0x20; i++)
             {
-                UINT32 opcode = reverse(READ32(i));
+                UINT32 opcode = reverse(READ32(cpustate, i));
                 ssem_dasm_one(string, i, opcode);
-                fprintf(dasm, "%02X: %08X    %s\n", i, opcode, string);
+                fprintf(disasm, "%02X: %08X    %s\n", i, opcode, string);
             }
 
             fclose(disasm);
@@ -98,7 +130,7 @@ static void unimplemented_opcode(ssem_state *cpustate, UINT32 op)
         {
             for( i = 0; i < 0x80; i++ )
             {
-                fputc(memory_read_byte_32be(cpustate->program, i), store);
+                fputc(cpustate->program->read_byte(i), store);
             }
             fclose(store);
         }
@@ -106,40 +138,6 @@ static void unimplemented_opcode(ssem_state *cpustate, UINT32 op)
 #endif
 
     fatalerror("SSEM: unknown opcode %d (%08X) at %d\n", reverse(op) & 7, reverse(op), cpustate->pc);
-}
-
-/*****************************************************************************/
-
-INLINE UINT32 READ32(ssem_state *cpustate, UINT32 address)
-{
-    UINT32 v = 0;
-    // The MAME core does not have a good way of specifying a minimum datum size that is more than
-    // 8 bits in width.  The minimum datum width on the SSEM is 32 bits, so we need to quadruple
-    // the address value to get the appropriate byte index.
-    address <<= 2;
-
-    v |= memory_read_byte(cpustate->program, address + 0) << 24;
-    v |= memory_read_byte(cpustate->program, address + 1) << 16;
-    v |= memory_read_byte(cpustate->program, address + 2) <<  8;
-    v |= memory_read_byte(cpustate->program, address + 3) <<  0;
-
-    return reverse(v);
-}
-
-INLINE void WRITE32(ssem_state *cpustate, UINT32 address, UINT32 data)
-{
-    UINT32 v = reverse(data);
-
-    // The MAME core does not have a good way of specifying a minimum datum size that is more than
-    // 8 bits in width.  The minimum datum width on the SSEM is 32 bits, so we need to quadruple
-    // the address value to get the appropriate byte index.
-    address <<= 2;
-
-    memory_write_byte(cpustate->program, address + 0, (v >> 24) & 0x000000ff);
-    memory_write_byte(cpustate->program, address + 1, (v >> 16) & 0x000000ff);
-    memory_write_byte(cpustate->program, address + 2, (v >>  8) & 0x000000ff);
-    memory_write_byte(cpustate->program, address + 3, (v >>  0) & 0x000000ff);
-    return;
 }
 
 /*****************************************************************************/
@@ -152,7 +150,7 @@ static CPU_INIT( ssem )
     cpustate->halt = 0;
 
     cpustate->device = device;
-    cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+    cpustate->program = device->space(AS_PROGRAM);
 }
 
 static CPU_EXIT( ssem )
@@ -172,8 +170,6 @@ static CPU_EXECUTE( ssem )
 {
     ssem_state *cpustate = get_safe_token(device);
     UINT32 op;
-
-    cpustate->icount = cycles;
 
     cpustate->pc &= 0x1f;
 
@@ -233,8 +229,6 @@ static CPU_EXECUTE( ssem )
 
         --cpustate->icount;
     }
-
-    return cycles - cpustate->icount;
 }
 
 
@@ -256,7 +250,7 @@ static CPU_SET_INFO( ssem )
 
 CPU_GET_INFO( ssem )
 {
-    ssem_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+    ssem_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
     switch(state)
     {
@@ -272,15 +266,15 @@ CPU_GET_INFO( ssem )
         case CPUINFO_INT_MIN_CYCLES:            info->i = 1;                    break;
         case CPUINFO_INT_MAX_CYCLES:            info->i = 1;                    break;
 
-        case CPUINFO_INT_DATABUS_WIDTH_PROGRAM: info->i = 8;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;                   break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_IO:      info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_IO:      info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM: info->i = 8;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;                   break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + AS_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:      info->i = 0;                    break;
 
         case CPUINFO_INT_PC:    /* intentional fallthrough */
         case CPUINFO_INT_REGISTER + SSEM_PC:    info->i = cpustate->pc << 2;    break;
@@ -311,3 +305,5 @@ CPU_GET_INFO( ssem )
         case CPUINFO_STR_REGISTER + SSEM_HALT:          sprintf(info->s, "HALT: %d", cpustate->halt);   break;
     }
 }
+
+DEFINE_LEGACY_CPU_DEVICE(SSEM, ssem);

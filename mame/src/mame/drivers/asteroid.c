@@ -183,13 +183,13 @@ There is not a rev 03 known or dumped. An Asteroids rev 03 is not mentioned in a
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "rendlay.h"
 #include "video/vector.h"
 #include "video/avgdvg.h"
 #include "machine/atari_vg.h"
-#include "asteroid.h"
+#include "includes/asteroid.h"
 #include "sound/discrete.h"
 #include "sound/pokey.h"
 
@@ -204,7 +204,7 @@ There is not a rev 03 known or dumped. An Asteroids rev 03 is not mentioned in a
 
 static WRITE8_HANDLER( astdelux_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine(), offset,data);
 }
 
 
@@ -221,9 +221,9 @@ static WRITE8_HANDLER( llander_led_w )
 	{
 		"lamp0", "lamp1", "lamp2", "lamp3", "lamp4"
 	};
-    int i;
+	int i;
 
-    for (i = 0; i < 5; i++)
+	for (i = 0; i < 5; i++)
 		output_set_value(lampname[i], (data >> (4 - i)) & 1);
 }
 
@@ -234,11 +234,11 @@ static WRITE8_HANDLER( llander_led_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( asteroid_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( asteroid_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0200, 0x02ff) AM_RAMBANK(1) AM_BASE(&asteroid_ram1)
-	AM_RANGE(0x0300, 0x03ff) AM_RAMBANK(2) AM_BASE(&asteroid_ram2)
+	AM_RANGE(0x0200, 0x02ff) AM_RAMBANK("bank1") AM_BASE_MEMBER(asteroid_state, m_ram1)
+	AM_RANGE(0x0300, 0x03ff) AM_RAMBANK("bank2") AM_BASE_MEMBER(asteroid_state, m_ram2)
 	AM_RANGE(0x2000, 0x2007) AM_READ(asteroid_IN0_r)	/* IN0 */
 	AM_RANGE(0x2400, 0x2407) AM_READ(asteroid_IN1_r)	/* IN1 */
 	AM_RANGE(0x2800, 0x2803) AM_READ(asteroid_DSW1_r)	/* DSW1 */
@@ -249,39 +249,39 @@ static ADDRESS_MAP_START( asteroid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3a00, 0x3a00) AM_DEVWRITE("discrete", asteroid_thump_w)
 	AM_RANGE(0x3c00, 0x3c05) AM_DEVWRITE("discrete", asteroid_sounds_w)
 	AM_RANGE(0x3e00, 0x3e00) AM_DEVWRITE("discrete", asteroid_noise_reset_w)
-	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x4000)
+	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x4000)
 	AM_RANGE(0x5000, 0x57ff) AM_ROM						/* vector rom */
 	AM_RANGE(0x6800, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( astdelux_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( astdelux_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0200, 0x02ff) AM_RAMBANK(1) AM_BASE(&asteroid_ram1)
-	AM_RANGE(0x0300, 0x03ff) AM_RAMBANK(2) AM_BASE(&asteroid_ram2)
+	AM_RANGE(0x0200, 0x02ff) AM_RAMBANK("bank1") AM_BASE_MEMBER(asteroid_state, m_ram1)
+	AM_RANGE(0x0300, 0x03ff) AM_RAMBANK("bank2") AM_BASE_MEMBER(asteroid_state, m_ram2)
 	AM_RANGE(0x2000, 0x2007) AM_READ(asteroid_IN0_r)	/* IN0 */
 	AM_RANGE(0x2400, 0x2407) AM_READ(asteroid_IN1_r)	/* IN1 */
 	AM_RANGE(0x2800, 0x2803) AM_READ(asteroid_DSW1_r)	/* DSW1 */
 	AM_RANGE(0x2c00, 0x2c0f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
-	AM_RANGE(0x2c40, 0x2c7f) AM_DEVREAD("earom", atari_vg_earom_r)
+	AM_RANGE(0x2c40, 0x2c7f) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(avgdvg_go_w)
-	AM_RANGE(0x3200, 0x323f) AM_DEVWRITE("earom", atari_vg_earom_w)
+	AM_RANGE(0x3200, 0x323f) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
 	AM_RANGE(0x3400, 0x3400) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x3600, 0x3600) AM_DEVWRITE("discrete", asteroid_explode_w)
-	AM_RANGE(0x3a00, 0x3a00) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x3a00, 0x3a00) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
 	AM_RANGE(0x3c00, 0x3c01) AM_WRITE(astdelux_led_w)
 	AM_RANGE(0x3c03, 0x3c03) AM_DEVWRITE("discrete", astdelux_sounds_w)
 	AM_RANGE(0x3c04, 0x3c04) AM_WRITE(astdelux_bank_switch_w)
 	AM_RANGE(0x3c05, 0x3c07) AM_WRITE(astdelux_coin_counter_w)
 	AM_RANGE(0x3e00, 0x3e00) AM_DEVWRITE("discrete", asteroid_noise_reset_w)
-	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x4000)
+	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x4000)
 	AM_RANGE(0x4800, 0x57ff) AM_ROM						/* vector rom */
 	AM_RANGE(0x6000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( llander_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( llander_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x1f00)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("IN0")
@@ -293,7 +293,7 @@ static ADDRESS_MAP_START( llander_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3400, 0x3400) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x3c00, 0x3c00) AM_DEVWRITE("discrete", llander_sounds_w)
 	AM_RANGE(0x3e00, 0x3e00) AM_DEVWRITE("discrete", llander_snd_reset_w)
-	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x4000)
+	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x4000)
 	AM_RANGE(0x4800, 0x5fff) AM_ROM						/* vector rom */
 	AM_RANGE(0x6000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
@@ -308,7 +308,7 @@ ADDRESS_MAP_END
 
 static CUSTOM_INPUT( clock_r )
 {
-	return (cputag_get_total_cycles(field->port->machine, "maincpu") & 0x100) ? 1 : 0;
+	return (field.machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
 }
 
 static INPUT_PORTS_START( asteroid )
@@ -358,7 +358,7 @@ static INPUT_PORTS_START( asteroid )
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( asteroib )
+static INPUT_PORTS_START( asteroidb )
 	PORT_INCLUDE( asteroid )
 
 	PORT_MODIFY("IN0")
@@ -501,18 +501,19 @@ static INPUT_PORTS_START( astdelux )
 	PORT_DIPSETTING (	0xc0, "1 Coin Each 2 Coins" )
 	PORT_DIPSETTING (	0xe0, DEF_STR( None ) )
 
-	/* The manual includes a 3rd DIP controlling the number & configuration of coin counters, defined as:
-    PORT_START("DSW3")                                  // 4-Toggle switch located on game PCB at M12
-    PORT_DIPNAME( 0x03, 0x00, "Coin Counters" )             PORT_DIPLOCATION("M12:1,2")
-    PORT_DIPSETTING (   0x00, "1=Left, Center & Right" )    // "For games having these coin doors: Thai 1Baht/1Baht, German 1DM/1DM, US 25c/25c,
+	/* The manual includes a 3rd DIP controlling the number & configuration of coin counters, defined as: */
+#if 0
+	PORT_START("DSW3")                                  // 4-Toggle switch located on game PCB at M12
+	PORT_DIPNAME( 0x03, 0x00, "Coin Counters" )             PORT_DIPLOCATION("M12:1,2")
+	PORT_DIPSETTING (   0x00, "1=Left, Center & Right" )    // "For games having these coin doors: Thai 1Baht/1Baht, German 1DM/1DM, US 25c/25c,
                                                             // Belgian or French 5Fr/5Fr, Swiss or French 1Fr/1Fr, US 25c/25c/25c,
                                                             // Japanese 100Y/100Y, Swedish 1Kr/1Kr, UK 10P/10P, Australian 20c/20c, or Italian 100L/100L."
-    PORT_DIPSETTING (   0x01, "1=Left & Center, 2=Right" )  // "For games having these coin doors: German 2DM/1DM, German 1DM/5DM, US 25c/25c/1$, or US 25c/1$."
-    PORT_DIPSETTING (   0x02, "1=Left, 2=Center & Right" )  // "No coin door is currently designed for this configuration."
-    PORT_DIPSETTING (   0x03, "1=Left, 2=Center, 3=Right" ) // "For games having these coin doors: German 1DM/2DM/5DM."
-    PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "M12:3" )            // Listed as "Unused"
-    PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "M12:4" )            // Listed as "Unused"
-    */
+	PORT_DIPSETTING (   0x01, "1=Left & Center, 2=Right" )  // "For games having these coin doors: German 2DM/1DM, German 1DM/5DM, US 25c/25c/1$, or US 25c/1$."
+	PORT_DIPSETTING (   0x02, "1=Left, 2=Center & Right" )  // "No coin door is currently designed for this configuration."
+	PORT_DIPSETTING (   0x03, "1=Left, 2=Center, 3=Right" ) // "For games having these coin doors: German 1DM/2DM/5DM."
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "M12:3" )            // Listed as "Unused"
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "M12:4" )            // Listed as "Unused"
+#endif
 INPUT_PORTS_END
 
 
@@ -562,7 +563,7 @@ static INPUT_PORTS_START( llander )
 	PORT_DIPSETTING (	0xd0, "1800" )
 
 	/* The next one is a potentiometer */
-	/* The way the DAC/counter circuit always trys to self center at the voltage derived from the thrust control, */
+	/* The way the DAC/counter circuit always tries to self center at the voltage derived from the thrust control, */
 	/* I don't think it ever expected to get to 0xff. We can not emulate the external DAC circuit exactly, */
 	/* so changing the range to 0xfe seems to solve the problem. */
 	/* The thrust control is basically a hand operated pedal. */
@@ -609,82 +610,80 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( asteroid )
+static MACHINE_CONFIG_START( asteroid, asteroid_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
-	MDRV_CPU_PROGRAM_MAP(asteroid_map)
-	MDRV_CPU_PERIODIC_INT(asteroid_interrupt, (double)MASTER_CLOCK/4096/12)
+	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
+	MCFG_CPU_PROGRAM_MAP(asteroid_map)
+	MCFG_CPU_PERIODIC_INT(asteroid_interrupt, (double)MASTER_CLOCK/4096/12)
 
-	MDRV_MACHINE_RESET(asteroid)
+	MCFG_MACHINE_RESET(asteroid)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_SIZE(400,300)
-	MDRV_SCREEN_VISIBLE_AREA(522, 1566, 394, 1182)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(400,300)
+	MCFG_SCREEN_VISIBLE_AREA(522, 1566, 394, 1182)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(dvg)
-	MDRV_VIDEO_UPDATE(vector)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(asteroid)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.4)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( asterock )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(asteroid)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PERIODIC_INT(asterock_interrupt, (double)MASTER_CLOCK/4096/12)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( astdelux )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(asteroid)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(astdelux_map)
-
-	MDRV_ATARIVGEAROM_ADD("earom")
+	MCFG_VIDEO_START(dvg)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(astdelux)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey", POKEY, MASTER_CLOCK/8)
-	MDRV_SOUND_CONFIG(pokey_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(asteroid)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.4)
+MACHINE_CONFIG_END
 
-
-static MACHINE_DRIVER_START( llander )
+static MACHINE_CONFIG_DERIVED( asterock, asteroid )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(asteroid)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(llander_map)
-	MDRV_CPU_PERIODIC_INT(llander_interrupt, (double)MASTER_CLOCK/4096/12)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PERIODIC_INT(asterock_interrupt, (double)MASTER_CLOCK/4096/12)
+MACHINE_CONFIG_END
 
-	MDRV_MACHINE_RESET(avgdvg)
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_REFRESH_RATE(40)
-	MDRV_SCREEN_VISIBLE_AREA(522, 1566, 270, 1070)
-	MDRV_VIDEO_START(dvg)
-	MDRV_VIDEO_UPDATE(vector)
+static MACHINE_CONFIG_DERIVED( astdelux, asteroid )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(astdelux_map)
+
+	MCFG_ATARIVGEAROM_ADD("earom")
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(llander)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(astdelux)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+
+	MCFG_SOUND_ADD("pokey", POKEY, MASTER_CLOCK/8)
+	MCFG_SOUND_CONFIG(pokey_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( llander, asteroid )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(llander_map)
+	MCFG_CPU_PERIODIC_INT(llander_interrupt, (double)MASTER_CLOCK/4096/12)
+
+	MCFG_MACHINE_RESET(avgdvg)
+
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_REFRESH_RATE(40)
+	MCFG_SCREEN_VISIBLE_AREA(522, 1566, 270, 1070)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
+
+	MCFG_VIDEO_START(dvg)
+
+	/* sound hardware */
+	MCFG_SOUND_REPLACE("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(llander)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -791,6 +790,19 @@ ROM_START( meteorho )
 	/* DVG PROM */
 	ROM_REGION( 0x100, "user1", 0 )
 	ROM_LOAD( "prom.bin",	0x0000, 0x0100, CRC(9e237193) SHA1(f663e12d5db0fa50ea49d03591475ae0a7168bc0) )
+ROM_END
+
+ROM_START( hyperspc )
+	ROM_REGION( 0x8000, "maincpu", 0 )
+	ROM_LOAD( "035145-01.bin",   0x6800, 0x0800, CRC(e9bfda64) SHA1(291dc567ebb31b35df83d9fb87f4080f251ff9c8) )
+	ROM_LOAD( "035144-01.bin",   0x7000, 0x0800, CRC(e53c28a9) SHA1(d9f081e73511ec43377f0c6457747f15a470d4dc) )
+	ROM_LOAD( "035143-01.bin",   0x7800, 0x0800, CRC(7d4e3d05) SHA1(d88000e904e158efde50e453e2889ecd2cb95f24) )
+	/* Vector ROM */
+	ROM_LOAD( "035127-01.bin",   0x5000, 0x0800, CRC(7dec48bd) SHA1(8bc926a763ff80b101b2e1c24d45615c3daf67d5) )
+
+	/* DVG PROM */
+	ROM_REGION( 0x100, "user1", 0 )
+	ROM_LOAD( "034602-01.c8",   0x0000, 0x0100, CRC(97953db8) SHA1(8cbded64d1dd35b18c4d5cece00f77e7b2cab2ad) )
 ROM_END
 
 
@@ -920,16 +932,16 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( asteroib )
+static DRIVER_INIT( asteroidb )
 {
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2000, 0x2000, 0, 0, "IN0");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2003, 0x2003, 0, 0, "HS");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0x2000, 0x2000, "IN0");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0x2003, 0x2003, "HS");
 }
 
 
 static DRIVER_INIT( asterock )
 {
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2000, 0x2007, 0, 0, asterock_IN0_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x2000, 0x2007, FUNC(asterock_IN0_r));
 }
 
 
@@ -943,10 +955,11 @@ static DRIVER_INIT( asterock )
 GAME( 1979, asteroid, 0,        asteroid, asteroid, 0,        ROT0, "Atari",   "Asteroids (rev 4)",        GAME_SUPPORTS_SAVE )
 GAME( 1979, asteroid2,asteroid, asteroid, asteroid, 0,        ROT0, "Atari",   "Asteroids (rev 2)",        GAME_SUPPORTS_SAVE )
 GAME( 1979, asteroid1,asteroid, asteroid, asteroid, 0,        ROT0, "Atari",   "Asteroids (rev 1)",        GAME_SUPPORTS_SAVE )
-GAME( 1979, asteroidb,asteroid, asteroid, asteroib, asteroib, ROT0, "bootleg", "Asteroids (bootleg on Lunar Lander hardware)", GAME_SUPPORTS_SAVE )
-GAME( 1979, asterock, asteroid, asterock, asterock, asterock, ROT0, "Sidam",   "Asterock",                 GAME_SUPPORTS_SAVE )
-GAME( 1979, meteorts, asteroid, asteroid, asteroid, 0,        ROT0, "VGG",     "Meteorites",               GAME_SUPPORTS_SAVE )
-GAME( 1980, meteorho, asteroid, asteroid, asteroid, 0,        ROT0, "Hoei",    "Meteor",                   GAME_SUPPORTS_SAVE )
+GAME( 1979, asteroidb,asteroid, asteroid, asteroidb,asteroidb,ROT0, "bootleg", "Asteroids (bootleg on Lunar Lander hardware)", GAME_SUPPORTS_SAVE )
+GAME( 1979, asterock, asteroid, asterock, asterock, asterock, ROT0, "bootleg (Sidam)",   "Asterock (bootleg of Asteroids)",    GAME_SUPPORTS_SAVE )
+GAME( 1979, meteorts, asteroid, asteroid, asteroid, 0,        ROT0, "bootleg (VGG)",     "Meteorites (bootleg of Asteroids)",  GAME_SUPPORTS_SAVE )
+GAME( 1979, meteorho, asteroid, asteroid, asteroid, 0,        ROT0, "bootleg (Hoei)",    "Meteor (bootleg of Asteroids)",      GAME_SUPPORTS_SAVE )
+GAME( 1979, hyperspc, asteroid, asteroid, asteroid, 0,        ROT0, "bootleg (Rumiano)", "Hyperspace (bootleg of Asteroids)",  GAME_SUPPORTS_SAVE )
 GAMEL(1980, astdelux, 0,        astdelux, astdelux, 0,        ROT0, "Atari",   "Asteroids Deluxe (rev 3)", GAME_SUPPORTS_SAVE, layout_ho88ffff )
 GAMEL(1980, astdelux2,astdelux, astdelux, astdelux, 0,        ROT0, "Atari",   "Asteroids Deluxe (rev 2)", GAME_SUPPORTS_SAVE, layout_ho88ffff )
 GAMEL(1980, astdelux1,astdelux, astdelux, astdelux, 0,        ROT0, "Atari",   "Asteroids Deluxe (rev 1)", GAME_SUPPORTS_SAVE, layout_ho88ffff )

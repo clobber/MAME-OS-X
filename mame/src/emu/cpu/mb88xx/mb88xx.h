@@ -12,7 +12,6 @@
 #ifndef __MB88XX_H__
 #define	__MB88XX_H__
 
-#include "cpuintrf.h"
 
 /***************************************************************************
     PORT ENUMERATION
@@ -65,20 +64,14 @@ struct _mb88_cpu_core
     PUBLIC FUNCTIONS
 ***************************************************************************/
 
-CPU_GET_INFO( mb88 );
-CPU_GET_INFO( mb8841 );
-CPU_GET_INFO( mb8842 );
-CPU_GET_INFO( mb8843 );
-CPU_GET_INFO( mb8844 );
-
-#define CPU_MB88 CPU_GET_INFO_NAME( mb88 )
-#define CPU_MB8841 CPU_GET_INFO_NAME( mb8841 )
-#define CPU_MB8842 CPU_GET_INFO_NAME( mb8842 )
-#define CPU_MB8843 CPU_GET_INFO_NAME( mb8843 )
-#define CPU_MB8844 CPU_GET_INFO_NAME( mb8844 )
+DECLARE_LEGACY_CPU_DEVICE(MB88, mb88);
+DECLARE_LEGACY_CPU_DEVICE(MB8841, mb8841);
+DECLARE_LEGACY_CPU_DEVICE(MB8842, mb8842);
+DECLARE_LEGACY_CPU_DEVICE(MB8843, mb8843);
+DECLARE_LEGACY_CPU_DEVICE(MB8844, mb8844);
 
 CPU_DISASSEMBLE( mb88 );
 
-void mb88_external_clock_w(const device_config *device, int state);
+void mb88_external_clock_w(device_t *device, int state);
 
 #endif /* __MB88XX_H__ */

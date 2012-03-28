@@ -194,13 +194,13 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
 1) 'topspeed' and 'topspedu'
 
-  - All adresses are for 2nd M68000 CPU !
+  - All addresses are for 2nd M68000 CPU !
   - Region stored at 0x01fffe.w
   - Sets :
       * 'topspeed' : region = 0x0003
       * 'topspedu' : region = 0x0004
   - Coinage relies on the region (code at 0x00dd10) :
-      * 0x0001 (Japan), 0x0002 (US) and 0x0004 (US, Romstar licence) use TAITO_COINAGE_JAPAN_OLD
+      * 0x0001 (Japan), 0x0002 (US) and 0x0004 (US, Romstar license) use TAITO_COINAGE_JAPAN_OLD
       * 0x0003 (World) uses TAITO_COINAGE_WORLD
   - Notice screen only if region = 0x0001
   - Game name : "Top Speed"
@@ -214,13 +214,13 @@ Stephh's notes (based on the game M68000 code and some tests) :
   - There is sort of built-in cheat (code at 0x015332) :
       * set "Allow Continue" Dip Switch to "No"
       * set "Continue Price" Dip Switch to 1C_1C
-      * set contents of 0x000402.b to 0x55 (be aware that this adress is in ROM area)
+      * set contents of 0x000402.b to 0x55 (be aware that this address is in ROM area)
       * you'll then be awarded infinite time :)
 
 
 2) 'fullthrl'
 
-  - All adresses are for 2nd M68000 CPU !
+  - All addresses are for 2nd M68000 CPU !
   - Region stored at 0x01fffe.w
   - Sets :
       * 'fullthrl' : region = 0x0001
@@ -229,65 +229,53 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "cpu/m68000/m68000.h"
 #include "video/taitoic.h"
+#include "machine/taitoio.h"
 #include "audio/taitosnd.h"
 #include "sound/2151intf.h"
 #include "sound/msm5205.h"
+#include "includes/topspeed.h"
 
 #include "topspeed.lh"
 
 
-WRITE16_HANDLER( rainbow_spritectrl_w );
-
-VIDEO_START( topspeed );
-VIDEO_UPDATE( topspeed );
-
-static UINT16 cpua_ctrl;
-static INT32 ioc220_port = 0;
-static INT32 banknum;
-static int adpcm_pos;
-static int adpcm_data;
-
-extern UINT16 *topspeed_spritemap;
-
-static size_t sharedram_size;
-static UINT16 *sharedram;
-
-extern UINT16 *topspeed_raster_ctrl;
-
-
 static READ16_HANDLER( sharedram_r )
 {
-	return sharedram[offset];
+	topspeed_state *state = space->machine().driver_data<topspeed_state>();
+	return state->m_sharedram[offset];
 }
 
 static WRITE16_HANDLER( sharedram_w )
 {
-	COMBINE_DATA(&sharedram[offset]);
+	topspeed_state *state = space->machine().driver_data<topspeed_state>();
+	COMBINE_DATA(&state->m_sharedram[offset]);
 }
 
-static void parse_control(running_machine *machine)	/* assumes Z80 sandwiched between 68Ks */
+static void parse_control( running_machine &machine )	/* assumes Z80 sandwiched between 68Ks */
 {
 	/* bit 0 enables cpu B */
 	/* however this fails when recovering from a save state
        if cpu B is disabled !! */
-	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, (cpua_ctrl &0x1) ? CLEAR_LINE : ASSERT_LINE);
-
+	topspeed_state *state = machine.driver_data<topspeed_state>();
+	device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (state->m_cpua_ctrl &0x1) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static WRITE16_HANDLER( cpua_ctrl_w )
 {
-	if ((data &0xff00) && ((data &0xff) == 0))
+	topspeed_state *state = space->machine().driver_data<topspeed_state>();
+
+	if ((data & 0xff00) && ((data & 0xff) == 0))
 		data = data >> 8;	/* for Wgp */
-	cpua_ctrl = data;
 
-	parse_control(space->machine);
+	state->m_cpua_ctrl = data;
 
-	logerror("CPU #0 PC %06x: write %04x to cpu control\n",cpu_get_pc(space->cpu),data);
+	parse_control(space->machine());
+
+	logerror("CPU #0 PC %06x: write %04x to cpu control\n", cpu_get_pc(&space->device()), data);
 }
 
 
@@ -299,29 +287,31 @@ static WRITE16_HANDLER( cpua_ctrl_w )
 
 static TIMER_CALLBACK( topspeed_interrupt6  )
 {
-	cputag_set_input_line(machine, "maincpu", 6, HOLD_LINE);
+	topspeed_state *state = machine.driver_data<topspeed_state>();
+	device_set_input_line(state->m_maincpu, 6, HOLD_LINE);
 }
 
 /* 68000 B */
 
 static TIMER_CALLBACK( topspeed_cpub_interrupt6 )
 {
-	cputag_set_input_line(machine, "sub", 6, HOLD_LINE);	/* assumes Z80 sandwiched between the 68Ks */
+	topspeed_state *state = machine.driver_data<topspeed_state>();
+	device_set_input_line(state->m_subcpu, 6, HOLD_LINE);	/* assumes Z80 sandwiched between the 68Ks */
 }
 
 
 static INTERRUPT_GEN( topspeed_interrupt )
 {
 	/* Unsure how many int6's per frame */
-	timer_set(device->machine, cpu_clocks_to_attotime(device,200000-500), NULL, 0, topspeed_interrupt6);
-	cpu_set_input_line(device, 5, HOLD_LINE);
+	device->machine().scheduler().timer_set(downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), FUNC(topspeed_interrupt6));
+	device_set_input_line(device, 5, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( topspeed_cpub_interrupt )
 {
 	/* Unsure how many int6's per frame */
-	timer_set(device->machine, cpu_clocks_to_attotime(device,200000-500), NULL, 0, topspeed_cpub_interrupt6);
-	cpu_set_input_line(device, 5, HOLD_LINE);
+	device->machine().scheduler().timer_set(downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), FUNC(topspeed_cpub_interrupt6));
+	device_set_input_line(device, 5, HOLD_LINE);
 }
 
 
@@ -335,10 +325,11 @@ static INTERRUPT_GEN( topspeed_cpub_interrupt )
 
 static READ8_HANDLER( topspeed_input_bypass_r )
 {
-	UINT8 port = TC0220IOC_port_r(space,0);	/* read port number */
+	topspeed_state *state = space->machine().driver_data<topspeed_state>();
+	UINT8 port = tc0220ioc_port_r(state->m_tc0220ioc, 0);	/* read port number */
 	int steer = 0;
-	int analogue_steer = input_port_read_safe(space->machine, STEER_PORT_TAG,0x00);
-	int fake = input_port_read_safe(space->machine, FAKE_PORT_TAG,0x00);
+	int analogue_steer = input_port_read_safe(space->machine(), STEER_PORT_TAG, 0x00);
+	int fake = input_port_read_safe(space->machine(), FAKE_PORT_TAG, 0x00);
 
 	if (!(fake & 0x10))	/* Analogue steer (the real control method) */
 	{
@@ -356,9 +347,7 @@ static READ8_HANDLER( topspeed_input_bypass_r )
 		if (fake & 0x01)	/* pressing left */
 			steer = 0xff80;
 
-		/* To allow hiscore input we must let you return to
-           continuous input type while you press up */
-
+		/* To allow hiscore input we must let you return to continuous input type while you press up */
 		if (fake & 0x04)	/* pressing up */
 			steer = analogue_steer;
 	}
@@ -372,7 +361,7 @@ static READ8_HANDLER( topspeed_input_bypass_r )
 			return steer >> 8;
 
 		default:
-			return TC0220IOC_portreg_r(space,offset);
+			return tc0220ioc_portreg_r(state->m_tc0220ioc, offset);
 	}
 }
 
@@ -382,13 +371,13 @@ static READ16_HANDLER( topspeed_motor_r )
 	switch (offset)
 	{
 		case 0x0:
-			return (mame_rand(space->machine) &0xff);	/* motor status ?? */
+			return (space->machine().rand() & 0xff);	/* motor status ?? */
 
 		case 0x101:
 			return 0x55;	/* motor cpu status ? */
 
 		default:
-logerror("CPU #0 PC %06x: warning - read from motor cpu %03x\n",cpu_get_pc(space->cpu),offset);
+			logerror("CPU #0 PC %06x: warning - read from motor cpu %03x\n", cpu_get_pc(&space->device()), offset);
 			return 0;
 	}
 }
@@ -396,9 +385,7 @@ logerror("CPU #0 PC %06x: warning - read from motor cpu %03x\n",cpu_get_pc(space
 static WRITE16_HANDLER( topspeed_motor_w )
 {
 	/* Writes $900000-25 and $900200-219 */
-
-logerror("CPU #0 PC %06x: warning - write %04x to motor cpu %03x\n",cpu_get_pc(space->cpu),data,offset);
-
+	logerror("CPU #0 PC %06x: warning - write %04x to motor cpu %03x\n", cpu_get_pc(&space->device()), data, offset);
 }
 
 
@@ -406,42 +393,47 @@ logerror("CPU #0 PC %06x: warning - write %04x to motor cpu %03x\n",cpu_get_pc(s
                         SOUND
 *****************************************************/
 
-static void reset_sound_region(running_machine *machine)
+static void reset_sound_region( running_machine &machine )
 {
-	memory_set_bankptr(machine,  10, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
+	topspeed_state *state = machine.driver_data<topspeed_state>();
+	memory_set_bank(machine,  "bank10", state->m_banknum);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )	/* assumes Z80 sandwiched between 68Ks */
 {
-	banknum = (data - 1) & 7;
-	reset_sound_region(device->machine);
+	topspeed_state *state = device->machine().driver_data<topspeed_state>();
+	state->m_banknum = data & 7;
+	reset_sound_region(device->machine());
 }
 
-static void topspeed_msm5205_vck(const device_config *device)
+static void topspeed_msm5205_vck( device_t *device )
 {
-	if (adpcm_data != -1)
+	topspeed_state *state = device->machine().driver_data<topspeed_state>();
+	if (state->m_adpcm_data != -1)
 	{
-		msm5205_data_w(device, adpcm_data & 0x0f);
-		adpcm_data = -1;
+		msm5205_data_w(device, state->m_adpcm_data & 0x0f);
+		state->m_adpcm_data = -1;
 	}
 	else
 	{
-		adpcm_data = memory_region(device->machine, "adpcm")[adpcm_pos];
-		adpcm_pos = (adpcm_pos + 1) & 0x1ffff;
-		msm5205_data_w(device, adpcm_data >> 4);
+		state->m_adpcm_data = device->machine().region("adpcm")->base()[state->m_adpcm_pos];
+		state->m_adpcm_pos = (state->m_adpcm_pos + 1) & 0x1ffff;
+		msm5205_data_w(device, state->m_adpcm_data >> 4);
 	}
 }
 
 static WRITE8_DEVICE_HANDLER( topspeed_msm5205_address_w )
 {
-	adpcm_pos = (adpcm_pos & 0x00ff) | (data << 8);
+	topspeed_state *state = device->machine().driver_data<topspeed_state>();
+	state->m_adpcm_pos = (state->m_adpcm_pos & 0x00ff) | (data << 8);
 	msm5205_reset_w(device, 0);
 }
 
 static WRITE8_DEVICE_HANDLER( topspeed_msm5205_stop_w )
 {
+	topspeed_state *state = device->machine().driver_data<topspeed_state>();
 	msm5205_reset_w(device, 1);
-	adpcm_pos &= 0xff00;
+	state->m_adpcm_pos &= 0xff00;
 }
 
 
@@ -450,45 +442,45 @@ static WRITE8_DEVICE_HANDLER( topspeed_msm5205_stop_w )
 ***********************************************************/
 
 
-static ADDRESS_MAP_START( topspeed_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( topspeed_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram) AM_SIZE(&sharedram_size)
-	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_SIZE_MEMBER(topspeed_state, m_sharedram, m_sharedram_size)
+	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x600002, 0x600003) AM_WRITE(cpua_ctrl_w)
-	AM_RANGE(0x7e0000, 0x7e0001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
-	AM_RANGE(0x7e0002, 0x7e0003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
-	AM_RANGE(0x800000, 0x8003ff) AM_RAM AM_BASE(&topspeed_raster_ctrl)
+	AM_RANGE(0x7e0000, 0x7e0001) AM_READNOP AM_DEVWRITE8("tc0140syt", tc0140syt_port_w, 0x00ff)
+	AM_RANGE(0x7e0002, 0x7e0003) AM_DEVREADWRITE8("tc0140syt", tc0140syt_comm_r, tc0140syt_comm_w, 0x00ff)
+	AM_RANGE(0x800000, 0x8003ff) AM_RAM AM_BASE_MEMBER(topspeed_state, m_raster_ctrl)
 	AM_RANGE(0x800400, 0x80ffff) AM_RAM
-	AM_RANGE(0xa00000, 0xa0ffff) AM_READWRITE(PC080SN_word_0_r, PC080SN_word_0_w)
-	AM_RANGE(0xa20000, 0xa20003) AM_WRITE(PC080SN_yscroll_word_0_w)
-	AM_RANGE(0xa40000, 0xa40003) AM_WRITE(PC080SN_xscroll_word_0_w)
-	AM_RANGE(0xa50000, 0xa50003) AM_WRITE(PC080SN_ctrl_word_0_w)
-	AM_RANGE(0xb00000, 0xb0ffff) AM_READWRITE(PC080SN_word_1_r, PC080SN_word_1_w)
-	AM_RANGE(0xb20000, 0xb20003) AM_WRITE(PC080SN_yscroll_word_1_w)
-	AM_RANGE(0xb40000, 0xb40003) AM_WRITE(PC080SN_xscroll_word_1_w)
-	AM_RANGE(0xb50000, 0xb50003) AM_WRITE(PC080SN_ctrl_word_1_w)
-	AM_RANGE(0xd00000, 0xd00fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe00000, 0xe0ffff) AM_RAM AM_BASE(&topspeed_spritemap)
+	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("pc080sn_1", pc080sn_word_r, pc080sn_word_w)
+	AM_RANGE(0xa20000, 0xa20003) AM_DEVWRITE("pc080sn_1", pc080sn_yscroll_word_w)
+	AM_RANGE(0xa40000, 0xa40003) AM_DEVWRITE("pc080sn_1", pc080sn_xscroll_word_w)
+	AM_RANGE(0xa50000, 0xa50003) AM_DEVWRITE("pc080sn_1", pc080sn_ctrl_word_w)
+	AM_RANGE(0xb00000, 0xb0ffff) AM_DEVREADWRITE("pc080sn_2", pc080sn_word_r, pc080sn_word_w)
+	AM_RANGE(0xb20000, 0xb20003) AM_DEVWRITE("pc080sn_2", pc080sn_yscroll_word_w)
+	AM_RANGE(0xb40000, 0xb40003) AM_DEVWRITE("pc080sn_2", pc080sn_xscroll_word_w)
+	AM_RANGE(0xb50000, 0xb50003) AM_DEVWRITE("pc080sn_2", pc080sn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd00fff) AM_RAM AM_BASE_SIZE_MEMBER(topspeed_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xe00000, 0xe0ffff) AM_RAM AM_BASE_MEMBER(topspeed_state, m_spritemap)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( topspeed_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( topspeed_cpub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x400000, 0X40ffff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)
-	AM_RANGE(0x880000, 0x880001) AM_READWRITE8(topspeed_input_bypass_r, TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x880002, 0x880003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x400000, 0X40ffff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(topspeed_state, m_sharedram)
+	AM_RANGE(0x880000, 0x880001) AM_READ8(topspeed_input_bypass_r, 0x00ff) AM_DEVWRITE8("tc0220ioc", tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x880002, 0x880003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x900000, 0x9003ff) AM_READWRITE(topspeed_motor_r, topspeed_motor_w)	/* motor CPU */
 ADDRESS_MAP_END
 
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( z80_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(10)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
-	AM_RANGE(0xa000, 0xa000) AM_WRITE(taitosound_slave_port_w)
-	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("tc0140syt", tc0140syt_slave_port_w)
+	AM_RANGE(0xa001, 0xa001) AM_DEVREADWRITE("tc0140syt", tc0140syt_slave_comm_r, tc0140syt_slave_comm_w)
 	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("msm", topspeed_msm5205_address_w)
 //  AM_RANGE(0xb400, 0xb400) // msm5205 start? doesn't seem to work right
 	AM_RANGE(0xb800, 0xb800) AM_DEVWRITE("msm", topspeed_msm5205_stop_w)
@@ -531,9 +523,9 @@ static INPUT_PORTS_START( topspeed )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Allow_Continue ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
-    PORT_DIPNAME( 0x80, 0x80, DEF_STR( Continue_Price ) )        /* see notes */
-    PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(    0x80, "Same as Start" )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Continue_Price ) )        /* see notes */
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x80, "Same as Start" )
 
 	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
@@ -625,9 +617,10 @@ GFXDECODE_END
 
 /* handler called by the YM2151 emulator when the internal timers cause an IRQ */
 
-static void irq_handler(const device_config *device, int irq)	/* assumes Z80 sandwiched between 68Ks */
+static void irq_handler( device_t *device, int irq )	/* assumes Z80 sandwiched between 68Ks */
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	topspeed_state *state = device->machine().driver_data<topspeed_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2151_interface ym2151_config =
@@ -647,7 +640,7 @@ static const msm5205_interface msm5205_config =
                      MACHINE DRIVERS
 ***********************************************************/
 
-static STATE_POSTLOAD( topspeed_postload )
+static void topspeed_postload(running_machine &machine)
 {
 	parse_control(machine);
 	reset_sound_region(machine);
@@ -655,64 +648,98 @@ static STATE_POSTLOAD( topspeed_postload )
 
 static MACHINE_START( topspeed )
 {
-	state_save_register_global(machine, cpua_ctrl);
-	state_save_register_global(machine, ioc220_port);
-	state_save_register_global(machine, banknum);
-	state_save_register_postload(machine, topspeed_postload, NULL);
+	topspeed_state *state = machine.driver_data<topspeed_state>();
+
+	memory_configure_bank(machine, "bank10", 0, 4, machine.region("audiocpu")->base() + 0xc000, 0x4000);
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_tc0220ioc = machine.device("tc0220ioc");
+	state->m_pc080sn_1 = machine.device("pc080sn_1");
+	state->m_pc080sn_2 = machine.device("pc080sn_2");
+
+	state->save_item(NAME(state->m_cpua_ctrl));
+	state->save_item(NAME(state->m_ioc220_port));
+	state->save_item(NAME(state->m_banknum));
+	machine.save().register_postload(save_prepost_delegate(FUNC(topspeed_postload), &machine));
 }
 
 static MACHINE_RESET( topspeed )
 {
-	cpua_ctrl = 0xff;
-	ioc220_port = 0;
-	banknum = -1;
-	adpcm_pos = 0;
-	adpcm_data = -1;
+	topspeed_state *state = machine.driver_data<topspeed_state>();
+
+	state->m_cpua_ctrl = 0xff;
+	state->m_ioc220_port = 0;
+	state->m_banknum = -1;
+	state->m_adpcm_pos = 0;
+	state->m_adpcm_data = -1;
 }
 
-static MACHINE_DRIVER_START( topspeed )
+static const pc080sn_interface topspeed_pc080sn_intf =
+{
+	1,	 /* gfxnum */
+	0, 8, 0, 0	/* x_offset, y_offset, y_invert, dblwidth */
+};
+
+static const tc0220ioc_interface topspeed_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
+static const tc0140syt_interface topspeed_tc0140syt_intf =
+{
+	"maincpu", "audiocpu"
+};
+
+static MACHINE_CONFIG_START( topspeed, topspeed_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(topspeed_map)
-	MDRV_CPU_VBLANK_INT("screen", topspeed_interrupt)
+	MCFG_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(topspeed_map)
+	MCFG_CPU_VBLANK_INT("screen", topspeed_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80,16000000/4)	/* 4 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(z80_map)
+	MCFG_CPU_ADD("audiocpu", Z80,16000000/4)	/* 4 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(z80_map)
 
-	MDRV_CPU_ADD("sub", M68000, 12000000)	/* 12 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(topspeed_cpub_map)
-	MDRV_CPU_VBLANK_INT("screen", topspeed_cpub_interrupt)
+	MCFG_CPU_ADD("sub", M68000, 12000000)	/* 12 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(topspeed_cpub_map)
+	MCFG_CPU_VBLANK_INT("screen", topspeed_cpub_interrupt)
 
-	MDRV_MACHINE_START(topspeed)
-	MDRV_MACHINE_RESET(topspeed)
+	MCFG_MACHINE_START(topspeed)
+	MCFG_MACHINE_RESET(topspeed)
+
+	MCFG_TC0220IOC_ADD("tc0220ioc", topspeed_io_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(topspeed)
 
-	MDRV_GFXDECODE(topspeed)
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_GFXDECODE(topspeed)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(topspeed)
-	MDRV_VIDEO_UPDATE(topspeed)
+	MCFG_PC080SN_ADD("pc080sn_1", topspeed_pc080sn_intf)
+	MCFG_PC080SN_ADD("pc080sn_2", topspeed_pc080sn_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 4000000)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.30)
-	MDRV_SOUND_ROUTE(1, "mono", 0.30)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 4000000)
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.30)
+	MCFG_SOUND_ROUTE(1, "mono", 0.30)
 
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("msm", MSM5205, 384000)
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+
+	MCFG_TC0140SYT_ADD("tc0140syt", topspeed_tc0140syt_intf)
+MACHINE_CONFIG_END
 
 
 
@@ -847,14 +874,6 @@ ROM_START( fullthrl )
 ROM_END
 
 
-static DRIVER_INIT( topspeed )
-{
-//  taitosnd_setz80_soundcpu( 2 );
-
-	cpua_ctrl = 0xff;
-}
-
-GAMEL( 1987, topspeed, 0,        topspeed, topspeed, topspeed, ROT0, "Taito Corporation Japan", "Top Speed (World)", 0, layout_topspeed )
-GAMEL( 1987, topspeedu,topspeed, topspeed, fullthrl, topspeed, ROT0, "Taito America Corporation (Romstar license)", "Top Speed (US)", 0, layout_topspeed )
-GAMEL( 1987, fullthrl, topspeed, topspeed, fullthrl, topspeed, ROT0, "Taito Corporation", "Full Throttle (Japan)", 0, layout_topspeed )
-
+GAMEL( 1987, topspeed, 0,        topspeed, topspeed, 0, ROT0, "Taito Corporation Japan",                     "Top Speed (World)", GAME_SUPPORTS_SAVE, layout_topspeed )
+GAMEL( 1987, topspeedu,topspeed, topspeed, fullthrl, 0, ROT0, "Taito America Corporation (Romstar license)", "Top Speed (US)", GAME_SUPPORTS_SAVE, layout_topspeed )
+GAMEL( 1987, fullthrl, topspeed, topspeed, fullthrl, 0, ROT0, "Taito Corporation",                           "Full Throttle (Japan)", GAME_SUPPORTS_SAVE, layout_topspeed )

@@ -50,6 +50,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <new>
 #include "png.h"
 
 
@@ -73,7 +74,7 @@ struct _render_font_char
 	INT32				width;				/* width from this character to the next */
 	INT32				xoffs, yoffs;		/* X and Y offset from baseline to top,left of bitmap */
 	INT32				bmwidth, bmheight;	/* width and height of bitmap */
-	bitmap_t *			bitmap;				/* pointer to the bitmap containing the raw data */
+	bitmap_argb32 *		bitmap;				/* pointer to the bitmap containing the raw data */
 };
 
 
@@ -83,7 +84,7 @@ struct _render_font
 {
 	int					height;				/* height of the font, from ascent to descent */
 	int					yoffs;				/* y offset from baseline to descent */
-	render_font_char 	chars[65536];		/* array of characters */
+	render_font_char	chars[65536];		/* array of characters */
 };
 
 
@@ -92,9 +93,9 @@ struct _render_font
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE int pixel_is_set(bitmap_t *bitmap, int y, int x)
+INLINE int pixel_is_set(bitmap_argb32 &bitmap, int y, int x)
 {
-	return (*BITMAP_ADDR32(bitmap, y, x) & 0xffffff) == 0;
+	return (bitmap.pix32(y, x) & 0xffffff) == 0;
 }
 
 
@@ -186,7 +187,7 @@ static int render_font_save_cached(render_font *font, const char *filename, UINT
 				for (y = 0; y < ch->bmheight; y++)
 				{
 					int desty = y + font->height + font->yoffs - ch->yoffs - ch->bmheight;
-					const UINT32 *src = (desty >= 0 && desty < font->height) ? BITMAP_ADDR32(ch->bitmap, desty, 0) : NULL;
+					const UINT32 *src = (desty >= 0 && desty < font->height) ? &ch->bitmap->pix32(desty) : NULL;
 					for (x = 0; x < ch->bmwidth; x++)
 					{
 						if (src != NULL && src[x] != 0)
@@ -210,7 +211,7 @@ static int render_font_save_cached(render_font *font, const char *filename, UINT
 					goto error;
 
 				/* free the bitmap and texture */
-				bitmap_free(ch->bitmap);
+				delete ch->bitmap;
 				ch->bitmap = NULL;
 			}
 
@@ -257,26 +258,26 @@ error:
     characters in the given font
 -------------------------------------------------*/
 
-static int bitmap_to_chars(bitmap_t *bitmap, render_font *font)
+static int bitmap_to_chars(bitmap_argb32 &bitmap, render_font *font)
 {
 	int rowstart = 0;
 	int x, y;
 
 	/* loop over rows */
-	while (rowstart < bitmap->height)
+	while (rowstart < bitmap.height())
 	{
 		int rowend, baseline, colstart;
 		int chstart;
 
 		/* find the top of the row */
-		for ( ; rowstart < bitmap->height; rowstart++)
+		for ( ; rowstart < bitmap.height(); rowstart++)
 			if (pixel_is_set(bitmap, rowstart, 0))
 				break;
-		if (rowstart >= bitmap->height)
+		if (rowstart >= bitmap.height())
 			break;
 
 		/* find the bottom of the row */
-		for (rowend = rowstart + 1; rowend < bitmap->height; rowend++)
+		for (rowend = rowstart + 1; rowend < bitmap.height(); rowend++)
 			if (!pixel_is_set(bitmap, rowend, 0))
 			{
 				rowend--;
@@ -324,20 +325,20 @@ static int bitmap_to_chars(bitmap_t *bitmap, render_font *font)
 
 		/* scan the column to find characters */
 		colstart = 0;
-		while (colstart < bitmap->width)
+		while (colstart < bitmap.width())
 		{
 			render_font_char *ch = &font->chars[chstart];
 			int colend;
 
 			/* find the start of the character */
-			for ( ; colstart < bitmap->width; colstart++)
+			for ( ; colstart < bitmap.width(); colstart++)
 				if (pixel_is_set(bitmap, rowend + 2, colstart))
 					break;
-			if (colstart >= bitmap->width)
+			if (colstart >= bitmap.width())
 				break;
 
 			/* find the end of the character */
-			for (colend = colstart + 1; colend < bitmap->width; colend++)
+			for (colend = colstart + 1; colend < bitmap.width(); colend++)
 				if (!pixel_is_set(bitmap, rowend + 2, colend))
 				{
 					colend--;
@@ -351,7 +352,7 @@ static int bitmap_to_chars(bitmap_t *bitmap, render_font *font)
 //              printf("  Character %X - width = %d\n", chstart, colend - colstart + 1);
 
 				/* allocate a bitmap */
-				ch->bitmap = bitmap_alloc(colend - colstart + 1, font->height, BITMAP_FORMAT_ARGB32);
+				ch->bitmap = new(std::nothrow) bitmap_argb32(colend - colstart + 1, font->height);
 				if (ch->bitmap == NULL)
 				{
 					fprintf(stderr, "Error allocating character bitmap (%dx%d)\n", colend - colstart + 1, font->height);
@@ -361,14 +362,14 @@ static int bitmap_to_chars(bitmap_t *bitmap, render_font *font)
 				/* plot the character */
 				for (y = rowstart; y <= rowend; y++)
 					for (x = colstart; x <= colend; x++)
-						*BITMAP_ADDR32(ch->bitmap, y - rowstart, x - colstart) = pixel_is_set(bitmap, y, x) ? 0xffffffff : 0x00000000;
+						ch->bitmap->pix32(y - rowstart, x - colstart) = pixel_is_set(bitmap, y, x) ? 0xffffffff : 0x00000000;
 
 				/* set the character parameters */
 				ch->width = colend - colstart + 1;
 				ch->xoffs = 0;
 				ch->yoffs = font->yoffs;
-				ch->bmwidth = ch->bitmap->width;
-				ch->bmheight = ch->bitmap->height;
+				ch->bmwidth = ch->bitmap->width();
+				ch->bmheight = ch->bitmap->height();
 			}
 
 			/* next character */
@@ -381,7 +382,7 @@ static int bitmap_to_chars(bitmap_t *bitmap, render_font *font)
 	}
 
 	/* return non-zero (TRUE) if we errored */
-	return (rowstart < bitmap->height);
+	return (rowstart < bitmap.height());
 }
 
 
@@ -399,7 +400,7 @@ int main(int argc, char *argv[])
 	/* validate arguments */
     if (argc < 3)
     {
-    	fprintf(stderr, "Usage:\npng2bdf <input.png> [<input2.png> [...]] <output.bdc>\n");
+    	fprintf(stderr, "Usage:\n%s <input.png> [<input2.png> [...]] <output.bdc>\n", argv[0]);
     	return 1;
     }
     bdcname = argv[argc - 1];
@@ -413,21 +414,19 @@ int main(int argc, char *argv[])
 	/* iterate over input files */
 	for (curarg = 1; curarg < argc - 1; curarg++)
 	{
-		const char *pngname = argv[curarg];
-		file_error filerr;
-		png_error pngerr;
-		bitmap_t *bitmap;
-		core_file *file;
-
 	    /* load the png file */
-		filerr = core_fopen(pngname, OPEN_FLAG_READ, &file);
+		const char *pngname = argv[curarg];
+		core_file *file;
+		file_error filerr = core_fopen(pngname, OPEN_FLAG_READ, &file);
 		if (filerr != FILERR_NONE)
 	    {
 	    	fprintf(stderr, "Error %d attempting to open PNG file\n", filerr);
 	    	error = TRUE;
 	    	break;
 	    }
-		pngerr = png_read_bitmap(file, &bitmap);
+
+		bitmap_argb32 bitmap;
+		png_error pngerr = png_read_bitmap(file, bitmap);
 		core_fclose(file);
 		if (pngerr != PNGERR_NONE)
 		{
@@ -438,7 +437,6 @@ int main(int argc, char *argv[])
 
 		/* parse the PNG into characters */
 		error = bitmap_to_chars(bitmap, font);
-		bitmap_free(bitmap);
 		if (error)
 			break;
 	}

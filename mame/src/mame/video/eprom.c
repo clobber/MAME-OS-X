@@ -4,14 +4,9 @@
 
 ****************************************************************************/
 
-#include "driver.h"
-#include "machine/atarigen.h"
-#include "eprom.h"
-#include "thunderj.h"
-
-
-int eprom_screen_intensity;
-int eprom_video_disable;
+#include "emu.h"
+#include "video/atarimo.h"
+#include "includes/eprom.h"
 
 
 /*************************************
@@ -20,14 +15,15 @@ int eprom_video_disable;
  *
  *************************************/
 
-static void update_palette(running_machine *machine)
+static void update_palette(running_machine &machine)
 {
+	eprom_state *state = machine.driver_data<eprom_state>();
 	int color;
 
 	for (color = 0; color < 0x800; ++color)
 	{
 		int i, r, g, b;
-		UINT16 const data = paletteram16[color];
+		UINT16 const data = machine.generic.paletteram.u16[color];
 
 		/* FIXME this is only a very crude approximation of the palette output.
          * The circuit involves a dozen transistors and probably has an output
@@ -35,7 +31,7 @@ static void update_palette(running_machine *machine)
          * This is, however, good enough to match the video and description
          * of MAMETesters bug #02677.
          */
-		i = (((data >> 12) & 15) + 1) * (4 - eprom_screen_intensity);
+		i = (((data >> 12) & 15) + 1) * (4 - state->m_screen_intensity);
 		if (i < 0)
 			i = 0;
 
@@ -57,7 +53,8 @@ static void update_palette(running_machine *machine)
 
 static TILE_GET_INFO( get_alpha_tile_info )
 {
-	UINT16 data = atarigen_alpha[tile_index];
+	eprom_state *state = machine.driver_data<eprom_state>();
+	UINT16 data = state->m_alpha[tile_index];
 	int code = data & 0x3ff;
 	int color = ((data >> 10) & 0x0f) | ((data >> 9) & 0x20);
 	int opaque = data & 0x8000;
@@ -67,8 +64,9 @@ static TILE_GET_INFO( get_alpha_tile_info )
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	UINT16 data1 = atarigen_playfield[tile_index];
-	UINT16 data2 = atarigen_playfield_upper[tile_index] >> 8;
+	eprom_state *state = machine.driver_data<eprom_state>();
+	UINT16 data1 = state->m_playfield[tile_index];
+	UINT16 data2 = state->m_playfield_upper[tile_index] >> 8;
 	int code = data1 & 0x7fff;
 	int color = 0x10 + (data2 & 0x0f);
 	SET_TILE_INFO(0, code, color, (data1 >> 15) & 1);
@@ -77,8 +75,9 @@ static TILE_GET_INFO( get_playfield_tile_info )
 
 static TILE_GET_INFO( guts_get_playfield_tile_info )
 {
-	UINT16 data1 = atarigen_playfield[tile_index];
-	UINT16 data2 = atarigen_playfield_upper[tile_index] >> 8;
+	eprom_state *state = machine.driver_data<eprom_state>();
+	UINT16 data1 = state->m_playfield[tile_index];
+	UINT16 data2 = state->m_playfield_upper[tile_index] >> 8;
 	int code = data1 & 0x7fff;
 	int color = 0x10 + (data2 & 0x0f);
 	SET_TILE_INFO(2, code, color, (data1 >> 15) & 1);
@@ -130,22 +129,21 @@ VIDEO_START( eprom )
 		0,					/* resulting value to indicate "special" */
 		0					/* callback routine for special entries */
 	};
+	eprom_state *state = machine.driver_data<eprom_state>();
 
 	/* initialize the playfield */
-	atarigen_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* initialize the alphanumerics */
-	atarigen_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	tilemap_set_transparent_pen(atarigen_alpha_tilemap, 0);
+	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	state->m_alpha_tilemap->set_transparent_pen(0);
 
-	/* global brightess (not used by klax and guts) */
-	eprom_screen_intensity = 0;
-
-	/* video disabled (not used?) */
-	eprom_video_disable = 0;
+	/* save states */
+	state->save_item(NAME(state->m_screen_intensity));
+	state->save_item(NAME(state->m_video_disable));
 }
 
 
@@ -187,22 +185,21 @@ VIDEO_START( guts )
 		0,					/* resulting value to indicate "special" */
 		0					/* callback routine for special entries */
 	};
+	eprom_state *state = machine.driver_data<eprom_state>();
 
 	/* initialize the playfield */
-	atarigen_playfield_tilemap = tilemap_create(machine, guts_get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	state->m_playfield_tilemap = tilemap_create(machine, guts_get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* initialize the alphanumerics */
-	atarigen_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	tilemap_set_transparent_pen(atarigen_alpha_tilemap, 0);
+	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	state->m_alpha_tilemap->set_transparent_pen(0);
 
-	/* global brightess (not used by guts) */
-	eprom_screen_intensity = 0;
-
-	/* video disable (not used by guts) */
-	eprom_video_disable = 0;
+	/* save states */
+	state->save_item(NAME(state->m_screen_intensity));
+	state->save_item(NAME(state->m_video_disable));
 }
 
 
@@ -213,15 +210,17 @@ VIDEO_START( guts )
  *
  *************************************/
 
-void eprom_scanline_update(const device_config *screen, int scanline)
+void eprom_scanline_update(screen_device &screen, int scanline)
 {
+	eprom_state *state = screen.machine().driver_data<eprom_state>();
+
 	/* update the playfield */
 	if (scanline == 0)
 	{
-		int xscroll = (atarigen_alpha[0x780] >> 7) & 0x1ff;
-		int yscroll = (atarigen_alpha[0x781] >> 7) & 0x1ff;
-		tilemap_set_scrollx(atarigen_playfield_tilemap, 0, xscroll);
-		tilemap_set_scrolly(atarigen_playfield_tilemap, 0, yscroll);
+		int xscroll = (state->m_alpha[0x780] >> 7) & 0x1ff;
+		int yscroll = (state->m_alpha[0x781] >> 7) & 0x1ff;
+		state->m_playfield_tilemap->set_scrollx(0, xscroll);
+		state->m_playfield_tilemap->set_scrolly(0, yscroll);
 		atarimo_set_xscroll(0, xscroll);
 		atarimo_set_yscroll(0, yscroll);
 	}
@@ -235,30 +234,31 @@ void eprom_scanline_update(const device_config *screen, int scanline)
  *
  *************************************/
 
-VIDEO_UPDATE( eprom )
+SCREEN_UPDATE_IND16( eprom )
 {
+	eprom_state *state = screen.machine().driver_data<eprom_state>();
 	atarimo_rect_list rectlist;
-	bitmap_t *mobitmap;
+	bitmap_ind16 *mobitmap;
 	int x, y, r;
 
-	if (eprom_video_disable)
+	if (state->m_video_disable)
 	{
-		bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+		bitmap.fill(get_black_pen(screen.machine()), cliprect);
 		return 0;
 	}
 
-	update_palette(screen->machine);
+	update_palette(screen.machine());
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0);
+	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -359,15 +359,15 @@ VIDEO_UPDATE( eprom )
 		}
 
 	/* add the alpha on top */
-	tilemap_draw(bitmap, cliprect, atarigen_alpha_tilemap, 0, 0);
+	state->m_alpha_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* now go back and process the upper bit of MO priority */
 	rectlist.rect -= rectlist.numrects;
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -378,7 +378,7 @@ VIDEO_UPDATE( eprom )
 					{
 						/* if bit 2 is set, start setting high palette bits */
 						if (mo[x] & 2)
-							thunderj_mark_high_palette(bitmap, pf, mo, x, y);
+							atarimo_mark_high_palette(bitmap, pf, mo, x, y);
 					}
 
 					/* erase behind ourselves */
@@ -389,30 +389,31 @@ VIDEO_UPDATE( eprom )
 }
 
 
-VIDEO_UPDATE( guts )
+SCREEN_UPDATE_IND16( guts )
 {
+	eprom_state *state = screen.machine().driver_data<eprom_state>();
 	atarimo_rect_list rectlist;
-	bitmap_t *mobitmap;
+	bitmap_ind16 *mobitmap;
 	int x, y, r;
 
-	if (eprom_video_disable)
+	if (state->m_video_disable)
 	{
-		bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+		bitmap.fill(get_black_pen(screen.machine()), cliprect);
 		return 0;
 	}
 
-	update_palette(screen->machine);
+	update_palette(screen.machine());
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0);
+	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -432,15 +433,15 @@ VIDEO_UPDATE( guts )
 		}
 
 	/* add the alpha on top */
-	tilemap_draw(bitmap, cliprect, atarigen_alpha_tilemap, 0, 0);
+	state->m_alpha_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* now go back and process the upper bit of MO priority */
 	rectlist.rect -= rectlist.numrects;
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -451,7 +452,7 @@ VIDEO_UPDATE( guts )
 					{
 						/* if bit 2 is set, start setting high palette bits */
 						if (mo[x] & 2)
-							thunderj_mark_high_palette(bitmap, pf, mo, x, y);
+							atarimo_mark_high_palette(bitmap, pf, mo, x, y);
 					}
 
 					/* erase behind ourselves */

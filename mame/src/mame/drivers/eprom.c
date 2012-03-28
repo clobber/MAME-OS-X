@@ -23,21 +23,11 @@
 ***************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "machine/atarigen.h"
 #include "audio/atarijsa.h"
-#include "eprom.h"
-
-
-
-/*************************************
- *
- *  Statics
- *
- *************************************/
-
-static UINT16 *sync_data;
+#include "video/atarimo.h"
+#include "includes/eprom.h"
 
 
 
@@ -47,31 +37,33 @@ static UINT16 *sync_data;
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	cputag_set_input_line(machine, "maincpu", 4, atarigen_video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	eprom_state *state = machine.driver_data<eprom_state>();
 
-	if (cputag_get_cpu(machine, "extra") != NULL)
-		cputag_set_input_line(machine, "extra", 4, atarigen_video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 4, state->m_video_int_state ? ASSERT_LINE : CLEAR_LINE);
 
-	cputag_set_input_line(machine, "maincpu", 6, atarigen_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	if (machine.device("extra") != NULL)
+		cputag_set_input_line(machine, "extra", 4, state->m_video_int_state ? ASSERT_LINE : CLEAR_LINE);
+
+	cputag_set_input_line(machine, "maincpu", 6, state->m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
-static MACHINE_RESET( klaxp )
+static MACHINE_START( eprom )
 {
-	atarigen_eeprom_reset();
-	atarigen_interrupt_reset(update_interrupts);
-	atarigen_scanline_timer_reset(machine->primary_screen, eprom_scanline_update, 8);
-	atarijsa_reset();
-	atarigen_init_save_state(machine);
+	atarigen_init(machine);
 }
 
 
 static MACHINE_RESET( eprom )
 {
-	MACHINE_RESET_CALL(klaxp);
-	state_save_register_global_pointer(machine, sync_data, 2);
+	eprom_state *state = machine.driver_data<eprom_state>();
+
+	atarigen_eeprom_reset(state);
+	atarigen_interrupt_reset(state, update_interrupts);
+	atarigen_scanline_timer_reset(*machine.primary_screen, eprom_scanline_update, 8);
+	atarijsa_reset();
 }
 
 
@@ -84,10 +76,11 @@ static MACHINE_RESET( eprom )
 
 static READ16_HANDLER( special_port1_r )
 {
-	int result = input_port_read(space->machine, "260010");
+	eprom_state *state = space->machine().driver_data<eprom_state>();
+	int result = input_port_read(space->machine(), "260010");
 
-	if (atarigen_sound_to_cpu_ready) result ^= 0x0004;
-	if (atarigen_cpu_to_sound_ready) result ^= 0x0008;
+	if (state->m_sound_to_cpu_ready) result ^= 0x0004;
+	if (state->m_cpu_to_sound_ready) result ^= 0x0008;
 	result ^= 0x0010;
 
 	return result;
@@ -96,11 +89,11 @@ static READ16_HANDLER( special_port1_r )
 
 static READ16_HANDLER( adc_r )
 {
-	static int last_offset;
+	eprom_state *state = space->machine().driver_data<eprom_state>();
 	static const char *const adcnames[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-	int result = input_port_read(space->machine, adcnames[last_offset & 3]);
+	int result = input_port_read(space->machine(), adcnames[state->m_last_offset & 3]);
 
-	last_offset = offset;
+	state->m_last_offset = offset;
 	return result;
 }
 
@@ -114,19 +107,21 @@ static READ16_HANDLER( adc_r )
 
 static WRITE16_HANDLER( eprom_latch_w )
 {
-	if (ACCESSING_BITS_0_7 && (cputag_get_cpu(space->machine, "extra") != NULL))
+	eprom_state *state = space->machine().driver_data<eprom_state>();
+
+	if (ACCESSING_BITS_0_7 && (space->machine().device("extra") != NULL))
 	{
 		/* bit 0: reset extra CPU */
 		if (data & 1)
-			cputag_set_input_line(space->machine, "extra", INPUT_LINE_RESET, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "extra", INPUT_LINE_RESET, CLEAR_LINE);
 		else
-			cputag_set_input_line(space->machine, "extra", INPUT_LINE_RESET, ASSERT_LINE);
+			cputag_set_input_line(space->machine(), "extra", INPUT_LINE_RESET, ASSERT_LINE);
 
 		/* bits 1-4: screen intensity */
-		eprom_screen_intensity = (data & 0x1e) >> 1;
+		state->m_screen_intensity = (data & 0x1e) >> 1;
 
 		/* bit 5: video disable */
-		eprom_video_disable = (data & 0x20);
+		state->m_video_disable = (data & 0x20);
 	}
 }
 
@@ -140,19 +135,21 @@ static WRITE16_HANDLER( eprom_latch_w )
 
 static READ16_HANDLER( sync_r )
 {
-	return sync_data[offset];
+	eprom_state *state = space->machine().driver_data<eprom_state>();
+	return state->m_sync_data[offset];
 }
 
 
 static WRITE16_HANDLER( sync_w )
 {
-	int oldword = sync_data[offset];
+	eprom_state *state = space->machine().driver_data<eprom_state>();
+	int oldword = state->m_sync_data[offset];
 	int newword = oldword;
 	COMBINE_DATA(&newword);
 
-	sync_data[offset] = newword;
+	state->m_sync_data[offset] = newword;
 	if ((oldword & 0xff00) != (newword & 0xff00))
-		cpu_yield(space->cpu);
+		device_yield(&space->device());
 }
 
 
@@ -163,11 +160,11 @@ static WRITE16_HANDLER( sync_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x09ffff) AM_ROM
-	AM_RANGE(0x0e0000, 0x0e0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
-	AM_RANGE(0x16cc00, 0x16cc01) AM_RAM AM_SHARE(2)
-	AM_RANGE(0x160000, 0x16ffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x0e0000, 0x0e0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
+	AM_RANGE(0x16cc00, 0x16cc01) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x160000, 0x16ffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x1f0000, 0x1fffff) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0x260000, 0x26000f) AM_READ_PORT("260000")
 	AM_RANGE(0x260010, 0x26001f) AM_READ(special_port1_r)
@@ -178,21 +175,21 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x360010, 0x360011) AM_WRITE(eprom_latch_w)
 	AM_RANGE(0x360020, 0x360021) AM_WRITE(atarigen_sound_reset_w)
 	AM_RANGE(0x360030, 0x360031) AM_WRITE(atarigen_sound_w)
-	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM AM_BASE(&paletteram16)
-	AM_RANGE(0x3f0000, 0x3f1fff) AM_WRITE(atarigen_playfield_w) AM_BASE(&atarigen_playfield)
-	AM_RANGE(0x3f2000, 0x3f3fff) AM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
-	AM_RANGE(0x3f4000, 0x3f4f7f) AM_WRITE(atarigen_alpha_w) AM_BASE(&atarigen_alpha)
-	AM_RANGE(0x3f4f80, 0x3f4fff) AM_WRITE(atarimo_0_slipram_w) AM_BASE(&atarimo_0_slipram)
-	AM_RANGE(0x3f8000, 0x3f9fff) AM_WRITE(atarigen_playfield_upper_w) AM_BASE(&atarigen_playfield_upper)
+	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x3f0000, 0x3f1fff) AM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(eprom_state, m_playfield)
+	AM_RANGE(0x3f2000, 0x3f3fff) AM_READWRITE(atarimo_0_spriteram_r, atarimo_0_spriteram_w)
+	AM_RANGE(0x3f4000, 0x3f4f7f) AM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(eprom_state, m_alpha)
+	AM_RANGE(0x3f4f80, 0x3f4fff) AM_READWRITE(atarimo_0_slipram_r, atarimo_0_slipram_w)
+	AM_RANGE(0x3f8000, 0x3f9fff) AM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(eprom_state, m_playfield_upper)
 	AM_RANGE(0x3f0000, 0x3f9fff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( guts_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( guts_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x09ffff) AM_ROM
-	AM_RANGE(0x0e0000, 0x0e0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
-	AM_RANGE(0x16cc00, 0x16cc01) AM_RAM AM_SHARE(2)
-	AM_RANGE(0x160000, 0x16ffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x0e0000, 0x0e0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
+	AM_RANGE(0x16cc00, 0x16cc01) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x160000, 0x16ffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x1f0000, 0x1fffff) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0x260000, 0x26000f) AM_READ_PORT("260000")
 	AM_RANGE(0x260010, 0x26001f) AM_READ(special_port1_r)
@@ -203,12 +200,12 @@ static ADDRESS_MAP_START( guts_map, ADDRESS_SPACE_PROGRAM, 16 )
 //  AM_RANGE(0x360010, 0x360011) AM_WRITE(eprom_latch_w)
 	AM_RANGE(0x360020, 0x360021) AM_WRITE(atarigen_sound_reset_w)
 	AM_RANGE(0x360030, 0x360031) AM_WRITE(atarigen_sound_w)
-	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM AM_BASE(&paletteram16)
-	AM_RANGE(0xff0000, 0xff1fff) AM_WRITE(atarigen_playfield_upper_w) AM_BASE(&atarigen_playfield_upper)
-	AM_RANGE(0xff8000, 0xff9fff) AM_WRITE(atarigen_playfield_w) AM_BASE(&atarigen_playfield)
-	AM_RANGE(0xffa000, 0xffbfff) AM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
-	AM_RANGE(0xffc000, 0xffcf7f) AM_WRITE(atarigen_alpha_w) AM_BASE(&atarigen_alpha)
-	AM_RANGE(0xffcf80, 0xffcfff) AM_WRITE(atarimo_0_slipram_w) AM_BASE(&atarimo_0_slipram)
+	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xff0000, 0xff1fff) AM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(eprom_state, m_playfield_upper)
+	AM_RANGE(0xff8000, 0xff9fff) AM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(eprom_state, m_playfield)
+	AM_RANGE(0xffa000, 0xffbfff) AM_READWRITE(atarimo_0_spriteram_r, atarimo_0_spriteram_w)
+	AM_RANGE(0xffc000, 0xffcf7f) AM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(eprom_state, m_alpha)
+	AM_RANGE(0xffcf80, 0xffcfff) AM_READWRITE(atarimo_0_slipram_r, atarimo_0_slipram_w)
 	AM_RANGE(0xff0000, 0xff1fff) AM_RAM
 	AM_RANGE(0xff8000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -221,10 +218,10 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( extra_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( extra_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x16cc00, 0x16cc01) AM_READWRITE(sync_r, sync_w) AM_SHARE(2) AM_BASE(&sync_data)
-	AM_RANGE(0x160000, 0x16ffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x16cc00, 0x16cc01) AM_READWRITE(sync_r, sync_w) AM_SHARE("share2") AM_BASE_MEMBER(eprom_state, m_sync_data)
+	AM_RANGE(0x160000, 0x16ffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x260000, 0x26000f) AM_READ_PORT("260000")
 	AM_RANGE(0x260010, 0x26001f) AM_READ(special_port1_r)
 	AM_RANGE(0x260020, 0x26002f) AM_READ(adc_r)
@@ -410,99 +407,100 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( eprom )
+static MACHINE_CONFIG_START( eprom, eprom_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
+	MCFG_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
 
-	MDRV_CPU_ADD("extra", M68000, ATARI_CLOCK_14MHz/2)
-	MDRV_CPU_PROGRAM_MAP(extra_map)
+	MCFG_CPU_ADD("extra", M68000, ATARI_CLOCK_14MHz/2)
+	MCFG_CPU_PROGRAM_MAP(extra_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
-	MDRV_MACHINE_RESET(eprom)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MCFG_MACHINE_START(eprom)
+	MCFG_MACHINE_RESET(eprom)
+	MCFG_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
-	MDRV_GFXDECODE(eprom)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_GFXDECODE(eprom)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a SYNGEN chip to generate video signals */
-	MDRV_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE_STATIC(eprom)
 
-	MDRV_VIDEO_START(eprom)
-	MDRV_VIDEO_UPDATE(eprom)
+	MCFG_VIDEO_START(eprom)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(jsa_i_mono_speech)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(jsa_i_mono_speech)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( klaxp )
+static MACHINE_CONFIG_START( klaxp, eprom_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
+	MCFG_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
-	MDRV_MACHINE_RESET(klaxp)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MCFG_MACHINE_START(eprom)
+	MCFG_MACHINE_RESET(eprom)
+	MCFG_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
-	MDRV_GFXDECODE(eprom)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_GFXDECODE(eprom)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a SYNGEN chip to generate video signals */
-	MDRV_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE_STATIC(eprom)
 
-	MDRV_VIDEO_START(eprom)
-	MDRV_VIDEO_UPDATE(eprom)
+	MCFG_VIDEO_START(eprom)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(jsa_ii_mono)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(jsa_ii_mono)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( guts )
+static MACHINE_CONFIG_START( guts, eprom_state )
+
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
-	MDRV_CPU_PROGRAM_MAP(guts_map)
-	MDRV_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
+	MCFG_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
+	MCFG_CPU_PROGRAM_MAP(guts_map)
+	MCFG_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
-	MDRV_MACHINE_RESET(eprom)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MCFG_MACHINE_START(eprom)
+	MCFG_MACHINE_RESET(eprom)
+	MCFG_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
-	MDRV_GFXDECODE(guts)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_GFXDECODE(guts)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a SYNGEN chip to generate video signals */
-	MDRV_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE_STATIC(guts)
 
-	MDRV_VIDEO_START(guts)
-	MDRV_VIDEO_UPDATE(guts)
+	MCFG_VIDEO_START(guts)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(jsa_ii_mono)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(jsa_ii_mono)
+MACHINE_CONFIG_END
 
 
 
@@ -725,25 +723,24 @@ ROM_END
 
 static DRIVER_INIT( eprom )
 {
-	atarigen_eeprom_default = NULL;
+	eprom_state *state = machine.driver_data<eprom_state>();
+
 	atarijsa_init(machine, "260010", 0x0002);
 
 	/* install CPU synchronization handlers */
-	sync_data = memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x16cc00, 0x16cc01, 0, 0, sync_r, sync_w);
-	sync_data = memory_install_readwrite16_handler(cputag_get_address_space(machine, "extra", ADDRESS_SPACE_PROGRAM), 0x16cc00, 0x16cc01, 0, 0, sync_r, sync_w);
+	state->m_sync_data = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x16cc00, 0x16cc01, FUNC(sync_r), FUNC(sync_w));
+	state->m_sync_data = machine.device("extra")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x16cc00, 0x16cc01, FUNC(sync_r), FUNC(sync_w));
 }
 
 
 static DRIVER_INIT( klaxp )
 {
-	atarigen_eeprom_default = NULL;
 	atarijsa_init(machine, "260010", 0x0002);
 }
 
 
 static DRIVER_INIT( guts )
 {
-	atarigen_eeprom_default = NULL;
 	atarijsa_init(machine, "260010", 0x0002);
 }
 

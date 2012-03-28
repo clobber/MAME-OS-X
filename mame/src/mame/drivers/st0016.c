@@ -9,16 +9,14 @@ Todo:
 Dips verified for Neratte Chu (nratechu) from manual
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/v810/v810.h"
-#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 
 
 
-static int mux_port;
 UINT32 st0016_rom_bank;
 
 /*************************************
@@ -27,14 +25,14 @@ UINT32 st0016_rom_bank;
  *
  *************************************/
 
-static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( st0016_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xe87f) AM_RAM /* common ram */
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w) /* sound regs 8 x $20 bytes, see notes */
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w) /* sound regs 8 x $20 bytes, see notes */
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM /* work ram */
@@ -47,35 +45,38 @@ static READ8_HANDLER(mux_r)
         xxxx - input port #2
     xxxx     - dip switches (2x8 bits) (multiplexed)
 */
-	int retval = input_port_read(space->machine, "SYSTEM") & 0x0f;
-	switch(mux_port & 0x30)
+	st0016_state *state = space->machine().driver_data<st0016_state>();
+	int retval = input_port_read(space->machine(), "SYSTEM") & 0x0f;
+
+	switch(state->mux_port & 0x30)
 	{
-		case 0x00: retval |= ((input_port_read(space->machine, "DSW1") & 1) << 4) | ((input_port_read(space->machine, "DSW1") & 0x10) << 1)
-								| ((input_port_read(space->machine, "DSW2") & 1) << 6) | ((input_port_read(space->machine, "DSW2") & 0x10) <<3); break;
-		case 0x10: retval |= ((input_port_read(space->machine, "DSW1") & 2) << 3) | ((input_port_read(space->machine, "DSW1") & 0x20)   )
-								| ((input_port_read(space->machine, "DSW2") & 2) << 5) | ((input_port_read(space->machine, "DSW2") & 0x20) <<2); break;
-		case 0x20: retval |= ((input_port_read(space->machine, "DSW1") & 4) << 2) | ((input_port_read(space->machine, "DSW1") & 0x40) >> 1)
-								| ((input_port_read(space->machine, "DSW2") & 4) << 4) | ((input_port_read(space->machine, "DSW2") & 0x40) <<1); break;
-		case 0x30: retval |= ((input_port_read(space->machine, "DSW1") & 8) << 1) | ((input_port_read(space->machine, "DSW1") & 0x80) >> 2)
-								| ((input_port_read(space->machine, "DSW2") & 8) << 3) | ((input_port_read(space->machine, "DSW2") & 0x80)    ); break;
+		case 0x00: retval |= ((input_port_read(space->machine(), "DSW1") & 1) << 4) | ((input_port_read(space->machine(), "DSW1") & 0x10) << 1)
+								| ((input_port_read(space->machine(), "DSW2") & 1) << 6) | ((input_port_read(space->machine(), "DSW2") & 0x10) <<3); break;
+		case 0x10: retval |= ((input_port_read(space->machine(), "DSW1") & 2) << 3) | ((input_port_read(space->machine(), "DSW1") & 0x20)   )
+								| ((input_port_read(space->machine(), "DSW2") & 2) << 5) | ((input_port_read(space->machine(), "DSW2") & 0x20) <<2); break;
+		case 0x20: retval |= ((input_port_read(space->machine(), "DSW1") & 4) << 2) | ((input_port_read(space->machine(), "DSW1") & 0x40) >> 1)
+								| ((input_port_read(space->machine(), "DSW2") & 4) << 4) | ((input_port_read(space->machine(), "DSW2") & 0x40) <<1); break;
+		case 0x30: retval |= ((input_port_read(space->machine(), "DSW1") & 8) << 1) | ((input_port_read(space->machine(), "DSW1") & 0x80) >> 2)
+								| ((input_port_read(space->machine(), "DSW2") & 8) << 3) | ((input_port_read(space->machine(), "DSW2") & 0x80)    ); break;
 	}
+
 	return retval;
 }
 
 static WRITE8_HANDLER(mux_select_w)
 {
-	mux_port=data;
+	st0016_state *state = space->machine().driver_data<st0016_state>();
+
+	state->mux_port=data;
 }
 
 WRITE8_HANDLER(st0016_rom_bank_w)
 {
-	memory_set_bankptr(space->machine,  1, memory_region(space->machine, "maincpu") + (data* 0x4000) + 0x10000 );
+	memory_set_bankptr(space->machine(),  "bank1", space->machine().region("maincpu")->base() + (data* 0x4000) + 0x10000 );
 	st0016_rom_bank=data;
 }
 
-READ8_HANDLER(st0016_dma_r);
-
-static ADDRESS_MAP_START( st0016_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w) /* video/crt regs ? */
 	AM_RANGE(0xc0, 0xc0) AM_READ_PORT("P1") AM_WRITE(mux_select_w)
@@ -113,7 +114,7 @@ static WRITE32_HANDLER(latch32_w)
 	if(!offset)
 		latches[2]|=1;
 	COMBINE_DATA(&latches[offset]);
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	space->machine().scheduler().synchronize();
 }
 
 static READ8_HANDLER(latch8_r)
@@ -128,18 +129,18 @@ static WRITE8_HANDLER(latch8_w)
 	if(!offset)
 		latches[2]|=2;
 	latches[offset]=data;
-	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	space->machine().scheduler().synchronize();
 }
 
-static ADDRESS_MAP_START( v810_mem,ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( v810_mem,AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM
 	AM_RANGE(0x80000000, 0x8001ffff) AM_RAM
 	AM_RANGE(0xc0000000, 0xc001ffff) AM_RAM
 	AM_RANGE(0x40000000, 0x4000000f) AM_READ(latch32_r) AM_WRITE(latch32_w)
-	AM_RANGE(0xfff80000, 0xffffffff) AM_READ(SMH_BANK(2))
+	AM_RANGE(0xfff80000, 0xffffffff) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( st0016_m2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_m2_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w)
 	AM_RANGE(0xc0, 0xc3) AM_READ(latch8_r) AM_WRITE(latch8_w)
@@ -412,13 +413,16 @@ static GFXDECODE_START( st0016 )
 //  GFXDECODE_ENTRY( NULL, 0, charlayout,      0, 16*4  )
 GFXDECODE_END
 
-static INTERRUPT_GEN(st0016_int)
+static TIMER_DEVICE_CALLBACK(st0016_int)
 {
-	if(!cpu_getiloops(device))
-		cpu_set_input_line(device,0,HOLD_LINE);
-	else
-		if(cpu_get_reg(device, Z80_IFF1)) /* dirty hack ... */
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE );
+	st0016_state *state = timer.machine().driver_data<st0016_state>();
+	int scanline = param;
+
+	if(scanline == 240)
+		device_set_input_line(state->m_maincpu,0,HOLD_LINE);
+	else if((scanline % 64) == 0)
+		if(cpu_get_reg(state->m_maincpu, Z80_IFF1)) /* dirty hack ... */
+			device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE );
 }
 
 static const st0016_interface st0016_config =
@@ -432,44 +436,41 @@ static const st0016_interface st0016_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( st0016 )
+static MACHINE_CONFIG_START( st0016, st0016_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(st0016_mem)
-	MDRV_CPU_IO_MAP(st0016_io)
-
-	MDRV_CPU_VBLANK_INT_HACK(st0016_int,5) /*  4*nmi + int0 */
+	MCFG_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(st0016_mem)
+	MCFG_CPU_IO_MAP(st0016_io)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", st0016_int, "screen", 0, 1) /*  4*nmi + int0 */
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(48*8, 48*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 48*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(48*8, 48*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 48*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(st0016)
 
-	MDRV_GFXDECODE(st0016)
-	MDRV_PALETTE_LENGTH(16*16*4+1)
+	MCFG_GFXDECODE(st0016)
+	MCFG_PALETTE_LENGTH(16*16*4+1)
 
-	MDRV_VIDEO_START(st0016)
-	MDRV_VIDEO_UPDATE(st0016)
+	MCFG_VIDEO_START(st0016)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
-	MDRV_SOUND_CONFIG(st0016_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("stsnd", ST0016, 0)
+	MCFG_SOUND_CONFIG(st0016_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mayjinsn )
-	MDRV_IMPORT_FROM(st0016)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(st0016_m2_io)
-	MDRV_CPU_ADD("sub", V810, 10000000)//25 Mhz ?
-	MDRV_CPU_PROGRAM_MAP(v810_mem)
-	MDRV_QUANTUM_TIME(HZ(60))
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( mayjinsn, st0016 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(st0016_m2_io)
+	MCFG_CPU_ADD("sub", V810, 10000000)//25 Mhz ?
+	MCFG_CPU_PROGRAM_MAP(v810_mem)
+	MCFG_QUANTUM_TIME(attotime::from_hz(60))
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -519,6 +520,27 @@ ROM_START( nratechu )
 	ROM_LOAD( "sx012-01",   0x10000, 0x80000,   CRC(6ca01d57) SHA1(065848f19ecf2dc1f7bbc7ddd87bca502e4b8b16) )
 	ROM_LOAD( "sx012-02",   0x110000, 0x100000, CRC(40a4e354) SHA1(8120ce8deee6805050a5b083a334c3743c09566b) )
 	ROM_COPY( "maincpu",  0x10000, 0x00000, 0x08000 )
+ROM_END
+
+/* PCB E51-00001 (almost identical to above) */
+
+ROM_START( dcrown )
+	ROM_REGION( 0x290000, "maincpu", 0 )
+	ROM_LOAD( "dc1.u31",0x010000, 0x80000, CRC(e55200b8) SHA1(20a968dc895bb636b064c29b4b53c6ffa49fea36) )
+	ROM_LOAD( "dc2.u32",0x090000, 0x80000, CRC(05b6192f) SHA1(6af6e7b2c681f2791a7f89a528a95eb976c8ba84) )
+	ROM_LOAD( "dc3.u33",0x110000, 0x80000, CRC(f23c1975) SHA1(118d6054922a733d23363c53bb331d84c78e50ad) )
+	ROM_LOAD( "dc4.u34",0x190000, 0x80000, CRC(0d1c2c61) SHA1(7e4dc20ab683ce0f61dd939cfd9b17714ba2343a) )
+
+	ROM_COPY( "maincpu",   0x010000, 0x000000, 0x08000 )
+ROM_END
+
+ROM_START( dcrowna )
+	ROM_REGION( 0x290000, "maincpu", 0 )
+	ROM_LOAD( "dcn-0.1c",     0x010000, 0x080000, CRC(5dd0615d) SHA1(b859994bd79229da4c687deefe1997313724b26e) )
+	ROM_LOAD( "dcn-1.1d",     0x090000, 0x080000, CRC(6c6f14e7) SHA1(2a3474e44420cc78e3ead777eb91481c4bb46eef) )
+	ROM_LOAD( "dcn-2.1e",     0x110000, 0x080000, CRC(e9401a5e) SHA1(db24ebe5a0073c7c1c2da957772e223545f3c778) )
+	ROM_LOAD( "dcn-3.1f",     0x190000, 0x080000, CRC(ec2e88bc) SHA1(2a8deee63e123dae411e2b834eca69be6f646d66) )
+	ROM_COPY( "maincpu",   0x010000, 0x000000, 0x08000 )
 ROM_END
 
 /*
@@ -661,13 +683,13 @@ static DRIVER_INIT(nratechu)
 static DRIVER_INIT(mayjinsn)
 {
 	st0016_game=4|0x80;
-	memory_set_bankptr(machine, 2, memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2", machine.region("user1")->base());
 }
 
 static DRIVER_INIT(mayjisn2)
 {
 	st0016_game=4;
-	memory_set_bankptr(machine, 2, memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2", machine.region("user1")->base());
 }
 
 /*************************************
@@ -676,9 +698,11 @@ static DRIVER_INIT(mayjisn2)
  *
  *************************************/
 
-GAME(  1994, renju,	0,	  st0016,   renju,    renju,    ROT0, "Visco", "Renju Kizoku", 0)
-GAME(  1996, nratechu,	0,	  st0016,   nratechu, nratechu, ROT0, "Seta",  "Neratte Chu", 0)
-GAME(  1994, mayjisn2,	0,	  mayjinsn, mayjisn2, mayjisn2, ROT0, "Seta",  "Mayjinsen 2", 0)
-GAME(  1995, koikois,	 0,	  st0016, koikois, renju, ROT0, "Visco",  "Koi Koi Shimasho", GAME_IMPERFECT_GRAPHICS)
+GAME(  1994, renju,	    0,	    st0016,   renju,    renju,    ROT0, "Visco",     "Renju Kizoku", 0)
+GAME(  1996, nratechu,	0,	    st0016,   nratechu, nratechu, ROT0, "Seta",      "Neratte Chu", 0)
+GAME(  1994, mayjisn2,	0,	    mayjinsn, mayjisn2, mayjisn2, ROT0, "Seta",      "Mayjinsen 2", 0)
+GAME(  1995, koikois,   0,	    st0016,   koikois,  renju,    ROT0, "Visco",     "Koi Koi Shimasho", GAME_IMPERFECT_GRAPHICS)
 /* Not working */
-GAME( 1994, mayjinsn,	0,	  mayjinsn, st0016,   mayjinsn, ROT0, "Seta",  "Mayjinsen",GAME_IMPERFECT_GRAPHICS|GAME_NOT_WORKING)
+GAME( 1994, mayjinsn,	0,	    mayjinsn, st0016,   mayjinsn, ROT0, "Seta",      "Mayjinsen",GAME_IMPERFECT_GRAPHICS|GAME_NOT_WORKING)
+GAME( 199?, dcrown,	    0,      st0016,   renju,    renju,    ROT0, "<unknown>", "Dream Crown (Set 1)", GAME_NOT_WORKING)
+GAME( 199?, dcrowna,    dcrown, st0016,   renju,    renju,    ROT0, "<unknown>", "Dream Crown (Set 2)", GAME_NOT_WORKING)

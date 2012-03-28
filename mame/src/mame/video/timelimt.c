@@ -1,13 +1,6 @@
-#include "driver.h"
+#include "emu.h"
+#include "includes/timelimt.h"
 
-/* globals */
-UINT8 *timelimt_bg_videoram;
-size_t timelimt_bg_videoram_size;
-
-/* locals */
-static int scrollx, scrolly;
-
-static tilemap *bg_tilemap, *fg_tilemap;
 
 /***************************************************************************
 
@@ -30,7 +23,7 @@ static tilemap *bg_tilemap, *fg_tilemap;
 PALETTE_INIT( timelimt ) {
 	int i;
 
-	for (i = 0;i < machine->config->total_colors;i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -62,62 +55,74 @@ PALETTE_INIT( timelimt ) {
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	SET_TILE_INFO(1, timelimt_bg_videoram[tile_index], 0, 0);
+	timelimt_state *state = machine.driver_data<timelimt_state>();
+	SET_TILE_INFO(1, state->m_bg_videoram[tile_index], 0, 0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
+	timelimt_state *state = machine.driver_data<timelimt_state>();
+	UINT8 *videoram = state->m_videoram;
 	SET_TILE_INFO(0, videoram[tile_index], 0, 0);
 }
 
 VIDEO_START( timelimt )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	timelimt_state *state = machine.driver_data<timelimt_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
 		 8, 8, 64, 32);
 
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows,
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows,
 		 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(fg_tilemap, 0);
+	state->m_fg_tilemap->set_transparent_pen(0);
 }
 
 /***************************************************************************/
 
 WRITE8_HANDLER( timelimt_videoram_w )
 {
+	timelimt_state *state = space->machine().driver_data<timelimt_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap, offset);
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( timelimt_bg_videoram_w )
 {
-	timelimt_bg_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	timelimt_state *state = space->machine().driver_data<timelimt_state>();
+	state->m_bg_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( timelimt_scroll_x_lsb_w )
 {
-	scrollx &= 0x100;
-	scrollx |= data & 0xff;
+	timelimt_state *state = space->machine().driver_data<timelimt_state>();
+	state->m_scrollx &= 0x100;
+	state->m_scrollx |= data & 0xff;
 }
 
 WRITE8_HANDLER( timelimt_scroll_x_msb_w )
 {
-	scrollx &= 0xff;
-	scrollx |= ( data & 1 ) << 8;
+	timelimt_state *state = space->machine().driver_data<timelimt_state>();
+	state->m_scrollx &= 0xff;
+	state->m_scrollx |= ( data & 1 ) << 8;
 }
 
 WRITE8_HANDLER( timelimt_scroll_y_w )
 {
-	scrolly = data;
+	timelimt_state *state = space->machine().driver_data<timelimt_state>();
+	state->m_scrolly = data;
 }
 
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
+	timelimt_state *state = machine.driver_data<timelimt_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for( offs = spriteram_size; offs >= 0; offs -= 4 )
+	for( offs = state->m_spriteram_size; offs >= 0; offs -= 4 )
 	{
 		int sy = 240 - spriteram[offs];
 		int sx = spriteram[offs+3];
@@ -129,7 +134,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		code += ( attr & 0x80 ) ? 0x40 : 0x00;
 		code += ( attr & 0x40 ) ? 0x80 : 0x00;
 
-		drawgfx_transpen( bitmap, cliprect,machine->gfx[2],
+		drawgfx_transpen( bitmap, cliprect,machine.gfx[2],
 				code,
 				attr & 7,
 				flipx,flipy,
@@ -138,14 +143,15 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 }
 
 
-VIDEO_UPDATE( timelimt )
+SCREEN_UPDATE_IND16( timelimt )
 {
-	tilemap_set_scrollx(bg_tilemap, 0, scrollx);
-	tilemap_set_scrolly(bg_tilemap, 0, scrolly);
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	timelimt_state *state = screen.machine().driver_data<timelimt_state>();
+	state->m_bg_tilemap->set_scrollx(0, state->m_scrollx);
+	state->m_bg_tilemap->set_scrolly(0, state->m_scrolly);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 
-	draw_sprites(screen->machine, bitmap, cliprect);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 
-	tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }

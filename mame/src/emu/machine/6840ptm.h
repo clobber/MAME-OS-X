@@ -6,59 +6,134 @@
 
 ***************************************************************************/
 
+#pragma once
+
 #ifndef __6840PTM_H__
 #define __6840PTM_H__
 
-#include "devcb.h"
-
-/***************************************************************************
-    MACROS / CONSTANTS
-***************************************************************************/
-
-#define PTM6840		DEVICE_GET_INFO_NAME(ptm6840)
-
-#define MDRV_PTM6840_ADD(_tag, _config) \
-	MDRV_DEVICE_ADD(_tag, PTM6840, 0) \
-	MDRV_DEVICE_CONFIG(_config)
+#include "emu.h"
 
 
-/***************************************************************************
-    TYPE DEFINITIONS
-***************************************************************************/
+
+//**************************************************************************
+//  DEVICE CONFIGURATION MACROS
+//**************************************************************************
+
+#define MCFG_PTM6840_ADD(_tag, _interface) \
+	MCFG_DEVICE_ADD(_tag, PTM6840, 0) \
+	ptm6840_device::static_set_interface(*device, _interface);
 
 
-typedef struct _ptm6840_interface ptm6840_interface;
-struct _ptm6840_interface
+
+//**************************************************************************
+//  TYPE DEFINITIONS
+//**************************************************************************
+
+// ======================> ptm6840_interface
+
+struct ptm6840_interface
 {
-	int internal_clock;
-	int external_clock[3];
+	double m_internal_clock;
+	double m_external_clock[3];
 
-	devcb_write8 out_func[3];	// function to call when output[idx] changes
-	devcb_write_line irq_func;	// function called if IRQ line changes
+	devcb_write8 m_out_cb[3];		// function to call when output[idx] changes
+	devcb_write_line m_irq_cb;	// function called if IRQ line changes
 };
 
 
-/***************************************************************************
-    PROTOTYPES
-***************************************************************************/
 
-/* device interface */
-DEVICE_GET_INFO( ptm6840 );
+// ======================> ptm6840_device
 
-int ptm6840_get_status( const device_config *device, int clock );	// get whether timer is enabled
-int ptm6840_get_irq( const device_config *device );					// get IRQ state
-UINT16 ptm6840_get_count( const device_config *device, int counter );// get counter value
-void ptm6840_set_ext_clock( const device_config *device, int counter, int clock ); // set clock frequency
-int ptm6840_get_ext_clock( const device_config *device, int counter );// get clock frequency
+class ptm6840_device :  public device_t,
+                        public ptm6840_interface
+{
+public:
+    // construction/destruction
+    ptm6840_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
 
-WRITE8_DEVICE_HANDLER( ptm6840_set_g1 );	// set gate1 state
-WRITE8_DEVICE_HANDLER( ptm6840_set_g2 );	// set gate2 state
-WRITE8_DEVICE_HANDLER( ptm6840_set_g3 );	// set gate3 state
-WRITE8_DEVICE_HANDLER( ptm6840_set_c1 );	// set clock1 state
-WRITE8_DEVICE_HANDLER( ptm6840_set_c2 );	// set clock2 state
-WRITE8_DEVICE_HANDLER( ptm6840_set_c3 );	// set clock3 state
+	// static configuration helpers
+	static void static_set_interface(device_t &device, const ptm6840_interface &interface);
 
-WRITE8_DEVICE_HANDLER( ptm6840_write );
-READ8_DEVICE_HANDLER( ptm6840_read );
+	int status(int clock) const { return m_enabled[clock]; } // get whether timer is enabled
+	int irq_state() const { return m_IRQ; }					// get IRQ state
+	UINT16 count(int counter) const { return compute_counter(counter); }	// get counter value
+	void set_ext_clock(int counter, double clock);	// set clock frequency
+	int ext_clock(int counter) const { return m_external_clock[counter]; }	// get clock frequency
+
+	DECLARE_WRITE8_MEMBER( write );
+	void write(offs_t offset, UINT8 data) { write(*memory_nonspecific_space(machine()), offset, data); }
+	DECLARE_READ8_MEMBER( read );
+	UINT8 read(offs_t offset) { return read(*memory_nonspecific_space(machine()), offset); }
+
+	void set_gate(int idx, int state);
+	DECLARE_WRITE_LINE_MEMBER( set_g1 );
+	DECLARE_WRITE_LINE_MEMBER( set_g2 );
+	DECLARE_WRITE_LINE_MEMBER( set_g3 );
+
+	void set_clock(int idx, int state);
+	DECLARE_WRITE_LINE_MEMBER( set_c1 );
+	DECLARE_WRITE_LINE_MEMBER( set_c2 );
+	DECLARE_WRITE_LINE_MEMBER( set_c3 );
+
+	void update_interrupts();
+
+protected:
+    // device-level overrides
+    virtual void device_start();
+    virtual void device_reset();
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
+
+private:
+	void subtract_from_counter(int counter, int count);
+	void tick(int counter, int count);
+	void timeout(int idx);
+
+	UINT16 compute_counter(int counter) const;
+	void reload_count(int idx);
+
+	enum
+	{
+		PTM_6840_CTRL1   = 0,
+		PTM_6840_CTRL2   = 1,
+		PTM_6840_STATUS  = 1,
+		PTM_6840_MSBBUF1 = 2,
+		PTM_6840_LSB1	 = 3,
+		PTM_6840_MSBBUF2 = 4,
+		PTM_6840_LSB2    = 5,
+		PTM_6840_MSBBUF3 = 6,
+		PTM_6840_LSB3    = 7,
+	};
+
+	devcb_resolved_write8 m_out_func[3];	// function to call when output[idx] changes
+	devcb_resolved_write_line m_irq_func;	// function called if IRQ line changes
+
+	UINT8 m_control_reg[3];
+	UINT8 m_output[3]; // Output states
+	UINT8 m_gate[3];   // Input gate states
+	UINT8 m_clk[3];  // Clock states
+	UINT8 m_enabled[3];
+	UINT8 m_mode[3];
+	UINT8 m_fired[3];
+	UINT8 m_t3_divisor;
+	UINT8 m_t3_scaler;
+	UINT8 m_IRQ;
+	UINT8 m_status_reg;
+	UINT8 m_status_read_since_int;
+	UINT8 m_lsb_buffer;
+	UINT8 m_msb_buffer;
+
+	// Each PTM has 3 timers
+	emu_timer *m_timer[3];
+
+	UINT16 m_latch[3];
+	UINT16 m_counter[3];
+
+	static const char *const opmode[];
+};
+
+
+// device type definition
+extern const device_type PTM6840;
+
 
 #endif /* __6840PTM_H__ */

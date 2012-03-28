@@ -3,7 +3,6 @@
 #ifndef __MB86233_H__
 #define __MB86233_H__
 
-#include "cpuintrf.h"
 
 /***************************************************************************
     REGISTER ENUMERATION
@@ -43,8 +42,8 @@ enum
     STRUCTURES
 ***************************************************************************/
 
-typedef int (*mb86233_fifo_read_func)(const device_config *device, UINT32 *data);
-typedef void (*mb86233_fifo_write_func)(const device_config *device, UINT32 data);
+typedef int (*mb86233_fifo_read_func)(device_t *device, UINT32 *data);
+typedef void (*mb86233_fifo_write_func)(device_t *device, UINT32 data);
 
 typedef struct _mb86233_cpu_core mb86233_cpu_core;
 struct _mb86233_cpu_core
@@ -54,7 +53,6 @@ struct _mb86233_cpu_core
 	const char *tablergn;
 };
 
-extern CPU_GET_INFO( mb86233 );
-#define CPU_MB86233 CPU_GET_INFO_NAME( mb86233 )
+DECLARE_LEGACY_CPU_DEVICE(MB86233, mb86233);
 
 #endif /* __MB86233_H__ */

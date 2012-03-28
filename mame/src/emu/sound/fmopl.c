@@ -67,8 +67,7 @@ Revision History:
         verify volume of the FM part on the Y8950
 */
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "ymdeltat.h"
 #include "fmopl.h"
 
@@ -199,7 +198,8 @@ static FILE * cymfile = NULL;
 
 
 
-typedef struct{
+typedef struct
+{
 	UINT32	ar;			/* attack rate: AR<<2           */
 	UINT32	dr;			/* decay rate:  DR<<2           */
 	UINT32	rr;			/* release rate:RR<<2           */
@@ -239,7 +239,8 @@ typedef struct{
 	UINT16	wavetable;
 } OPL_SLOT;
 
-typedef struct{
+typedef struct
+{
 	OPL_SLOT SLOT[2];
 	/* phase generator state */
 	UINT32  block_fnum;	/* block+fnum                   */
@@ -249,7 +250,8 @@ typedef struct{
 } OPL_CH;
 
 /* OPL state */
-typedef struct fm_opl_f {
+typedef struct
+{
 	/* FM channel slots */
 	OPL_CH	P_CH[9];				/* OPL/OPL2 chips have 9 channels*/
 
@@ -263,6 +265,9 @@ typedef struct fm_opl_f {
 	UINT32	fn_tab[1024];			/* fnumber->increment counter   */
 
 	/* LFO */
+	UINT32	LFO_AM;
+	INT32	LFO_PM;
+
 	UINT8	lfo_am_depth;
 	UINT8	lfo_pm_depth_range;
 	UINT32	lfo_am_cnt;
@@ -313,6 +318,13 @@ typedef struct fm_opl_f {
 	UINT32 rate;					/* sampling rate (Hz)           */
 	double freqbase;				/* frequency base               */
 	attotime TimerBase;			/* Timer base time (==sampling time)*/
+	device_t *device;
+
+	signed int phase_modulation;	/* phase modulation input (SLOT 2) */
+	signed int output[1];
+#if BUILD_Y8950
+	INT32 output_deltat[4];		/* for Y8950 DELTA-T, chip is mono, that 4 here is just for safety */
+#endif
 } FM_OPL;
 
 
@@ -526,7 +538,7 @@ static unsigned int sin_tab[SIN_LEN * 4];
     The whole table takes: 64 * 210 = 13440 samples.
 
     When AM = 1 data is used directly
-    When AM = 0 data is divided by 4 before being used (loosing precision is important)
+    When AM = 0 data is divided by 4 before being used (losing precision is important)
 */
 
 #define LFO_AM_TAB_ELEMENTS 210
@@ -627,18 +639,11 @@ static const INT8 lfo_pm_table[8*8*2] = {
 static int num_lock = 0;
 
 
-static void *cur_chip = NULL;	/* current chip pointer */
-static OPL_SLOT *SLOT7_1, *SLOT7_2, *SLOT8_1, *SLOT8_2;
+#define SLOT7_1 (&OPL->P_CH[7].SLOT[SLOT1])
+#define SLOT7_2 (&OPL->P_CH[7].SLOT[SLOT2])
+#define SLOT8_1 (&OPL->P_CH[8].SLOT[SLOT1])
+#define SLOT8_2 (&OPL->P_CH[8].SLOT[SLOT2])
 
-static signed int phase_modulation;	/* phase modulation input (SLOT 2) */
-static signed int output[1];
-
-#if BUILD_Y8950
-static INT32 output_deltat[4];		/* for Y8950 DELTA-T, chip is mono, that 4 here is just for safety */
-#endif
-
-static UINT32	LFO_AM;
-static INT32	LFO_PM;
 
 
 
@@ -707,12 +712,12 @@ INLINE void advance_lfo(FM_OPL *OPL)
 	tmp = lfo_am_table[ OPL->lfo_am_cnt >> LFO_SH ];
 
 	if (OPL->lfo_am_depth)
-		LFO_AM = tmp;
+		OPL->LFO_AM = tmp;
 	else
-		LFO_AM = tmp>>2;
+		OPL->LFO_AM = tmp>>2;
 
 	OPL->lfo_pm_cnt += OPL->lfo_pm_inc;
-	LFO_PM = ((OPL->lfo_pm_cnt>>LFO_SH) & 7) | OPL->lfo_pm_depth_range;
+	OPL->LFO_PM = ((OPL->lfo_pm_cnt>>LFO_SH) & 7) | OPL->lfo_pm_depth_range;
 }
 
 /* advance to next sample */
@@ -822,7 +827,7 @@ INLINE void advance(FM_OPL *OPL)
 
 			unsigned int fnum_lfo   = (block_fnum&0x0380) >> 7;
 
-			signed int lfo_fn_table_index_offset = lfo_pm_table[LFO_PM + 16*fnum_lfo ];
+			signed int lfo_fn_table_index_offset = lfo_pm_table[OPL->LFO_PM + 16*fnum_lfo ];
 
 			if (lfo_fn_table_index_offset)	/* LFO phase modulation active */
 			{
@@ -902,16 +907,16 @@ INLINE signed int op_calc1(UINT32 phase, unsigned int env, signed int pm, unsign
 }
 
 
-#define volume_calc(OP) ((OP)->TLL + ((UINT32)(OP)->volume) + (LFO_AM & (OP)->AMmask))
+#define volume_calc(OP) ((OP)->TLL + ((UINT32)(OP)->volume) + (OPL->LFO_AM & (OP)->AMmask))
 
 /* calculate output */
-INLINE void OPL_CALC_CH( OPL_CH *CH )
+INLINE void OPL_CALC_CH( FM_OPL *OPL, OPL_CH *CH )
 {
 	OPL_SLOT *SLOT;
 	unsigned int env;
 	signed int out;
 
-	phase_modulation = 0;
+	OPL->phase_modulation = 0;
 
 	/* SLOT 1 */
 	SLOT = &CH->SLOT[SLOT1];
@@ -931,7 +936,7 @@ INLINE void OPL_CALC_CH( OPL_CH *CH )
 	SLOT++;
 	env = volume_calc(SLOT);
 	if( env < ENV_QUIET )
-		output[0] += op_calc(SLOT->Cnt, env, phase_modulation, SLOT->wavetable);
+		OPL->output[0] += op_calc(SLOT->Cnt, env, OPL->phase_modulation, SLOT->wavetable);
 }
 
 /*
@@ -971,7 +976,7 @@ number   number    BLK/FNUM2 FNUM    Drum  Hat   Drum  Tom  Cymbal
 
 /* calculate rhythm */
 
-INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
+INLINE void OPL_CALC_RH( FM_OPL *OPL, OPL_CH *CH, unsigned int noise )
 {
 	OPL_SLOT *SLOT;
 	signed int out;
@@ -985,7 +990,7 @@ INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
       - output sample always is multiplied by 2
     */
 
-	phase_modulation = 0;
+	OPL->phase_modulation = 0;
 	/* SLOT 1 */
 	SLOT = &CH[6].SLOT[SLOT1];
 	env = volume_calc(SLOT);
@@ -994,7 +999,7 @@ INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
 	SLOT->op1_out[0] = SLOT->op1_out[1];
 
 	if (!SLOT->CON)
-		phase_modulation = SLOT->op1_out[0];
+		OPL->phase_modulation = SLOT->op1_out[0];
 	/* else ignore output of operator 1 */
 
 	SLOT->op1_out[1] = 0;
@@ -1009,7 +1014,7 @@ INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
 	SLOT++;
 	env = volume_calc(SLOT);
 	if( env < ENV_QUIET )
-		output[0] += op_calc(SLOT->Cnt, env, phase_modulation, SLOT->wavetable) * 2;
+		OPL->output[0] += op_calc(SLOT->Cnt, env, OPL->phase_modulation, SLOT->wavetable) * 2;
 
 
 	/* Phase generation is based on: */
@@ -1077,7 +1082,7 @@ INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
 				phase = 0xd0>>2;
 		}
 
-		output[0] += op_calc(phase<<FREQ_SH, env, 0, SLOT7_1->wavetable) * 2;
+		OPL->output[0] += op_calc(phase<<FREQ_SH, env, 0, SLOT7_1->wavetable) * 2;
 	}
 
 	/* Snare Drum (verified on real YM3812) */
@@ -1098,13 +1103,13 @@ INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
 		if (noise)
 			phase ^= 0x100;
 
-		output[0] += op_calc(phase<<FREQ_SH, env, 0, SLOT7_2->wavetable) * 2;
+		OPL->output[0] += op_calc(phase<<FREQ_SH, env, 0, SLOT7_2->wavetable) * 2;
 	}
 
 	/* Tom Tom (verified on real YM3812) */
 	env = volume_calc(SLOT8_1);
 	if( env < ENV_QUIET )
-		output[0] += op_calc(SLOT8_1->Cnt, env, 0, SLOT8_1->wavetable) * 2;
+		OPL->output[0] += op_calc(SLOT8_1->Cnt, env, 0, SLOT8_1->wavetable) * 2;
 
 	/* Top Cymbal (verified on real YM3812) */
 	env = volume_calc(SLOT8_2);
@@ -1131,9 +1136,8 @@ INLINE void OPL_CALC_RH( OPL_CH *CH, unsigned int noise )
 		if (res2)
 			phase = 0x300;
 
-		output[0] += op_calc(phase<<FREQ_SH, env, 0, SLOT8_2->wavetable) * 2;
+		OPL->output[0] += op_calc(phase<<FREQ_SH, env, 0, SLOT8_2->wavetable) * 2;
 	}
-
 }
 
 
@@ -1267,7 +1271,7 @@ static void OPL_initalize(FM_OPL *OPL)
 	/*logerror("freqbase=%f\n", OPL->freqbase);*/
 
 	/* Timer base time */
-	OPL->TimerBase = attotime_mul(ATTOTIME_IN_HZ(OPL->clock), 72);
+	OPL->TimerBase = attotime::from_hz(OPL->clock) * 72;
 
 	/* make fnumber -> increment counter table */
 	for( i=0 ; i < 1024 ; i++ )
@@ -1494,14 +1498,14 @@ static void OPLWriteReg(FM_OPL *OPL, int r, int v)
 				/* timer 2 */
 				if(OPL->st[1] != st2)
 				{
-					attotime period = st2 ? attotime_mul(OPL->TimerBase, OPL->T[1]) : attotime_zero;
+					attotime period = st2 ? (OPL->TimerBase * OPL->T[1]) : attotime::zero;
 					OPL->st[1] = st2;
 					if (OPL->timer_handler) (OPL->timer_handler)(OPL->TimerParam,1,period);
 				}
 				/* timer 1 */
 				if(OPL->st[0] != st1)
 				{
-					attotime period = st1 ? attotime_mul(OPL->TimerBase, OPL->T[0]) : attotime_zero;
+					attotime period = st1 ? (OPL->TimerBase * OPL->T[0]) : attotime::zero;
 					OPL->st[0] = st1;
 					if (OPL->timer_handler) (OPL->timer_handler)(OPL->TimerParam,0,period);
 				}
@@ -1538,9 +1542,9 @@ static void OPLWriteReg(FM_OPL *OPL, int r, int v)
 		case 0x0d:		/* PRESCALE   */
 		case 0x0e:
 		case 0x0f:		/* ADPCM data write */
-		case 0x10: 		/* DELTA-N    */
-		case 0x11: 		/* DELTA-N    */
-		case 0x12: 		/* ADPCM volume */
+		case 0x10:		/* DELTA-N    */
+		case 0x11:		/* DELTA-N    */
+		case 0x12:		/* ADPCM volume */
 			if(OPL->type&OPL_TYPE_ADPCM)
 				YM_DELTAT_ADPCM_Write(OPL->deltat,r-0x07,v);
 			break;
@@ -1697,7 +1701,7 @@ static void OPLWriteReg(FM_OPL *OPL, int r, int v)
 		CH = &OPL->P_CH[r&0x0f];
 		CH->SLOT[SLOT1].FB  = (v>>1)&7 ? ((v>>1)&7) + 7 : 0;
 		CH->SLOT[SLOT1].CON = v&1;
-		CH->SLOT[SLOT1].connect1 = CH->SLOT[SLOT1].CON ? &output[0] : &phase_modulation;
+		CH->SLOT[SLOT1].connect1 = CH->SLOT[SLOT1].CON ? &OPL->output[0] : &OPL->phase_modulation;
 		break;
 	case 0xe0: /* waveform select */
 		/* simply ignore write to the waveform select register if selecting not enabled in test register */
@@ -1722,14 +1726,13 @@ static TIMER_CALLBACK( cymfile_callback )
 }
 
 /* lock/unlock for common table */
-static int OPL_LockTable(const device_config *device)
+static int OPL_LockTable(device_t *device)
 {
 	num_lock++;
 	if(num_lock>1) return 0;
 
 	/* first time */
 
-	cur_chip = NULL;
 	/* allocate total level table (128kb space) */
 	if( !init_tables() )
 	{
@@ -1741,7 +1744,7 @@ static int OPL_LockTable(const device_config *device)
 	{
 		cymfile = fopen("3812_.cym","wb");
 		if (cymfile)
-			timer_pulse ( device->machine, ATTOTIME_IN_HZ(110), NULL, 0, cymfile_callback); /*110 Hz pulse timer*/
+			device->machine().scheduler().timer_pulse ( attotime::from_hz(110), FUNC(cymfile_callback)); /*110 Hz pulse timer*/
 		else
 			logerror("Could not create file 3812_.cym\n");
 	}
@@ -1756,7 +1759,6 @@ static void OPL_UnLockTable(void)
 
 	/* last time */
 
-	cur_chip = NULL;
 	OPLCloseTable();
 
 	if (cymfile)
@@ -1801,7 +1803,7 @@ static void OPLResetChip(FM_OPL *OPL)
 		YM_DELTAT *DELTAT = OPL->deltat;
 
 		DELTAT->freqbase = OPL->freqbase;
-		DELTAT->output_pointer = &output_deltat[0];
+		DELTAT->output_pointer = &OPL->output_deltat[0];
 		DELTAT->portshift = 5;
 		DELTAT->output_range = 1<<23;
 		YM_DELTAT_ADPCM_Reset(DELTAT,0,YM_DELTAT_EMULATION_MODE_NORMAL);
@@ -1810,9 +1812,8 @@ static void OPLResetChip(FM_OPL *OPL)
 }
 
 
-static STATE_POSTLOAD( OPL_postload )
+static void OPL_postload(FM_OPL *OPL)
 {
-	FM_OPL *OPL = (FM_OPL *)param;
 	int slot, ch;
 
 	for( ch=0 ; ch < 9 ; ch++ )
@@ -1854,7 +1855,7 @@ static STATE_POSTLOAD( OPL_postload )
 			SLOT->TLL = SLOT->TL + (CH->ksl_base >> SLOT->ksl);
 
 			/* Connect output */
-			SLOT->connect1 = SLOT->CON ? &output[0] : &phase_modulation;
+			SLOT->connect1 = SLOT->CON ? &OPL->output[0] : &OPL->phase_modulation;
 		}
 	}
 #if BUILD_Y8950
@@ -1868,43 +1869,43 @@ static STATE_POSTLOAD( OPL_postload )
 }
 
 
-static void OPLsave_state_channel(const device_config *device, OPL_CH *CH)
+static void OPLsave_state_channel(device_t *device, OPL_CH *CH)
 {
 	int slot, ch;
 
 	for( ch=0 ; ch < 9 ; ch++, CH++ )
 	{
 		/* channel */
-		state_save_register_device_item(device, ch, CH->block_fnum);
-		state_save_register_device_item(device, ch, CH->kcode);
+		device->save_item(NAME(CH->block_fnum), ch);
+		device->save_item(NAME(CH->kcode), ch);
 		/* slots */
 		for( slot=0 ; slot < 2 ; slot++ )
 		{
 			OPL_SLOT *SLOT = &CH->SLOT[slot];
 
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->ar);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->dr);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->rr);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->KSR);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->ksl);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->mul);
+			device->save_item(NAME(SLOT->ar), ch * 2 + slot);
+			device->save_item(NAME(SLOT->dr), ch * 2 + slot);
+			device->save_item(NAME(SLOT->rr), ch * 2 + slot);
+			device->save_item(NAME(SLOT->KSR), ch * 2 + slot);
+			device->save_item(NAME(SLOT->ksl), ch * 2 + slot);
+			device->save_item(NAME(SLOT->mul), ch * 2 + slot);
 
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->Cnt);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->FB);
-			state_save_register_device_item_array(device, ch * 2 + slot, SLOT->op1_out);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->CON);
+			device->save_item(NAME(SLOT->Cnt), ch * 2 + slot);
+			device->save_item(NAME(SLOT->FB), ch * 2 + slot);
+			device->save_item(NAME(SLOT->op1_out), ch * 2 + slot);
+			device->save_item(NAME(SLOT->CON), ch * 2 + slot);
 
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->eg_type);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->state);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->TL);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->volume);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->sl);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->key);
+			device->save_item(NAME(SLOT->eg_type), ch * 2 + slot);
+			device->save_item(NAME(SLOT->state), ch * 2 + slot);
+			device->save_item(NAME(SLOT->TL), ch * 2 + slot);
+			device->save_item(NAME(SLOT->volume), ch * 2 + slot);
+			device->save_item(NAME(SLOT->sl), ch * 2 + slot);
+			device->save_item(NAME(SLOT->key), ch * 2 + slot);
 
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->AMmask);
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->vib);
+			device->save_item(NAME(SLOT->AMmask), ch * 2 + slot);
+			device->save_item(NAME(SLOT->vib), ch * 2 + slot);
 
-			state_save_register_device_item(device, ch * 2 + slot, SLOT->wavetable);
+			device->save_item(NAME(SLOT->wavetable), ch * 2 + slot);
 		}
 	}
 }
@@ -1912,30 +1913,30 @@ static void OPLsave_state_channel(const device_config *device, OPL_CH *CH)
 
 /* Register savestate for a virtual YM3812/YM3526Y8950 */
 
-static void OPL_save_state(FM_OPL *OPL, const device_config *device)
+static void OPL_save_state(FM_OPL *OPL, device_t *device)
 {
 	OPLsave_state_channel(device, OPL->P_CH);
 
-	state_save_register_device_item(device, 0, OPL->eg_cnt);
-	state_save_register_device_item(device, 0, OPL->eg_timer);
+	device->save_item(NAME(OPL->eg_cnt));
+	device->save_item(NAME(OPL->eg_timer));
 
-	state_save_register_device_item(device, 0, OPL->rhythm);
+	device->save_item(NAME(OPL->rhythm));
 
-	state_save_register_device_item(device, 0, OPL->lfo_am_depth);
-	state_save_register_device_item(device, 0, OPL->lfo_pm_depth_range);
-	state_save_register_device_item(device, 0, OPL->lfo_am_cnt);
-	state_save_register_device_item(device, 0, OPL->lfo_pm_cnt);
+	device->save_item(NAME(OPL->lfo_am_depth));
+	device->save_item(NAME(OPL->lfo_pm_depth_range));
+	device->save_item(NAME(OPL->lfo_am_cnt));
+	device->save_item(NAME(OPL->lfo_pm_cnt));
 
-	state_save_register_device_item(device, 0, OPL->noise_rng);
-	state_save_register_device_item(device, 0, OPL->noise_p);
+	device->save_item(NAME(OPL->noise_rng));
+	device->save_item(NAME(OPL->noise_p));
 
 	if( OPL->type & OPL_TYPE_WAVESEL )
 	{
-		state_save_register_device_item(device, 0, OPL->wavesel);
+		device->save_item(NAME(OPL->wavesel));
 	}
 
-	state_save_register_device_item_array(device, 0, OPL->T);
-	state_save_register_device_item_array(device, 0, OPL->st);
+	device->save_item(NAME(OPL->T));
+	device->save_item(NAME(OPL->st));
 
 #if BUILD_Y8950
 	if ( (OPL->type & OPL_TYPE_ADPCM) && (OPL->deltat) )
@@ -1945,24 +1946,24 @@ static void OPL_save_state(FM_OPL *OPL, const device_config *device)
 
 	if ( OPL->type & OPL_TYPE_IO )
 	{
-		state_save_register_device_item(device, 0, OPL->portDirection);
-		state_save_register_device_item(device, 0, OPL->portLatch);
+		device->save_item(NAME(OPL->portDirection));
+		device->save_item(NAME(OPL->portLatch));
 	}
 #endif
 
-	state_save_register_device_item(device, 0, OPL->address);
-	state_save_register_device_item(device, 0, OPL->status);
-	state_save_register_device_item(device, 0, OPL->statusmask);
-	state_save_register_device_item(device, 0, OPL->mode);
+	device->save_item(NAME(OPL->address));
+	device->save_item(NAME(OPL->status));
+	device->save_item(NAME(OPL->statusmask));
+	device->save_item(NAME(OPL->mode));
 
-	state_save_register_postload(device->machine, OPL_postload, OPL);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(OPL_postload), OPL));
 }
 
 
 /* Create one of virtual YM3812/YM3526/Y8950 */
 /* 'clock' is chip clock in Hz  */
 /* 'rate'  is sampling rate  */
-static FM_OPL *OPLCreate(const device_config *device, UINT32 clock, UINT32 rate, int type)
+static FM_OPL *OPLCreate(device_t *device, UINT32 clock, UINT32 rate, int type)
 {
 	char *ptr;
 	FM_OPL *OPL;
@@ -1978,13 +1979,7 @@ static FM_OPL *OPLCreate(const device_config *device, UINT32 clock, UINT32 rate,
 #endif
 
 	/* allocate memory block */
-	ptr = (char *)malloc(state_size);
-
-	if (ptr==NULL)
-		return NULL;
-
-	/* clear */
-	memset(ptr,0,state_size);
+	ptr = (char *)auto_alloc_array_clear(device->machine(), UINT8, state_size);
 
 	OPL  = (FM_OPL *)ptr;
 
@@ -1998,6 +1993,7 @@ static FM_OPL *OPLCreate(const device_config *device, UINT32 clock, UINT32 rate,
 	ptr += sizeof(YM_DELTAT);
 #endif
 
+	OPL->device = device;
 	OPL->type  = type;
 	OPL->clock = clock;
 	OPL->rate  = rate;
@@ -2012,7 +2008,7 @@ static FM_OPL *OPLCreate(const device_config *device, UINT32 clock, UINT32 rate,
 static void OPLDestroy(FM_OPL *OPL)
 {
 	OPL_UnLockTable();
-	free(OPL);
+	auto_free(OPL->device->machine(), OPL);
 }
 
 /* Optional handlers */
@@ -2145,7 +2141,7 @@ static int OPLTimerOver(FM_OPL *OPL,int c)
 		}
 	}
 	/* reload timer */
-	if (OPL->timer_handler) (OPL->timer_handler)(OPL->TimerParam,c,attotime_mul(OPL->TimerBase, OPL->T[c]));
+	if (OPL->timer_handler) (OPL->timer_handler)(OPL->TimerParam,c,OPL->TimerBase * OPL->T[c]);
 	return OPL->status>>7;
 }
 
@@ -2155,7 +2151,7 @@ static int OPLTimerOver(FM_OPL *OPL,int c)
 
 #if (BUILD_YM3812)
 
-void * ym3812_init(const device_config *device, UINT32 clock, UINT32 rate)
+void * ym3812_init(device_t *device, UINT32 clock, UINT32 rate)
 {
 	/* emulator create */
 	FM_OPL *YM3812 = OPLCreate(device,clock,rate,OPL_TYPE_YM3812);
@@ -2229,42 +2225,34 @@ void ym3812_update_one(void *chip, OPLSAMPLE *buffer, int length)
 	OPLSAMPLE	*buf = buffer;
 	int i;
 
-	if( (void *)OPL != cur_chip ){
-		cur_chip = (void *)OPL;
-		/* rhythm slots */
-		SLOT7_1 = &OPL->P_CH[7].SLOT[SLOT1];
-		SLOT7_2 = &OPL->P_CH[7].SLOT[SLOT2];
-		SLOT8_1 = &OPL->P_CH[8].SLOT[SLOT1];
-		SLOT8_2 = &OPL->P_CH[8].SLOT[SLOT2];
-	}
 	for( i=0; i < length ; i++ )
 	{
 		int lt;
 
-		output[0] = 0;
+		OPL->output[0] = 0;
 
 		advance_lfo(OPL);
 
 		/* FM part */
-		OPL_CALC_CH(&OPL->P_CH[0]);
-		OPL_CALC_CH(&OPL->P_CH[1]);
-		OPL_CALC_CH(&OPL->P_CH[2]);
-		OPL_CALC_CH(&OPL->P_CH[3]);
-		OPL_CALC_CH(&OPL->P_CH[4]);
-		OPL_CALC_CH(&OPL->P_CH[5]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[0]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[1]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[2]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[3]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[4]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[5]);
 
 		if(!rhythm)
 		{
-			OPL_CALC_CH(&OPL->P_CH[6]);
-			OPL_CALC_CH(&OPL->P_CH[7]);
-			OPL_CALC_CH(&OPL->P_CH[8]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[6]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[7]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[8]);
 		}
 		else		/* Rhythm part */
 		{
-			OPL_CALC_RH(&OPL->P_CH[0], (OPL->noise_rng>>0)&1 );
+			OPL_CALC_RH(OPL, &OPL->P_CH[0], (OPL->noise_rng>>0)&1 );
 		}
 
-		lt = output[0];
+		lt = OPL->output[0];
 
 		lt >>= FINAL_SH;
 
@@ -2291,7 +2279,7 @@ void ym3812_update_one(void *chip, OPLSAMPLE *buffer, int length)
 
 #if (BUILD_YM3526)
 
-void *ym3526_init(const device_config *device, UINT32 clock, UINT32 rate)
+void *ym3526_init(device_t *device, UINT32 clock, UINT32 rate)
 {
 	/* emulator create */
 	FM_OPL *YM3526 = OPLCreate(device,clock,rate,OPL_TYPE_YM3526);
@@ -2364,42 +2352,34 @@ void ym3526_update_one(void *chip, OPLSAMPLE *buffer, int length)
 	OPLSAMPLE	*buf = buffer;
 	int i;
 
-	if( (void *)OPL != cur_chip ){
-		cur_chip = (void *)OPL;
-		/* rhythm slots */
-		SLOT7_1 = &OPL->P_CH[7].SLOT[SLOT1];
-		SLOT7_2 = &OPL->P_CH[7].SLOT[SLOT2];
-		SLOT8_1 = &OPL->P_CH[8].SLOT[SLOT1];
-		SLOT8_2 = &OPL->P_CH[8].SLOT[SLOT2];
-	}
 	for( i=0; i < length ; i++ )
 	{
 		int lt;
 
-		output[0] = 0;
+		OPL->output[0] = 0;
 
 		advance_lfo(OPL);
 
 		/* FM part */
-		OPL_CALC_CH(&OPL->P_CH[0]);
-		OPL_CALC_CH(&OPL->P_CH[1]);
-		OPL_CALC_CH(&OPL->P_CH[2]);
-		OPL_CALC_CH(&OPL->P_CH[3]);
-		OPL_CALC_CH(&OPL->P_CH[4]);
-		OPL_CALC_CH(&OPL->P_CH[5]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[0]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[1]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[2]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[3]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[4]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[5]);
 
 		if(!rhythm)
 		{
-			OPL_CALC_CH(&OPL->P_CH[6]);
-			OPL_CALC_CH(&OPL->P_CH[7]);
-			OPL_CALC_CH(&OPL->P_CH[8]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[6]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[7]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[8]);
 		}
 		else		/* Rhythm part */
 		{
-			OPL_CALC_RH(&OPL->P_CH[0], (OPL->noise_rng>>0)&1 );
+			OPL_CALC_RH(OPL, &OPL->P_CH[0], (OPL->noise_rng>>0)&1 );
 		}
 
-		lt = output[0];
+		lt = OPL->output[0];
 
 		lt >>= FINAL_SH;
 
@@ -2438,7 +2418,7 @@ static void Y8950_deltat_status_reset(void *chip, UINT8 changebits)
 	OPL_STATUS_RESET(Y8950, changebits);
 }
 
-void *y8950_init(const device_config *device, UINT32 clock, UINT32 rate)
+void *y8950_init(device_t *device, UINT32 clock, UINT32 rate)
 {
 	/* emulator create */
 	FM_OPL *Y8950 = OPLCreate(device,clock,rate,OPL_TYPE_Y8950);
@@ -2527,21 +2507,12 @@ void y8950_update_one(void *chip, OPLSAMPLE *buffer, int length)
 	YM_DELTAT	*DELTAT = OPL->deltat;
 	OPLSAMPLE	*buf    = buffer;
 
-	if( (void *)OPL != cur_chip ){
-		cur_chip = (void *)OPL;
-		/* rhythm slots */
-		SLOT7_1 = &OPL->P_CH[7].SLOT[SLOT1];
-		SLOT7_2 = &OPL->P_CH[7].SLOT[SLOT2];
-		SLOT8_1 = &OPL->P_CH[8].SLOT[SLOT1];
-		SLOT8_2 = &OPL->P_CH[8].SLOT[SLOT2];
-
-	}
 	for( i=0; i < length ; i++ )
 	{
 		int lt;
 
-		output[0] = 0;
-		output_deltat[0] = 0;
+		OPL->output[0] = 0;
+		OPL->output_deltat[0] = 0;
 
 		advance_lfo(OPL);
 
@@ -2550,25 +2521,25 @@ void y8950_update_one(void *chip, OPLSAMPLE *buffer, int length)
 			YM_DELTAT_ADPCM_CALC(DELTAT);
 
 		/* FM part */
-		OPL_CALC_CH(&OPL->P_CH[0]);
-		OPL_CALC_CH(&OPL->P_CH[1]);
-		OPL_CALC_CH(&OPL->P_CH[2]);
-		OPL_CALC_CH(&OPL->P_CH[3]);
-		OPL_CALC_CH(&OPL->P_CH[4]);
-		OPL_CALC_CH(&OPL->P_CH[5]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[0]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[1]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[2]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[3]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[4]);
+		OPL_CALC_CH(OPL, &OPL->P_CH[5]);
 
 		if(!rhythm)
 		{
-			OPL_CALC_CH(&OPL->P_CH[6]);
-			OPL_CALC_CH(&OPL->P_CH[7]);
-			OPL_CALC_CH(&OPL->P_CH[8]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[6]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[7]);
+			OPL_CALC_CH(OPL, &OPL->P_CH[8]);
 		}
 		else		/* Rhythm part */
 		{
-			OPL_CALC_RH(&OPL->P_CH[0], (OPL->noise_rng>>0)&1 );
+			OPL_CALC_RH(OPL, &OPL->P_CH[0], (OPL->noise_rng>>0)&1 );
 		}
 
-		lt = output[0] + (output_deltat[0]>>11);
+		lt = OPL->output[0] + (OPL->output_deltat[0]>>11);
 
 		lt >>= FINAL_SH;
 

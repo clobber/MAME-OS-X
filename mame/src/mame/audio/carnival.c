@@ -36,7 +36,7 @@
 /*                                                                           */
 /*****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
@@ -83,16 +83,16 @@
 static const char *const carnival_sample_names[] =
 {
 	"*carnival",
-	"bear.wav",
-	"bonus1.wav",
-	"bonus2.wav",
-	"clang.wav",
-	"duck1.wav",
-	"duck2.wav",
-	"duck3.wav",
-	"pipehit.wav",
-	"ranking.wav",
-	"rifle.wav",
+	"bear",
+	"bonus1",
+	"bonus2",
+	"clang",
+	"duck1",
+	"duck2",
+	"duck3",
+	"pipehit",
+	"ranking",
+	"rifle",
 	0
 };
 
@@ -127,7 +127,7 @@ static int psgData = 0;
 WRITE8_HANDLER( carnival_audio_1_w )
 {
 	static int port1State = 0;
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	device_t *samples = space->machine().device("samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;
@@ -206,7 +206,7 @@ WRITE8_HANDLER( carnival_audio_1_w )
 
 WRITE8_HANDLER( carnival_audio_2_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	device_t *samples = space->machine().device("samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;
@@ -236,7 +236,7 @@ WRITE8_HANDLER( carnival_audio_2_w )
 
 	if ( bitsGoneHigh & OUT_PORT_2_MUSIC_RESET )
 		/* reset output is no longer asserted active low */
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, PULSE_LINE );
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, PULSE_LINE );
 }
 
 
@@ -285,28 +285,28 @@ static WRITE8_DEVICE_HANDLER( carnival_music_port_2_w )
 }
 
 
-static ADDRESS_MAP_START( carnival_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( carnival_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( carnival_audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( carnival_audio_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(carnival_music_port_t1_r)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_WRITE(carnival_music_port_1_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_DEVWRITE("psg", carnival_music_port_2_w)
 ADDRESS_MAP_END
 
 
-MACHINE_DRIVER_START( carnival_audio )
-	MDRV_CPU_ADD("audiocpu", I8039, 3579545)
-	MDRV_CPU_PROGRAM_MAP(carnival_audio_map)
-	MDRV_CPU_IO_MAP(carnival_audio_io_map)
+MACHINE_CONFIG_FRAGMENT( carnival_audio )
+	MCFG_CPU_ADD("audiocpu", I8039, 3579545)
+	MCFG_CPU_PROGRAM_MAP(carnival_audio_map)
+	MCFG_CPU_IO_MAP(carnival_audio_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
-	MDRV_SOUND_ADD("psg", AY8910, PSG_CLOCK)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+	MCFG_SOUND_ADD("psg", AY8910, PSG_CLOCK)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(carnival_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(carnival_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END

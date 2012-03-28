@@ -1,14 +1,28 @@
 /***************************************************************************
 
-Multipede (c) 1980-2 Infogrames / 199x CosmoDog
+Centipede, Millipede, Missile Command, Let's Go Bowling "Multipede"
+(c) 1980-2 / 2002 - Infogrames / CosmoDog
 
 preliminary driver by Angelo Salese
+
+Earlier revisions of this cabinet did not include the bowling game.
+ Known to exist "CMM Rev 1.03" (without Let's Go Bowling)
 
 TODO:
 - program banking;
 - finish video emulation;
 - inputs;
 - sound;
+- NVRAM (EEPROM) at U8 or U11 on PCB
+- driver probably needs rewriting, at least the i/o part;
+- Is the W65C02S the same as the 65SC02 core or are there any
+  extra Op-codes & addressing modes?
+
+Probably on the CPLD (CY39100V208B) - Quoted from Cosmodog's website:
+ "Instead, we used a programmable chip that we could reconfigure very
+ quickly while the game is running. So, during that 1/8th of a second
+ or so when the screen goes black while it switches games, it's actually
+ reloading the hardware with a whole new design to run the next game."
 
 ============================================================================
 
@@ -20,24 +34,38 @@ Multipede 1.00 PCB by CosmoDog
 Flash ROM AT29C020
 
 Cypress CY39100V208B
-CPU WDC 658C02-8P-14
+CPU WDC 65C02S8P-14
 CY37128-P100
 CYC1399
-
+OSC @ 72.576MHz
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
+
+
+class cmmb_state : public driver_device
+{
+public:
+	cmmb_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram;
+	UINT8 m_irq_mask;
+};
+
 
 static VIDEO_START( cmmb )
 {
 
 }
 
-static VIDEO_UPDATE( cmmb )
+static SCREEN_UPDATE_IND16( cmmb )
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
+	cmmb_state *state = screen.machine().driver_data<cmmb_state>();
+	UINT8 *videoram = state->m_videoram;
+	const gfx_element *gfx = screen.machine().gfx[0];
 	int count = 0x00000;
 
 	int y,x;
@@ -60,22 +88,22 @@ static VIDEO_UPDATE( cmmb )
 
 static READ8_HANDLER( cmmb_charram_r )
 {
-	UINT8 *GFX = memory_region(space->machine, "gfx");
+	UINT8 *GFX = space->machine().region("gfx")->base();
 
 	return GFX[offset];
 }
 
 static WRITE8_HANDLER( cmmb_charram_w )
 {
-	UINT8 *GFX = memory_region(space->machine, "gfx");
+	UINT8 *GFX = space->machine().region("gfx")->base();
 
 	GFX[offset] = data;
 
 	offset&=0xfff;
 
 	/* dirty char */
-	gfx_element_mark_dirty(space->machine->gfx[0], offset >> 4);
-    gfx_element_mark_dirty(space->machine->gfx[1], offset >> 5);
+	gfx_element_mark_dirty(space->machine().gfx[0], offset >> 4);
+    gfx_element_mark_dirty(space->machine().gfx[1], offset >> 5);
 }
 
 
@@ -87,46 +115,46 @@ static WRITE8_HANDLER( cmmb_paletteram_w )
 
 static READ8_HANDLER( cmmb_input_r )
 {
-	printf("%02x R\n",offset);
+	//printf("%02x R\n",offset);
 	switch(offset)
 	{
-		case 0x00: return input_port_read(space->machine, "IN2");
+		case 0x00: return input_port_read(space->machine(), "IN2");
 		case 0x03: return 4; //eeprom?
-		case 0x0e: return input_port_read(space->machine, "IN0");
-		case 0x0f: return input_port_read(space->machine, "IN1");
+		case 0x0e: return input_port_read(space->machine(), "IN0");
+		case 0x0f: return input_port_read(space->machine(), "IN1");
 	}
 
 	return 0xff;
 }
 
-static UINT8 irq_mask;
 
 /*
     {
-        UINT8 *ROM = memory_region(space->machine, "maincpu");
+        UINT8 *ROM = space->machine().region("maincpu")->base();
         UINT32 bankaddress;
 
         bankaddress = 0x10000 + (0x10000 * (data & 0x03));
-        memory_set_bankptr(space->machine, 1, &ROM[bankaddress]);
+        memory_set_bankptr(space->machine(), "bank1", &ROM[bankaddress]);
     }
 */
 
 static WRITE8_HANDLER( cmmb_output_w )
 {
-	printf("%02x -> [%02x] W\n",data,offset);
+	cmmb_state *state = space->machine().driver_data<cmmb_state>();
+	//printf("%02x -> [%02x] W\n",data,offset);
 	switch(offset)
 	{
 		case 0x01:
 			{
-				UINT8 *ROM = memory_region(space->machine, "maincpu");
+				UINT8 *ROM = space->machine().region("maincpu")->base();
 				UINT32 bankaddress;
 
 				bankaddress = 0x1c000 + (0x10000 * (data & 0x03));
-				memory_set_bankptr(space->machine, 1, &ROM[bankaddress]);
+				memory_set_bankptr(space->machine(), "bank1", &ROM[bankaddress]);
 			}
 			break;
 		case 0x03:
-			irq_mask = data & 0x80;
+			state->m_irq_mask = data & 0x80;
 			break;
 		case 0x07:
 			break;
@@ -135,18 +163,19 @@ static WRITE8_HANDLER( cmmb_output_w )
 
 static READ8_HANDLER( kludge_r )
 {
-	return mame_rand(space->machine);
+	return space->machine().rand();
 }
 
 /* overlap empty addresses */
-static ADDRESS_MAP_START( cmmb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cmmb_map, AS_PROGRAM, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xffff)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM /* zero page address */
 //  AM_RANGE(0x13c0, 0x13ff) AM_RAM //spriteram
-	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&videoram)
-	AM_RANGE(0x2480, 0x249f) AM_RAM_WRITE(cmmb_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE_MEMBER(cmmb_state, m_videoram)
+	AM_RANGE(0x2480, 0x249f) AM_RAM_WRITE(cmmb_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x4000, 0x400f) AM_READWRITE(cmmb_input_r,cmmb_output_w) //i/o
 	AM_RANGE(0x4900, 0x4900) AM_READ(kludge_r)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xafff) AM_RAM
 	AM_RANGE(0xb000, 0xbfff) AM_READWRITE(cmmb_charram_r,cmmb_charram_w)
 	AM_RANGE(0xc000, 0xc00f) AM_READWRITE(cmmb_input_r,cmmb_output_w) //i/o
@@ -156,7 +185,7 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( cmmb )
 	PORT_START("IN0")
-	PORT_DIPNAME( 0x01, 0x01, "SYSTEM" )
+	PORT_DIPNAME( 0x01, 0x01, "SYSTEM0" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
@@ -181,7 +210,7 @@ static INPUT_PORTS_START( cmmb )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_START("IN1")
-	PORT_DIPNAME( 0x01, 0x01, "SYSTEM" )
+	PORT_DIPNAME( 0x01, 0x01, "SYSTEM1" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
@@ -202,11 +231,11 @@ static INPUT_PORTS_START( cmmb )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Service_Mode ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_START("IN2")
-	PORT_DIPNAME( 0x01, 0x01, "SYSTEM" )
+	PORT_DIPNAME( 0x01, 0x01, "SYSTEM2" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
@@ -262,41 +291,41 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( cmmb_irq )
 {
-	//if(input_code_pressed_once(device->machine, KEYCODE_Z))
-	//  cpu_set_input_line(device, 0, HOLD_LINE);
+	//if(device->machine().input().code_pressed_once(KEYCODE_Z))
+	//  device_set_input_line(device, 0, HOLD_LINE);
 }
 
 static MACHINE_RESET( cmmb )
 {
 }
 
-static MACHINE_DRIVER_START( cmmb )
+static MACHINE_CONFIG_START( cmmb, cmmb_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",M65C02,8000000/2) // unknown clock
-	MDRV_CPU_PROGRAM_MAP(cmmb_map)
-	MDRV_CPU_VBLANK_INT("screen",cmmb_irq)
+	MCFG_CPU_ADD("maincpu",M65SC02,XTAL_72_576MHz/5) // Unknown clock, but chip rated for 14MHz
+	MCFG_CPU_PROGRAM_MAP(cmmb_map)
+	MCFG_CPU_VBLANK_INT("screen",cmmb_irq)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) // unknown
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MDRV_GFXDECODE(cmmb)
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) // unknown
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(cmmb)
 
-	MDRV_VIDEO_START(cmmb)
-	MDRV_VIDEO_UPDATE(cmmb)
+	MCFG_GFXDECODE(cmmb)
+	MCFG_PALETTE_LENGTH(512)
 
-	MDRV_MACHINE_RESET(cmmb)
+	MCFG_VIDEO_START(cmmb)
+
+	MCFG_MACHINE_RESET(cmmb)
 
 	/* sound hardware */
-//  MDRV_SPEAKER_STANDARD_MONO("mono")
-//  MDRV_SOUND_ADD("ay", AY8910, 8000000/4)
-//  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+//  MCFG_SPEAKER_STANDARD_MONO("mono")
+//  MCFG_SOUND_ADD("aysnd", AY8910, 8000000/4)
+//  MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -306,10 +335,10 @@ MACHINE_DRIVER_END
 
 ROM_START( cmmb162 )
 	ROM_REGION( 0x50000, "maincpu", 0 )
-	ROM_LOAD( "cmmb162.bin",   0x10000, 0x40000, CRC(71a5a75d) SHA1(0ad7b97580082cda98cb1e8aab8efcf491d0ed25) )
-	ROM_COPY( "maincpu", 	   0x18000, 0x08000, 0x08000 )
+	ROM_LOAD( "cmmb162.u2",   0x10000, 0x40000, CRC(71a5a75d) SHA1(0ad7b97580082cda98cb1e8aab8efcf491d0ed25) )
+	ROM_COPY( "maincpu",	  0x18000, 0x08000, 0x08000 )
 
 	ROM_REGION( 0x1000, "gfx", ROMREGION_ERASE00 )
 ROM_END
 
-GAME( 199?, cmmb162,  0,       cmmb,  cmmb,  0, ROT270, "Infogrames / Cosmodog", "Multipede (V1.00)", GAME_NO_SOUND|GAME_NOT_WORKING )
+GAME( 2002, cmmb162,  0,       cmmb,  cmmb,  0, ROT270, "Infogrames / Cosmodog", "Multipede (rev 1.62)", GAME_NO_SOUND|GAME_NOT_WORKING )

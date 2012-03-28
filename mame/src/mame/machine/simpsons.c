@@ -1,11 +1,9 @@
-#include "driver.h"
-#include "video/konamiic.h"
+#include "emu.h"
+#include "video/konicdev.h"
 #include "cpu/konami/konami.h"
 #include "machine/eeprom.h"
 #include "sound/k053260.h"
 #include "includes/simpsons.h"
-
-int simpsons_firq_enabled;
 
 /***************************************************************************
 
@@ -13,68 +11,19 @@ int simpsons_firq_enabled;
 
 ***************************************************************************/
 
-static int init_eeprom_count;
-
-
-static const eeprom_interface eeprom_intf =
-{
-	7,				/* address bits */
-	8,				/* data bits */
-	"011000",		/*  read command */
-	"011100",		/* write command */
-	0,				/* erase command */
-	"0100000000000",/* lock command */
-	"0100110000000" /* unlock command */
-};
-
-NVRAM_HANDLER( simpsons )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file)
-		{
-			init_eeprom_count = 0;
-			eeprom_load(file);
-		}
-		else
-			init_eeprom_count = 10;
-	}
-}
-
-READ8_HANDLER( simpsons_eeprom_r )
-{
-	int res;
-
-	res = (eeprom_read_bit() << 4);
-
-	res |= 0x20;//konami_eeprom_ack() << 5; /* add the ack */
-
-	res |= input_port_read(space->machine, "TEST") & 1; /* test switch */
-
-	if (init_eeprom_count)
-	{
-		init_eeprom_count--;
-		res &= 0xfe;
-	}
-	return res;
-}
-
 WRITE8_HANDLER( simpsons_eeprom_w )
 {
-	if ( data == 0xff )
+	simpsons_state *state = space->machine().driver_data<simpsons_state>();
+
+	if (data == 0xff)
 		return;
 
-	eeprom_write_bit(data & 0x80);
-	eeprom_set_cs_line((data & 0x08) ? CLEAR_LINE : ASSERT_LINE);
-	eeprom_set_clock_line((data & 0x10) ? ASSERT_LINE : CLEAR_LINE);
+	input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 
-	simpsons_video_banking( space->machine, data & 3 );
+	state->m_video_bank = data & 0x03;
+	simpsons_video_banking(space->machine(), state->m_video_bank);
 
-	simpsons_firq_enabled = data & 0x04;
+	state->m_firq_enabled = data & 0x04;
 }
 
 /***************************************************************************
@@ -85,20 +34,23 @@ WRITE8_HANDLER( simpsons_eeprom_w )
 
 WRITE8_HANDLER( simpsons_coin_counter_w )
 {
+	simpsons_state *state = space->machine().driver_data<simpsons_state>();
+
 	/* bit 0,1 coin counters */
-	coin_counter_w(0,data & 0x01);
-	coin_counter_w(1,data & 0x02);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
 	/* bit 2 selects mono or stereo sound */
 	/* bit 3 = enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line((data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(state->m_k052109, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 	/* bit 4 = INIT (unknown) */
 	/* bit 5 = enable sprite ROM reading */
-	K053246_set_OBJCHA_line((~data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
+	k053246_set_objcha_line(state->m_k053246, (~data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 READ8_HANDLER( simpsons_sound_interrupt_r )
 {
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff );
+	simpsons_state *state = space->machine().driver_data<simpsons_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff );
 	return 0x00;
 }
 
@@ -116,28 +68,66 @@ READ8_DEVICE_HANDLER( simpsons_sound_r )
 
 static KONAMI_SETLINES_CALLBACK( simpsons_banking )
 {
-	memory_set_bank(device->machine, 1, lines & 0x3f);
+	memory_set_bank(device->machine(), "bank1", lines & 0x3f);
+}
+
+static void simpsons_postload(running_machine &machine)
+{
+	simpsons_state *state = machine.driver_data<simpsons_state>();
+
+	simpsons_video_banking(machine, state->m_video_bank);
+}
+
+MACHINE_START( simpsons )
+{
+	simpsons_state *state = machine.driver_data<simpsons_state>();
+
+	machine.generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x1000);
+	state->m_xtraram = auto_alloc_array_clear(machine, UINT8, 0x1000);
+	state->m_spriteram = auto_alloc_array_clear(machine, UINT16, 0x1000 / 2);
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k053260 = machine.device("k053260");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k053246 = machine.device("k053246");
+	state->m_k053251 = machine.device("k053251");
+
+	state->save_item(NAME(state->m_firq_enabled));
+	state->save_item(NAME(state->m_video_bank));
+	state->save_item(NAME(state->m_sprite_colorbase));
+	state->save_item(NAME(state->m_layer_colorbase));
+	state->save_item(NAME(state->m_layerpri));
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x1000);
+	state->save_pointer(NAME(state->m_xtraram), 0x1000);
+	state->save_pointer(NAME(state->m_spriteram), 0x1000 / 2);
+	machine.save().register_postload(save_prepost_delegate(FUNC(simpsons_postload), &machine));
 }
 
 MACHINE_RESET( simpsons )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	simpsons_state *state = machine.driver_data<simpsons_state>();
+	int i;
 
-	konami_configure_set_lines(cputag_get_cpu(machine, "maincpu"), simpsons_banking);
+	konami_configure_set_lines(machine.device("maincpu"), simpsons_banking);
 
-	paletteram = &RAM[0x88000];
-	simpsons_xtraram = &RAM[0x89000];
-	spriteram16 = (UINT16 *)&RAM[0x8a000];
+	for (i = 0; i < 3; i++)
+	{
+		state->m_layerpri[i] = 0;
+		state->m_layer_colorbase[i] = 0;
+	}
 
-	simpsons_firq_enabled = 0;
+	state->m_sprite_colorbase = 0;
+	state->m_firq_enabled = 0;
+	state->m_video_bank = 0;
 
 	/* init the default banks */
-	memory_configure_bank(machine, 1, 0, 64, memory_region(machine, "maincpu") + 0x10000, 0x2000);
-	memory_set_bank(machine, 1, 0);
+	memory_configure_bank(machine, "bank1", 0, 64, machine.region("maincpu")->base() + 0x10000, 0x2000);
+	memory_set_bank(machine, "bank1", 0);
 
-	memory_configure_bank(machine, 2, 0, 2, memory_region(machine, "audiocpu") + 0x10000, 0);
-	memory_configure_bank(machine, 2, 2, 6, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
-	memory_set_bank(machine, 2, 0);
+	memory_configure_bank(machine, "bank2", 0, 2, machine.region("audiocpu")->base() + 0x10000, 0);
+	memory_configure_bank(machine, "bank2", 2, 6, machine.region("audiocpu")->base() + 0x10000, 0x4000);
+	memory_set_bank(machine, "bank2", 0);
 
-	simpsons_video_banking( machine, 0 );
+	simpsons_video_banking(machine, 0);
 }

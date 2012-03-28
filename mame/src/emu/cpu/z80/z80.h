@@ -3,7 +3,14 @@
 #ifndef __Z80_H__
 #define __Z80_H__
 
-#include "cpuintrf.h"
+enum
+{
+	NSC800_RSTA = INPUT_LINE_IRQ0 + 1,
+	NSC800_RSTB,
+	NSC800_RSTC,
+	Z80_INPUT_LINE_WAIT,
+	Z80_INPUT_LINE_BUSRQ
+};
 
 enum
 {
@@ -14,16 +21,16 @@ enum
 	Z80_R, Z80_I, Z80_IM, Z80_IFF1, Z80_IFF2, Z80_HALT,
 	Z80_DC0, Z80_DC1, Z80_DC2, Z80_DC3, Z80_WZ,
 
-	Z80_GENPC = REG_GENPC,
-	Z80_GENSP = REG_GENSP,
-	Z80_GENPCBASE = REG_GENPCBASE
+	Z80_GENPC = STATE_GENPC,
+	Z80_GENSP = STATE_GENSP,
+	Z80_GENPCBASE = STATE_GENPCBASE
 };
 
-CPU_GET_INFO( z80 );
-#define CPU_Z80 CPU_GET_INFO_NAME( z80 )
+DECLARE_LEGACY_CPU_DEVICE(Z80, z80);
+DECLARE_LEGACY_CPU_DEVICE(NSC800, nsc800);
 
 CPU_DISASSEMBLE( z80 );
 
-void z80_set_cycle_tables(const device_config *device, const UINT8 *op, const UINT8 *cb, const UINT8 *ed, const UINT8 *xy, const UINT8 *xycb, const UINT8 *ex);
+void z80_set_cycle_tables(device_t *device, const UINT8 *op, const UINT8 *cb, const UINT8 *ed, const UINT8 *xy, const UINT8 *xycb, const UINT8 *ex);
 
 #endif /* __Z80_H__ */

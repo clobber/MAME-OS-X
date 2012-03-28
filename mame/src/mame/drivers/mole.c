@@ -1,63 +1,145 @@
-//  MOLE ATTACK    YACHIYO  1982
-//  known clones: "Holy Moly"
-//
-//  emulated by Jason Nelson, Phil Stroffolino
-//  known issues:
-//      some dips not mapped
-//      protection isn't fully understood, but game seems to be
-//      ok.
-//
-//  buttons are laid out as follows:
-//  7   8   9
-//  4   5   6
-//  1   2   3
-//
-// Working RAM notes:
-// 0x2e0                    number of credits
-// 0x2F1                    coin up trigger
-// 0x2F2                    round counter
-// 0x2F3                    flag value
-// 0x2FD                    hammer aim for attract mode
-// 0x2E1-E2                 high score
-// 0x2ED-EE                 score
-// 0x301-309                presence and height of mole in each hole, from bottom left
-// 0x30a
-// 0x32E-336                if a hammer is above a mole. (Not the same as collision)
-// 0x337                    dip switch related
-// 0x338                    dip switch related
-// 0x340                    hammer control: manual=0; auto=1
-// 0x34C                    round point 10s.
-// 0x34D                    which bonus round pattern to use for moles.
-// 0x349                    button pressed (0..8 / 0xff)
-// 0x350                    number of players
-// 0x351                    irq-related
-// 0x361
-// 0x362
-// 0x363
-// 0x364
-// 0x366                    mirrors tile bank
-// 0x36B                    controls which player is playing. (1 == player 2);
-// 0x3DC                    affects mole popmessage
-// 0x3E5                    round point/passing point control?
-// 0x3E7                    round point/passing point control?
+/*****************************************************************************
 
-#include "driver.h"
+   MOLE ATTACK by Yachiyo Electronics Co.,LTD. 1982
+
+   Known Clones:
+   "Holey Moley", from tai (Thomas Automatics, Inc.)
+
+   emulated by Jason Nelson, Phil Stroffolino
+
+   Known Issues:
+   - some dips not mapped
+   - protection isn't fully understood, but game seems to be ok.
+   - cpu speeds unverified
+
+   Buttons are laid out as follows:
+   7   8   9
+   4   5   6
+   1   2   3
+
+   Working RAM notes:
+   0x2e0                    number of credits
+   0x2F1                    coin up trigger
+   0x2F2                    round counter
+   0x2F3                    flag value
+   0x2FD                    hammer aim for attract mode
+   0x2E1-E2                 high score
+   0x2ED-EE                 score
+   0x301-309                presence and height of mole in each hole, from bottom left
+   0x30a
+   0x32E-336                if a hammer is above a mole. (Not the same as collision)
+   0x337                    dip switch related
+   0x338                    dip switch related
+   0x340                    hammer control: manual=0; auto=1
+   0x34C                    round point 10s.
+   0x34D                    which bonus round pattern to use for moles.
+   0x349                    button pressed (0..8 / 0xff)
+   0x350                    number of players
+   0x351                    irq-related
+   0x361
+   0x362
+   0x363
+   0x364
+   0x366                    mirrors tile bank
+   0x36B                    controls which player is playing. (1 == player 2);
+   0x3DC                    affects mole popmessage
+   0x3E5                    round point/passing point control?
+   0x3E7                    round point/passing point control?
+
+******************************************************************************/
+
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 
 
-WRITE8_HANDLER(mole_videoram_w);
-WRITE8_HANDLER(mole_tilebank_w);
-WRITE8_HANDLER(mole_flipscreen_w);
+class mole_state : public driver_device
+{
+public:
+	mole_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-PALETTE_INIT(mole);
-VIDEO_START(mole);
-VIDEO_UPDATE(mole);
+	/* video-related */
+	tilemap_t    *m_bg_tilemap;
+	int          m_tile_bank;
 
+	/* memory */
+	UINT16       m_tileram[0x400];
+};
+
+
+/*************************************
+ *
+ *  Video emulation
+ *
+ *************************************/
+
+static PALETTE_INIT( mole )
+{
+	int i;
+
+	for (i = 0; i < 8; i++)
+		palette_set_color_rgb(machine, i, pal1bit(i >> 0), pal1bit(i >> 2), pal1bit(i >> 1));
+}
+
+static TILE_GET_INFO( get_bg_tile_info )
+{
+	mole_state *state = machine.driver_data<mole_state>();
+	UINT16 code = state->m_tileram[tile_index];
+
+	SET_TILE_INFO((code & 0x200) ? 1 : 0, code & 0x1ff, 0, 0);
+}
+
+static VIDEO_START( mole )
+{
+	mole_state *state = machine.driver_data<mole_state>();
+	memset(state->m_tileram, 0, sizeof(state->m_tileram));
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 40, 25);
+
+	state->save_item(NAME(state->m_tileram));
+}
+
+static WRITE8_HANDLER( mole_videoram_w )
+{
+	mole_state *state = space->machine().driver_data<mole_state>();
+
+	state->m_tileram[offset] = data | (state->m_tile_bank << 8);
+	state->m_bg_tilemap->mark_tile_dirty(offset);
+}
+
+static WRITE8_HANDLER( mole_tilebank_w )
+{
+	mole_state *state = space->machine().driver_data<mole_state>();
+
+	state->m_tile_bank = data;
+	state->m_bg_tilemap->mark_all_dirty();
+}
+
+static WRITE8_HANDLER( mole_flipscreen_w )
+{
+	flip_screen_set(space->machine(), data & 0x01);
+}
+
+static SCREEN_UPDATE_IND16( mole )
+{
+	mole_state *state = screen.machine().driver_data<mole_state>();
+
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	return 0;
+}
+
+
+
+/*************************************
+ *
+ *  Memory handlers
+ *
+ *************************************/
 
 static READ8_HANDLER( mole_protection_r )
 {
-	/*  Following are all known examples of Mole Attack
+
+    /*  Following are all known examples of Mole Attack
     **  code reading from the protection circuitry:
     **
     **  5b0b:
@@ -82,7 +164,7 @@ static READ8_HANDLER( mole_protection_r )
 	{
 	case 0x08: return 0xb0; /* random mole placement */
 	case 0x26:
-		if (cpu_get_pc(space->cpu) == 0x53d7)
+		if (cpu_get_pc(&space->device()) == 0x53d7)
 		{
 			return 0x06; /* bonus round */
 		}
@@ -94,24 +176,31 @@ static READ8_HANDLER( mole_protection_r )
 	case 0xae: return 0x32; /* coinage */
 	}
 
-	/*  The above are critical protection reads.
+    /*  The above are critical protection reads.
     **  It isn't clear what effect (if any) the
     **  remaining reads have; for now we simply
     **  return 0x00
     */
+
 	return 0x00;
 }
 
 
-static ADDRESS_MAP_START( mole_map, ADDRESS_SPACE_PROGRAM, 8 )
+/*************************************
+ *
+ *  Address maps
+ *
+ *************************************/
+
+static ADDRESS_MAP_START( mole_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0800, 0x08ff) AM_READ(mole_protection_r)
 	AM_RANGE(0x0800, 0x0800) AM_WRITENOP // ???
 	AM_RANGE(0x0820, 0x0820) AM_WRITENOP // ???
 	AM_RANGE(0x5000, 0x7fff) AM_MIRROR(0x8000) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(mole_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(mole_videoram_w)
 	AM_RANGE(0x8400, 0x8400) AM_WRITE(mole_tilebank_w)
-	AM_RANGE(0x8c00, 0x8c01) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x8c00, 0x8c01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x8c40, 0x8c40) AM_WRITENOP // ???
 	AM_RANGE(0x8c80, 0x8c80) AM_WRITENOP // ???
 	AM_RANGE(0x8c81, 0x8c81) AM_WRITENOP // ???
@@ -121,6 +210,12 @@ static ADDRESS_MAP_START( mole_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8dc0, 0x8dc0) AM_READ_PORT("IN2") AM_WRITE(mole_flipscreen_w)
 ADDRESS_MAP_END
 
+
+/*************************************
+ *
+ *  Input ports
+ *
+ *************************************/
 
 static INPUT_PORTS_START( mole )
 	PORT_START("DSW")	/* 0x8d00 */
@@ -143,37 +238,43 @@ static INPUT_PORTS_START( mole )
 	PORT_BIT( 0xc0, IP_ACTIVE_HIGH, IPT_UNUSED )
 
 	PORT_START("IN0")	/* 0x8d40 */
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 )
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 )
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON3 )
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON4 )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON5 )
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON6 )
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON7 )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON8 )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 1") PORT_CODE(KEYCODE_1_PAD)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 2") PORT_CODE(KEYCODE_2_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 3") PORT_CODE(KEYCODE_3_PAD)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 4") PORT_CODE(KEYCODE_4_PAD)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 5") PORT_CODE(KEYCODE_5_PAD)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 6") PORT_CODE(KEYCODE_6_PAD)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 7") PORT_CODE(KEYCODE_7_PAD)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 8") PORT_CODE(KEYCODE_8_PAD)
 
 	PORT_START("IN1")	/* 0x8d80 */
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON9 )
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_COCKTAIL
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_COCKTAIL
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_COCKTAIL
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P1 Pad 9") PORT_CODE(KEYCODE_9_PAD)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 1") PORT_CODE(KEYCODE_Q) PORT_COCKTAIL
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 2") PORT_CODE(KEYCODE_W) PORT_COCKTAIL
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 3") PORT_CODE(KEYCODE_E) PORT_COCKTAIL
 	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Upright ) )
-	PORT_DIPSETTING(	0x10, DEF_STR( Cocktail ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( Upright ) )
+	PORT_DIPSETTING( 0x10, DEF_STR( Cocktail ) )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_START2 )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_START1 )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_COIN1 )
 
 	PORT_START("IN2")	/* 0x8dc0 */
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON8 ) PORT_COCKTAIL
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON7 ) PORT_COCKTAIL
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_COCKTAIL
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON9 ) PORT_COCKTAIL
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_COCKTAIL
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_COCKTAIL
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 8") PORT_CODE(KEYCODE_X) PORT_COCKTAIL
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 7") PORT_CODE(KEYCODE_Z) PORT_COCKTAIL
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 4") PORT_CODE(KEYCODE_A) PORT_COCKTAIL
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 9") PORT_CODE(KEYCODE_C) PORT_COCKTAIL
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 6") PORT_CODE(KEYCODE_D) PORT_COCKTAIL
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("P2 Pad 5") PORT_CODE(KEYCODE_S) PORT_COCKTAIL
 	PORT_BIT( 0xc0, IP_ACTIVE_HIGH, IPT_UNUSED )
 INPUT_PORTS_END
 
+
+/*************************************
+ *
+ *  Graphics definitions
+ *
+ *************************************/
 
 static const gfx_layout tile_layout =
 {
@@ -193,35 +294,63 @@ static GFXDECODE_START( mole )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( mole )
-	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", M6502, 4000000) // ???
-	MDRV_CPU_PROGRAM_MAP(mole_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+/*************************************
+ *
+ *  Machine driver
+ *
+ *************************************/
 
-	// video hardware
+static MACHINE_START( mole )
+{
+	mole_state *state = machine.driver_data<mole_state>();
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 25*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 25*8-1)
+	state->save_item(NAME(state->m_tile_bank));
+}
 
-	MDRV_GFXDECODE(mole)
-	MDRV_PALETTE_LENGTH(8)
+static MACHINE_RESET( mole )
+{
+	mole_state *state = machine.driver_data<mole_state>();
 
-	MDRV_PALETTE_INIT(mole)
-	MDRV_VIDEO_START(mole)
-	MDRV_VIDEO_UPDATE(mole)
+	state->m_tile_bank = 0;
+}
 
-	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+static MACHINE_CONFIG_START( mole, mole_state )
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", M6502, 4000000) // ???
+	MCFG_CPU_PROGRAM_MAP(mole_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
+	MCFG_MACHINE_START(mole)
+	MCFG_MACHINE_RESET(mole)
+
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 25*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 25*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(mole)
+
+	MCFG_GFXDECODE(mole)
+	MCFG_PALETTE_LENGTH(8)
+
+	MCFG_PALETTE_INIT(mole)
+	MCFG_VIDEO_START(mole)
+
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("aysnd", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
+
+
+/*************************************
+ *
+ *  ROM definition(s)
+ *
+ *************************************/
 
 ROM_START( mole ) // ALL ROMS ARE 2732
 	ROM_REGION( 0x10000, "maincpu", 0 )	// 64k for 6502 code
@@ -239,4 +368,10 @@ ROM_START( mole ) // ALL ROMS ARE 2732
 ROM_END
 
 
-GAME( 1982, mole, 0, mole, mole, 0, ROT0, "Yachiyo Electronics, Ltd.", "Mole Attack", 0 )
+/*************************************
+ *
+ *  Game driver(s)
+ *
+ *************************************/
+
+GAME( 1982, mole, 0, mole, mole, 0, ROT0, "Yachiyo Electronics, Ltd.", "Mole Attack", GAME_SUPPORTS_SAVE )

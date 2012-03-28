@@ -4,6 +4,20 @@
 
 *************************************************************************/
 
+class aztarac_state : public driver_device
+{
+public:
+	aztarac_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		  m_nvram(*this, "nvram") { }
+
+	required_shared_ptr<UINT16>	m_nvram;
+	int m_sound_status;
+	UINT16 *m_vectorram;
+	int m_xcenter;
+	int m_ycenter;
+};
+
 /*----------- defined in audio/aztarac.c -----------*/
 
 READ16_HANDLER( aztarac_sound_r );
@@ -17,8 +31,6 @@ INTERRUPT_GEN( aztarac_snd_timed_irq );
 
 
 /*----------- defined in video/aztarac.c -----------*/
-
-extern UINT16 *aztarac_vectorram;
 
 WRITE16_HANDLER( aztarac_ubr_w );
 

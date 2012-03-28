@@ -4,8 +4,8 @@
 
 *************************************************************************/
 
-#include "driver.h"
-#include "atarifb.h"
+#include "emu.h"
+#include "includes/atarifb.h"
 #include "sound/discrete.h"
 
 

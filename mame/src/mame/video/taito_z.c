@@ -1,39 +1,17 @@
-#include "driver.h"
+#include "emu.h"
 #include "video/taitoic.h"
-
-#define TC0100SCN_GFX_NUM 1
-#define TC0480SCP_GFX_NUM 1
-
-static int sci_spriteframe;
-
-static int road_palbank;
-
+#include "includes/taito_z.h"
 
 /**********************************************************/
 
-static void taitoz_core_vh_start(running_machine *machine, int x_offs)
-{
-	if (has_TC0480SCP(machine))	/* it's Dblaxle, a tc0480scp game */
-		TC0480SCP_vh_start(machine,TC0480SCP_GFX_NUM,x_offs,0x21,0x08,4,0,0,0,0);
-	else	/* it's a tc0100scn game */
-		TC0100SCN_vh_start(machine,1,TC0100SCN_GFX_NUM,x_offs,0,0,0,0,0,0);
-
-	if (has_TC0150ROD(machine))
-		TC0150ROD_vh_start(machine);
-
-	if (TC0110PCR_mask(machine) & 1)
-		TC0110PCR_vh_start(machine);
-}
-
 VIDEO_START( taitoz )
 {
-	road_palbank = 3;
-	taitoz_core_vh_start(machine, 0);
-}
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	state->m_road_palbank = 3;
+	state->m_sci_spriteframe = 0;
 
-VIDEO_START( spacegun )
-{
-	taitoz_core_vh_start(machine, 4);
+	state->save_item(NAME(state->m_road_palbank));
+	state->save_item(NAME(state->m_sci_spriteframe));
 }
 
 /********************************************************
@@ -43,12 +21,14 @@ VIDEO_START( spacegun )
 
 READ16_HANDLER( sci_spriteframe_r )
 {
-	return (sci_spriteframe << 8);
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	return (state->m_sci_spriteframe << 8);
 }
 
 WRITE16_HANDLER( sci_spriteframe_w )
 {
-	sci_spriteframe = (data >> 8) &0xff;
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+	state->m_sci_spriteframe = (data >> 8) & 0xff;
 }
 
 
@@ -166,37 +146,40 @@ confirmed
 ********************************************************/
 
 
-static void contcirc_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void contcirc_draw_sprites_16x8( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int y_offs )
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
 	int zoomx, zoomy, zx, zy;
-	int sprite_chunk,map_offset,code,j,k,px,py;
+	int sprite_chunk, map_offset, code, j, k, px, py;
 	int bad_chunks;
-	static const int primasks[2] = {0xf0,0xfc};
+	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = 0;offs < spriteram_size/2;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2; offs += 4)
 	{
-		data = spriteram16[offs+0];
+		data = spriteram[offs + 0];
 		zoomy = (data & 0xfe00) >> 9;
 		y = data & 0x1ff;
 
-		data = spriteram16[offs+1];
+		data = spriteram[offs + 1];
 		tilenum = data & 0x7ff;		/* $80000 spritemap rom maps up to $7ff 128x128 sprites */
 
-		data = spriteram16[offs+2];
+		data = spriteram[offs + 2];
 		priority = (data & 0x8000) >> 15;
 		flipx = (data & 0x4000) >> 14;
 		flipy = (data & 0x2000) >> 13;	// ???
 		x = data & 0x1ff;   // correct mask?
 
-		data = spriteram16[offs+3];
+		data = spriteram[offs + 3];
 		color = (data & 0xff00) >> 8;
 		zoomx = (data & 0x7f);
 
-		if (!tilenum) continue;
+		if (!tilenum)
+			continue;
 
 		map_offset = tilenum << 7;
 
@@ -204,31 +187,32 @@ static void contcirc_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 		zoomy += 1;
 
 		y += y_offs;
-		y += (128-zoomy);
+		y += (128 - zoomy);
 
 		/* treat coords as signed */
-		if (x>0x140) x -= 0x200;
-		if (y>0x140) y -= 0x200;
+		if (x > 0x140) x -= 0x200;
+		if (y > 0x140) y -= 0x200;
 
 		bad_chunks = 0;
 
-		for (sprite_chunk=0;sprite_chunk<128;sprite_chunk++)
+		for (sprite_chunk = 0; sprite_chunk < 128; sprite_chunk++)
 		{
 			k = sprite_chunk % 8;   /* 8 sprite chunks per row */
 			j = sprite_chunk / 8;   /* 16 rows */
 
-			px = flipx ? (7-k) : k;	/* pick tiles back to front for x and y flips */
-			py = flipy ? (15-j) : j;
+			px = flipx ?  (7 - k) : k;	/* pick tiles back to front for x and y flips */
+			py = flipy ? (15 - j) : j;
 
-			code = spritemap[map_offset + px + (py<<3)];
+			code = spritemap[map_offset + px + (py << 3)];
 
-			if (code == 0xffff)	bad_chunks++;
+			if (code == 0xffff)
+				bad_chunks++;
 
-			curx = x + ((k*zoomx)/8);
-			cury = y + ((j*zoomy)/16);
+			curx = x + ((k * zoomx) / 8);
+			cury = y + ((j * zoomy) / 16);
 
-			zx = x + (((k+1)*zoomx)/8) - curx;
-			zy = y + (((j+1)*zoomy)/16) - cury;
+			zx = x + (((k + 1) * zoomx) / 8) - curx;
+			zy = y + (((j + 1) * zoomy) / 16) - cury;
 
 			if (sprites_flipscreen)
 			{
@@ -242,87 +226,91 @@ static void contcirc_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
-					zx<<12,zy<<13,machine->priority_bitmap,primasks[priority],0);
+					zx<<12,zy<<13,machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
-logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
+			logerror("Sprite number %04x had %02x invalid chunks\n", tilenum, bad_chunks);
 	}
 }
 
 
 
-static void chasehq_draw_sprites_16x16(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void chasehq_draw_sprites_16x16( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int y_offs )
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
 	int zoomx, zoomy, zx, zy;
-	int sprite_chunk,map_offset,code,j,k,px,py;
+	int sprite_chunk, map_offset, code, j, k, px, py;
 	int bad_chunks;
-	static const int primasks[2] = {0xf0,0xfc};
+	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = spriteram_size/2-4;offs >=0;offs -= 4)
+	for (offs = state->m_spriteram_size / 2 - 4; offs >= 0; offs -= 4)
 	{
-		data = spriteram16[offs+0];
+		data = spriteram[offs + 0];
 		zoomy = (data & 0xfe00) >> 9;
 		y = data & 0x1ff;
 
-		data = spriteram16[offs+1];
+		data = spriteram[offs + 1];
 		priority = (data & 0x8000) >> 15;
 		color = (data & 0x7f80) >> 7;
 		zoomx = (data & 0x7f);
 
-		data = spriteram16[offs+2];
+		data = spriteram[offs + 2];
 		flipy = (data & 0x8000) >> 15;
 		flipx = (data & 0x4000) >> 14;
 		x = data & 0x1ff;
 
-		data = spriteram16[offs+3];
+		data = spriteram[offs + 3];
 		/* higher bits are sometimes used... e.g. sign over flashing enemy car...! */
 		tilenum = data & 0x7ff;
 
-		if (!tilenum) continue;
+		if (!tilenum)
+			continue;
 
 		zoomx += 1;
 		zoomy += 1;
 
 		y += y_offs;
-		y += (128-zoomy);
+		y += (128 - zoomy);
 
 		/* treat coords as signed */
-		if (x>0x140) x -= 0x200;
-		if (y>0x140) y -= 0x200;
+		if (x > 0x140) x -= 0x200;
+		if (y > 0x140) y -= 0x200;
 
 		bad_chunks = 0;
 
-		if ((zoomx-1) & 0x40)	/* 128x128 sprites, $0-$3ffff in spritemap rom, OBJA */
+		if ((zoomx - 1) & 0x40)	/* 128x128 sprites, $0-$3ffff in spritemap rom, OBJA */
 		{
 			map_offset = tilenum << 6;
 
-			for (sprite_chunk=0;sprite_chunk<64;sprite_chunk++)
+			for (sprite_chunk = 0; sprite_chunk < 64; sprite_chunk++)
 			{
 				j = sprite_chunk / 8;   /* 8 rows */
 				k = sprite_chunk % 8;   /* 8 sprite chunks per row */
 
-				px = flipx ? (7-k) : k;	/* pick tiles back to front for x and y flips */
-				py = flipy ? (7-j) : j;
+				px = flipx ? (7 - k) : k;	/* pick tiles back to front for x and y flips */
+				py = flipy ? (7 - j) : j;
 
-				code = spritemap[map_offset + px + (py<<3)];
+				code = spritemap[map_offset + px + (py << 3)];
 
-				if (code == 0xffff)	bad_chunks++;
+				if (code == 0xffff)
+					bad_chunks++;
 
-				curx = x + ((k*zoomx)/8);
-				cury = y + ((j*zoomy)/8);
+				curx = x + ((k * zoomx) / 8);
+				cury = y + ((j * zoomy) / 8);
 
-				zx = x + (((k+1)*zoomx)/8) - curx;
-				zy = y + (((j+1)*zoomy)/8) - cury;
+				zx = x + (((k + 1) * zoomx) / 8) - curx;
+				zy = y + (((j + 1) * zoomy) / 8) - cury;
 
 				if (sprites_flipscreen)
 				{
@@ -336,36 +324,36 @@ static void chasehq_draw_sprites_16x16(running_machine *machine, bitmap_t *bitma
 					flipy = !flipy;
 				}
 
-				pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+				pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 						code,
 						color,
 						flipx,flipy,
 						curx,cury,
 						zx<<12,zy<<12,
-						machine->priority_bitmap,primasks[priority],0);
+						machine.priority_bitmap,primasks[priority],0);
 			}
 		}
-		else if ((zoomx-1) & 0x20)	/* 64x128 sprites, $40000-$5ffff in spritemap rom, OBJB */
+		else if ((zoomx - 1) & 0x20)	/* 64x128 sprites, $40000-$5ffff in spritemap rom, OBJB */
 		{
 			map_offset = (tilenum << 5) + 0x20000;
 
-			for (sprite_chunk=0;sprite_chunk<32;sprite_chunk++)
+			for (sprite_chunk = 0; sprite_chunk < 32; sprite_chunk++)
 			{
 				j = sprite_chunk / 4;   /* 8 rows */
 				k = sprite_chunk % 4;   /* 4 sprite chunks per row */
 
-				px = flipx ? (3-k) : k;	/* pick tiles back to front for x and y flips */
-				py = flipy ? (7-j) : j;
+				px = flipx ? (3 - k) : k;	/* pick tiles back to front for x and y flips */
+				py = flipy ? (7 - j) : j;
 
-				code = spritemap[map_offset + px + (py<<2)];
+				code = spritemap[map_offset + px + (py << 2)];
 
 				if (code == 0xffff)	bad_chunks++;
 
-				curx = x + ((k*zoomx)/4);
-				cury = y + ((j*zoomy)/8);
+				curx = x + ((k * zoomx) / 4);
+				cury = y + ((j * zoomy) / 8);
 
-				zx = x + (((k+1)*zoomx)/4) - curx;
-				zy = y + (((j+1)*zoomy)/8) - cury;
+				zx = x + (((k + 1) * zoomx) / 4) - curx;
+				zy = y + (((j + 1) * zoomy) / 8) - cury;
 
 				if (sprites_flipscreen)
 				{
@@ -379,36 +367,36 @@ static void chasehq_draw_sprites_16x16(running_machine *machine, bitmap_t *bitma
 					flipy = !flipy;
 				}
 
-				pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[2],
+				pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[2],
 						code,
 						color,
 						flipx,flipy,
 						curx,cury,
 						zx<<12,zy<<12,
-						machine->priority_bitmap,primasks[priority],0);
+						machine.priority_bitmap,primasks[priority],0);
 			}
 		}
-		else if (!((zoomx-1) & 0x60))	/* 32x128 sprites, $60000-$7ffff in spritemap rom, OBJB */
+		else if (!((zoomx - 1) & 0x60))	/* 32x128 sprites, $60000-$7ffff in spritemap rom, OBJB */
 		{
 			map_offset = (tilenum << 4) + 0x30000;
 
-			for (sprite_chunk=0;sprite_chunk<16;sprite_chunk++)
+			for (sprite_chunk = 0; sprite_chunk < 16; sprite_chunk++)
 			{
 				j = sprite_chunk / 2;   /* 8 rows */
 				k = sprite_chunk % 2;   /* 2 sprite chunks per row */
 
-				px = flipx ? (1-k) : k;	/* pick tiles back to front for x and y flips */
-				py = flipy ? (7-j) : j;
+				px = flipx ? (1 - k) : k;	/* pick tiles back to front for x and y flips */
+				py = flipy ? (7 - j) : j;
 
-				code = spritemap[map_offset + px + (py<<1)];
+				code = spritemap[map_offset + px + (py << 1)];
 
 				if (code == 0xffff)	bad_chunks ++;
 
-				curx = x + ((k*zoomx)/2);
-				cury = y + ((j*zoomy)/8);
+				curx = x + ((k * zoomx) / 2);
+				cury = y + ((j * zoomy) / 8);
 
-				zx = x + (((k+1)*zoomx)/2) - curx;
-				zy = y + (((j+1)*zoomy)/8) - cury;
+				zx = x + (((k + 1) * zoomx) / 2) - curx;
+				zy = y + (((j + 1) * zoomy) / 8) - cury;
 
 				if (sprites_flipscreen)
 				{
@@ -422,54 +410,57 @@ static void chasehq_draw_sprites_16x16(running_machine *machine, bitmap_t *bitma
 					flipy = !flipy;
 				}
 
-				pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[2],
+				pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[2],
 						code,
 						color,
 						flipx,flipy,
 						curx,cury,
 						zx<<12,zy<<12,
-						machine->priority_bitmap,primasks[priority],0);
+						machine.priority_bitmap,primasks[priority],0);
 			}
 		}
 
 		if (bad_chunks)
-logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
+			logerror("Sprite number %04x had %02x invalid chunks\n", tilenum, bad_chunks);
 	}
 }
 
 
 
-static void bshark_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void bshark_draw_sprites_16x8( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int y_offs )
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
 	int zoomx, zoomy, zx, zy;
-	int sprite_chunk,map_offset,code,j,k,px,py;
+	int sprite_chunk, map_offset, code, j, k, px, py;
 	int bad_chunks;
-	static const int primasks[2] = {0xf0,0xfc};
+	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = spriteram_size/2-4;offs >= 0;offs -= 4)
+	for (offs = state->m_spriteram_size / 2 - 4; offs >= 0; offs -= 4)
 	{
-		data = spriteram16[offs+0];
+		data = spriteram[offs + 0];
 		zoomy = (data & 0x7e00) >> 9;
 		y = data & 0x1ff;
 
-		data = spriteram16[offs+1];
+		data = spriteram[offs + 1];
 		priority = (data & 0x8000) >> 15;
 		color = (data & 0x7f80) >> 7;
 		zoomx = (data & 0x3f);
 
-		data = spriteram16[offs+2];
+		data = spriteram[offs + 2];
 		flipy = (data & 0x8000) >> 15;
 		flipx = (data & 0x4000) >> 14;
 		x = data & 0x1ff;
 
-		data = spriteram16[offs+3];
+		data = spriteram[offs + 3];
 		tilenum = data & 0x1fff;	/* $80000 spritemap rom maps up to $2000 64x64 sprites */
 
-		if (!tilenum) continue;
+		if (!tilenum)
+			continue;
 
 		map_offset = tilenum << 5;
 
@@ -477,31 +468,32 @@ static void bshark_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,
 		zoomy += 1;
 
 		y += y_offs;
-		y += (64-zoomy);
+		y += (64 - zoomy);
 
 		/* treat coords as signed */
-		if (x>0x140) x -= 0x200;
-		if (y>0x140) y -= 0x200;
+		if (x > 0x140) x -= 0x200;
+		if (y > 0x140) y -= 0x200;
 
 		bad_chunks = 0;
 
-		for (sprite_chunk=0;sprite_chunk<32;sprite_chunk++)
+		for (sprite_chunk = 0; sprite_chunk < 32; sprite_chunk++)
 		{
 			k = sprite_chunk % 4;   /* 4 sprite chunks per row */
 			j = sprite_chunk / 4;   /* 8 rows */
 
-			px = flipx ? (3-k) : k;	/* pick tiles back to front for x and y flips */
-			py = flipy ? (7-j) : j;
+			px = flipx ? (3 - k) : k;	/* pick tiles back to front for x and y flips */
+			py = flipy ? (7 - j) : j;
 
-			code = spritemap[map_offset + px + (py<<2)];
+			code = spritemap[map_offset + px + (py << 2)];
 
-			if (code == 0xffff)	bad_chunks++;
+			if (code == 0xffff)
+				bad_chunks++;
 
-			curx = x + ((k*zoomx)/4);
-			cury = y + ((j*zoomy)/8);
+			curx = x + ((k * zoomx) / 4);
+			cury = y + ((j * zoomy) / 8);
 
-			zx = x + (((k+1)*zoomx)/4) - curx;
-			zy = y + (((j+1)*zoomy)/8) - cury;
+			zx = x + (((k + 1) * zoomx) / 4) - curx;
+			zy = y + (((j + 1) * zoomy) / 8) - cury;
 
 			if (sprites_flipscreen)
 			{
@@ -515,32 +507,34 @@ static void bshark_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
-logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
+			logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 	}
 }
 
 
 
-static void sci_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void sci_draw_sprites_16x8( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int y_offs )
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, start_offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
 	int zoomx, zoomy, zx, zy;
-	int sprite_chunk,map_offset,code,j,k,px,py;
+	int sprite_chunk, map_offset, code, j, k, px, py;
 	int bad_chunks;
-	static const int primasks[2] = {0xf0,0xfc};
+	static const int primasks[2] = { 0xf0, 0xfc };
 
 	/* SCI alternates between two areas of its spriteram */
 
@@ -548,29 +542,30 @@ static void sci_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,con
 	// reversing it now only gives us sprite updates on alternate
 	// frames. So we probably have to partly buffer spriteram?
 
-	start_offs = (sci_spriteframe &1) * 0x800;
+	start_offs = (state->m_sci_spriteframe & 1) * 0x800;
 	start_offs = 0x800 - start_offs;
 
-	for (offs = (start_offs + 0x800 - 4);offs >= start_offs;offs -= 4)
+	for (offs = (start_offs + 0x800 - 4); offs >= start_offs; offs -= 4)
 	{
-		data = spriteram16[offs+0];
+		data = spriteram[offs + 0];
 		zoomy = (data & 0x7e00) >> 9;
 		y = data & 0x1ff;
 
-		data = spriteram16[offs+1];
+		data = spriteram[offs + 1];
 		priority = (data & 0x8000) >> 15;
 		color = (data & 0x7f80) >> 7;
 		zoomx = (data & 0x3f);
 
-		data = spriteram16[offs+2];
+		data = spriteram[offs + 2];
 		flipy = (data & 0x8000) >> 15;
 		flipx = (data & 0x4000) >> 14;
 		x = data & 0x1ff;
 
-		data = spriteram16[offs+3];
+		data = spriteram[offs + 3];
 		tilenum = data & 0x1fff;	/* $80000 spritemap rom maps up to $2000 64x64 sprites */
 
-		if (!tilenum) continue;
+		if (!tilenum)
+			continue;
 
 		map_offset = tilenum << 5;
 
@@ -578,31 +573,32 @@ static void sci_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,con
 		zoomy += 1;
 
 		y += y_offs;
-		y += (64-zoomy);
+		y += (64 - zoomy);
 
 		/* treat coords as signed */
-		if (x>0x140) x -= 0x200;
-		if (y>0x140) y -= 0x200;
+		if (x > 0x140) x -= 0x200;
+		if (y > 0x140) y -= 0x200;
 
 		bad_chunks = 0;
 
-		for (sprite_chunk=0;sprite_chunk<32;sprite_chunk++)
+		for (sprite_chunk = 0; sprite_chunk < 32; sprite_chunk++)
 		{
 			j = sprite_chunk / 4;   /* 8 rows */
 			k = sprite_chunk % 4;   /* 4 sprite chunks per row */
 
-			px = flipx ? (3-k) : k;	/* pick tiles back to front for x and y flips */
-			py = flipy ? (7-j) : j;
+			px = flipx ? (3 - k) : k;	/* pick tiles back to front for x and y flips */
+			py = flipy ? (7 - j) : j;
 
-			code = spritemap[map_offset + px + (py<<2)];
+			code = spritemap[map_offset + px + (py << 2)];
 
-			if (code == 0xffff)	bad_chunks++;
+			if (code == 0xffff)
+				bad_chunks++;
 
-			curx = x + ((k*zoomx)/4);
-			cury = y + ((j*zoomy)/8);
+			curx = x + ((k * zoomx) / 4);
+			cury = y + ((j * zoomy) / 8);
 
-			zx = x + (((k+1)*zoomx)/4) - curx;
-			zy = y + (((j+1)*zoomy)/8) - cury;
+			zx = x + (((k + 1) * zoomx) / 4) - curx;
+			zy = y + (((j + 1) * zoomy) / 8) - cury;
 
 			if (sprites_flipscreen)
 			{
@@ -616,53 +612,56 @@ static void sci_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,con
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
-logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
+			logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 	}
 }
 
 
 
-static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void aquajack_draw_sprites_16x8(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,int y_offs)
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
 	int zoomx, zoomy, zx, zy;
-	int sprite_chunk,map_offset,code,j,k,px,py;
+	int sprite_chunk, map_offset, code, j, k, px, py;
 	int bad_chunks;
-	static const int primasks[2] = {0xf0,0xfc};
+	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = 0;offs < spriteram_size/2;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2; offs += 4)
 	{
-		data = spriteram16[offs+0];
+		data = spriteram[offs + 0];
 		zoomy = (data & 0x7e00) >> 9;
 		y = data & 0x1ff;
 
-		data = spriteram16[offs+1];
+		data = spriteram[offs + 1];
 		priority = (data & 0x8000) >> 15;
 		flipx = (data & 0x4000) >> 14;
 		x = data & 0x1ff;   // correct mask?
 
-		data = spriteram16[offs+2];
+		data = spriteram[offs + 2];
 		color = (data & 0xff00) >> 8;
 		zoomx = (data & 0x3f);
 
-		data = spriteram16[offs+3];
+		data = spriteram[offs + 3];
 		flipy = (data & 0x8000) >> 15;	// ???
 		tilenum = data & 0x1fff;	/* $80000 spritemap rom maps up to $2000 64x64 sprites */
 
-		if (!tilenum) continue;
+		if (!tilenum)
+			continue;
 
 		map_offset = tilenum << 5;
 
@@ -672,8 +671,8 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 		y += y_offs;
 
 		/* treat coords as signed */
-		if (x>0x140) x -= 0x200;
-		if (y>0x140) y -= 0x200;
+		if (x > 0x140) x -= 0x200;
+		if (y > 0x140) y -= 0x200;
 
 		bad_chunks = 0;
 
@@ -682,18 +681,19 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 			k = sprite_chunk % 4;   /* 4 sprite chunks per row */
 			j = sprite_chunk / 4;   /* 8 rows */
 
-			px = flipx ? (3-k) : k;	/* pick tiles back to front for x and y flips */
-			py = flipy ? (7-j) : j;
+			px = flipx ? (3 - k) : k;	/* pick tiles back to front for x and y flips */
+			py = flipy ? (7 - j) : j;
 
-			code = spritemap[map_offset + px + (py<<2)];
+			code = spritemap[map_offset + px + (py << 2)];
 
-			if (code == 0xffff)	bad_chunks++;
+			if (code == 0xffff)
+				bad_chunks++;
 
-			curx = x + ((k*zoomx)/4);
-			cury = y + ((j*zoomy)/8);
+			curx = x + ((k * zoomx)/4);
+			cury = y + ((j * zoomy)/8);
 
-			zx = x + (((k+1)*zoomx)/4) - curx;
-			zy = y + (((j+1)*zoomy)/8) - cury;
+			zx = x + (((k + 1) * zoomx)/4) - curx;
+			zy = y + (((j + 1) * zoomy)/8) - cury;
 
 			if (sprites_flipscreen)
 			{
@@ -707,53 +707,56 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
-logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
+			logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 	}
 }
 
 
 
-static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
+static void spacegun_draw_sprites_16x8(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,int y_offs)
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	taitoz_state *state = machine.driver_data<taitoz_state>();
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT16 *spriteram = state->m_spriteram;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
 	int zoomx, zoomy, zx, zy;
-	int sprite_chunk,map_offset,code,j,k,px,py;
+	int sprite_chunk, map_offset, code, j, k, px, py;
 	int bad_chunks;
-	static const int primasks[2] = {0xf0,0xfc};
+	static const int primasks[2] = { 0xf0, 0xfc };
 
-	for (offs = 0; offs < spriteram_size/2-4;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size / 2 - 4; offs += 4)
 	{
-		data = spriteram16[offs+0];
+		data = spriteram[offs + 0];
 		zoomy = (data & 0xfe00) >> 9;
 		y = data & 0x1ff;
 
-		data = spriteram16[offs+1];
+		data = spriteram[offs + 1];
 		priority = (data & 0x8000) >> 15;
 		flipx = (data & 0x4000) >> 14;
 		x = data & 0x1ff;   // correct mask?
 
-		data = spriteram16[offs+2];
+		data = spriteram[offs + 2];
 		color = (data & 0xff00) >> 8;
 		zoomx = (data & 0x7f);
 
-		data = spriteram16[offs+3];
+		data = spriteram[offs + 3];
 		flipy = (data & 0x8000) >> 15;	// ???
 		tilenum = data & 0x1fff;	/* $80000 spritemap rom maps up to $2000 64x64 sprites */
 
-		if (!tilenum) continue;
+		if (!tilenum)
+			continue;
 
 		map_offset = tilenum << 5;
 
@@ -763,28 +766,29 @@ static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 		y += y_offs;
 
 		/* treat coords as signed */
-		if (x>0x140) x -= 0x200;
-		if (y>0x140) y -= 0x200;
+		if (x > 0x140) x -= 0x200;
+		if (y > 0x140) y -= 0x200;
 
 		bad_chunks = 0;
 
-		for (sprite_chunk=0;sprite_chunk<32;sprite_chunk++)
+		for (sprite_chunk = 0; sprite_chunk < 32; sprite_chunk++)
 		{
 			k = sprite_chunk % 4;   /* 4 sprite chunks per row */
 			j = sprite_chunk / 4;   /* 8 rows */
 
-			px = flipx ? (3-k) : k;	/* pick tiles back to front for x and y flips */
-			py = flipy ? (7-j) : j;
+			px = flipx ? (3 - k) : k;	/* pick tiles back to front for x and y flips */
+			py = flipy ? (7 - j) : j;
 
-			code = spritemap[map_offset + px + (py<<2)];
+			code = spritemap[map_offset + px + (py << 2)];
 
-			if (code == 0xffff)	bad_chunks++;
+			if (code == 0xffff)
+				bad_chunks++;
 
-			curx = x + ((k*zoomx)/4);
-			cury = y + ((j*zoomy)/8);
+			curx = x + ((k * zoomx) / 4);
+			cury = y + ((j * zoomy) / 8);
 
-			zx = x + (((k+1)*zoomx)/4) - curx;
-			zy = y + (((j+1)*zoomy)/8) - cury;
+			zx = x + (((k + 1) * zoomx) / 4) - curx;
+			zy = y + (((j + 1) * zoomy) / 8) - cury;
 
 			if (sprites_flipscreen)
 			{
@@ -798,17 +802,17 @@ static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 				flipy = !flipy;
 			}
 
-			pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[0],
+			pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[0],
 					code,
 					color,
 					flipx,flipy,
 					curx,cury,
 					zx<<12,zy<<13,
-					machine->priority_bitmap,primasks[priority],0);
+					machine.priority_bitmap,primasks[priority],0);
 		}
 
 		if (bad_chunks)
-logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
+			logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 	}
 }
 
@@ -819,10 +823,12 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 
 WRITE16_HANDLER( contcirc_out_w )
 {
+	taitoz_state *state = space->machine().driver_data<taitoz_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 0 = reset sub CPU */
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
 
 		/* bits 1-3 n.c. */
 
@@ -831,192 +837,199 @@ WRITE16_HANDLER( contcirc_out_w )
 		/* bit 5 = SCP */
 
 		/* bits 6 and 7 select the road palette bank */
-		road_palbank = (data & 0xc0) >> 6;
+		state->m_road_palbank = (data & 0xc0) >> 6;
 	}
 }
 
 
-VIDEO_UPDATE( contcirc )
+SCREEN_UPDATE_IND16( contcirc )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],0,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-3,road_palbank << 6,1,0,1,2);	// -6
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], 0, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -3, state->m_road_palbank << 6, 1, 0, 1, 2);	// -6
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	contcirc_draw_sprites_16x8(screen->machine, bitmap,cliprect,5);	// 7
+	contcirc_draw_sprites_16x8(screen.machine(), bitmap, cliprect, 5);	// 7
 	return 0;
 }
 
 
 /* Nightstr and ChaseHQ */
 
-VIDEO_UPDATE( chasehq )
+SCREEN_UPDATE_IND16( chasehq )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,0,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	chasehq_draw_sprites_16x16(screen->machine, bitmap,cliprect,7);
+	chasehq_draw_sprites_16x16(screen.machine(), bitmap, cliprect, 7);
 	return 0;
 }
 
 
-VIDEO_UPDATE( bshark )
+SCREEN_UPDATE_IND16( bshark )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap_fill(bitmap, cliprect,0);
+	bitmap.fill(0, cliprect);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,1,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 1, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	bshark_draw_sprites_16x8(screen->machine, bitmap,cliprect,8);
+	bshark_draw_sprites_16x8(screen.machine(), bitmap, cliprect, 8);
 	return 0;
 }
 
 
-VIDEO_UPDATE( sci )
+SCREEN_UPDATE_IND16( sci )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,0,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	sci_draw_sprites_16x8(screen->machine, bitmap,cliprect,6);
+	sci_draw_sprites_16x8(screen.machine(), bitmap, cliprect, 6);
 	return 0;
 }
 
 
-VIDEO_UPDATE( aquajack )
+SCREEN_UPDATE_IND16( aquajack )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0,2,1,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0, 2, 1, 1, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	aquajack_draw_sprites_16x8(screen->machine, bitmap,cliprect,3);
+	aquajack_draw_sprites_16x8(screen.machine(), bitmap, cliprect, 3);
 	return 0;
 }
 
 
-VIDEO_UPDATE( spacegun )
+SCREEN_UPDATE_IND16( spacegun )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(state->m_tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,1);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 2);
+	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	spacegun_draw_sprites_16x8(screen->machine, bitmap,cliprect,4);
+	spacegun_draw_sprites_16x8(screen.machine(), bitmap, cliprect, 4);
 
 	return 0;
 }
 
 
-VIDEO_UPDATE( dblaxle )
+SCREEN_UPDATE_IND16( dblaxle )
 {
+	taitoz_state *state = screen.machine().driver_data<taitoz_state>();
 	UINT8 layer[5];
 	UINT16 priority;
 
-	TC0480SCP_tilemap_update(screen->machine);
+	tc0480scp_tilemap_update(state->m_tc0480scp);
 
-	priority = TC0480SCP_get_bg_priority();
+	priority = tc0480scp_get_bg_priority(state->m_tc0480scp);
 
-	layer[0] = (priority &0xf000) >> 12;	/* tells us which bg layer is bottom */
-	layer[1] = (priority &0x0f00) >>  8;
-	layer[2] = (priority &0x00f0) >>  4;
-	layer[3] = (priority &0x000f) >>  0;	/* tells us which is top */
+	layer[0] = (priority & 0xf000) >> 12;	/* tells us which bg layer is bottom */
+	layer[1] = (priority & 0x0f00) >>  8;
+	layer[2] = (priority & 0x00f0) >>  4;
+	layer[3] = (priority & 0x000f) >>  0;	/* tells us which is top */
 	layer[4] = 4;   /* text layer always over bg layers */
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* Ensure screen blanked - this shouldn't be necessary! */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[1],0,0);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[2],0,1);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[1], 0, 0);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[2], 0, 1);
 
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,0,1,2);
-	bshark_draw_sprites_16x8(screen->machine, bitmap,cliprect,7);
+	tc0150rod_draw(state->m_tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	bshark_draw_sprites_16x8(screen.machine(), bitmap, cliprect, 7);
 
 	/* This layer used for the big numeric displays */
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[3],0,4);
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[3], 0, 4);
 
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[4],0,0);	/* Text layer */
+	tc0480scp_tilemap_draw(state->m_tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* Text layer */
 	return 0;
 }

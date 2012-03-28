@@ -1,5 +1,4 @@
-#include <math.h>
-
+#include "emu.h"
 #include "sidvoice.h"
 #include "sid.h"
 #include "sidenvel.h"
@@ -26,7 +25,7 @@ static INT8* ampMod1x8;
 
 static const UINT32 noiseSeed = 0x7ffff8;
 
-void sidInitMixerEngine(running_machine *machine)
+void sidInitMixerEngine(running_machine &machine)
 {
 	UINT16 uk;
 	INT32 si, sj    ;

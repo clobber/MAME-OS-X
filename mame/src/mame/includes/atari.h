@@ -22,16 +22,18 @@ extern const pia6821_interface atarixl_pia_interface;
 READ8_DEVICE_HANDLER(atari_pia_pa_r);
 READ8_DEVICE_HANDLER(atari_pia_pb_r);
 WRITE8_DEVICE_HANDLER(a600xl_pia_pb_w);
+WRITE_LINE_DEVICE_HANDLER(atari_pia_cb2_w);
+
 
 /* This is needed in MESS as well for Atari 8bit drivers */
-void atari_machine_start(running_machine *machine);
+void atari_machine_start(running_machine &machine);
 
 MACHINE_START( atarixl );
 
-void atari_interrupt_cb(const device_config *device, int mask);
+void atari_interrupt_cb(device_t *device, int mask);
 
-void a800_handle_keyboard(running_machine *machine);
-void a5200_handle_keypads(running_machine *machine);
+void a800_handle_keyboard(running_machine &machine);
+void a5200_handle_keypads(running_machine &machine);
 
 /* video */
 
@@ -210,7 +212,7 @@ typedef struct {
     UINT16  data[HWIDTH];       /* graphics data buffer (text through chargen) */
 }   VIDEO;
 
-typedef void (*atari_renderer_func)(const address_space *space, VIDEO *video);
+typedef void (*atari_renderer_func)(address_space *space, VIDEO *video);
 
 typedef struct {
 	atari_renderer_func	renderer;	/* current renderer */
@@ -235,7 +237,7 @@ typedef struct {
 	UINT8	cclock[256+32]; 	/* color clock buffer filled by ANTIC */
 	UINT8	pmbits[256+32]; 	/* player missile buffer filled by GTIA */
 	UINT16	color_lookup[256];	/* color lookup table */
-	UINT8   *prio_table[64]; 	/* player/missile priority tables */
+	UINT8   *prio_table[64];	/* player/missile priority tables */
 	VIDEO	*video[312];		/* video buffer */
 	UINT32	*cclk_expand;		/* shared buffer for the following: */
 	UINT32  *pf_21;				/* 1cclk 2 color txt 2,3 */
@@ -257,13 +259,14 @@ typedef struct {
 	UINT8   *uc_g1;				/* used colors for gfx GTIA 1 */
 	UINT8   *uc_g2;				/* used colors for gfx GTIA 2 */
 	UINT8   *uc_g3;				/* used colors for gfx GTIA 3 */
+	bitmap_ind16 *bitmap;
 }   ANTIC;
 
-#define RDANTIC(space)		memory_read_byte(space, antic.dpage+antic.doffs)
-#define RDVIDEO(space,o)	memory_read_byte(space, antic.vpage+((antic.voffs+(o))&VOFFS))
-#define RDCHGEN(space,o)	memory_read_byte(space, antic.chbase+(o))
-#define RDPMGFXS(space,o) 	memory_read_byte(space, antic.pmbase_s+(o)+(antic.scanline>>1))
-#define RDPMGFXD(space,o) 	memory_read_byte(space, antic.pmbase_d+(o)+antic.scanline)
+#define RDANTIC(space)		space->read_byte(antic.dpage+antic.doffs)
+#define RDVIDEO(space,o)	space->read_byte(antic.vpage+((antic.voffs+(o))&VOFFS))
+#define RDCHGEN(space,o)	space->read_byte(antic.chbase+(o))
+#define RDPMGFXS(space,o)	space->read_byte(antic.pmbase_s+(o)+(antic.scanline>>1))
+#define RDPMGFXD(space,o)	space->read_byte(antic.pmbase_d+(o)+antic.scanline)
 
 #define PREPARE()												\
 	UINT32 *dst = (UINT32 *)&antic.cclock[PMOFFSET]
@@ -364,7 +367,7 @@ typedef struct {
 	for( i = 0; i < width; i++ )								\
 		video->data[i] = RDVIDEO(space,i) << 1
 
-#define PREPARE_GFXA(space,width) 								\
+#define PREPARE_GFXA(space,width)								\
 	UINT32 *dst = (UINT32 *)&antic.cclock[PMOFFSET];			\
     int i;                                                      \
 	for( i = 0; i < width; i++ )								\
@@ -376,7 +379,7 @@ typedef struct {
 	for( i = 0; i < width; i++ )								\
 		video->data[i] = RDVIDEO(space,i)
 
-#define PREPARE_GFXF(space,width) 								\
+#define PREPARE_GFXF(space,width)								\
 	UINT32 *dst = (UINT32 *)&antic.cclock[PMOFFSET];			\
     int i;                                                      \
 	for( i = 0; i < width; i++ )								\
@@ -424,10 +427,10 @@ typedef struct {
 /* erase a number of color clocks to background color PBK */
 #define ERASE4	{	\
 	*dst++ = (PBK << 24) | (PBK << 16) | (PBK << 8) | PBK;	\
-    *dst++ = (PBK << 24) | (PBK << 16) | (PBK << 8) | PBK;  \
-    *dst++ = (PBK << 24) | (PBK << 16) | (PBK << 8) | PBK;  \
+	*dst++ = (PBK << 24) | (PBK << 16) | (PBK << 8) | PBK;  \
+	*dst++ = (PBK << 24) | (PBK << 16) | (PBK << 8) | PBK;  \
 	*dst++ = (PBK << 24) | (PBK << 16) | (PBK << 8) | PBK;	\
-	}
+}
 
 #define ZAP48() 												\
 	dst = (UINT32 *)&antic.cclock[PMOFFSET];					\
@@ -534,7 +537,7 @@ void antic_reset(void);
  READ8_HANDLER ( atari_antic_r );
 WRITE8_HANDLER ( atari_antic_w );
 
-#define ANTIC_RENDERER(name) void name(const address_space *space, VIDEO *video)
+#define ANTIC_RENDERER(name) void name(address_space *space, VIDEO *video)
 
 ANTIC_RENDERER( antic_mode_0_xx );
 ANTIC_RENDERER( antic_mode_2_32 );
@@ -586,16 +589,14 @@ extern char atari_frame_message[64+1];
 extern int atari_frame_counter;
 
 extern VIDEO_START( atari );
-extern VIDEO_UPDATE( atari );
+extern SCREEN_UPDATE_IND16( atari );
 
-INTERRUPT_GEN( a400_interrupt );
-INTERRUPT_GEN( a800_interrupt );
-INTERRUPT_GEN( a800xl_interrupt );
-INTERRUPT_GEN( a5200_interrupt );
+TIMER_DEVICE_CALLBACK( a400_interrupt );
+TIMER_DEVICE_CALLBACK( a800_interrupt );
+TIMER_DEVICE_CALLBACK( a800xl_interrupt );
+TIMER_DEVICE_CALLBACK( a5200_interrupt );
 
-/*----------- defined in drivers/maxaflex.c -----------*/
-
-int atari_input_disabled(void);
+extern PALETTE_INIT( atari );
 
 #endif /* ATARI_H */
 

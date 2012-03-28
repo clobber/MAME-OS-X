@@ -4,8 +4,7 @@
  *
  *************************************/
 
-#include "driver.h"
-#include "includes/atarig42.h"
+#include "emu.h"
 #include "cpu/tms32010/tms32010.h"
 #include "asic65.h"
 
@@ -21,31 +20,26 @@
 
 static struct _asic65_t
 {
-	UINT8  	type;
-	int    	command;
-	UINT16 	param[32];
-	UINT16 	yorigin;
-	UINT8  	param_index;
-	UINT8  	result_index;
-	UINT8  	reset_state;
-	UINT8  	last_bank;
+	UINT8	type;
+	int 	command;
+	UINT16	param[32];
+	UINT16	yorigin;
+	UINT8	param_index;
+	UINT8	result_index;
+	UINT8	reset_state;
+	UINT8	last_bank;
 
 	/* ROM-based interface states */
-	const device_config *cpu;
+	device_t *cpu;
 	UINT8	tfull;
-	UINT8 	_68full;
-	UINT8 	cmd;
-	UINT8 	xflg;
-	UINT16 	_68data;
-	UINT16 	tdata;
+	UINT8	_68full;
+	UINT8	cmd;
+	UINT8	xflg;
+	UINT16	_68data;
+	UINT16	tdata;
 
 	FILE * log;
 } asic65;
-
-WRITE16_HANDLER( asic65_data_w );
-
-READ16_HANDLER( asic65_r );
-READ16_HANDLER( asic65_io_r );
 
 
 #define PARAM_WRITE		0
@@ -75,7 +69,7 @@ static const UINT8 command_map[3][MAX_COMMANDS] =
 {
 	{
 		/* standard version */
-		OP_UNKNOWN,		OP_REFLECT,		OP_CHECKSUM, 	OP_VERSION,		/* 00-03 */
+		OP_UNKNOWN,		OP_REFLECT,		OP_CHECKSUM,	OP_VERSION,		/* 00-03 */
 		OP_RAMTEST,		OP_UNKNOWN,		OP_UNKNOWN,		OP_RESET,		/* 04-07 */
 		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		/* 08-0b */
 		OP_UNKNOWN,		OP_UNKNOWN,		OP_TMATRIXMULT,	OP_UNKNOWN,		/* 0c-0f */
@@ -89,7 +83,7 @@ static const UINT8 command_map[3][MAX_COMMANDS] =
 	},
 	{
 		/* Steel Talons version */
-		OP_UNKNOWN,		OP_REFLECT,		OP_CHECKSUM, 	OP_VERSION,		/* 00-03 */
+		OP_UNKNOWN,		OP_REFLECT,		OP_CHECKSUM,	OP_VERSION,		/* 00-03 */
 		OP_RAMTEST,		OP_UNKNOWN,		OP_UNKNOWN,		OP_RESET,		/* 04-07 */
 		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		/* 08-0b */
 		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		/* 0c-0f */
@@ -103,7 +97,7 @@ static const UINT8 command_map[3][MAX_COMMANDS] =
 	},
 	{
 		/* Guardians version */
-		OP_UNKNOWN,		OP_REFLECT,		OP_CHECKSUM, 	OP_VERSION,		/* 00-03 */
+		OP_UNKNOWN,		OP_REFLECT,		OP_CHECKSUM,	OP_VERSION,		/* 00-03 */
 		OP_RAMTEST,		OP_UNKNOWN,		OP_UNKNOWN,		OP_RESET,		/* 04-07 */
 		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		OP_UNKNOWN,		/* 08-0b */
 		OP_UNKNOWN,		OP_UNKNOWN,		OP_INITBANKS,	OP_SETBANK,		/* 0c-0f */
@@ -125,13 +119,13 @@ static const UINT8 command_map[3][MAX_COMMANDS] =
  *
  *************************************/
 
-void asic65_config(running_machine *machine, int asictype)
+void asic65_config(running_machine &machine, int asictype)
 {
 	memset(&asic65, 0, sizeof(asic65));
 	asic65.type = asictype;
 	asic65.yorigin = 0x1800;
 	if (asic65.type == ASIC65_ROMBASED)
-		asic65.cpu = cputag_get_cpu(machine, "asic65");
+		asic65.cpu = machine.device("asic65");
 }
 
 
@@ -142,18 +136,18 @@ void asic65_config(running_machine *machine, int asictype)
  *
  *************************************/
 
-void asic65_reset(running_machine *machine, int state)
+void asic65_reset(running_machine &machine, int state)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	/* rom-based means reset and clear states */
 	if (asic65.cpu != NULL)
-		cpu_set_input_line(asic65.cpu, INPUT_LINE_RESET, state ? ASSERT_LINE : CLEAR_LINE);
+		device_set_input_line(asic65.cpu, INPUT_LINE_RESET, state ? ASSERT_LINE : CLEAR_LINE);
 
 	/* otherwise, do it manually */
 	else
 	{
-		cputag_suspend(machine, "asic65", SUSPEND_REASON_DISABLE, 1);
+		machine.device<cpu_device>("asic65")->suspend(SUSPEND_REASON_DISABLE, 1);
 
 		/* if reset is being signalled, clear everything */
 		if (state && !asic65.reset_state)
@@ -185,7 +179,7 @@ static TIMER_CALLBACK( m68k_asic65_deferred_w )
 	asic65.cmd = param >> 16;
 	asic65.tdata = param;
 	if (asic65.cpu != NULL)
-		cpu_set_input_line(asic65.cpu, 0, ASSERT_LINE);
+		device_set_input_line(asic65.cpu, 0, ASSERT_LINE);
 }
 
 
@@ -197,8 +191,8 @@ WRITE16_HANDLER( asic65_data_w )
 	/* rom-based use a deferred write mechanism */
 	if (asic65.type == ASIC65_ROMBASED)
 	{
-		timer_call_after_resynch(space->machine, NULL, data | (offset << 16), m68k_asic65_deferred_w);
-		cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(20));
+		space->machine().scheduler().synchronize(FUNC(m68k_asic65_deferred_w), data | (offset << 16));
+		space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(20));
 		return;
 	}
 
@@ -217,7 +211,7 @@ WRITE16_HANDLER( asic65_data_w )
 	else
 	{
 		int command = (data < MAX_COMMANDS) ? command_map[asic65.type][data] : OP_UNKNOWN;
-		if (asic65.log) fprintf(asic65.log, "\n(%06X)%c%04X:", cpu_get_previouspc(space->cpu), (command == OP_UNKNOWN) ? '*' : ' ', data);
+		if (asic65.log) fprintf(asic65.log, "\n(%06X)%c%04X:", cpu_get_previouspc(&space->device()), (command == OP_UNKNOWN) ? '*' : ' ', data);
 
 		/* set the command number and reset the parameter/result indices */
 		asic65.command = data;
@@ -236,7 +230,7 @@ READ16_HANDLER( asic65_r )
 	if (asic65.type == ASIC65_ROMBASED)
 	{
 		asic65._68full = 0;
-		cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(5));
+		space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(5));
 		return asic65._68data;
 	}
 
@@ -454,7 +448,7 @@ READ16_HANDLER( asic65_io_r )
 		/* bit 14 = 68FULL */
 		/* bit 13 = XFLG */
 		/* bit 12 = controlled by jumper */
-		cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(5));
+		space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(5));
 		return (asic65.tfull << 15) | (asic65._68full << 14) | (asic65.xflg << 13) | 0x0000;
 	}
 	else
@@ -483,7 +477,7 @@ static READ16_HANDLER( asic65_68k_r )
 {
 	asic65.tfull = 0;
 	if (asic65.cpu != NULL)
-		cpu_set_input_line(asic65.cpu, 0, CLEAR_LINE);
+		device_set_input_line(asic65.cpu, 0, CLEAR_LINE);
 	return asic65.tdata;
 }
 
@@ -507,7 +501,7 @@ static READ16_HANDLER( asic65_stat_r )
 static READ16_HANDLER( asci65_get_bio )
 {
 	if (!asic65.tfull)
-		cpu_spinuntil_int(space->cpu);
+		device_spin_until_interrupt(&space->device());
 	return asic65.tfull ? CLEAR_LINE : ASSERT_LINE;
 }
 
@@ -519,12 +513,12 @@ static READ16_HANDLER( asci65_get_bio )
  *
  *************************************/
 
-static ADDRESS_MAP_START( asic65_program_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( asic65_program_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000, 0xfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( asic65_io_map, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( asic65_io_map, AS_IO, 16 )
 	AM_RANGE(0, 0) AM_MIRROR(6) AM_READWRITE(asic65_68k_r, asic65_68k_w)
 	AM_RANGE(1, 1) AM_MIRROR(6) AM_READWRITE(asic65_stat_r, asic65_stat_w)
 	AM_RANGE(TMS32010_BIO, TMS32010_BIO) AM_READ(asci65_get_bio)
@@ -538,13 +532,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-MACHINE_DRIVER_START( asic65 )
+MACHINE_CONFIG_FRAGMENT( asic65 )
 
 	/* ASIC65 */
-	MDRV_CPU_ADD("asic65", TMS32010, 20000000)
-	MDRV_CPU_PROGRAM_MAP(asic65_program_map)
-	MDRV_CPU_IO_MAP(asic65_io_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_ADD("asic65", TMS32010, 20000000)
+	MCFG_CPU_PROGRAM_MAP(asic65_program_map)
+	MCFG_CPU_IO_MAP(asic65_io_map)
+MACHINE_CONFIG_END
 
 
 

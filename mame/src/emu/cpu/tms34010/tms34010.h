@@ -12,9 +12,6 @@
 #ifndef __TMS34010_H__
 #define __TMS34010_H__
 
-#include "cpuintrf.h"
-#include "driver.h"
-
 
 /* register indexes for get_reg and set_reg */
 enum
@@ -53,9 +50,9 @@ enum
 	TMS34010_B13,
 	TMS34010_B14,
 
-	TMS34010_GENPC = REG_GENPC,
-	TMS34010_GENSP = REG_GENSP,
-	TMS34010_GENPCBASE = REG_GENPCBASE
+	TMS34010_GENPC = STATE_GENPC,
+	TMS34010_GENSP = STATE_GENSP,
+	TMS34010_GENPCBASE = STATE_GENPCBASE
 };
 
 
@@ -199,23 +196,21 @@ struct _tms34010_config
 	const char *screen_tag;						/* the screen operated on */
 	UINT32	pixclock;							/* the pixel clock (0 means don't adjust screen size) */
 	int		pixperclock;						/* pixels per clock */
-	void	(*scanline_callback)(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
-	void	(*output_int)(const device_config *device, int state);			/* output interrupt callback */
-	void	(*to_shiftreg)(const address_space *space, offs_t, UINT16 *);	/* shift register write */
-	void	(*from_shiftreg)(const address_space *space, offs_t, UINT16 *);	/* shift register read */
+	void	(*scanline_callback_ind16)(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params);
+	void	(*scanline_callback_rgb32)(screen_device &screen, bitmap_rgb32 &bitmap, int scanline, const tms34010_display_params *params);
+	void	(*output_int)(device_t *device, int state);			/* output interrupt callback */
+	void	(*to_shiftreg)(address_space *space, offs_t, UINT16 *);	/* shift register write */
+	void	(*from_shiftreg)(address_space *space, offs_t, UINT16 *);	/* shift register read */
 };
 
 
 /* PUBLIC FUNCTIONS - 34010 */
-VIDEO_UPDATE( tms340x0 );
-void tms34010_get_display_params(const device_config *cpu, tms34010_display_params *params);
+SCREEN_UPDATE_IND16( tms340x0_ind16 );
+SCREEN_UPDATE_RGB32( tms340x0_rgb32 );
+void tms34010_get_display_params(device_t *cpu, tms34010_display_params *params);
 
-CPU_GET_INFO( tms34010 );
-#define CPU_TMS34010 CPU_GET_INFO_NAME( tms34010 )
-
-/* PUBLIC FUNCTIONS - 34020 */
-CPU_GET_INFO( tms34020 );
-#define CPU_TMS34020 CPU_GET_INFO_NAME( tms34020 )
+DECLARE_LEGACY_CPU_DEVICE(TMS34010, tms34010);
+DECLARE_LEGACY_CPU_DEVICE(TMS34020, tms34020);
 
 
 /* Host control interface */
@@ -224,8 +219,8 @@ CPU_GET_INFO( tms34020 );
 #define TMS34010_HOST_DATA			2
 #define TMS34010_HOST_CONTROL		3
 
-void		tms34010_host_w(const device_config *cpu, int reg, int data);
-int			tms34010_host_r(const device_config *cpu, int reg);
+void		tms34010_host_w(device_t *cpu, int reg, int data);
+int			tms34010_host_r(device_t *cpu, int reg);
 
 
 /* Reads & writes to the 34010 I/O registers; place at 0xc0000000 */

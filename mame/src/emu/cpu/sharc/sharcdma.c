@@ -10,14 +10,14 @@ static void schedule_chained_dma_op(SHARC_REGS *cpustate, int channel, UINT32 dm
 {
 	UINT32 op_ptr = 0x20000 + dma_chain_ptr;
 
-	UINT32 int_index 		= dm_read32(cpustate, op_ptr - 0);
+	UINT32 int_index		= dm_read32(cpustate, op_ptr - 0);
 	UINT32 int_modifier		= dm_read32(cpustate, op_ptr - 1);
 	UINT32 int_count		= dm_read32(cpustate, op_ptr - 2);
-	UINT32 chain_ptr 		= dm_read32(cpustate, op_ptr - 3);
+	UINT32 chain_ptr		= dm_read32(cpustate, op_ptr - 3);
 	//UINT32 gen_purpose        = dm_read32(cpustate, op_ptr - 4);
-	UINT32 ext_index 		= dm_read32(cpustate, op_ptr - 5);
+	UINT32 ext_index		= dm_read32(cpustate, op_ptr - 5);
 	UINT32 ext_modifier 	= dm_read32(cpustate, op_ptr - 6);
-	UINT32 ext_count 		= dm_read32(cpustate, op_ptr - 7);
+	UINT32 ext_count		= dm_read32(cpustate, op_ptr - 7);
 
 	if (cpustate->dmaop_cycles > 0)
 	{
@@ -141,18 +141,18 @@ static void sharc_dma_exec(SHARC_REGS *cpustate, int channel)
 	UINT32 src, dst;
 	UINT32 src_count, dst_count;
 	UINT32 src_modifier, dst_modifier;
-	int chen, tran, dtype, pmode, mswf, master, ishake, intio, ext, flsh;
+	int chen, tran, dtype, pmode, /*mswf, master,*/ ishake, intio/*, ext, flsh*/;
 
 	chen = (cpustate->dma[channel].control >> 1) & 0x1;
 	tran = (cpustate->dma[channel].control >> 2) & 0x1;
 	dtype = (cpustate->dma[channel].control >> 5) & 0x1;
 	pmode = (cpustate->dma[channel].control >> 6) & 0x3;
-	mswf = (cpustate->dma[channel].control >> 8) & 0x1;
-	master = (cpustate->dma[channel].control >> 9) & 0x1;
+	//mswf = (cpustate->dma[channel].control >> 8) & 0x1;
+	//master = (cpustate->dma[channel].control >> 9) & 0x1;
 	ishake = (cpustate->dma[channel].control >> 10) & 0x1;
 	intio = (cpustate->dma[channel].control >> 11) & 0x1;
-	ext = (cpustate->dma[channel].control >> 12) & 0x1;
-	flsh = (cpustate->dma[channel].control >> 13) & 0x1;
+	//ext = (cpustate->dma[channel].control >> 12) & 0x1;
+	//flsh = (cpustate->dma[channel].control >> 13) & 0x1;
 
 	if (ishake)
 		fatalerror("SHARC: dma_exec: handshake not supported");

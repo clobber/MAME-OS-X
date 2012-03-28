@@ -66,29 +66,29 @@ INLINE void WRITE64(UINT32 a, UINT64 d)
 
 /***********************************************************************/
 
-static UINT16 ppc_read16_unaligned(const address_space *space, UINT32 a)
+static UINT16 ppc_read16_unaligned(address_space *space, UINT32 a)
 {
 	return ((UINT16)ppc.read8(space, a+0) << 8) | ((UINT16)ppc.read8(space, a+1) << 0);
 }
 
-static UINT32 ppc_read32_unaligned(const address_space *space, UINT32 a)
+static UINT32 ppc_read32_unaligned(address_space *space, UINT32 a)
 {
 	return ((UINT32)ppc.read8(space, a+0) << 24) | ((UINT32)ppc.read8(space, a+1) << 16) |
 				   ((UINT32)ppc.read8(space, a+2) << 8) | ((UINT32)ppc.read8(space, a+3) << 0);
 }
 
-static UINT64 ppc_read64_unaligned(const address_space *space, UINT32 a)
+static UINT64 ppc_read64_unaligned(address_space *space, UINT32 a)
 {
 	return ((UINT64)READ32(space, a+0) << 32) | (UINT64)(READ32(space, a+4));
 }
 
-static void ppc_write16_unaligned(const address_space *space, UINT32 a, UINT16 d)
+static void ppc_write16_unaligned(address_space *space, UINT32 a, UINT16 d)
 {
 	ppc.write8(space, a+0, (UINT8)(d >> 8));
 	ppc.write8(space, a+1, (UINT8)(d));
 }
 
-static void ppc_write32_unaligned(const address_space *space, UINT32 a, UINT32 d)
+static void ppc_write32_unaligned(address_space *space, UINT32 a, UINT32 d)
 {
 	ppc.write8(space, a+0, (UINT8)(d >> 24));
 	ppc.write8(space, a+1, (UINT8)(d >> 16));
@@ -96,7 +96,7 @@ static void ppc_write32_unaligned(const address_space *space, UINT32 a, UINT32 d
 	ppc.write8(space, a+3, (UINT8)(d >> 0));
 }
 
-static void ppc_write64_unaligned(const address_space *space, UINT32 a, UINT64 d)
+static void ppc_write64_unaligned(address_space *space, UINT32 a, UINT64 d)
 {
 	ppc.write32(space, a+0, (UINT32)(d >> 32));
 	ppc.write32(space, a+4, (UINT32)(d));
@@ -119,15 +119,6 @@ enum
 	PPC_TRANSLATE_NOEXCEPTION = 0x0004
 };
 
-#ifdef MESS
-#define PPC_MMU_ENABLED		1
-#else /* !MESS */
-/* MMU not enabled in MAME; model3 drivers don't work properly */
-#define PPC_MMU_ENABLED		0
-#endif /* MESS */
-
-
-
 static int ppc_is_protected(UINT32 pp, int flags)
 {
 	if (flags & PPC_TRANSLATE_WRITE)
@@ -145,160 +136,152 @@ static int ppc_is_protected(UINT32 pp, int flags)
 
 static int ppc_translate_address(offs_t *addr_ptr, int flags)
 {
-	if (PPC_MMU_ENABLED)
+	const BATENT *bat;
+	UINT32 address;
+	UINT32 sr, vsid, hash;
+	UINT32 pteg_address;
+	UINT32 target_pte, bl, mask;
+	UINT64 pte;
+	UINT64 *pteg_ptr[2];
+	int i, hash_type;
+	UINT32 dsisr = DSISR_PROT;
+
+	bat = (flags & PPC_TRANSLATE_CODE) ? ppc.ibat : ppc.dbat;
+
+	address = *addr_ptr;
+
+	/* first check the block address translation table */
+	for (i = 0; i < 4; i++)
 	{
-		const BATENT *bat;
-		UINT32 address;
-		UINT32 sr, vsid, hash;
-		UINT32 pteg_address;
-		UINT32 target_pte, bl, mask;
-		UINT64 pte;
-		UINT64 *pteg_ptr[2];
-		int i, hash_type;
-		UINT32 dsisr = DSISR_PROT;
-
-		bat = (flags & PPC_TRANSLATE_CODE) ? ppc.ibat : ppc.dbat;
-
-		address = *addr_ptr;
-
-		/* first check the block address translation table */
-		for (i = 0; i < 4; i++)
+		if (bat[i].u & ((MSR & MSR_PR) ? 0x00000001 : 0x00000002))
 		{
-			if (bat[i].u & ((MSR & MSR_PR) ? 0x00000001 : 0x00000002))
+			bl = bat[i].u & 0x00001FFC;
+			mask = (~bl << 15) & 0xFFFE0000;
+
+			if ((address & mask) == (bat[i].u & 0xFFFE0000))
+			{
+				if (ppc_is_protected(bat[i].l, flags))
+					goto exception;
+
+				*addr_ptr = (bat[i].l & 0xFFFE0000)
+					| (address & ((bl << 15) | 0x0001FFFF));
+				return 1;
+			}
+		}
+	}
+
+	/* now try page address translation */
+	sr = ppc.sr[(address >> 28) & 0x0F];
+	if (sr & 0x80000000)
+	{
+		/* direct store translation */
+		if ((flags & PPC_TRANSLATE_NOEXCEPTION) == 0)
+			fatalerror("ppc: direct store translation not yet implemented");
+		return 0;
+	}
+	else
+	{
+		/* is no execute is set? */
+		if ((flags & PPC_TRANSLATE_CODE) && (sr & 0x10000000))
+			goto exception;
+
+		vsid = sr & 0x00FFFFFF;
+		hash = (vsid & 0x0007FFFF) ^ ((address >> 12) & 0xFFFF);
+		target_pte = (vsid << 7) | ((address >> 22) & 0x3F) | 0x80000000;
+
+		/* we have to try both types of hashes */
+		for (hash_type = 0; hash_type <= 1; hash_type++)
+		{
+			pteg_address = (ppc.sdr1 & 0xFFFF0000)
+				| (((ppc.sdr1 & 0x01FF) & (hash >> 10)) << 16)
+				| ((hash & 0x03FF) << 6);
+
+			pteg_ptr[hash_type] = ppc->program->get_read_ptr(pteg_address);
+			if (pteg_ptr[hash_type])
+			{
+				for (i = 0; i < 8; i++)
+				{
+					pte = pteg_ptr[hash_type][i];
+
+					/* is valid? */
+					if (((pte >> 32) & 0xFFFFFFFF) == target_pte)
+					{
+						if (ppc_is_protected((UINT32) pte, flags))
+							goto exception;
+
+						*addr_ptr = ((UINT32) (pte & 0xFFFFF000))
+							| (address & 0x0FFF);
+						return 1;
+					}
+				}
+			}
+
+			hash ^= 0x7FFFF;
+			target_pte ^= 0x40;
+		}
+
+		if (DUMP_PAGEFAULTS)
+		{
+			mame_printf_debug("PAGE FAULT: address=%08X PC=%08X SDR1=%08X MSR=%08X\n", address, ppc.pc, ppc.sdr1, ppc.msr);
+			mame_printf_debug("\n");
+
+			for (i = 0; i < 4; i++)
 			{
 				bl = bat[i].u & 0x00001FFC;
 				mask = (~bl << 15) & 0xFFFE0000;
-
-				if ((address & mask) == (bat[i].u & 0xFFFE0000))
-				{
-					if (ppc_is_protected(bat[i].l, flags))
-						goto exception;
-
-					*addr_ptr = (bat[i].l & 0xFFFE0000)
-						| (address & ((bl << 15) | 0x0001FFFF));
-					return 1;
-				}
+				mame_printf_debug("    BAT[%d]=%08X%08X    (A & %08X = %08X)\n", i, bat[i].u, bat[i].l,
+					mask, bat[i].u & 0xFFFE0000);
 			}
-		}
+			mame_printf_debug("\n");
+			mame_printf_debug("    VSID=%06X HASH=%05X HASH\'=%05X\n", vsid, hash, hash ^ 0x7FFFF);
 
-		/* now try page address translation */
-		sr = ppc.sr[(address >> 28) & 0x0F];
-		if (sr & 0x80000000)
-		{
-			/* direct store translation */
-			if ((flags & PPC_TRANSLATE_NOEXCEPTION) == 0)
-				fatalerror("ppc: direct store translation not yet implemented");
-			return 0;
-		}
-		else
-		{
-			/* is no execute is set? */
-			if ((flags & PPC_TRANSLATE_CODE) && (sr & 0x10000000))
-				goto exception;
-
-			vsid = sr & 0x00FFFFFF;
-			hash = (vsid & 0x0007FFFF) ^ ((address >> 12) & 0xFFFF);
-			target_pte = (vsid << 7) | ((address >> 22) & 0x3F) | 0x80000000;
-
-			/* we have to try both types of hashes */
 			for (hash_type = 0; hash_type <= 1; hash_type++)
 			{
-				pteg_address = (ppc.sdr1 & 0xFFFF0000)
-					| (((ppc.sdr1 & 0x01FF) & (hash >> 10)) << 16)
-					| ((hash & 0x03FF) << 6);
-
-				pteg_ptr[hash_type] = memory_get_read_ptr(ppc->program, pteg_address);
 				if (pteg_ptr[hash_type])
 				{
 					for (i = 0; i < 8; i++)
 					{
 						pte = pteg_ptr[hash_type][i];
-
-						/* is valid? */
-						if (((pte >> 32) & 0xFFFFFFFF) == target_pte)
-						{
-							if (ppc_is_protected((UINT32) pte, flags))
-								goto exception;
-
-							*addr_ptr = ((UINT32) (pte & 0xFFFFF000))
-								| (address & 0x0FFF);
-							return 1;
-						}
-					}
-				}
-
-				hash ^= 0x7FFFF;
-				target_pte ^= 0x40;
-			}
-
-			if (DUMP_PAGEFAULTS)
-			{
-				mame_printf_debug("PAGE FAULT: address=%08X PC=%08X SDR1=%08X MSR=%08X\n", address, ppc.pc, ppc.sdr1, ppc.msr);
-				mame_printf_debug("\n");
-
-				for (i = 0; i < 4; i++)
-				{
-					bl = bat[i].u & 0x00001FFC;
-					mask = (~bl << 15) & 0xFFFE0000;
-					mame_printf_debug("    BAT[%d]=%08X%08X    (A & %08X = %08X)\n", i, bat[i].u, bat[i].l,
-						mask, bat[i].u & 0xFFFE0000);
-				}
-				mame_printf_debug("\n");
-				mame_printf_debug("    VSID=%06X HASH=%05X HASH\'=%05X\n", vsid, hash, hash ^ 0x7FFFF);
-
-				for (hash_type = 0; hash_type <= 1; hash_type++)
-				{
-					if (pteg_ptr[hash_type])
-					{
-						for (i = 0; i < 8; i++)
-						{
-							pte = pteg_ptr[hash_type][i];
-							mame_printf_debug("    PTE[%i%c]=%08X%08X\n",
-								i,
-								hash_type ? '\'' : ' ',
-								(unsigned) (pte >> 32),
-								(unsigned) (pte >> 0));
-						}
+						mame_printf_debug("    PTE[%i%c]=%08X%08X\n",
+							i,
+							hash_type ? '\'' : ' ',
+							(unsigned) (pte >> 32),
+							(unsigned) (pte >> 0));
 					}
 				}
 			}
 		}
+	}
 
-		dsisr = DSISR_PAGE;
+	dsisr = DSISR_PAGE;
 
 exception:
-		/* lookup failure - exception */
-		if ((flags & PPC_TRANSLATE_NOEXCEPTION) == 0)
-		{
-			if (flags & PPC_TRANSLATE_CODE)
-			{
-				ppc_exception(EXCEPTION_ISI);
-			}
-			else
-			{
-				ppc.dar = address;
-				if (flags & PPC_TRANSLATE_WRITE)
-					ppc.dsisr = dsisr | DSISR_STORE;
-				else
-					ppc.dsisr = dsisr;
-
-				ppc_exception(EXCEPTION_DSI);
-			}
-		}
-		return 0;
-	}
-	else
+	/* lookup failure - exception */
+	if ((flags & PPC_TRANSLATE_NOEXCEPTION) == 0)
 	{
-		/* MMU not enabled in MAME; model3 drivers don't work properly */
-		return 1;
+		if (flags & PPC_TRANSLATE_CODE)
+		{
+			ppc_exception(EXCEPTION_ISI);
+		}
+		else
+		{
+			ppc.dar = address;
+			if (flags & PPC_TRANSLATE_WRITE)
+				ppc.dsisr = dsisr | DSISR_STORE;
+			else
+				ppc.dsisr = dsisr;
+
+			ppc_exception(EXCEPTION_DSI);
+		}
 	}
+	return 0;
 }
 
-static int ppc_translate_address_cb(int space, offs_t *addr)
+static int ppc_translate_address_cb(address_spacenum space, offs_t *addr)
 {
 	int success = 1;
 
-	if (space == ADDRESS_SPACE_PROGRAM)
+	if (space == AS_PROGRAM)
 	{
 		if (MSR & MSR_DR)
 			success = ppc_translate_address(addr, PPC_TRANSLATE_CODE | PPC_TRANSLATE_READ | PPC_TRANSLATE_NOEXCEPTION);
@@ -306,59 +289,59 @@ static int ppc_translate_address_cb(int space, offs_t *addr)
 	return success;
 }
 
-static UINT8 ppc_read8_translated(const address_space *space, offs_t address)
+static UINT8 ppc_read8_translated(address_space *space, offs_t address)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_READ);
-	return memory_read_byte_64be(space, address);
+	return space->read_byte(address);
 }
 
-static UINT16 ppc_read16_translated(const address_space *space, offs_t address)
+static UINT16 ppc_read16_translated(address_space *space, offs_t address)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_READ);
-	return memory_read_word_64be(space, address);
+	return space->read_word(address);
 }
 
-static UINT32 ppc_read32_translated(const address_space *space, offs_t address)
+static UINT32 ppc_read32_translated(address_space *space, offs_t address)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_READ);
-	return memory_read_dword_64be(space, address);
+	return space->read_dword(address);
 }
 
-static UINT64 ppc_read64_translated(const address_space *space, offs_t address)
+static UINT64 ppc_read64_translated(address_space *space, offs_t address)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_READ);
-	return memory_read_qword_64be(space, address);
+	return space->read_qword(address);
 }
 
-static void ppc_write8_translated(const address_space *space, offs_t address, UINT8 data)
+static void ppc_write8_translated(address_space *space, offs_t address, UINT8 data)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_WRITE);
-	memory_write_byte_64be(space, address, data);
+	space->write_byte(address, data);
 }
 
-static void ppc_write16_translated(const address_space *space, offs_t address, UINT16 data)
+static void ppc_write16_translated(address_space *space, offs_t address, UINT16 data)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_WRITE);
-	memory_write_word_64be(space, address, data);
+	space->write_word(address, data);
 }
 
-static void ppc_write32_translated(const address_space *space, offs_t address, UINT32 data)
+static void ppc_write32_translated(address_space *space, offs_t address, UINT32 data)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_WRITE);
-	memory_write_dword_64be(space, address, data);
+	space->write_dword(address, data);
 }
 
-static void ppc_write64_translated(const address_space *space, offs_t address, UINT64 data)
+static void ppc_write64_translated(address_space *space, offs_t address, UINT64 data)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_DATA | PPC_TRANSLATE_WRITE);
-	memory_write_qword_64be(space, address, data);
+	space->write_qword(address, data);
 }
 
 #ifndef PPC_DRC
-static UINT32 ppc_readop_translated(const address_space *space, offs_t address)
+static UINT32 ppc_readop_translated(address_space *space, offs_t address)
 {
 	ppc_translate_address(&address, PPC_TRANSLATE_CODE | PPC_TRANSLATE_READ);
-	return memory_read_dword_64be(space, address);
+	return space->read_dword(address);
 }
 #endif
 
@@ -385,10 +368,10 @@ static CPU_READOP( ppc )
 	{
 		switch(size)
 		{
-			case 1:	*value = memory_read_byte(ppc.program, offset);	break;
-			case 2:	*value = memory_read_word(ppc.program, offset);	break;
-			case 4:	*value = memory_read_dword(ppc.program, offset);	break;
-			case 8:	*value = memory_read_qword(ppc.program, offset);	break;
+			case 1:	*value = ppc.program->read_byte(offset);	break;
+			case 2:	*value = ppc.program->read_word(offset);	break;
+			case 4:	*value = ppc.program->read_dword(offset);	break;
+			case 8:	*value = ppc.program->read_qword(offset);	break;
 		}
 	}
 
@@ -406,10 +389,10 @@ static CPU_READ( ppc )
 	{
 		switch(size)
 		{
-			case 1:	*value = memory_read_byte(ppc.program, offset);	break;
-			case 2:	*value = memory_read_word(ppc.program, offset);	break;
-			case 4:	*value = memory_read_dword(ppc.program, offset);	break;
-			case 8:	*value = memory_read_qword(ppc.program, offset);	break;
+			case 1:	*value = ppc.program->read_byte(offset);	break;
+			case 2:	*value = ppc.program->read_word(offset);	break;
+			case 4:	*value = ppc.program->read_dword(offset);	break;
+			case 8:	*value = ppc.program->read_qword(offset);	break;
 		}
 	}
 
@@ -425,10 +408,10 @@ static CPU_WRITE( ppc )
 	{
 		switch(size)
 		{
-			case 1:	memory_write_byte(ppc.program, offset, value);	break;
-			case 2:	memory_write_word(ppc.program, offset, value);	break;
-			case 4:	memory_write_dword(ppc.program, offset, value);	break;
-			case 8:	memory_write_qword(ppc.program, offset, value);	break;
+			case 1:	ppc.program->write_byte(offset, value);	break;
+			case 2:	ppc.program->write_word(offset, value);	break;
+			case 4:	ppc.program->write_dword(offset, value);	break;
+			case 8:	ppc.program->write_qword(offset, value);	break;
 		}
 	}
 

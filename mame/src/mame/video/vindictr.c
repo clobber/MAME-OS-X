@@ -4,22 +4,9 @@
 
 ****************************************************************************/
 
-#include "driver.h"
-#include "machine/atarigen.h"
-#include "vindictr.h"
-#include "thunderj.h"
-
-
-
-/*************************************
- *
- *  Statics
- *
- *************************************/
-
-static UINT8 playfield_tile_bank;
-static UINT16 playfield_xscroll;
-static UINT16 playfield_yscroll;
+#include "emu.h"
+#include "video/atarimo.h"
+#include "includes/vindictr.h"
 
 
 
@@ -31,7 +18,8 @@ static UINT16 playfield_yscroll;
 
 static TILE_GET_INFO( get_alpha_tile_info )
 {
-	UINT16 data = atarigen_alpha[tile_index];
+	vindictr_state *state = machine.driver_data<vindictr_state>();
+	UINT16 data = state->m_alpha[tile_index];
 	int code = data & 0x3ff;
 	int color = ((data >> 10) & 0x0f) | ((data >> 9) & 0x20);
 	int opaque = data & 0x8000;
@@ -41,8 +29,9 @@ static TILE_GET_INFO( get_alpha_tile_info )
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	UINT16 data = atarigen_playfield[tile_index];
-	int code = (playfield_tile_bank * 0x1000) + (data & 0xfff);
+	vindictr_state *state = machine.driver_data<vindictr_state>();
+	UINT16 data = state->m_playfield[tile_index];
+	int code = (state->m_playfield_tile_bank * 0x1000) + (data & 0xfff);
 	int color = 0x10 + 2 * ((data >> 12) & 7);
 	SET_TILE_INFO(0, code, color, (data >> 15) & 1);
 }
@@ -93,16 +82,22 @@ VIDEO_START( vindictr )
 		0,					/* resulting value to indicate "special" */
 		NULL				/* callback routine for special entries */
 	};
+	vindictr_state *state = machine.driver_data<vindictr_state>();
 
 	/* initialize the playfield */
-	atarigen_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* initialize the alphanumerics */
-	atarigen_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	tilemap_set_transparent_pen(atarigen_alpha_tilemap, 0);
+	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	state->m_alpha_tilemap->set_transparent_pen(0);
+
+	/* save states */
+	state->save_item(NAME(state->m_playfield_tile_bank));
+	state->save_item(NAME(state->m_playfield_xscroll));
+	state->save_item(NAME(state->m_playfield_yscroll));
 }
 
 
@@ -120,8 +115,8 @@ WRITE16_HANDLER( vindictr_paletteram_w )
 	int c;
 
 	/* first blend the data */
-	COMBINE_DATA(&paletteram16[offset]);
-	data = paletteram16[offset];
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	data = space->machine().generic.paletteram.u16[offset];
 
 	/* now generate colors at all 16 intensities */
 	for (c = 0; c < 8; c++)
@@ -131,7 +126,7 @@ WRITE16_HANDLER( vindictr_paletteram_w )
 		int g = ((data >> 4) & 15) * i;
 		int b = ((data >> 0) & 15) * i;
 
-		palette_set_color(space->machine,offset + c*2048,MAKE_RGB(r,g,b));
+		palette_set_color(space->machine(),offset + c*2048,MAKE_RGB(r,g,b));
 	}
 }
 
@@ -143,15 +138,16 @@ WRITE16_HANDLER( vindictr_paletteram_w )
  *
  *************************************/
 
-void vindictr_scanline_update(const device_config *screen, int scanline)
+void vindictr_scanline_update(screen_device &screen, int scanline)
 {
-	UINT16 *base = &atarigen_alpha[((scanline - 8) / 8) * 64 + 42];
+	vindictr_state *state = screen.machine().driver_data<vindictr_state>();
+	UINT16 *base = &state->m_alpha[((scanline - 8) / 8) * 64 + 42];
 	int x;
 
 	/* keep in range */
-	if (base < atarigen_alpha)
+	if (base < state->m_alpha)
 		base += 0x7c0;
-	else if (base >= &atarigen_alpha[0x7c0])
+	else if (base >= &state->m_alpha[0x7c0])
 		return;
 
 	/* update the current parameters */
@@ -162,27 +158,27 @@ void vindictr_scanline_update(const device_config *screen, int scanline)
 		switch ((data >> 9) & 7)
 		{
 			case 2:		/* /PFB */
-				if (playfield_tile_bank != (data & 7))
+				if (state->m_playfield_tile_bank != (data & 7))
 				{
-					video_screen_update_partial(screen, scanline - 1);
-					playfield_tile_bank = data & 7;
-					tilemap_mark_all_tiles_dirty(atarigen_playfield_tilemap);
+					screen.update_partial(scanline - 1);
+					state->m_playfield_tile_bank = data & 7;
+					state->m_playfield_tilemap->mark_all_dirty();
 				}
 				break;
 
 			case 3:		/* /PFHSLD */
-				if (playfield_xscroll != (data & 0x1ff))
+				if (state->m_playfield_xscroll != (data & 0x1ff))
 				{
-					video_screen_update_partial(screen, scanline - 1);
-					tilemap_set_scrollx(atarigen_playfield_tilemap, 0, data);
-					playfield_xscroll = data & 0x1ff;
+					screen.update_partial(scanline - 1);
+					state->m_playfield_tilemap->set_scrollx(0, data);
+					state->m_playfield_xscroll = data & 0x1ff;
 				}
 				break;
 
 			case 4:		/* /MOHS */
 				if (atarimo_get_xscroll(0) != (data & 0x1ff))
 				{
-					video_screen_update_partial(screen, scanline - 1);
+					screen.update_partial(scanline - 1);
 					atarimo_set_xscroll(0, data & 0x1ff);
 				}
 				break;
@@ -191,21 +187,21 @@ void vindictr_scanline_update(const device_config *screen, int scanline)
 				break;
 
 			case 6:		/* /VIRQ */
-				atarigen_scanline_int_gen(cputag_get_cpu(screen->machine, "maincpu"));
+				atarigen_scanline_int_gen(screen.machine().device("maincpu"));
 				break;
 
 			case 7:		/* /PFVS */
 			{
 				/* a new vscroll latches the offset into a counter; we must adjust for this */
 				int offset = scanline;
-				const rectangle *visible_area = video_screen_get_visible_area(screen);
-				if (offset > visible_area->max_y)
-					offset -= visible_area->max_y + 1;
+				const rectangle &visible_area = screen.visible_area();
+				if (offset > visible_area.max_y)
+					offset -= visible_area.max_y + 1;
 
-				if (playfield_yscroll != ((data - offset) & 0x1ff))
+				if (state->m_playfield_yscroll != ((data - offset) & 0x1ff))
 				{
-					video_screen_update_partial(screen, scanline - 1);
-					tilemap_set_scrolly(atarigen_playfield_tilemap, 0, data - offset);
+					screen.update_partial(scanline - 1);
+					state->m_playfield_tilemap->set_scrolly(0, data - offset);
 					atarimo_set_yscroll(0, (data - offset) & 0x1ff);
 				}
 				break;
@@ -222,22 +218,23 @@ void vindictr_scanline_update(const device_config *screen, int scanline)
  *
  *************************************/
 
-VIDEO_UPDATE( vindictr )
+SCREEN_UPDATE_IND16( vindictr )
 {
+	vindictr_state *state = screen.machine().driver_data<vindictr_state>();
 	atarimo_rect_list rectlist;
-	bitmap_t *mobitmap;
+	bitmap_ind16 *mobitmap;
 	int x, y, r;
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0);
+	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -270,15 +267,15 @@ VIDEO_UPDATE( vindictr )
 		}
 
 	/* add the alpha on top */
-	tilemap_draw(bitmap, cliprect, atarigen_alpha_tilemap, 0, 0);
+	state->m_alpha_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* now go back and process the upper bit of MO priority */
 	rectlist.rect -= rectlist.numrects;
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -289,7 +286,7 @@ VIDEO_UPDATE( vindictr )
 					{
 						/* if bit 2 is set, start setting high palette bits */
 						if (mo[x] & 2)
-							thunderj_mark_high_palette(bitmap, pf, mo, x, y);
+							atarimo_mark_high_palette(bitmap, pf, mo, x, y);
 
 						/* if the upper bit of pen data is set, we adjust the final intensity */
 						if (mo[x] & 8)

@@ -1,61 +1,47 @@
 /***************************************************************************
 
-Labyrinth Runner (GX771) (c) 1987 Konami
+    Labyrinth Runner (GX771) (c) 1987 Konami
 
-similar to Fast Lane
+    similar to Fast Lane
 
-Driver by Nicola Salmoria
+    Driver by Nicola Salmoria
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/hd6309/hd6309.h"
-#include "video/konamiic.h"
 #include "sound/2203intf.h"
-#include "konamipt.h"
+#include "video/konicdev.h"
+#include "includes/konamipt.h"
+#include "includes/labyrunr.h"
 
-/* from video/labyrunr.c */
-extern UINT8 *labyrunr_videoram1,*labyrunr_videoram2,*labyrunr_scrollram;
-PALETTE_INIT( labyrunr );
-WRITE8_HANDLER( labyrunr_vram1_w );
-WRITE8_HANDLER( labyrunr_vram2_w );
-VIDEO_START( labyrunr );
-VIDEO_UPDATE( labyrunr );
 
-static INTERRUPT_GEN( labyrunr_interrupt )
+static TIMER_DEVICE_CALLBACK( labyrunr_scanline )
 {
-	if (cpu_getiloops(device) == 0)
-	{
-		if (K007121_ctrlram[0][0x07] & 0x02)
-			cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
-	}
-	else if (cpu_getiloops(device) % 2)
-	{
-		if (K007121_ctrlram[0][0x07] & 0x01)
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-	}
+	labyrunr_state *state = timer.machine().driver_data<labyrunr_state>();
+	int scanline = param;
+
+	if(scanline == 240 && k007121_ctrlram_r(state->m_k007121, 7) & 0x02) // vblank irq
+		device_set_input_line(state->m_maincpu, HD6309_IRQ_LINE, HOLD_LINE);
+	else if(((scanline % 32) == 0) && k007121_ctrlram_r(state->m_k007121, 7) & 0x01) // timer irq
+		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( labyrunr_bankswitch_w )
 {
-	int bankaddress;
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
-
-if (data & 0xe0) popmessage("bankswitch %02x",data);
+	if (data & 0xe0) popmessage("bankswitch %02x", data);
 
 	/* bits 0-2 = bank number */
-	bankaddress = 0x10000 + (data & 0x07) * 0x4000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bank(space->machine(), "bank1", data & 0x07);	// shall we check if data&7 > #banks?
 
 	/* bits 3 and 4 are coin counters */
-	coin_counter_w(0,data & 0x08);
-	coin_counter_w(1,data & 0x10);
+	coin_counter_w(space->machine(), 0, data & 0x08);
+	coin_counter_w(space->machine(), 1, data & 0x10);
 }
 
-static ADDRESS_MAP_START( labyrunr_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0007) AM_WRITE(K007121_ctrl_0_w)
-	AM_RANGE(0x0020, 0x005f) AM_RAM AM_BASE(&labyrunr_scrollram)
+static ADDRESS_MAP_START( labyrunr_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0007) AM_DEVWRITE("k007121", k007121_ctrl_w)
+	AM_RANGE(0x0020, 0x005f) AM_RAM AM_BASE_MEMBER(labyrunr_state, m_scrollram)
 	AM_RANGE(0x0800, 0x0800) AM_DEVREADWRITE("ym1", ym2203_read_port_r, ym2203_write_port_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("ym1", ym2203_status_port_r, ym2203_control_port_w)
 	AM_RANGE(0x0900, 0x0900) AM_DEVREADWRITE("ym2", ym2203_read_port_r, ym2203_write_port_w)
@@ -64,14 +50,14 @@ static ADDRESS_MAP_START( labyrunr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0a01, 0x0a01) AM_READ_PORT("P1")
 	AM_RANGE(0x0b00, 0x0b00) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x0c00, 0x0c00) AM_WRITE(labyrunr_bankswitch_w)
-	AM_RANGE(0x0d00, 0x0d1f) AM_READWRITE(K051733_r, K051733_w)
+	AM_RANGE(0x0d00, 0x0d1f) AM_DEVREADWRITE("k051733", k051733_r, k051733_w)
 	AM_RANGE(0x0e00, 0x0e00) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE(&paletteram)
+	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE_MEMBER(labyrunr_state, m_paletteram)
 	AM_RANGE(0x1800, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(labyrunr_vram1_w) AM_BASE(&labyrunr_videoram1)
-	AM_RANGE(0x3800, 0x3fff) AM_RAM_WRITE(labyrunr_vram2_w) AM_BASE(&labyrunr_videoram2)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE_MEMBER(labyrunr_state, m_spriteram)
+	AM_RANGE(0x3000, 0x37ff) AM_RAM_WRITE(labyrunr_vram1_w) AM_BASE_MEMBER(labyrunr_state, m_videoram1)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM_WRITE(labyrunr_vram2_w) AM_BASE_MEMBER(labyrunr_state, m_videoram2)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -100,43 +86,43 @@ static INPUT_PORTS_START( labyrunr )
 	KONAMI8_COCKTAIL_B12_START
 
 	PORT_START("DSW1")
-	KONAMI_COINAGE(DEF_STR( Free_Play ), DEF_STR( None ))
+	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), DEF_STR( None ), SW1)
 	/* "None" = coin slot B disabled */
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )			PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, "2" )
 	PORT_DIPSETTING(    0x02, "3" )
 	PORT_DIPSETTING(    0x01, "5" )
 	PORT_DIPSETTING(    0x00, "7" )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("SW2:3")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(    0x18, "30000 70000" )
 	PORT_DIPSETTING(    0x10, "40000 80000" )
 	PORT_DIPSETTING(    0x08, "40000" )
 	PORT_DIPSETTING(    0x00, "50000" )
-	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("SW2:6,7")
 	PORT_DIPSETTING(    0x60, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("DSW3")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )		PORT_DIPLOCATION("SW3:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Upright Controls" )
+	PORT_DIPNAME( 0x02, 0x02, "Upright Controls" )			PORT_DIPLOCATION("SW3:2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Single ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Dual ) )
-	PORT_SERVICE( 0x04, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Continues ) )
-	PORT_DIPSETTING(    0x08, "3" )
-	PORT_DIPSETTING(    0x00, "5" )
+	PORT_SERVICE_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW3:3" )
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("SW3:4")
+	PORT_DIPSETTING(    0x08, "3 Times" )
+	PORT_DIPSETTING(    0x00, "5 Times" )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
@@ -191,45 +177,59 @@ static const ym2203_interface ym2203_interface_2 =
 
 
 
-static MACHINE_DRIVER_START( labyrunr )
+static MACHINE_START( labyrunr )
+{
+	labyrunr_state *state = machine.driver_data<labyrunr_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 6, &ROM[0x10000], 0x4000);
+
+	state->m_k007121 = machine.device("k007121");
+}
+
+static MACHINE_CONFIG_START( labyrunr, labyrunr_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)		/* 24MHz/8? */
-	MDRV_CPU_PROGRAM_MAP(labyrunr_map)
-	MDRV_CPU_VBLANK_INT_HACK(labyrunr_interrupt,8)	/* 1 IRQ + 4 NMI (generated by 007121) */
+	MCFG_CPU_ADD("maincpu", HD6309, 3000000*4)		/* 24MHz/8? */
+	MCFG_CPU_PROGRAM_MAP(labyrunr_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", labyrunr_scanline, "screen", 0, 1)
+
+	MCFG_MACHINE_START(labyrunr)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(37*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 35*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(37*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 35*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(labyrunr)
 
-	MDRV_GFXDECODE(labyrunr)
-	MDRV_PALETTE_LENGTH(2*8*16*16)
+	MCFG_GFXDECODE(labyrunr)
+	MCFG_PALETTE_LENGTH(2*8*16*16)
 
-	MDRV_PALETTE_INIT(labyrunr)
-	MDRV_VIDEO_START(labyrunr)
-	MDRV_VIDEO_UPDATE(labyrunr)
+	MCFG_PALETTE_INIT(labyrunr)
+	MCFG_VIDEO_START(labyrunr)
+
+	MCFG_K007121_ADD("k007121")
+	MCFG_K051733_ADD("k051733")
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym1", YM2203, 3000000)
-	MDRV_SOUND_CONFIG(ym2203_interface_1)
-	MDRV_SOUND_ROUTE(0, "mono", 0.40)
-	MDRV_SOUND_ROUTE(1, "mono", 0.40)
-	MDRV_SOUND_ROUTE(2, "mono", 0.40)
-	MDRV_SOUND_ROUTE(3, "mono", 0.80)
+	MCFG_SOUND_ADD("ym1", YM2203, 3000000)
+	MCFG_SOUND_CONFIG(ym2203_interface_1)
+	MCFG_SOUND_ROUTE(0, "mono", 0.40)
+	MCFG_SOUND_ROUTE(1, "mono", 0.40)
+	MCFG_SOUND_ROUTE(2, "mono", 0.40)
+	MCFG_SOUND_ROUTE(3, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ym2", YM2203, 3000000)
-	MDRV_SOUND_CONFIG(ym2203_interface_2)
-	MDRV_SOUND_ROUTE(0, "mono", 0.40)
-	MDRV_SOUND_ROUTE(1, "mono", 0.40)
-	MDRV_SOUND_ROUTE(2, "mono", 0.40)
-	MDRV_SOUND_ROUTE(3, "mono", 0.80)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ym2", YM2203, 3000000)
+	MCFG_SOUND_CONFIG(ym2203_interface_2)
+	MCFG_SOUND_ROUTE(0, "mono", 0.40)
+	MCFG_SOUND_ROUTE(1, "mono", 0.40)
+	MCFG_SOUND_ROUTE(2, "mono", 0.40)
+	MCFG_SOUND_ROUTE(3, "mono", 0.80)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -287,6 +287,6 @@ ROM_START( labyrunrk )
 ROM_END
 
 
-GAME( 1987, tricktrp, 0,        labyrunr, labyrunr, 0, ROT90, "Konami", "Trick Trap (World?)", 0 )
-GAME( 1987, labyrunr, tricktrp, labyrunr, labyrunr, 0, ROT90, "Konami", "Labyrinth Runner (Japan)", 0 )
-GAME( 1987, labyrunrk,tricktrp, labyrunr, labyrunr, 0, ROT90, "Konami", "Labyrinth Runner (World Ver. K)", 0 )
+GAME( 1987, tricktrp, 0,        labyrunr, labyrunr, 0, ROT90, "Konami", "Trick Trap (World?)", GAME_SUPPORTS_SAVE )
+GAME( 1987, labyrunr, tricktrp, labyrunr, labyrunr, 0, ROT90, "Konami", "Labyrinth Runner (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1987, labyrunrk,tricktrp, labyrunr, labyrunr, 0, ROT90, "Konami", "Labyrinth Runner (World Ver. K)", GAME_SUPPORTS_SAVE )

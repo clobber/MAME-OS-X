@@ -13,21 +13,32 @@ RAM: 411A (x48)
 
 XTal: 20.0
 
+todo:
+ how are the games checking the battery
+ state?
+
 **********************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
+
+
+class wldarrow_state : public driver_device
+{
+public:
+	wldarrow_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram_0;
+	UINT8 *m_videoram_1;
+	UINT8 *m_videoram_2;
+	size_t m_videoram_size;
+};
 
 
 #define NUM_PENS	(8)
-
-
-static UINT8 *wldarrow_videoram_0;
-static UINT8 *wldarrow_videoram_1;
-static UINT8 *wldarrow_videoram_2;
-static size_t wldarrow_videoram_size;
-
 
 
 /*************************************
@@ -47,23 +58,24 @@ static void get_pens(pen_t *pens)
 }
 
 
-static VIDEO_UPDATE( wldarrow )
+static SCREEN_UPDATE_RGB32( wldarrow )
 {
+	wldarrow_state *state = screen.machine().driver_data<wldarrow_state>();
 	pen_t pens[NUM_PENS];
 	offs_t offs;
 
 	get_pens(pens);
 
-	for (offs = 0; offs < wldarrow_videoram_size; offs++)
+	for (offs = 0; offs < state->m_videoram_size; offs++)
 	{
 		int i;
 
 		UINT8 y = offs >> 5;
 		UINT8 x = offs << 3;
 
-		UINT8 data0 = wldarrow_videoram_0[offs];
-		UINT8 data1 = wldarrow_videoram_1[offs];
-		UINT8 data2 = wldarrow_videoram_2[offs];
+		UINT8 data0 = state->m_videoram_0[offs];
+		UINT8 data1 = state->m_videoram_1[offs];
+		UINT8 data2 = state->m_videoram_2[offs];
 
 		/* weird equations, but it matches every flyer screenshot -
            perhaphs they used a look-up PROM? */
@@ -77,7 +89,7 @@ static VIDEO_UPDATE( wldarrow )
 						  ((data_g >> 6) & 0x02) |
 						  ((data_b >> 7) & 0x01);
 
-			*BITMAP_ADDR32(bitmap, y, x) = pens[color];
+			bitmap.pix32(y, x) = pens[color];
 
 			data_r = data_r << 1;
 			data_g = data_g << 1;
@@ -112,7 +124,7 @@ static WRITE8_HANDLER( lights_2_w )
 
 static WRITE8_HANDLER( counter_w )
 {
-	coin_counter_w(0, data);
+	coin_counter_w(space->machine(), 0, data);
 }
 
 
@@ -159,13 +171,13 @@ static WRITE8_DEVICE_HANDLER( wldarrow_dac_4_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( wldarrow_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x2fff) AM_ROM
+static ADDRESS_MAP_START( wldarrow_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x37ff) AM_ROM
 	AM_RANGE(0x3800, 0x3800) AM_READ_PORT("IN0")
-	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&wldarrow_videoram_0) AM_SIZE(&wldarrow_videoram_size)
-	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_BASE(&wldarrow_videoram_1)
-	AM_RANGE(0x8000, 0x9fff) AM_RAM AM_BASE(&wldarrow_videoram_2)
-	AM_RANGE(0xcd00, 0xcdff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE_MEMBER(wldarrow_state, m_videoram_0) AM_SIZE_MEMBER(wldarrow_state, m_videoram_size)
+	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_BASE_MEMBER(wldarrow_state, m_videoram_1)
+	AM_RANGE(0x8000, 0x9fff) AM_RAM AM_BASE_MEMBER(wldarrow_state, m_videoram_2)
+	AM_RANGE(0xcd00, 0xcdff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("BITSW") AM_DEVWRITE("dac", wldarrow_dac_1_w)
 	AM_RANGE(0xf004, 0xf004) AM_READ_PORT("IN1") AM_WRITE(lights_1_w)
 	AM_RANGE(0xf006, 0xf006) AM_READ_PORT("IN2") AM_WRITE(lights_2_w)
@@ -340,30 +352,28 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( wldarrow )
+static MACHINE_CONFIG_START( wldarrow, wldarrow_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, 2000000)
-	MDRV_CPU_PROGRAM_MAP(wldarrow_map)
+	MCFG_CPU_ADD("maincpu", I8080, 2000000)
+	MCFG_CPU_PROGRAM_MAP(wldarrow_map)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(wldarrow)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 32*8-1)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 32*8-1)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_UPDATE_STATIC(wldarrow)
 
 	/* audio hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -441,6 +451,26 @@ ROM_START( mdrawpkr )
 	ROM_LOAD( "tms2516.k3", 0x2800, 0x0800, CRC(30904dc8) SHA1(c82276aa0eb8f48d136ad8c15dd309c9b880c294) )
 ROM_END
 
+ROM_START( mdrawpkra )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "meyco.k8", 0x0000, 0x0800, CRC(b4f6994d) SHA1(46fb2784b7b333f6755522fd27741a2fc4a4bc99) )
+	ROM_LOAD( "meyco.k7", 0x0800, 0x0800, CRC(8830365d) SHA1(044bc92880b78fa2a6ed5e133b484ac7d34c455a) )
+	ROM_LOAD( "meyco.k6", 0x1000, 0x0800, CRC(e1d5d38d) SHA1(523029185e2edc0351fa128d6494a5002cb2d7e7) )
+	ROM_LOAD( "meyco.k5", 0x1800, 0x0800, CRC(27c8dbcc) SHA1(996732b16c46460400957b3ed7bc36f537258dd7) )
+	ROM_LOAD( "meyco.k4", 0x2000, 0x0800, CRC(e3f18769) SHA1(7c98ca3f8b423200eb51ebe432591a98394ef952) )
+	ROM_LOAD( "meyco.k3", 0x2800, 0x0800, CRC(72aee07f) SHA1(a6d6086f3a6181d5111d05ae779c3f7b363c7f14) )
+ROM_END
+
+ROM_START( unkmeyco )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "k8", 0x0000, 0x0800, CRC(c6d8a2f7) SHA1(1fcd3ad72a29f832ffaf37edcb74e84e21909496) )
+	ROM_LOAD( "k7", 0x0800, 0x0800, CRC(6e30e5ae) SHA1(980096adefce4d4d97607b22f56f3acf246986ed) )
+	ROM_LOAD( "k6", 0x1000, 0x0800, CRC(7e2cb0e1) SHA1(3ea8f3c051ba730a39404b718d93bcdd762834c3) )
+	ROM_LOAD( "k5", 0x1800, 0x0800, CRC(536c83f9) SHA1(0dc9171c14f96bde68dc3b175abe31fa25753b48) )
+	ROM_LOAD( "k4", 0x2000, 0x0800, CRC(178b0f95) SHA1(cea5922f5294958c59cacd42e30399fc329426d9) )
+	ROM_LOAD( "k3", 0x2800, 0x0800, CRC(9cd6b843) SHA1(fb9c5c5ba96ebb75dc42e7c891d6da2a8a1ea6c1) )
+	ROM_LOAD( "k2", 0x3000, 0x0800, CRC(5f82eafa) SHA1(4f5a4dc773ceae9a69ec532166047867db4ddadf) )
+ROM_END
 
 
 /*************************************
@@ -452,12 +482,14 @@ ROM_END
 static DRIVER_INIT( wldarrow )
 {
 	offs_t i;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 
-	for (i = 0; i < 0x3000; i++)
+	for (i = 0; i < 0x3800; i++)
 		rom[i] ^= 0xff;
 }
 
 
-GAME( 1982, wldarrow,  0, wldarrow, wldarrow, wldarrow, ROT0, "Meyco Games", "Wild Arrow (Standard V4.8)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 198?, mdrawpkr,  0, wldarrow, mdrawpkr, wldarrow, ROT0, "Meyco Games", "Draw Poker Joker's Wild", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1982, wldarrow,  0,        wldarrow, wldarrow, wldarrow, ROT0, "Meyco Games", "Wild Arrow (Standard V4.8)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 198?, mdrawpkr,  0,        wldarrow, mdrawpkr, wldarrow, ROT0, "Meyco Games", "Draw Poker Joker's Wild (Standard)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 198?, mdrawpkra, mdrawpkr, wldarrow, mdrawpkr, wldarrow, ROT0, "Meyco Games", "Draw Poker Joker's Wild (02-11)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 198?, unkmeyco,  0,        wldarrow, mdrawpkr, wldarrow, ROT0, "Meyco Games", "unknown Meyco game", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

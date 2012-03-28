@@ -49,18 +49,31 @@ it as ASCII text.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 #include "includes/btime.h"
 
 
-static ADDRESS_MAP_START( dommy_map, ADDRESS_SPACE_PROGRAM, 8 )
+static TIMER_DEVICE_CALLBACK( scregg_interrupt )
+{
+	btime_state *state = timer.machine().driver_data<btime_state>();
+	device_set_input_line(state->m_maincpu, 0, (param & 8) ? ASSERT_LINE : CLEAR_LINE);
+}
+
+static WRITE8_HANDLER( scregg_irqack_w )
+{
+	btime_state *state = space->machine().driver_data<btime_state>();
+	device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
+}
+
+
+static ADDRESS_MAP_START( dommy_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x2000, 0x23ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x2400, 0x27ff) AM_RAM AM_BASE(&btime_colorram)
-	AM_RANGE(0x2800, 0x2bff) AM_READWRITE(btime_mirrorvideoram_r,btime_mirrorvideoram_w)
-	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1") AM_WRITENOP
+	AM_RANGE(0x2000, 0x23ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x2400, 0x27ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
+	AM_RANGE(0x2800, 0x2bff) AM_READWRITE(btime_mirrorvideoram_r, btime_mirrorvideoram_w)
+	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1") AM_WRITE(scregg_irqack_w)
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("DSW2") AM_WRITE(btime_video_control_w)
 /*  AM_RANGE(0x4004, 0x4004)  */ /* this is read */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("P1")
@@ -71,14 +84,14 @@ static ADDRESS_MAP_START( dommy_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( eggs_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( eggs_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE(&btime_colorram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
 	AM_RANGE(0x1800, 0x1bff) AM_READWRITE(btime_mirrorvideoram_r,btime_mirrorvideoram_w)
 	AM_RANGE(0x1c00, 0x1fff) AM_READWRITE(btime_mirrorcolorram_r,btime_mirrorcolorram_w)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("DSW1") AM_WRITE(btime_video_control_w)
-	AM_RANGE(0x2001, 0x2001) AM_READ_PORT("DSW2") AM_WRITENOP
+	AM_RANGE(0x2001, 0x2001) AM_READ_PORT("DSW2") AM_WRITE(scregg_irqack_w)
 	AM_RANGE(0x2002, 0x2002) AM_READ_PORT("P1")
 	AM_RANGE(0x2003, 0x2003) AM_READ_PORT("P2")
 	AM_RANGE(0x2004, 0x2005) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -200,70 +213,94 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( dommy )
+static MACHINE_START( scregg )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = NULL;
+
+	state->save_item(NAME(state->m_btime_palette));
+	state->save_item(NAME(state->m_bnj_scroll1));
+	state->save_item(NAME(state->m_bnj_scroll2));
+	state->save_item(NAME(state->m_btime_tilemap));
+}
+
+static MACHINE_RESET( scregg )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+
+	state->m_btime_palette = 0;
+	state->m_bnj_scroll1 = 0;
+	state->m_bnj_scroll2 = 0;
+	state->m_btime_tilemap[0] = 0;
+	state->m_btime_tilemap[1] = 0;
+	state->m_btime_tilemap[2] = 0;
+	state->m_btime_tilemap[3] = 0;
+}
+
+static MACHINE_CONFIG_START( dommy, btime_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 1500000)
-	MDRV_CPU_PROGRAM_MAP(dommy_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold,16*60) //???
+	MCFG_CPU_ADD("maincpu", M6502, XTAL_12MHz/8)
+	MCFG_CPU_PROGRAM_MAP(dommy_map)
+	MCFG_TIMER_ADD_SCANLINE("irq", scregg_interrupt, "screen", 0, 8)
+
+	MCFG_MACHINE_START(scregg)
+	MCFG_MACHINE_RESET(scregg)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(57)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(3072)        /* frames per second, vblank duration taken from Burger Time */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 31*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(XTAL_12MHz/2, 384, 8, 248, 272, 8, 248)
+	MCFG_SCREEN_UPDATE_STATIC(eggs)
 
-	MDRV_GFXDECODE(scregg)
-	MDRV_PALETTE_LENGTH(8)
+	MCFG_GFXDECODE(scregg)
+	MCFG_PALETTE_LENGTH(8)
 
-	MDRV_PALETTE_INIT(btime)
-	MDRV_VIDEO_START(btime)
-	MDRV_VIDEO_UPDATE(eggs)
+	MCFG_PALETTE_INIT(btime)
+	MCFG_VIDEO_START(btime)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
+	MCFG_SOUND_ADD("ay1", AY8910, XTAL_12MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, XTAL_12MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( scregg )
+static MACHINE_CONFIG_START( scregg, btime_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 1500000)
-	MDRV_CPU_PROGRAM_MAP(eggs_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold,16*60) //???
+	MCFG_CPU_ADD("maincpu", M6502, XTAL_12MHz/8)
+	MCFG_CPU_PROGRAM_MAP(eggs_map)
+	MCFG_TIMER_ADD_SCANLINE("irq", scregg_interrupt, "screen", 0, 8)
+
+	MCFG_MACHINE_START(scregg)
+	MCFG_MACHINE_RESET(scregg)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(57)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(3072)        /* frames per second, vblank duration taken from Burger Time */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(XTAL_12MHz/2, 384, 8, 248, 272, 8, 248)
+	MCFG_SCREEN_UPDATE_STATIC(eggs)
 
-	MDRV_GFXDECODE(scregg)
-	MDRV_PALETTE_LENGTH(8)
+	MCFG_GFXDECODE(scregg)
+	MCFG_PALETTE_LENGTH(8)
 
-	MDRV_PALETTE_INIT(btime)
-	MDRV_VIDEO_START(btime)
-	MDRV_VIDEO_UPDATE(eggs)
+	MCFG_PALETTE_INIT(btime)
+	MCFG_VIDEO_START(btime)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
+	MCFG_SOUND_ADD("ay1", AY8910, XTAL_12MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, XTAL_12MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
+MACHINE_CONFIG_END
 
 
 ROM_START( dommy )
@@ -285,46 +322,46 @@ ROM_END
 
 ROM_START( scregg )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "scregg.e14",   0x3000, 0x1000, CRC(29226d77) SHA1(e1a329a4452eeb90801d001140ce865bf1ea7716) )
-	ROM_LOAD( "scregg.d14",   0x4000, 0x1000, CRC(eb143880) SHA1(73b3ca6e0d72cd0db951ae9ed1552cf8b7d91e68) )
-	ROM_LOAD( "scregg.c14",   0x5000, 0x1000, CRC(4455f262) SHA1(fc7b2d9094fa5e25c1bf4b68386f640f4502e0c0) )
-	ROM_LOAD( "scregg.b14",   0x6000, 0x1000, CRC(044ac5d2) SHA1(f2d2fe2236de1b3b2614cc95f61a90571638cd69) )
-	ROM_LOAD( "scregg.a14",   0x7000, 0x1000, CRC(b5a0814a) SHA1(192cdc506fb0bbfed8ae687f2699397ace3bef30) )
-	ROM_RELOAD(               0xf000, 0x1000 )        /* for reset/interrupt vectors */
+	ROM_LOAD( "d00.e14",   0x3000, 0x1000, CRC(29226d77) SHA1(e1a329a4452eeb90801d001140ce865bf1ea7716) )
+	ROM_LOAD( "d10.d14",   0x4000, 0x1000, CRC(eb143880) SHA1(73b3ca6e0d72cd0db951ae9ed1552cf8b7d91e68) )
+	ROM_LOAD( "d20.c14",   0x5000, 0x1000, CRC(4455f262) SHA1(fc7b2d9094fa5e25c1bf4b68386f640f4502e0c0) )
+	ROM_LOAD( "d30.b14",   0x6000, 0x1000, CRC(044ac5d2) SHA1(f2d2fe2236de1b3b2614cc95f61a90571638cd69) )
+	ROM_LOAD( "d40.a14",   0x7000, 0x1000, CRC(b5a0814a) SHA1(192cdc506fb0bbfed8ae687f2699397ace3bef30) )
+	ROM_RELOAD(            0xf000, 0x1000 )        /* for reset/interrupt vectors */
 
 	ROM_REGION( 0x6000, "gfx1", 0 )
-	ROM_LOAD( "scregg.j12",   0x0000, 0x1000, CRC(a485c10c) SHA1(88edd35479ceb58244f644a7e0520d225df3bf65) )
-	ROM_LOAD( "scregg.j10",   0x1000, 0x1000, CRC(1fd4e539) SHA1(3067bbd9493614e80d8d3982fe80ef25688d256c) )
-	ROM_LOAD( "scregg.h12",   0x2000, 0x1000, CRC(8454f4b2) SHA1(6a8d257a3fec901453c7216ad894badf96188ebf) )
-	ROM_LOAD( "scregg.h10",   0x3000, 0x1000, CRC(72bd89ee) SHA1(2e38c27b546eeef0fe42340777c8687f4c65ee97) )
-	ROM_LOAD( "scregg.g12",   0x4000, 0x1000, CRC(ff3c2894) SHA1(0da866db6a79f658de3efc609b9ca8520b4d22d0) )
-	ROM_LOAD( "scregg.g10",   0x5000, 0x1000, CRC(9c20214a) SHA1(e01b72501a01ffc0370cf19c9a379a54800cccc6) )
+	ROM_LOAD( "d50.j12",   0x0000, 0x1000, CRC(a485c10c) SHA1(88edd35479ceb58244f644a7e0520d225df3bf65) )
+	ROM_LOAD( "d60.j10",   0x1000, 0x1000, CRC(1fd4e539) SHA1(3067bbd9493614e80d8d3982fe80ef25688d256c) )
+	ROM_LOAD( "d70.h12",   0x2000, 0x1000, CRC(8454f4b2) SHA1(6a8d257a3fec901453c7216ad894badf96188ebf) )
+	ROM_LOAD( "d80.h10",   0x3000, 0x1000, CRC(72bd89ee) SHA1(2e38c27b546eeef0fe42340777c8687f4c65ee97) )
+	ROM_LOAD( "d90.g12",   0x4000, 0x1000, CRC(ff3c2894) SHA1(0da866db6a79f658de3efc609b9ca8520b4d22d0) )
+	ROM_LOAD( "da0.g10",   0x5000, 0x1000, CRC(9c20214a) SHA1(e01b72501a01ffc0370cf19c9a379a54800cccc6) )
 
 	ROM_REGION( 0x0040, "proms", 0 )
-	ROM_LOAD( "screggco.c6",  0x0000, 0x0020, CRC(ff23bdd6) SHA1(d09738915da456449bb4e8d9eefb8e6378f0edea) )	/* palette */
-	ROM_LOAD( "screggco.b4",  0x0020, 0x0020, CRC(7cc4824b) SHA1(2a283fc17fac32e63385948bfe180d05f1fb8727) )	/* unknown */
+	ROM_LOAD( "dc0.c6 ",   0x0000, 0x0020, CRC(ff23bdd6) SHA1(d09738915da456449bb4e8d9eefb8e6378f0edea) )	/* palette */
+	ROM_LOAD( "db1.b4",    0x0020, 0x0020, CRC(7cc4824b) SHA1(2a283fc17fac32e63385948bfe180d05f1fb8727) )	/* unknown */
 ROM_END
 
 ROM_START( eggs )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "e14.bin",      0x3000, 0x1000, CRC(4e216f9d) SHA1(7b9d984481c8227e417dae4a1adbb5dec5f959b7) )
-	ROM_LOAD( "d14.bin",      0x4000, 0x1000, CRC(4edb267f) SHA1(f5d1a79b13d6fbb92561b4e4cfb78465114497d1) )
-	ROM_LOAD( "c14.bin",      0x5000, 0x1000, CRC(15a5c48c) SHA1(70141c739a8c019554a6c5257ad12606a1542b1f) )
-	ROM_LOAD( "b14.bin",      0x6000, 0x1000, CRC(5c11c00e) SHA1(4a9295086bf935a1c9b1b01f83d1ff6242d74907) )
-	ROM_LOAD( "a14.bin",      0x7000, 0x1000, CRC(953faf07) SHA1(ee3181e9ee664053d6e6899fe38e136a9ea6abe1) )
-	ROM_RELOAD(               0xf000, 0x1000 )   /* for reset/interrupt vectors */
+	ROM_LOAD( "e14.bin",   0x3000, 0x1000, CRC(4e216f9d) SHA1(7b9d984481c8227e417dae4a1adbb5dec5f959b7) )
+	ROM_LOAD( "d14.bin",   0x4000, 0x1000, CRC(4edb267f) SHA1(f5d1a79b13d6fbb92561b4e4cfb78465114497d1) )
+	ROM_LOAD( "c14.bin",   0x5000, 0x1000, CRC(15a5c48c) SHA1(70141c739a8c019554a6c5257ad12606a1542b1f) )
+	ROM_LOAD( "b14.bin",   0x6000, 0x1000, CRC(5c11c00e) SHA1(4a9295086bf935a1c9b1b01f83d1ff6242d74907) )
+	ROM_LOAD( "a14.bin",   0x7000, 0x1000, CRC(953faf07) SHA1(ee3181e9ee664053d6e6899fe38e136a9ea6abe1) )
+	ROM_RELOAD(            0xf000, 0x1000 )   /* for reset/interrupt vectors */
 
 	ROM_REGION( 0x6000, "gfx1", 0 )
-	ROM_LOAD( "j12.bin",      0x0000, 0x1000, CRC(ce4a2e46) SHA1(6b31c481ca038834ae295d015054f852baa6330f) )
-	ROM_LOAD( "j10.bin",      0x1000, 0x1000, CRC(a1bcaffc) SHA1(74f6df3136826822bbc22b027700fb3ddfceaa97) )
-	ROM_LOAD( "h12.bin",      0x2000, 0x1000, CRC(9562836d) SHA1(c5d5d6ceede6105975c87ff8e1f7e5312b992b92) )
-	ROM_LOAD( "h10.bin",      0x3000, 0x1000, CRC(3cfb3a8e) SHA1(e60c9da1a7841c3bb5351a109d99c8df34747212) )
-	ROM_LOAD( "g12.bin",      0x4000, 0x1000, CRC(679f8af7) SHA1(f69302ff0125d96fbfdd914d7ecefd7130a24616) )
-	ROM_LOAD( "g10.bin",      0x5000, 0x1000, CRC(5b58d3b5) SHA1(f138b7294dd20d050bb8a2191e87b0c3815f6148) )
+	ROM_LOAD( "j12.bin",   0x0000, 0x1000, CRC(ce4a2e46) SHA1(6b31c481ca038834ae295d015054f852baa6330f) )
+	ROM_LOAD( "j10.bin",   0x1000, 0x1000, CRC(a1bcaffc) SHA1(74f6df3136826822bbc22b027700fb3ddfceaa97) )
+	ROM_LOAD( "h12.bin",   0x2000, 0x1000, CRC(9562836d) SHA1(c5d5d6ceede6105975c87ff8e1f7e5312b992b92) )
+	ROM_LOAD( "h10.bin",   0x3000, 0x1000, CRC(3cfb3a8e) SHA1(e60c9da1a7841c3bb5351a109d99c8df34747212) )
+	ROM_LOAD( "g12.bin",   0x4000, 0x1000, CRC(679f8af7) SHA1(f69302ff0125d96fbfdd914d7ecefd7130a24616) )
+	ROM_LOAD( "g10.bin",   0x5000, 0x1000, CRC(5b58d3b5) SHA1(f138b7294dd20d050bb8a2191e87b0c3815f6148) )
 
 	ROM_REGION( 0x0040, "proms", 0 )
-	ROM_LOAD( "eggs.c6",      0x0000, 0x0020, CRC(e8408c81) SHA1(549b9948a4a73e7a704731b942565183cef05d52) )	/* palette */
-	ROM_LOAD( "screggco.b4",  0x0020, 0x0020, CRC(7cc4824b) SHA1(2a283fc17fac32e63385948bfe180d05f1fb8727) )	/* unknown */
+	ROM_LOAD( "eggs.c6",   0x0000, 0x0020, CRC(e8408c81) SHA1(549b9948a4a73e7a704731b942565183cef05d52) )	/* palette */
+	ROM_LOAD( "db1.b4",    0x0020, 0x0020, CRC(7cc4824b) SHA1(2a283fc17fac32e63385948bfe180d05f1fb8727) )	/* unknown */
 ROM_END
 
 // rockduck - check gfx roms (planes) order
@@ -359,9 +396,9 @@ static DRIVER_INIT( rockduck )
 {
 	// rd2.rdh and rd1.rdj are bitswapped, but not rd3.rdg .. are they really from the same board?
 	int x;
-	UINT8 *src = memory_region( machine, "gfx1" );
+	UINT8 *src = machine.region( "gfx1" )->base();
 
-	for (x=0x2000;x<0x6000;x++)
+	for (x = 0x2000; x < 0x6000; x++)
 	{
 		src[x] = BITSWAP8(src[x],2,0,3,6,1,4,7,5);
 
@@ -369,7 +406,7 @@ static DRIVER_INIT( rockduck )
 }
 
 
-GAME( 1983, dommy,    0,        dommy,  scregg, 0, ROT270, "Technos Japan", "Dommy", 0 )
-GAME( 1983, scregg,   0,        scregg, scregg, 0, ROT270, "Technos Japan", "Scrambled Egg", 0 )
-GAME( 1983, eggs,     scregg,   scregg, scregg, 0, ROT270, "[Technos Japan] Universal USA", "Eggs", 0 )
-GAME( 1983, rockduck, 0,        scregg, rockduck, rockduck, ROT270, "Datel SAS", "Rock Duck (prototype?)", GAME_WRONG_COLORS )
+GAME( 1983, dommy,    0,        dommy,  scregg, 0, ROT270, "Technos Japan", "Dommy", GAME_SUPPORTS_SAVE )
+GAME( 1983, scregg,   0,        scregg, scregg, 0, ROT270, "Technos Japan", "Scrambled Egg", GAME_SUPPORTS_SAVE )
+GAME( 1983, eggs,     scregg,   scregg, scregg, 0, ROT270, "Technos Japan / Universal USA", "Eggs", GAME_SUPPORTS_SAVE )
+GAME( 1983, rockduck, 0,        scregg, rockduck, rockduck, ROT270, "Datel SAS", "Rock Duck (prototype?)", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )

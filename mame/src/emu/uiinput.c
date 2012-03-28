@@ -9,9 +9,8 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "uiinput.h"
-#include "mame.h"
-#include "inptport.h"
 #include "profiler.h"
 #include "render.h"
 
@@ -60,7 +59,7 @@ struct _ui_input_private
     FUNCTION PROTOYPES
 ***************************************************************************/
 
-static void ui_input_frame_update(running_machine *machine);
+//static void ui_input_frame_update(running_machine &machine);
 
 
 
@@ -73,15 +72,15 @@ static void ui_input_frame_update(running_machine *machine);
     system
 -------------------------------------------------*/
 
-void ui_input_init(running_machine *machine)
+void ui_input_init(running_machine &machine)
 {
 	/* create the private data */
-	machine->ui_input_data = auto_alloc_clear(machine, ui_input_private);
-	machine->ui_input_data->current_mouse_x = -1;
-	machine->ui_input_data->current_mouse_y = -1;
+	machine.ui_input_data = auto_alloc_clear(machine, ui_input_private);
+	machine.ui_input_data->current_mouse_x = -1;
+	machine.ui_input_data->current_mouse_y = -1;
 
 	/* add a frame callback to poll inputs */
-	add_frame_callback(machine, ui_input_frame_update);
+	machine.add_notifier(MACHINE_NOTIFY_FRAME, machine_notify_delegate(FUNC(ui_input_frame_update), &machine));
 }
 
 
@@ -96,15 +95,15 @@ void ui_input_init(running_machine *machine)
     corresponding IPT_UI_* events
 -------------------------------------------------*/
 
-static void ui_input_frame_update(running_machine *machine)
+void ui_input_frame_update(running_machine &machine)
 {
-	ui_input_private *uidata = machine->ui_input_data;
+	ui_input_private *uidata = machine.ui_input_data;
 	int code;
 
 	/* update the state of all the UI keys */
 	for (code = __ipt_ui_start; code <= __ipt_ui_end; code++)
 	{
-		int pressed = input_seq_pressed(machine, input_type_seq(machine, code, 0, SEQ_TYPE_STANDARD));
+		int pressed = machine.input().seq_pressed(input_type_seq(machine, code, 0, SEQ_TYPE_STANDARD));
 		if (!pressed || uidata->seqpressed[code] != SEQ_PRESSED_RESET)
 			uidata->seqpressed[code] = pressed;
 	}
@@ -116,9 +115,9 @@ static void ui_input_frame_update(running_machine *machine)
     onto the queue
 -------------------------------------------------*/
 
-int ui_input_push_event(running_machine *machine, ui_event evt)
+int ui_input_push_event(running_machine &machine, ui_event evt)
 {
-	ui_input_private *uidata = machine->ui_input_data;
+	ui_input_private *uidata = machine.ui_input_data;
 
 	/* we may be called before the UI is initialized */
 	if (uidata == NULL)
@@ -169,9 +168,9 @@ int ui_input_push_event(running_machine *machine, ui_event evt)
     ui_input_pop_event - pops an event off of the queue
 -------------------------------------------------*/
 
-int ui_input_pop_event(running_machine *machine, ui_event *evt)
+int ui_input_pop_event(running_machine &machine, ui_event *evt)
 {
-	ui_input_private *uidata = machine->ui_input_data;
+	ui_input_private *uidata = machine.ui_input_data;
 	int result;
 
 	if (uidata->events_start != uidata->events_end)
@@ -194,9 +193,9 @@ int ui_input_pop_event(running_machine *machine, ui_event *evt)
     and resets the sequence states
 -------------------------------------------------*/
 
-void ui_input_reset(running_machine *machine)
+void ui_input_reset(running_machine &machine)
 {
-	ui_input_private *uidata = machine->ui_input_data;
+	ui_input_private *uidata = machine.ui_input_data;
 	int code;
 
 	uidata->events_start = 0;
@@ -214,9 +213,9 @@ void ui_input_reset(running_machine *machine)
     location of the mouse
 -------------------------------------------------*/
 
-render_target *ui_input_find_mouse(running_machine *machine, INT32 *x, INT32 *y, int *button)
+render_target *ui_input_find_mouse(running_machine &machine, INT32 *x, INT32 *y, int *button)
 {
-	ui_input_private *uidata = machine->ui_input_data;
+	ui_input_private *uidata = machine.ui_input_data;
 	if (x != NULL)
 		*x = uidata->current_mouse_x;
 	if (y != NULL)
@@ -238,7 +237,7 @@ render_target *ui_input_find_mouse(running_machine *machine, INT32 *x, INT32 *y,
     detected
 -------------------------------------------------*/
 
-int ui_input_pressed(running_machine *machine, int code)
+int ui_input_pressed(running_machine &machine, int code)
 {
 	return ui_input_pressed_repeat(machine, code, 0);
 }
@@ -251,12 +250,12 @@ int ui_input_pressed(running_machine *machine, int code)
     is triggered
 -------------------------------------------------*/
 
-int ui_input_pressed_repeat(running_machine *machine, int code, int speed)
+int ui_input_pressed_repeat(running_machine &machine, int code, int speed)
 {
-	ui_input_private *uidata = machine->ui_input_data;
+	ui_input_private *uidata = machine.ui_input_data;
 	int pressed = FALSE;
 
-profiler_mark_start(PROFILER_INPUT);
+g_profiler.start(PROFILER_INPUT);
 
 	/* get the status of this key (assumed to be only in the defaults) */
 	assert(code >= IPT_UI_CONFIGURE && code <= IPT_OSD_16);
@@ -284,7 +283,7 @@ profiler_mark_start(PROFILER_INPUT);
 	else
 		uidata->next_repeat[code] = 0;
 
-profiler_mark_end();
+g_profiler.stop();
 
 	return pressed;
 }

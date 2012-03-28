@@ -210,7 +210,7 @@ INLINE uint g65816i_pull_24(g65816i_cpu_struct *cpustate)
 {
 	uint res = g65816i_pull_8(cpustate);
 	res |= g65816i_pull_8(cpustate) << 8;
-	return res | (g65816i_pull_8(cpustate) << 16);
+	return ((res + 1) & 0xffff) | (g65816i_pull_8(cpustate) << 16);
 }
 
 
@@ -561,28 +561,28 @@ INLINE void g65816i_check_maskable_interrupt(g65816i_cpu_struct *cpustate)
 
 
 #define OPER_8_IMM(cpustate)		read_8_IMM(EA_IMM8(cpustate))
-#define OPER_8_D(cpustate)	      	read_8_D(EA_D(cpustate))
-#define OPER_8_A(cpustate)	      	read_8_A(EA_A(cpustate))
-#define OPER_8_AL(cpustate)	      	read_8_AL(EA_AL(cpustate))
-#define OPER_8_DX(cpustate)	      	read_8_DX(EA_DX(cpustate))
-#define OPER_8_DY(cpustate)	      	read_8_DY(EA_DY(cpustate))
-#define OPER_8_AX(cpustate)	      	read_8_AX(EA_AX(cpustate))
+#define OPER_8_D(cpustate)	    	read_8_D(EA_D(cpustate))
+#define OPER_8_A(cpustate)	    	read_8_A(EA_A(cpustate))
+#define OPER_8_AL(cpustate)	    	read_8_AL(EA_AL(cpustate))
+#define OPER_8_DX(cpustate)	    	read_8_DX(EA_DX(cpustate))
+#define OPER_8_DY(cpustate)	    	read_8_DY(EA_DY(cpustate))
+#define OPER_8_AX(cpustate)	    	read_8_AX(EA_AX(cpustate))
 #define OPER_8_ALX(cpustate)		read_8_ALX(EA_ALX(cpustate))
-#define OPER_8_AY(cpustate)	      	read_8_AY(EA_AY(cpustate))
-#define OPER_8_DI(cpustate)	      	read_8_DI(EA_DI(cpustate))
+#define OPER_8_AY(cpustate)	    	read_8_AY(EA_AY(cpustate))
+#define OPER_8_DI(cpustate)	    	read_8_DI(EA_DI(cpustate))
 #define OPER_8_DLI(cpustate)		read_8_DLI(EA_DLI(cpustate))
-#define OPER_8_AI(cpustate)	      	read_8_AI(EA_AI(cpustate))
+#define OPER_8_AI(cpustate)	    	read_8_AI(EA_AI(cpustate))
 #define OPER_8_ALI(cpustate)		read_8_ALI(EA_ALI(cpustate))
 #define OPER_8_DXI(cpustate)		read_8_DXI(EA_DXI(cpustate))
 #define OPER_8_DIY(cpustate)		read_8_DIY(EA_DIY(cpustate))
 #define OPER_8_DLIY(cpustate)		read_8_DLIY(EA_DLIY(cpustate))
 #define OPER_8_AXI(cpustate)		read_8_AXI(EA_AXI(cpustate))
-#define OPER_8_S(cpustate)	      	read_8_S(EA_S(cpustate))
+#define OPER_8_S(cpustate)	    	read_8_S(EA_S(cpustate))
 #define OPER_8_SIY(cpustate)		read_8_SIY(EA_SIY(cpustate))
 
 #define OPER_16_IMM(cpustate)		read_16_IMM(EA_IMM16(cpustate))
-#define OPER_16_D(cpustate)	      	read_16_D(EA_D(cpustate))
-#define OPER_16_A(cpustate)	      	read_16_A(EA_A(cpustate))
+#define OPER_16_D(cpustate)	    	read_16_D(EA_D(cpustate))
+#define OPER_16_A(cpustate)	    	read_16_A(EA_A(cpustate))
 #define OPER_16_AL(cpustate)		read_16_AL(EA_AL(cpustate))
 #define OPER_16_DX(cpustate)		read_16_DX(EA_DX(cpustate))
 #define OPER_16_DY(cpustate)		read_16_DY(EA_DY(cpustate))
@@ -597,12 +597,12 @@ INLINE void g65816i_check_maskable_interrupt(g65816i_cpu_struct *cpustate)
 #define OPER_16_DIY(cpustate)		read_16_DIY(EA_DIY(cpustate))
 #define OPER_16_DLIY(cpustate)		read_16_DLIY(EA_DLIY(cpustate))
 #define OPER_16_AXI(cpustate)		read_16_AXI(EA_AXI(cpustate))
-#define OPER_16_S(cpustate)	      	read_16_S(EA_S(cpustate))
+#define OPER_16_S(cpustate)	    	read_16_S(EA_S(cpustate))
 #define OPER_16_SIY(cpustate)		read_16_SIY(EA_SIY(cpustate))
 
 #define OPER_24_IMM(cpustate)		read_24_IMM(EA_IMM24(cpustate))
-#define OPER_24_D(cpustate)	      	read_24_D(EA_D(cpustate))
-#define OPER_24_A(cpustate)	      	read_24_A(EA_A(cpustate))
+#define OPER_24_D(cpustate)	    	read_24_D(EA_D(cpustate))
+#define OPER_24_A(cpustate)	    	read_24_A(EA_A(cpustate))
 #define OPER_24_AL(cpustate)		read_24_AL(EA_AL(cpustate))
 #define OPER_24_DX(cpustate)		read_24_DX(EA_DX(cpustate))
 #define OPER_24_DY(cpustate)		read_24_DY(EA_DY(cpustate))
@@ -617,7 +617,7 @@ INLINE void g65816i_check_maskable_interrupt(g65816i_cpu_struct *cpustate)
 #define OPER_24_DIY(cpustate)		read_24_DIY(EA_DIY(cpustate))
 #define OPER_24_DLIY(cpustate)		read_24_DLIY(EA_DLIY(cpustate))
 #define OPER_24_AXI(cpustate)		read_24_AXI(EA_AXI(cpustate))
-#define OPER_24_S(cpustate)	      	read_24_S(EA_S(cpustate))
+#define OPER_24_S(cpustate)	    	read_24_S(EA_S(cpustate))
 #define OPER_24_SIY(cpustate)		read_24_SIY(EA_SIY(cpustate))
 
 INLINE uint EA_IMM8(g65816i_cpu_struct *cpustate)  {REGISTER_PC += 1; return REGISTER_PB | MAKE_UINT_16(REGISTER_PC-1);}
@@ -658,93 +658,60 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			SRC    = OPER_8_##MODE(cpustate);										\
 			if(FLAG_D)														\
 			{																\
-				unsigned tmp1, tmp2, tmpA, tmpB;							\
-				tmp1 = REGISTER_A & 0x0F;									\
-				tmp2 = (REGISTER_A >> 4) & 0x0F;							\
-				tmpA = SRC&0x0F;											\
-				tmpB = (SRC >> 4) & 0x0F;									\
-				tmp1 = tmp1 + tmpA + CFLAG_AS_1();							\
-				tmp2 = tmp2 + tmpB;											\
-				FLAG_C = CFLAG_CLEAR;										\
-				if(tmp1 > 0x09)												\
-				{															\
-					tmp2++;													\
-					tmp1 = ((tmp1 + 6) & 0x0F);								\
-				}															\
-				if(tmp2 > 0x09)												\
-				{															\
-					tmp2=((tmp2 + 6) & 0x0F);								\
-					FLAG_C = CFLAG_SET;										\
-				}															\
-				tmp16 = tmp1 | (tmp2 << 4);									\
-				FLAG_V = VFLAG_ADD_8(SRC, REGISTER_A, tmp16);				\
+				INT32 result, r0, r1, carry;													\
+				r0 = REGISTER_A;	\
+				r1 = SRC;		\
+				carry = CFLAG_AS_1();	\
+				result = (r0 & 0x0f) + (r1 & 0x0f) + (carry << 0);							\
+				if (result > 0x09) result += 0x06;										\
+				carry = result > 0x0f;												\
+				result = (r0 & 0xf0) + (r1 & 0xf0) + (carry << 4) + (result & 0x0f);					\
+				FLAG_V = ~(r0 ^ SRC) & (r0 ^ result) & 0x80;							\
+				if (result > 0x9f) result += 0x60;										\
+				FLAG_C = (result > 0xff) ? 0x100 : 0;											\
+				FLAG_N = (result & 0x80);												\
+				FLAG_Z = REGISTER_A = MAKE_UINT_8(result);										\
 			}																\
 			else															\
 			{																\
 				FLAG_C = tmp16 = REGISTER_A + SRC + CFLAG_AS_1();			\
 				FLAG_V = VFLAG_ADD_8(SRC, REGISTER_A, FLAG_C);				\
+				FLAG_N = FLAG_Z = REGISTER_A = MAKE_UINT_8(tmp16);				\
 			}																\
-			FLAG_N = FLAG_Z = REGISTER_A = MAKE_UINT_8(tmp16);				\
 	}
 
 #else
 #define OP_ADC(MODE)														\
 			CLK(CLK_OP + CLK_R16 + CLK_##MODE);								\
 			SRC    = OPER_16_##MODE(cpustate);										\
-			if(!FLAG_D)														\
-			{																\
-				FLAG_C = REGISTER_A + SRC + CFLAG_AS_1();					\
-				FLAG_V = VFLAG_ADD_16(SRC, REGISTER_A, FLAG_C);				\
-				FLAG_Z = REGISTER_A = MAKE_UINT_16(FLAG_C);					\
-				FLAG_N = NFLAG_16(REGISTER_A);								\
-				FLAG_C = CFLAG_16(FLAG_C);									\
-				BREAKOUT;													\
-			}																\
-			else															\
-			{																\
-				unsigned tmp16;												\
-				unsigned tmp1,tmp2,tmp3, tmp4, tmpA, tmpB, tmpC, tmpD;		\
-				tmp1 = REGISTER_A & 0x0F;									\
-				tmp2 = (REGISTER_A >> 4) & 0x0F;							\
-				tmp3 = (REGISTER_A >> 8) & 0x0F;							\
-				tmp4 = (REGISTER_A >> 12) & 0x0F;							\
-				tmpA = SRC & 0x0F;											\
-				tmpB = (SRC >> 4) & 0x0F;									\
-				tmpC = (SRC >> 8) & 0x0F;									\
-				tmpD = (SRC >> 12) & 0x0F;									\
-				tmp1 = tmp1 + tmpA + CFLAG_AS_1();							\
-				tmp2 = tmp2 + tmpB;											\
-				tmp3 = tmp3 + tmpC;											\
-				tmp4 = tmp4 + tmpD;											\
-				FLAG_C = CFLAG_CLEAR;										\
-				if(tmp1 > 9)												\
-				{															\
-					tmp2++;													\
-					tmp1 = ((tmp1 + 6) & 0x0F);								\
-				}															\
-				if(tmp2 > 9)												\
-				{															\
-					tmp3++;													\
-					tmp2 = ((tmp2 + 6) & 0x0F);								\
-				}															\
-				if(tmp3 > 9)												\
-				{															\
-					tmp4++;													\
-					tmp3 = ((tmp3 + 6) & 0x0F);								\
-				}															\
-				if(tmp4 > 9)												\
-				{															\
-					FLAG_C = CFLAG_SET;										\
-					tmp4 = ((tmp4 + 6) & 0x0F);								\
-				}															\
-				tmp16 = tmp1 | (tmp2 << 4) | (tmp3 << 8) | (tmp4 << 12);	\
-				FLAG_V = VFLAG_ADD_16(SRC, REGISTER_A, tmp16);				\
-				FLAG_Z = REGISTER_A = MAKE_UINT_16(tmp16);					\
-				FLAG_N = NFLAG_16(REGISTER_A);								\
-			}
-
+			INT32 result, r0, r1, carry;													\
+			r0 = REGISTER_A;	\
+			r1 = SRC;		\
+			carry = CFLAG_AS_1();	\
+			if (!FLAG_D)	\
+			{	\
+				result = r0 + r1 + carry;	\
+			}	\
+			else	\
+			{	\
+				result = (r0 & 0x000f) + (r1 & 0x000f) + (carry <<  0);	\
+				if(result > 0x0009) result += 0x0006;	\
+				carry = result > 0x000f;	\
+				result = (r0 & 0x00f0) + (r1 & 0x00f0) + (carry <<  4) + (result & 0x000f);	\
+				if(result > 0x009f) result += 0x0060;	\
+				carry = result > 0x00ff;	\
+				result = (r0 & 0x0f00) + (r1 & 0x0f00) + (carry <<  8) + (result & 0x00ff);	\
+				if(result > 0x09ff) result += 0x0600;	\
+				carry = result > 0x0fff;		\
+				result = (r0 & 0xf000) + (r1 & 0xf000) + (carry << 12) + (result & 0x0fff);	\
+			}	\
+			FLAG_V = ~(r0 ^ r1) & (r0 ^ result) & 0x8000;	\
+			FLAG_V >>= 8;	\
+			if (FLAG_D && result > 0x9fff) result += 0x6000;	\
+			FLAG_C = (result > 0xffff) ? 0x100 : 0;	\
+			FLAG_Z = REGISTER_A = MAKE_UINT_16(result);			\
+			FLAG_N = NFLAG_16(REGISTER_A);
 #endif
-
 
 /* M6502   Logical AND with accumulator */
 #undef OP_AND
@@ -1148,6 +1115,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			REGISTER_X = MAKE_UINT_8(REGISTER_X+1);								\
 			REGISTER_Y = MAKE_UINT_8(REGISTER_Y+1);								\
 			REGISTER_A--;								\
+			REGISTER_A &= 0xff; \
 			if ((REGISTER_A&0xff) != 0xff) \
 			{\
 				REGISTER_PC -= 3; \
@@ -1155,6 +1123,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			else \
 			{ \
 				REGISTER_B -= 0x100;\
+				REGISTER_B &= 0xff00; \
 				if ((REGISTER_B & 0xff00) != 0xff00)\
 				{			  \
 					REGISTER_PC -= 3;\
@@ -1170,6 +1139,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			REGISTER_X = MAKE_UINT_16(REGISTER_X+1);								\
 			REGISTER_Y = MAKE_UINT_16(REGISTER_Y+1);								\
 			REGISTER_A--;								\
+			REGISTER_A &= 0xff; \
 			if ((REGISTER_A&0xff) != 0xff) \
 			{\
 				REGISTER_PC -= 3; \
@@ -1177,6 +1147,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			else \
 			{ \
 				REGISTER_B -= 0x100;\
+				REGISTER_B &= 0xff00; \
 				if ((REGISTER_B & 0xff00) != 0xff00)\
 				{			  \
 					REGISTER_PC -= 3;\
@@ -1230,6 +1201,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			REGISTER_X = MAKE_UINT_8(REGISTER_X-1);								\
 			REGISTER_Y = MAKE_UINT_8(REGISTER_Y-1);								\
 			REGISTER_A--;								\
+			REGISTER_A &= 0xff; \
 			if ((REGISTER_A&0xff) != 0xff) \
 			{\
 				REGISTER_PC -= 3; \
@@ -1237,6 +1209,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			else \
 			{ \
 				REGISTER_B -= 0x100;\
+				REGISTER_B &= 0xff00; \
 				if ((REGISTER_B & 0xff00) != 0xff00)\
 				{			  \
 					REGISTER_PC -= 3;\
@@ -1252,6 +1225,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			REGISTER_X = MAKE_UINT_16(REGISTER_X-1);								\
 			REGISTER_Y = MAKE_UINT_16(REGISTER_Y-1);								\
 			REGISTER_A--;								\
+			REGISTER_A &= 0xff; \
 			if ((REGISTER_A&0xff) != 0xff) \
 			{\
 				REGISTER_PC -= 3; \
@@ -1259,6 +1233,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			else \
 			{ \
 				REGISTER_B -= 0x100;\
+				REGISTER_B &= 0xff00; \
 				if ((REGISTER_B & 0xff00) != 0xff00)\
 				{			  \
 					REGISTER_PC -= 3;\
@@ -1530,7 +1505,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 #undef OP_RTL
 #define OP_RTL()															\
 			CLK(6);															\
-			g65816i_jump_24(cpustate, g65816i_pull_24(cpustate)+1)
+			g65816i_jump_24(cpustate, g65816i_pull_24(cpustate))
 
 /* M6502   Return from Subroutine */
 /* Unusual behavior: Gets PC and increments */
@@ -1546,9 +1521,9 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 #define OP_SBC(MODE)														\
 			CLK(CLK_OP + CLK_R8 + CLK_##MODE);								\
 			SRC = OPER_8_##MODE(cpustate);											\
-			FLAG_C = ~FLAG_C;												\
 			if(!FLAG_D)														\
 			{																\
+				FLAG_C = ~FLAG_C;												\
 				FLAG_C = REGISTER_A - SRC - CFLAG_AS_1();					\
 				FLAG_V = VFLAG_SUB_8(SRC, REGISTER_A, FLAG_C);				\
 				FLAG_N = FLAG_Z = REGISTER_A = MAKE_UINT_8(FLAG_C);			\
@@ -1557,93 +1532,53 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 			}																\
 			else															\
 			{																\
-				unsigned tmp16;												\
-				signed tmp1, tmp2, tmpA, tmpB;							\
-				DST = CFLAG_AS_1();											\
-				tmp1 = REGISTER_A & 0x0F;									\
-				tmp2 = (REGISTER_A >> 4) & 0x0F;							\
-				tmpA = SRC&0x0F;											\
-				tmpB = (SRC >> 4) & 0x0F;									\
-				tmp1 = tmp1 - tmpA - DST;									\
-				tmp2 = tmp2 - tmpB;											\
-				FLAG_C = CFLAG_CLEAR;										\
-				if(tmp1 < 0)												\
-					tmp2--;													\
-				if((tmp1 > 0x09) || (tmp1 < 0 ))							\
-				{															\
-					tmp1 = ((tmp1 + 10) & 0x0F);							\
-				}															\
-				if(!(tmp2 < 0))												\
-					FLAG_C = CFLAG_SET;										\
-				if((tmp2 > 0x09) || (tmp2 < 0))								\
-				{															\
-						tmp2=((tmp2 + 10) & 0x0F);							\
-				}															\
-				tmp16 = tmp1 | (tmp2 << 4);									\
-				FLAG_V = VFLAG_SUB_8(SRC, REGISTER_A, tmp16);				\
-				FLAG_N = FLAG_Z = REGISTER_A = MAKE_UINT_8(tmp16);			\
+				INT32 result, r0, r1, carry;													\
+				r0 = REGISTER_A;	\
+				r1 = SRC;		\
+				r1 ^= 0xff;		\
+				carry = CFLAG_AS_1();	\
+				result = (r0 & 0x0f) + (r1 & 0x0f) + (carry << 0);	\
+				if (result <= 0x0f) result -= 0x06;	\
+				carry = result > 0x0f;	\
+				result = (r0 & 0xf0) + (r1 & 0xf0) + (carry << 4) + (result & 0x0f);	\
+				FLAG_V = ~(r0 ^ r1) & (r0 ^ result) & 0x80;	\
+				if (result <= 0xff) result -= 0x60;	\
+    				FLAG_C = (result > 0xff) ? 0x100 : 0;											\
+				FLAG_N = (result & 0x80);												\
+				FLAG_Z = REGISTER_A = MAKE_UINT_8(result);										\
 			}
 #else
 #define OP_SBC(MODE)														\
 			CLK(CLK_OP + CLK_R16 + CLK_##MODE);								\
-			SRC = OPER_16_##MODE(cpustate);											\
-			FLAG_C = ~FLAG_C;												\
-			if(!FLAG_D)														\
-			{																\
-				FLAG_C = REGISTER_A - SRC - CFLAG_AS_1();					\
-				FLAG_V = VFLAG_SUB_16(SRC, REGISTER_A, FLAG_C);				\
-				FLAG_Z = REGISTER_A = MAKE_UINT_16(FLAG_C);					\
-				FLAG_N = NFLAG_16(REGISTER_A);								\
-				FLAG_C = ~CFLAG_16(FLAG_C);									\
-				BREAKOUT;													\
-			}																\
-			else															\
-			{																\
-				unsigned tmp16;												\
-				signed tmp1,tmp2,tmp3, tmp4, tmpA, tmpB, tmpC, tmpD;		\
-				DST = CFLAG_AS_1();											\
-				tmp1 = REGISTER_A & 0x0F;									\
-				tmp2 = (REGISTER_A >> 4) & 0x0F;							\
-				tmp3 = (REGISTER_A >> 8) & 0x0F;							\
-				tmp4 = (REGISTER_A >> 12) & 0x0F;							\
-				tmpA = SRC & 0x0F;											\
-				tmpB = (SRC >> 4) & 0x0F;									\
-				tmpC = (SRC >> 8) & 0x0F;									\
-				tmpD = (SRC >> 12) & 0x0F;									\
-				tmp1 = tmp1 - tmpA - CFLAG_AS_1();							\
-				tmp2 = tmp2 - tmpB;											\
-				tmp3 = tmp3 - tmpC;											\
-				tmp4 = tmp4 - tmpD;											\
-				FLAG_C = CFLAG_CLEAR;										\
-				if(tmp1 < 0)												\
-					tmp2--;													\
-				if((tmp1 > 0x09) || (tmp1 < 0 ))							\
-				{															\
-					tmp1 = ((tmp1 + 10) & 0x0F);							\
-				}															\
-				if(tmp2 < 0)												\
-					tmp3--;													\
-				if((tmp2 > 0x09) || (tmp2 < 0))								\
-				{															\
-						tmp2=((tmp2 + 10) & 0x0F);							\
-				}															\
-				if(tmp3 < 0)												\
-					tmp4--;													\
-				if((tmp3 > 0x09) || (tmp3 < 0 ))							\
-				{															\
-					tmp3 = ((tmp3 + 10) & 0x0F);							\
-				}															\
-				if(!(tmp4 < 0))												\
-					FLAG_C = CFLAG_SET;										\
-				if((tmp4 > 0x09) || (tmp4 < 0))								\
-				{															\
-					tmp4=((tmp4 + 10) & 0x0F);								\
-				}															\
-				tmp16 = tmp1 | (tmp2 << 4) | (tmp3 << 8) | (tmp4 << 12);	\
-				FLAG_V = VFLAG_SUB_16(SRC, REGISTER_A, tmp16);				\
-				FLAG_Z = REGISTER_A = MAKE_UINT_16(tmp16);					\
-				FLAG_N = NFLAG_16(REGISTER_A);								\
-			}
+			SRC    = OPER_16_##MODE(cpustate);										\
+			INT32 result, r0, r1, carry;													\
+			r0 = REGISTER_A;	\
+			r1 = SRC;		\
+			r1 ^= 0xffff;		\
+			carry = CFLAG_AS_1();	\
+			if (!FLAG_D)	\
+			{	\
+				result = r0 + r1 + carry;	\
+			}	\
+			else	\
+			{	\
+				result = (r0 & 0x000f) + (r1 & 0x000f) + (carry <<  0);	\
+				if(result <= 0x000f) result -= 0x0006;	\
+				carry = result > 0x000f;	\
+				result = (r0 & 0x00f0) + (r1 & 0x00f0) + (carry <<  4) + (result & 0x000f);	\
+				if(result <= 0x00ff) result -= 0x0060;	\
+				carry = result > 0x00ff;	\
+				result = (r0 & 0x0f00) + (r1 & 0x0f00) + (carry <<  8) + (result & 0x00ff);	\
+				if(result <= 0x0fff) result -= 0x0600;	\
+				carry = result > 0x0fff;		\
+				result = (r0 & 0xf000) + (r1 & 0xf000) + (carry << 12) + (result & 0x0fff);	\
+			}	\
+			FLAG_V = ~(r0 ^ r1) & (r0 ^ result) & 0x8000;	\
+			FLAG_V >>= 8;	\
+			if (FLAG_D && result <= 0xffff) result -= 0x6000;	\
+			FLAG_C = (result > 0xffff) ? 0x100 : 0;	\
+			FLAG_Z = REGISTER_A = MAKE_UINT_16(result);			\
+			FLAG_N = NFLAG_16(REGISTER_A);
 #endif
 
 
@@ -1899,7 +1834,7 @@ INLINE uint EA_SIY(g65816i_cpu_struct *cpustate)   {return MAKE_UINT_16(read_16_
 #define OP_TSB(MODE)														\
 			CLK(CLK_OP + CLK_RMW16 + CLK_W_##MODE);							\
 			DST    = EA_##MODE(cpustate);											\
-	  		FLAG_Z = read_16_##MODE(DST);									\
+			FLAG_Z = read_16_##MODE(DST);									\
 			write_16_##MODE(DST, FLAG_Z | REGISTER_A);							\
 			FLAG_Z &= REGISTER_A
 #endif
@@ -2353,9 +2288,9 @@ TABLE_FUNCTION(uint, get_reg, (g65816i_cpu_struct *cpustate, int regnum))
 		case G65816_A: return REGISTER_B | REGISTER_A;
 		case G65816_X: return REGISTER_X;
 		case G65816_Y: return REGISTER_Y;
-		case REG_GENSP: return REGISTER_S;
+		case STATE_GENSP: return REGISTER_S;
 		case G65816_S: return REGISTER_S;
-		case REG_GENPC: return REGISTER_PC;
+		case STATE_GENPC: return REGISTER_PC;
 		case G65816_PC: return REGISTER_PC;
 		case G65816_PB: return REGISTER_PB >> 16;
 		case G65816_DB: return REGISTER_DB >> 16;
@@ -2363,7 +2298,7 @@ TABLE_FUNCTION(uint, get_reg, (g65816i_cpu_struct *cpustate, int regnum))
 		case G65816_P: return g65816i_get_reg_p(cpustate);
 		case G65816_NMI_STATE: return LINE_NMI;
 		case G65816_IRQ_STATE: return LINE_IRQ;
-		case REG_GENPCBASE: return REGISTER_PPC;
+		case STATE_GENPCBASE: return REGISTER_PPC;
 	}
 	return 0;
 }
@@ -2374,11 +2309,11 @@ TABLE_FUNCTION(void, set_reg, (g65816i_cpu_struct *cpustate, int regnum, uint va
 {
 	switch(regnum)
 	{
-		case REG_GENPC: case G65816_PC: REGISTER_PC = MAKE_UINT_16(val); break;
+		case STATE_GENPC: case G65816_PC: REGISTER_PC = MAKE_UINT_16(val); break;
 #if FLAG_SET_E
-		case REG_GENSP: case G65816_S: REGISTER_S = MAKE_UINT_8(val) | 0x100; break;
+		case STATE_GENSP: case G65816_S: REGISTER_S = MAKE_UINT_8(val) | 0x100; break;
 #else
-		case REG_GENSP: case G65816_S: REGISTER_S = MAKE_UINT_16(val); break;
+		case STATE_GENSP: case G65816_S: REGISTER_S = MAKE_UINT_16(val); break;
 #endif
 		case G65816_P: g65816i_set_reg_p(cpustate, val); break;
 #if FLAG_SET_M
@@ -2397,7 +2332,7 @@ TABLE_FUNCTION(void, set_reg, (g65816i_cpu_struct *cpustate, int regnum, uint va
 		case G65816_PB: REGISTER_PB = MAKE_UINT_8(val); break;
 		case G65816_NMI_STATE: FTABLE_SET_LINE(cpustate, G65816_LINE_NMI, val == 0 ? CLEAR_LINE : ASSERT_LINE); break;
 		case G65816_IRQ_STATE: FTABLE_SET_LINE(cpustate, G65816_LINE_IRQ, val == 0 ? CLEAR_LINE : ASSERT_LINE); break;
-	 }
+	}
 }
 
 

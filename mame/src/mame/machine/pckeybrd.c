@@ -16,12 +16,8 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/pckeybrd.h"
-
-#ifdef MESS
-#include "inputx.h"
-#endif /* MESS */
 
 /* AT keyboard documentation comes from www.beyondlogic.org and HelpPC documentation */
 
@@ -308,16 +304,14 @@ static const extended_keyboard_code at_keyboard_extended_codes_set_2_3[]=
 
 static void at_keyboard_queue_insert(UINT8 data);
 
-#ifdef MESS
 static int at_keyboard_queue_size(void);
-static int at_keyboard_queue_chars(const unicode_char *text, size_t text_len);
-static int at_keyboard_accept_char(unicode_char ch);
-static int at_keyboard_charqueue_empty(void);
-#endif
+static int at_keyboard_queue_chars(running_machine &machine, const unicode_char *text, size_t text_len);
+static int at_keyboard_accept_char(running_machine &machine, unicode_char ch);
+static int at_keyboard_charqueue_empty(running_machine &machine);
 
 
 
-void at_keyboard_init(running_machine *machine, AT_KEYBOARD_TYPE type)
+void at_keyboard_init(running_machine &machine, AT_KEYBOARD_TYPE type)
 {
 	int i;
 
@@ -331,38 +325,37 @@ void at_keyboard_init(running_machine *machine, AT_KEYBOARD_TYPE type)
 	keyboard.input_state = 0;
 	memset(&keyboard.make[0], 0, sizeof(UINT8)*128);
 	/* set default led state */
-	set_led_status(2, 0);
-	set_led_status(0, 0);
-	set_led_status(1, 0);
+	set_led_status(machine, 2, 0);
+	set_led_status(machine, 0, 0);
+	set_led_status(machine, 1, 0);
 
 	keyboard.scan_code_set = 3;
 
 	/* locate the keyboard ports */
 	for (i = 0; i < sizeof(keyboard.ports) / sizeof(keyboard.ports[0]); i++)
 	{
-		char buf[40];
-		sprintf(buf, "pc_keyboard_%d", i);
-		keyboard.ports[i] = input_port_by_tag(machine->portconfig, buf);
+		astring buf;
+		buf.printf("pc_keyboard_%d", i);
+		keyboard.ports[i] = machine.port(buf);
 	}
 
-#ifdef MESS
-	inputx_setup_natural_keyboard(at_keyboard_queue_chars,
+	inputx_setup_natural_keyboard(machine,
+		at_keyboard_queue_chars,
 		at_keyboard_accept_char,
 		at_keyboard_charqueue_empty);
-#endif
 }
 
 
 
-void at_keyboard_reset(void)
+void at_keyboard_reset(running_machine &machine)
 {
 	keyboard.head = keyboard.tail = 0;
 	keyboard.input_state = 0;
 	memset(&keyboard.make[0], 0, sizeof(UINT8)*128);
 	/* set default led state */
-	set_led_status(2, 0);
-	set_led_status(0, 0);
-	set_led_status(1, 0);
+	set_led_status(machine, 2, 0);
+	set_led_status(machine, 0, 0);
+	set_led_status(machine, 1, 0);
 
 	keyboard.scan_code_set=1;
 	at_keyboard_queue_insert(0xaa);
@@ -388,7 +381,6 @@ static void at_keyboard_queue_insert(UINT8 data)
 }
 
 
-#ifdef MESS
 static int at_keyboard_queue_size(void)
 {
 	int queue_size;
@@ -397,7 +389,6 @@ static int at_keyboard_queue_size(void)
 		queue_size += sizeof(keyboard.queue) / sizeof(keyboard.queue[0]);
 	return queue_size;
 }
-#endif
 
 
 /* add a list of codes to the keyboard buffer */
@@ -601,7 +592,7 @@ void at_keyboard_polling(void)
 						at_keyboard_extended_scancode_insert(i,0);
 					}
 				}
-		}
+			}
 	}
 }
 
@@ -675,7 +666,7 @@ Note:   each command is acknowledged by FAh (ACK), if not mentioned otherwise.
 SeeAlso: #P046
 */
 
-void at_keyboard_write(UINT8 data)
+void at_keyboard_write(running_machine &machine, UINT8 data)
 {
 	if (LOG_KEYBOARD)
 		logerror("keyboard write %.2x\n",data);
@@ -765,7 +756,7 @@ void at_keyboard_write(UINT8 data)
 			if (data & 0x080)
 			{
 				/* command received instead of code - execute command */
-				at_keyboard_write(data);
+				at_keyboard_write(machine, data);
 			}
 			else
 			{
@@ -777,9 +768,9 @@ void at_keyboard_write(UINT8 data)
 
 				/* led's in same order as my keyboard leds. */
 				/* num lock, caps lock, scroll lock */
-				set_led_status(2, (data & 0x01));
-				set_led_status(0, ((data & 0x02)>>1));
-				set_led_status(1, ((data & 0x04)>>2));
+				set_led_status(machine, 2, (data & 0x01));
+				set_led_status(machine, 0, ((data & 0x02)>>1));
+				set_led_status(machine, 1, ((data & 0x04)>>2));
 
 			}
 			break;
@@ -790,7 +781,7 @@ void at_keyboard_write(UINT8 data)
 			if (data & 0x080)
 			{
 				/* command received instead of code - execute command */
-				at_keyboard_write(data);
+				at_keyboard_write(machine, data);
 			}
 			else
 			{
@@ -820,7 +811,7 @@ void at_keyboard_write(UINT8 data)
 			if (data & 0x080)
 			{
 				/* command received instead of code - execute command */
-				at_keyboard_write(data);
+				at_keyboard_write(machine, data);
 			}
 			else
 			{
@@ -832,7 +823,6 @@ void at_keyboard_write(UINT8 data)
 	}
 }
 
-#ifdef MESS
 /***************************************************************************
   unicode_char_to_at_keycode
 ***************************************************************************/
@@ -978,7 +968,7 @@ static UINT8 unicode_char_to_at_keycode(unicode_char ch)
   at_keyboard_queue_chars
 ***************************************************************************/
 
-static int at_keyboard_queue_chars(const unicode_char *text, size_t text_len)
+static int at_keyboard_queue_chars(running_machine &machine, const unicode_char *text, size_t text_len)
 {
 	int i;
 	UINT8 b;
@@ -1247,18 +1237,17 @@ INPUT_PORTS_END
   Inputx stuff
 ***************************************************************************/
 
-static int at_keyboard_accept_char(unicode_char ch)
+static int at_keyboard_accept_char(running_machine &machine, unicode_char ch)
 {
 	return unicode_char_to_at_keycode(ch) != 0;
 }
 
 
 
-static int at_keyboard_charqueue_empty(void)
+static int at_keyboard_charqueue_empty(running_machine &machine)
 {
 	return at_keyboard_queue_size() == 0;
 }
-#endif /* MESS */
 
 
 

@@ -9,10 +9,10 @@
 #define ASIC65_GUARDIANS	2
 #define ASIC65_ROMBASED		3
 
-void asic65_config(running_machine *machine, int asictype);
-void asic65_reset(running_machine *machine, int state);
+void asic65_config(running_machine &machine, int asictype);
+void asic65_reset(running_machine &machine, int state);
 WRITE16_HANDLER( asic65_data_w );
 READ16_HANDLER( asic65_r );
 READ16_HANDLER( asic65_io_r );
 
-MACHINE_DRIVER_EXTERN( asic65 );
+MACHINE_CONFIG_EXTERN( asic65 );

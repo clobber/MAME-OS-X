@@ -31,28 +31,50 @@ dy_5.bin
 dy_6.bin (near Z80)
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
 
-static tilemap *bg_tilemap,*top_tilemap;
-static int ay_data;
+
+class dynadice_state : public driver_device
+{
+public:
+	dynadice_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	/* memory pointers */
+	UINT8 *  m_videoram;
+//  UINT8 *  m_nvram;     // currently this uses generic nvram handling
+//  UINT8 *  m_paletteram;    // currently this uses generic palette handling
+
+	/* video-related */
+	tilemap_t  *m_bg_tilemap;
+	tilemap_t  *m_top_tilemap;
+
+	/* misc */
+	int      m_ay_data;
+};
+
 
 static WRITE8_HANDLER( dynadice_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
-	tilemap_mark_all_tiles_dirty(top_tilemap);
+	dynadice_state *state = space->machine().driver_data<dynadice_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
+	state->m_top_tilemap->mark_all_dirty();
 }
 
 static WRITE8_HANDLER( sound_data_w )
 {
-	ay_data = data;
+	dynadice_state *state = space->machine().driver_data<dynadice_state>();
+	state->m_ay_data = data;
 }
 
 static WRITE8_DEVICE_HANDLER( sound_control_w )
 {
+	dynadice_state *state = device->machine().driver_data<dynadice_state>();
 /*
     AY 3-8910 :
 
@@ -62,18 +84,21 @@ static WRITE8_DEVICE_HANDLER( sound_control_w )
     D3 - /Reset
 
 */
-	if ((data &7)==7) ay8910_address_w(device,0,ay_data);
-	if ((data &7)==6) ay8910_data_w(device,0,ay_data);
+	if ((data & 7) == 7)
+		ay8910_address_w(device, 0, state->m_ay_data);
+
+	if ((data & 7) == 6)
+		ay8910_data_w(device, 0, state->m_ay_data);
 }
 
 
-static ADDRESS_MAP_START( dynadice_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dynadice_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(dynadice_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4000, 0x40ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x2000, 0x23ff) AM_RAM_WRITE(dynadice_videoram_w) AM_BASE_MEMBER(dynadice_state, m_videoram)
+	AM_RANGE(0x4000, 0x40ff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynadice_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( dynadice_io_map, AS_IO, 8 )
 	AM_RANGE(0x50, 0x50) AM_READ_PORT("IN0")
 	AM_RANGE(0x51, 0x51) AM_READ_PORT("IN1")
 	AM_RANGE(0x52, 0x52) AM_READ_PORT("DSW")
@@ -82,17 +107,17 @@ static ADDRESS_MAP_START( dynadice_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x70, 0x77) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynadice_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( dynadice_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynadice_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( dynadice_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)
 	AM_RANGE(0x01, 0x01) AM_WRITE(soundlatch_clear_w)
 	AM_RANGE(0x02, 0x02) AM_WRITE(sound_data_w)
-	AM_RANGE(0x03, 0x03) AM_DEVWRITE("ay", sound_control_w)
+	AM_RANGE(0x03, 0x03) AM_DEVWRITE("aysnd", sound_control_w)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( dynadice )
@@ -166,65 +191,85 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_tile_info )
 {
-	int code=videoram[tile_index];
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+	int code = state->m_videoram[tile_index];
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
 static VIDEO_START( dynadice )
 {
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+
 	/* pacman - style videoram layout */
-	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,32,32);
-	top_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_cols,8,8,2,32);
-	tilemap_set_scrollx(bg_tilemap, 0, -16 );
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_top_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_cols, 8, 8, 2, 32);
+	state->m_bg_tilemap->set_scrollx(0, -16);
 }
 
-static VIDEO_UPDATE( dynadice )
+static SCREEN_UPDATE_IND16( dynadice )
 {
-	rectangle myclip=*cliprect;
-	myclip.max_x=15;
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	tilemap_draw(bitmap,&myclip,top_tilemap,0,0);
+	dynadice_state *state = screen.machine().driver_data<dynadice_state>();
+	rectangle myclip = cliprect;
+	myclip.max_x = 15;
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	state->m_top_tilemap->draw(bitmap, myclip, 0, 0);
 	return 0;
 }
 
 static PALETTE_INIT( dynadice )
 {
 	int i;
-	for(i=0;i<8;i++)
-		palette_set_color_rgb(machine,i,pal1bit(i >> 1),pal1bit(i >> 2),pal1bit(i >> 0));
+	for(i = 0; i < 8; i++)
+		palette_set_color_rgb(machine, i, pal1bit(i >> 1), pal1bit(i >> 2), pal1bit(i >> 0));
 }
 
-static MACHINE_DRIVER_START( dynadice )
-	MDRV_CPU_ADD("maincpu", 8080,18432000/8)
-	MDRV_CPU_PROGRAM_MAP(dynadice_map)
-	MDRV_CPU_IO_MAP(dynadice_io_map)
+static MACHINE_START( dynadice )
+{
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+	state->save_item(NAME(state->m_ay_data));
+}
 
-	MDRV_CPU_ADD("audiocpu", Z80,18432000/6)
-	MDRV_CPU_PROGRAM_MAP(dynadice_sound_map)
-	MDRV_CPU_IO_MAP(dynadice_sound_io_map)
+static MACHINE_RESET( dynadice )
+{
+	dynadice_state *state = machine.driver_data<dynadice_state>();
+	state->m_ay_data = 0;
+}
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+static MACHINE_CONFIG_START( dynadice, dynadice_state )
+
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", I8080,18432000/8)
+	MCFG_CPU_PROGRAM_MAP(dynadice_map)
+	MCFG_CPU_IO_MAP(dynadice_io_map)
+
+	MCFG_CPU_ADD("audiocpu", Z80,18432000/6)
+	MCFG_CPU_PROGRAM_MAP(dynadice_sound_map)
+	MCFG_CPU_IO_MAP(dynadice_sound_io_map)
+
+	MCFG_MACHINE_START(dynadice)
+	MCFG_MACHINE_RESET(dynadice)
+
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256+16, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 34*8-1, 3*8, 28*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(256+16, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 34*8-1, 3*8, 28*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(dynadice)
 
-	MDRV_GFXDECODE(dynadice)
-	MDRV_PALETTE_LENGTH(8)
-	MDRV_PALETTE_INIT(dynadice)
+	MCFG_GFXDECODE(dynadice)
+	MCFG_PALETTE_LENGTH(8)
+	MCFG_PALETTE_INIT(dynadice)
 
-	MDRV_VIDEO_START(dynadice)
-	MDRV_VIDEO_UPDATE(dynadice)
+	MCFG_VIDEO_START(dynadice)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("aysnd", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 ROM_START( dynadice )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -247,19 +292,18 @@ ROM_END
 
 static DRIVER_INIT( dynadice )
 {
-	int i,j;
-	UINT8 *usr1 = memory_region(machine, "user1");
-	UINT8 *cpu2 = memory_region(machine, "audiocpu");
-	UINT8 *gfx1 = memory_region(machine, "gfx1");
-	UINT8 *gfx2 = memory_region(machine, "gfx2");
+	int i, j;
+	UINT8 *usr1 = machine.region("user1")->base();
+	UINT8 *cpu2 = machine.region("audiocpu")->base();
+	UINT8 *gfx1 = machine.region("gfx1")->base();
+	UINT8 *gfx2 = machine.region("gfx2")->base();
 
-	cpu2[0x0b]=0x23;	/* bug in game code  Dec HL -> Inc HL*/
+	cpu2[0x0b] = 0x23;	/* bug in game code  Dec HL -> Inc HL*/
 
 	/* 1bpp tiles -> 3bpp tiles (dy_5.bin  contains bg/fg color data for each tile line) */
-	for(i=0;i<0x800;i++)
-		for(j=0;j<8;j++)
-			gfx2[(i<<3)+j]=(gfx1[i]&(0x80>>j))?(usr1[i]&7):(usr1[i]>>4);
-
+	for (i = 0; i < 0x800; i++)
+		for (j = 0; j < 8; j++)
+			gfx2[(i << 3) + j] = (gfx1[i] & (0x80 >> j)) ? (usr1[i] & 7) : (usr1[i] >> 4);
 }
 
-GAME( 19??, dynadice, 0, dynadice, dynadice, dynadice, ROT90, "<unknown>", "Dynamic Dice", 0 )
+GAME( 19??, dynadice, 0, dynadice, dynadice, dynadice, ROT90, "<unknown>", "Dynamic Dice", GAME_SUPPORTS_SAVE )

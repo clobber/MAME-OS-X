@@ -1,7 +1,5 @@
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "dac.h"
-#include <math.h>
 
 
 /* default to 4x oversampling */
@@ -18,13 +16,11 @@ struct _dac_state
 };
 
 
-INLINE dac_state *get_safe_token(const device_config *device)
+INLINE dac_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_DAC);
-	return (dac_state *)device->token;
+	assert(device->type() == DAC);
+	return (dac_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -38,7 +34,7 @@ static STREAM_UPDATE( DAC_update )
 }
 
 
-void dac_data_w(const device_config *device, UINT8 data)
+void dac_data_w(device_t *device, UINT8 data)
 {
 	dac_state *info = get_safe_token(device);
 	INT16 out = info->UnsignedVolTable[data];
@@ -46,13 +42,13 @@ void dac_data_w(const device_config *device, UINT8 data)
 	if (info->output != out)
 	{
 		/* update the output buffer before changing the registers */
-		stream_update(info->channel);
+		info->channel->update();
 		info->output = out;
 	}
 }
 
 
-void dac_signed_data_w(const device_config *device, UINT8 data)
+void dac_signed_data_w(device_t *device, UINT8 data)
 {
 	dac_state *info = get_safe_token(device);
 	INT16 out = info->SignedVolTable[data];
@@ -60,13 +56,13 @@ void dac_signed_data_w(const device_config *device, UINT8 data)
 	if (info->output != out)
 	{
 		/* update the output buffer before changing the registers */
-		stream_update(info->channel);
+		info->channel->update();
 		info->output = out;
 	}
 }
 
 
-void dac_data_16_w(const device_config *device, UINT16 data)
+void dac_data_16_w(device_t *device, UINT16 data)
 {
 	dac_state *info = get_safe_token(device);
 	INT16 out = data >> 1;		/* range      0..32767 */
@@ -74,13 +70,13 @@ void dac_data_16_w(const device_config *device, UINT16 data)
 	if (info->output != out)
 	{
 		/* update the output buffer before changing the registers */
-		stream_update(info->channel);
+		info->channel->update();
 		info->output = out;
 	}
 }
 
 
-void dac_signed_data_16_w(const device_config *device, UINT16 data)
+void dac_signed_data_16_w(device_t *device, UINT16 data)
 {
 	dac_state *info = get_safe_token(device);
 	INT16 out = (INT32)data - (INT32)0x08000;	/* range -32768..32767 */
@@ -89,9 +85,16 @@ void dac_signed_data_16_w(const device_config *device, UINT16 data)
 	if (info->output != out)
 	{
 		/* update the output buffer before changing the registers */
-		stream_update(info->channel);
+		info->channel->update();
 		info->output = out;
 	}
+}
+
+
+INT16 dac_output(device_t *device)
+{
+	dac_state *info = get_safe_token(device);
+	return info->output;
 }
 
 
@@ -114,10 +117,10 @@ static DEVICE_START( dac )
 
 	DAC_build_voltable(info);
 
-	info->channel = stream_create(device,0,1,device->clock ? device->clock : DEFAULT_SAMPLE_RATE,info,DAC_update);
+	info->channel = device->machine().sound().stream_alloc(*device,0,1,device->clock() ? device->clock() : DEFAULT_SAMPLE_RATE,info,DAC_update);
 	info->output = 0;
 
-	state_save_register_device_item(device, 0, info->output);
+	device->save_item(NAME(info->output));
 }
 
 
@@ -158,3 +161,6 @@ DEVICE_GET_INFO( dac )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
+
+
+DEFINE_LEGACY_SOUND_DEVICE(DAC, dac);

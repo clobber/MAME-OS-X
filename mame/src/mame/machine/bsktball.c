@@ -4,163 +4,167 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "bsktball.h"
-
-static int LD1=0;
-static int LD2=0;
-static UINT32 NMION = 0;
+#include "emu.h"
+#include "includes/bsktball.h"
 
 /***************************************************************************
-bsktball_nmion_w
+    bsktball_nmion_w
 ***************************************************************************/
 WRITE8_HANDLER( bsktball_nmion_w )
 {
-	NMION = offset & 0x01;
+	bsktball_state *state = space->machine().driver_data<bsktball_state>();
+	state->m_nmi_on = offset & 0x01;
 }
 
 /***************************************************************************
-bsktball_interrupt
+    bsktball_interrupt
 ***************************************************************************/
 /* NMI every 32V, IRQ every VBLANK */
-INTERRUPT_GEN( bsktball_interrupt )
+TIMER_DEVICE_CALLBACK( bsktball_scanline )
 {
-	static int i256V=0;
+	bsktball_state *state = timer.machine().driver_data<bsktball_state>();
+	int scanline = param;
 
-	/* We mod by 8 because we're interrupting 8x per frame, 1 per 32V */
-	i256V=(i256V+1) % 8;
-
-	if (i256V==0)
-		cpu_set_input_line(device, 0, HOLD_LINE);
-	else if (NMION)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if(scanline == 0) // vblank irq
+		cputag_set_input_line(timer.machine(), "maincpu", 0, HOLD_LINE);
+	else if(((scanline % 28) == 0) && (state->m_nmi_on)) // 32v timer irq
+		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
+
 /***************************************************************************
-bsktball_ld_w
+    bsktball_ld_w
 ***************************************************************************/
 
 WRITE8_HANDLER( bsktball_ld1_w )
 {
-	LD1 = (offset & 0x01);
+	bsktball_state *state = space->machine().driver_data<bsktball_state>();
+	state->m_ld1 = (offset & 0x01);
 }
 
 WRITE8_HANDLER( bsktball_ld2_w )
 {
-	LD2 = (offset & 0x01);
+	bsktball_state *state = space->machine().driver_data<bsktball_state>();
+	state->m_ld2 = (offset & 0x01);
 }
 
 
 /***************************************************************************
-bsktball_in0_r
+    bsktball_in0_r
 ***************************************************************************/
 
 READ8_HANDLER( bsktball_in0_r )
 {
-	static int DR0=0;		/* PL2 H DIR */
-	static int DR1=0;		/* PL2 V DIR */
-	static int DR2=0;		/* PL1 H DIR */
-	static int DR3=0;		/* PL1 V DIR */
-
-	static int last_p1_horiz=0;
-	static int last_p1_vert=0;
-	static int last_p2_horiz=0;
-	static int last_p2_vert=0;
-
+	bsktball_state *state = space->machine().driver_data<bsktball_state>();
 	int p1_horiz;
 	int p1_vert;
 	int p2_horiz;
 	int p2_vert;
 	int temp;
 
-	p1_horiz = input_port_read(space->machine, "TRACK0_X");
-	p1_vert  = input_port_read(space->machine, "TRACK0_Y");
-	p2_horiz = input_port_read(space->machine, "TRACK1_X");
-	p2_vert  = input_port_read(space->machine, "TRACK1_Y");
+	p1_horiz = input_port_read(space->machine(), "TRACK0_X");
+	p1_vert  = input_port_read(space->machine(), "TRACK0_Y");
+	p2_horiz = input_port_read(space->machine(), "TRACK1_X");
+	p2_vert  = input_port_read(space->machine(), "TRACK1_Y");
 
 	/* Set direction bits */
 
 	/* P1 H DIR */
-	if (p1_horiz > last_p1_horiz)
+	if (p1_horiz > state->m_last_p1_horiz)
 	{
-		if ((p1_horiz-last_p1_horiz) > 128)		DR2=0x40;
-		else									DR2=0;
+		if ((p1_horiz - state->m_last_p1_horiz) > 128)
+			state->m_dir2 = 0x40;
+		else
+			state->m_dir2 = 0;
 	}
-	else if (p1_horiz < last_p1_horiz)
+	else if (p1_horiz < state->m_last_p1_horiz)
 	{
-		if ((last_p1_horiz-p1_horiz) > 128)		DR2=0;
-		else									DR2=0x40;
+		if ((state->m_last_p1_horiz - p1_horiz) > 128)
+			state->m_dir2 = 0;
+		else
+			state->m_dir2 = 0x40;
 	}
 
 	/* P1 V DIR */
-	if (p1_vert > last_p1_vert)
+	if (p1_vert > state->m_last_p1_vert)
 	{
-		if ((p1_vert-last_p1_vert) > 128)		DR3=0;
-		else									DR3=0x80;
+		if ((p1_vert - state->m_last_p1_vert) > 128)
+			state->m_dir3 = 0;
+		else
+			state->m_dir3 = 0x80;
 	}
-	else if (p1_vert < last_p1_vert)
+	else if (p1_vert < state->m_last_p1_vert)
 	{
-		if ((last_p1_vert-p1_vert) > 128)		DR3=0x80;
-		else									DR3=0;
+		if ((state->m_last_p1_vert - p1_vert) > 128)
+			state->m_dir3 = 0x80;
+		else
+			state->m_dir3 = 0;
 	}
 
 	/* P2 H DIR */
-	if (p2_horiz > last_p2_horiz)
+	if (p2_horiz > state->m_last_p2_horiz)
 	{
-		if ((p2_horiz-last_p2_horiz) > 128)		DR0=0x10;
-		else									DR0=0;
+		if ((p2_horiz - state->m_last_p2_horiz) > 128)
+			state->m_dir0 = 0x10;
+		else
+			state->m_dir0 = 0;
 	}
-	else if (p2_horiz < last_p2_horiz)
+	else if (p2_horiz < state->m_last_p2_horiz)
 	{
-		if ((last_p2_horiz-p2_horiz) > 128)		DR0=0;
-		else									DR0=0x10;
+		if ((state->m_last_p2_horiz - p2_horiz) > 128)
+			state->m_dir0 = 0;
+		else
+			state->m_dir0 = 0x10;
 	}
 
 	/* P2 V DIR */
-	if (p2_vert > last_p2_vert)
+	if (p2_vert > state->m_last_p2_vert)
 	{
-		if ((p2_vert-last_p2_vert) > 128)		DR1=0;
-		else									DR1=0x20;
+		if ((p2_vert - state->m_last_p2_vert) > 128)
+			state->m_dir1 = 0;
+		else
+			state->m_dir1 = 0x20;
 	}
-	else if (p2_vert < last_p2_vert)
+	else if (p2_vert < state->m_last_p2_vert)
 	{
-		if ((last_p2_vert-p2_vert) > 128)		DR1=0x20;
-		else									DR1=0;
+		if ((state->m_last_p2_vert - p2_vert) > 128)
+			state->m_dir1 = 0x20;
+		else
+			state->m_dir1 = 0;
 	}
 
-
-	last_p1_horiz = p1_horiz;
-	last_p1_vert  = p1_vert;
-	last_p2_horiz = p2_horiz;
-	last_p2_vert  = p2_vert;
+	state->m_last_p1_horiz = p1_horiz;
+	state->m_last_p1_vert  = p1_vert;
+	state->m_last_p2_horiz = p2_horiz;
+	state->m_last_p2_vert  = p2_vert;
 
 	/* D0-D3 = Plyr 1 Horiz, D4-D7 = Plyr 1 Vert */
-	if ((LD1) & (LD2))
+	if ((state->m_ld1) & (state->m_ld2))
 	{
-		return ((p1_horiz & 0x0F) | ((p1_vert << 4) & 0xF0));
+		return ((p1_horiz & 0x0f) | ((p1_vert << 4) & 0xf0));
 	}
 	/* D0-D3 = Plyr 2 Horiz, D4-D7 = Plyr 2 Vert */
-	else if (LD2)
+	else if (state->m_ld2)
 	{
-		return ((p2_horiz & 0x0F) | ((p2_vert << 4) & 0xF0));
+		return ((p2_horiz & 0x0f) | ((p2_vert << 4) & 0xf0));
 	}
 	else
 	{
-		temp = input_port_read(space->machine, "IN0") & 0x0F;
+		temp = input_port_read(space->machine(), "IN0") & 0x0f;
 
-		return (temp | DR0 | DR1 | DR2 | DR3);
+		return (temp | state->m_dir0 | state->m_dir1 | state->m_dir2 | state->m_dir3);
 	}
 }
 
 /***************************************************************************
-bsktball_led_w
+    bsktball_led_w
 ***************************************************************************/
 WRITE8_HANDLER( bsktball_led1_w )
 {
-	set_led_status(0,offset & 0x01);
+	set_led_status(space->machine(), 0, offset & 0x01);
 }
 
 WRITE8_HANDLER( bsktball_led2_w )
 {
-	set_led_status(1,offset & 0x01);
+	set_led_status(space->machine(), 1, offset & 0x01);
 }

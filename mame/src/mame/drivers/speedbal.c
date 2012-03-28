@@ -50,39 +50,31 @@ c1  ??
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/3812intf.h"
-
-
-extern UINT8 *speedbal_background_videoram;
-extern UINT8 *speedbal_foreground_videoram;
-
-VIDEO_START( speedbal );
-VIDEO_UPDATE( speedbal );
-WRITE8_HANDLER( speedbal_foreground_videoram_w );
-WRITE8_HANDLER( speedbal_background_videoram_w );
+#include "includes/speedbal.h"
+#include "machine/nvram.h"
 
 static WRITE8_HANDLER( speedbal_coincounter_w )
 {
-	coin_counter_w(0, data & 0x80);
-	coin_counter_w(1, data & 0x40);
-	flip_screen_set(space->machine, data & 8); // also changes data & 0x10 at the same time too (flipx and flipy?)
+	coin_counter_w(space->machine(), 0, data & 0x80);
+	coin_counter_w(space->machine(), 1, data & 0x40);
+	flip_screen_set(space->machine(), data & 8); // also changes data & 0x10 at the same time too (flipx and flipy?)
 	/* unknown: (data & 0x10) and (data & 4) */
 }
 
-static ADDRESS_MAP_START( main_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_cpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdbff) AM_ROM
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE(1) // shared with SOUND
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM_WRITE(speedbal_background_videoram_w) AM_BASE(&speedbal_background_videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(speedbal_foreground_videoram_w) AM_BASE(&speedbal_foreground_videoram)
-	AM_RANGE(0xf000, 0xf5ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf600, 0xfeff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xff00, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE("share1") // shared with SOUND
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM_WRITE(speedbal_background_videoram_w) AM_BASE_MEMBER(speedbal_state, m_background_videoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(speedbal_foreground_videoram_w) AM_BASE_MEMBER(speedbal_state, m_foreground_videoram)
+	AM_RANGE(0xf000, 0xf5ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf600, 0xfeff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xff00, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(speedbal_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_cpu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_cpu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("DSW2")
 	AM_RANGE(0x10, 0x10) AM_READ_PORT("DSW1")
@@ -92,16 +84,16 @@ static ADDRESS_MAP_START( main_cpu_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x50, 0x50) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_cpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xd000, 0xdbff) AM_RAM
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE(1) // shared with MAIN CPU
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE("share1") // shared with MAIN CPU
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_cpu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_cpu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x40, 0x40) AM_WRITENOP
 	AM_RANGE(0x80, 0x80) AM_WRITENOP
 	AM_RANGE(0x82, 0x82) AM_WRITENOP
@@ -225,41 +217,40 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( speedbal )
+static MACHINE_CONFIG_START( speedbal, speedbal_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(main_cpu_map)
-	MDRV_CPU_IO_MAP(main_cpu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(main_cpu_map)
+	MCFG_CPU_IO_MAP(main_cpu_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 2660000)	/* 2.66 MHz ???  Maybe yes */
-	MDRV_CPU_PROGRAM_MAP(sound_cpu_map)
-	MDRV_CPU_IO_MAP(sound_cpu_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,8)
+	MCFG_CPU_ADD("audiocpu", Z80, 2660000)	/* 2.66 MHz ???  Maybe yes */
+	MCFG_CPU_PROGRAM_MAP(sound_cpu_map)
+	MCFG_CPU_IO_MAP(sound_cpu_io_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,8*60)
 
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MCFG_NVRAM_ADD_1FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(speedbal)
 
-	MDRV_GFXDECODE(speedbal)
-	MDRV_PALETTE_LENGTH(768)
+	MCFG_GFXDECODE(speedbal)
+	MCFG_PALETTE_LENGTH(768)
 
-	MDRV_VIDEO_START(speedbal)
-	MDRV_VIDEO_UPDATE(speedbal)
+	MCFG_VIDEO_START(speedbal)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3600000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM3812, 3600000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 

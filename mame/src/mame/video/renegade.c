@@ -4,44 +4,48 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "includes/renegade.h"
 
-UINT8 *renegade_videoram2;
-static INT32 renegade_scrollx;
-static tilemap *bg_tilemap;
-static tilemap *fg_tilemap;
 
 WRITE8_HANDLER( renegade_videoram_w )
 {
+	renegade_state *state = space->machine().driver_data<renegade_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
 	offset = offset % (64 * 16);
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( renegade_videoram2_w )
 {
-	renegade_videoram2[offset] = data;
+	renegade_state *state = space->machine().driver_data<renegade_state>();
+	state->m_videoram2[offset] = data;
 	offset = offset % (32 * 32);
-	tilemap_mark_tile_dirty(fg_tilemap, offset);
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( renegade_flipscreen_w )
 {
-	flip_screen_set(space->machine, ~data & 0x01);
+	flip_screen_set(space->machine(), ~data & 0x01);
 }
 
 WRITE8_HANDLER( renegade_scroll0_w )
 {
-	renegade_scrollx = (renegade_scrollx & 0xff00) | data;
+	renegade_state *state = space->machine().driver_data<renegade_state>();
+	state->m_scrollx = (state->m_scrollx & 0xff00) | data;
 }
 
 WRITE8_HANDLER( renegade_scroll1_w )
 {
-	renegade_scrollx = (renegade_scrollx & 0xff) | (data << 8);
+	renegade_state *state = space->machine().driver_data<renegade_state>();
+	state->m_scrollx = (state->m_scrollx & 0xff) | (data << 8);
 }
 
 static TILE_GET_INFO( get_bg_tilemap_info )
 {
+	renegade_state *state = machine.driver_data<renegade_state>();
+	UINT8 *videoram = state->m_videoram;
 	const UINT8 *source = &videoram[tile_index];
 	UINT8 attributes = source[0x400]; /* CCC??BBB */
 	SET_TILE_INFO(
@@ -53,7 +57,8 @@ static TILE_GET_INFO( get_bg_tilemap_info )
 
 static TILE_GET_INFO( get_fg_tilemap_info )
 {
-	const UINT8 *source = &renegade_videoram2[tile_index];
+	renegade_state *state = machine.driver_data<renegade_state>();
+	const UINT8 *source = &state->m_videoram2[tile_index];
 	UINT8 attributes = source[0x400];
 	SET_TILE_INFO(
 		0,
@@ -64,18 +69,20 @@ static TILE_GET_INFO( get_fg_tilemap_info )
 
 VIDEO_START( renegade )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tilemap_info, tilemap_scan_rows,      16, 16, 64, 16);
-	fg_tilemap = tilemap_create(machine, get_fg_tilemap_info, tilemap_scan_rows,   8, 8, 32, 32);
+	renegade_state *state = machine.driver_data<renegade_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tilemap_info, tilemap_scan_rows,      16, 16, 64, 16);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tilemap_info, tilemap_scan_rows,   8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(fg_tilemap, 0);
-	tilemap_set_scrolldx(bg_tilemap, 256, 0);
+	state->m_fg_tilemap->set_transparent_pen(0);
+	state->m_bg_tilemap->set_scrolldx(256, 0);
 
-	state_save_register_global(machine, renegade_scrollx);
+	state_save_register_global(machine, state->m_scrollx);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	UINT8 *source = spriteram;
+	renegade_state *state = machine.driver_data<renegade_state>();
+	UINT8 *source = state->m_spriteram;
 	UINT8 *finish = source + 96 * 4;
 
 	while (source < finish)
@@ -104,7 +111,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 			if (attributes & 0x80) /* big sprite */
 			{
 				sprite_number &= ~1;
-				drawgfx_transpen(bitmap, cliprect, machine->gfx[sprite_bank],
+				drawgfx_transpen(bitmap, cliprect, machine.gfx[sprite_bank],
 					sprite_number + 1,
 					color,
 					xflip, flip_screen_get(machine),
@@ -114,7 +121,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 			{
 				sy += (flip_screen_get(machine) ? -16 : 16);
 			}
-			drawgfx_transpen(bitmap, cliprect, machine->gfx[sprite_bank],
+			drawgfx_transpen(bitmap, cliprect, machine.gfx[sprite_bank],
 				sprite_number,
 				color,
 				xflip, flip_screen_get(machine),
@@ -124,11 +131,12 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	}
 }
 
-VIDEO_UPDATE( renegade )
+SCREEN_UPDATE_IND16( renegade )
 {
-	tilemap_set_scrollx(bg_tilemap, 0, renegade_scrollx);
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0 , 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, fg_tilemap, 0 , 0);
+	renegade_state *state = screen.machine().driver_data<renegade_state>();
+	state->m_bg_tilemap->set_scrollx(0, state->m_scrollx);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0 , 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0 , 0);
 	return 0;
 }

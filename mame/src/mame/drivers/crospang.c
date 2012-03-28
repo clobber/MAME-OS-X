@@ -12,10 +12,8 @@
 
   Cross Pang New - Is shown on the website but is not currently dumped
 
-  No Copyright Notice is displayed for Cross Pang however the following page
-  lists it as being by F2 System, Released April 1998
-  http://www.f2.co.kr/eng/f2system/intro5.asp (page no longer valid, check www.f2.co.kr)
-
+  No Copyright Notice is displayed for Cross Pang however http://www.f2.co.kr
+  at one time did list it as being by F2 System, Released April 1998
 
   Cross Pang:
     Audio Test isn't correct when a sound is tested, instead musics are right.
@@ -24,57 +22,44 @@
   Bestri:
     Bestri includes Heuk San Baek Sa as one of it's three sub games.
 
+  Note:
+  Bestri tile banking / enable wrong (corrupt gfx in some modes?)
+   - check and merge with other Tumble Pop based implementations?
+
   2008-08
   Added Service dipswitch and dip locations based on Service Mode.
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
-
-extern UINT16 *crospang_bg_videoram,*crospang_fg_videoram;
-
-extern VIDEO_START( crospang );
-extern VIDEO_UPDATE( crospang );
-
-extern WRITE16_HANDLER ( crospang_fg_scrolly_w );
-extern WRITE16_HANDLER ( crospang_bg_scrolly_w );
-extern WRITE16_HANDLER ( crospang_fg_scrollx_w );
-extern WRITE16_HANDLER ( crospang_bg_scrollx_w );
-
-extern WRITE16_HANDLER ( bestri_fg_scrolly_w );
-extern WRITE16_HANDLER ( bestri_bg_scrolly_w );
-extern WRITE16_HANDLER ( bestri_fg_scrollx_w );
-extern WRITE16_HANDLER ( bestri_bg_scrollx_w );
-
-extern WRITE16_HANDLER ( crospang_fg_videoram_w );
-extern WRITE16_HANDLER ( crospang_bg_videoram_w );
-extern WRITE16_HANDLER ( bestri_tilebank_w );
+#include "includes/crospang.h"
+#include "video/decospr.h"
 
 static WRITE16_HANDLER ( crospang_soundlatch_w )
 {
 	if(ACCESSING_BITS_0_7)
 	{
-		soundlatch_w(space,0,data & 0xff);
+		soundlatch_w(space, 0, data & 0xff);
 	}
 }
 
 /* main cpu */
 
-static ADDRESS_MAP_START( crospang_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x0fffff) AM_READ(SMH_ROM) AM_WRITENOP // writes to rom quite often
+static ADDRESS_MAP_START( crospang_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x0fffff) AM_ROM AM_WRITENOP // writes to rom quite often
 	AM_RANGE(0x100000, 0x100001) AM_WRITENOP
 	AM_RANGE(0x100002, 0x100003) AM_WRITE(crospang_fg_scrolly_w)
 	AM_RANGE(0x100004, 0x100005) AM_WRITE(crospang_bg_scrollx_w)
 	AM_RANGE(0x100006, 0x100007) AM_WRITE(crospang_bg_scrolly_w)
 	AM_RANGE(0x100008, 0x100009) AM_WRITE(crospang_fg_scrollx_w)
 	AM_RANGE(0x10000e, 0x10000f) AM_WRITENOP
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE(&crospang_fg_videoram)
-	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE(&crospang_bg_videoram)
-	AM_RANGE(0x200000, 0x2005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE_MEMBER(crospang_state, m_fg_videoram)
+	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE_MEMBER(crospang_state, m_bg_videoram)
+	AM_RANGE(0x200000, 0x2005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE_SIZE_MEMBER(crospang_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x270000, 0x270001) AM_WRITE(crospang_soundlatch_w)
 	AM_RANGE(0x280000, 0x280001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x280002, 0x280003) AM_READ_PORT("COIN")
@@ -82,8 +67,8 @@ static ADDRESS_MAP_START( crospang_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x320000, 0x32ffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bestri_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x0fffff) AM_READ(SMH_ROM) AM_WRITENOP // writes to rom quite often
+static ADDRESS_MAP_START( bestri_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x0fffff) AM_ROM AM_WRITENOP // writes to rom quite often
 
 	AM_RANGE(0x100004, 0x100005) AM_WRITE(bestri_fg_scrollx_w)
 	AM_RANGE(0x100006, 0x100007) AM_WRITE(bestri_fg_scrolly_w)
@@ -91,10 +76,10 @@ static ADDRESS_MAP_START( bestri_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x10000c, 0x10000d) AM_WRITE(bestri_bg_scrollx_w)
 	AM_RANGE(0x10000e, 0x10000f) AM_WRITE(bestri_tilebank_w)
 
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE(&crospang_fg_videoram)
-	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE(&crospang_bg_videoram)
-	AM_RANGE(0x200000, 0x2005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(crospang_fg_videoram_w) AM_BASE_MEMBER(crospang_state, m_fg_videoram)
+	AM_RANGE(0x122000, 0x1227ff) AM_RAM_WRITE(crospang_bg_videoram_w) AM_BASE_MEMBER(crospang_state, m_bg_videoram)
+	AM_RANGE(0x200000, 0x2005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x210000, 0x2107ff) AM_RAM AM_BASE_SIZE_MEMBER(crospang_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x270000, 0x270001) AM_WRITE(crospang_soundlatch_w)
 	AM_RANGE(0x270004, 0x270005) AM_WRITENOP
 	AM_RANGE(0x280000, 0x280001) AM_READ_PORT("P1_P2")
@@ -106,32 +91,33 @@ ADDRESS_MAP_END
 
 /* sound cpu */
 
-static ADDRESS_MAP_START( crospang_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( crospang_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( crospang_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( crospang_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
-	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
+	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x06, 0x06) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
 
+/* verified from M68000 code */
 static INPUT_PORTS_START( crospang )
 	PORT_START("P1_P2")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY PORT_PLAYER(2)
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(2)
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
@@ -145,48 +131,59 @@ static INPUT_PORTS_START( crospang )
 	PORT_BIT( 0xfc00, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x0003, 0x0002, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x0003, 0x0002, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:1,2")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(      0x0003, DEF_STR( 1C_2C ) )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0004, 0x0004, "SW1:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0008, 0x0008, "SW1:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0010, 0x0010, "SW1:5" )
-	PORT_DIPNAME( 0x0020, 0x0020, "Number of Powers" ) PORT_DIPLOCATION("SW1:6")
+	PORT_DIPNAME( 0x000c, 0x000c, DEF_STR( Difficulty ) )   PORT_DIPLOCATION("SW1:3,4")   /* to be confirmed */
+	PORT_DIPSETTING(      0x0008, DEF_STR( Easy ) )         /* table at 0x02ee2c */
+	PORT_DIPSETTING(      0x000c, DEF_STR( Medium ) )       /* table at 0x02e88c */
+	PORT_DIPSETTING(      0x0000, DEF_STR( Hard ) )         /* table at 0x02f96c */
+	PORT_DIPSETTING(      0x0004, DEF_STR( Hardest ) )      /* table at 0x02f3cc */
+	PORT_DIPNAME( 0x0010, 0x0010, "Bonus Power (Points)" )  PORT_DIPLOCATION("SW1:6")
+	PORT_DIPSETTING(      0x0010, "5k 20k 15k+" )
+	PORT_DIPSETTING(      0x0000, "8k 23k 15k+" )
+	PORT_DIPNAME( 0x0020, 0x0020, "Number of Powers" )      PORT_DIPLOCATION("SW1:6")
 	PORT_DIPSETTING(      0x0000, "1" )
 	PORT_DIPSETTING(      0x0020, "2" )
-	PORT_DIPNAME( 0x00c0, 0x0040, "Extra Balls" ) PORT_DIPLOCATION("SW1:7,8")
+	PORT_DIPNAME( 0x00c0, 0x0040, "Extra Balls per Move" )  PORT_DIPLOCATION("SW1:7,8")
 	PORT_DIPSETTING(      0x00c0, "1" )
 	PORT_DIPSETTING(      0x0080, "2" )
 	PORT_DIPSETTING(      0x0040, "3" )
 	PORT_DIPSETTING(      0x0000, "4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0100, 0x0100, "SW2:1" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0200, 0x0200, "SW2:2" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0400, 0x0400, "SW2:3" )
-	PORT_DIPNAME( 0x1800, 0x1000, "Minimum Balls per Row" ) PORT_DIPLOCATION("SW2:4,5")
+	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Unknown ) )      PORT_DIPLOCATION("SW2:1,2")   /* code at 0x021672 - occurs after level 6 */
+	PORT_DIPSETTING(      0x0300, "6/7" )
+	PORT_DIPSETTING(      0x0200, "7/8" )
+	PORT_DIPSETTING(      0x0100, "8/9" )
+	PORT_DIPSETTING(      0x0000, "9/10" )
+	PORT_DIPNAME( 0x0400, 0x0400, "Bonus Power (Bomb)" )    PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(      0x0400, "3 Chain Reactions" )
+	PORT_DIPSETTING(      0x0000, "4 Chain Reactions" )
+	PORT_DIPNAME( 0x1800, 0x1800, "Minimum Balls per Row" ) PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(      0x1800, "3" )
 	PORT_DIPSETTING(      0x1000, "4" )
 	PORT_DIPSETTING(      0x0800, "5" )
 	PORT_DIPSETTING(      0x0000, "6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x2000, 0x2000, "SW2:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x2000, 0x2000, "SW2:6" )        /* stored at 0x325414.w but not read back */
 	PORT_SERVICE_DIPLOC( 0x4000, IP_ACTIVE_LOW, "SW2:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x8000, 0x8000, "SW2:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x8000, 0x8000, "SW2:8" )        /* stored at 0x325418.w but not read back */
 INPUT_PORTS_END
 
+/* verified from M68000 code */
 static INPUT_PORTS_START( heuksun )
 	PORT_START("P1_P2")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY PORT_PLAYER(2)
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(2)
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
@@ -205,35 +202,44 @@ static INPUT_PORTS_START( heuksun )
 	PORT_DIPSETTING(      0x0001, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(      0x0003, DEF_STR( 1C_2C ) )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0004, 0x0004, "SW1:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0008, 0x0008, "SW1:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0010, 0x0010, "SW1:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0020, 0x0020, "SW1:6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0040, 0x0040, "SW1:7" )
+	PORT_DIPNAME( 0x000c, 0x000c, DEF_STR( Difficulty ) )   PORT_DIPLOCATION("SW1:3,4")   /* stored at 0x324632.w */
+	PORT_DIPSETTING(      0x000c, DEF_STR( Easy ) )         /* 1 */
+	PORT_DIPSETTING(      0x0008, DEF_STR( Medium ) )       /* 2 */
+	PORT_DIPSETTING(      0x0004, DEF_STR( Hard ) )         /* 3 */
+	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )      /* 4 */
+	PORT_DIPNAME( 0x0010, 0x0010, "Help Penalty (Heuk Sun)" ) PORT_DIPLOCATION("SW1:5")   /* code at 0x01878e and 0x0187f6 */
+	PORT_DIPSETTING(      0x0010, "Constant" )
+	PORT_DIPSETTING(      0x0000, "Variable" )              /* based on "Difficulty" Dip Switch */
+	PORT_DIPUNUSED_DIPLOC( 0x0020, 0x0020, "SW1:6" )        /* read once during initialisation but not even stored */
+	PORT_DIPUNKNOWN_DIPLOC( 0x0040, 0x0040, "SW1:7" )       /* stored at 0x32463a.w but not read back ? */
 	PORT_SERVICE_DIPLOC( 0x0080, IP_ACTIVE_LOW, "SW1:8" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0100, 0x0100, "SW2:1" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0200, 0x0200, "SW2:2" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0400, 0x0400, "SW2:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0800, 0x0800, "SW2:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x1000, 0x1000, "SW2:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x2000, 0x2000, "SW2:6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x4000, 0x4000, "SW2:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x8000, 0x8000, "SW2:8" )
+	/* bits are tested from most to less significant - code at 0x01023e */
+	PORT_DIPNAME( 0xff00, 0xff00, DEF_STR( Unknown ) )      PORT_DIPLOCATION("SW2:1,2,3,4,5,6,7,8") /* stored at 0x324662.w but not read back ? */
+	PORT_DIPSETTING(      0xff00, "0" )
+	PORT_DIPSETTING(      0xfe00, "1" )
+	PORT_DIPSETTING(      0xfd00, "2" )
+	PORT_DIPSETTING(      0xfb00, "3" )
+	PORT_DIPSETTING(      0xf700, "4" )
+	PORT_DIPSETTING(      0xef00, "5" )
+	PORT_DIPSETTING(      0xdf00, "6" )
+	PORT_DIPSETTING(      0xbf00, "7" )
+	PORT_DIPSETTING(      0x7f00, "8" )
 INPUT_PORTS_END
 
+/* verified from M68000 code */
 static INPUT_PORTS_START( bestri )
 	PORT_START("P1_P2")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY PORT_PLAYER(2)
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(2)
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
@@ -248,24 +254,43 @@ static INPUT_PORTS_START( bestri )
 
 	PORT_START("DSW")
 	PORT_SERVICE_DIPLOC( 0x0001, IP_ACTIVE_LOW, "SW1:1" )
-	PORT_DIPNAME( 0x0006, 0x0002, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:2,3")
+	PORT_DIPNAME( 0x0006, 0x0002, DEF_STR( Coinage ) )      PORT_DIPLOCATION("SW1:2,3")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0004, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(      0x0006, DEF_STR( 1C_2C ) )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0008, 0x0008, "SW1:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0010, 0x0010, "SW1:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0020, 0x0020, "SW1:6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0040, 0x0040, "SW1:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0080, 0x0080, "SW1:8" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0100, 0x0100, "SW2:1" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0200, 0x0200, "SW2:2" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0400, 0x0400, "SW2:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x0800, 0x0800, "SW2:4" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x1000, 0x1000, "SW2:5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x2000, 0x2000, "SW2:6" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x4000, 0x4000, "SW2:7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x8000, 0x8000, "SW2:8" )
+	PORT_DIPNAME( 0x0018, 0x0018, DEF_STR( Difficulty ) )   PORT_DIPLOCATION("SW1:4,5")   /* stored at 0x3a6f78.w */
+	PORT_DIPSETTING(      0x0018, DEF_STR( Easy ) )         /* 1 */
+	PORT_DIPSETTING(      0x0008, DEF_STR( Medium ) )       /* 2 */
+	PORT_DIPSETTING(      0x0010, DEF_STR( Hard ) )         /* 3 */
+	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )      /* 4 */
+	PORT_DIPNAME( 0x0020, 0x0020, "Help Penalty (Heuk Sun)" ) PORT_DIPLOCATION("SW1:6")   /* code at 0x0b7152 and 0x07b1ba */
+	PORT_DIPSETTING(      0x0020, "Constant" )
+	PORT_DIPSETTING(      0x0000, "Variable" )              /* based on "Difficulty" Dip Switch */
+	PORT_DIPNAME( 0x00c0, 0x00c0, "Girls" )                 PORT_DIPLOCATION("SW1:7,8")   /* stored at 0x3a6faa.w */
+	PORT_DIPSETTING(      0x00c0, DEF_STR( No ) )
+	PORT_DIPSETTING(      0x0080, DEF_STR( Yes ) )
+//  PORT_DIPSETTING(      0x0040, DEF_STR( No ) )
+//  PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
+	PORT_DIPNAME( 0x0700, 0x0700, DEF_STR( Unknown ) )      PORT_DIPLOCATION("SW2:1,2,3") /* stored at 0x3a6fa6.w but not read back ? */
+	PORT_DIPSETTING(      0x0700, "0" )
+	PORT_DIPSETTING(      0x0300, "1" )
+	PORT_DIPSETTING(      0x0500, "2" )
+	PORT_DIPSETTING(      0x0100, "3" )
+	PORT_DIPSETTING(      0x0600, "4" )
+	PORT_DIPSETTING(      0x0200, "5" )
+	PORT_DIPSETTING(      0x0400, "6" )
+	PORT_DIPSETTING(      0x0000, "7" )
+	PORT_DIPNAME( 0x1800, 0x1800, "Unknown (Die Break)" )   PORT_DIPLOCATION("SW2:4,5")   /* stored at 0x3a6fa8.w */
+	PORT_DIPSETTING(      0x1800, "0" )
+	PORT_DIPSETTING(      0x0800, "1" )
+	PORT_DIPSETTING(      0x1000, "2" )
+	PORT_DIPSETTING(      0x0000, "3" )
+	PORT_DIPNAME( 0x2000, 0x2000, "Time (Penta)" )          PORT_DIPLOCATION("SW2:6")     /* stored at 0x3a6fac.w */
+	PORT_DIPSETTING(      0x0000, "60" )
+	PORT_DIPSETTING(      0x2000, "90" )
+	PORT_DIPUNUSED_DIPLOC( 0x4000, 0x4000, "SW2:7" )        /* read once during initialisation but not even stored */
+	PORT_DIPUNUSED_DIPLOC( 0x8000, 0x8000, "SW2:8" )        /* read once during initialisation but not even stored */
 INPUT_PORTS_END
 
 static const gfx_layout tlayout =
@@ -290,9 +315,10 @@ static GFXDECODE_START( crospang )
 GFXDECODE_END
 
 
-static void irqhandler(const device_config *device, int linestate)
+static void irqhandler( device_t *device, int linestate )
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
+	crospang_state *state = device->machine().driver_data<crospang_state>();
+	device_set_input_line(state->m_audiocpu, 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -300,79 +326,77 @@ static const ym3812_interface ym3812_config =
 	irqhandler	/* IRQ Line */
 };
 
-static MACHINE_DRIVER_START( crospang )
+
+static MACHINE_START( crospang )
+{
+	crospang_state *state = machine.driver_data<crospang_state>();
+
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_bestri_tilebank));
+
+}
+
+static MACHINE_RESET( crospang )
+{
+	crospang_state *state = machine.driver_data<crospang_state>();
+
+	state->m_bestri_tilebank = 0;
+
+}
+
+
+static MACHINE_CONFIG_START( crospang, crospang_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 14318180/2)
-	MDRV_CPU_PROGRAM_MAP(crospang_map)
-	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 14318180)
+	MCFG_CPU_PROGRAM_MAP(crospang_map)
+	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 14318180/4)
-	MDRV_CPU_PROGRAM_MAP(crospang_sound_map)
-	MDRV_CPU_IO_MAP(crospang_sound_io_map)
+	MCFG_CPU_ADD("audiocpu", Z80, 14318180/4)
+	MCFG_CPU_PROGRAM_MAP(crospang_sound_map)
+	MCFG_CPU_IO_MAP(crospang_sound_io_map)
+
+	MCFG_MACHINE_START(crospang)
+	MCFG_MACHINE_RESET(crospang)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 64*8)
+	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(crospang)
 
-	MDRV_PALETTE_LENGTH(0x300)
-	MDRV_GFXDECODE(crospang)
+	MCFG_PALETTE_LENGTH(0x300)
+	MCFG_GFXDECODE(crospang)
 
-	MDRV_VIDEO_START(crospang)
-	MDRV_VIDEO_UPDATE(crospang)
+	MCFG_VIDEO_START(crospang)
+
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 0);
+	decospr_device::set_is_bootleg(*device, true);
+	decospr_device::set_offsets(*device, 5,7);
+
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 14318180/4)
-	MDRV_SOUND_CONFIG(ym3812_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM3812, 14318180/4)
+	MCFG_SOUND_CONFIG(ym3812_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bestri )
+static MACHINE_CONFIG_DERIVED( bestri, crospang )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 14318180/2)
-	MDRV_CPU_PROGRAM_MAP(bestri_map)
-	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(bestri_map)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 14318180/4)
-	MDRV_CPU_PROGRAM_MAP(crospang_sound_map)
-	MDRV_CPU_IO_MAP(crospang_sound_io_map)
-
-	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
-
-	MDRV_PALETTE_LENGTH(0x300)
-	MDRV_GFXDECODE(crospang)
-
-	MDRV_VIDEO_START(crospang)
-	MDRV_VIDEO_UPDATE(crospang)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("ym", YM3812, 14318180/4)
-	MDRV_SOUND_CONFIG(ym3812_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( crospang )
@@ -528,7 +552,6 @@ ROM_START( bestri )
 	ROM_CONTINUE ( 0x0c0000,0x20000)
 	ROM_CONTINUE ( 0x1c0000,0x20000)
 
-
 	ROM_REGION( 0x200000, "gfx2", 0 ) // sprites
 	ROM_LOAD16_BYTE( "ud14.j12", 0x000000, 0x80000, CRC(141c696e) SHA1(3d35a20f7c12a8d8a9f6d351f06fb9df0c673354) )
 	ROM_LOAD16_BYTE( "ud15.h12", 0x000001, 0x80000, CRC(7c04adc0) SHA1(9883565d6556ce8ae3da6c91cbf04894e87e6923) )
@@ -537,14 +560,14 @@ ROM_START( bestri )
 ROM_END
 
 
-static void tumblepb_gfx1_rearrange(running_machine *machine)
+static void tumblepb_gfx1_rearrange(running_machine &machine)
 {
-	UINT8 *rom = memory_region(machine, "gfx1");
-	int len = memory_region_length(machine, "gfx1");
+	UINT8 *rom = machine.region("gfx1")->base();
+	int len = machine.region("gfx1")->bytes();
 	int i;
 
 	/* gfx data is in the wrong order */
-	for (i = 0;i < len;i++)
+	for (i = 0; i < len; i++)
 	{
 		if ((i & 0x20) == 0)
 		{
@@ -552,9 +575,9 @@ static void tumblepb_gfx1_rearrange(running_machine *machine)
 		}
 	}
 	/* low/high half are also swapped */
-	for (i = 0;i < len/2;i++)
+	for (i = 0; i < len / 2; i++)
 	{
-		int t = rom[i]; rom[i] = rom[i + len/2]; rom[i + len/2] = t;
+		int t = rom[i]; rom[i] = rom[i + len / 2]; rom[i + len / 2] = t;
 	}
 }
 
@@ -563,7 +586,6 @@ static DRIVER_INIT( crospang )
 	tumblepb_gfx1_rearrange(machine);
 }
 
-GAME( 1998, crospang, 0, crospang, crospang, crospang, ROT0, "F2 System", "Cross Pang", 0 )
-GAME( 199?, heuksun,  0, crospang, heuksun,  crospang, ROT0, "Oksan / F2 System", "Heuk Sun Baek Sa (Korea)", 0 )
-GAME( 1998, bestri,   0, bestri,   bestri,   crospang, ROT0, "F2 System", "Bestri (Korea)", 0 )
-
+GAME( 1998, crospang, 0, crospang, crospang, crospang, ROT0, "F2 System", "Cross Pang", GAME_SUPPORTS_SAVE )
+GAME( 199?, heuksun,  0, crospang, heuksun,  crospang, ROT0, "Oksan / F2 System", "Heuk Sun Baek Sa (Korea)", GAME_SUPPORTS_SAVE )
+GAME( 1998, bestri,   0, bestri,   bestri,   crospang, ROT0, "F2 System", "Bestri (Korea)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )

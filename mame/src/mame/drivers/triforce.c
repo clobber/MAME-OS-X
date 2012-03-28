@@ -18,29 +18,33 @@ use with Namco ROM carts.
 
 Games on this system include....
 
-Game                                                   Manufacturer              Media                Key Chip
-+----------------------------------------------------+-------------------------+--------------------+--------------|
-|Donkey Kong Jungle Fever                            | Capcom / Nintendo, 2005 | ROM Cart           |              |
-|F-Zero AX                                           | Sega / Nintendo, 2003   | GDROM GDT-0004     |              |
-|F-Zero AX Monster Ride                              | Sega / Nintendo, 2004   | GDROM              |              |
-|*Firmware Update                                    | Sega                    | GDROM GDT-0011     | ?            |
-|*Gekitou Pro Yakyuu                                 | Sega, 2003              | GDROM GDT-0008C    | 317-0371-JPN |
-|*Mario Kart Arcade GP                               | Namco / Nintendo, 2005  | ROM Cart           | 317-5109-COM |
-|Mario Kart Arcade GP 2                              | Namco / Nintendo, 2007  | ROM Cart           |              |
-|Starfox (planned, but not released)                 | Namco / Nintendo, 200?  | ?                  |              |
-|*The Key Of Avalon : The Wizard Master (server)     | Sega, 2003              | GDROM GDT-0005C    | ?            |
-|The Key Of Avalon : The Wizard Master (client)      | Sega, 2003              | GDROM GDT-0006C    |              |
-|*The Key Of Avalon Ver 1.3 (server)                 | Sega, 2004              | GDROM GDT-0009C    | ?            |
-|*The Key Of Avalon Ver 1.3 (client)                 | Sega, 2004              | GDROM GDT-0010C    | ?            |
-|The Key Of Avalon 2 (server)                        | Sega, 2005              | GDROM              |              |
-|*The Key Of Avalon 2 (client)                       | Sega, 2005              | GDROM GDT-0017B    | ?            |
-|*Virtua Striker 2002 (Japan)                        | Sega, 2002              | GDROM GDT-0001     | 317-0337-JPN |
-|*Virtua Striker 2002 (Export)                       | Sega, 2002              | GDROM GDT-0002     | 317-0337-EXP |
-|*Virtua Striker 4 (Japan)                           | Sega, 2005              | GDROM GDT-0013E    | 317-0391-JPN |
-|*Virtua Striker 4 (Export)                          | Sega, 2005              | GDROM GDT-0015     | 317-0393-EXP |
-|*Virtua Striker 4 Ver.2006 (Japan)                  | Sega, 2006              | GDROM GDT-0020D    | ?            |
-|Virtua Striker 4 Ver.2006 (Export)                  | Sega, 2006              | GDROM GDT-0021     |              |
-+----------------------------------------------------+-------------------------+--------------------+--------------+
+   Game                                                      Manufacturer              Media             Key Chip
++-+---------------------------------------------------------+-------------------------+-----------------+--------------|
+| |Donkey Kong Jungle Fever                                 | Namco / Nintendo, 2005  | ROM Cart        | ?            |
+|*|Mario Kart Arcade GP                                     | Namco / Nintendo, 2005  | ROM Cart        | 317-5109-COM |
+| |Mario Kart Arcade GP 2                                   | Namco / Nintendo, 2007  | ROM Cart        | ?            |
+|*|Virtua Striker 2002 (Japan)                              | Sega, 2002              | GDROM GDT-0001  | 317-0337-JPN |
+|*|Virtua Striker 2002 (Export)                             | Sega, 2002              | GDROM GDT-0002  | 317-0337-EXP |
+| |F-Zero AX                                                | Sega / Nintendo, 2003   | GDROM GDT-0004  | ?            |
+|*|The Key Of Avalon: The Wizard Master (server) (Rev C)    | Sega, 2003              | GDROM GDT-0005C | ?            |
+| |The Key Of Avalon: The Wizard Master (client) (Rev C)    | Sega, 2003              | GDROM GDT-0006C | ?            |
+|*|Gekitou Pro Yakyuu (Rev C)                               | Sega, 2003              | GDROM GDT-0008C | 317-0371-JPN |
+|*|The Key Of Avalon 1.30: Chaotic Sabbat (server) (Rev C)  | Sega, 2004              | GDROM GDT-0009C | ?            |
+|*|The Key Of Avalon 1.30: Chaotic Sabbat (client) (Rev C)  | Sega, 2004              | GDROM GDT-0010C | ?            |
+|*|Firmware Update                                          | Sega, 2004              | GDROM GDT-0011  | ?            |
+|*|Virtua Striker 4 (Japan) (Rev E)                         | Sega, 2004              | GDROM GDT-0013E | 317-0391-JPN |
+|*|Virtua Striker 4 (Export)                                | Sega, 2004              | GDROM GDT-0015  | 317-0393-EXP |
+| |The Key Of Avalon 2: Eutaxy Commandment (server)         | Sega, 2004              | GDROM GDT-0016  | ?            |
+|*|The Key Of Avalon 2: Eutaxy Commandment (client) (Rev B) | Sega, 2004              | GDROM GDT-0017B | ?            |
+|*|Virtua Striker 4 Ver.2006 (Japan) (Rev D)                | Sega, 2006              | GDROM GDT-0020D | ?            |
+| |Virtua Striker 4 Ver.2006 (Export)                       | Sega, 2006              | GDROM GDT-0021  | ?            |
+| |F-Zero AX - Monster Ride Cycraft Edition                 | Sega / Nintendo, 2004   | GDROM ?         | ?            |
+| |The Key Of Avalon 1.10                                   | Sega, 2003              | GDROM ?         | ?            |
+| |The Key Of Avalon 1.20: Summon The New Monster           | Sega, 2003              | GDROM ?         | ?            |
+| |The Key Of Avalon 2.5: War of the Key                    | Sega, 2005              | GDROM ?         | ?            |
+| |Donkey Kong:Banana Kingdom                               | Namco / Nintendo, 2006  | ROM Cart ?      | ?            |
+| |Starfox Armada (planned, but not released)               | Namco / Nintendo, 2002? | ?               | ?            |
++-+---------------------------------------------------------+-------------------------+-----------------+--------------+
 * denotes these games are archived.
 If you can help with the undumped games or know of missing Triforce games, please contact...
 http://guru.mameworld.info/
@@ -393,16 +397,19 @@ Notes:
       J8 - 3-pin Fan Connector
       J9 - 4-pin Namco Audio Connector (unused)
 
+------------------------------------------------------------------------------------------------------------------
+
+ Note: "Type 3" Triforce uploads GD-ROM firmware to a MIPS processor which is DES encrypted (same as the GD images).
+ The key is 0x00 0x22 0x44 0x66 0x88 0xaa 0xcc 0xee (http://debugmo.de/2010/12/the-last-piece/).
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/powerpc/ppc.h"
-#include "video/generic.h"
-#include "naomibd.h"
+#include "machine/naomigd.h"
 
-static ADDRESS_MAP_START( gc_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("maincpu", 0) AM_SHARE(2)	/* Program ROM */
+static ADDRESS_MAP_START( gc_map, AS_PROGRAM, 32 )
+	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("maincpu", 0) AM_SHARE("share2")	/* Program ROM */
 ADDRESS_MAP_END
 
 
@@ -411,7 +418,7 @@ static VIDEO_START(triforce)
 
 }
 
-static VIDEO_UPDATE(triforce)
+static SCREEN_UPDATE_RGB32(triforce)
 {
 	return 0;
 }
@@ -419,31 +426,29 @@ static VIDEO_UPDATE(triforce)
 static INPUT_PORTS_START( triforce )
 INPUT_PORTS_END
 
-static MACHINE_DRIVER_START( triforce_base )
+static MACHINE_CONFIG_START( triforce_base, driver_device )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", PPC403GA, 64000000) /* Wrong! */
-	MDRV_CPU_PROGRAM_MAP(gc_map)
+	MCFG_CPU_ADD("maincpu", PPC403GA, 64000000) /* Correct CPU is a PowerPC 750 (what Apple called "G3") with paired-single vector instructions added */
+	MCFG_CPU_PROGRAM_MAP(gc_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
- 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(640, 480)
-	MDRV_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(640, 480)
+	MCFG_SCREEN_VISIBLE_AREA(0, 639, 0, 479)
+	MCFG_SCREEN_UPDATE_STATIC(triforce)
 
-	MDRV_PALETTE_LENGTH(65536)
+	MCFG_PALETTE_LENGTH(65536)
 
-	MDRV_VIDEO_START(triforce)
-	MDRV_VIDEO_UPDATE(triforce)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(triforce)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( triforcegd )
-	MDRV_IMPORT_FROM(triforce_base)
-	MDRV_NAOMI_DIMM_BOARD_ADD("rom_board", "gdrom", "user1", "picreturn")
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( triforcegd, triforce_base )
+	MCFG_NAOMI_GDROM_BOARD_ADD("rom_board", ":gdrom", "picreturn", NULL, "maincpu", NULL)
+MACHINE_CONFIG_END
 
 #define ROM_LOAD16_WORD_SWAP_BIOS(bios,name,offset,length,hash) \
 		ROMX_LOAD(name, offset, length, hash, ROM_GROUPWORD | ROM_BIOS(bios+1)) /* Note '+1' */
@@ -455,14 +460,10 @@ MACHINE_DRIVER_END
 
 ROM_START( triforce )
 	TRIFORCE_BIOS
-
-	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
 
 ROM_START( vs2002j )
 	TRIFORCE_BIOS
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0001", 0, SHA1(1b4b16b0715fa5717904f0b3141cc48cca99b7a4) )
@@ -491,9 +492,6 @@ PIC
 ROM_START( vs2002ex )
 	TRIFORCE_BIOS
 
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
-
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0002", 0, SHA1(471e896d43167c93cc229cfc94ff7ac6de7cf9a4) )
 
@@ -504,9 +502,6 @@ ROM_END
 
 ROM_START( avalons )
 	TRIFORCE_BIOS
-
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0005c", 0, SHA1(9edb3d9ff492d2207d57bfdb6859e796f76c5e0c) )
@@ -519,9 +514,6 @@ ROM_END
 ROM_START( gekpurya )
 	TRIFORCE_BIOS
 
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
-
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0008c", 0, SHA1(2c1bdb8324efc216edd771fe45c680ac726111a0) )
 
@@ -532,9 +524,6 @@ ROM_END
 
 ROM_START( tfupdate )
 	TRIFORCE_BIOS
-
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0011", 0, SHA1(71bfa8f53d211085c020d54f55eeeabf85212a0b) )
@@ -571,9 +560,6 @@ PIC
 ROM_START( vs4 )
 	TRIFORCE_BIOS
 
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
-
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0015", 0, SHA1(1f83712b2b170d6edf4a27c15b6f763cc3cc4b71) )
 
@@ -602,9 +588,6 @@ PIC
 
 ROM_START( vs4j )
 	TRIFORCE_BIOS
-
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0013e", 0, SHA1(b69cc5cab889114eda5c6e9ddcca42de9bc235b3) )
@@ -635,9 +618,6 @@ track03.bin 45150   549299  1185760800
 
 ROM_START( avalon13 )
 	TRIFORCE_BIOS
-
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0010c", 0, SHA1(716c441d8dc9036a13c66ef0048cd6d32ac63c4e) )
@@ -670,9 +650,6 @@ track03.bin 45150   549299  1185760800
 ROM_START( avalon20 )
 	TRIFORCE_BIOS
 
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
-
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0017b", 0, SHA1(e2dd32c322ffcaf38b82275d2721b71bb3dfc1f2) )
 
@@ -684,9 +661,6 @@ ROM_END
 ROM_START( vs42006 )
 	TRIFORCE_BIOS
 
-
-	ROM_REGION( 0x20000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
-
 	DISK_REGION( "gdrom" )
 	DISK_IMAGE_READONLY( "gdt-0020d", 0, SHA1(db256d094b9754d452d7a2b8a370699d21141c1f) )
 
@@ -696,14 +670,14 @@ ROM_END
 
 
 
-GAME( 2002, triforce, 0,        triforcegd,    triforce,    0, ROT0, "Sega",           "Triforce Bios", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
-GAME( 2002, vs2002j,  triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 2002 (GDT-0001)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2002, vs2002ex, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 2002 (GDT-0002)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2003, avalons,  triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "The Key Of Avalon - The Wizard Master - Server (GDT-0005C) (V4.001)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2003, gekpurya, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Gekitou Pro Yakyuu Mizushima Shinji All Stars vs. Pro Yakyuu (Rev C) (GDT-0008C)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2004, avalon13, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "The Key Of Avalon 1.3 - Chaotic Sabbat - Client (GDT-0010C) (V4.000)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 200?, tfupdate, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Triforce DIMM Updater (GDT-0011)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2004, vs4j,     triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 4 (Japan) (GDT-0013E)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2004, vs4,      triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 4 (Export) (GDT-0015)", GAME_NO_SOUND|GAME_NOT_WORKING )
-GAME( 2004, avalon20, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "The Key Of Avalon 2.0 - Eutaxy and Commandment - Client (GDT-0017B) (V3.001)", GAME_NO_SOUND|GAME_NOT_WORKING )
-//GAME( 2006, vs42006,  triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 4 ver. 2006 (Rev D) (Japan) (GDT-0020D)", GAME_NO_SOUND|GAME_NOT_WORKING )
+GAME( 2002, triforce, 0,        triforcegd,    triforce,    0, ROT0, "Sega",           "Triforce Bios", GAME_IS_SKELETON|GAME_IS_BIOS_ROOT )
+GAME( 2002, vs2002j,  triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 2002 (GDT-0001)", GAME_IS_SKELETON )
+GAME( 2002, vs2002ex, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 2002 (GDT-0002)", GAME_IS_SKELETON )
+GAME( 2003, avalons,  triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "The Key Of Avalon - The Wizard Master - Server (GDT-0005C) (V4.001)", GAME_IS_SKELETON )
+GAME( 2003, gekpurya, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Gekitou Pro Yakyuu Mizushima Shinji All Stars vs. Pro Yakyuu (Rev C) (GDT-0008C)", GAME_IS_SKELETON )
+GAME( 2004, avalon13, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "The Key Of Avalon 1.3 - Chaotic Sabbat - Client (GDT-0010C) (V4.000)", GAME_IS_SKELETON )
+GAME( 2004, tfupdate, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Triforce DIMM Updater (GDT-0011)", GAME_IS_SKELETON )
+GAME( 2004, vs4j,     triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 4 (Japan) (GDT-0013E)", GAME_IS_SKELETON )
+GAME( 2004, vs4,      triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 4 (Export) (GDT-0015)", GAME_IS_SKELETON )
+GAME( 2004, avalon20, triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "The Key Of Avalon 2.0 - Eutaxy and Commandment - Client (GDT-0017B) (V3.001)", GAME_IS_SKELETON )
+GAME( 2006, vs42006,  triforce, triforcegd,    triforce,    0, ROT0, "Sega",           "Virtua Striker 4 Ver.2006 (Japan) (Rev D) (GDT-0020D)", GAME_IS_SKELETON )

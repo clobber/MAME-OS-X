@@ -72,7 +72,7 @@ Stephh's additional notes :
     In the Comad games, the interruption is the same, but the addresses
     which are checked are in full RAM. So the Dip Switch could be checked.
 
-  - I added the 'galpania' romset which is in fact the same as 'galpanic',
+  - I added the 'galpanica' romset which is in fact the same as 'galpanic',
     but with the PRG ROMS which aren't overwritten and simulated the CALC1
     MCU functions
     Here are a few notes about what I found :
@@ -84,7 +84,7 @@ Stephh's additional notes :
         with the other set. I don't know if there are some other unmapped
         reads, but the game seems to run fine with what I've done.
       * When you press the "Tilt" button, the game enters in an endless
-        loop, but this isn't a bug ! Check code begining at 0x000e02 and
+        loop, but this isn't a bug ! Check code beginning at 0x000e02 and
         ending at 0x000976 for more infos.
           -Expects watchdog to reset it- pjp
       * Sound hasn't been tested.
@@ -117,78 +117,86 @@ The current set of Super Model is an example of type C
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "includes/kaneko16.h"
 #include "sound/okim6295.h"
 #include "video/kan_pand.h"
+#include "includes/galpanic.h"
+#include "includes/galpnipt.h"
 
-extern UINT16 *galpanic_bgvideoram,*galpanic_fgvideoram;
-extern size_t galpanic_fgvideoram_size;
-
-PALETTE_INIT( galpanic );
-WRITE16_HANDLER( galpanic_bgvideoram_w );
-WRITE16_HANDLER( galpanic_paletteram_w );
-VIDEO_START( galpanic );
-VIDEO_UPDATE( galpanic );
-VIDEO_UPDATE( comad );
-
-
-static VIDEO_EOF( galpanic )
+static SCREEN_VBLANK( galpanic )
 {
-	pandora_eof(machine);
-}
-
-static INTERRUPT_GEN( galpanic_interrupt )
-{
-	/* IRQ 3 drives the game, IRQ 5 updates the palette */
-	if (cpu_getiloops(device) != 0)
-		cpu_set_input_line(device, 5, HOLD_LINE);
-	else
-		cpu_set_input_line(device, 3, HOLD_LINE);
-}
-
-static INTERRUPT_GEN( galhustl_interrupt )
-{
-	switch ( cpu_getiloops(device) )
+	// rising edge
+	if (vblank_on)
 	{
-		case 2:  cpu_set_input_line(device, 5, HOLD_LINE); break;
-		case 1:  cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 0:  cpu_set_input_line(device, 3, HOLD_LINE); break;
+		device_t *pandora = screen.machine().device("pandora");
+		pandora_eof(pandora);
 	}
+}
+
+static TIMER_DEVICE_CALLBACK( galpanic_scanline )
+{
+	int scanline = param;
+
+	if(scanline == 224) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 3, HOLD_LINE);
+
+	/* Pandora "sprite end dma" irq? */
+	if(scanline == 32)
+		cputag_set_input_line(timer.machine(), "maincpu", 5, HOLD_LINE);
+}
+
+
+static TIMER_DEVICE_CALLBACK( galhustl_scanline )
+{
+	int scanline = param;
+
+	if(scanline == 224) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 3, HOLD_LINE);
+
+	/* Pandora "sprite end dma" irq? */
+	if(scanline == 32)
+		cputag_set_input_line(timer.machine(), "maincpu", 4, HOLD_LINE);
+
+	if(scanline == 0) // timer irq?
+		cputag_set_input_line(timer.machine(), "maincpu", 5, HOLD_LINE);
 }
 
 
 static WRITE16_HANDLER( galpanic_6295_bankswitch_w )
 {
+	device_t *pandora = space->machine().device("pandora");
+
 	if (ACCESSING_BITS_8_15)
 	{
-		UINT8 *rom = memory_region(space->machine, "oki");
+		UINT8 *rom = space->machine().region("oki")->base();
 
 		memcpy(&rom[0x30000],&rom[0x40000 + ((data >> 8) & 0x0f) * 0x10000],0x10000);
 
 		// used before title screen
-		pandora_set_clear_bitmap((data & 0x8000)>>15);
+		pandora_set_clear_bitmap(pandora, (data & 0x8000)>>15);
 	}
 }
 
-static WRITE16_HANDLER( galpania_6295_bankswitch_w )
+static WRITE16_HANDLER( galpanica_6295_bankswitch_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		UINT8 *rom = memory_region(space->machine, "oki");
+		UINT8 *rom = space->machine().region("oki")->base();
 
 		memcpy(&rom[0x30000],&rom[0x40000 + ((data >> 8) & 0x0f) * 0x10000],0x10000);
 	}
 }
 
 #ifdef UNUSED_FUNCTION
-static WRITE16_HANDLER( galpania_misc_w )
+static WRITE16_HANDLER( galpanica_misc_w )
 {
+	device_t *pandora = machine.device("pandora");
+
 	if (ACCESSING_BITS_0_7)
 	{
-		pandora_set_clear_bitmap( data & 0x0004 );
+		pandora_set_clear_bitmap(pandora, data & 0x0004);
 	}
 
 	// other bits unknown !
@@ -199,11 +207,11 @@ static WRITE16_HANDLER( galpanic_coin_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(0, data & 0x100);
-		coin_counter_w(1, data & 0x200);
+		coin_counter_w(space->machine(), 0, data & 0x100);
+		coin_counter_w(space->machine(), 1, data & 0x200);
 
-		coin_lockout_w(0, ~data & 0x400);
-		coin_lockout_w(1, ~data & 0x800);
+		coin_lockout_w(space->machine(), 0, ~data & 0x400);
+		coin_lockout_w(space->machine(), 1, ~data & 0x800);
 	}
 }
 
@@ -217,16 +225,16 @@ static WRITE16_HANDLER( galpanic_bgvideoram_mirror_w )
 	}
 }
 
-static ADDRESS_MAP_START( galpanic_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( galpanic_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x3fffff) AM_ROM
-	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)	/* + work RAM */
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE(&paletteram16)	/* 1024 colors, but only 512 seem to be used */
-	AM_RANGE(0x700000, 0x701fff) AM_READWRITE(pandora_spriteram_LSB_r, pandora_spriteram_LSB_w)
+	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)	/* + work RAM */
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
+	AM_RANGE(0x700000, 0x701fff) AM_DEVREADWRITE("pandora", pandora_spriteram_LSB_r, pandora_spriteram_LSB_w)
 	AM_RANGE(0x702000, 0x704fff) AM_RAM
-	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
-	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
+	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
+	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpanic_6295_bankswitch_w)
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(galpanic_coin_w)	/* coin counters */
@@ -236,498 +244,222 @@ static ADDRESS_MAP_START( galpanic_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xe00000, 0xe00015) AM_READWRITE(galpanib_calc_r,galpanib_calc_w) /* CALC1 MCU interaction (simulated) */
 ADDRESS_MAP_END
 
-static READ16_HANDLER( kludge )
+static READ16_HANDLER( comad_timer_r )
 {
-	return mame_rand(space->machine) & 0x0700;
+	return (space->machine().primary_screen->vpos() & 0x07) << 8;
 }
 
 /* a kludge! */
 static READ8_DEVICE_HANDLER( comad_okim6295_r )
 {
 	UINT16 retvalue;
+//  okim6295_device *oki = downcast<okim6295_device *>(device);
 
-//  retvalue = okim6295_r(offset,mem_mask) << 8; // doesn't work, causes lockups when girls change..
-	retvalue = mame_rand(device->machine);
+//  retvalue = oki->read_status(); // doesn't work, causes lockups when girls change..
+	retvalue = device->machine().rand();
 
 	return retvalue;
 }
 
-static ADDRESS_MAP_START( comad_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( comad_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)	/* + work RAM */
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE(&paletteram16)	/* 1024 colors, but only 512 seem to be used */
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
-	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)	/* + work RAM */
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
+	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
 //  AM_RANGE(0x800006, 0x800007)    ??
-	AM_RANGE(0x80000a, 0x80000b) AM_READ(kludge)	/* bits 8-a = timer? palette update code waits for them to be 111 */
-	AM_RANGE(0x80000c, 0x80000d) AM_READ(kludge)	/* missw96 bits 8-a = timer? palette update code waits for them to be 111 */
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpania_6295_bankswitch_w)	/* not sure */
+	AM_RANGE(0x80000a, 0x80000b) AM_READ(comad_timer_r)	/* bits 8-a = timer? palette update code waits for them to be 111 */
+	AM_RANGE(0x80000c, 0x80000d) AM_READ(comad_timer_r)	/* missw96 bits 8-a = timer? palette update code waits for them to be 111 */
+	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpanica_6295_bankswitch_w)	/* not sure */
 	AM_RANGE(0xc00000, 0xc0ffff) AM_RAM				/* missw96 */
 	AM_RANGE(0xc80000, 0xc8ffff) AM_RAM				/* fantasia, newfant */
-	AM_RANGE(0xf00000, 0xf00001) AM_DEVREADWRITE8("oki", comad_okim6295_r, okim6295_w, 0xff00)	/* fantasia, missw96 */
-	AM_RANGE(0xf80000, 0xf80001) AM_DEVREADWRITE8("oki", comad_okim6295_r, okim6295_w, 0xff00)	/* newfant */
+	AM_RANGE(0xf00000, 0xf00001) AM_DEVREAD8("oki", comad_okim6295_r, 0xff00) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)	/* fantasia, missw96 */
+	AM_RANGE(0xf80000, 0xf80001) AM_DEVREAD8("oki", comad_okim6295_r, 0xff00) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)	/* newfant */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fantsia2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( fantsia2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)	/* + work RAM */
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE(&paletteram16)	/* 1024 colors, but only 512 seem to be used */
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
-	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)	/* + work RAM */
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
+	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
 //  AM_RANGE(0x800006, 0x800007)    ??
-	AM_RANGE(0x800008, 0x800009) AM_READ(kludge)	/* bits 8-a = timer? palette update code waits for them to be 111 */
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpania_6295_bankswitch_w)	/* not sure */
+	AM_RANGE(0x800008, 0x800009) AM_READ(comad_timer_r)	/* bits 8-a = timer? palette update code waits for them to be 111 */
+	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpanica_6295_bankswitch_w)	/* not sure */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITENOP	/* coin counters, + ? */
-	AM_RANGE(0xc80000, 0xc80001) AM_DEVREADWRITE8("oki", comad_okim6295_r, okim6295_w, 0xff00)
+	AM_RANGE(0xc80000, 0xc80001) AM_DEVREAD8("oki", comad_okim6295_r, 0xff00) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)
 	AM_RANGE(0xf80000, 0xf8ffff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( galhustl_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( galhustl_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-    AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)
+    AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)
 	AM_RANGE(0x580000, 0x583fff) AM_RAM_WRITE(galpanic_bgvideoram_mirror_w)
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE(&paletteram16)	/* 1024 colors, but only 512 seem to be used */
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x600800, 0x600fff) AM_RAM	// writes only 1?
 	AM_RANGE(0x680000, 0x68001f) AM_RAM	// regs?
-	AM_RANGE(0x700000, 0x700fff) AM_RAM	AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM	AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x780000, 0x78001f) AM_RAM	// regs?
-	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
-	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
+	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
+	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpania_6295_bankswitch_w)
+	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpanica_6295_bankswitch_w)
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITENOP // ?
-	AM_RANGE(0xd00000, 0xd00001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0xff00)
+	AM_RANGE(0xd00000, 0xd00001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0xff00)
 	AM_RANGE(0xe80000, 0xe8ffff) AM_RAM
 ADDRESS_MAP_END
 
 #ifdef UNUSED_FUNCTION
 READ16_HANDLER( zipzap_random_read )
 {
-    return mame_rand(space->machine);
+    return space->machine().rand();
 }
 #endif
 
-static ADDRESS_MAP_START( zipzap_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( zipzap_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)
 	AM_RANGE(0x580000, 0x583fff) AM_RAM_WRITE(galpanic_bgvideoram_mirror_w)
-	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE(&paletteram16)	/* 1024 colors, but only 512 seem to be used */
+	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x680000, 0x68001f) AM_RAM
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x701000, 0x71ffff) AM_RAM
 	AM_RANGE(0x780000, 0x78001f) AM_RAM
-	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
-	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
+	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
+	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
 
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpania_6295_bankswitch_w)
+	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpanica_6295_bankswitch_w)
 
-	AM_RANGE(0xc00000, 0xc00001) AM_DEVREADWRITE8("oki", comad_okim6295_r, okim6295_w, 0xff00)
+	AM_RANGE(0xc00000, 0xc00001) AM_DEVREAD8("oki", comad_okim6295_r, 0xff00) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)	/* fantasia, missw96 */
 
 	AM_RANGE(0xc80000, 0xc8ffff) AM_RAM		// main ram
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( supmodel_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( supmodel_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x4fffff) AM_ROM
-	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE(&galpanic_fgvideoram) AM_SIZE(&galpanic_fgvideoram_size)
-	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE(&galpanic_bgvideoram)
+	AM_RANGE(0x500000, 0x51ffff) AM_RAM AM_BASE_MEMBER(galpanic_state, m_fgvideoram) AM_SIZE_MEMBER(galpanic_state, m_fgvideoram_size)
+	AM_RANGE(0x520000, 0x53ffff) AM_RAM_WRITE(galpanic_bgvideoram_w) AM_BASE_MEMBER(galpanic_state, m_bgvideoram)
 //  AM_RANGE(0x580000, 0x583fff) AM_RAM_WRITE(galpanic_bgvideoram_mirror_w) // can't be right, causes half the display to vanish at times!
-	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE(&paletteram16)	/* 1024 colors, but only 512 seem to be used */
+	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(galpanic_paletteram_w) AM_BASE_GENERIC(paletteram)	/* 1024 colors, but only 512 seem to be used */
 	AM_RANGE(0x680000, 0x68001f) AM_RAM
-	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x700000, 0x700fff) AM_RAM AM_BASE_SIZE_MEMBER(galpanic_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x780000, 0x78001f) AM_RAM
-	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1_P1")
-	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2_P2")
+	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("DSW1")
+	AM_RANGE(0x800002, 0x800003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800004, 0x800005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x800006, 0x800007) AM_READ(kludge)
-	AM_RANGE(0x800008, 0x800009) AM_READ(kludge)
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpania_6295_bankswitch_w)	/* not sure */
+	AM_RANGE(0x800006, 0x800007) AM_READ(comad_timer_r)
+	AM_RANGE(0x800008, 0x800009) AM_READ(comad_timer_r)
+	AM_RANGE(0x900000, 0x900001) AM_WRITE(galpanica_6295_bankswitch_w)	/* not sure */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITENOP
 	AM_RANGE(0xc80000, 0xc8ffff) AM_RAM
 	AM_RANGE(0xd80000, 0xd80001) AM_WRITENOP
 	AM_RANGE(0xe00012, 0xe00013) AM_WRITENOP
 	AM_RANGE(0xe80000, 0xe80001) AM_WRITENOP
-	AM_RANGE(0xf80000, 0xf80001) AM_DEVREADWRITE8("oki", comad_okim6295_r, okim6295_w, 0xff00)
+	AM_RANGE(0xf80000, 0xf80001) AM_DEVREAD8("oki", comad_okim6295_r, 0xff00) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)	/* fantasia, missw96 */
 ADDRESS_MAP_END
-
-#define COMMON_COIN0\
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Coin_A ) )\
-	PORT_DIPSETTING(      0x0020, DEF_STR( 2C_1C ) )\
-	PORT_DIPSETTING(      0x0030, DEF_STR( 1C_1C ) )\
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_2C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0008)\
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_4C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0008)\
-	PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Coin_B ) )\
-	PORT_DIPSETTING(      0x0080, DEF_STR( 2C_1C ) )\
-	PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_1C ) )\
-	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_2C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0008)\
-	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_3C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_4C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )	PORT_CONDITION("DSW1_P1",0x0008,PORTCOND_EQUALS,0x0008)
-
-#define COMMON_COIN1\
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Coin_A ) )\
-	PORT_DIPSETTING(      0x0020, DEF_STR( 2C_1C ) )\
-	PORT_DIPSETTING(      0x0030, DEF_STR( 1C_1C ) )\
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_2C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0008)\
-	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_3C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_4C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0008)\
-	PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Coin_B ) )\
-	PORT_DIPSETTING(      0x0080, DEF_STR( 2C_1C ) )\
-	PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_1C ) )\
-	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_2C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0008)\
-	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_3C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_4C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0000)\
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )	PORT_CONDITION("DSW2_P2",0x0008,PORTCOND_EQUALS,0x0008)
 
 
 static INPUT_PORTS_START( galpanic )
-	PORT_START("DSW1_P1")
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )	/* flip screen? - code at 0x000522 */
+	PORT_START("DSW1")
+	PORT_DIPUNUSED_DIPLOC( 0x0001, 0x0001, "SW1:1" )
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW1:2") /* flip screen? - code at 0x000522 */
 	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_SERVICE( 0x0004, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	/* Coinage - World (0x03ffff.b = 03) */
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(      0x0020, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0030, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )
-	/* Coinage - Japan (0x03ffff.b = 01) and US (0x03ffff.b = 02)
-    PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Coin_A ) )
-    PORT_DIPSETTING(      0x0010, DEF_STR( 2C_1C ) )
-    PORT_DIPSETTING(      0x0030, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( 2C_3C ) )
-    PORT_DIPSETTING(      0x0020, DEF_STR( 1C_2C ) )
-    PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Coin_B ) )
-    PORT_DIPSETTING(      0x0040, DEF_STR( 2C_1C ) )
-    PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( 2C_3C ) )
-    PORT_DIPSETTING(      0x0080, DEF_STR( 1C_2C ) )
-    */
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_SERVICE_DIPLOC(  0x0004, IP_ACTIVE_LOW, "SW1:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x0008, 0x0008, "SW1:4" )
+	COINAGE_WORLD
+	GALS_PANIC_JOYSTICK_4WAY(1)			/* "Shot2" is shown in "test mode" but not used by the game */
 
-	PORT_START("DSW2_P2")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )
+	PORT_START("DSW2")
+	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
 	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Lives ) )
+	PORT_DIPUNUSED_DIPLOC( 0x0004, 0x0004, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x0008, 0x0008, "SW2:4" )
+	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Lives ) )	PORT_DIPLOCATION("SW2:5,6")
 	PORT_DIPSETTING(      0x0010, "2" )
 	PORT_DIPSETTING(      0x0030, "3" )
 	PORT_DIPSETTING(      0x0020, "4" )
 	PORT_DIPSETTING(      0x0000, "5" )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )	/* demo sounds? - see notes */
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW2:7") /* demo sounds? - see notes */
 	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, "Character Test" )
+	PORT_DIPNAME( 0x0080, 0x0080, "Character Test" )	PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	GALS_PANIC_JOYSTICK_4WAY(2)			/* "Shot2" is shown in "test mode" but not used by the game */
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	SYSTEM_SERVICE
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( galpania )
-	PORT_START("DSW1_P1")
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )	/* flip screen? - code at 0x00060a */
-	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_SERVICE( 0x0004, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x0008, 0x0008, "Coin Mode" )
-	PORT_DIPSETTING(      0x0008, "Mode 1" )
-	PORT_DIPSETTING(      0x0000, "Mode 2" )
-	/* Coinage - Japan (0x03ffff.b = 01)
-    PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Coin_A ) )
-    PORT_DIPSETTING(      0x0010, DEF_STR( 2C_1C ) )
-    PORT_DIPSETTING(      0x0030, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( 2C_3C ) )
-    PORT_DIPSETTING(      0x0020, DEF_STR( 1C_2C ) )
-    PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Coin_B ) )
-    PORT_DIPSETTING(      0x0040, DEF_STR( 2C_1C ) )
-    PORT_DIPSETTING(      0x00c0, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( 2C_3C ) )
-    PORT_DIPSETTING(      0x0080, DEF_STR( 1C_2C ) )
-    */
-	/* Coinage - US (0x03ffff.b = 02) and World (0x03ffff.b = 03) */
-	COMMON_COIN0
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+static INPUT_PORTS_START( galpanica )
+	PORT_START("DSW1")
+	COINAGE_TEST_LOC		/* Unknown DSW switch 2 is flip screen? - code at 0x00060a */
+	GALS_PANIC_JOYSTICK_4WAY(1)
 
-	PORT_START("DSW2_P2")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Lives ) )
-	PORT_DIPSETTING(      0x0010, "2" )
-	PORT_DIPSETTING(      0x0030, "3" )
-	PORT_DIPSETTING(      0x0020, "4" )
-	PORT_DIPSETTING(      0x0000, "5" )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("DSW2")
+	DIFFICULTY_DEMO_SOUNDS
+	GALS_PANIC_JOYSTICK_4WAY(2)
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	SYSTEM_SERVICE
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( fantasia )
-	PORT_START("DSW1_P1")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )	/* freeze/vblank? - code at 0x000734 ('fantasia') */
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )		/* or 0x00075a ('newfant') - not called ? */
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Lives ) )
-	PORT_DIPSETTING(      0x0010, "2" )
-	PORT_DIPSETTING(      0x0030, "3" )
-	PORT_DIPSETTING(      0x0020, "4" )
-	PORT_DIPSETTING(      0x0000, "5" )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("DSW1")
+	DIFFICULTY_DEMO_SOUNDS		/* Unknown dip might be freeze/vblank? - code at 0x000734 ('fantasia') or 0x00075a ('newfant') - not called ? */
+	GALS_PANIC_JOYSTICK_4WAY(1)	/* "Shot2" is shown in "test mode" but not used by the game */
 
-	PORT_START("DSW2_P2")
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )	/* flip screen? - code at 0x00021c */
-	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_SERVICE( 0x0004, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x0008, 0x0008, "Coin Mode" )
-	PORT_DIPSETTING(      0x0008, "Mode 1" )
-	PORT_DIPSETTING(      0x0000, "Mode 2" )
-	COMMON_COIN1
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Shot2" in "test mode" */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("DSW2")
+	COINAGE_TEST_LOC		/* Unknown DSW switch 2 is flip screen? - code at 0x00021c */
+	GALS_PANIC_JOYSTICK_4WAY(2)	/* "Shot2" is shown in "test mode" but not used by the game */
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_TILT )		/* MAME may crash when pressed (see notes) */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )		/* "Service" in "test mode" */
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	SYSTEM_NO_SERVICE		/* MAME may crash when TILT is pressed (see notes), "Service" is shown in "test mode" */
 INPUT_PORTS_END
 
 /* Same as 'fantasia', but no "Service Mode" Dip Switch (and thus no "hidden" buttons) */
 static INPUT_PORTS_START( missw96 )
-	PORT_START("DSW1_P1")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )	/* freeze/vblank? - code at 0x00074e - not called ? */
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Lives ) )
-	PORT_DIPSETTING(      0x0010, "2" )
-	PORT_DIPSETTING(      0x0030, "3" )
-	PORT_DIPSETTING(      0x0020, "4" )
-	PORT_DIPSETTING(      0x0000, "5" )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("DSW1")
+	DIFFICULTY_DEMO_SOUNDS		/* Unknown dip might be freeze/vblank? - code at 0x00074e - not called ? */
+	GALS_PANIC_JOYSTICK_4WAY(1)
 
-	PORT_START("DSW2_P2")
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )	/* flip screen? - code at 0x00021c */
-	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, "Coin Mode" )
-	PORT_DIPSETTING(      0x0008, "Mode 1" )
-	PORT_DIPSETTING(      0x0000, "Mode 2" )
-	COMMON_COIN1
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("DSW2")
+	COINAGE_NO_TEST_LOC		/* Unknown DSW switch 2 is flip screen? - code at 0x00021c */
+	GALS_PANIC_JOYSTICK_4WAY(2)
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_TILT )		/* MAME may crash when pressed (see notes) */
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	SYSTEM_NO_SERVICE		/* MAME may crash when TILT is pressed (see notes) */
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( galhustl )
-	PORT_START("DSW1_P1")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Lives ) )
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Lives ) )	PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(      0x0000, "6" )
 	PORT_DIPSETTING(      0x0001, "7" )
 	PORT_DIPSETTING(      0x0003, "8" )
 	PORT_DIPSETTING(      0x0002, "10" )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Demo_Sounds ) )
+	PORT_DIPUNUSED_DIPLOC( 0x0004, 0x0004, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x0008, 0x0008, "SW2:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x0010, 0x0010, "SW2:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x0020, 0x0020, "SW2:6" )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:7")
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
-	PORT_SERVICE( 0x0080, IP_ACTIVE_LOW )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_SERVICE_DIPLOC(  0x0080, IP_ACTIVE_LOW, "SW2:8" )
+	GALS_PANIC_JOYSTICK_8WAY(1)
 
-	PORT_START("DSW2_P2")
-	PORT_DIPNAME( 0x0007, 0x0007, DEF_STR( Coinage ) )
+	PORT_START("DSW2")
+	PORT_DIPNAME( 0x0007, 0x0007, DEF_STR( Coinage ) )	PORT_DIPLOCATION("SW1:1,2,3")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 2C_1C ) )
@@ -736,42 +468,24 @@ static INPUT_PORTS_START( galhustl )
 	PORT_DIPSETTING(      0x0003, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(      0x0006, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(      0x0005, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x0018, 0x0018, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x0018, 0x0018, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:4,5")
 	PORT_DIPSETTING(      0x0010, DEF_STR( Easy ) )			/* 5000 - 7000 */
 	PORT_DIPSETTING(      0x0018, DEF_STR( Normal ) )		/* 4000 - 6000 */
 	PORT_DIPSETTING(      0x0008, DEF_STR( Hard ) )			/* 6000 - 8000 */
 	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )		/* 7000 - 9000 */
-	PORT_DIPNAME( 0x0060, 0x0060, "Play Time" )
+	PORT_DIPNAME( 0x0060, 0x0060, "Play Time" )		PORT_DIPLOCATION("SW1:6,7")
 	PORT_DIPSETTING(      0x0040, "120 Sec" )
 	PORT_DIPSETTING(      0x0060, "100 Sec" )
 	PORT_DIPSETTING(      0x0020, "80 Sec" )
 	PORT_DIPSETTING(      0x0000, "70 Sec" )
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_DIPUNUSED_DIPLOC( 0x0080, 0x0080, "SW1:8" )
+	GALS_PANIC_JOYSTICK_8WAY(2)
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	SYSTEM_NO_TILT
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( zipzap )
-	PORT_START("DSW1_P1")
+	PORT_START("DSW1")
 	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
@@ -795,16 +509,9 @@ static INPUT_PORTS_START( zipzap )
 	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	GALS_PANIC_JOYSTICK_8WAY(1)
 
-	PORT_START("DSW2_P2")
+	PORT_START("DSW2")
 	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( 2C_1C ) )
@@ -828,25 +535,9 @@ static INPUT_PORTS_START( zipzap )
 	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	GALS_PANIC_JOYSTICK_8WAY(2)
 
-	PORT_START("SYSTEM")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	SYSTEM_NO_TILT
 INPUT_PORTS_END
 
 
@@ -868,125 +559,137 @@ static GFXDECODE_START( galpanic )
 GFXDECODE_END
 
 
+static const kaneko_pandora_interface galpanic_pandora_config =
+{
+	"screen",	/* screen tag */
+	0,	/* gfx_region */
+	0, -16	/* x_offs, y_offs */
+};
 
-static MACHINE_DRIVER_START( galpanic )
+
+static MACHINE_CONFIG_START( galpanic, galpanic_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, XTAL_12MHz) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(galpanic_map)
-	MDRV_CPU_VBLANK_INT_HACK(galpanic_interrupt,2)
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_12MHz) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(galpanic_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", galpanic_scanline, "screen", 0, 1)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* frames per second, vblank duration */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* frames per second, vblank duration */)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)
+	MCFG_SCREEN_UPDATE_STATIC(galpanic)
+	MCFG_SCREEN_VBLANK_STATIC( galpanic )
 
-	MDRV_GFXDECODE(galpanic)
-	MDRV_PALETTE_LENGTH(1024 + 32768)
+	MCFG_GFXDECODE(galpanic)
+	MCFG_PALETTE_LENGTH(1024 + 32768)
 
-	MDRV_PALETTE_INIT(galpanic)
-	MDRV_VIDEO_START(galpanic)
-	MDRV_VIDEO_UPDATE(galpanic)
-	MDRV_VIDEO_EOF( galpanic )
+	MCFG_KANEKO_PANDORA_ADD("pandora", galpanic_pandora_config)
+
+	MCFG_PALETTE_INIT(galpanic)
+	MCFG_VIDEO_START(galpanic)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_12MHz/6) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", XTAL_12MHz/6, OKIM6295_PIN7_LOW) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( galpania )
+static MACHINE_CONFIG_DERIVED( galpanica, galpanic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(galpanic)
 
 	/* arm watchdog */
-	MDRV_WATCHDOG_TIME_INIT(SEC(3))	/* a guess, and certainly wrong */
-MACHINE_DRIVER_END
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(3))	/* a guess, and certainly wrong */
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( comad )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(galpanic)
-	MDRV_CPU_REPLACE("maincpu", M68000, 10000000)
-	MDRV_CPU_PROGRAM_MAP(comad_map)
-
-	/* video hardware */
-	MDRV_VIDEO_UPDATE(comad)
-	MDRV_VIDEO_EOF(0)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( supmodel )
+static MACHINE_CONFIG_DERIVED( comad, galpanic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(comad)
-	MDRV_CPU_REPLACE("maincpu", M68000, 12000000)	/* ? */
-	MDRV_CPU_PROGRAM_MAP(supmodel_map)
-	MDRV_CPU_VBLANK_INT_HACK(galpanic_interrupt,2)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(10000000)
+	MCFG_CPU_PROGRAM_MAP(comad_map)
+
+	MCFG_DEVICE_REMOVE("pandora")
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(comad)
-	MDRV_VIDEO_EOF(0)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(comad)
+	MCFG_SCREEN_VBLANK_NONE()
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( supmodel, comad )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(12000000)	/* ? */
+	MCFG_CPU_PROGRAM_MAP(supmodel_map)
+//  MCFG_TIMER_ADD_SCANLINE("scantimer", galpanic_scanline, "screen", 0, 1)
+
+	/* video hardware */
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(comad)
+	MCFG_SCREEN_VBLANK_NONE()
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("oki", OKIM6295, 1584000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_REPLACE("oki", 1584000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( fantsia2 )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(comad)
-	MDRV_CPU_REPLACE("maincpu", M68000, 12000000)	/* ? */
-	MDRV_CPU_PROGRAM_MAP(fantsia2_map)
-
-	/* video hardware */
-	MDRV_VIDEO_UPDATE(comad)
-	MDRV_VIDEO_EOF(0)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( galhustl )
+static MACHINE_CONFIG_DERIVED( fantsia2, comad )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(comad)
-	MDRV_CPU_REPLACE("maincpu", M68000, 12000000)	/* ? */
-	MDRV_CPU_PROGRAM_MAP(galhustl_map)
-	MDRV_CPU_VBLANK_INT_HACK(galhustl_interrupt,3)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(12000000)	/* ? */
+	MCFG_CPU_PROGRAM_MAP(fantsia2_map)
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(comad)
-	MDRV_VIDEO_EOF(0)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(comad)
+	MCFG_SCREEN_VBLANK_NONE()
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( galhustl, comad )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(12000000)	/* ? */
+	MCFG_CPU_PROGRAM_MAP(galhustl_map)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_CALLBACK(galhustl_scanline)
+
+	/* video hardware */
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(comad)
+	MCFG_SCREEN_VBLANK_NONE()
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_REPLACE("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( zipzap )
+static MACHINE_CONFIG_DERIVED( zipzap, comad )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(comad)
-	MDRV_CPU_REPLACE("maincpu", M68000, 12000000)	/* ? */
-	MDRV_CPU_PROGRAM_MAP(zipzap_map)
-	MDRV_CPU_VBLANK_INT_HACK(galhustl_interrupt,3)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(12000000)	/* ? */
+	MCFG_CPU_PROGRAM_MAP(zipzap_map)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_CALLBACK(galhustl_scanline)
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(comad)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(comad)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_REPLACE("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -1304,8 +1007,8 @@ ROM_START( supmodel )
 ROM_END
 
 GAME( 1990, galpanic, 0,        galpanic, galpanic, 0, ROT90, "Kaneko", "Gals Panic (Unprotected)", GAME_NO_COCKTAIL )
-GAME( 1990, galpanica,galpanic, galpania, galpania, 0, ROT90, "Kaneko", "Gals Panic (MCU Protected)", GAME_NO_COCKTAIL )
-GAME( 1994, supmodel, 0,        supmodel, fantasia, 0, ROT90, "Comad & New Japan System", "Super Model",GAME_NO_COCKTAIL ) // 'official' or hack of fantasia?
+GAME( 1990, galpanica,galpanic, galpanica,galpanica,0, ROT90, "Kaneko", "Gals Panic (MCU Protected)", GAME_NO_COCKTAIL )
+GAME( 1994, supmodel, 0,        supmodel, fantasia, 0, ROT90, "Comad & New Japan System", "Super Model",GAME_NO_COCKTAIL )
 GAME( 1995, newfant,  0,        comad,    fantasia, 0, ROT90, "Comad & New Japan System", "New Fantasia", GAME_NO_COCKTAIL )
 GAME( 1995, fantsy95, 0,        comad,    fantasia, 0, ROT90, "Hi-max Technology Inc.", "Fantasy '95", GAME_NO_COCKTAIL )
 GAME( 1996, missw96,  0,        comad,    missw96,  0, ROT0,  "Comad", "Miss World '96 (Nude)", GAME_NO_COCKTAIL )

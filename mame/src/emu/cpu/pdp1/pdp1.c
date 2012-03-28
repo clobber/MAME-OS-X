@@ -335,6 +335,7 @@
 */
 
 
+#include "emu.h"
 #include "debugger.h"
 #include "pdp1.h"
 
@@ -342,8 +343,8 @@
 #define LOG_EXTRA 0
 #define LOG_IOT_EXTRA 0
 
-#define READ_PDP_18BIT(A) ((signed)memory_read_dword_32be(cpustate->program, (A)<<2))
-#define WRITE_PDP_18BIT(A,V) (memory_write_dword_32be(cpustate->program, (A)<<2,(V)))
+#define READ_PDP_18BIT(A) ((signed)cpustate->program->read_dword((A)<<2))
+#define WRITE_PDP_18BIT(A,V) (cpustate->program->write_dword((A)<<2,(V)))
 
 
 /* PDP1 Registers */
@@ -416,25 +417,23 @@ struct _pdp1_state
 	/* 1 for 16-line sequence break system, 0 for default break system */
 	int type_20_sbs;
 
-	const device_config *device;
-	const address_space *program;
+	legacy_cpu_device *device;
+	address_space *program;
 	int icount;
 };
 
-INLINE pdp1_state *get_safe_token(const device_config *device)
+INLINE pdp1_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_PDP1);
-	return (pdp1_state *)device->token;
+	assert(device->type() == PDP1);
+	return (pdp1_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static void execute_instruction(pdp1_state *cpustate);
-static void null_iot (const device_config *device, int op2, int nac, int mb, int *io, int ac);
-static void lem_eem_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac);
-static void sbs_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac);
-static void type_20_sbs_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac);
+static void null_iot (device_t *device, int op2, int nac, int mb, int *io, int ac);
+static void lem_eem_iot(device_t *device, int op2, int nac, int mb, int *io, int ac);
+static void sbs_iot(device_t *device, int op2, int nac, int mb, int *io, int ac);
+static void type_20_sbs_iot(device_t *device, int op2, int nac, int mb, int *io, int ac);
 static void pulse_start_clear(pdp1_state *cpustate);
 
 
@@ -538,14 +537,14 @@ static void pdp1_set_irq_line (pdp1_state *cpustate, int irqline, int state)
 
 static CPU_INIT( pdp1 )
 {
-	const pdp1_reset_param_t *param = (const pdp1_reset_param_t *)device->static_config;
+	const pdp1_reset_param_t *param = (const pdp1_reset_param_t *)device->static_config();
 	pdp1_state *cpustate = get_safe_token(device);
 	int i;
 
 	/* clean-up */
 	memset (cpustate, 0, sizeof (*cpustate));
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
 
 	/* set up params and callbacks */
 	for (i=0; i<64; i++)
@@ -621,8 +620,6 @@ static const char instruction_kind[32] =
 static CPU_EXECUTE( pdp1 )
 {
 	pdp1_state *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	do
 	{
@@ -861,8 +858,6 @@ static CPU_EXECUTE( pdp1 )
 		}
 	}
 	while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -936,7 +931,7 @@ static CPU_SET_INFO( pdp1 )
 
 CPU_GET_INFO( pdp1 )
 {
-	pdp1_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	pdp1_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -952,19 +947,19 @@ CPU_GET_INFO( pdp1 )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 5;	/* 5us cycle time */	break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 31;	/* we emulate individual 5us cycle, but MUL/DIV have longer timings */	break;
 
-	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 18;	/*16+2 ignored bits to make double word address*/	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 18;	/*16+2 ignored bits to make double word address*/	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = 0;	/* no SP */				break;
 	case CPUINFO_INT_PC:							info->i = PC;							break;
-	case CPUINFO_INT_PREVIOUSPC:					info->i = 0;	/* TODO??? */			break;
+	case CPUINFO_INT_PREVIOUSPC:					info->i = PC;	/* TODO??? */			break;
 
 	case CPUINFO_INT_INPUT_STATE + 0:
 	case CPUINFO_INT_INPUT_STATE + 1:
@@ -1031,7 +1026,7 @@ CPU_GET_INFO( pdp1 )
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
 
 	/* --- the following bits of info are returned as NULL-terminated strings --- */
-	case DEVINFO_STR_NAME: 							strcpy(info->s, "PDP1");	break;
+	case DEVINFO_STR_NAME:							strcpy(info->s, "PDP1");	break;
 	case DEVINFO_STR_FAMILY:					strcpy(info->s, "DEC PDP-1");	break;
 	case DEVINFO_STR_VERSION:					strcpy(info->s, "2.0");	break;
 	case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);	break;
@@ -1059,7 +1054,7 @@ CPU_GET_INFO( pdp1 )
 		break;
 
 
-	case CPUINFO_STR_REGISTER + PDP1_PC:			sprintf(info->s, "PC:0%06o", PC); break;
+	case CPUINFO_STR_REGISTER + PDP1_PC:			sprintf(info->s, "PC:0%06o(%04X)", PC, PC); break;
 	case CPUINFO_STR_REGISTER + PDP1_IR:			sprintf(info->s, "IR:0%02o", IR); break;
 	case CPUINFO_STR_REGISTER + PDP1_MB:			sprintf(info->s, "MB:0%06o", MB); break;
 	case CPUINFO_STR_REGISTER + PDP1_MA:			sprintf(info->s, "MA:0%06o", MA); break;
@@ -1095,6 +1090,7 @@ CPU_GET_INFO( pdp1 )
 	case CPUINFO_STR_REGISTER + PDP1_IOC:			sprintf(info->s, "IOC:%X", cpustate->ioc); break;
 	case CPUINFO_STR_REGISTER + PDP1_IOH:			sprintf(info->s, "IOH:%X", cpustate->ioh); break;
 	case CPUINFO_STR_REGISTER + PDP1_IOS:			sprintf(info->s, "IOS:%X", cpustate->ios); break;
+	case CPUINFO_IS_OCTAL:							info->i = true;							break;
 	}
 }
 
@@ -1703,7 +1699,7 @@ no_fetch:
 /*
     Handle unimplemented IOT
 */
-static void null_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac)
+static void null_iot(device_t *device, int op2, int nac, int mb, int *io, int ac)
 {
 	pdp1_state *cpustate = get_safe_token(device);
 	/* Note that the dummy IOT 0 is used to wait for the completion pulse
@@ -1726,7 +1722,7 @@ static void null_iot(const device_config *device, int op2, int nac, int mb, int 
 
     IOT 74: LEM/EEM
 */
-static void lem_eem_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac)
+static void lem_eem_iot(device_t *device, int op2, int nac, int mb, int *io, int ac)
 {
 	pdp1_state *cpustate = get_safe_token(device);
 	if (! cpustate->extend_support)	/* extend mode supported? */
@@ -1750,7 +1746,7 @@ static void lem_eem_iot(const device_config *device, int op2, int nac, int mb, i
     IOT 55: esm
     IOT 56: cbs
 */
-static void sbs_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac)
+static void sbs_iot(device_t *device, int op2, int nac, int mb, int *io, int ac)
 {
 	pdp1_state *cpustate = get_safe_token(device);
 	switch (op2)
@@ -1794,7 +1790,7 @@ static void sbs_iot(const device_config *device, int op2, int nac, int mb, int *
     IOT 52: isb
     IOT 53: cac
 */
-static void type_20_sbs_iot(const device_config *device, int op2, int nac, int mb, int *io, int ac)
+static void type_20_sbs_iot(device_t *device, int op2, int nac, int mb, int *io, int ac)
 {
 	pdp1_state *cpustate = get_safe_token(device);
 	int channel, mask;
@@ -1891,3 +1887,5 @@ static void pulse_start_clear(pdp1_state *cpustate)
 	if (cpustate->io_sc_callback)
 		(*cpustate->io_sc_callback)(cpustate->device);
 }
+
+DEFINE_LEGACY_CPU_DEVICE(PDP1, pdp1);

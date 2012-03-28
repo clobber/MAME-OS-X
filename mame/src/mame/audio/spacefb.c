@@ -4,47 +4,46 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/dac.h"
 #include "sound/samples.h"
 #include "includes/spacefb.h"
 
 
-
-static UINT8 spacefb_sound_latch;
-
-
-
 READ8_HANDLER( spacefb_audio_p2_r )
 {
-	return (spacefb_sound_latch & 0x18) << 1;
+	spacefb_state *state = space->machine().driver_data<spacefb_state>();
+	return (state->m_sound_latch & 0x18) << 1;
 }
 
 
 READ8_HANDLER( spacefb_audio_t0_r )
 {
-	return spacefb_sound_latch & 0x20;
+	spacefb_state *state = space->machine().driver_data<spacefb_state>();
+	return state->m_sound_latch & 0x20;
 }
 
 
 READ8_HANDLER( spacefb_audio_t1_r )
 {
-	return spacefb_sound_latch & 0x04;
+	spacefb_state *state = space->machine().driver_data<spacefb_state>();
+	return state->m_sound_latch & 0x04;
 }
 
 
 WRITE8_HANDLER( spacefb_port_1_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	spacefb_state *state = space->machine().driver_data<spacefb_state>();
+	device_t *samples = space->machine().device("samples");
 
-	cputag_set_input_line(space->machine, "audiocpu", 0, (data & 0x02) ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, (data & 0x02) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* enemy killed */
-	if (!(data & 0x01) && (spacefb_sound_latch & 0x01))  sample_start(samples, 0,0,0);
+	if (!(data & 0x01) && (state->m_sound_latch & 0x01))  sample_start(samples, 0,0,0);
 
 	/* ship fire */
-	if (!(data & 0x40) && (spacefb_sound_latch & 0x40))  sample_start(samples, 1,1,0);
+	if (!(data & 0x40) && (state->m_sound_latch & 0x40))  sample_start(samples, 1,1,0);
 
 	/*
      *  Explosion Noise
@@ -54,7 +53,7 @@ WRITE8_HANDLER( spacefb_port_1_w )
      *  Fortunately it seems like the recorded sample of the spaceship death is the longest the sample plays for.
      *  We loop it just in case it runs out
      */
-	if ((data & 0x80) != (spacefb_sound_latch & 0x80))
+	if ((data & 0x80) != (state->m_sound_latch & 0x80))
 	{
 		if (data & 0x80)
 			/* play decaying noise */
@@ -64,17 +63,17 @@ WRITE8_HANDLER( spacefb_port_1_w )
 			sample_start(samples, 2,2,1);
 	}
 
-	spacefb_sound_latch = data;
+	state->m_sound_latch = data;
 }
 
 
 static const char *const spacefb_sample_names[] =
 {
 	"*spacefb",
-	"ekilled.wav",
-	"shipfire.wav",
-	"explode1.wav",
-	"explode2.wav",
+	"ekilled",
+	"shipfire",
+	"explode1",
+	"explode2",
 	0
 };
 
@@ -86,13 +85,13 @@ static const samples_interface spacefb_samples_interface =
 };
 
 
-MACHINE_DRIVER_START( spacefb_audio )
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+MACHINE_CONFIG_FRAGMENT( spacefb_audio )
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(spacefb_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(spacefb_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END

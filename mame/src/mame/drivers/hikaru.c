@@ -7,14 +7,14 @@ Sega Hikaru Hardware Overview (last updated 5th August 2009 at 3:45pm)
 
 Note! This document will be updated from time to time when more dumps are available.
 
-This document covers all the known Sega Hikaru games. The graphics are quite breath-taking
+This document covers all the known Sega Hikaru games. The graphics are quite breathtaking
 and this system is said to be one of the most expensive arcade boards developed by Sega.
 The games on this system include....
 Air Trix                     (C) Sega, 2001
 !Brave Fire Fighters         (C) Sega, 1999
 *Cyber Troopers Virtual On 4 (C) Sega, 2001
-!Nascar Racing               (C) Sega, 2000
-!Planet Harriers             (C) Sega, 2001
+Nascar Racing               (C) Sega, 2000
+Planet Harriers             (C) Sega, 2001
 !Star Wars Racer Arcade      (C) Sega, 2000
 
 ! - denotes secured but not fully dumped yet
@@ -319,7 +319,7 @@ Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/sh4/sh4.h"
 
 #define CPU_CLOCK (200000000)
@@ -332,7 +332,7 @@ static VIDEO_START(hikaru)
 
 }
 
-static VIDEO_UPDATE(hikaru)
+static SCREEN_UPDATE_RGB32(hikaru)
 {
 	return 0;
 }
@@ -341,30 +341,68 @@ static INPUT_PORTS_START( hikaru )
 	PORT_START("IN0")
 INPUT_PORTS_END
 
-static ADDRESS_MAP_START( hikaru_map, ADDRESS_SPACE_PROGRAM, 64 )
-	AM_RANGE(0x00000000, 0x001FFFFF) AM_ROM AM_SHARE(1)
-	AM_RANGE(0x00400000, 0x004000FF) AM_NOP // unknown
-	AM_RANGE(0x00800000, 0x008000FF) AM_NOP // unknown
-	AM_RANGE(0x00830000, 0x00831FFF) AM_NOP // unknown
-	AM_RANGE(0x00838000, 0x008380ff) AM_NOP // unknown
-	AM_RANGE(0x0082F000, 0x0082F0ff) AM_NOP // unknown
-	AM_RANGE(0x00C00000, 0x00C002FF) AM_RAM // unknown nvram?
-	AM_RANGE(0x01000000, 0x010001FF) AM_NOP // unknown
-	AM_RANGE(0x02000000, 0x020000FF) AM_NOP // unknown
-	AM_RANGE(0x02710000, 0x027100FF) AM_NOP // unknown
-	AM_RANGE(0x03000000, 0x030000FF) AM_NOP // unknown
-	AM_RANGE(0x04000000, 0x040000FF) AM_NOP // unknown
-	AM_RANGE(0x0C000000, 0x0DFFFFFF) AM_RAM
-	AM_RANGE(0x14000000, 0x140000FF) AM_NOP // unknown
-	AM_RANGE(0x14004000, 0x140041FF) AM_RAM // unknown
-	AM_RANGE(0x15000000, 0x150000FF) AM_NOP // unknown
-	AM_RANGE(0x16001000, 0x160010FF) AM_RAM // unknown
-	AM_RANGE(0x1A000000, 0x1A0000FF) AM_NOP // unknown
+/*
+ Area 0
+  00000000-00200000    boot ROM
+  00400000-00400003    ?
+  00800000-0083ffff    MIE + Service/Test switches and more
+  00c00000-00c0ffff    backup RAM
+  01000000-01000003    ?
+  01000100-01000103    ?
+  02000000-02ffffff    banked area (ROMBD+AICA+COMM+other devices)
+  03000000-03ffffff    banked area (ROMBD+EEPROM+COMM+other devices)
+ Area 1
+  04000000-0400003f    Memory controller (Master)
+ Area 3
+  0c000000-0dffffff    RAM
+ Area 5
+  14000000-140000ff    Master/Slave COMM
+  14000100-143fffff    GPU command RAM
+  15000000-150000ff    GPU Regs
+  16000000-163fffff x2 ? \ these two overlap [selected by 040000xx = 0x04,0x06,0x40]
+  16010000-17ffffff    Slave RAM /
+ Area 6
+  18001000-1800101f    ?
+  1a000000-1a000103    GPU Regs
+  1a000180-150001bf    GPU Texture Regs A
+  1a000200-1500023f    GPU Texture Regs B
+  1a040000-1a04000f    GPU Texture fIfO (?)
+  1b000000-1b7fffff    GPU Texture RAM and framebuffer (a 2048x2048x16-bit sheet?)
+
+*/
+
+static ADDRESS_MAP_START( hikaru_map, AS_PROGRAM, 64 )
+//  Area 0
+	AM_RANGE(0x00000000, 0x001fffff) AM_ROM AM_SHARE("share1")  // boot ROM
+	AM_RANGE(0x00400000, 0x00400007) AM_NOP // unknown
+	AM_RANGE(0x00800000, 0x0083ffff) AM_NOP // MIE + Service/Test switches and more
+	AM_RANGE(0x00c00000, 0x00c0ffff) AM_RAM // backup RAM
+	AM_RANGE(0x01000000, 0x01000007) AM_NOP // unknown
+	AM_RANGE(0x01000100, 0x01000107) AM_NOP // unknown
+	AM_RANGE(0x02000000, 0x02ffffff) AM_NOP // banked area (ROMBD + AICA + COMM + other devices)
+	AM_RANGE(0x03000000, 0x03ffffff) AM_NOP // banked area (ROMBD + EEPROM + COMM + other devices)
+//  Area 1
+	AM_RANGE(0x04000000, 0x0400003f) AM_NOP // memory controller (Master)
+//  Area 3
+	AM_RANGE(0x0c000000, 0x0dffffff) AM_RAM // main Work RAM
+//  Area 5
+	AM_RANGE(0x14000000, 0x140000ff) AM_NOP // Master/Slave COMM
+	AM_RANGE(0x14000100, 0x143fffff) AM_RAM // GPU command RAM
+	AM_RANGE(0x15000000, 0x150000ff) AM_NOP // GPU Regs
+	AM_RANGE(0x16001000, 0x163fffff) AM_RAM // ? \ these two overlap [selected by 040000xx = 0x04,0x06,0x40]
+	AM_RANGE(0x16010000, 0x17ffffff) AM_RAM // Slave Work RAM
+//  Area 6
+	AM_RANGE(0x18001000, 0x1800101f) AM_NOP // unknown
+	AM_RANGE(0x1a000000, 0x1a000107) AM_NOP // GPU Regs
+	AM_RANGE(0x1a000180, 0x1a0001bf) AM_NOP // GPU Texture Regs A
+	AM_RANGE(0x1a000200, 0x1a00023f) AM_NOP // GPU Texture Regs B
+	AM_RANGE(0x1a040000, 0x1a04000f) AM_NOP // GPU Texture FIFO (?)
+	AM_RANGE(0x1b000000, 0x1b7fffff) AM_NOP // GPU Texture RAM and framebuffer (a 2048x2048x16-bit sheet?)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hikaru_map_slave, ADDRESS_SPACE_PROGRAM, 64 )
+static ADDRESS_MAP_START( hikaru_map_slave, AS_PROGRAM, 64 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00000000, 0x001FFFFF) AM_ROM AM_SHARE(1)
+	AM_RANGE(0x00000000, 0x001FFFFF) AM_ROM AM_SHARE("share1")
 	AM_RANGE(0x0C000000, 0x0DFFFFFF) AM_RAM
 	AM_RANGE(0x10000000, 0x100000FF) AM_RAM
 	AM_RANGE(0x1A800000, 0x1A8000FF) AM_RAM
@@ -372,40 +410,39 @@ static ADDRESS_MAP_START( hikaru_map_slave, ADDRESS_SPACE_PROGRAM, 64 )
 ADDRESS_MAP_END
 
 
-static MACHINE_DRIVER_START( hikaru )
+static MACHINE_CONFIG_START( hikaru, driver_device )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", SH4, CPU_CLOCK)
-//  MDRV_CPU_CONFIG(sh4cpu_config)
-	MDRV_CPU_PROGRAM_MAP(hikaru_map)
-//  MDRV_CPU_IO_MAP(hikaru_port)
-//  MDRV_CPU_VBLANK_INT("screen", hikaru,vblank)
-	MDRV_CPU_ADD("slave", SH4, CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(hikaru_map_slave)
+	MCFG_CPU_ADD("maincpu", SH4LE, CPU_CLOCK)
+//  MCFG_CPU_CONFIG(sh4cpu_config)
+	MCFG_CPU_PROGRAM_MAP(hikaru_map)
+//  MCFG_CPU_IO_MAP(hikaru_port)
+//  MCFG_CPU_VBLANK_INT("screen", hikaru,vblank)
+	MCFG_CPU_ADD("slave", SH4LE, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(hikaru_map_slave)
 
-//  MDRV_MACHINE_START( hikaru )
-//  MDRV_MACHINE_RESET( hikaru )
+//  MCFG_MACHINE_START( hikaru )
+//  MCFG_MACHINE_RESET( hikaru )
 
-//  MDRV_NVRAM_HANDLER(hikaru_eeproms)
+//  MCFG_NVRAM_HANDLER(hikaru_eeproms)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(640, 480)
-	MDRV_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(640, 480)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_UPDATE_STATIC(hikaru)
 
-	MDRV_PALETTE_LENGTH(0x1000)
+	MCFG_PALETTE_LENGTH(0x1000)
 
-	MDRV_VIDEO_START(hikaru)
-	MDRV_VIDEO_UPDATE(hikaru)
+	MCFG_VIDEO_START(hikaru)
 
-//  MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-//  MDRV_SOUND_ADD("aica", AICA, 0)
-//  MDRV_SOUND_CONFIG(aica_config)
-//  MDRV_SOUND_ROUTE(0, "lspeaker", 2.0)
-//  MDRV_SOUND_ROUTE(0, "rspeaker", 2.0)
-MACHINE_DRIVER_END
+//  MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+//  MCFG_SOUND_ADD("aica", AICA, 0)
+//  MCFG_SOUND_CONFIG(aica_config)
+//  MCFG_SOUND_ROUTE(0, "lspeaker", 2.0)
+//  MCFG_SOUND_ROUTE(0, "rspeaker", 2.0)
+MACHINE_CONFIG_END
 
 
 #define ROM_LOAD16_WORD_SWAP_BIOS(bios,name,offset,length,hash) \
@@ -417,9 +454,12 @@ MACHINE_DRIVER_END
 	ROM_LOAD16_WORD_SWAP_BIOS( 0, "epr23400a.ic94",   0x000000, 0x200000, CRC(2aa906a7) SHA1(098c9909b123ed6c338ac874f2ee90e3b2da4c02) ) \
 	ROM_SYSTEM_BIOS( 1, "bios1", "epr23400" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 1, "epr-23400.ic94",   0x000000, 0x200000, CRC(3d557104) SHA1(d39879f5a1acbd54ad8ee4fbd412f870c9ff4aa5) ) \
+	ROM_SYSTEM_BIOS( 2, "bios2", "epr21904" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 1, "epr-21904.ic94",   0x000000, 0x200000, CRC(d96298b6) SHA1(d10d837bc7d68eb7125c34beffe21a91305627b0) ) \
 
 // bios 0 is SAMURAI boot rom 0.96 / 2000/8/10
 // bios 1 is SAMURAI boot rom 0.92 / 1999/7/2
+// bios 2 is SAMURAI boot rom 0.84 / 1999/7/22
 
 
 ROM_START( hikaru )
@@ -549,7 +589,55 @@ ROM_START( podrace )
 	ROM_LOAD("mpr-23117.ic68" , 0xf800000, 0x0800000, NO_DUMP )
 ROM_END
 
+ROM_START( braveff )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	HIKARU_BIOS
+
+	ROM_REGION( 0x2000000, "user1", 0)
+	ROM_LOAD32_WORD( "epr-21994.ic29", 0x000000, 0x200000, CRC(31b0a754) SHA1(b49c998a15fbc790b780ed6665a56681d4edd369) )
+	ROM_LOAD32_WORD( "epr-21995.ic30", 0x000002, 0x200000, CRC(bcccb56b) SHA1(6e7a69934e5b47495ae8e90c57759573bc519d24) )
+	ROM_LOAD32_WORD( "epr-21996.ic31", 0x400000, 0x200000, CRC(a8f88e17) SHA1(dbbd2a73335c740bcf2ff9680c575841af29b340) )
+	ROM_LOAD32_WORD( "epr-21997.ic32", 0x400002, 0x200000, CRC(4b24fa1b) SHA1(53c330f7e7ce8cb67f67db3ee9068a77aeb33747) )
+	ROM_LOAD32_WORD( "epr-21998.ic33", 0x800000, 0x200000, CRC(bd1df696) SHA1(fd937894763fab5cb50f33c40f8047e0d3adc93b) )
+	ROM_LOAD32_WORD( "epr-21999.ic34", 0x800002, 0x200000, CRC(9425eee0) SHA1(0f6a23163022bbd7ec54dd638094f3e317a87919) )
+	/* ic35 unpopulated */
+	/* ic36 unpopulated */
+
+	/* ROM board using 64M SOP44 MASKROM */
+	ROM_REGION( 0x10000000, "user2", ROMREGION_ERASE00)
+ROM_END
+
+ROM_START( sgnascar )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	HIKARU_BIOS
+
+	ROM_REGION( 0x2000000, "user1", 0)
+	ROM_LOAD32_WORD( "epr-23485a.ic35", 0x000000, 0x400000, CRC(1072f531) SHA1(ca07a8bfb7247e4aec57e18cb091d24dcef666c1) )
+	ROM_LOAD32_WORD( "epr-23486a.ic36", 0x000002, 0x400000, CRC(02d4aab6) SHA1(b1b0e07dc71dc124177e27dfd8b459444e8ae4d3) )
+
+	/* ROM board using 128M TSOP48 MASKROMs */
+	ROM_REGION( 0x10000000, "user2", ROMREGION_ERASE00)
+	ROM_LOAD( "mpr-23469.ic19", 0x0000000, 0x1000000, CRC(89cbad8d) SHA1(e4f103b96a3a842a90182172ddcf3bc5dfe6cca8) )
+	ROM_LOAD( "mpr-23473.ic20", 0x1000000, 0x1000000, CRC(977b87d6) SHA1(079eeebc6f9c60d0a016a46386bbe846d8a354da) )
+	ROM_LOAD( "mpr-23470.ic21", 0x2000000, 0x1000000, CRC(faf4940f) SHA1(72fee9ea5b78da260ed99ebe80ca6300f62cdbd7) )
+	ROM_LOAD( "mpr-23474.ic22", 0x3000000, 0x1000000, CRC(faf69ac5) SHA1(875c748151bf0e9cd73d86384665414b2f7b6f5a) )
+	ROM_LOAD( "mpr-23471.ic23", 0x4000000, 0x1000000, CRC(a3aad8ac) SHA1(afc8f3d1546e50afab4f540d59c87fe27cfb2cdd) )
+	ROM_LOAD( "mpr-23475.ic24", 0x5000000, 0x1000000, CRC(5f51597c) SHA1(02c0a5d463714082b7ebb2bec4d0f88aff186f82) )
+	ROM_LOAD( "mpr-23472.ic25", 0x6000000, 0x1000000, CRC(2495f678) SHA1(94b3160aabaea0596855c38ab1b63b16b20f2bae) )
+	ROM_LOAD( "mpr-23476.ic26", 0x7000000, 0x1000000, CRC(927cf31c) SHA1(7cab22a4113d92080a52e1d235bf075ce95f985f) )
+	ROM_LOAD( "mpr-23477.ic27", 0x8000000, 0x1000000, CRC(b4b7c477) SHA1(bcbfe081d509f0b87c6685b9b6617ae146987fe7) )
+	ROM_LOAD( "mpr-23481.ic28", 0x9000000, 0x1000000, CRC(27b8eb7d) SHA1(087b1ed13a3e2a0dbda82c454243214784429d24) )
+	ROM_LOAD( "mpr-23478.ic29", 0xa000000, 0x1000000, CRC(1fac431c) SHA1(2e3903c8cfd55d414555a1d23ba3a97c335991b3) )
+	ROM_LOAD( "mpr-23482.ic30", 0xb000000, 0x1000000, CRC(2e9a0420) SHA1(376d5f0b8274d741a702dc08da50ea5679991740) )
+	ROM_LOAD( "mpr-23479.ic31", 0xc000000, 0x1000000, CRC(22e07a60) SHA1(22f50af81c0b457ed550fde696126f882a25b0a8) )
+	ROM_LOAD( "mpr-23483.ic32", 0xd000000, 0x1000000, CRC(c37adebe) SHA1(e84f6d2cc364c743f7f3b73d8c8d0271952bb093) )
+	ROM_LOAD( "mpr-23480.ic33", 0xe000000, 0x1000000, CRC(f517b8b3) SHA1(c04740adb612473c4c9f8186e7e93d2f73d1bb1a) )
+	ROM_LOAD( "mpr-23484.ic34", 0xf000000, 0x1000000, CRC(2ebe1aa1) SHA1(16b39f7422da1a334dde27169c2949e1d95bddb3) )
+ROM_END
+
 GAME( 2000, hikaru,   0,        hikaru,   hikaru,   0, ROT0, "Sega",            "Hikaru Bios", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
+GAME( 1999, braveff,  hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Brave Fire Fighters", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
 GAME( 2000, airtrix,  hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Air Trix", GAME_NO_SOUND|GAME_NOT_WORKING )
+GAME( 2000, sgnascar, hikaru,   hikaru,   hikaru,   0, ROT0, "Sega / Electronic Arts", "NASCAR Racing", GAME_NO_SOUND|GAME_NOT_WORKING )
 GAME( 2001, pharrier, hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Planet Harriers", GAME_NO_SOUND|GAME_NOT_WORKING )
 GAME( 2001, podrace,  hikaru,   hikaru,   hikaru,   0, ROT0, "Sega",            "Star Wars Pod Racer", GAME_NO_SOUND|GAME_NOT_WORKING )

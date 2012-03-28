@@ -8,7 +8,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "includes/atari.h"
 #include "sound/pokey.h"
@@ -20,11 +20,11 @@
 #define VERBOSE_SERIAL	0
 #define VERBOSE_TIMERS	0
 
-static void a600xl_mmu(running_machine *machine, UINT8 new_mmu);
+static void a600xl_mmu(running_machine &machine, UINT8 new_mmu);
 
-static void pokey_reset(running_machine *machine);
+static void pokey_reset(running_machine &machine);
 
-void atari_interrupt_cb(const device_config *device, int mask)
+void atari_interrupt_cb(device_t *device, int mask)
 {
 
 	if (VERBOSE_POKEY)
@@ -53,7 +53,7 @@ void atari_interrupt_cb(const device_config *device, int mask)
 			logerror("atari interrupt_cb TIMR1\n");
 	}
 
-	cputag_set_input_line(device->machine, "maincpu", 0, HOLD_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", 0, HOLD_LINE);
 }
 
 /**************************************************************
@@ -64,17 +64,17 @@ void atari_interrupt_cb(const device_config *device, int mask)
 
 READ8_DEVICE_HANDLER(atari_pia_pa_r)
 {
-	return atari_input_disabled() ? 0xFF : input_port_read_safe(device->machine, "djoy_0_1", 0);
+	return input_port_read_safe(device->machine(), "djoy_0_1", 0);
 }
 
 READ8_DEVICE_HANDLER(atari_pia_pb_r)
 {
-	return atari_input_disabled() ? 0xFF : input_port_read_safe(device->machine, "djoy_2_3", 0);
+	return input_port_read_safe(device->machine(), "djoy_2_3", 0);
 }
 
-WRITE8_DEVICE_HANDLER(a600xl_pia_pb_w) { a600xl_mmu(device->machine, data); }
+WRITE8_DEVICE_HANDLER(a600xl_pia_pb_w) { a600xl_mmu(device->machine(), data); }
 
-static WRITE_LINE_DEVICE_HANDLER(atari_pia_cb2_w) { }	// This is used by Floppy drive on Atari 8bits Home Computers
+WRITE_LINE_DEVICE_HANDLER(atari_pia_cb2_w) { }	// This is used by Floppy drive on Atari 8bits Home Computers
 
 const pia6821_interface atarixl_pia_interface =
 {
@@ -99,27 +99,21 @@ const pia6821_interface atarixl_pia_interface =
  *
  **************************************************************/
 
-void a600xl_mmu(running_machine *machine, UINT8 new_mmu)
+void a600xl_mmu(running_machine &machine, UINT8 new_mmu)
 {
-	read8_space_func rbank2;
-	write8_space_func wbank2;
-
 	/* check if self-test ROM changed */
 	if ( new_mmu & 0x80 )
 	{
-		logerror("%s MMU SELFTEST RAM\n", machine->gamedrv->name);
-		rbank2 = (read8_space_func)SMH_NOP;
-		wbank2 = (write8_space_func)SMH_NOP;
+		logerror("%s MMU SELFTEST RAM\n", machine.system().name);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_readwrite(0x5000, 0x57ff);
 	}
 	else
 	{
-		logerror("%s MMU SELFTEST ROM\n", machine->gamedrv->name);
-		rbank2 = (read8_space_func)SMH_BANK(2);
-		wbank2 = (write8_space_func)SMH_UNMAP;
+		logerror("%s MMU SELFTEST ROM\n", machine.system().name);
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_bank(0x5000, 0x57ff, "bank2");
+		machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0x5000, 0x57ff);
+		memory_set_bankptr(machine, "bank2", machine.region("maincpu")->base() + 0x5000);
 	}
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x57ff, 0, 0, rbank2, wbank2);
-	if (rbank2 == (read8_space_func)SMH_BANK(2))
-		memory_set_bankptr(machine, 2, memory_region(machine, "maincpu") + 0x5000);
 }
 
 
@@ -163,12 +157,14 @@ void a600xl_mmu(running_machine *machine, UINT8 new_mmu)
 
 static int atari_last;
 
-void a800_handle_keyboard(running_machine *machine)
+void a800_handle_keyboard(running_machine &machine)
 {
-	const device_config *pokey = devtag_get_device(machine, "pokey");
+	device_t *pokey = machine.device("pokey");
 	int atari_code, count, ipt, i;
-	static const char *const tag[] = { "keyboard_0", "keyboard_1", "keyboard_2", "keyboard_3",
-										"keyboard_4", "keyboard_5", "keyboard_6", "keyboard_7" };
+	static const char *const tag[] = {
+		"keyboard_0", "keyboard_1", "keyboard_2", "keyboard_3",
+		"keyboard_4", "keyboard_5", "keyboard_6", "keyboard_7"
+	};
 
 	/* check keyboard */
 	for( i = 0; i < 8; i++ )
@@ -246,9 +242,9 @@ void a800_handle_keyboard(running_machine *machine)
 
  **************************************************************/
 
-void a5200_handle_keypads(running_machine *machine)
+void a5200_handle_keypads(running_machine &machine)
 {
-	const device_config *pokey = devtag_get_device(machine, "pokey");
+	device_t *pokey = machine.device("pokey");
 	int atari_code, count, ipt, i;
 	static const char *const tag[] = { "keypad_0", "keypad_1", "keypad_2", "keypad_3" };
 
@@ -310,53 +306,53 @@ void a5200_handle_keypads(running_machine *machine)
  *************************************/
 
 
-static void pokey_reset(running_machine *machine)
+static void pokey_reset(running_machine &machine)
 {
-	const device_config *pokey = devtag_get_device(machine, "pokey");
+	device_t *pokey = machine.device("pokey");
 	pokey_w(pokey,15,0);
 	atari_last = 0xff;
 }
 
 
-static UINT8 console_read(const address_space *space)
+static UINT8 console_read(address_space *space)
 {
-	return input_port_read(space->machine, "console");
+	return input_port_read(space->machine(), "console");
 }
 
 
-static void console_write(const address_space *space, UINT8 data)
+static void console_write(address_space *space, UINT8 data)
 {
-	const device_config *dac = devtag_get_device(space->machine, "dac");
+	device_t *dac = space->machine().device("dac");
 	if (data & 0x08)
-		dac_data_w(dac, -120);
+		dac_data_w(dac, (UINT8)-120);
 	else
 		dac_data_w(dac, +120);
 }
 
 
-static void _antic_reset(running_machine *machine)
+static void _antic_reset(running_machine &machine)
 {
 	antic_reset();
 }
 
 
-void atari_machine_start(running_machine *machine)
+void atari_machine_start(running_machine &machine)
 {
 	gtia_interface gtia_intf;
 
 	/* GTIA */
 	memset(&gtia_intf, 0, sizeof(gtia_intf));
-	if (input_port_by_tag(machine->portconfig, "console") != NULL)
+	if (machine.port("console") != NULL)
 		gtia_intf.console_read = console_read;
-	if (devtag_get_device(machine, "dac") != NULL)
+	if (machine.device("dac") != NULL)
 		gtia_intf.console_write = console_write;
 	gtia_init(machine, &gtia_intf);
 
 	/* pokey */
-	add_reset_callback(machine, pokey_reset);
+	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(pokey_reset), &machine));
 
 	/* ANTIC */
-	add_reset_callback(machine, _antic_reset);
+	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(_antic_reset), &machine));
 
 	/* save states */
 	state_save_register_global_pointer(machine, ((UINT8 *) &antic.r), sizeof(antic.r));

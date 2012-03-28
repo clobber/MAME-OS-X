@@ -32,6 +32,7 @@
  *  implement the ARM7TDMI guideline format is used
  ******************************************************************************/
 
+#include "emu.h"
 #include "arm7core.h"
 
 static char *WritePadding( char *pBuf, const char *pBuf0 )
@@ -938,6 +939,11 @@ static UINT32 thumb_disasm( char *pBuf, UINT32 pc, UINT16 opcode )
 							case 0x2: /* MOV */
 								switch( ( opcode & THUMB_HIREG_H ) >> THUMB_HIREG_H_SHIFT )
 								{
+									case 0x0:
+										rs = ( opcode & THUMB_HIREG_RS ) >> THUMB_HIREG_RS_SHIFT;
+										rd = opcode & THUMB_HIREG_RD;
+										pBuf += sprintf( pBuf, "MOV R%d, R%d", rd, rs );
+										break;
 									case 0x1:
 										rs = ( opcode & THUMB_HIREG_RS ) >> THUMB_HIREG_RS_SHIFT;
 										rd = opcode & THUMB_HIREG_RD;
@@ -1316,7 +1322,18 @@ CPU_DISASSEMBLE( arm7arm )
 	return arm7_disasm(buffer, pc, oprom[0] | (oprom[1] << 8) | (oprom[2] << 16) | (oprom[3] << 24)) | 4;
 }
 
+CPU_DISASSEMBLE( arm7arm_be )
+{
+	return arm7_disasm(buffer, pc, oprom[3] | (oprom[2] << 8) | (oprom[1] << 16) | (oprom[0] << 24)) | 4;
+}
+
 CPU_DISASSEMBLE( arm7thumb )
 {
 	return thumb_disasm(buffer, pc, oprom[0] | (oprom[1] << 8)) | 2;
 }
+
+CPU_DISASSEMBLE( arm7thumb_be )
+{
+	return thumb_disasm(buffer, pc, oprom[1] | (oprom[0] << 8)) | 2;
+}
+

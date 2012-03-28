@@ -4,19 +4,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "machine/atarigen.h"
+#include "emu.h"
+#include "video/atarimo.h"
 #include "includes/badlands.h"
-
-
-
-/*************************************
- *
- *  Local variables
- *
- *************************************/
-
-static UINT8 playfield_tile_bank;
 
 
 
@@ -28,8 +18,9 @@ static UINT8 playfield_tile_bank;
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	UINT16 data = atarigen_playfield[tile_index];
-	int code = (data & 0x1fff) + ((data & 0x1000) ? (playfield_tile_bank << 12) : 0);
+	badlands_state *state = machine.driver_data<badlands_state>();
+	UINT16 data = state->m_playfield[tile_index];
+	int code = (data & 0x1fff) + ((data & 0x1000) ? (state->m_playfield_tile_bank << 12) : 0);
 	int color = (data >> 13) & 0x07;
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -80,12 +71,16 @@ VIDEO_START( badlands )
 		0,					/* resulting value to indicate "special" */
 		0					/* callback routine for special entries */
 	};
+	badlands_state *state = machine.driver_data<badlands_state>();
 
 	/* initialize the playfield */
-	atarigen_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_rows,  8,8, 64,32);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
+
+	/* save states */
+	state->save_item(NAME(state->m_playfield_tile_bank));
 }
 
 
@@ -98,12 +93,13 @@ VIDEO_START( badlands )
 
 WRITE16_HANDLER( badlands_pf_bank_w )
 {
+	badlands_state *state = space->machine().driver_data<badlands_state>();
 	if (ACCESSING_BITS_0_7)
-		if (playfield_tile_bank != (data & 1))
+		if (state->m_playfield_tile_bank != (data & 1))
 		{
-			video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
-			playfield_tile_bank = data & 1;
-			tilemap_mark_all_tiles_dirty(atarigen_playfield_tilemap);
+			space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
+			state->m_playfield_tile_bank = data & 1;
+			state->m_playfield_tilemap->mark_all_dirty();
 		}
 }
 
@@ -115,22 +111,23 @@ WRITE16_HANDLER( badlands_pf_bank_w )
  *
  *************************************/
 
-VIDEO_UPDATE( badlands )
+SCREEN_UPDATE_IND16( badlands )
 {
+	badlands_state *state = screen.machine().driver_data<badlands_state>();
 	atarimo_rect_list rectlist;
-	bitmap_t *mobitmap;
+	bitmap_ind16 *mobitmap;
 	int x, y, r;
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0);
+	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{

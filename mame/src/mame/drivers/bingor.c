@@ -437,23 +437,32 @@
 
 ************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i86/i86.h"
 #include "cpu/pic16c5x/pic16c5x.h"
 #include "sound/saa1099.h"
 
-static UINT16 *blit_ram;
+
+class bingor_state : public driver_device
+{
+public:
+	bingor_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT16 *m_blit_ram;
+};
+
 
 static VIDEO_START(bingor)
 {
-
 }
 
-static VIDEO_UPDATE(bingor)
+static SCREEN_UPDATE_RGB32(bingor)
 {
+	bingor_state *state = screen.machine().driver_data<bingor_state>();
 	int x,y,count;
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
 
 	count = (0x2000/2);
 
@@ -463,25 +472,25 @@ static VIDEO_UPDATE(bingor)
 		{
 			UINT32 color;
 
-			color = (blit_ram[count] & 0xf000)>>12;
+			color = (state->m_blit_ram[count] & 0xf000)>>12;
 
-			if((x+3)<video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
-				*BITMAP_ADDR32(bitmap, y, x+3) = screen->machine->pens[color];
+			if(cliprect.contains(x+3, y))
+				bitmap.pix32(y, x+3) = screen.machine().pens[color];
 
-			color = (blit_ram[count] & 0x0f00)>>8;
+			color = (state->m_blit_ram[count] & 0x0f00)>>8;
 
-			if((x+2)<video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
-				*BITMAP_ADDR32(bitmap, y, x+2) = screen->machine->pens[color];
+			if(cliprect.contains(x+2, y))
+				bitmap.pix32(y, x+2) = screen.machine().pens[color];
 
-			color = (blit_ram[count] & 0x00f0)>>4;
+			color = (state->m_blit_ram[count] & 0x00f0)>>4;
 
-			if((x+1)<video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
-				*BITMAP_ADDR32(bitmap, y, x+1) = screen->machine->pens[color];
+			if(cliprect.contains(x+1, y))
+				bitmap.pix32(y, x+1) = screen.machine().pens[color];
 
-			color = (blit_ram[count] & 0x000f)>>0;
+			color = (state->m_blit_ram[count] & 0x000f)>>0;
 
-			if((x+0)<video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
-				*BITMAP_ADDR32(bitmap, y, x+0) = screen->machine->pens[color];
+			if(cliprect.contains(x+0, y))
+				bitmap.pix32(y, x+0) = screen.machine().pens[color];
 
 			count++;
 		}
@@ -493,19 +502,19 @@ static VIDEO_UPDATE(bingor)
 #if 0
 static READ16_HANDLER( test_r )
 {
-	return mame_rand(space->machine);
+	return space->machine().rand();
 }
 #endif
 
-static ADDRESS_MAP_START( bingor_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bingor_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x0ffff) AM_RAM
 	AM_RANGE(0x90000, 0x9ffff) AM_ROM AM_REGION("gfx", 0)
-	AM_RANGE(0xa0300, 0xa031f) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBIIII_word_w) AM_BASE(&paletteram16) //wrong
-	AM_RANGE(0xa0000, 0xaffff) AM_RAM AM_BASE(&blit_ram)
+	AM_RANGE(0xa0300, 0xa031f) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBIIII_word_w) AM_BASE_GENERIC(paletteram) //wrong
+	AM_RANGE(0xa0000, 0xaffff) AM_RAM AM_BASE_MEMBER(bingor_state, m_blit_ram)
 	AM_RANGE(0xe0000, 0xfffff) AM_ROM AM_REGION("boot_prg",0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bingor_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( bingor_io, AS_IO, 16 )
 //  AM_RANGE(0x0000, 0x00ff) AM_READ( test_r )
 	AM_RANGE(0x0100, 0x0101) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
 	AM_RANGE(0x0102, 0x0103) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
@@ -514,10 +523,10 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( test8_r )
 {
-	return mame_rand(space->machine);
+	return space->machine().rand();
 }
 
-static ADDRESS_MAP_START( pic_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pic_io_map, AS_IO, 8 )
 	AM_RANGE(0x02, 0x02) AM_READ(test8_r)
 	AM_RANGE(0x10, 0x10) AM_READNOP
 ADDRESS_MAP_END
@@ -576,13 +585,13 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( vblank_irq )
 {
-//  cpu_set_input_line_and_vector(device,0,HOLD_LINE,0x08/4); // reads i/o 0x200 and puts the result in ram, pic irq?
-	cpu_set_input_line_and_vector(device,0,HOLD_LINE,0x4c/4); // ?
+//  device_set_input_line_and_vector(device,0,HOLD_LINE,0x08/4); // reads i/o 0x200 and puts the result in ram, pic irq?
+	device_set_input_line_and_vector(device,0,HOLD_LINE,0x4c/4); // ?
 }
 
 static INTERRUPT_GEN( unk_irq )
 {
-	cpu_set_input_line_and_vector(device,0,HOLD_LINE,0x48/4); // ?
+	device_set_input_line_and_vector(device,0,HOLD_LINE,0x48/4); // ?
 }
 
 
@@ -602,37 +611,36 @@ static GFXDECODE_START( bingor )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( bingor )
-	MDRV_CPU_ADD("maincpu", I80186, 14000000 ) //?? Mhz
-	MDRV_CPU_PROGRAM_MAP(bingor_map)
-	MDRV_CPU_IO_MAP(bingor_io)
-	MDRV_CPU_VBLANK_INT("screen", vblank_irq)
-	MDRV_CPU_PERIODIC_INT(nmi_line_pulse, 30)
-	MDRV_CPU_PERIODIC_INT(unk_irq, 30)
+static MACHINE_CONFIG_START( bingor, bingor_state )
+	MCFG_CPU_ADD("maincpu", I80186, 14000000 ) //?? Mhz
+	MCFG_CPU_PROGRAM_MAP(bingor_map)
+	MCFG_CPU_IO_MAP(bingor_io)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse, 30)
+	MCFG_CPU_PERIODIC_INT(unk_irq, 30)
 
-	MDRV_CPU_ADD("pic", PIC16C57, 12000000) //?? Mhz
-	MDRV_CPU_IO_MAP(pic_io_map)
+	MCFG_CPU_ADD("pic", PIC16C57, 12000000) //?? Mhz
+	MCFG_CPU_IO_MAP(pic_io_map)
 
 
-	MDRV_GFXDECODE(bingor)
-	//MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_GFXDECODE(bingor)
+	//MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(0, 400-1, 0, 300-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(0, 400-1, 0, 300-1)
+	MCFG_SCREEN_UPDATE_STATIC(bingor)
 
-	MDRV_PALETTE_LENGTH(0x100)
+	MCFG_PALETTE_LENGTH(0x100)
 
-	MDRV_VIDEO_START(bingor)
-	MDRV_VIDEO_UPDATE(bingor)
+	MCFG_VIDEO_START(bingor)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("saa", SAA1099, 6000000 )
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("saa", SAA1099, 6000000 )
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 // I doubt we need to load the eeproms
 

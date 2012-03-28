@@ -1,7 +1,22 @@
-#include "driver.h"
-#include "streams.h"
-#include "samples.h"
+/* samples.c
 
+ Playback of pre-recorded samples. Used for high-level simulation of discrete sound circuits
+ where proper low-level simulation isn't available.  Also used for tape loops and similar.
+
+ Current limitations
+  - Only supports single channel samples!
+
+ Considerations
+  - Maybe this should be part of the presentation layer (artwork etc.) with samples specified
+    in .lay files instead of in drivers?
+
+*/
+
+
+#include "emu.h"
+#include "emuopts.h"
+#include "samples.h"
+#include "../../lib/libflac/include/flac/all.h"
 
 typedef struct _sample_channel sample_channel;
 struct _sample_channel
@@ -22,20 +37,18 @@ struct _sample_channel
 typedef struct _samples_info samples_info;
 struct _samples_info
 {
-	const device_config *device;
+	device_t *device;
 	int			numchannels;	/* how many channels */
 	sample_channel *channel;/* array of channels */
 	loaded_samples *samples;/* array of samples */
 };
 
 
-INLINE samples_info *get_safe_token(const device_config *device)
+INLINE samples_info *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_SAMPLES);
-	return (samples_info *)device->token;
+	assert(device->type() == SAMPLES);
+	return (samples_info *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -45,132 +58,316 @@ INLINE samples_info *get_safe_token(const device_config *device)
 #define FRAC_MASK		(FRAC_ONE - 1)
 #define MAX_CHANNELS    100
 
+struct flac_reader
+{
+	UINT8* rawdata;
+	INT16* write_data;
+	int position;
+	int length;
+	int decoded_size;
+	int sample_rate;
+	int channels;
+	int bits_per_sample;
+	int total_samples;
+	int write_position;
+} flacread;
+
+static flac_reader* flacreadptr;
+
+void my_error_callback(const FLAC__StreamDecoder * decoder, FLAC__StreamDecoderErrorStatus status, void * client_data)
+{
+	fatalerror("FLAC error Callback\n");
+}
+
+void my_metadata_callback(const FLAC__StreamDecoder *decoder, const FLAC__StreamMetadata *metadata, void *client_data)
+{
+
+	flac_reader* flacrd =  ((flac_reader*)client_data);
+
+	if (metadata->type==0)
+	{
+		const FLAC__StreamMetadata_StreamInfo *streaminfo = &(metadata->data.stream_info);
+
+		flacrd->sample_rate = streaminfo->sample_rate;
+		flacrd->channels = streaminfo->channels;
+		flacrd->bits_per_sample = streaminfo->bits_per_sample;
+		flacrd->total_samples = streaminfo->total_samples;
+	}
+}
+
+
+
+
+FLAC__StreamDecoderReadStatus my_read_callback(const FLAC__StreamDecoder *decoder, FLAC__byte buffer[], size_t *bytes, void *client_data)
+{
+	flac_reader* flacrd =  ((flac_reader*)client_data);
+
+	if(*bytes > 0)
+	{
+		if (*bytes <=  flacrd->length)
+		{
+			memcpy(buffer, flacrd->rawdata+flacrd->position, *bytes);
+			flacrd->position+=*bytes;
+			flacrd->length-=*bytes;
+			return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
+		}
+		else
+		{
+			memcpy(buffer, flacrd->rawdata+flacrd->position,  flacrd->length);
+		    flacrd->position+= flacrd->length;
+			flacrd->length = 0;
+
+			return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
+		}
+	}
+	else
+	{
+		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
+	}
+
+	if ( flacrd->length==0)
+	{
+		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
+	}
+
+	return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
+
+}
+
+FLAC__StreamDecoderWriteStatus my_write_callback(const FLAC__StreamDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 *const buffer[], void *client_data)
+{
+	flac_reader* flacrd =  ((flac_reader*)client_data);
+
+	flacrd->decoded_size += frame->header.blocksize;
+
+	for (int i=0;i<frame->header.blocksize;i++)
+	{
+		flacrd->write_data[i+flacrd->write_position] = buffer[0][i];
+	}
+
+	flacrd->write_position +=  frame->header.blocksize;
+
+	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
+}
+
+
+
+
+
 
 /*-------------------------------------------------
     read_wav_sample - read a WAV file as a sample
 -------------------------------------------------*/
 
-static int read_wav_sample(running_machine *machine, mame_file *f, loaded_sample *sample)
+static int read_wav_sample(running_machine &machine, emu_file &file, loaded_sample *sample, char* filename)
 {
 	unsigned long offset = 0;
 	UINT32 length, rate, filesize;
 	UINT16 bits, temp16;
 	char buf[32];
 	UINT32 sindex;
+	int type = 0;
 
 	/* read the core header and make sure it's a WAVE file */
-	offset += mame_fread(f, buf, 4);
+	offset += file.read(buf, 4);
 	if (offset < 4)
-		return 0;
-	if (memcmp(&buf[0], "RIFF", 4) != 0)
-		return 0;
-
-	/* get the total size */
-	offset += mame_fread(f, &filesize, 4);
-	if (offset < 8)
-		return 0;
-	filesize = LITTLE_ENDIANIZE_INT32(filesize);
-
-	/* read the RIFF file type and make sure it's a WAVE file */
-	offset += mame_fread(f, buf, 4);
-	if (offset < 12)
-		return 0;
-	if (memcmp(&buf[0], "WAVE", 4) != 0)
-		return 0;
-
-	/* seek until we find a format tag */
-	while (1)
 	{
-		offset += mame_fread(f, buf, 4);
-		offset += mame_fread(f, &length, 4);
-		length = LITTLE_ENDIANIZE_INT32(length);
-		if (memcmp(&buf[0], "fmt ", 4) == 0)
-			break;
-
-		/* seek to the next block */
-		mame_fseek(f, length, SEEK_CUR);
-		offset += length;
-		if (offset >= filesize)
-			return 0;
+		mame_printf_warning("unable to read %s, 0-byte file?\n", filename);
+		return 0;
+	}
+	if (memcmp(&buf[0], "RIFF", 4) == 0)
+		type = 1;
+	else if (memcmp(&buf[0], "fLaC", 4) == 0)
+		type = 2;
+	else
+	{
+		mame_printf_warning("unable to read %s, corrupt file?\n", filename);
+		return 0;
 	}
 
-	/* read the format -- make sure it is PCM */
-	offset += mame_fread(f, &temp16, 2);
-	temp16 = LITTLE_ENDIANIZE_INT16(temp16);
-	if (temp16 != 1)
-		return 0;
-
-	/* number of channels -- only mono is supported */
-	offset += mame_fread(f, &temp16, 2);
-	temp16 = LITTLE_ENDIANIZE_INT16(temp16);
-	if (temp16 != 1)
-		return 0;
-
-	/* sample rate */
-	offset += mame_fread(f, &rate, 4);
-	rate = LITTLE_ENDIANIZE_INT32(rate);
-
-	/* bytes/second and block alignment are ignored */
-	offset += mame_fread(f, buf, 6);
-
-	/* bits/sample */
-	offset += mame_fread(f, &bits, 2);
-	bits = LITTLE_ENDIANIZE_INT16(bits);
-	if (bits != 8 && bits != 16)
-		return 0;
-
-	/* seek past any extra data */
-	mame_fseek(f, length - 16, SEEK_CUR);
-	offset += length - 16;
-
-	/* seek until we find a data tag */
-	while (1)
+	if (type==1)
 	{
-		offset += mame_fread(f, buf, 4);
-		offset += mame_fread(f, &length, 4);
-		length = LITTLE_ENDIANIZE_INT32(length);
-		if (memcmp(&buf[0], "data", 4) == 0)
-			break;
-
-		/* seek to the next block */
-		mame_fseek(f, length, SEEK_CUR);
-		offset += length;
-		if (offset >= filesize)
+		/* get the total size */
+		offset += file.read(&filesize, 4);
+		if (offset < 8)
 			return 0;
-	}
+		filesize = LITTLE_ENDIANIZE_INT32(filesize);
 
-	/* if there was a 0 length data block, we're done */
-	if (length == 0)
-		return 0;
+		/* read the RIFF file type and make sure it's a WAVE file */
+		offset += file.read(buf, 4);
+		if (offset < 12)
+			return 0;
+		if (memcmp(&buf[0], "WAVE", 4) != 0)
+			return 0;
 
-	/* fill in the sample data */
-	sample->length = length;
-	sample->frequency = rate;
+		/* seek until we find a format tag */
+		while (1)
+		{
+			offset += file.read(buf, 4);
+			offset += file.read(&length, 4);
+			length = LITTLE_ENDIANIZE_INT32(length);
+			if (memcmp(&buf[0], "fmt ", 4) == 0)
+				break;
 
-	/* read the data in */
-	if (bits == 8)
-	{
-		unsigned char *tempptr;
-		int sindex;
+			/* seek to the next block */
+			file.seek(length, SEEK_CUR);
+			offset += length;
+			if (offset >= filesize)
+				return 0;
+		}
 
-		sample->data = auto_alloc_array(machine, INT16, length);
-		mame_fread(f, sample->data, length);
+		/* read the format -- make sure it is PCM */
+		offset += file.read(&temp16, 2);
+		temp16 = LITTLE_ENDIANIZE_INT16(temp16);
+		if (temp16 != 1)
+			return 0;
 
-		/* convert 8-bit data to signed samples */
-		tempptr = (unsigned char *)sample->data;
-		for (sindex = length - 1; sindex >= 0; sindex--)
-			sample->data[sindex] = (INT8)(tempptr[sindex] ^ 0x80) * 256;
+		/* number of channels -- only mono is supported */
+		offset += file.read(&temp16, 2);
+		temp16 = LITTLE_ENDIANIZE_INT16(temp16);
+		if (temp16 != 1)
+			return 0;
+
+		/* sample rate */
+		offset += file.read(&rate, 4);
+		rate = LITTLE_ENDIANIZE_INT32(rate);
+
+		/* bytes/second and block alignment are ignored */
+		offset += file.read(buf, 6);
+
+		/* bits/sample */
+		offset += file.read(&bits, 2);
+		bits = LITTLE_ENDIANIZE_INT16(bits);
+		if (bits != 8 && bits != 16)
+			return 0;
+
+		/* seek past any extra data */
+		file.seek(length - 16, SEEK_CUR);
+		offset += length - 16;
+
+		/* seek until we find a data tag */
+		while (1)
+		{
+			offset += file.read(buf, 4);
+			offset += file.read(&length, 4);
+			length = LITTLE_ENDIANIZE_INT32(length);
+			if (memcmp(&buf[0], "data", 4) == 0)
+				break;
+
+			/* seek to the next block */
+			file.seek(length, SEEK_CUR);
+			offset += length;
+			if (offset >= filesize)
+				return 0;
+		}
+
+		/* if there was a 0 length data block, we're done */
+		if (length == 0)
+			return 0;
+
+		/* fill in the sample data */
+		sample->length = length;
+		sample->frequency = rate;
+
+		/* read the data in */
+		if (bits == 8)
+		{
+			unsigned char *tempptr;
+			int sindex;
+
+			sample->data = auto_alloc_array(machine, INT16, length);
+			file.read(sample->data, length);
+
+			/* convert 8-bit data to signed samples */
+			tempptr = (unsigned char *)sample->data;
+			for (sindex = length - 1; sindex >= 0; sindex--)
+				sample->data[sindex] = (INT8)(tempptr[sindex] ^ 0x80) * 256;
+
+		}
+		else
+		{
+			/* 16-bit data is fine as-is */
+			sample->data = auto_alloc_array(machine, INT16, length/2);
+			file.read(sample->data, length);
+
+				sample->length /= 2;
+			if (ENDIANNESS_NATIVE != ENDIANNESS_LITTLE)
+				for (sindex = 0; sindex < sample->length; sindex++)
+					sample->data[sindex] = LITTLE_ENDIANIZE_INT16(sample->data[sindex]);
+		}
 	}
 	else
 	{
-		/* 16-bit data is fine as-is */
-		sample->data = auto_alloc_array(machine, INT16, length/2);
-		mame_fread(f, sample->data, length);
-		sample->length /= 2;
-		if (ENDIANNESS_NATIVE != ENDIANNESS_LITTLE)
-			for (sindex = 0; sindex < sample->length; sindex++)
-				sample->data[sindex] = LITTLE_ENDIANIZE_INT16(sample->data[sindex]);
+		int length;
+
+		file.seek(0, SEEK_END);
+		length = file.tell();
+		file.seek(0, 0);
+
+		flacread.rawdata = auto_alloc_array(machine, UINT8, length);
+		flacread.length = length;
+		flacread.position = 0;
+		flacread.decoded_size = 0;
+
+		flacreadptr = &flacread;
+
+		file.read(flacread.rawdata, length);
+
+		FLAC__StreamDecoder *decoder = FLAC__stream_decoder_new();
+
+		if (!decoder)
+			fatalerror("Fail FLAC__stream_decoder_new\n");
+
+		if(FLAC__stream_decoder_init_stream(
+			decoder,
+			my_read_callback,
+			NULL, //my_seek_callback,      // or NULL
+			NULL, //my_tell_callback,      // or NULL
+			NULL, //my_length_callback,    // or NULL
+			NULL, //my_eof_callback,       // or NULL
+			my_write_callback,
+			my_metadata_callback, //my_metadata_callback,  // or NULL
+			my_error_callback,
+			(void*)flacreadptr /*my_client_data*/ ) != FLAC__STREAM_DECODER_INIT_STATUS_OK)
+			fatalerror("Fail FLAC__stream_decoder_init_stream\n");
+
+		if (FLAC__stream_decoder_process_until_end_of_metadata(decoder) != FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM)
+			fatalerror("Fail FLAC__stream_decoder_process_until_end_of_metadata\n");
+
+		if (flacread.channels != 1) // only Mono supported
+			fatalerror("Only MONO samples are supported\n");
+
+
+		sample->data = auto_alloc_array(machine, INT16, flacread.total_samples*2);
+		flacread.write_position = 0;
+		flacread.write_data = sample->data;
+
+		if (FLAC__stream_decoder_process_until_end_of_stream (decoder) != FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM)
+		{
+			fatalerror("Fail FLAC__stream_decoder_process_until_end_of_stream\n");
+		}
+
+		if (FLAC__stream_decoder_finish (decoder) != true)
+			fatalerror("Fail FLAC__stream_decoder_finish\n");
+
+		FLAC__stream_decoder_delete(decoder);
+
+		/* fill in the sample data */
+
+		sample->frequency = flacread.sample_rate;
+		sample->length = flacread.total_samples * (flacread.bits_per_sample/8);
+
+		if (flacread.bits_per_sample == 8)
+		{
+			for (sindex = 0; sindex <= sample->length; sindex++)
+				sample->data[sindex] = ((sample->data[sindex])&0xff)*256;
+		}
+		else // don't need to process 16-bit samples?
+		{
+			sample->length = sample->length /2; //??
+		}
 	}
+
 	return 1;
 }
 
@@ -179,14 +376,14 @@ static int read_wav_sample(running_machine *machine, mame_file *f, loaded_sample
     readsamples - load all samples
 -------------------------------------------------*/
 
-loaded_samples *readsamples(running_machine *machine, const char *const *samplenames, const char *basename)
+loaded_samples *readsamples(running_machine &machine, const char *const *samplenames, const char *basename)
 {
 	loaded_samples *samples;
 	int skipfirst = 0;
 	int i;
 
 	/* if the user doesn't want to use samples, bail */
-	if (!options_get_bool(mame_options(), OPTION_SAMPLES))
+	if (!machine.options().samples())
 		return NULL;
 	if (samplenames == 0 || samplenames[0] == 0)
 		return NULL;
@@ -208,25 +405,40 @@ loaded_samples *readsamples(running_machine *machine, const char *const *samplen
 	for (i = 0; i < samples->total; i++)
 		if (samplenames[i+skipfirst][0])
 		{
-			file_error filerr;
-			mame_file *f;
-			astring *fname;
+			emu_file file(machine.options().sample_path(), OPEN_FLAG_READ);
+			file_error filerr = FILERR_NOT_FOUND;
 
-			fname = astring_assemble_3(astring_alloc(), basename, PATH_SEPARATOR, samplenames[i+skipfirst]);
-			filerr = mame_fopen(SEARCHPATH_SAMPLE, astring_c(fname), OPEN_FLAG_READ, &f);
+			char filename[512];
 
-			if (filerr != FILERR_NONE && skipfirst)
+			if (filerr != FILERR_NONE)
 			{
-				astring_assemble_3(fname, samplenames[0] + 1, PATH_SEPARATOR, samplenames[i+skipfirst]);
-				filerr = mame_fopen(SEARCHPATH_SAMPLE, astring_c(fname), OPEN_FLAG_READ, &f);
+				// first try opening samples as .flac
+				sprintf(filename, "%s.flac", samplenames[i+skipfirst]);
+
+				filerr = file.open(basename, PATH_SEPARATOR, filename);
+				// try parent sample set
+				if (filerr != FILERR_NONE && skipfirst)
+					filerr = file.open(samplenames[0] + 1, PATH_SEPARATOR, filename);
 			}
+
+			if (filerr != FILERR_NONE)
+			{
+				// .wav fallback
+				sprintf(filename, "%s.wav", samplenames[i+skipfirst]);
+
+				filerr = file.open(basename, PATH_SEPARATOR, filename);
+				// try parent sample set
+				if (filerr != FILERR_NONE && skipfirst)
+					filerr = file.open(samplenames[0] + 1, PATH_SEPARATOR, filename);
+			}
+
+
 			if (filerr == FILERR_NONE)
-			{
-				read_wav_sample(machine, f, &samples->sample[i]);
-				mame_fclose(f);
-			}
+				read_wav_sample(machine, file, &samples->sample[i], filename);
 
-			astring_free(fname);
+			if (filerr == FILERR_NOT_FOUND)
+				mame_printf_warning("sample '%s' NOT FOUND\n", samplenames[i+skipfirst]);
+
 		}
 
 	return samples;
@@ -238,7 +450,7 @@ loaded_samples *readsamples(running_machine *machine, const char *const *samplen
 /* Start one of the samples loaded from disk. Note: channel must be in the range */
 /* 0 .. Samplesinterface->channels-1. It is NOT the discrete channel to pass to */
 /* mixer_play_sample() */
-void sample_start(const device_config *device,int channel,int samplenum,int loop)
+void sample_start(device_t *device,int channel,int samplenum,int loop)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -254,7 +466,7 @@ void sample_start(const device_config *device,int channel,int samplenum,int loop
     chan = &info->channel[channel];
 
 	/* force an update before we start */
-	stream_update(chan->stream);
+	chan->stream->update();
 
 	/* update the parameters */
 	sample = &info->samples->sample[samplenum];
@@ -264,12 +476,12 @@ void sample_start(const device_config *device,int channel,int samplenum,int loop
 	chan->pos = 0;
 	chan->frac = 0;
 	chan->basefreq = sample->frequency;
-	chan->step = ((INT64)chan->basefreq << FRAC_BITS) / info->device->machine->sample_rate;
+	chan->step = ((INT64)chan->basefreq << FRAC_BITS) / info->device->machine().sample_rate();
 	chan->loop = loop;
 }
 
 
-void sample_start_raw(const device_config *device,int channel,const INT16 *sampledata,int samples,int frequency,int loop)
+void sample_start_raw(device_t *device,int channel,const INT16 *sampledata,int samples,int frequency,int loop)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -279,7 +491,7 @@ void sample_start_raw(const device_config *device,int channel,const INT16 *sampl
     chan = &info->channel[channel];
 
 	/* force an update before we start */
-	stream_update(chan->stream);
+	chan->stream->update();
 
 	/* update the parameters */
 	chan->source = sampledata;
@@ -288,12 +500,12 @@ void sample_start_raw(const device_config *device,int channel,const INT16 *sampl
 	chan->pos = 0;
 	chan->frac = 0;
 	chan->basefreq = frequency;
-	chan->step = ((INT64)chan->basefreq << FRAC_BITS) / info->device->machine->sample_rate;
+	chan->step = ((INT64)chan->basefreq << FRAC_BITS) / info->device->machine().sample_rate();
 	chan->loop = loop;
 }
 
 
-void sample_set_freq(const device_config *device,int channel,int freq)
+void sample_set_freq(device_t *device,int channel,int freq)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -303,13 +515,13 @@ void sample_set_freq(const device_config *device,int channel,int freq)
     chan = &info->channel[channel];
 
 	/* force an update before we start */
-	stream_update(chan->stream);
+	chan->stream->update();
 
-	chan->step = ((INT64)freq << FRAC_BITS) / info->device->machine->sample_rate;
+	chan->step = ((INT64)freq << FRAC_BITS) / info->device->machine().sample_rate();
 }
 
 
-void sample_set_volume(const device_config *device,int channel,float volume)
+void sample_set_volume(device_t *device,int channel,float volume)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -318,11 +530,11 @@ void sample_set_volume(const device_config *device,int channel,float volume)
 
     chan = &info->channel[channel];
 
-	stream_set_output_gain(chan->stream, 0, volume);
+	chan->stream->set_output_gain(0, volume);
 }
 
 
-void sample_set_pause(const device_config *device,int channel,int pause)
+void sample_set_pause(device_t *device,int channel,int pause)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -332,13 +544,13 @@ void sample_set_pause(const device_config *device,int channel,int pause)
     chan = &info->channel[channel];
 
 	/* force an update before we start */
-	stream_update(chan->stream);
+	chan->stream->update();
 
 	chan->paused = pause;
 }
 
 
-void sample_stop(const device_config *device,int channel)
+void sample_stop(device_t *device,int channel)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -348,13 +560,13 @@ void sample_stop(const device_config *device,int channel)
     chan = &info->channel[channel];
 
     /* force an update before we start */
-    stream_update(chan->stream);
+    chan->stream->update();
     chan->source = NULL;
     chan->source_num = -1;
 }
 
 
-int sample_get_base_freq(const device_config *device,int channel)
+int sample_get_base_freq(device_t *device,int channel)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -364,12 +576,12 @@ int sample_get_base_freq(const device_config *device,int channel)
     chan = &info->channel[channel];
 
 	/* force an update before we start */
-	stream_update(chan->stream);
+	chan->stream->update();
 	return chan->basefreq;
 }
 
 
-int sample_playing(const device_config *device,int channel)
+int sample_playing(device_t *device,int channel)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -379,7 +591,7 @@ int sample_playing(const device_config *device,int channel)
     chan = &info->channel[channel];
 
 	/* force an update before we start */
-	stream_update(chan->stream);
+	chan->stream->update();
 	return (chan->source != NULL);
 }
 
@@ -436,9 +648,8 @@ static STREAM_UPDATE( sample_update_sound )
 }
 
 
-static STATE_POSTLOAD( samples_postload )
+static void samples_postload(samples_info *info)
 {
-	samples_info *info = (samples_info *)param;
 	int i;
 
 	/* loop over channels */
@@ -474,22 +685,22 @@ static STATE_POSTLOAD( samples_postload )
 static DEVICE_START( samples )
 {
 	int i;
-	const samples_interface *intf = (const samples_interface *)device->static_config;
+	const samples_interface *intf = (const samples_interface *)device->static_config();
 	samples_info *info = get_safe_token(device);
 
 	info->device = device;
 
 	/* read audio samples */
 	if (intf->samplenames)
-		info->samples = readsamples(device->machine, intf->samplenames,device->machine->gamedrv->name);
+		info->samples = readsamples(device->machine(), intf->samplenames,device->machine().system().name);
 
 	/* allocate channels */
 	info->numchannels = intf->channels;
 	assert(info->numchannels < MAX_CHANNELS);
-	info->channel = auto_alloc_array(device->machine, sample_channel, info->numchannels);
+	info->channel = auto_alloc_array(device->machine(), sample_channel, info->numchannels);
 	for (i = 0; i < info->numchannels; i++)
 	{
-	    info->channel[i].stream = stream_create(device, 0, 1, device->machine->sample_rate, &info->channel[i], sample_update_sound);
+	    info->channel[i].stream = device->machine().sound().stream_alloc(*device, 0, 1, device->machine().sample_rate(), &info->channel[i], sample_update_sound);
 
 		info->channel[i].source = NULL;
 		info->channel[i].source_num = -1;
@@ -498,15 +709,15 @@ static DEVICE_START( samples )
 		info->channel[i].paused = 0;
 
 		/* register with the save state system */
-        state_save_register_device_item(device, i, info->channel[i].source_length);
-        state_save_register_device_item(device, i, info->channel[i].source_num);
-        state_save_register_device_item(device, i, info->channel[i].pos);
-        state_save_register_device_item(device, i, info->channel[i].frac);
-        state_save_register_device_item(device, i, info->channel[i].step);
-        state_save_register_device_item(device, i, info->channel[i].loop);
-        state_save_register_device_item(device, i, info->channel[i].paused);
+        device->save_item(NAME(info->channel[i].source_length), i);
+        device->save_item(NAME(info->channel[i].source_num), i);
+        device->save_item(NAME(info->channel[i].pos), i);
+        device->save_item(NAME(info->channel[i].frac), i);
+        device->save_item(NAME(info->channel[i].step), i);
+        device->save_item(NAME(info->channel[i].loop), i);
+        device->save_item(NAME(info->channel[i].paused), i);
 	}
-	state_save_register_postload(device->machine, samples_postload, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(samples_postload), info));
 
 	/* initialize any custom handlers */
 	if (intf->start)
@@ -532,11 +743,13 @@ DEVICE_GET_INFO( samples )
         case DEVINFO_FCT_RESET:                         /* Nothing */                           		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
-        case DEVINFO_STR_NAME:                          strcpy(info->s, "Samples");                    	break;
-        case DEVINFO_STR_FAMILY:                   strcpy(info->s, "Big Hack");                   	break;
-        case DEVINFO_STR_VERSION:                  strcpy(info->s, "1.1");                        	break;
-        case DEVINFO_STR_SOURCE_FILE:                     strcpy(info->s, __FILE__);                     		break;
+        case DEVINFO_STR_NAME:                          strcpy(info->s, "Samples");                 	break;
+        case DEVINFO_STR_FAMILY:                   strcpy(info->s, "Big Hack");                 	break;
+        case DEVINFO_STR_VERSION:                  strcpy(info->s, "1.1");                      	break;
+        case DEVINFO_STR_SOURCE_FILE:                     strcpy(info->s, __FILE__);                    		break;
         case DEVINFO_STR_CREDITS:                  strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(SAMPLES, samples);

@@ -4,6 +4,54 @@
 
 *************************************************************************/
 
+class snk_state : public driver_device
+{
+public:
+	snk_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	int m_countryc_trackball;
+	int m_last_value[2];
+	int m_cp_count[2];
+
+	int m_marvins_sound_busy_flag;
+	// FIXME this should be initialised on machine reset
+	int m_sound_status;
+
+	UINT8 *m_spriteram;
+	UINT8 *m_tx_videoram;
+	UINT8 *m_fg_videoram;
+	UINT8 *m_bg_videoram;
+
+	tilemap_t *m_tx_tilemap;
+	tilemap_t *m_fg_tilemap;
+	tilemap_t *m_bg_tilemap;
+	int m_fg_scrollx;
+	int m_fg_scrolly;
+	int m_bg_scrollx;
+	int m_bg_scrolly;
+	int m_sp16_scrollx;
+	int m_sp16_scrolly;
+	int m_sp32_scrollx;
+	int m_sp32_scrolly;
+	UINT8 m_sprite_split_point;
+	int m_num_sprites;
+	int m_yscroll_mask;
+	UINT32 m_bg_tile_offset;
+	UINT32 m_tx_tile_offset;
+	int m_is_psychos;
+
+	UINT8 m_drawmode_table[16];
+	UINT8 m_empty_tile[16*16];
+	int m_hf_posy;
+	int m_hf_posx;
+	int m_tc16_posy;
+	int m_tc16_posx;
+	int m_tc32_posy;
+	int m_tc32_posx;
+};
+
+
 /*----------- defined in video/snk.c -----------*/
 
 extern PALETTE_INIT( tnk3 );
@@ -19,11 +67,11 @@ extern VIDEO_START( gwar );
 extern VIDEO_START( psychos );
 extern VIDEO_START( tdfever );
 
-extern VIDEO_UPDATE( marvins );
-extern VIDEO_UPDATE( tnk3 );
-extern VIDEO_UPDATE( ikari );
-extern VIDEO_UPDATE( gwar );
-extern VIDEO_UPDATE( tdfever );
+extern SCREEN_UPDATE_IND16( marvins );
+extern SCREEN_UPDATE_IND16( tnk3 );
+extern SCREEN_UPDATE_IND16( ikari );
+extern SCREEN_UPDATE_IND16( gwar );
+extern SCREEN_UPDATE_IND16( tdfever );
 
 extern WRITE8_HANDLER( snk_fg_scrollx_w );
 extern WRITE8_HANDLER( snk_fg_scrolly_w );
@@ -55,9 +103,6 @@ extern WRITE8_HANDLER( gwara_sp_scroll_msb_w );
 extern WRITE8_HANDLER( tdfever_sp_scroll_msb_w );
 extern WRITE8_HANDLER( tdfever_spriteram_w );
 
-extern UINT8 *snk_tx_videoram;
-extern UINT8 *snk_fg_videoram;
-extern UINT8 *snk_bg_videoram;
 extern WRITE8_HANDLER( snk_tx_videoram_w );
 extern WRITE8_HANDLER( snk_bg_videoram_w );
 extern WRITE8_HANDLER( marvins_fg_videoram_w );

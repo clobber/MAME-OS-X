@@ -64,8 +64,7 @@
 
 */
 
-#include "driver.h"
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "cop400.h"
 
@@ -90,12 +89,15 @@ struct _cop400_state
 {
 	const cop400_interface *intf;
 
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
+
+    UINT8 featuremask;
 
 	/* registers */
-	UINT16 	pc;	   			/* 9/10/11-bit ROM address program counter */
+	UINT16	pc;				/* 9/10/11-bit ROM address program counter */
 	UINT16	prevpc;			/* previous value of program counter */
 	UINT8	a;				/* 4-bit accumulator */
 	UINT8	b;				/* 5/6/7-bit RAM address register */
@@ -109,6 +111,7 @@ struct _cop400_state
 	int		skl;			/* 1-bit latch for SK output */
 	UINT8	h;				/* 4-bit general purpose I/O port (COP440 only) */
 	UINT8	r;				/* 8-bit general purpose I/O port (COP440 only) */
+	UINT8	flags;			// used for I/O only
 
 	/* counter */
 	UINT8	t;				/* 8-bit timer */
@@ -137,7 +140,6 @@ struct _cop400_state
 	int LBIops[256];
 	int LBIops33[256];
 	int icount;				/* instruction counter */
-	cpu_state_table state_table;	/* state table */
 
 	const cop400_opcode_map *opcode_map;
 
@@ -156,70 +158,14 @@ struct _cop400_opcode_map {
 };
 
 /***************************************************************************
-    CPU STATE DESCRIPTION
-***************************************************************************/
-
-#define COP400_STATE_ENTRY(_name, _format, _member, _datamask, _featuremask, _flags) \
-	CPU_STATE_ENTRY(COP400_##_name, #_name, _format, cop400_state, _member, _datamask, _featuremask, _flags)
-
-#define COP410_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	COP400_STATE_ENTRY(_name, _format, _member, _datamask, COP410_FEATURE | COP420_FEATURE | COP444_FEATURE | COP440_FEATURE, _flags)
-
-#define COP420_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	COP400_STATE_ENTRY(_name, _format, _member, _datamask, COP420_FEATURE | COP444_FEATURE | COP440_FEATURE, _flags)
-
-#define COP444_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	COP400_STATE_ENTRY(_name, _format, _member, _datamask, COP444_FEATURE | COP440_FEATURE, _flags)
-
-#define COP440_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	COP400_STATE_ENTRY(_name, _format, _member, _datamask, COP440_FEATURE, _flags)
-
-static const cpu_state_entry state_array[] =
-{
-	COP410_STATE_ENTRY(GENPC, "%03X", pc, 0xfff, CPUSTATE_NOSHOW)
-	COP410_STATE_ENTRY(GENPCBASE, "%03X", prevpc, 0xfff, CPUSTATE_NOSHOW)
-	COP440_STATE_ENTRY(GENSP, "%01X", n, 0x3, CPUSTATE_NOSHOW)
-
-	COP410_STATE_ENTRY(PC, "%03X", pc, 0xfff, 0)
-
-	COP400_STATE_ENTRY(SA, "%03X", sa, 0xfff, COP410_FEATURE | COP420_FEATURE | COP444_FEATURE, 0)
-	COP400_STATE_ENTRY(SB, "%03X", sb, 0xfff, COP410_FEATURE | COP420_FEATURE | COP444_FEATURE, 0)
-	COP400_STATE_ENTRY(SC, "%03X", sc, 0xfff, COP420_FEATURE | COP444_FEATURE, 0)
-	COP440_STATE_ENTRY(N, "%01X", n, 0x3, 0)
-
-	COP410_STATE_ENTRY(A, "%01X", a, 0xf, 0)
-	COP410_STATE_ENTRY(B, "%02X", b, 0xff, 0)
-	COP410_STATE_ENTRY(C, "%1u", c, 0x1, 0)
-
-	COP410_STATE_ENTRY(EN, "%01X", en, 0xf, 0)
-	COP410_STATE_ENTRY(G, "%01X", g, 0xf, 0)
-	COP440_STATE_ENTRY(H, "%01X", h, 0xf, 0)
-	COP410_STATE_ENTRY(Q, "%02X", q, 0xff, 0)
-	COP440_STATE_ENTRY(R, "%02X", r, 0xff, 0)
-
-	COP410_STATE_ENTRY(SIO, "%01X", sio, 0xf, 0)
-	COP410_STATE_ENTRY(SKL, "%1u", skl, 0x1, 0)
-
-	COP420_STATE_ENTRY(T, "%02X", t, 0xff, 0)
-};
-
-static const cpu_state_table state_table_template =
-{
-	NULL,						/* pointer to the base of state (offsets are relative to this) */
-	0,							/* subtype this table refers to */
-	ARRAY_LENGTH(state_array),	/* number of entries */
-	state_array					/* array of entries */
-};
-
-/***************************************************************************
     MACROS
 ***************************************************************************/
 
-#define ROM(a)			memory_decrypted_read_byte(cpustate->program, a)
-#define RAM_R(a)		memory_read_byte_8le(cpustate->data, a)
-#define RAM_W(a, v)		memory_write_byte_8le(cpustate->data, a, v)
-#define IN(a)			memory_read_byte_8le(cpustate->io, a)
-#define OUT(a, v)		memory_write_byte_8le(cpustate->io, a, v)
+#define ROM(a)			cpustate->direct->read_decrypted_byte(a)
+#define RAM_R(a)		cpustate->data->read_byte(a)
+#define RAM_W(a, v)		cpustate->data->write_byte(a, v)
+#define IN(a)			cpustate->io->read_byte(a)
+#define OUT(a, v)		cpustate->io->write_byte(a, v)
 
 #define IN_G()			(IN(COP400_PORT_G) & cpustate->g_mask)
 #define IN_L()			IN(COP400_PORT_L)
@@ -254,30 +200,28 @@ static const cpu_state_table state_table_template =
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE cop400_state *get_safe_token(const device_config *device)
+INLINE cop400_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_COP401 ||
-		   cpu_get_type(device) == CPU_COP410 ||
-		   cpu_get_type(device) == CPU_COP411 ||
-		   cpu_get_type(device) == CPU_COP402 ||
-		   cpu_get_type(device) == CPU_COP420 ||
-		   cpu_get_type(device) == CPU_COP421 ||
-		   cpu_get_type(device) == CPU_COP422 ||
-		   cpu_get_type(device) == CPU_COP404 ||
-		   cpu_get_type(device) == CPU_COP424 ||
-		   cpu_get_type(device) == CPU_COP425 ||
-		   cpu_get_type(device) == CPU_COP426 ||
-		   cpu_get_type(device) == CPU_COP444 ||
-		   cpu_get_type(device) == CPU_COP445);
-	return (cop400_state *)device->token;
+	assert(device->type() == COP401 ||
+		   device->type() == COP410 ||
+		   device->type() == COP411 ||
+		   device->type() == COP402 ||
+		   device->type() == COP420 ||
+		   device->type() == COP421 ||
+		   device->type() == COP422 ||
+		   device->type() == COP404 ||
+		   device->type() == COP424 ||
+		   device->type() == COP425 ||
+		   device->type() == COP426 ||
+		   device->type() == COP444 ||
+		   device->type() == COP445);
+	return (cop400_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 INLINE void PUSH(cop400_state *cpustate, UINT16 data)
 {
-	if (cpustate->state_table.subtypemask != COP410_FEATURE)
+	if (cpustate->featuremask != COP410_FEATURE)
 	{
 		SC = SB;
 	}
@@ -291,7 +235,7 @@ INLINE void POP(cop400_state *cpustate)
 	PC = SA;
 	SA = SB;
 
-	if (cpustate->state_table.subtypemask != COP410_FEATURE)
+	if (cpustate->featuremask != COP410_FEATURE)
 	{
 		SB = SC;
 	}
@@ -338,41 +282,41 @@ INSTRUCTION(illegal)
 
 static const cop400_opcode_map COP410_OPCODE_23_MAP[] =
 {
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, xad	 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, xad		},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	}
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	}
 };
 
 static void cop410_op23(cop400_state *cpustate, UINT8 opcode)
@@ -384,41 +328,41 @@ static void cop410_op23(cop400_state *cpustate, UINT8 opcode)
 
 static const cop400_opcode_map COP410_OPCODE_33_MAP[] =
 {
-	{1, illegal 	},{1, skgbz0	},{1, illegal   },{1, skgbz2	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, skgbz1 	},{1, illegal 	},{1, skgbz3 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, skgz 		},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, ing	 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, inl	 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, halt	 	},{1, illegal 	},{1, omg	 	},{1, illegal 	},{1, camq	 	},{1, illegal 	},{1, obd	 	},{1, illegal 	},
+	{1, illegal 	},{1, skgbz0	},{1, illegal   },{1, skgbz2	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, skgbz1	},{1, illegal	},{1, skgbz3	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, skgz		},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, ing		},{1, illegal	},{1, illegal	},{1, illegal	},{1, inl		},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, halt		},{1, illegal	},{1, omg		},{1, illegal	},{1, camq		},{1, illegal	},{1, obd		},{1, illegal	},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},
-	{1, lei 		},{1, lei 		},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, lei 		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},
+	{1, lei 		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	}
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	}
 };
 
 static void cop410_op33(cop400_state *cpustate, UINT8 opcode)
@@ -434,7 +378,7 @@ static const cop400_opcode_map COP410_OPCODE_MAP[] =
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 	{0, illegal		},{1, skmbz1	},{0, illegal	},{1, skmbz3		},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
-	{1, skc			},{1, ske		},{1, sc		},{1, cop410_op23	},{1, xis		},{1, ld		},{1, x			},{1, xds 		},
+	{1, skc			},{1, ske		},{1, sc		},{1, cop410_op23	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 	{1, asc			},{1, add		},{1, rc		},{1, cop410_op33	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
@@ -469,41 +413,41 @@ static const cop400_opcode_map COP410_OPCODE_MAP[] =
 
 static const cop400_opcode_map COP420_OPCODE_23_MAP[] =
 {
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	}
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	}
 };
 
 static void cop420_op23(cop400_state *cpustate, UINT8 opcode)
@@ -515,41 +459,41 @@ static void cop420_op23(cop400_state *cpustate, UINT8 opcode)
 
 static const cop400_opcode_map COP420_OPCODE_33_MAP[] =
 {
-	{1, illegal		},{1, skgbz0 	},{1, illegal 	},{1, skgbz2 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, skgbz1 	},{1, illegal 	},{1, skgbz3 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, skgz	 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, inin 		},{1, inil 		},{1, ing	 	},{1, illegal 	},{1, cqma	 	},{1, illegal 	},{1, inl	 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, omg	 	},{1, illegal 	},{1, camq	 	},{1, illegal 	},{1, obd	 	},{1, illegal 	},
+	{1, illegal		},{1, skgbz0	},{1, illegal	},{1, skgbz2	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, skgbz1	},{1, illegal	},{1, skgbz3	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, skgz		},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, inin		},{1, inil		},{1, ing		},{1, illegal	},{1, cqma		},{1, illegal	},{1, inl		},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, omg		},{1, illegal	},{1, camq		},{1, illegal	},{1, obd		},{1, illegal	},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, ogi	 		},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},
-	{1, ogi	 		},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},
-	{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},
-	{1, lei 		},{1, lei 		},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, ogi			},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},
+	{1, ogi			},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},
+	{1, lei 		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},
+	{1, lei 		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	}
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	}
 };
 
 static void cop420_op33(cop400_state *cpustate, UINT8 opcode)
@@ -565,9 +509,9 @@ static const cop400_opcode_map COP420_OPCODE_MAP[] =
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 	{1, casc		},{1, skmbz1	},{1, xabr		},{1, skmbz3		},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
-	{1, skc			},{1, ske		},{1, sc		},{1, cop420_op23	},{1, xis		},{1, ld		},{1, x			},{1, xds 		},
+	{1, skc			},{1, ske		},{1, sc		},{1, cop420_op23	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
-	{1, asc			},{1, add		},{1, rc		},{1, cop420_op33  	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
+	{1, asc			},{1, add		},{1, rc		},{1, cop420_op33	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 
 	{1, comp		},{1, skt		},{1, rmb2		},{1, rmb3			},{1, nop		},{1, rmb1		},{1, smb2		},{1, smb1		},
@@ -600,41 +544,41 @@ static const cop400_opcode_map COP420_OPCODE_MAP[] =
 
 static const cop400_opcode_map COP444_OPCODE_23_MAP[256] =
 {
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
 
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
-	{1, ldd		 	},{1, ldd		},{1, ldd	 	},{1, ldd	 	},{1, ldd	 	},{1, ldd 		},{1, ldd	 	},{1, ldd	 	},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
+	{1, ldd			},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},{1, ldd		},
 
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
 
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
-	{1, xad		 	},{1, xad		},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},{1, xad	 	},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
+	{1, xad			},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},{1, xad		},
 };
 
 static void cop444_op23(cop400_state *cpustate, UINT8 opcode)
@@ -646,41 +590,41 @@ static void cop444_op23(cop400_state *cpustate, UINT8 opcode)
 
 static const cop400_opcode_map COP444_OPCODE_33_MAP[256] =
 {
-	{1, illegal		},{1, skgbz0 	},{1, illegal 	},{1, skgbz2 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, skgbz1 	},{1, illegal 	},{1, skgbz3 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, skgz	 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, inin 		},{1, inil 		},{1, ing	 	},{1, illegal 	},{1, cqma	 	},{1, illegal 	},{1, inl	 	},{1, ctma	 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, it		 	},{1, illegal 	},{1, omg	 	},{1, illegal 	},{1, camq	 	},{1, illegal 	},{1, obd	 	},{1, camt	 	},
+	{1, illegal		},{1, skgbz0	},{1, illegal	},{1, skgbz2	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, skgbz1	},{1, illegal	},{1, skgbz3	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, skgz		},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, inin		},{1, inil		},{1, ing		},{1, illegal	},{1, cqma		},{1, illegal	},{1, inl		},{1, ctma		},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, it			},{1, illegal	},{1, omg		},{1, illegal	},{1, camq		},{1, illegal	},{1, obd		},{1, camt		},
 
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, ogi	 		},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},
-	{1, ogi	 		},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},{1, ogi	 	},
-	{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},{1, lei 		},
-	{1, lei 		},{1, lei 		},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},{1, lei	 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
-	{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},{1, illegal 	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, ogi			},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},
+	{1, ogi			},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},{1, ogi		},
+	{1, lei 		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},
+	{1, lei 		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},{1, lei		},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
+	{1, illegal 	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},{1, illegal	},
 
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
-	{1, lbi		 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},{1, lbi	 	},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
+	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 };
 
 static void cop444_op33(cop400_state *cpustate, UINT8 opcode)
@@ -696,9 +640,9 @@ static const cop400_opcode_map COP444_OPCODE_MAP[256] =
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 	{1, casc		},{1, skmbz1	},{1, cop444_xabr},{1, skmbz3		},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
-	{1, skc			},{1, ske		},{1, sc		},{1, cop444_op23	},{1, xis		},{1, ld		},{1, x			},{1, xds 		},
+	{1, skc			},{1, ske		},{1, sc		},{1, cop444_op23	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
-	{1, asc			},{1, add		},{1, rc		},{1, cop444_op33  	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
+	{1, asc			},{1, add		},{1, rc		},{1, cop444_op33	},{1, xis		},{1, ld		},{1, x			},{1, xds		},
 	{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi			},{1, lbi		},{1, lbi		},{1, lbi		},{1, lbi		},
 
 	{1, comp		},{1, skt		},{1, rmb2		},{1, rmb3			},{1, nop		},{1, rmb1		},{1, smb2		},{1, smb1		},
@@ -879,17 +823,60 @@ static TIMER_CALLBACK( microbus_tick )
     INITIALIZATION
 ***************************************************************************/
 
-static void cop400_init(const device_config *device, UINT8 g_mask, UINT8 d_mask, UINT8 in_mask, int has_counter, int has_inil)
+static void define_state_table(device_t *device)
 {
 	cop400_state *cpustate = get_safe_token(device);
 
-	cpustate->intf = (cop400_interface *) device->static_config;
+	device_state_interface *state;
+	device->interface(state);
+	state->state_add(STATE_GENPC,     "GENPC",     cpustate->pc).mask(0xfff).noshow();
+	state->state_add(STATE_GENPCBASE, "GENPCBASE", cpustate->prevpc).mask(0xfff).noshow();
+	state->state_add(STATE_GENSP,     "GENSP",     cpustate->n).mask(0x3).noshow();
+	state->state_add(STATE_GENFLAGS,  "GENFLAGS",  cpustate->flags).mask(0x3).callimport().callexport().noshow().formatstr("%2s");
+
+	state->state_add(COP400_PC,       "PC",        cpustate->pc).mask(0xfff);
+
+	if (cpustate->featuremask & (COP410_FEATURE | COP420_FEATURE | COP444_FEATURE))
+	{
+		state->state_add(COP400_SA,   "SA",        cpustate->sa).mask(0xfff);
+		state->state_add(COP400_SB,   "SB",        cpustate->sb).mask(0xfff);
+		if (cpustate->featuremask & (COP420_FEATURE | COP444_FEATURE))
+			state->state_add(COP400_SC, "SC",      cpustate->sc).mask(0xfff);
+	}
+	if (cpustate->featuremask & COP440_FEATURE)
+		state->state_add(COP400_N,    "N",         cpustate->n).mask(0x3);
+
+	state->state_add(COP400_A,        "A",         cpustate->a).mask(0xf);
+	state->state_add(COP400_B,        "B",         cpustate->b);
+	state->state_add(COP400_C,        "C",         cpustate->c).mask(0x1);
+
+	state->state_add(COP400_EN,       "EN",        cpustate->en).mask(0xf);
+	state->state_add(COP400_G,        "G",         cpustate->g).mask(0xf);
+	if (cpustate->featuremask & COP440_FEATURE)
+		state->state_add(COP400_H,    "H",         cpustate->h).mask(0xf);
+	state->state_add(COP400_Q,        "Q",         cpustate->q);
+	if (cpustate->featuremask & COP440_FEATURE)
+		state->state_add(COP400_R,    "R",         cpustate->r);
+
+	state->state_add(COP400_SIO,      "SIO",       cpustate->sio).mask(0xf);
+	state->state_add(COP400_SKL,      "SKL",       cpustate->skl).mask(0x1);
+
+	if (cpustate->featuremask & (COP420_FEATURE | COP444_FEATURE | COP440_FEATURE))
+		state->state_add(COP400_T,    "T",         cpustate->t);
+}
+
+static void cop400_init(legacy_cpu_device *device, UINT8 g_mask, UINT8 d_mask, UINT8 in_mask, int has_counter, int has_inil)
+{
+	cop400_state *cpustate = get_safe_token(device);
+
+	cpustate->intf = (cop400_interface *) device->static_config();
 
 	/* find address spaces */
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	/* set output pin masks */
 
@@ -899,73 +886,72 @@ static void cop400_init(const device_config *device, UINT8 g_mask, UINT8 d_mask,
 
 	/* allocate serial timer */
 
-	cpustate->serial_timer = timer_alloc(device->machine, serial_tick, cpustate);
-	timer_adjust_periodic(cpustate->serial_timer, attotime_zero, 0, ATTOTIME_IN_HZ(device->clock / 16));
+	cpustate->serial_timer = device->machine().scheduler().timer_alloc(FUNC(serial_tick), cpustate);
+	cpustate->serial_timer->adjust(attotime::zero, 0, attotime::from_hz(device->clock() / 16));
 
 	/* allocate counter timer */
 
 	if (has_counter)
 	{
-		cpustate->counter_timer = timer_alloc(device->machine, counter_tick, cpustate);
-		timer_adjust_periodic(cpustate->counter_timer, attotime_zero, 0, ATTOTIME_IN_HZ(device->clock / 16 / 4));
+		cpustate->counter_timer = device->machine().scheduler().timer_alloc(FUNC(counter_tick), cpustate);
+		cpustate->counter_timer->adjust(attotime::zero, 0, attotime::from_hz(device->clock() / 16 / 4));
 	}
 
 	/* allocate IN latch timer */
 
 	if (has_inil)
 	{
-		cpustate->inil_timer = timer_alloc(device->machine, inil_tick, cpustate);
-		timer_adjust_periodic(cpustate->inil_timer, attotime_zero, 0, ATTOTIME_IN_HZ(device->clock / 16));
+		cpustate->inil_timer = device->machine().scheduler().timer_alloc(FUNC(inil_tick), cpustate);
+		cpustate->inil_timer->adjust(attotime::zero, 0, attotime::from_hz(device->clock() / 16));
 	}
 
 	/* allocate Microbus timer */
 
 	if (cpustate->intf->microbus == COP400_MICROBUS_ENABLED)
 	{
-		cpustate->microbus_timer = timer_alloc(device->machine, microbus_tick, cpustate);
-		timer_adjust_periodic(cpustate->microbus_timer, attotime_zero, 0, ATTOTIME_IN_HZ(device->clock / 16));
+		cpustate->microbus_timer = device->machine().scheduler().timer_alloc(FUNC(microbus_tick), cpustate);
+		cpustate->microbus_timer->adjust(attotime::zero, 0, attotime::from_hz(device->clock() / 16));
 	}
 
 	/* register for state saving */
 
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item(device, 0, cpustate->prevpc);
-	state_save_register_device_item(device, 0, cpustate->n);
-	state_save_register_device_item(device, 0, cpustate->sa);
-	state_save_register_device_item(device, 0, cpustate->sb);
-	state_save_register_device_item(device, 0, cpustate->sc);
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->b);
-	state_save_register_device_item(device, 0, cpustate->c);
-	state_save_register_device_item(device, 0, cpustate->g);
-	state_save_register_device_item(device, 0, cpustate->h);
-	state_save_register_device_item(device, 0, cpustate->q);
-	state_save_register_device_item(device, 0, cpustate->r);
-	state_save_register_device_item(device, 0, cpustate->en);
-	state_save_register_device_item(device, 0, cpustate->sio);
-	state_save_register_device_item(device, 0, cpustate->skl);
-	state_save_register_device_item(device, 0, cpustate->t);
-	state_save_register_device_item(device, 0, cpustate->skip);
-	state_save_register_device_item(device, 0, cpustate->skip_lbi);
-	state_save_register_device_item(device, 0, cpustate->skt_latch);
-	state_save_register_device_item(device, 0, cpustate->si);
-	state_save_register_device_item(device, 0, cpustate->last_skip);
-	state_save_register_device_item_array(device, 0, cpustate->in);
-	state_save_register_device_item(device, 0, cpustate->microbus_int);
-	state_save_register_device_item(device, 0, cpustate->halt);
-	state_save_register_device_item(device, 0, cpustate->idle);
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->prevpc));
+	device->save_item(NAME(cpustate->n));
+	device->save_item(NAME(cpustate->sa));
+	device->save_item(NAME(cpustate->sb));
+	device->save_item(NAME(cpustate->sc));
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->b));
+	device->save_item(NAME(cpustate->c));
+	device->save_item(NAME(cpustate->g));
+	device->save_item(NAME(cpustate->h));
+	device->save_item(NAME(cpustate->q));
+	device->save_item(NAME(cpustate->r));
+	device->save_item(NAME(cpustate->en));
+	device->save_item(NAME(cpustate->sio));
+	device->save_item(NAME(cpustate->skl));
+	device->save_item(NAME(cpustate->t));
+	device->save_item(NAME(cpustate->skip));
+	device->save_item(NAME(cpustate->skip_lbi));
+	device->save_item(NAME(cpustate->skt_latch));
+	device->save_item(NAME(cpustate->si));
+	device->save_item(NAME(cpustate->last_skip));
+	device->save_item(NAME(cpustate->in));
+	device->save_item(NAME(cpustate->microbus_int));
+	device->save_item(NAME(cpustate->halt));
+	device->save_item(NAME(cpustate->idle));
 }
 
-static void cop410_init_opcodes(const device_config *device)
+static void cop410_init_opcodes(device_t *device)
 {
 	cop400_state *cpustate = get_safe_token(device);
 	int i;
 
 	/* set up the state table */
 
-	cpustate->state_table = state_table_template;
-	cpustate->state_table.baseptr = cpustate;
-	cpustate->state_table.subtypemask = COP410_FEATURE;
+	cpustate->featuremask = COP410_FEATURE;
+	define_state_table(device);
 
 	/* initialize instruction length array */
 
@@ -987,16 +973,15 @@ static void cop410_init_opcodes(const device_config *device)
 	cpustate->opcode_map = COP410_OPCODE_MAP;
 }
 
-static void cop420_init_opcodes(const device_config *device)
+static void cop420_init_opcodes(device_t *device)
 {
 	cop400_state *cpustate = get_safe_token(device);
 	int i;
 
 	/* set up the state table */
 
-	cpustate->state_table = state_table_template;
-	cpustate->state_table.baseptr = cpustate;
-	cpustate->state_table.subtypemask = COP420_FEATURE;
+	cpustate->featuremask = COP420_FEATURE;
+	define_state_table(device);
 
 	/* initialize instruction length array */
 
@@ -1022,16 +1007,15 @@ static void cop420_init_opcodes(const device_config *device)
 	cpustate->opcode_map = COP420_OPCODE_MAP;
 }
 
-static void cop444_init_opcodes(const device_config *device)
+static void cop444_init_opcodes(device_t *device)
 {
 	cop400_state *cpustate = get_safe_token(device);
 	int i;
 
 	/* set up the state table */
 
-	cpustate->state_table = state_table_template;
-	cpustate->state_table.baseptr = cpustate;
-	cpustate->state_table.subtypemask = COP444_FEATURE;
+	cpustate->featuremask = COP444_FEATURE;
+	define_state_table(device);
 
 	/* initialize instruction length array */
 
@@ -1145,8 +1129,6 @@ static CPU_EXECUTE( cop400 )
 
 	UINT8 opcode;
 
-	cpustate->icount = cycles;
-
 	do
 	{
 		cpustate->prevpc = PC;
@@ -1248,46 +1230,47 @@ static CPU_EXECUTE( cop400 )
 			}
 		}
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 /***************************************************************************
     ADDRESS MAPS
 ***************************************************************************/
 
-static ADDRESS_MAP_START( program_512b, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_512b, AS_PROGRAM, 8 )
 	AM_RANGE(0x000, 0x1ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( program_1kb, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_1kb, AS_PROGRAM, 8 )
 	AM_RANGE(0x000, 0x3ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( program_2kb, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_2kb, AS_PROGRAM, 8 )
 	AM_RANGE(0x000, 0x7ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( data_32b, ADDRESS_SPACE_DATA, 8 )
+static ADDRESS_MAP_START( data_32b, AS_DATA, 8 )
 	AM_RANGE(0x00, 0x1f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( data_64b, ADDRESS_SPACE_DATA, 8 )
+static ADDRESS_MAP_START( data_64b, AS_DATA, 8 )
 	AM_RANGE(0x00, 0x3f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( data_128b, ADDRESS_SPACE_DATA, 8 )
+static ADDRESS_MAP_START( data_128b, AS_DATA, 8 )
 	AM_RANGE(0x00, 0x7f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( data_160b, ADDRESS_SPACE_DATA, 8 )
+#ifdef UNUSED_CODE
+static ADDRESS_MAP_START( data_160b, AS_DATA, 8 )
 	AM_RANGE(0x00, 0x9f) AM_RAM
 ADDRESS_MAP_END
+#endif
 
 /***************************************************************************
     VALIDITY CHECKS
 ***************************************************************************/
 
+#if 0
 static CPU_VALIDITY_CHECK( cop410 )
 {
 	int error = FALSE;
@@ -1343,10 +1326,51 @@ static CPU_VALIDITY_CHECK( cop444 )
 
 	return error;
 }
+#endif
 
 /***************************************************************************
     GENERAL CONTEXT ACCESS
 ***************************************************************************/
+
+static CPU_IMPORT_STATE( cop400 )
+{
+	cop400_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			cpustate->c = (cpustate->flags >> 1) & 1;
+			cpustate->skl = (cpustate->flags >> 0) & 1;
+			break;
+	}
+}
+
+static CPU_EXPORT_STATE( cop400 )
+{
+	cop400_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			cpustate->flags = (cpustate->c ? 0x02 : 0x00) |
+							  (cpustate->skl ? 0x01 : 0x00);
+			break;
+	}
+}
+
+static CPU_EXPORT_STRING( cop400 )
+{
+	cop400_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			string.printf("%c%c",
+						 cpustate->c ? 'C' : '.',
+						 cpustate->skl ? 'S' : '.');
+			break;
+	}
+}
 
 static CPU_SET_INFO( cop400 )
 {
@@ -1355,8 +1379,8 @@ static CPU_SET_INFO( cop400 )
 
 static CPU_GET_INFO( cop400 )
 {
-	cop400_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
-	cop400_interface *intf = (device != NULL && device->static_config != NULL) ? (cop400_interface *)device->static_config : NULL;
+	cop400_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	cop400_interface *intf = (device->static_config() != NULL) ? (cop400_interface *)device->static_config() : NULL;
 
 	switch (state)
 	{
@@ -1372,15 +1396,15 @@ static CPU_GET_INFO( cop400 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;											break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 2;											break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 8;											break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:			/* set per-core */										break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:			info->i = 0;											break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:			info->i = 8; /* really 4 */								break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			/* set per-core */										break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 			info->i = 0;											break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:				info->i = 8;											break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 				info->i = 9;											break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 				info->i = 0;											break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			/* set per-core */										break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0;											break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8; /* really 4 */								break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			/* set per-core */										break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;											break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 9;											break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;											break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(cop400);				break;
@@ -1388,13 +1412,15 @@ static CPU_GET_INFO( cop400 )
 		case CPUINFO_FCT_RESET:							info->reset = CPU_RESET_NAME(cop400);					break;
 		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(cop400);				break;
 		case CPUINFO_FCT_DISASSEMBLE:					/* set per-core */										break;
-		case CPUINFO_FCT_VALIDITY_CHECK:				/* set per-core */										break;
+//      case CPUINFO_FCT_VALIDITY_CHECK:                /* set per-core */                                      break;
+		case CPUINFO_FCT_IMPORT_STATE:					info->import_state = CPU_IMPORT_STATE_NAME(cop400);		break;
+		case CPUINFO_FCT_EXPORT_STATE:					info->export_state = CPU_EXPORT_STATE_NAME(cop400);		break;
+		case CPUINFO_FCT_EXPORT_STRING: 				info->export_string = CPU_EXPORT_STRING_NAME(cop400);	break;
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;						break;
-		case CPUINFO_PTR_STATE_TABLE:					info->state_table = &cpustate->state_table;				break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	/* set per-core */										break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA: 		/* set per-core */ 										break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	/* set per-core */										break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		/* set per-core */										break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP400");								break;
@@ -1411,30 +1437,23 @@ static CPU_GET_INFO( cop400 )
 
 CPU_GET_INFO( cop410 )
 {
-	cop400_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
-
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:			info->i = 9;											break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			info->i = 5;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 9;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 5;											break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(cop410);						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(cop410);		break;
-		case CPUINFO_FCT_VALIDITY_CHECK:				info->validity_check = CPU_VALIDITY_CHECK_NAME(cop410);	break;
+//      case CPUINFO_FCT_VALIDITY_CHECK:                info->validity_check = CPU_VALIDITY_CHECK_NAME(cop410); break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_512b);	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_32b);		break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_512b);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_32b);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP410");								break;
-
-		case CPUINFO_STR_FLAGS: sprintf(info->s,
-									"%c%c",
-									 cpustate->c ? 'C' : '.',
-									 cpustate->skl ? 'S' : '.'); break;
 
 		default:										CPU_GET_INFO_CALL(cop400);								break;
 	}
@@ -1463,7 +1482,7 @@ CPU_GET_INFO( cop401 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = NULL;								break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = NULL;								break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP401");								break;
@@ -1474,22 +1493,22 @@ CPU_GET_INFO( cop401 )
 
 CPU_GET_INFO( cop420 )
 {
-	cop400_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	cop400_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:			info->i = 10;											break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			info->i = 6;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 10;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 6;											break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(cop420);						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(cop420);		break;
-		case CPUINFO_FCT_VALIDITY_CHECK:				info->validity_check = CPU_VALIDITY_CHECK_NAME(cop420);	break;
+//      case CPUINFO_FCT_VALIDITY_CHECK:                info->validity_check = CPU_VALIDITY_CHECK_NAME(cop420); break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_1kb);	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_64b);		break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_1kb);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_64b);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP420");								break;
@@ -1512,7 +1531,7 @@ CPU_GET_INFO( cop421 )
 	{
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(cop421);						break;
-		case CPUINFO_FCT_VALIDITY_CHECK:				info->validity_check = CPU_VALIDITY_CHECK_NAME(cop421);	break;
+//      case CPUINFO_FCT_VALIDITY_CHECK:                info->validity_check = CPU_VALIDITY_CHECK_NAME(cop421); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP421");								break;
@@ -1544,7 +1563,7 @@ CPU_GET_INFO( cop402 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = NULL;								break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = NULL;								break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP402");								break;
@@ -1555,22 +1574,22 @@ CPU_GET_INFO( cop402 )
 
 CPU_GET_INFO( cop444 )
 {
-	cop400_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	cop400_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:			info->i = 11;											break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			info->i = 7;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 11;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 7;											break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(cop444);						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(cop444);		break;
-		case CPUINFO_FCT_VALIDITY_CHECK:				info->validity_check = CPU_VALIDITY_CHECK_NAME(cop444);	break;
+//      case CPUINFO_FCT_VALIDITY_CHECK:                info->validity_check = CPU_VALIDITY_CHECK_NAME(cop444); break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_2kb);	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_128b);		break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_2kb);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_128b);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP444");								break;
@@ -1608,12 +1627,12 @@ CPU_GET_INFO( cop424 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:			info->i = 10;											break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			info->i = 6;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 10;											break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 6;											break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_1kb);	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_64b);		break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_1kb);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map8 = ADDRESS_MAP_NAME(data_64b);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP424");								break;
@@ -1661,7 +1680,7 @@ CPU_GET_INFO( cop404 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = NULL;								break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = NULL;								break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "COP404");								break;
@@ -1669,3 +1688,22 @@ CPU_GET_INFO( cop404 )
 		default:										CPU_GET_INFO_CALL(cop444);								break;
 	}
 }
+
+/* COP410 family */
+DEFINE_LEGACY_CPU_DEVICE(COP401, cop401);
+DEFINE_LEGACY_CPU_DEVICE(COP410, cop410);
+DEFINE_LEGACY_CPU_DEVICE(COP411, cop411);
+
+/* COP420 family */
+DEFINE_LEGACY_CPU_DEVICE(COP402, cop402);
+DEFINE_LEGACY_CPU_DEVICE(COP420, cop420);
+DEFINE_LEGACY_CPU_DEVICE(COP421, cop421);
+DEFINE_LEGACY_CPU_DEVICE(COP422, cop422);
+
+/* COP444 family */
+DEFINE_LEGACY_CPU_DEVICE(COP404, cop404);
+DEFINE_LEGACY_CPU_DEVICE(COP424, cop424);
+DEFINE_LEGACY_CPU_DEVICE(COP425, cop425);
+DEFINE_LEGACY_CPU_DEVICE(COP426, cop426);
+DEFINE_LEGACY_CPU_DEVICE(COP444, cop444);
+DEFINE_LEGACY_CPU_DEVICE(COP445, cop445);

@@ -15,7 +15,6 @@
 #ifndef __H6280_H__
 #define __H6280_H__
 
-#include "cpuintrf.h"
 
 enum
 {
@@ -61,10 +60,11 @@ typedef struct
     UINT8 nmi_state;
     UINT8 irq_state[3];
 	UINT8 irq_pending;
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
-	const address_space *io;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 
 #if LAZY_FLAGS
     INT32 NZ;			/* last value (lazy N and Z flag) */
@@ -73,9 +73,7 @@ typedef struct
 } h6280_Regs;
 
 
-
-CPU_GET_INFO( h6280 );
-#define CPU_H6280 CPU_GET_INFO_NAME( h6280 )
+DECLARE_LEGACY_CPU_DEVICE(H6280, h6280);
 
 READ8_HANDLER( h6280_irq_status_r );
 WRITE8_HANDLER( h6280_irq_status_w );
@@ -84,8 +82,8 @@ READ8_HANDLER( h6280_timer_r );
 WRITE8_HANDLER( h6280_timer_w );
 
 /* functions for use by the PSG and joypad port only! */
-UINT8 h6280io_get_buffer(const device_config*);
-void h6280io_set_buffer(const device_config*, UINT8);
+UINT8 h6280io_get_buffer(device_t*);
+void h6280io_set_buffer(device_t*, UINT8);
 
 CPU_DISASSEMBLE( h6280 );
 

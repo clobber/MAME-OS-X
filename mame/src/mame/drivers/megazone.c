@@ -6,7 +6,7 @@ To enter service mode, keep 1&2 pressed on reset
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/konami1.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/mcs48/mcs48.h"
@@ -14,28 +14,14 @@ To enter service mode, keep 1&2 pressed on reset
 #include "sound/ay8910.h"
 #include "sound/dac.h"
 #include "sound/flt_rc.h"
-#include "konamipt.h"
-
-extern UINT8 *megazone_scrollx;
-extern UINT8 *megazone_scrolly;
-
-extern UINT8 *megazone_videoram2;
-extern UINT8 *megazone_colorram2;
-extern size_t megazone_videoram2_size;
-
-static int i8039_status;
-
-VIDEO_START( megazone );
-
-WRITE8_HANDLER( megazone_flipscreen_w );
-PALETTE_INIT( megazone );
-VIDEO_UPDATE( megazone );
+#include "includes/konamipt.h"
+#include "includes/megazone.h"
 
 
-
-static READ8_DEVICE_HANDLER( megazone_portA_r )
+static READ8_DEVICE_HANDLER( megazone_port_a_r )
 {
-	int clock,timer;
+	megazone_state *state = device->machine().driver_data<megazone_state>();
+	int clock, timer;
 
 
 	/* main xtal 14.318MHz, divided by 8 to get the AY-3-8910 clock, further */
@@ -45,95 +31,102 @@ static READ8_DEVICE_HANDLER( megazone_portA_r )
 	/* (divide by (1024/2), and not 1024, because the CPU cycle counter is */
 	/* incremented every other state change of the clock) */
 
-	clock = cputag_get_total_cycles(device->machine, "audiocpu") * 7159/12288;	/* = (14318/8)/(18432/6) */
+	clock = state->m_audiocpu->total_cycles() * 7159/12288;	/* = (14318/8)/(18432/6) */
 	timer = (clock / (1024/2)) & 0x0f;
 
 	/* low three bits come from the 8039 */
-
-	return (timer << 4) | i8039_status;
+	return (timer << 4) | state->m_i8039_status;
 }
 
-static WRITE8_DEVICE_HANDLER( megazone_portB_w )
+static WRITE8_DEVICE_HANDLER( megazone_port_b_w )
 {
 	static const char *const fltname[] = { "filter.0.0", "filter.0.1", "filter.0.2" };
 	int i;
 
-
-	for (i = 0;i < 3;i++)
+	for (i = 0; i < 3; i++)
 	{
-		int C;
+		int C = 0;
+		if (data & 1)
+			C +=  10000;	/*  10000pF = 0.01uF */
+		if (data & 2)
+			C += 220000;	/* 220000pF = 0.22uF */
 
-
-		C = 0;
-		if (data & 1) C +=  10000;	/*  10000pF = 0.01uF */
-		if (data & 2) C += 220000;	/* 220000pF = 0.22uF */
 		data >>= 2;
-		filter_rc_set_RC(devtag_get_device(device->machine, fltname[i]),FLT_RC_LOWPASS,1000,2200,200,CAP_P(C));
+		filter_rc_set_RC(device->machine().device(fltname[i]),FLT_RC_LOWPASS,1000,2200,200,CAP_P(C));
 	}
 }
 
 static WRITE8_HANDLER( megazone_i8039_irq_w )
 {
-	cputag_set_input_line(space->machine, "daccpu", 0, ASSERT_LINE);
+	megazone_state *state = space->machine().driver_data<megazone_state>();
+	device_set_input_line(state->m_daccpu, 0, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( i8039_irqen_and_status_w )
 {
+	megazone_state *state = space->machine().driver_data<megazone_state>();
+
 	if ((data & 0x80) == 0)
-		cputag_set_input_line(space->machine, "daccpu", 0, CLEAR_LINE);
-	i8039_status = (data & 0x70) >> 4;
+		device_set_input_line(state->m_daccpu, 0, CLEAR_LINE);
+	state->m_i8039_status = (data & 0x70) >> 4;
 }
 
 static WRITE8_HANDLER( megazone_coin_counter_w )
 {
-	coin_counter_w(1-offset,data);		/* 1-offset, because coin counters are in reversed order */
+	coin_counter_w(space->machine(), 1 - offset, data);		/* 1-offset, because coin counters are in reversed order */
+}
+
+static WRITE8_HANDLER( irq_mask_w )
+{
+	megazone_state *state = space->machine().driver_data<megazone_state>();
+
+	state->m_irq_mask = data & 1;
 }
 
 
-
-static ADDRESS_MAP_START( megazone_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( megazone_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0001) AM_WRITE(megazone_coin_counter_w) /* coin counter 2, coin counter 1 */
 	AM_RANGE(0x0005, 0x0005) AM_WRITE(megazone_flipscreen_w)
-	AM_RANGE(0x0007, 0x0007) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0x0007, 0x0007) AM_WRITE(irq_mask_w)
 	AM_RANGE(0x0800, 0x0800) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0x1000, 0x1000) AM_WRITEONLY AM_BASE(&megazone_scrolly)
-	AM_RANGE(0x1800, 0x1800) AM_WRITEONLY AM_BASE(&megazone_scrollx)
-	AM_RANGE(0x2000, 0x23ff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0x2400, 0x27ff) AM_RAM AM_BASE(&megazone_videoram2) AM_SIZE(&megazone_videoram2_size)
-	AM_RANGE(0x2800, 0x2bff) AM_RAM AM_BASE(&colorram)
-	AM_RANGE(0x2c00, 0x2fff) AM_RAM AM_BASE(&megazone_colorram2)
-	AM_RANGE(0x3000, 0x33ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x1000, 0x1000) AM_WRITEONLY AM_BASE_MEMBER(megazone_state, m_scrolly)
+	AM_RANGE(0x1800, 0x1800) AM_WRITEONLY AM_BASE_MEMBER(megazone_state, m_scrollx)
+	AM_RANGE(0x2000, 0x23ff) AM_RAM AM_BASE_SIZE_MEMBER(megazone_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x2400, 0x27ff) AM_RAM AM_BASE_SIZE_MEMBER(megazone_state, m_videoram2, m_videoram2_size)
+	AM_RANGE(0x2800, 0x2bff) AM_RAM AM_BASE_MEMBER(megazone_state, m_colorram)
+	AM_RANGE(0x2c00, 0x2fff) AM_RAM AM_BASE_MEMBER(megazone_state, m_colorram2)
+	AM_RANGE(0x3000, 0x33ff) AM_RAM AM_BASE_SIZE_MEMBER(megazone_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x4000, 0xffff) AM_ROM		/* 4000->5FFF is a debug rom */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( megazone_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( megazone_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(megazone_i8039_irq_w)	/* START line. Interrupts 8039 */
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(soundlatch_w)			/* CODE  line. Command Interrupts 8039 */
-	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("IN0")  			/* IO Coin */
-	AM_RANGE(0x6001, 0x6001) AM_READ_PORT("IN1")  			/* P1 IO */
-	AM_RANGE(0x6002, 0x6002) AM_READ_PORT("IN2")  			/* P2 IO */
-	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("DSW1")
-	AM_RANGE(0x8001, 0x8001) AM_READ_PORT("DSW2")
+	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("IN0")			/* IO Coin */
+	AM_RANGE(0x6001, 0x6001) AM_READ_PORT("IN1")			/* P1 IO */
+	AM_RANGE(0x6002, 0x6002) AM_READ_PORT("IN2")			/* P2 IO */
+	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("DSW2")
+	AM_RANGE(0x8001, 0x8001) AM_READ_PORT("DSW1")
 	AM_RANGE(0xa000, 0xa000) AM_WRITENOP					/* INTMAIN - Interrupts main CPU (unused) */
 	AM_RANGE(0xc000, 0xc000) AM_WRITENOP					/* INT (Actually is NMI) enable/disable (unused)*/
 	AM_RANGE(0xc001, 0xc001) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( megazone_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( megazone_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x00, 0x02) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x02, 0x02) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0x00, 0x00) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x00, 0x02) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x02, 0x02) AM_DEVWRITE("aysnd", ay8910_data_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( megazone_i8039_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( megazone_i8039_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( megazone_i8039_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( megazone_i8039_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READ(soundlatch_r)
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_WRITE(i8039_irqen_and_status_w)
@@ -152,41 +145,41 @@ static INPUT_PORTS_START( megazone )
 	PORT_START("IN2")
 	KONAMI8_COCKTAIL_B1_UNK
 
-	/* 0x8000 -> 0xe020 (CPU1) = 0x3820 (CPU0) */
+	/* 0x8001 -> 0xe021 (CPU1) = 0x3821 (CPU0) */
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )
+	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), "No Coin B", SW1)
+	/* "No Coin B" = coins produce sound, but no effect on coin counter */
+
+	/* 0x8000 -> 0xe020 (CPU1) = 0x3820 (CPU0) */
+	PORT_START("DSW2")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, "3" )
 	PORT_DIPSETTING(    0x02, "4" )
 	PORT_DIPSETTING(    0x01, "5" )
 	PORT_DIPSETTING(    0x00, "7" )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SW2:3")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(    0x18, "20k 70k 70k+" )
 	PORT_DIPSETTING(    0x10, "20k 80k 80k+" )
 	PORT_DIPSETTING(    0x08, "30k 90k 90k+" )
 	PORT_DIPSETTING(    0x00, "30k 100k 100k+" )
-	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:6,7")
 	PORT_DIPSETTING(    0x60, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-
-	/* 0x8001 -> 0xe021 (CPU1) = 0x3821 (CPU0) */
-	PORT_START("DSW2")
-	KONAMI_COINAGE(DEF_STR( Free_Play ), "No Coin B")
-	/* "No Coin B" = coins produce sound, but no effect on coin counter */
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( megazona )
 	PORT_INCLUDE( megazone )
 
-	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )
+	PORT_MODIFY("DSW2")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, "2" )
 	PORT_DIPSETTING(    0x02, "3" )
 	PORT_DIPSETTING(    0x01, "4" )
@@ -229,66 +222,96 @@ static const ay8910_interface ay8910_config =
 {
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
-	DEVCB_HANDLER(megazone_portA_r),
+	DEVCB_HANDLER(megazone_port_a_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(megazone_portB_w)
+	DEVCB_HANDLER(megazone_port_b_w)
 };
 
 
 
-static MACHINE_DRIVER_START( megazone )
+static MACHINE_START( megazone )
+{
+	megazone_state *state = machine.driver_data<megazone_state>();
+
+	state->m_maincpu = machine.device<cpu_device>("maincpu");
+	state->m_audiocpu = machine.device<cpu_device>("audiocpu");
+	state->m_daccpu = machine.device<cpu_device>("daccpu");
+
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_i8039_status));
+}
+
+static MACHINE_RESET( megazone )
+{
+	megazone_state *state = machine.driver_data<megazone_state>();
+
+	state->m_flipscreen = 0;
+	state->m_i8039_status = 0;
+}
+
+static INTERRUPT_GEN( vblank_irq )
+{
+	megazone_state *state = device->machine().driver_data<megazone_state>();
+
+	if(state->m_irq_mask)
+		device_set_input_line(device, 0, HOLD_LINE);
+}
+
+
+static MACHINE_CONFIG_START( megazone, megazone_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, 18432000/9)        /* 2 MHz */
-	MDRV_CPU_PROGRAM_MAP(megazone_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", M6809, 18432000/9)        /* 2 MHz */
+	MCFG_CPU_PROGRAM_MAP(megazone_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80,18432000/6)     /* Z80 Clock is derived from the H1 signal */
-	MDRV_CPU_PROGRAM_MAP(megazone_sound_map)
-	MDRV_CPU_IO_MAP(megazone_sound_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("audiocpu", Z80,18432000/6)     /* Z80 Clock is derived from the H1 signal */
+	MCFG_CPU_PROGRAM_MAP(megazone_sound_map)
+	MCFG_CPU_IO_MAP(megazone_sound_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("daccpu", I8039,14318000/2)	/* 1/2 14MHz crystal */
-	MDRV_CPU_PROGRAM_MAP(megazone_i8039_map)
-	MDRV_CPU_IO_MAP(megazone_i8039_io_map)
+	MCFG_CPU_ADD("daccpu", I8039,14318000/2)	/* 1/2 14MHz crystal */
+	MCFG_CPU_PROGRAM_MAP(megazone_i8039_map)
+	MCFG_CPU_IO_MAP(megazone_i8039_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(900))
+	MCFG_QUANTUM_TIME(attotime::from_hz(900))
+	MCFG_MACHINE_START(megazone)
+	MCFG_MACHINE_RESET(megazone)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(megazone)
 
-	MDRV_GFXDECODE(megazone)
-	MDRV_PALETTE_LENGTH(16*16+16*16)
+	MCFG_GFXDECODE(megazone)
+	MCFG_PALETTE_LENGTH(16*16+16*16)
 
-	MDRV_PALETTE_INIT(megazone)
-	MDRV_VIDEO_START(megazone)
-	MDRV_VIDEO_UPDATE(megazone)
+	MCFG_PALETTE_INIT(megazone)
+	MCFG_VIDEO_START(megazone)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 14318000/8)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(0, "filter.0.0", 0.30)
-	MDRV_SOUND_ROUTE(1, "filter.0.1", 0.30)
-	MDRV_SOUND_ROUTE(2, "filter.0.2", 0.30)
+	MCFG_SOUND_ADD("aysnd", AY8910, 14318000/8)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(0, "filter.0.0", 0.30)
+	MCFG_SOUND_ROUTE(1, "filter.0.1", 0.30)
+	MCFG_SOUND_ROUTE(2, "filter.0.2", 0.30)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("filter.0.0", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MDRV_SOUND_ADD("filter.0.1", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MDRV_SOUND_ADD("filter.0.2", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("filter.0.0", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.0.1", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.0.2", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -516,12 +539,12 @@ static DRIVER_INIT( megazone )
 }
 
 /* these just display a Konami copyright, no logo */
-GAME( 1983, megazone, 0,        megazone, megazone, megazone, ROT90, "Konami",                       "Mega Zone (Konami set 1)", 0 )
-GAME( 1983, megazonea, megazone, megazone, megazona, megazone, ROT90, "Konami",                       "Mega Zone (Konami set 2)", 0 )
+GAME( 1983, megazone, 0,         megazone, megazone, megazone, ROT90, "Konami",                       "Mega Zone (Konami set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, megazonea, megazone, megazone, megazona, megazone, ROT90, "Konami",                       "Mega Zone (Konami set 2)", GAME_SUPPORTS_SAVE )
 
 /* these display Konami and Kosuka copyright, no logo */
-GAME( 1983, megazoneb, megazone, megazone, megazone, megazone, ROT90, "Konami / Kosuka",              "Mega Zone (Kosuka set 1)", 0 )
-GAME( 1983, megazonec, megazone, megazone, megazone, megazone, ROT90, "Konami / Kosuka",              "Mega Zone (Kosuka set 2)", 0 )
+GAME( 1983, megazoneb, megazone, megazone, megazone, megazone, ROT90, "Konami / Kosuka",              "Mega Zone (Kosuka set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, megazonec, megazone, megazone, megazone, megazone, ROT90, "Konami / Kosuka",              "Mega Zone (Kosuka set 2)", GAME_SUPPORTS_SAVE )
 
 /* this displays Konami and Kosuka copyright with a Konami / Interlogic logo */
-GAME( 1983, megazonei, megazone, megazone, megazone, megazone, ROT90, "Konami / Interlogic + Kosuka", "Mega Zone (Interlogic + Kosuka)", 0 )
+GAME( 1983, megazonei, megazone, megazone, megazone, megazone, ROT90, "Konami / Interlogic / Kosuka", "Mega Zone (Interlogic / Kosuka)", GAME_SUPPORTS_SAVE )

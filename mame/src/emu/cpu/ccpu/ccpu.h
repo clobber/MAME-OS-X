@@ -13,8 +13,6 @@
 #ifndef __CCPU_H__
 #define	__CCPU_H__
 
-#include "cpuintrf.h"
-
 
 /***************************************************************************
     REGISTER ENUMERATION
@@ -40,8 +38,8 @@ enum
     CONFIG STRUCTURE
 ***************************************************************************/
 
-typedef UINT8 (*ccpu_input_func)(const device_config *device);
-typedef void (*ccpu_vector_func)(const device_config *device, INT16 sx, INT16 sy, INT16 ex, INT16 ey, UINT8 shift);
+typedef UINT8 (*ccpu_input_func)(device_t *device);
+typedef void (*ccpu_vector_func)(device_t *device, INT16 sx, INT16 sy, INT16 ex, INT16 ey, UINT8 shift);
 
 typedef struct _ccpu_config ccpu_config;
 struct _ccpu_config
@@ -56,10 +54,9 @@ struct _ccpu_config
     PUBLIC FUNCTIONS
 ***************************************************************************/
 
-CPU_GET_INFO( ccpu );
-#define CPU_CCPU CPU_GET_INFO_NAME( ccpu )
+DECLARE_LEGACY_CPU_DEVICE(CCPU, ccpu);
 
-void ccpu_wdt_timer_trigger(const device_config *device);
+void ccpu_wdt_timer_trigger(device_t *device);
 
 CPU_DISASSEMBLE( ccpu );
 

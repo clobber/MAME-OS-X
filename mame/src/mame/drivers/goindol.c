@@ -17,102 +17,93 @@ Notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/2203intf.h"
-
-VIDEO_START( goindol );
-WRITE8_HANDLER( goindol_fg_videoram_w );
-WRITE8_HANDLER( goindol_bg_videoram_w );
-VIDEO_UPDATE( goindol );
-
-extern UINT8 *goindol_fg_scrollx;
-extern UINT8 *goindol_fg_scrolly;
-extern UINT8 *goindol_fg_videoram;
-extern UINT8 *goindol_bg_videoram;
-extern size_t goindol_fg_videoram_size;
-extern size_t goindol_bg_videoram_size;
-extern int goindol_char_bank;
+#include "includes/goindol.h"
 
 
 static WRITE8_HANDLER( goindol_bankswitch_w )
 {
-	int bankaddress;
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	goindol_state *state = space->machine().driver_data<goindol_state>();
 
-	bankaddress = 0x10000 + ((data & 3) * 0x4000);
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bank(space->machine(), "bank1", data & 0x03);
 
-	if (goindol_char_bank != ((data & 0x10) >> 4))
+	if (state->m_char_bank != ((data & 0x10) >> 4))
 	{
-		goindol_char_bank = (data & 0x10) >> 4;
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		state->m_char_bank = (data & 0x10) >> 4;
+		space->machine().tilemap().mark_all_dirty();
 	}
 
-	flip_screen_set(space->machine, data & 0x20);
+	flip_screen_set(space->machine(), data & 0x20);
 }
 
 
 
 static READ8_HANDLER( prot_f422_r )
 {
-	static int toggle;
+	goindol_state *state = space->machine().driver_data<goindol_state>();
 
 	/* bit 7 = vblank? */
-	toggle ^= 0x80;
+	state->m_prot_toggle ^= 0x80;
 
-	return toggle;
+	return state->m_prot_toggle;
 }
 
 
-static UINT8 *ram;
-
 static WRITE8_HANDLER( prot_fc44_w )
 {
-logerror("%04x: prot_fc44_w(%02x)\n",cpu_get_pc(space->cpu),data);
-	ram[0x0419] = 0x5b;
-	ram[0x041a] = 0x3f;
-	ram[0x041b] = 0x6d;
+	goindol_state *state = space->machine().driver_data<goindol_state>();
+
+	logerror("%04x: prot_fc44_w(%02x)\n", cpu_get_pc(&space->device()), data);
+	state->m_ram[0x0419] = 0x5b;
+	state->m_ram[0x041a] = 0x3f;
+	state->m_ram[0x041b] = 0x6d;
 }
 
 static WRITE8_HANDLER( prot_fd99_w )
 {
-logerror("%04x: prot_fd99_w(%02x)\n",cpu_get_pc(space->cpu),data);
-	ram[0x0421] = 0x3f;
+	goindol_state *state = space->machine().driver_data<goindol_state>();
+
+	logerror("%04x: prot_fd99_w(%02x)\n", cpu_get_pc(&space->device()), data);
+	state->m_ram[0x0421] = 0x3f;
 }
 
 static WRITE8_HANDLER( prot_fc66_w )
 {
-logerror("%04x: prot_fc66_w(%02x)\n",cpu_get_pc(space->cpu),data);
-	ram[0x0423] = 0x06;
+	goindol_state *state = space->machine().driver_data<goindol_state>();
+
+	logerror("%04x: prot_fc66_w(%02x)\n", cpu_get_pc(&space->device()), data);
+	state->m_ram[0x0423] = 0x06;
 }
 
 static WRITE8_HANDLER( prot_fcb0_w )
 {
-logerror("%04x: prot_fcb0_w(%02x)\n",cpu_get_pc(space->cpu),data);
-	ram[0x0425] = 0x06;
+	goindol_state *state = space->machine().driver_data<goindol_state>();
+
+	logerror("%04x: prot_fcb0_w(%02x)\n", cpu_get_pc(&space->device()), data);
+	state->m_ram[0x0425] = 0x06;
 }
 
 
 
-static ADDRESS_MAP_START( goindol_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( goindol_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE(&ram)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_MEMBER(goindol_state, m_ram)
 	AM_RANGE(0xc800, 0xc800) AM_READNOP AM_WRITE(soundlatch_w) // watchdog?
 	AM_RANGE(0xc810, 0xc810) AM_WRITE(goindol_bankswitch_w)
 	AM_RANGE(0xc820, 0xc820) AM_READ_PORT("DIAL")
-	AM_RANGE(0xc820, 0xd820) AM_WRITE(SMH_RAM) AM_BASE(&goindol_fg_scrolly)
+	AM_RANGE(0xc820, 0xd820) AM_WRITEONLY AM_BASE_MEMBER(goindol_state, m_fg_scrolly)
 	AM_RANGE(0xc830, 0xc830) AM_READ_PORT("P1")
-	AM_RANGE(0xc830, 0xd830) AM_WRITE(SMH_RAM) AM_BASE(&goindol_fg_scrollx)
+	AM_RANGE(0xc830, 0xd830) AM_WRITEONLY AM_BASE_MEMBER(goindol_state, m_fg_scrollx)
 	AM_RANGE(0xc834, 0xc834) AM_READ_PORT("P2")
-	AM_RANGE(0xd000, 0xd03f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd000, 0xd03f) AM_RAM AM_BASE_SIZE_MEMBER(goindol_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd040, 0xd7ff) AM_RAM
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(goindol_bg_videoram_w) AM_BASE(&goindol_bg_videoram) AM_SIZE(&goindol_bg_videoram_size)
-	AM_RANGE(0xe000, 0xe03f) AM_RAM AM_BASE(&spriteram_2)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(goindol_bg_videoram_w) AM_BASE_SIZE_MEMBER(goindol_state, m_bg_videoram, m_bg_videoram_size)
+	AM_RANGE(0xe000, 0xe03f) AM_RAM AM_BASE_MEMBER(goindol_state, m_spriteram2)
 	AM_RANGE(0xe040, 0xe7ff) AM_RAM
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(goindol_fg_videoram_w) AM_BASE(&goindol_fg_videoram) AM_SIZE(&goindol_fg_videoram_size)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(goindol_fg_videoram_w) AM_BASE_SIZE_MEMBER(goindol_state, m_fg_videoram, m_fg_videoram_size)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("DSW1")
 	AM_RANGE(0xf422, 0xf422) AM_READ(prot_f422_r)
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("DSW2")
@@ -122,9 +113,9 @@ static ADDRESS_MAP_START( goindol_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xfd99, 0xfd99) AM_WRITE(prot_fd99_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("ym", ym2203_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("ymsnd", ym2203_w)
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xd800, 0xd800) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -172,7 +163,7 @@ static INPUT_PORTS_START( goindol )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:6")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ))
- 	PORT_DIPNAME( 0x40, 0x40, "Invulnerability (Cheat)")	PORT_DIPLOCATION("SW1:7")
+	PORT_DIPNAME( 0x40, 0x40, "Invulnerability (Cheat)")	PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_SERVICE_DIPLOC(  0x80, IP_ACTIVE_LOW, "SW1:8" )
@@ -232,38 +223,59 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( goindol )
+static MACHINE_START( goindol )
+{
+	goindol_state *state = machine.driver_data<goindol_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
+
+	state->save_item(NAME(state->m_char_bank));
+	state->save_item(NAME(state->m_prot_toggle));
+}
+
+static MACHINE_RESET( goindol )
+{
+	goindol_state *state = machine.driver_data<goindol_state>();
+
+	state->m_char_bank = 0;
+	state->m_prot_toggle = 0;
+}
+
+static MACHINE_CONFIG_START( goindol, goindol_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 6000000)        /* 6 MHz (?) */
-	MDRV_CPU_PROGRAM_MAP(goindol_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)	/* XTAL confirmed, divisor is not */
+	MCFG_CPU_PROGRAM_MAP(goindol_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 4000000)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_12MHz/2)	/* XTAL confirmed, divisor is not */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)
+
+	MCFG_MACHINE_START(goindol)
+	MCFG_MACHINE_RESET(goindol)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(goindol)
 
-	MDRV_GFXDECODE(goindol)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(goindol)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MDRV_VIDEO_START(goindol)
-	MDRV_VIDEO_UPDATE(goindol)
+	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
+	MCFG_VIDEO_START(goindol)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/8)	/* Confirmed pitch from recording */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
 
@@ -377,12 +389,12 @@ ROM_END
 
 static DRIVER_INIT( goindol )
 {
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 
 
 	/* I hope that's all patches to avoid protection */
 
-	rom[0x18e9] = 0x18;	// ROM 1 check
+	rom[0x18e9] = 0x18; // ROM 1 check
 	rom[0x1964] = 0x00; // ROM 9 error (MCU?)
 	rom[0x1965] = 0x00; //
 	rom[0x1966] = 0x00; //
@@ -406,7 +418,7 @@ static DRIVER_INIT( goindol )
 
 
 
-GAME( 1987, goindol,  0,       goindol, goindol, goindol, ROT90, "Sun a Electronics", "Goindol (World)", GAME_UNEMULATED_PROTECTION )
-GAME( 1987, goindolu, goindol, goindol, goindol, goindol, ROT90, "Sun a Electronics", "Goindol (US)",    GAME_UNEMULATED_PROTECTION )
-GAME( 1987, goindolk, goindol, goindol, goindol, goindol, ROT90, "Sun a Electronics", "Goindol (Korea)", GAME_UNEMULATED_PROTECTION )
-GAME( 1987, homo,     goindol, goindol, homo,    0,       ROT90, "bootleg", "Homo", 0 )
+GAME( 1987, goindol,  0,       goindol, goindol, goindol, ROT90, "SunA",    "Goindol (World)", GAME_UNEMULATED_PROTECTION | GAME_SUPPORTS_SAVE )
+GAME( 1987, goindolu, goindol, goindol, goindol, goindol, ROT90, "SunA",    "Goindol (US)",    GAME_UNEMULATED_PROTECTION | GAME_SUPPORTS_SAVE )
+GAME( 1987, goindolk, goindol, goindol, goindol, goindol, ROT90, "SunA",    "Goindol (Korea)", GAME_UNEMULATED_PROTECTION | GAME_SUPPORTS_SAVE )
+GAME( 1987, homo,     goindol, goindol, homo,    0,       ROT90, "bootleg", "Homo", GAME_SUPPORTS_SAVE )

@@ -11,7 +11,8 @@
 #ifndef __SID6581_H__
 #define __SID6581_H__
 
-#include "sndintrf.h"
+#include "devlegcy.h"
+
 
 typedef enum
 {
@@ -23,16 +24,14 @@ typedef enum
 typedef struct _sid6581_interface sid6581_interface;
 struct _sid6581_interface
 {
-	int (*ad_read)(const device_config *device, int channel);
+	int (*ad_read)(device_t *device, int channel);
 } ;
 
 
 READ8_DEVICE_HANDLER  ( sid6581_r );
 WRITE8_DEVICE_HANDLER ( sid6581_w );
 
-DEVICE_GET_INFO( sid6581 );
-DEVICE_GET_INFO( sid8580 );
-#define SOUND_SID6581 DEVICE_GET_INFO_NAME( sid6581 )
-#define SOUND_SID8580 DEVICE_GET_INFO_NAME( sid8580 )
+DECLARE_LEGACY_SOUND_DEVICE(SID6581, sid6581);
+DECLARE_LEGACY_SOUND_DEVICE(SID8580, sid8580);
 
 #endif /* __SID6581_H__ */

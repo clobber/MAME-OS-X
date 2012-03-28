@@ -416,23 +416,23 @@ The Two Bit Score "Dux" hack was circulated and common enough for inclusion
     Off On  On                          For every 5 coins, add 1 coin
     ------------------------------------------
 
+Maze Invaders:
+http://www.atarigames.com/safestuff/mazeinvaders.html
+
+-  The controls are somewhat like Food Fight in the way that they need to be
+'calibrated' as you play or before you start by pushing a couple seconds in
+each direction to assign the boundries.
+
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/s2650/s2650.h"
 #include "machine/atari_vg.h"
-#include "centiped.h"
+#include "includes/centiped.h"
 #include "sound/ay8910.h"
 #include "sound/sn76496.h"
 #include "sound/pokey.h"
-
-
-static UINT8 oldpos[4];
-static UINT8 sign[4];
-static UINT8 dsw_select, control_select;
-static UINT8 *rambase;
-
 
 /*************************************
  *
@@ -446,41 +446,47 @@ static TIMER_DEVICE_CALLBACK( generate_interrupt )
 
 	/* IRQ is clocked on the rising edge of 16V, equal to the previous 32V */
 	if (scanline & 16)
-		cputag_set_input_line(timer->machine, "maincpu", 0, ((scanline - 1) & 32) ? ASSERT_LINE : CLEAR_LINE);
+		cputag_set_input_line(timer.machine(), "maincpu", 0, ((scanline - 1) & 32) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* do a partial update now to handle sprite multiplexing (Maze Invaders) */
-	video_screen_update_partial(timer->machine->primary_screen, scanline);
+	timer.machine().primary_screen->update_partial(scanline);
 }
 
 
 static MACHINE_START( centiped )
 {
-	state_save_register_global_array(machine, oldpos);
-	state_save_register_global_array(machine, sign);
-	state_save_register_global(machine, dsw_select);
+	centiped_state *state = machine.driver_data<centiped_state>();
+
+	state->save_item(NAME(state->m_oldpos));
+	state->save_item(NAME(state->m_sign));
+	state->save_item(NAME(state->m_dsw_select));
 }
 
 
 static MACHINE_RESET( centiped )
 {
+	centiped_state *state = machine.driver_data<centiped_state>();
+
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	dsw_select = 0;
-	control_select = 0;
+	state->m_dsw_select = 0;
+	state->m_control_select = 0;
 }
 
 
 static MACHINE_RESET( magworm )
 {
+	centiped_state *state = machine.driver_data<centiped_state>();
+
 	MACHINE_RESET_CALL(centiped);
 
 	/* kludge: clear RAM so that magworm can be reset cleanly */
-	memset(rambase, 0, 0x400);
+	memset(state->m_rambase, 0, 0x400);
 }
 
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -509,53 +515,55 @@ static WRITE8_HANDLER( irq_ack_w )
  * to prevent the counter from wrapping around between reads.
  */
 
-INLINE int read_trackball(running_machine *machine, int idx, int switch_port)
+INLINE int read_trackball(running_machine &machine, int idx, int switch_port)
 {
+	centiped_state *state = machine.driver_data<centiped_state>();
 	UINT8 newpos;
 	static const char *const portnames[] = { "IN0", "IN1", "IN2" };
 	static const char *const tracknames[] = { "TRACK0_X", "TRACK0_Y", "TRACK1_X", "TRACK1_Y" };
 
 	/* adjust idx if we're cocktail flipped */
-	if (centiped_flipscreen)
+	if (state->m_flipscreen)
 		idx += 2;
 
 	/* if we're to read the dipswitches behind the trackball data, do it now */
-	if (dsw_select)
-		return (input_port_read(machine, portnames[switch_port]) & 0x7f) | sign[idx];
+	if (state->m_dsw_select)
+		return (input_port_read(machine, portnames[switch_port]) & 0x7f) | state->m_sign[idx];
 
 	/* get the new position and adjust the result */
 	newpos = input_port_read(machine, tracknames[idx]);
-	if (newpos != oldpos[idx])
+	if (newpos != state->m_oldpos[idx])
 	{
-		sign[idx] = (newpos - oldpos[idx]) & 0x80;
-		oldpos[idx] = newpos;
+		state->m_sign[idx] = (newpos - state->m_oldpos[idx]) & 0x80;
+		state->m_oldpos[idx] = newpos;
 	}
 
 	/* blend with the bits from the switch port */
-	return (input_port_read(machine, portnames[switch_port]) & 0x70) | (oldpos[idx] & 0x0f) | sign[idx];
+	return (input_port_read(machine, portnames[switch_port]) & 0x70) | (state->m_oldpos[idx] & 0x0f) | state->m_sign[idx];
 }
 
 
 static READ8_HANDLER( centiped_IN0_r )
 {
-	return read_trackball(space->machine, 0, 0);
+	return read_trackball(space->machine(), 0, 0);
 }
 
 
 static READ8_HANDLER( centiped_IN2_r )
 {
-	return read_trackball(space->machine, 1, 2);
+	return read_trackball(space->machine(), 1, 2);
 }
 
 
 static READ8_HANDLER( milliped_IN1_r )
 {
-	return read_trackball(space->machine, 1, 1);
+	return read_trackball(space->machine(), 1, 1);
 }
 
 static READ8_HANDLER( milliped_IN2_r )
 {
-	UINT8 data = input_port_read(space->machine, "IN2");
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+	UINT8 data = input_port_read(space->machine(), "IN2");
 
 	/* MSH - 15 Feb, 2007
      * The P2 X Joystick inputs are not properly handled in
@@ -564,9 +572,9 @@ static READ8_HANDLER( milliped_IN2_r )
      * the inputs, and has the good side effect of disabling
      * the actual Joy1 inputs while control_select is no zero.
      */
-	if (0 != control_select) {
+	if (0 != state->m_control_select) {
 		/* Bottom 4 bits is our joystick inputs */
-		UINT8 joy2data = input_port_read(space->machine, "IN3") & 0x0f;
+		UINT8 joy2data = input_port_read(space->machine(), "IN3") & 0x0f;
 		data = data & 0xf0; /* Keep the top 4 bits */
 		data |= (joy2data & 0x0a) >> 1; /* flip left and up */
 		data |= (joy2data & 0x05) << 1; /* flip right and down */
@@ -576,32 +584,39 @@ static READ8_HANDLER( milliped_IN2_r )
 
 static WRITE8_HANDLER( input_select_w )
 {
-	dsw_select = (~data >> 7) & 1;
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+
+	state->m_dsw_select = (~data >> 7) & 1;
 }
 
 /* used P2 controls if 1, P1 controls if 0 */
 static WRITE8_HANDLER( control_select_w )
 {
-	control_select = (data >> 7) & 1;
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+
+	state->m_control_select = (data >> 7) & 1;
 }
 
 
 static READ8_HANDLER( mazeinv_input_r )
 {
+	centiped_state *state = space->machine().driver_data<centiped_state>();
 	static const char *const sticknames[] = { "STICK0", "STICK1", "STICK2", "STICK3" };
 
-	return input_port_read(space->machine, sticknames[control_select]);
+	return input_port_read(space->machine(), sticknames[state->m_control_select]);
 }
 
 
 static WRITE8_HANDLER( mazeinv_input_select_w )
 {
-	control_select = offset & 3;
+	centiped_state *state = space->machine().driver_data<centiped_state>();
+
+	state->m_control_select = offset & 3;
 }
 
 static READ8_HANDLER( bullsdrt_data_port_r )
 {
-	switch (cpu_get_pc(space->cpu))
+	switch (cpu_get_pc(&space->device()))
 	{
 		case 0x0033:
 		case 0x6b19:
@@ -621,25 +636,25 @@ static READ8_HANDLER( bullsdrt_data_port_r )
 
 static WRITE8_HANDLER( led_w )
 {
-	set_led_status(offset, ~data & 0x80);
+	set_led_status(space->machine(), offset, ~data & 0x80);
 }
 
 
 static READ8_DEVICE_HANDLER( caterplr_rand_r )
 {
-	return mame_rand(device->machine) % 0xff;
+	return device->machine().rand() % 0xff;
 }
 
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(offset, data);
+	coin_counter_w(space->machine(), offset, data);
 }
 
 
 static WRITE8_HANDLER( bullsdrt_coin_count_w )
 {
-	coin_counter_w(0, data);
+	coin_counter_w(space->machine(), 0, data);
 }
 
 
@@ -671,11 +686,11 @@ static READ8_DEVICE_HANDLER( caterplr_AY8910_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( centiped_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( centiped_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_rambase)
+	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("DSW1")		/* DSW1 */
 	AM_RANGE(0x0801, 0x0801) AM_READ_PORT("DSW2")		/* DSW2 */
 	AM_RANGE(0x0c00, 0x0c00) AM_READ(centiped_IN0_r)	/* IN0 */
@@ -683,10 +698,10 @@ static ADDRESS_MAP_START( centiped_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0c02, 0x0c02) AM_READ(centiped_IN2_r)	/* IN2 */
 	AM_RANGE(0x0c03, 0x0c03) AM_READ_PORT("IN3")		/* IN3 */
 	AM_RANGE(0x1000, 0x100f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
-	AM_RANGE(0x1400, 0x140f) AM_WRITE(centiped_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0x1600, 0x163f) AM_DEVWRITE("earom", atari_vg_earom_w)
-	AM_RANGE(0x1680, 0x1680) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
-	AM_RANGE(0x1700, 0x173f) AM_DEVREAD("earom", atari_vg_earom_r)
+	AM_RANGE(0x1400, 0x140f) AM_WRITE(centiped_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x1600, 0x163f) AM_DEVWRITE_MODERN("earom",atari_vg_earom_device, write)
+	AM_RANGE(0x1680, 0x1680) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
+	AM_RANGE(0x1700, 0x173f) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
 	AM_RANGE(0x1800, 0x1800) AM_WRITE(irq_ack_w)
 	AM_RANGE(0x1c00, 0x1c02) AM_WRITE(coin_count_w)
 	AM_RANGE(0x1c03, 0x1c04) AM_WRITE(led_w)
@@ -696,11 +711,11 @@ static ADDRESS_MAP_START( centiped_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( centipdb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( centipdb_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x4000) AM_RAM
-	AM_RANGE(0x0400, 0x07bf) AM_MIRROR(0x4000) AM_RAM_WRITE(centiped_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x07c0, 0x07ff) AM_MIRROR(0x4000) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x0400, 0x07bf) AM_MIRROR(0x4000) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x07c0, 0x07ff) AM_MIRROR(0x4000) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x0800, 0x0800) AM_MIRROR(0x4000) AM_READ_PORT("DSW1")		/* DSW1 */
 	AM_RANGE(0x0801, 0x0801) AM_MIRROR(0x4000) AM_READ_PORT("DSW2")		/* DSW2 */
 	AM_RANGE(0x0c00, 0x0c00) AM_MIRROR(0x4000) AM_READ(centiped_IN0_r)	/* IN0 */
@@ -709,10 +724,10 @@ static ADDRESS_MAP_START( centipdb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0c03, 0x0c03) AM_MIRROR(0x4000) AM_READ_PORT("IN3")		/* IN3 */
 	AM_RANGE(0x1000, 0x1001) AM_MIRROR(0x4000) AM_DEVWRITE("pokey", ay8910_data_address_w)
 	AM_RANGE(0x1001, 0x1001) AM_MIRROR(0x4000) AM_DEVREAD("pokey", ay8910_r)
-	AM_RANGE(0x1400, 0x140f) AM_MIRROR(0x4000) AM_WRITE(centiped_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0x1600, 0x163f) AM_MIRROR(0x4000) AM_DEVWRITE("earom", atari_vg_earom_w)
-	AM_RANGE(0x1680, 0x1680) AM_MIRROR(0x4000) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
-	AM_RANGE(0x1700, 0x173f) AM_MIRROR(0x4000) AM_DEVREAD("earom", atari_vg_earom_r)
+	AM_RANGE(0x1400, 0x140f) AM_MIRROR(0x4000) AM_WRITE(centiped_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x1600, 0x163f) AM_MIRROR(0x4000) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
+	AM_RANGE(0x1680, 0x1680) AM_MIRROR(0x4000) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
+	AM_RANGE(0x1700, 0x173f) AM_MIRROR(0x4000) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
 	AM_RANGE(0x1800, 0x1800) AM_MIRROR(0x4000) AM_WRITE(irq_ack_w)
 	AM_RANGE(0x1c00, 0x1c02) AM_MIRROR(0x4000) AM_WRITE(coin_count_w)
 	AM_RANGE(0x1c03, 0x1c04) AM_MIRROR(0x4000) AM_WRITE(led_w)
@@ -730,19 +745,19 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( milliped_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( milliped_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0400, 0x040f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x0800, 0x080f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x2000, 0x2000) AM_READ(centiped_IN0_r)
 	AM_RANGE(0x2001, 0x2001) AM_READ(milliped_IN1_r)
 	AM_RANGE(0x2010, 0x2010) AM_READ(milliped_IN2_r)
 	AM_RANGE(0x2011, 0x2011) AM_READ_PORT("IN3")
-	AM_RANGE(0x2030, 0x2030) AM_DEVREAD("earom", atari_vg_earom_r)
-	AM_RANGE(0x2480, 0x249f) AM_WRITE(milliped_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x2030, 0x2030) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
+	AM_RANGE(0x2480, 0x249f) AM_WRITE(milliped_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x2500, 0x2502) AM_WRITE(coin_count_w)
 	AM_RANGE(0x2503, 0x2504) AM_WRITE(led_w)
 	AM_RANGE(0x2505, 0x2505) AM_WRITE(input_select_w) /* TBEN */
@@ -750,8 +765,8 @@ static ADDRESS_MAP_START( milliped_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2507, 0x2507) AM_WRITE(control_select_w) /* CNTRLSEL */
 	AM_RANGE(0x2600, 0x2600) AM_WRITE(irq_ack_w)
 	AM_RANGE(0x2680, 0x2680) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0x2700, 0x2700) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
-	AM_RANGE(0x2780, 0x27bf) AM_DEVWRITE("earom", atari_vg_earom_w)
+	AM_RANGE(0x2700, 0x2700) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
+	AM_RANGE(0x2780, 0x27bf) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
 	AM_RANGE(0x4000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -763,11 +778,11 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( warlords_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( warlords_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("DSW1")	/* DSW1 */
 	AM_RANGE(0x0801, 0x0801) AM_READ_PORT("DSW2")	/* DSW2 */
 	AM_RANGE(0x0c00, 0x0c00) AM_READ_PORT("IN0")	/* IN0 */
@@ -788,29 +803,29 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mazeinv_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mazeinv_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0400, 0x040f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x0800, 0x080f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x1000, 0x13bf) AM_RAM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x13c0, 0x13ff) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x2000, 0x2000) AM_READ_PORT("IN0")
 	AM_RANGE(0x2001, 0x2001) AM_READ_PORT("IN1")
 	AM_RANGE(0x2010, 0x2010) AM_READ_PORT("IN2")
 	AM_RANGE(0x2011, 0x2011) AM_READ_PORT("IN3")
 	AM_RANGE(0x2020, 0x2020) AM_READ(mazeinv_input_r)
-	AM_RANGE(0x2030, 0x2030) AM_DEVREAD("earom", atari_vg_earom_r)
-	AM_RANGE(0x2480, 0x249f) AM_WRITE(mazeinv_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x2030, 0x2030) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
+	AM_RANGE(0x2480, 0x249f) AM_WRITE(mazeinv_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x2500, 0x2502) AM_WRITE(coin_count_w)
 	AM_RANGE(0x2503, 0x2504) AM_WRITE(led_w)
 	AM_RANGE(0x2505, 0x2505) AM_WRITE(input_select_w)
-//  AM_RANGE(0x2506, 0x2507) AM_WRITENOP /* ? */
+	AM_RANGE(0x2506, 0x2506) AM_WRITE(centiped_flip_screen_w)
 	AM_RANGE(0x2580, 0x2583) AM_WRITE(mazeinv_input_select_w)
 	AM_RANGE(0x2600, 0x2600) AM_WRITE(irq_ack_w)
 	AM_RANGE(0x2680, 0x2680) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0x2700, 0x2700) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
-	AM_RANGE(0x2780, 0x27bf) AM_DEVWRITE("earom", atari_vg_earom_w)
+	AM_RANGE(0x2700, 0x2700) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
+	AM_RANGE(0x2780, 0x27bf) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
 	AM_RANGE(0x3000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -822,33 +837,33 @@ ADDRESS_MAP_END
  *
  ****************************************/
 
-static ADDRESS_MAP_START( bullsdrt_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bullsdrt_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x1000) AM_MIRROR(0x6000) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1080, 0x1080) AM_MIRROR(0x6000) AM_READ(centiped_IN0_r)
 	AM_RANGE(0x1081, 0x1081) AM_MIRROR(0x6000) AM_READ_PORT("IN1")
 	AM_RANGE(0x1082, 0x1082) AM_MIRROR(0x6000) AM_READ(centiped_IN2_r)
-	AM_RANGE(0x1200, 0x123f) AM_MIRROR(0x6000) AM_DEVREADWRITE("earom", atari_vg_earom_r, atari_vg_earom_w)
-	AM_RANGE(0x1280, 0x1280) AM_MIRROR(0x6000) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x1200, 0x123f) AM_MIRROR(0x6000) AM_DEVREADWRITE_MODERN("earom",atari_vg_earom_device, read, write)
+	AM_RANGE(0x1280, 0x1280) AM_MIRROR(0x6000) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
 	AM_RANGE(0x1300, 0x1300) AM_MIRROR(0x6000) AM_READ_PORT("DSW2")
-	AM_RANGE(0x1400, 0x140f) AM_MIRROR(0x6000) AM_WRITE(centiped_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x1400, 0x140f) AM_MIRROR(0x6000) AM_WRITE(centiped_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x1481, 0x1481) AM_MIRROR(0x6000) AM_WRITE(bullsdrt_coin_count_w)
 	AM_RANGE(0x1483, 0x1484) AM_MIRROR(0x6000) AM_WRITE(led_w)
 	AM_RANGE(0x1487, 0x1487) AM_MIRROR(0x6000) AM_WRITE(centiped_flip_screen_w)
 	AM_RANGE(0x1500, 0x1500) AM_MIRROR(0x6000) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x1580, 0x1580) AM_MIRROR(0x6000) AM_NOP
-	AM_RANGE(0x1800, 0x1bbf) AM_MIRROR(0x6000) AM_WRITE(centiped_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x1bc0, 0x1bff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x1800, 0x1bbf) AM_MIRROR(0x6000) AM_WRITE(centiped_videoram_w) AM_BASE_MEMBER(centiped_state, m_videoram)
+	AM_RANGE(0x1bc0, 0x1bff) AM_MIRROR(0x6000) AM_RAM AM_BASE_MEMBER(centiped_state, m_spriteram)
 	AM_RANGE(0x1c00, 0x1fff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x2000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bullsdrt_port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bullsdrt_port_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_WRITE(bullsdrt_sprites_bank_w)
-	AM_RANGE(0x20, 0x3f) AM_WRITE(bullsdrt_tilesbank_w) AM_BASE(&bullsdrt_tiles_bankram)
-	AM_RANGE(S2650_DATA_PORT, S2650_DATA_PORT) AM_READ(bullsdrt_data_port_r) AM_DEVWRITE("sn", sn76496_w)
+	AM_RANGE(0x20, 0x3f) AM_WRITE(bullsdrt_tilesbank_w) AM_BASE_MEMBER(centiped_state, m_bullsdrt_tiles_bankram)
+	AM_RANGE(S2650_DATA_PORT, S2650_DATA_PORT) AM_READ(bullsdrt_data_port_r) AM_DEVWRITE("snsnd", sn76496_w)
 ADDRESS_MAP_END
 
 
@@ -898,43 +913,43 @@ static INPUT_PORTS_START( centiped )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )	PORT_DIPLOCATION("N9:1,2")
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("N9:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( German ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Spanish ) )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )	PORT_DIPLOCATION("N9:3,4")
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )		PORT_DIPLOCATION("N9:!3,!4")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x04, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("N9:5,6")
+	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("N9:!5,!6")
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x10, "12000" )
 	PORT_DIPSETTING(    0x20, "15000" )
 	PORT_DIPSETTING(    0x30, "20000" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("N9:7")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("N9:!7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x80, 0x00, "Credit Minimum" ) PORT_DIPLOCATION("N9:8")
+	PORT_DIPNAME( 0x80, 0x00, "Credit Minimum" )		PORT_DIPLOCATION("N9:!8")
 	PORT_DIPSETTING(    0x00, "1" )
 	PORT_DIPSETTING(    0x80, "2" )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) ) PORT_DIPLOCATION("N8:1,2")
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) )		PORT_DIPLOCATION("N8:!1,!2")
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" ) PORT_DIPLOCATION("N8:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" )			PORT_DIPLOCATION("N8:!3,!4")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x04, "*4" )
 	PORT_DIPSETTING(    0x08, "*5" )
 	PORT_DIPSETTING(    0x0c, "*6" )
-	PORT_DIPNAME( 0x10, 0x00, "Left Coin" )	PORT_DIPLOCATION("N8:5")
+	PORT_DIPNAME( 0x10, 0x00, "Left Coin" )				PORT_DIPLOCATION("N8:!5")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x10, "*2" )
-	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" ) PORT_DIPLOCATION("N8:6,7,8")
+	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" )			PORT_DIPLOCATION("N8:!6,!7,!8")
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(    0x20, "3 credits/2 coins" )
 	PORT_DIPSETTING(    0x40, "5 credits/4 coins" )
@@ -959,7 +974,7 @@ static INPUT_PORTS_START( caterplr )
 	PORT_INCLUDE( centiped )
 
 	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )	PORT_DIPLOCATION("N9:1,2")
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("N9:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( German ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( French ) )
@@ -981,35 +996,35 @@ static INPUT_PORTS_START( centtime )
 	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) ) PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( German ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Spanish ) )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:!3,!4")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x04, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW1:5,6")
+	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW1:!5,!6")
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x10, "12000" )
 	PORT_DIPSETTING(    0x20, "15000" )
 	PORT_DIPSETTING(    0x30, "20000" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW1:7")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:!7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x80, 0x00, "Credit Minimum" ) PORT_DIPLOCATION("SW1:8")
+	PORT_DIPNAME( 0x80, 0x00, "Credit Minimum" )		PORT_DIPLOCATION("SW1:!8")
 	PORT_DIPSETTING(    0x00, "1" )
 	PORT_DIPSETTING(    0x80, "2" )
 
 	PORT_MODIFY("DSW2")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW2:!1,!2")
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x1c, 0x00, DEF_STR( Game_Time ) ) PORT_DIPLOCATION("SW2:3,4,5")
+	PORT_DIPNAME( 0x1c, 0x00, DEF_STR( Game_Time ) )	PORT_DIPLOCATION("SW2:!3,!4,!5")
 	PORT_DIPSETTING(    0x00, "Untimed" )
 	PORT_DIPSETTING(    0x04, "1 Minute" )
 	PORT_DIPSETTING(    0x08, "2 Minutes" )
@@ -1018,7 +1033,7 @@ static INPUT_PORTS_START( centtime )
 	PORT_DIPSETTING(    0x14, "5 Minutes" )
 	PORT_DIPSETTING(    0x18, "6 Minutes" )
 	PORT_DIPSETTING(    0x1c, "7 Minutes" )
-	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" ) PORT_DIPLOCATION("SW2:6,7,8")
+	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" )			PORT_DIPLOCATION("SW2:!6,!7,!8")
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(    0x20, "3 credits/2 coins" )
 	PORT_DIPSETTING(    0x40, "5 credits/4 coins" )
@@ -1045,47 +1060,47 @@ static INPUT_PORTS_START( magworm )
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) ) PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" ) PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" )			PORT_DIPLOCATION("SW1:!3,!4")
 	PORT_DIPSETTING(    0x00, "*3" )
 	PORT_DIPSETTING(    0x04, "*7" )
 	PORT_DIPSETTING(    0x08, "*1/2" )
 	PORT_DIPSETTING(    0x0c, "*6" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Language ) ) PORT_DIPLOCATION("SW1:5,6")
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("SW1:!5,!6")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( German ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( Spanish ) )
-	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW1:7,8")
+	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:!7,!8")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x40, "3" )
 	PORT_DIPSETTING(    0x80, "4" )
 	PORT_DIPSETTING(    0xc0, "5" )
 
 	PORT_MODIFY("DSW2")
-	PORT_DIPNAME( 0x01, 0x00, "Left Coin" ) PORT_DIPLOCATION("SW2:1")
+	PORT_DIPNAME( 0x01, 0x00, "Left Coin" )				PORT_DIPLOCATION("SW2:!1")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x01, "*2" )
-	PORT_DIPNAME( 0x0e, 0x00, "Bonus Coins" ) PORT_DIPLOCATION("SW2:2,3,4")
+	PORT_DIPNAME( 0x0e, 0x00, "Bonus Coins" )			PORT_DIPLOCATION("SW2:!2,!3,!4")
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(    0x02, "3 credits/2 coins" )
 	PORT_DIPSETTING(    0x04, "5 credits/4 coins" )
 	PORT_DIPSETTING(    0x06, "6 credits/4 coins" )
 	PORT_DIPSETTING(    0x08, "6 credits/5 coins" )
 	PORT_DIPSETTING(    0x0a, "4 credits/3 coins" )
-	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:!5,!6")
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x10, "12000" )
 	PORT_DIPSETTING(    0x20, "15000" )
 	PORT_DIPSETTING(    0x30, "20000" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:!7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x80, 0x00, "Credit Minimum" ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPNAME( 0x80, 0x00, "Credit Minimum" )		PORT_DIPLOCATION("SW2:!8")
 	PORT_DIPSETTING(    0x00, "1" )
 	PORT_DIPSETTING(    0x80, "2" )
 INPUT_PORTS_END
@@ -1093,12 +1108,12 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( milliped )
 	PORT_START("IN0")	/* $2000 */ /* see port 6 for x trackball */
-	PORT_DIPNAME(0x03, 0x00, DEF_STR( Language ) ) PORT_DIPLOCATION("P8:1,2")
+	PORT_DIPNAME(0x03, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("P8:!1,!2")
 	PORT_DIPSETTING(   0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(   0x01, DEF_STR( German ) )
 	PORT_DIPSETTING(   0x02, DEF_STR( French ) )
 	PORT_DIPSETTING(   0x03, DEF_STR( Spanish ) )
-	PORT_DIPNAME(0x0c, 0x04, "Bonus" ) PORT_DIPLOCATION("P8:3,4")
+	PORT_DIPNAME(0x0c, 0x04, "Bonus" )					PORT_DIPLOCATION("P8:!3,!4")
 	PORT_DIPSETTING(   0x00, "0" )
 	PORT_DIPSETTING(   0x04, "0 1x" )
 	PORT_DIPSETTING(   0x08, "0 1x 2x" )
@@ -1106,22 +1121,22 @@ static INPUT_PORTS_START( milliped )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_VBLANK )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL )	/* trackball sign bit */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL )		/* trackball sign bit */
 
 	PORT_START("IN1")	/* $2001 */ /* see port 7 for y trackball */
 	/* these bits are unused */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_DIPNAME(0x04, 0x00, "Credit Minimum" )  PORT_DIPLOCATION("P8:7")
+	PORT_DIPNAME(0x04, 0x00, "Credit Minimum" )			PORT_DIPLOCATION("P8:!7")
 	PORT_DIPSETTING(   0x00, "1" )
 	PORT_DIPSETTING(   0x04, "2" )
-	PORT_DIPNAME(0x08, 0x00, "Coin Counters" )    PORT_DIPLOCATION("P8:8")
+	PORT_DIPNAME(0x08, 0x00, "Coin Counters" )			PORT_DIPLOCATION("P8:!8")
 	PORT_DIPSETTING(   0x00, "1" )
 	PORT_DIPSETTING(   0x08, "2" )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL )	/* trackball sign bit */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL )		/* trackball sign bit */
 
 	PORT_START("IN2")	/* $2010 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
@@ -1147,44 +1162,44 @@ static INPUT_PORTS_START( milliped )
 	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START("DSW1")	/* $0408 */
-	PORT_DIPNAME(0x01, 0x00, "Millipede Head" ) PORT_DIPLOCATION("D5:1")
+	PORT_DIPNAME(0x01, 0x00, "Millipede Head" )			PORT_DIPLOCATION("D5:!1")
 	PORT_DIPSETTING(   0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(   0x01, DEF_STR( Hard ) )
-	PORT_DIPNAME(0x02, 0x00, "Beetle" ) PORT_DIPLOCATION("D5:2")
+	PORT_DIPNAME(0x02, 0x00, "Beetle" )					PORT_DIPLOCATION("D5:!2")
 	PORT_DIPSETTING(   0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(   0x02, DEF_STR( Hard ) )
-	PORT_DIPNAME(0x0c, 0x04, DEF_STR( Lives ) ) PORT_DIPLOCATION("D5:3,4")
+	PORT_DIPNAME(0x0c, 0x04, DEF_STR( Lives ) )			PORT_DIPLOCATION("D5:!3,!4")
 	PORT_DIPSETTING(   0x00, "2" )
 	PORT_DIPSETTING(   0x04, "3" )
 	PORT_DIPSETTING(   0x08, "4" )
 	PORT_DIPSETTING(   0x0c, "5" )
-	PORT_DIPNAME(0x30, 0x10, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("D5:5,6")
+	PORT_DIPNAME(0x30, 0x10, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("D5:!5,!6")
 	PORT_DIPSETTING(   0x00, "12000" )
 	PORT_DIPSETTING(   0x10, "15000" )
 	PORT_DIPSETTING(   0x20, "20000" )
 	PORT_DIPSETTING(   0x30, DEF_STR( None ) )
-	PORT_DIPNAME(0x40, 0x00, "Spider" )  PORT_DIPLOCATION("D5:7")
+	PORT_DIPNAME(0x40, 0x00, "Spider" )					PORT_DIPLOCATION("D5:!7")
 	PORT_DIPSETTING(   0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(   0x40, DEF_STR( Hard ) )
-	PORT_DIPNAME(0x80, 0x00, "Starting Score Select" ) PORT_DIPLOCATION("D5:8")
+	PORT_DIPNAME(0x80, 0x00, "Starting Score Select" )	PORT_DIPLOCATION("D5:!8")
 	PORT_DIPSETTING(   0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(   0x00, DEF_STR( On ) )
 
 	PORT_START("DSW2")	/* $0808 */
-	PORT_DIPNAME(0x03, 0x02, DEF_STR( Coinage ) ) PORT_DIPLOCATION("B5:1,2")
+	PORT_DIPNAME(0x03, 0x02, DEF_STR( Coinage ) )		PORT_DIPLOCATION("B5:!1,!2")
 	PORT_DIPSETTING(   0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(   0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(   0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(   0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME(0x0c, 0x00, "Right Coin" ) PORT_DIPLOCATION("B5:3,4")
+	PORT_DIPNAME(0x0c, 0x00, "Right Coin" )				PORT_DIPLOCATION("B5:!3,!4")
 	PORT_DIPSETTING(   0x00, "*1" )
 	PORT_DIPSETTING(   0x04, "*4" )
 	PORT_DIPSETTING(   0x08, "*5" )
 	PORT_DIPSETTING(   0x0c, "*6" )
-	PORT_DIPNAME(0x10, 0x00, "Left Coin" ) PORT_DIPLOCATION("B5:5")
+	PORT_DIPNAME(0x10, 0x00, "Left Coin" )				PORT_DIPLOCATION("B5:!5")
 	PORT_DIPSETTING(   0x00, "*1" )
 	PORT_DIPSETTING(   0x10, "*2" )
-	PORT_DIPNAME(0xe0, 0x00, "Bonus Coins" ) PORT_DIPLOCATION("B5:6,7,8")
+	PORT_DIPNAME(0xe0, 0x00, "Bonus Coins" )			PORT_DIPLOCATION("B5:!6,!7,!8")
 	PORT_DIPSETTING(   0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(   0x20, "3 credits/2 coins" )
 	PORT_DIPSETTING(   0x40, "5 credits/4 coins" )
@@ -1210,7 +1225,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( warlords )
 	PORT_START("IN0")
 	PORT_BIT( 0x0f, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_DIPNAME( 0x10, 0x00, "Diag Step" )  /* Not referenced */
+	PORT_DIPNAME( 0x10, 0x00, "Diag Step" )				/* Not referenced */
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
 	PORT_SERVICE( 0x20, IP_ACTIVE_LOW )
@@ -1230,35 +1245,38 @@ static INPUT_PORTS_START( warlords )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) ) PORT_DIPLOCATION("J2:1,2")
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("J2:1,2")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Spanish ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( German ) )
-	PORT_DIPNAME( 0x04, 0x00, "Music" ) PORT_DIPLOCATION("J2:3")
+	PORT_DIPNAME( 0x04, 0x00, "Music" )					PORT_DIPLOCATION("J2:3")
 	PORT_DIPSETTING(    0x00, "End of game" )
 	PORT_DIPSETTING(    0x04, "High score only" )
-	PORT_BIT( 0xC8, IP_ACTIVE_HIGH, IPT_UNUSED ) PORT_DIPLOCATION("J2:4,7,8")
-	PORT_DIPNAME( 0x30, 0x00, "Credits" ) PORT_DIPLOCATION("J2:5,6")
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x00, "J2:4" )
+	PORT_DIPNAME( 0x30, 0x00, "Credits" )				PORT_DIPLOCATION("J2:5,6")
 	PORT_DIPSETTING(    0x00, "1p/2p = 1 credit" )
 	PORT_DIPSETTING(    0x10, "1p = 1, 2p = 2" )
 	PORT_DIPSETTING(    0x20, "1p/2p = 2 credits" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x00, "J2:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x00, "J2:8" )
+
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) ) PORT_DIPLOCATION("M2:1,2")
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) )		PORT_DIPLOCATION("M2:1,2")
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" ) PORT_DIPLOCATION("M2:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" )			PORT_DIPLOCATION("M2:3,4")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x04, "*4" )
 	PORT_DIPSETTING(    0x08, "*5" )
 	PORT_DIPSETTING(    0x0c, "*6" )
-	PORT_DIPNAME( 0x10, 0x00, "Left Coin" ) PORT_DIPLOCATION("M2:5")
+	PORT_DIPNAME( 0x10, 0x00, "Left Coin" )				PORT_DIPLOCATION("M2:5")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x10, "*2" )
-	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" ) PORT_DIPLOCATION("M2:6,7,8")
+	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" )			PORT_DIPLOCATION("M2:6,7,8")
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(    0x20, "3 credits/2 coins" )
 	PORT_DIPSETTING(    0x40, "5 credits/4 coins" )
@@ -1282,24 +1300,16 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( mazeinv )
 	PORT_START("IN0")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("SW0:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( German ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Spanish ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x00, "Minimum credits" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x00, "SW0:!3" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x00, "SW0:!4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x00, "SW0:!5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x00, "SW0:!6" )
+	PORT_DIPNAME( 0x40, 0x00, "Minimum credits" )		PORT_DIPLOCATION("SW0:!7")
 	PORT_DIPSETTING(    0x00, "1" )
 	PORT_DIPSETTING(    0x40, "2" )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
@@ -1308,62 +1318,64 @@ static INPUT_PORTS_START( mazeinv )
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Reverse")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("P1 Fire")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON3 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_TILT )		// No Function?
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN3 )
 
 	PORT_START("IN3")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2) PORT_NAME("P1 Reverse")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_NAME("P2 Fire")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Cabinet ) )
+	PORT_DIPSETTING( 0x20, DEF_STR( Upright ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( Cocktail ) )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, "Doors for bonus" )
+	PORT_DIPNAME( 0x03, 0x00, "Doors for bonus" )		PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x00, "10" )
 	PORT_DIPSETTING(    0x01, "12" )
 	PORT_DIPSETTING(    0x02, "14" )
 	PORT_DIPSETTING(    0x03, "16" )
-	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:!3,!4")
 	PORT_DIPSETTING(    0x00, "2" )
 	PORT_DIPSETTING(    0x04, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x0c, "5" )
-	PORT_DIPNAME( 0x30, 0x00, "Extra life at" )
+	PORT_DIPNAME( 0x30, 0x00, "Extra life at" )			PORT_DIPLOCATION("SW1:!5,!6")
 	PORT_DIPSETTING(    0x00, "20000" )
 	PORT_DIPSETTING(    0x10, "25000" )
 	PORT_DIPSETTING(    0x20, "30000" )
 	PORT_DIPSETTING(    0x30, "Never" )
-	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Easier ) )
+	PORT_DIPNAME( 0xc0, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:!7,!8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Easiest ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( Harder ) )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW2:!1,!2")
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" )
+	PORT_DIPNAME( 0x0c, 0x00, "Coin 2" )				PORT_DIPLOCATION("SW2:!3,!4")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x04, "*4" )
 	PORT_DIPSETTING(    0x08, "*5" )
 	PORT_DIPSETTING(    0x0c, "*6" )
-	PORT_DIPNAME( 0x10, 0x00, "Left Coin" )
+	PORT_DIPNAME( 0x10, 0x00, "Coin 3" )				PORT_DIPLOCATION("SW2:!5")
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x10, "*2" )
-	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" )
+	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" )			PORT_DIPLOCATION("SW2:!6,!7,!8")
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(    0x20, "3 credits/2 coins" )
 	PORT_DIPSETTING(    0x40, "5 credits/4 coins" )
@@ -1375,13 +1387,13 @@ static INPUT_PORTS_START( mazeinv )
 	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_Y ) PORT_MINMAX(0x40, 0xbf) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_REVERSE PORT_PLAYER(1)
 
 	PORT_START("STICK1")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_Y ) PORT_MINMAX(0x40, 0xbf) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(2)
 
 	PORT_START("STICK2")
 	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_X ) PORT_MINMAX(0x40, 0xbf) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(1)
 
 	PORT_START("STICK3")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_X ) PORT_MINMAX(0x40, 0xbf) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_REVERSE PORT_PLAYER(2)
 INPUT_PORTS_END
 
 
@@ -1586,164 +1598,159 @@ static const pokey_interface warlords_pokey_interface =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( centiped )
+static MACHINE_CONFIG_START( centiped, centiped_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 12096000/8)	/* 1.512 MHz (slows down to 0.75MHz while accessing playfield RAM) */
-	MDRV_CPU_PROGRAM_MAP(centiped_map)
+	MCFG_CPU_ADD("maincpu", M6502, 12096000/8)	/* 1.512 MHz (slows down to 0.75MHz while accessing playfield RAM) */
+	MCFG_CPU_PROGRAM_MAP(centiped_map)
 
-	MDRV_MACHINE_START(centiped)
-	MDRV_MACHINE_RESET(centiped)
+	MCFG_MACHINE_START(centiped)
+	MCFG_MACHINE_RESET(centiped)
 
-	MDRV_ATARIVGEAROM_ADD("earom")
+	MCFG_ATARIVGEAROM_ADD("earom")
 
 	/* timer */
-	MDRV_TIMER_ADD_SCANLINE("32v", generate_interrupt, "screen", 0, 16)
+	MCFG_TIMER_ADD_SCANLINE("32v", generate_interrupt, "screen", 0, 16)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(centiped)
 
-	MDRV_GFXDECODE(centiped)
-	MDRV_PALETTE_LENGTH(4+4*4*4*4)
+	MCFG_GFXDECODE(centiped)
+	MCFG_PALETTE_LENGTH(4+4*4*4*4)
 
-	MDRV_VIDEO_START(centiped)
-	MDRV_VIDEO_UPDATE(centiped)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("pokey", POKEY, 12096000/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( caterplr )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(centiped)
+	MCFG_VIDEO_START(centiped)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("pokey", AY8910, 12096000/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("pokey", POKEY, 12096000/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( centipdb )
+static MACHINE_CONFIG_DERIVED( caterplr, centiped )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(centiped)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(centipdb_map)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("pokey", AY8910, 12096000/8)
-	MDRV_SOUND_CONFIG(centipdb_ay8910_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("pokey", AY8910, 12096000/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( magworm )
+static MACHINE_CONFIG_DERIVED( centipdb, centiped )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(centiped)
-	MDRV_MACHINE_RESET(magworm)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(centipdb_map)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("pokey", AY8910, 12096000/8)
-	MDRV_SOUND_CONFIG(centipdb_ay8910_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("pokey", AY8910, 12096000/8)
+	MCFG_SOUND_CONFIG(centipdb_ay8910_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( milliped )
+static MACHINE_CONFIG_DERIVED( magworm, centiped )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(centiped)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(milliped_map)
+	MCFG_MACHINE_RESET(magworm)
+
+	/* sound hardware */
+	MCFG_SOUND_REPLACE("pokey", AY8910, 12096000/8)
+	MCFG_SOUND_CONFIG(centipdb_ay8910_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( milliped, centiped )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(milliped_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(milliped)
-	MDRV_PALETTE_LENGTH(4*4+4*4*4*4*4)
+	MCFG_GFXDECODE(milliped)
+	MCFG_PALETTE_LENGTH(4*4+4*4*4*4*4)
 
-	MDRV_VIDEO_START(milliped)
-	MDRV_VIDEO_UPDATE(milliped)
+	MCFG_VIDEO_START(milliped)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(milliped)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("pokey", POKEY, 12096000/8)
-	MDRV_SOUND_CONFIG(milliped_pokey_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_REPLACE("pokey", POKEY, 12096000/8)
+	MCFG_SOUND_CONFIG(milliped_pokey_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("pokey2", POKEY, 12096000/8)
-	MDRV_SOUND_CONFIG(milliped_pokey_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("pokey2", POKEY, 12096000/8)
+	MCFG_SOUND_CONFIG(milliped_pokey_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( warlords )
+static MACHINE_CONFIG_DERIVED( warlords, centiped )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(centiped)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(warlords_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(warlords_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(warlords)
-	MDRV_PALETTE_LENGTH(8*4+8*4)
+	MCFG_GFXDECODE(warlords)
+	MCFG_PALETTE_LENGTH(8*4+8*4)
 
-	MDRV_PALETTE_INIT(warlords)
-	MDRV_VIDEO_START(warlords)
-	MDRV_VIDEO_UPDATE(warlords)
+	MCFG_PALETTE_INIT(warlords)
+	MCFG_VIDEO_START(warlords)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(warlords)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("pokey", POKEY, 12096000/8)
-	MDRV_SOUND_CONFIG(warlords_pokey_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("pokey", POKEY, 12096000/8)
+	MCFG_SOUND_CONFIG(warlords_pokey_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mazeinv )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(milliped)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(mazeinv_map)
-	MDRV_VIDEO_UPDATE(centiped)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( bullsdrt )
+static MACHINE_CONFIG_DERIVED( mazeinv, milliped )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", S2650, 12096000/8)
-	MDRV_CPU_PROGRAM_MAP(bullsdrt_map)
-	MDRV_CPU_IO_MAP(bullsdrt_port_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(mazeinv_map)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(centiped)
+MACHINE_CONFIG_END
 
-	MDRV_ATARIVGEAROM_ADD("earom")
+
+static MACHINE_CONFIG_START( bullsdrt, centiped_state )
+
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", S2650, 12096000/8)
+	MCFG_CPU_PROGRAM_MAP(bullsdrt_map)
+	MCFG_CPU_IO_MAP(bullsdrt_port_map)
+
+	MCFG_ATARIVGEAROM_ADD("earom")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(bullsdrt)
 
-	MDRV_GFXDECODE(centiped)
-	MDRV_PALETTE_LENGTH(4+4*4*4*4)
+	MCFG_GFXDECODE(centiped)
+	MCFG_PALETTE_LENGTH(4+4*4*4*4)
 
-	MDRV_VIDEO_START(bullsdrt)
-	MDRV_VIDEO_UPDATE(bullsdrt)
+	MCFG_VIDEO_START(bullsdrt)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76496, 12096000/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("snsnd", SN76496, 12096000/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -1976,25 +1983,27 @@ ROM_END
 
 static DRIVER_INIT( caterplr )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	const device_config *device = devtag_get_device(machine, "pokey");
-	memory_install_readwrite8_device_handler(space, device, 0x1000, 0x100f, 0, 0, caterplr_AY8910_r, caterplr_AY8910_w);
-	memory_install_read8_device_handler(space, device, 0x1780, 0x1780, 0, 0, caterplr_rand_r);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	device_t *device = machine.device("pokey");
+	space->install_legacy_readwrite_handler(*device, 0x1000, 0x100f, FUNC(caterplr_AY8910_r), FUNC(caterplr_AY8910_w));
+	space->install_legacy_read_handler(*device, 0x1780, 0x1780, FUNC(caterplr_rand_r));
 }
 
 
 static DRIVER_INIT( magworm )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	const device_config *device = devtag_get_device(machine, "pokey");
-	memory_install_write8_device_handler(space, device, 0x1001, 0x1001, 0, 0, ay8910_address_w);
-	memory_install_readwrite8_device_handler(space, device, 0x1003, 0x1003, 0, 0, ay8910_r, ay8910_data_w);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	device_t *device = machine.device("pokey");
+	space->install_legacy_write_handler(*device, 0x1001, 0x1001, FUNC(ay8910_address_w));
+	space->install_legacy_readwrite_handler(*device, 0x1003, 0x1003, FUNC(ay8910_r), FUNC(ay8910_data_w));
 }
 
 
 static DRIVER_INIT( bullsdrt )
 {
-	dsw_select = 0;
+	centiped_state *state = machine.driver_data<centiped_state>();
+
+	state->m_dsw_select = 0;
 }
 
 
@@ -2011,7 +2020,7 @@ GAME( 1980, centtime, centiped, centiped, centtime, 0,        ROT270, "Atari",  
 GAME( 1980, centipdb, centiped, centipdb, centiped, 0,        ROT270, "bootleg", "Centipede (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1980, centipdd, centiped, centiped, centiped, 0,        ROT270, "hack",    "Centipede Dux (hack)", GAME_SUPPORTS_SAVE )
 GAME( 1980, caterplr, centiped, caterplr, caterplr, caterplr, ROT270, "bootleg", "Caterpillar", GAME_SUPPORTS_SAVE )
-GAME( 1980, millpac,  centiped, centipdb, centiped, 0,        ROT270, "Valadon Automation", "Millpac", GAME_SUPPORTS_SAVE )
+GAME( 1980, millpac,  centiped, centipdb, centiped, 0,        ROT270, "bootleg? (Valadon Automation)", "Millpac", GAME_SUPPORTS_SAVE )
 GAME( 1980, magworm,  centiped, magworm,  magworm,  magworm,  ROT270, "bootleg", "Magic Worm (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1982, milliped, 0,        milliped, milliped, 0,        ROT270, "Atari",   "Millipede", GAME_SUPPORTS_SAVE )
 GAME( 1982, millipdd, milliped, milliped, milliped, 0,        ROT270, "hack",    "Millipede Dux (hack)", GAME_SUPPORTS_SAVE )
@@ -2019,4 +2028,4 @@ GAME( 1982, millipdd, milliped, milliped, milliped, 0,        ROT270, "hack",   
 GAME( 1980, warlords, 0,        warlords, warlords, 0,        ROT0,   "Atari",   "Warlords", GAME_SUPPORTS_SAVE )
 GAME( 1981, mazeinv,  0,        mazeinv,  mazeinv,  0,        ROT270, "Atari",   "Maze Invaders (prototype)", 0 )
 
-GAME( 1985, bullsdrt, 0,        bullsdrt, bullsdrt, bullsdrt, ROT270, "Shinkai Inc. (Magic Eletronics Inc. licence)", "Bulls Eye Darts", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1985, bullsdrt, 0,        bullsdrt, bullsdrt, bullsdrt, ROT270, "Shinkai Inc. (Magic Eletronics Inc. license)", "Bulls Eye Darts", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )

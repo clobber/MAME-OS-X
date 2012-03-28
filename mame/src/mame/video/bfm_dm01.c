@@ -30,20 +30,16 @@ Standard dm01 memorymap
 -----------+---+-----------------+-----------------------------------------
 
   TODO: - find out clockspeed of CPU
-        - make a non-hacky Artwork representation of dot matrix
-  Layout notes: the dot matrix is set to screen 0.
-  Multiple matrices and matrix/VFD combos are not yet supported.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
-#include "video/awpvid.h"
 #include "bfm_dm01.h"
 // local prototypes ///////////////////////////////////////////////////////
 
-extern void Scorpion2_SetSwitchState(int strobe, int data, int state);
-extern int  Scorpion2_GetSwitchState(int strobe, int data);
+extern void Scorpion2_SetSwitchState(running_machine &machine, int strobe, int data, int state);
+extern int  Scorpion2_GetSwitchState(running_machine &machine, int strobe, int data);
 
 // local vars /////////////////////////////////////////////////////////////
 
@@ -64,8 +60,6 @@ static UINT8 comdata;
 
 //static int   read_index;
 //static int   write_index;
-
-static bitmap_t *dm_bitmap;
 
 #ifdef MAME_DEBUG
 #define VERBOSE 1
@@ -116,7 +110,7 @@ static WRITE8_HANDLER( control_w )
 		if ( data & 8 )	  busy = 0;
 		else			  busy = 1;
 
-		Scorpion2_SetSwitchState(FEEDBACK_STROBE,FEEDBACK_DATA, busy?0:1);
+		Scorpion2_SetSwitchState(space->machine(), FEEDBACK_STROBE,FEEDBACK_DATA, busy?0:1);
 	}
 }
 
@@ -140,28 +134,39 @@ static WRITE8_HANDLER( mux_w )
 
 	if ( x == 8 )
 	{
-    	int off = ((0xFF^data) & 0x7C) >> 2;	// 7C = 000001111100
+    	int row = ((0xFF^data) & 0x7C) >> 2;	// 7C = 000001111100
 
 		scanline[x] &= 0x80;
-		if ( (off >= 0)  && (off < DM_MAXLINES) )
+		if ( (row >= 0)  && (row < DM_MAXLINES) )
 		{
-			int p;
+			int p,dots;
 
 			x = 0;
 			p = 0;
+			dots = 0;
 
-			while ( p < DM_BYTESPERROW )
+			while ( p < (DM_BYTESPERROW) )
 			{
-				UINT8 d = scanline[p++];
-				LOG(("%d",d));
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x80) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x40) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x20) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x10) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x08) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x04) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x02) ? 0 : 1;
-				*BITMAP_ADDR16(dm_bitmap, off, x++) = (d & 0x01) ? 0 : 1;
+
+				UINT8 d = scanline[p];
+				if (d & 0x80) dots |= 0x01;
+				else          dots &=~0x01;
+				if (d & 0x40) dots |= 0x02;
+				else          dots &=~0x02;
+				if (d & 0x20) dots |= 0x04;
+				else          dots &=~0x04;
+				if (d & 0x10) dots |= 0x08;
+				else          dots &=~0x08;
+				if (d & 0x08) dots |= 0x10;
+				else          dots &=~0x10;
+				if (d & 0x04) dots |= 0x20;
+				else          dots &=~0x20;
+				if (d & 0x02) dots |= 0x40;
+				else          dots &=~0x40;
+				if (d & 0x01) dots |= 0x80;
+				else          dots &=~0x80;
+				output_set_indexed_value("matrix", p +(8*row), dots);
+				p++;
 			}
 		}
 	}
@@ -204,12 +209,12 @@ static READ8_HANDLER( unknown_r )
 
 static WRITE8_HANDLER( unknown_w )
 {
-	cputag_set_input_line(space->machine, "matrix", INPUT_LINE_NMI, CLEAR_LINE ); //?
+	cputag_set_input_line(space->machine(), "matrix", INPUT_LINE_NMI, CLEAR_LINE ); //?
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-ADDRESS_MAP_START( bfm_dm01_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+ADDRESS_MAP_START( bfm_dm01_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM								// 8k RAM
 	AM_RANGE(0x2000, 0x2000) AM_READWRITE(control_r, control_w)	// control reg
 	AM_RANGE(0x2800, 0x2800) AM_READWRITE(mux_r,mux_w)			// mux
@@ -220,7 +225,7 @@ ADDRESS_MAP_END
 
 ///////////////////////////////////////////////////////////////////////////
 
-void BFM_dm01_writedata(running_machine *machine, UINT8 data)
+void BFM_dm01_writedata(running_machine &machine, UINT8 data)
 {
 	comdata = data;
 	data_avail = 1;
@@ -233,51 +238,21 @@ void BFM_dm01_writedata(running_machine *machine, UINT8 data)
 
 INTERRUPT_GEN( bfm_dm01_vbl )
 {
-	cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE );
+	device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE );
 }
 
 ///////////////////////////////////////////////////////////////////////////
-
-VIDEO_START( bfm_dm01 )
-{
-	dm_bitmap = auto_bitmap_alloc(machine, DM_BYTESPERROW*8, DM_MAXLINES,video_screen_get_format(machine->primary_screen));
-}
-
-///////////////////////////////////////////////////////////////////////////
-
-// Note that we assume square pixels, which isn't strictly true (the elements are round).
-
-VIDEO_UPDATE( bfm_dm01 )
-{
-	const rectangle *visarea = video_screen_get_visible_area(screen);
-
-	copybitmap(bitmap, dm_bitmap, 0,0,0,0, visarea);
-
-	LOG(("Busy=%X",data_avail));
-	LOG(("%X",Scorpion2_GetSwitchState(FEEDBACK_STROBE,FEEDBACK_DATA)));
-
-	return 0;
-}
-
 int BFM_dm01_busy(void)
 {
 	return data_avail;
 }
 
-void BFM_dm01_reset(void)
+void BFM_dm01_reset(running_machine &machine)
 {
 	busy     = 0;
 	control  = 0;
 	xcounter = 0;
 	data_avail = 0;
 
-	Scorpion2_SetSwitchState(FEEDBACK_STROBE,FEEDBACK_DATA, busy?0:1);
+	Scorpion2_SetSwitchState(machine, FEEDBACK_STROBE,FEEDBACK_DATA, busy?0:1);
 }
-
-PALETTE_INIT( bfm_dm01 )
-{
-	palette_set_color(machine, 0, MAKE_RGB(0xFF,0x00,0x00));
-	palette_set_color(machine, 1, MAKE_RGB(0x40,0x00,0x00));
-}
-
-

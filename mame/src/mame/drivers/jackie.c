@@ -1,139 +1,214 @@
-#include "driver.h"
-#include "deprecat.h"
+/*
+Happy Jackie (c) 1993 IGS.
+Video Slot machine game for amusement only.
+
+Driver by David Haywood and Mirko Buffoni
+*/
+/*
+
+Anno    199x
+Produttore  IGS
+N.revisione
+
+CPU
+
+1x Z0840006PSC (main)
+2x D8255AC
+1x unknown AMT001
+1x unknown IGS002
+1x UM3567 (sound)
+1x oscillator 12.000MHz
+1x oscillator 3.579645
+
+ROMs
+
+2x D27128A (1,3)
+1x MBM27128 (2)
+3x 27C010 (4,5,6)
+1x D27512 (7sv)
+1x MBM27C512 (v110)
+1x unknown (DIP20 mil300)(jack3)
+3x PEEL18CV8PC (read protected)
+1x TIBPAL16L8 (read protected)
+
+Note
+
+1x 36x2 edge connector
+1x 10x2 edge connector (payout system)
+1x trimmer (volume)
+1x pushbutton
+1x battery
+5x 8x2 switches dip
+
+*/
+
+
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/2413intf.h"
 
-static int exp_bank = 0;
 
-static UINT8   *fg_tile_ram, *fg_color_ram;
-static tilemap *fg_tilemap;
+class jackie_state : public driver_device
+{
+public:
+	jackie_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this,"maincpu")
+		{ }
+
+	int m_exp_bank;
+	UINT8 *m_fg_tile_ram;
+	UINT8 *m_fg_color_ram;
+	tilemap_t *m_fg_tilemap;
+	UINT8 *m_bg_scroll;
+	UINT8 *m_bg_scroll2;
+	tilemap_t *m_reel1_tilemap;
+	UINT8 *m_reel1_ram;
+	tilemap_t *m_reel2_tilemap;
+	UINT8 *m_reel2_ram;
+	tilemap_t *m_reel3_tilemap;
+	UINT8 *m_reel3_ram;
+	int m_irq_enable;
+	int m_nmi_enable;
+	int m_bg_enable;
+	int m_hopper;
+	UINT8 m_out[3];
+	UINT16 m_unk_reg[3][5];
+
+	required_device<cpu_device> m_maincpu;
+};
+
+
+
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int code = fg_tile_ram[tile_index] | (fg_color_ram[tile_index] << 8);
+	jackie_state *state = machine.driver_data<jackie_state>();
+	int code = state->m_fg_tile_ram[tile_index] | (state->m_fg_color_ram[tile_index] << 8);
 	int tile = code & 0x1fff;
 	SET_TILE_INFO(0, code, tile != 0x1fff ? ((code >> 12) & 0xe) + 1 : 0, 0);
 }
 
 static WRITE8_HANDLER( fg_tile_w )
 {
-	fg_tile_ram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset);
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_fg_tile_ram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 static WRITE8_HANDLER( fg_color_w )
 {
-	fg_color_ram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset);
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_fg_color_ram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 
 
-static UINT8   *bg_scroll, *bg_scroll2;
 
 static WRITE8_HANDLER( bg_scroll_w )
 {
-	bg_scroll[offset] = data;
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_bg_scroll[offset] = data;
 }
 
-static tilemap *jackie_reel1_tilemap;
-static UINT8 *jackie_reel1_ram;
 
 static WRITE8_HANDLER( jackie_reel1_ram_w )
 {
-	jackie_reel1_ram[offset] = data;
-	tilemap_mark_tile_dirty(jackie_reel1_tilemap,offset);
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_reel1_ram[offset] = data;
+	state->m_reel1_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_jackie_reel1_tile_info )
 {
-	int code = jackie_reel1_ram[tile_index];
+	jackie_state *state = machine.driver_data<jackie_state>();
+	int code = state->m_reel1_ram[tile_index];
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
 
-static tilemap *jackie_reel2_tilemap;
-static UINT8 *jackie_reel2_ram;
 
 static WRITE8_HANDLER( jackie_reel2_ram_w )
 {
-	jackie_reel2_ram[offset] = data;
-	tilemap_mark_tile_dirty(jackie_reel2_tilemap,offset);
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_reel2_ram[offset] = data;
+	state->m_reel2_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_jackie_reel2_tile_info )
 {
-	int code = jackie_reel2_ram[tile_index];
+	jackie_state *state = machine.driver_data<jackie_state>();
+	int code = state->m_reel2_ram[tile_index];
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
-static tilemap *jackie_reel3_tilemap;
-static UINT8 *jackie_reel3_ram;
 
 static WRITE8_HANDLER( jackie_reel3_ram_w )
 {
-	jackie_reel3_ram[offset] = data;
-	tilemap_mark_tile_dirty(jackie_reel3_tilemap,offset);
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_reel3_ram[offset] = data;
+	state->m_reel3_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_jackie_reel3_tile_info )
 {
-	int code = jackie_reel3_ram[tile_index];
+	jackie_state *state = machine.driver_data<jackie_state>();
+	int code = state->m_reel3_ram[tile_index];
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
 static VIDEO_START(jackie)
 {
-	jackie_reel1_tilemap = tilemap_create(machine,get_jackie_reel1_tile_info,tilemap_scan_rows,8,32, 64, 8);
-	jackie_reel2_tilemap = tilemap_create(machine,get_jackie_reel2_tile_info,tilemap_scan_rows,8,32, 64, 8);
-	jackie_reel3_tilemap = tilemap_create(machine,get_jackie_reel3_tile_info,tilemap_scan_rows,8,32, 64, 8);
+	jackie_state *state = machine.driver_data<jackie_state>();
+	state->m_reel1_tilemap = tilemap_create(machine,get_jackie_reel1_tile_info,tilemap_scan_rows,8,32, 64, 8);
+	state->m_reel2_tilemap = tilemap_create(machine,get_jackie_reel2_tile_info,tilemap_scan_rows,8,32, 64, 8);
+	state->m_reel3_tilemap = tilemap_create(machine,get_jackie_reel3_tile_info,tilemap_scan_rows,8,32, 64, 8);
 
-	tilemap_set_scroll_cols(jackie_reel1_tilemap, 64);
-	tilemap_set_scroll_cols(jackie_reel2_tilemap, 64);
-	tilemap_set_scroll_cols(jackie_reel3_tilemap, 64);
+	state->m_reel1_tilemap->set_scroll_cols(64);
+	state->m_reel2_tilemap->set_scroll_cols(64);
+	state->m_reel3_tilemap->set_scroll_cols(64);
 
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows,	8,  8,	64, 32);
-	tilemap_set_transparent_pen(fg_tilemap, 0);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows,	8,  8,	64, 32);
+	state->m_fg_tilemap->set_transparent_pen(0);
 }
 
 
-static VIDEO_UPDATE(jackie)
+static SCREEN_UPDATE_IND16(jackie)
 {
+	jackie_state *state = screen.machine().driver_data<jackie_state>();
 	int i,j;
 	int startclipmin = 0;
-	const rectangle *visarea = video_screen_get_visible_area(screen);
+	const rectangle &visarea = screen.visible_area();
 
-	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
 
 	for (i=0;i < 0x40;i++)
 	{
-		tilemap_set_scrolly(jackie_reel1_tilemap, i, bg_scroll[i+0x000]);
-		tilemap_set_scrolly(jackie_reel2_tilemap, i, bg_scroll[i+0x040]);
-		tilemap_set_scrolly(jackie_reel3_tilemap, i, bg_scroll[i+0x080]);
+		state->m_reel1_tilemap->set_scrolly(i, state->m_bg_scroll[i+0x000]);
+		state->m_reel2_tilemap->set_scrolly(i, state->m_bg_scroll[i+0x040]);
+		state->m_reel3_tilemap->set_scrolly(i, state->m_bg_scroll[i+0x080]);
 	}
 
 	for (j=0; j < 0x100-1; j++)
 	{
 		rectangle clip;
-		int rowenable = bg_scroll2[j];
+		int rowenable = state->m_bg_scroll2[j];
 
 		/* draw top of screen */
-		clip.min_x = visarea->min_x;
-		clip.max_x = visarea->max_x;
-		clip.min_y = startclipmin;
-		clip.max_y = startclipmin+1;
+		clip.set(visarea.min_x, visarea.max_x, startclipmin, startclipmin+1);
 
 		if (rowenable==0)
 		{
-			tilemap_draw(bitmap,&clip,jackie_reel1_tilemap,0,0);
+			state->m_reel1_tilemap->draw(bitmap, clip, 0,0);
 		}
 		else if (rowenable==1)
 		{
-			tilemap_draw(bitmap,&clip,jackie_reel2_tilemap,0,0);
+			state->m_reel2_tilemap->draw(bitmap, clip, 0,0);
 		}
 		else if (rowenable==2)
 		{
-			tilemap_draw(bitmap,&clip,jackie_reel3_tilemap,0,0);
+			state->m_reel3_tilemap->draw(bitmap, clip, 0,0);
 		}
 		else if (rowenable==3)
 		{
@@ -142,88 +217,79 @@ static VIDEO_UPDATE(jackie)
 		startclipmin+=1;
 	}
 
-	tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	return 0;
 }
 
 
-static int irq_enable, nmi_enable, bg_enable, hopper;
 
 static MACHINE_RESET( jackie )
 {
-	irq_enable	=	1;
-	nmi_enable	=	0;
-	hopper		=	0;
-	bg_enable	=	1;
+	jackie_state *state = machine.driver_data<jackie_state>();
+	state->m_irq_enable	=	1;
+	state->m_nmi_enable	=	0;
+	state->m_hopper		=	0;
+	state->m_bg_enable	=	1;
 }
 
-static INTERRUPT_GEN( jackie_interrupt )
-{
-	if (cpu_getiloops(device) % 2) {
-		if (irq_enable)
-		cpu_set_input_line(device, 0, HOLD_LINE);
-	} else {
-		if (nmi_enable)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-	}
-}
 
-static UINT8  out[3];
-static UINT16 unk_reg[3][5];
-
-static void show_out(void)
+static void show_out(jackie_state *state)
 {
 #ifdef MAME_DEBUG
-//  popmessage("%02x %02x %02x", out[0], out[1], out[2]);
+//  popmessage("%02x %02x %02x", state->m_out[0], state->m_out[1], state->m_out[2]);
 	popmessage("520: %04x %04x %04x %04x %04x\n560: %04x %04x %04x %04x %04x\n5A0: %04x %04x %04x %04x %04x",
-		unk_reg[0][0],unk_reg[0][1],unk_reg[0][2],unk_reg[0][3],unk_reg[0][4],
-		unk_reg[1][0],unk_reg[1][1],unk_reg[1][2],unk_reg[1][3],unk_reg[1][4],
-		unk_reg[2][0],unk_reg[2][1],unk_reg[2][2],unk_reg[2][3],unk_reg[2][4]
+		state->m_unk_reg[0][0],state->m_unk_reg[0][1],state->m_unk_reg[0][2],state->m_unk_reg[0][3],state->m_unk_reg[0][4],
+		state->m_unk_reg[1][0],state->m_unk_reg[1][1],state->m_unk_reg[1][2],state->m_unk_reg[1][3],state->m_unk_reg[1][4],
+		state->m_unk_reg[2][0],state->m_unk_reg[2][1],state->m_unk_reg[2][2],state->m_unk_reg[2][3],state->m_unk_reg[2][4]
 	);
 #endif
 }
 
-static void jackie_unk_reg_lo_w( int reg, int offset, UINT8 data )
+static void jackie_unk_reg_lo_w( address_space *space, int offset, UINT8 data, int reg )
 {
-	unk_reg[reg][offset] &= 0xff00;
-	unk_reg[reg][offset] |= data;
-	show_out();
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_unk_reg[reg][offset] &= 0xff00;
+	state->m_unk_reg[reg][offset] |= data;
+	show_out(state);
 }
 
-static WRITE8_HANDLER( jackie_unk_reg1_lo_w ) { jackie_unk_reg_lo_w( 0, offset, data ); }
-static WRITE8_HANDLER( jackie_unk_reg2_lo_w ) { jackie_unk_reg_lo_w( 1, offset, data ); }
-static WRITE8_HANDLER( jackie_unk_reg3_lo_w ) { jackie_unk_reg_lo_w( 2, offset, data ); }
+static WRITE8_HANDLER( jackie_unk_reg1_lo_w ) { jackie_unk_reg_lo_w( space, offset, data, 0 ); }
+static WRITE8_HANDLER( jackie_unk_reg2_lo_w ) { jackie_unk_reg_lo_w( space, offset, data, 1 ); }
+static WRITE8_HANDLER( jackie_unk_reg3_lo_w ) { jackie_unk_reg_lo_w( space, offset, data, 2 ); }
 
-static void jackie_unk_reg_hi_w( int reg, int offset, UINT8 data )
+static void jackie_unk_reg_hi_w( address_space *space, int offset, UINT8 data, int reg )
 {
-	unk_reg[reg][offset] &= 0xff;
-	unk_reg[reg][offset] |= data << 8;
-	show_out();
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_unk_reg[reg][offset] &= 0xff;
+	state->m_unk_reg[reg][offset] |= data << 8;
+	show_out(state);
 }
 
-static WRITE8_HANDLER( jackie_unk_reg1_hi_w ) { jackie_unk_reg_hi_w( 0, offset, data ); }
-static WRITE8_HANDLER( jackie_unk_reg2_hi_w ) { jackie_unk_reg_hi_w( 1, offset, data ); }
-static WRITE8_HANDLER( jackie_unk_reg3_hi_w ) { jackie_unk_reg_hi_w( 2, offset, data ); }
+static WRITE8_HANDLER( jackie_unk_reg1_hi_w ) { jackie_unk_reg_hi_w( space, offset, data, 0 ); }
+static WRITE8_HANDLER( jackie_unk_reg2_hi_w ) { jackie_unk_reg_hi_w( space, offset, data, 1 ); }
+static WRITE8_HANDLER( jackie_unk_reg3_hi_w ) { jackie_unk_reg_hi_w( space, offset, data, 2 ); }
 
 static WRITE8_HANDLER( jackie_nmi_and_coins_w )
 {
-	coin_counter_w(0,		data & 0x01);	// coin_a
-	coin_counter_w(1,		data & 0x04);	// coin_c
-	coin_counter_w(2,		data & 0x08);	// key in
-	coin_counter_w(3,		data & 0x10);	// coin out mech
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	coin_counter_w(space->machine(), 0,		data & 0x01);	// coin_a
+	coin_counter_w(space->machine(), 1,		data & 0x04);	// coin_c
+	coin_counter_w(space->machine(), 2,		data & 0x08);	// key in
+	coin_counter_w(space->machine(), 3,		data & 0x10);	// coin state->m_out mech
 
-	set_led_status(6,		data & 0x20);	// led for coin out / hopper active
+	set_led_status(space->machine(), 6,		data & 0x20);	// led for coin state->m_out / state->m_hopper active
 
-	exp_bank   = (data & 0x02) ? 1 : 0;		// expram bank number
-	nmi_enable = data & 0x80;     // nmi enable?
+	state->m_exp_bank   = (data & 0x02) ? 1 : 0;		// expram bank number
+	state->m_nmi_enable = data & 0x80;     // nmi enable?
 
-	out[0] = data;
-	show_out();
+	state->m_out[0] = data;
+	show_out(state);
 }
 
 static WRITE8_HANDLER( jackie_lamps_w )
 {
+	jackie_state *state = space->machine().driver_data<jackie_state>();
 /*
     - Lbits -
     7654 3210
@@ -242,50 +308,53 @@ static WRITE8_HANDLER( jackie_lamps_w )
 	output_set_lamp_value(5, (data >> 2) & 1);		/* Lamp 5 - HOLD 5 */
 	output_set_lamp_value(6, (data & 1));			/* Lamp 6 - START */
 
-	hopper			=	(~data)& 0x80;
+	state->m_hopper			=	(~data)& 0x80;
 
-	out[1] = data;
-	show_out();
+	state->m_out[1] = data;
+	show_out(state);
 }
 
 static READ8_HANDLER( igs_irqack_r )
 {
-	irq_enable = 1;
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	state->m_irq_enable = 1;
 	return 0;
 }
 
 static WRITE8_HANDLER( igs_irqack_w )
 {
-//  cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
-	out[2] = data;
-	show_out();
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+//  cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	state->m_out[2] = data;
+	show_out(state);
 }
 
 static READ8_HANDLER( expram_r )
 {
-	UINT8 *rom = memory_region(space->machine, "gfx3");
+	jackie_state *state = space->machine().driver_data<jackie_state>();
+	UINT8 *rom = space->machine().region("gfx3")->base();
 
-	offset += exp_bank * 0x8000;
-//  logerror("PC %06X: %04x = %02x\n",cpu_get_pc(space->cpu),offset,rom[offset]);
+	offset += state->m_exp_bank * 0x8000;
+//  logerror("PC %06X: %04x = %02x\n",cpu_get_pc(&space->device()),offset,rom[offset]);
 	return rom[offset];
 }
 
 
-static ADDRESS_MAP_START( jackie_prg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( jackie_prg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_REGION("maincpu", 0xf000)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( jackie_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( jackie_io_map, AS_IO, 8 )
 	AM_RANGE(0x0520, 0x0524) AM_WRITE(jackie_unk_reg1_lo_w)
 	AM_RANGE(0x0d20, 0x0d24) AM_WRITE(jackie_unk_reg1_hi_w)
 	AM_RANGE(0x0560, 0x0564) AM_WRITE(jackie_unk_reg2_lo_w)
 	AM_RANGE(0x0d60, 0x0d64) AM_WRITE(jackie_unk_reg2_hi_w)
 	AM_RANGE(0x05a0, 0x05a4) AM_WRITE(jackie_unk_reg3_lo_w)
 	AM_RANGE(0x0da0, 0x0da4) AM_WRITE(jackie_unk_reg3_hi_w)
-	AM_RANGE(0x1000, 0x1107) AM_RAM AM_BASE( &bg_scroll2 )
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE(0x1000, 0x1107) AM_RAM AM_BASE_MEMBER(jackie_state, m_bg_scroll2 )
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1")			/* DSW1 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("DSW2")			/* DSW2 */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("DSW3")			/* DSW3 */
@@ -297,21 +366,22 @@ static ADDRESS_MAP_START( jackie_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x5090, 0x5090) AM_READ_PORT("BUTTONS1")
 	AM_RANGE(0x5091, 0x5091) AM_WRITE( jackie_lamps_w )
 	AM_RANGE(0x50a0, 0x50a0) AM_READ_PORT("BUTTONS2")
-	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x50c0, 0x50c0) AM_READ(igs_irqack_r) AM_WRITE(igs_irqack_w)
-	AM_RANGE(0x6000, 0x60ff) AM_RAM_WRITE( bg_scroll_w ) AM_BASE( &bg_scroll )
-	AM_RANGE(0x6800, 0x69ff) AM_RAM_WRITE( jackie_reel1_ram_w )  AM_BASE( &jackie_reel1_ram )
-	AM_RANGE(0x6a00, 0x6bff) AM_RAM_WRITE( jackie_reel2_ram_w )  AM_BASE( &jackie_reel2_ram )
-	AM_RANGE(0x6c00, 0x6dff) AM_RAM_WRITE( jackie_reel3_ram_w )  AM_BASE( &jackie_reel3_ram )
-	AM_RANGE(0x7000, 0x77ff) AM_RAM_WRITE( fg_tile_w )  AM_BASE( &fg_tile_ram )
-	AM_RANGE(0x7800, 0x7fff) AM_RAM_WRITE( fg_color_w ) AM_BASE( &fg_color_ram )
+	AM_RANGE(0x6000, 0x60ff) AM_RAM_WRITE( bg_scroll_w ) AM_BASE_MEMBER(jackie_state, m_bg_scroll )
+	AM_RANGE(0x6800, 0x69ff) AM_RAM_WRITE( jackie_reel1_ram_w )  AM_BASE_MEMBER(jackie_state, m_reel1_ram )
+	AM_RANGE(0x6a00, 0x6bff) AM_RAM_WRITE( jackie_reel2_ram_w )  AM_BASE_MEMBER(jackie_state, m_reel2_ram )
+	AM_RANGE(0x6c00, 0x6dff) AM_RAM_WRITE( jackie_reel3_ram_w )  AM_BASE_MEMBER(jackie_state, m_reel3_ram )
+	AM_RANGE(0x7000, 0x77ff) AM_RAM_WRITE( fg_tile_w )  AM_BASE_MEMBER(jackie_state, m_fg_tile_ram )
+	AM_RANGE(0x7800, 0x7fff) AM_RAM_WRITE( fg_color_w ) AM_BASE_MEMBER(jackie_state, m_fg_color_ram )
 	AM_RANGE(0x8000, 0xffff) AM_READ(expram_r)
 ADDRESS_MAP_END
 
 static CUSTOM_INPUT( hopper_r )
 {
-	if (hopper) return !(video_screen_get_frame_number(field->port->machine->primary_screen)%10);
-	return input_code_pressed(field->port->machine, KEYCODE_H);
+	jackie_state *state = field.machine().driver_data<jackie_state>();
+	if (state->m_hopper) return !(field.machine().primary_screen->frame_number()%10);
+	return field.machine().input().code_pressed(KEYCODE_H);
 }
 
 static INPUT_PORTS_START( jackie )
@@ -453,77 +523,71 @@ static GFXDECODE_START( jackie )
 	GFXDECODE_ENTRY( "gfx2", 0, layout_8x32x6, 0, 16 )
 GFXDECODE_END
 
+static DRIVER_INIT( jackie )
+{
 
+	int A;
+	UINT8 *rom = machine.region("maincpu")->base();
 
-static MACHINE_DRIVER_START( jackie )
+	for (A = 0;A < 0xf000;A++)
+	{
+		rom[A] = rom[A] ^ 0x21;
+
+		if (((A & 0x0080) == 0x0000) && ((A & 0x0008) == 0x0000)) rom[A] = rom[A] ^ 0x20;
+		if ((A & 0x0282) == 0x0282) rom[A] ^= 0x01;
+		if ((A & 0x0940) == 0x0940) rom[A] ^= 0x02;
+	}
+	memset( &rom[0xf000], 0, 0x1000);
+
+	// Patch trap
+	rom[0x7e86] = 0xc3;
+}
+
+static TIMER_DEVICE_CALLBACK( jackie_irq )
+{
+	jackie_state *state = timer.machine().driver_data<jackie_state>();
+	int scanline = param;
+
+	if((scanline % 32) != 0)
+		return;
+
+	if((scanline % 64) == 32 && state->m_irq_enable)
+		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
+	else if	((scanline % 64) == 0 && state->m_nmi_enable)
+		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static MACHINE_CONFIG_START( jackie, jackie_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz / 2)
-	MDRV_CPU_PROGRAM_MAP(jackie_prg_map)
-	MDRV_CPU_IO_MAP(jackie_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(jackie_interrupt,8)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz / 2)
+	MCFG_CPU_PROGRAM_MAP(jackie_prg_map)
+	MCFG_CPU_IO_MAP(jackie_io_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", jackie_irq, "screen", 0, 1)
 
-	MDRV_MACHINE_RESET(jackie)
+	MCFG_MACHINE_RESET(jackie)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(57)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0, 32*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(57)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(jackie)
 
-	MDRV_GFXDECODE(jackie)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(jackie)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(jackie)
-	MDRV_VIDEO_UPDATE(jackie)
+	MCFG_VIDEO_START(jackie)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("ymsnd", YM2413, 3579545)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-/*
-
-Anno    199x
-Produttore  IGS
-N.revisione
-
-CPU
-
-1x Z0840006PSC (main)
-2x D8255AC
-1x unknown AMT001
-1x unknown IGS002
-1x UM3567 (sound)
-1x oscillator 12.000MHz
-1x oscillator 3.579645
-
-ROMs
-
-2x D27128A (1,3)
-1x MBM27128 (2)
-3x 27C010 (4,5,6)
-1x D27512 (7sv)
-1x MBM27C512 (v110)
-1x unknown (DIP20 mil300)(jack3)
-3x PEEL18CV8PC (read protected)
-1x TIBPAL16L8 (read protected)
-
-Note
-
-1x 36x2 edge connector
-1x 10x2 edge connector (payout system)
-1x trimmer (volume)
-1x pushbutton
-1x battery
-5x 8x2 switches dip
-
-*/
 ROM_START( jackie )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "jackiev110.u23",   0x0000, 0x10000, CRC(1b78a619) SHA1(a6eb6b6e544efa55225f2e947483614afb6ece3b) )
@@ -548,24 +612,5 @@ ROM_START( jackie )
 	ROM_LOAD( "18cv8.u9",   0x0000, 0x155, BAD_DUMP CRC(996e8f59) SHA1(630d9b91f6e8eda781061e2a8ff6fb0fecaf034c) )
 ROM_END
 
-static DRIVER_INIT( jackie )
-{
-
-	int A;
-	UINT8 *rom = memory_region(machine, "maincpu");
-
-	for (A = 0;A < 0xf000;A++)
-	{
-		rom[A] = rom[A] ^ 0x21;
-
-		if (((A & 0x0080) == 0x0000) && ((A & 0x0008) == 0x0000)) rom[A] = rom[A] ^ 0x20;
-		if ((A & 0x0282) == 0x0282) rom[A] ^= 0x01;
-		if ((A & 0x0940) == 0x0940) rom[A] ^= 0x02;
-	}
-	memset( &rom[0xf000], 0, 0x1000);
-
-	// Patch trap
-	rom[0x7e86] = 0xc3;
-}
 
 GAME( 1993,  jackie,   0,        jackie,   jackie, jackie,  ROT0, "IGS",    "Happy Jackie (v110U)",       0 )

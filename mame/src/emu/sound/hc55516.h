@@ -3,22 +3,20 @@
 #ifndef __HC55516_H__
 #define __HC55516_H__
 
+#include "devlegcy.h"
+
 
 /* sets the digit (0 or 1) */
-void hc55516_digit_w(const device_config *device, int digit);
+void hc55516_digit_w(device_t *device, int digit);
 
 /* sets the clock state (0 or 1, clocked on the rising edge) */
-void hc55516_clock_w(const device_config *device, int state);
+void hc55516_clock_w(device_t *device, int state);
 
 /* returns whether the clock is currently LO or HI */
-int hc55516_clock_state_r(const device_config *device);
+int hc55516_clock_state_r(device_t *device);
 
-DEVICE_GET_INFO( hc55516 );
-DEVICE_GET_INFO( mc3417 );
-DEVICE_GET_INFO( mc3418 );
-
-#define SOUND_HC55516 DEVICE_GET_INFO_NAME( hc55516 )
-#define SOUND_MC3417 DEVICE_GET_INFO_NAME( mc3417 )
-#define SOUND_MC3418 DEVICE_GET_INFO_NAME( mc3418 )
+DECLARE_LEGACY_SOUND_DEVICE(HC55516, hc55516);
+DECLARE_LEGACY_SOUND_DEVICE(MC3417, mc3417);
+DECLARE_LEGACY_SOUND_DEVICE(MC3418, mc3418);
 
 #endif /* __HC55516_H__ */

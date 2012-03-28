@@ -4,70 +4,44 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "atari_vg.h"
 
-#define EAROM_SIZE	0x40
 
+// device type definition
+const device_type ATARIVGEAROM = &device_creator<atari_vg_earom_device>;
 
-typedef struct _atari_vg_earom_state atari_vg_earom_state;
-struct _atari_vg_earom_state
+//-------------------------------------------------
+//  atari_vg_earom_device - constructor
+//-------------------------------------------------
+
+atari_vg_earom_device::atari_vg_earom_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, ATARIVGEAROM, "ATARI VG EAROM", tag, owner, clock),
+	  device_nvram_interface(mconfig, *this)
 {
-	const device_config *device;
-
-	int offset;
-	int data;
-	char rom[EAROM_SIZE];
-
-};
-
-
-/***************************************************************************
-    INLINE FUNCTIONS
-***************************************************************************/
-
-/*-------------------------------------------------
-    get_safe_token - convert a device's token
-    into a atari_vg_earom_state
--------------------------------------------------*/
-
-INLINE atari_vg_earom_state *get_safe_token(const device_config *device)
-{
-	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == ATARIVGEAROM);
-	return (atari_vg_earom_state *)device->token;
 }
 
 
-
-
-READ8_DEVICE_HANDLER( atari_vg_earom_r )
+READ8_MEMBER( atari_vg_earom_device::read )
 {
-	atari_vg_earom_state *earom = get_safe_token(device);
-
-	logerror("read earom: %02x(%02x):%02x\n", earom->offset, offset, earom->data);
-	return (earom->data);
+	logerror("read earom: %02x(%02x):%02x\n", m_offset, offset, m_data);
+	return (m_data);
 }
 
 
-WRITE8_DEVICE_HANDLER( atari_vg_earom_w )
+WRITE8_MEMBER( atari_vg_earom_device::write )
 {
-	atari_vg_earom_state *earom = get_safe_token(device);
-
 	logerror("write earom: %02x:%02x\n", offset, data);
-	earom->offset = offset;
-	earom->data = data;
+	m_offset = offset;
+	m_data = data;
 }
 
 
 /* 0,8 and 14 get written to this location, too.
  * Don't know what they do exactly
  */
-WRITE8_DEVICE_HANDLER( atari_vg_earom_ctrl_w )
+WRITE8_MEMBER( atari_vg_earom_device::ctrl_w )
 {
-	atari_vg_earom_state *earom = get_safe_token(device);
-
 	logerror("earom ctrl: %02x:%02x\n",offset, data);
 	/*
         0x01 = clock
@@ -76,79 +50,65 @@ WRITE8_DEVICE_HANDLER( atari_vg_earom_ctrl_w )
         0x08 = set addr latch?
     */
 	if (data & 0x01)
-		earom->data = earom->rom[earom->offset];
+	{
+		m_data = m_rom[m_offset];
+//printf("Read %02X = %02X\n", m_offset, m_data);
+	}
 	if ((data & 0x0c) == 0x0c)
 	{
-		earom->rom[earom->offset]=earom->data;
-		logerror("    written %02x:%02x\n", earom->offset, earom->data);
+		m_rom[m_offset]=m_data;
+		logerror("    written %02x:%02x\n", m_offset, m_data);
+//printf("Write %02X = %02X\n", m_offset, m_data);
 	}
 }
 
+//-------------------------------------------------
+//  nvram_default - called to initialize NVRAM to
+//  its default state
+//-------------------------------------------------
 
-static DEVICE_NVRAM( atari_vg_earom )
+void atari_vg_earom_device::nvram_default()
 {
-	atari_vg_earom_state *earom = get_safe_token(device);
-
-	if (read_or_write)
-		mame_fwrite(file,earom->rom,EAROM_SIZE);
-	else if (file)
-		mame_fread(file,earom->rom,EAROM_SIZE);
-	else
-		memset(earom,0,EAROM_SIZE);
+	memset(m_rom,0,EAROM_SIZE);
 }
 
+//-------------------------------------------------
+//  nvram_read - called to read NVRAM from the
+//  .nv file
+//-------------------------------------------------
 
-/***************************************************************************
-    DEVICE INTERFACE
-***************************************************************************/
-
-static DEVICE_START( atari_vg_earom )
+void atari_vg_earom_device::nvram_read(emu_file &file)
 {
-	atari_vg_earom_state *earom = get_safe_token(device);
+	file.read(m_rom,EAROM_SIZE);
+}
 
-	/* validate arguments */
-	assert(device != NULL);
-	assert(device->tag != NULL);
-	assert(strlen(device->tag) < 20);
+//-------------------------------------------------
+//  nvram_write - called to write NVRAM to the
+//  .nv file
+//-------------------------------------------------
 
-	/* set static values */
-	earom->device = device;
+void atari_vg_earom_device::nvram_write(emu_file &file)
+{
+	file.write(m_rom,EAROM_SIZE);
+}
 
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+void atari_vg_earom_device::device_start()
+{
 	/* register for save states */
-	state_save_register_device_item(device, 0, earom->offset);
-	state_save_register_device_item(device, 0, earom->data);
+	save_item(NAME(m_offset));
+	save_item(NAME(m_data));
 }
 
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
 
-static DEVICE_RESET( atari_vg_earom )
+void atari_vg_earom_device::device_reset()
 {
-	atari_vg_earom_state *earom = get_safe_token(device);
-
-	earom->data = 0;
-	earom->offset = 0;
+	m_data = 0;
+	m_offset = 0;
 }
 
-
-DEVICE_GET_INFO( atari_vg_earom )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(atari_vg_earom_state);	break;
-		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;							break;
-		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_PERIPHERAL;		break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(atari_vg_earom);break;
-		case DEVINFO_FCT_NVRAM:							info->nvram = DEVICE_NVRAM_NAME(atari_vg_earom); break;
-		case DEVINFO_FCT_STOP:							/* Nothing */							break;
-		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME(atari_vg_earom);break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "atari_vg_earom");		break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "EEPROM");				break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");					break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);				break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
-	}
-}

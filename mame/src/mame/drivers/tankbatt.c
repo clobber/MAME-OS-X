@@ -56,32 +56,22 @@ Known issues:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/samples.h"
+#include "includes/tankbatt.h"
 
-extern UINT8 *tankbatt_bulletsram;
-extern size_t tankbatt_bulletsram_size;
-
-static int tankbatt_nmi_enable; /* No need to init this - the game will set it on reset */
-static int tankbatt_sound_enable;
-
-extern WRITE8_HANDLER( tankbatt_videoram_w );
-
-extern PALETTE_INIT( tankbatt );
-extern VIDEO_START( tankbatt );
-extern VIDEO_UPDATE( tankbatt );
 
 static WRITE8_HANDLER( tankbatt_led_w )
 {
-	set_led_status(offset,data & 1);
+	set_led_status(space->machine(), offset,data & 1);
 }
 
 static READ8_HANDLER( tankbatt_in0_r )
 {
 	int val;
 
-	val = input_port_read(space->machine, "P1");
+	val = input_port_read(space->machine(), "P1");
 	return ((val << (7 - offset)) & 0x80);
 }
 
@@ -89,7 +79,7 @@ static READ8_HANDLER( tankbatt_in1_r )
 {
 	int val;
 
-	val = input_port_read(space->machine, "P2");
+	val = input_port_read(space->machine(), "P2");
 	return ((val << (7 - offset)) & 0x80);
 }
 
@@ -97,39 +87,41 @@ static READ8_HANDLER( tankbatt_dsw_r )
 {
 	int val;
 
-	val = input_port_read(space->machine, "DSW");
+	val = input_port_read(space->machine(), "DSW");
 	return ((val << (7 - offset)) & 0x80);
 }
 
 static WRITE8_HANDLER( tankbatt_interrupt_enable_w )
 {
-	tankbatt_nmi_enable = !data;
-	tankbatt_sound_enable = !data;
+	tankbatt_state *state = space->machine().driver_data<tankbatt_state>();
+	state->m_nmi_enable = !data;
+	state->m_sound_enable = !data;
 
 	/* hack - turn off the engine noise if the normal game nmi's are disabled */
-	if (data) sample_stop (devtag_get_device(space->machine, "samples"), 2);
-//  interrupt_enable_w (offset, !data);
+	if (data) sample_stop (space->machine().device("samples"), 2);
 }
 
 static WRITE8_HANDLER( tankbatt_demo_interrupt_enable_w )
 {
-	tankbatt_nmi_enable = data;
-//  interrupt_enable_w (offset, data);
+	tankbatt_state *state = space->machine().driver_data<tankbatt_state>();
+	state->m_nmi_enable = data;
 }
 
 static WRITE8_HANDLER( tankbatt_sh_expl_w )
 {
-	if (tankbatt_sound_enable)
+	tankbatt_state *state = space->machine().driver_data<tankbatt_state>();
+	if (state->m_sound_enable)
 	{
-		const device_config *samples = devtag_get_device(space->machine, "samples");
+		device_t *samples = space->machine().device("samples");
 		sample_start (samples, 1, 3, 0);
 	}
 }
 
 static WRITE8_HANDLER( tankbatt_sh_engine_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
-	if (tankbatt_sound_enable)
+	tankbatt_state *state = space->machine().driver_data<tankbatt_state>();
+	device_t *samples = space->machine().device("samples");
+	if (state->m_sound_enable)
 	{
 		if (data)
 			sample_start (samples, 2, 2, 1);
@@ -141,9 +133,10 @@ static WRITE8_HANDLER( tankbatt_sh_engine_w )
 
 static WRITE8_HANDLER( tankbatt_sh_fire_w )
 {
-	if (tankbatt_sound_enable)
+	tankbatt_state *state = space->machine().driver_data<tankbatt_state>();
+	if (state->m_sound_enable)
 	{
-		const device_config *samples = devtag_get_device(space->machine, "samples");
+		device_t *samples = space->machine().device("samples");
 		sample_start (samples, 0, 0, 0);
 	}
 }
@@ -151,26 +144,26 @@ static WRITE8_HANDLER( tankbatt_sh_fire_w )
 static WRITE8_HANDLER( tankbatt_irq_ack_w )
 {
 	/* 0x6e written at the end of the irq routine, could be either irq ack or a coin sample */
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( tankbatt_coin_counter_w )
 {
-	coin_counter_w(0,data & 1);
-	coin_counter_w(1,data & 1);
+	coin_counter_w(space->machine(), 0,data & 1);
+	coin_counter_w(space->machine(), 1,data & 1);
 }
 
 static WRITE8_HANDLER( tankbatt_coin_lockout_w )
 {
-	coin_lockout_w(0,data & 1);
-	coin_lockout_w(1,data & 1);
+	coin_lockout_w(space->machine(), 0,data & 1);
+	coin_lockout_w(space->machine(), 1,data & 1);
 }
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x000f) AM_RAM AM_BASE(&tankbatt_bulletsram) AM_SIZE(&tankbatt_bulletsram_size)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x000f) AM_RAM AM_BASE_MEMBER(tankbatt_state, m_bulletsram) AM_SIZE_MEMBER(tankbatt_state, m_bulletsram_size)
 	AM_RANGE(0x0010, 0x01ff) AM_RAM
 	AM_RANGE(0x0200, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(tankbatt_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(tankbatt_videoram_w) AM_BASE_MEMBER(tankbatt_state, m_videoram)
 	AM_RANGE(0x0c00, 0x0c07) AM_READ(tankbatt_in0_r)
 	AM_RANGE(0x0c00, 0x0c01) AM_WRITE(tankbatt_led_w)
 	AM_RANGE(0x0c02, 0x0c02) AM_WRITE(tankbatt_coin_counter_w)
@@ -193,12 +186,13 @@ ADDRESS_MAP_END
 
 static INTERRUPT_GEN( tankbatt_interrupt )
 {
-	if (tankbatt_nmi_enable) cpu_set_input_line(device,INPUT_LINE_NMI,PULSE_LINE);
+	tankbatt_state *state = device->machine().driver_data<tankbatt_state>();
+	if (state->m_nmi_enable) device_set_input_line(device,INPUT_LINE_NMI,PULSE_LINE);
 }
 
 static INPUT_CHANGED( coin_inserted )
 {
-	cputag_set_input_line(field->port->machine, "maincpu", 0, ASSERT_LINE);
+	cputag_set_input_line(field.machine(), "maincpu", 0, ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( tankbatt )
@@ -220,31 +214,27 @@ static INPUT_PORTS_START( tankbatt )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
+	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )			PORT_DIPLOCATION("DSW:8")
 
 	PORT_START("DSW")	/* DSW */
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("DSW:7")
 	PORT_DIPSETTING(	0x01, DEF_STR( Upright ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ) )
- 	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Coinage ) )		PORT_DIPLOCATION("DSW:1,2")
 	PORT_DIPSETTING(	0x04, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(	0x06, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(	0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x18, 0x08, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x18, 0x08, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("DSW:3,4")
 	PORT_DIPSETTING(	0x00, "10000" )
 	PORT_DIPSETTING(	0x10, "15000" )
 	PORT_DIPSETTING(	0x08, "20000" )
 	PORT_DIPSETTING(	0x18, DEF_STR( None ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )		PORT_DIPLOCATION("DSW:5")
 	PORT_DIPSETTING(	0x20, "2" )
 	PORT_DIPSETTING(	0x00, "3" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "DSW:6" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -282,10 +272,10 @@ GFXDECODE_END
 static const char *const tankbatt_sample_names[] =
 {
 	"*tankbatt",
-	"fire.wav",
-	"engine1.wav",
-	"engine2.wav",
-	"explode1.wav",
+	"fire",
+	"engine1",
+	"engine2",
+	"explode1",
     0	/* end of array */
 };
 
@@ -297,35 +287,34 @@ static const samples_interface tankbatt_samples_interface =
 
 
 
-static MACHINE_DRIVER_START( tankbatt )
+static MACHINE_CONFIG_START( tankbatt, tankbatt_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 1000000)	/* 1 MHz ???? */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", tankbatt_interrupt)
+	MCFG_CPU_ADD("maincpu", M6502, 1000000)	/* 1 MHz ???? */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", tankbatt_interrupt)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(tankbatt)
 
-	MDRV_GFXDECODE(tankbatt)
-	MDRV_PALETTE_LENGTH(256*2)
+	MCFG_GFXDECODE(tankbatt)
+	MCFG_PALETTE_LENGTH(256*2)
 
-	MDRV_PALETTE_INIT(tankbatt)
-	MDRV_VIDEO_START(tankbatt)
-	MDRV_VIDEO_UPDATE(tankbatt)
+	MCFG_PALETTE_INIT(tankbatt)
+	MCFG_VIDEO_START(tankbatt)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(tankbatt_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(tankbatt_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
 

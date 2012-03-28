@@ -7,22 +7,10 @@ Issues:
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-
-
-VIDEO_UPDATE( rollrace );
-PALETTE_INIT( wiz );
-
-WRITE8_HANDLER( rollrace_charbank_w );
-WRITE8_HANDLER( rollrace_backgroundpage_w);
-WRITE8_HANDLER( rollrace_backgroundcolor_w);
-WRITE8_HANDLER( rollrace_bkgpen_w );
-WRITE8_HANDLER( rollrace_flipy_w );
-WRITE8_HANDLER( rollrace_spritebank_w );
-WRITE8_HANDLER( rollrace_flipx_w );
+#include "includes/rollrace.h"
 
 static READ8_HANDLER( ra_fake_d800_r )
 {
@@ -34,17 +22,32 @@ static WRITE8_HANDLER( ra_fake_d800_w )
 /*  logerror("d900: %02X\n",data);*/
 }
 
-static ADDRESS_MAP_START( rollrace_map, ADDRESS_SPACE_PROGRAM, 8 )
+static WRITE8_HANDLER( nmi_mask_w )
+{
+	rollrace_state *state = space->machine().driver_data<rollrace_state>();
+
+	state->m_nmi_mask = data & 1;
+}
+
+static WRITE8_HANDLER( sound_nmi_mask_w )
+{
+	rollrace_state *state = space->machine().driver_data<rollrace_state>();
+
+	state->m_sound_nmi_mask = data & 1;
+}
+
+
+static ADDRESS_MAP_START( rollrace_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROM			 /* only rollace2 */
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
 	AM_RANGE(0xd806, 0xd806) AM_READNOP /* looks like a watchdog, bit4 checked*/
 	AM_RANGE(0xd900, 0xd900) AM_READWRITE(ra_fake_d800_r,ra_fake_d800_w) /* protection ??*/
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xe400, 0xe47f) AM_RAM AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(rollrace_state, m_videoram)
+	AM_RANGE(0xe400, 0xe47f) AM_RAM AM_BASE_MEMBER(rollrace_state, m_colorram)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xec00, 0xec0f) AM_NOP /* Analog sound effects ?? ec00 sound enable ?*/
-	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_BASE_SIZE_MEMBER(rollrace_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf400, 0xf400) AM_WRITE(rollrace_backgroundcolor_w)
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("P1")
 	AM_RANGE(0xf801, 0xf801) AM_READ_PORT("P2") AM_WRITE(rollrace_bkgpen_w)
@@ -53,17 +56,17 @@ static ADDRESS_MAP_START( rollrace_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf804, 0xf804) AM_READ_PORT("DSW1")
 	AM_RANGE(0xf805, 0xf805) AM_READ_PORT("DSW2")
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITE(rollrace_flipx_w)
-	AM_RANGE(0xfc01, 0xfc01) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xfc01, 0xfc01) AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xfc02, 0xfc03) AM_WRITENOP /* coin counters */
 	AM_RANGE(0xfc04, 0xfc05) AM_WRITE(rollrace_charbank_w)
 	AM_RANGE(0xfc06, 0xfc06) AM_WRITE(rollrace_spritebank_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( rollrace_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( rollrace_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x3000) AM_READWRITE(soundlatch_r,interrupt_enable_w)
+	AM_RANGE(0x3000, 0x3000) AM_READWRITE(soundlatch_r,sound_nmi_mask_w)
 	AM_RANGE(0x4000, 0x4001) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x5000, 0x5001) AM_DEVWRITE("ay2", ay8910_address_data_w)
 	AM_RANGE(0x6000, 0x6001) AM_DEVWRITE("ay3", ay8910_address_data_w)
@@ -107,53 +110,53 @@ static INPUT_PORTS_START( rollrace )
 
 	PORT_START("DSW1")
 	PORT_DIPNAME( 0x07, 0x00, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING( 	0x07, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING( 	0x06, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING( 	0x04, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING( 	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING( 	0x05, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING( 	0x01, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING( 	0x02, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING( 	0x03, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(	0x07, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(	0x06, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(	0x04, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(	0x05, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(	0x02, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(	0x03, DEF_STR( 1C_6C ) )
 
 	PORT_DIPNAME( 0x38, 0x00, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING( 	0x38, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING( 	0x30, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING( 	0x20, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING( 	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING( 	0x28, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING( 	0x08, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING( 	0x10, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING( 	0x18, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(	0x38, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(	0x30, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(	0x28, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(	0x08, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(	0x10, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(	0x18, DEF_STR( 1C_6C ) )
 
 /*  PORT_BIT( 0x40, IP_ACTIVE_HIGH , IPT_VBLANK )  freezes frame, could be vblank ?*/
 	PORT_DIPNAME( 0x40, 0x00, "Freeze" )
-	PORT_DIPSETTING( 	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING( 	0x40, DEF_STR( On ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x40, DEF_STR( On ) )
 /*  PORT_DIPNAME( 0x80, 0x00, "Free Run" ) */
 	PORT_DIPNAME( 0x80, 0x00, "Invulnerability (Cheat)" )
-	PORT_DIPSETTING( 	0x00, DEF_STR( Off ) )	/* test mode, you are invulnerable */
-	PORT_DIPSETTING( 	0x80, DEF_STR( On ) )	/* to 'static' objects */
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )	/* test mode, you are invulnerable */
+	PORT_DIPSETTING(	0x80, DEF_STR( On ) )	/* to 'static' objects */
 
 	PORT_START("DSW2")
 	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )
-	PORT_DIPSETTING( 	0x00, "2" )
-	PORT_DIPSETTING( 	0x01, "3" )
-	PORT_DIPSETTING( 	0x02, "5" )
-	PORT_DIPSETTING( 	0x03, "7" )
+	PORT_DIPSETTING(	0x00, "2" )
+	PORT_DIPSETTING(	0x01, "3" )
+	PORT_DIPSETTING(	0x02, "5" )
+	PORT_DIPSETTING(	0x03, "7" )
 	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Bonus_Life ) )
-	PORT_DIPSETTING( 	0x04, "20000" )
-	PORT_DIPSETTING( 	0x08, "50000" )
-	PORT_DIPSETTING( 	0x0c, "100000" )
-	PORT_DIPSETTING( 	0x00, DEF_STR( None ) )
+	PORT_DIPSETTING(	0x04, "20000" )
+	PORT_DIPSETTING(	0x08, "50000" )
+	PORT_DIPSETTING(	0x0c, "100000" )
+	PORT_DIPSETTING(	0x00, DEF_STR( None ) )
 	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING( 	0x00, "A" )
-	PORT_DIPSETTING( 	0x10, "B" )
-	PORT_DIPSETTING( 	0x20, "C" )
-	PORT_DIPSETTING( 	0x30, "D" )
+	PORT_DIPSETTING(	0x00, "A" )
+	PORT_DIPSETTING(	0x10, "B" )
+	PORT_DIPSETTING(	0x20, "C" )
+	PORT_DIPSETTING(	0x30, "D" )
 	PORT_DIPNAME( 0x40, 0x00, DEF_STR(Cabinet) )
-	PORT_DIPSETTING( 	0x00, DEF_STR( Upright ) )
-	PORT_DIPSETTING( 	0x40, DEF_STR( Cocktail ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Upright ) )
+	PORT_DIPSETTING(	0x40, DEF_STR( Cocktail ) )
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
 	PORT_DIPSETTING( 0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING( 0x80, DEF_STR( On ) )
@@ -201,58 +204,72 @@ static GFXDECODE_START( rollrace )
 	GFXDECODE_ENTRY( "gfx1", 0x0800, charlayout,	0,	32 )
 	GFXDECODE_ENTRY( "gfx1", 0x1000, charlayout,	0,	32 )
 	GFXDECODE_ENTRY( "gfx1", 0x1800, charlayout,	0,	32 )
-	GFXDECODE_ENTRY( "gfx2", 0x0000, charlayout2,	0, 	32 ) /* for the road */
-	GFXDECODE_ENTRY( "gfx3", 0x0000, spritelayout,	0, 	32 ) /* sprites */
+	GFXDECODE_ENTRY( "gfx2", 0x0000, charlayout2,	0,	32 ) /* for the road */
+	GFXDECODE_ENTRY( "gfx3", 0x0000, spritelayout,	0,	32 ) /* sprites */
 	GFXDECODE_ENTRY( "gfx4", 0x0000, spritelayout,	0,	32 )
 	GFXDECODE_ENTRY( "gfx5", 0x0000, spritelayout,	0,	32 )
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( rollrace )
+static INTERRUPT_GEN( vblank_irq )
+{
+	rollrace_state *state = device->machine().driver_data<rollrace_state>();
+
+	if(state->m_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static INTERRUPT_GEN( sound_timer_irq )
+{
+	rollrace_state *state = device->machine().driver_data<rollrace_state>();
+
+	if(state->m_sound_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static MACHINE_CONFIG_START( rollrace, rollrace_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80,XTAL_24MHz/8) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(rollrace_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80,XTAL_24MHz/8) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(rollrace_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80,XTAL_24MHz/16) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(rollrace_sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,4)
+	MCFG_CPU_ADD("audiocpu", Z80,XTAL_24MHz/16) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(rollrace_sound_map)
+	MCFG_CPU_PERIODIC_INT(sound_timer_irq,4*60)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(16,255,16, 255-16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(16,255,16, 255-16)
+	MCFG_SCREEN_UPDATE_STATIC(rollrace)
 
-	MDRV_GFXDECODE(rollrace)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(rollrace)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_PALETTE_INIT(wiz)
-	MDRV_VIDEO_UPDATE(rollrace)
+	MCFG_PALETTE_INIT(rollrace)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ay1", AY8910,XTAL_24MHz/16) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
+	MCFG_SOUND_ADD("ay1", AY8910,XTAL_24MHz/16) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
-	MDRV_SOUND_ADD("ay2", AY8910,XTAL_24MHz/16) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
+	MCFG_SOUND_ADD("ay2", AY8910,XTAL_24MHz/16) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
-	MDRV_SOUND_ADD("ay3", AY8910,XTAL_24MHz/16) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay3", AY8910,XTAL_24MHz/16) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( rollace2 )
+static MACHINE_CONFIG_DERIVED( rollace2, rollrace )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(rollrace)
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0,255-24,16, 255-16)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0,255-24,16, 255-16)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -278,12 +295,12 @@ ROM_START( fightrol )
 	ROM_LOAD ( "7.18k", 0x2000, 0x2000, CRC(27843afa) SHA1(81d3031a2c06086461110696a0ee11d32992ecac) )
 	ROM_LOAD ( "5.20f", 0x4000, 0x2000, CRC(51dd0108) SHA1(138c0aba6c952204e794216193def17b390c4ba2) )
 
-	ROM_REGION( 0x6000, "gfx3",0 ) 	/* sprite bank 0*/
+	ROM_REGION( 0x6000, "gfx3",0 )	/* sprite bank 0*/
 	ROM_LOAD ( "8.17m",  0x0000, 0x2000, CRC(08ad783e) SHA1(fea91e41916cfc7b29c5f9a578e2c82a54f66829) )
 	ROM_LOAD ( "9.17r",  0x2000, 0x2000, CRC(69b23461) SHA1(73eca5e721425f37df311454bd5b4e632b096eba) )
 	ROM_LOAD ( "10.17t", 0x4000, 0x2000, CRC(ba6ccd8c) SHA1(29a13e3161aba4db080434685869f8b79ad7997c) )
 
-	ROM_REGION( 0x6000, "gfx4",0 ) 	/* sprite bank 1*/
+	ROM_REGION( 0x6000, "gfx4",0 )	/* sprite bank 1*/
 	ROM_LOAD ( "11.18m", 0x0000, 0x2000, CRC(06a5d849) SHA1(b9f604edf4fdc053b738041493aef91dd730fe6b) )
 	ROM_LOAD ( "12.18r", 0x2000, 0x2000, CRC(569815ef) SHA1(db261799892f60b2274b73fb25cde58219bb44db) )
 	ROM_LOAD ( "13.18t", 0x4000, 0x2000, CRC(4f8af872) SHA1(6c07ff0733b8d8440309c9ae0db0876587b740a6) )
@@ -325,12 +342,12 @@ ROM_START( rollace )
 	ROM_LOAD ( "7.18k", 0x2000, 0x2000, CRC(27843afa) SHA1(81d3031a2c06086461110696a0ee11d32992ecac) )
 	ROM_LOAD ( "5.20f", 0x4000, 0x2000, CRC(51dd0108) SHA1(138c0aba6c952204e794216193def17b390c4ba2) )
 
-	ROM_REGION( 0x6000, "gfx3",0 ) 	/* sprite bank 0*/
+	ROM_REGION( 0x6000, "gfx3",0 )	/* sprite bank 0*/
 	ROM_LOAD ( "w8.17m",  0x0000, 0x2000, CRC(e2afe3a3) SHA1(a83a12c0c6c62e45add916a6993f0ad06840c4d9) )
 	ROM_LOAD ( "w9.17p",  0x2000, 0x2000, CRC(8a8e6b62) SHA1(6e7d4a84b7c78e009bce0641e357f74c8ac9e5ac) )
 	ROM_LOAD ( "w10.17t", 0x4000, 0x2000, CRC(70bf7b23) SHA1(6774eceb0bfea66156ecd837f9d0adbdf8dec8ee) )
 
-	ROM_REGION( 0x6000, "gfx4",0 ) 	/* sprite bank 1*/
+	ROM_REGION( 0x6000, "gfx4",0 )	/* sprite bank 1*/
 	ROM_LOAD ( "11.18m", 0x0000, 0x2000, CRC(06a5d849) SHA1(b9f604edf4fdc053b738041493aef91dd730fe6b) )
 	ROM_LOAD ( "12.18r", 0x2000, 0x2000, CRC(569815ef) SHA1(db261799892f60b2274b73fb25cde58219bb44db) )
 	ROM_LOAD ( "13.18t", 0x4000, 0x2000, CRC(4f8af872) SHA1(6c07ff0733b8d8440309c9ae0db0876587b740a6) )
@@ -373,12 +390,12 @@ ROM_START( rollace2 )
 	ROM_LOAD ( "7.18k", 0x2000, 0x2000, CRC(27843afa) SHA1(81d3031a2c06086461110696a0ee11d32992ecac) )
 	ROM_LOAD ( "5.20f", 0x4000, 0x2000, CRC(51dd0108) SHA1(138c0aba6c952204e794216193def17b390c4ba2) )
 
-	ROM_REGION( 0x6000, "gfx3",0 ) 	/* sprite bank 0*/
+	ROM_REGION( 0x6000, "gfx3",0 )	/* sprite bank 0*/
 	ROM_LOAD ( "17n.764",0x0000, 0x2000, CRC(3365703c) SHA1(7cf374ba25f4fd163a66c0aea74ddfd3003c7992) )
 	ROM_LOAD ( "9.17r",  0x2000, 0x2000, CRC(69b23461) SHA1(73eca5e721425f37df311454bd5b4e632b096eba) )
 	ROM_LOAD ( "17t.764",0x4000, 0x2000, CRC(5e84cc9b) SHA1(33cdf7b756ade8c0dd1dcdad583af4de02cd51eb) )
 
-	ROM_REGION( 0x6000, "gfx4",0 ) 	/* sprite bank 1*/
+	ROM_REGION( 0x6000, "gfx4",0 )	/* sprite bank 1*/
 	ROM_LOAD ( "11.18m", 0x0000, 0x2000, CRC(06a5d849) SHA1(b9f604edf4fdc053b738041493aef91dd730fe6b) )
 	ROM_LOAD ( "12.18r", 0x2000, 0x2000, CRC(569815ef) SHA1(db261799892f60b2274b73fb25cde58219bb44db) )
 	ROM_LOAD ( "13.18t", 0x4000, 0x2000, CRC(4f8af872) SHA1(6c07ff0733b8d8440309c9ae0db0876587b740a6) )
@@ -404,6 +421,6 @@ ROM_START( rollace2 )
 ROM_END
 
 
-GAME( 1983, fightrol, 0,        rollrace, rollrace, 0, ROT270, "[Kaneko] (Taito license)", "Fighting Roller", GAME_IMPERFECT_SOUND )
-GAME( 1983, rollace,  fightrol, rollrace, rollrace, 0, ROT270, "[Kaneko] (Williams license)", "Roller Aces (set 1)", GAME_IMPERFECT_SOUND )
-GAME( 1983, rollace2, fightrol, rollace2, rollrace, 0, ROT90,  "[Kaneko] (Williams license)", "Roller Aces (set 2)", GAME_IMPERFECT_SOUND )
+GAME( 1983, fightrol, 0,        rollrace, rollrace, 0, ROT270, "Kaneko (Taito license)", "Fighting Roller", GAME_IMPERFECT_SOUND )
+GAME( 1983, rollace,  fightrol, rollrace, rollrace, 0, ROT270, "Kaneko (Williams license)", "Roller Aces (set 1)", GAME_IMPERFECT_SOUND )
+GAME( 1983, rollace2, fightrol, rollace2, rollrace, 0, ROT90,  "Kaneko (Williams license)", "Roller Aces (set 2)", GAME_IMPERFECT_SOUND )

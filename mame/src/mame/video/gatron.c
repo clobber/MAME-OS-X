@@ -17,19 +17,22 @@
 *******************************************************************************/
 
 
-#include "driver.h"
-
-static tilemap *bg_tilemap;
+#include "emu.h"
+#include "includes/gatron.h"
 
 
 WRITE8_HANDLER( gat_videoram_w )
 {
+	gatron_state *state = space->machine().driver_data<gatron_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	gatron_state *state = machine.driver_data<gatron_state>();
+	UINT8 *videoram = state->m_videoram;
 /*  - bits -
     7654 3210
     xxxx xxxx   tiles code.
@@ -44,12 +47,14 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( gat )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols, 8, 16, 48, 16);
+	gatron_state *state = machine.driver_data<gatron_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols, 8, 16, 48, 16);
 }
 
-VIDEO_UPDATE( gat )
+SCREEN_UPDATE_IND16( gat )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	gatron_state *state = screen.machine().driver_data<gatron_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 

@@ -11,25 +11,23 @@
     - 64 (32?) Sprites
 
 ***************************************************************************/
-#include "driver.h"
 
-/* Variables only used here: */
-
-static tilemap *bg_tilemap;
+#include "emu.h"
+#include "includes/amspdwy.h"
 
 
 WRITE8_HANDLER( amspdwy_paletteram_w )
 {
 	data ^= 0xff;
-	paletteram_BBGGGRRR_w(space,offset,data);
-//  paletteram_RRRGGGBB_w(offset,data);
+	paletteram_BBGGGRRR_w(space, offset, data);
+//  paletteram_RRRGGGBB_w(offset, data);
 }
 
 WRITE8_HANDLER( amspdwy_flipscreen_w )
 {
-	static int flip = 0;
-	flip ^= 1;
-	flip_screen_set(space->machine,  flip );
+	amspdwy_state *state = space->machine().driver_data<amspdwy_state>();
+	state->m_flipscreen ^= 1;
+	flip_screen_set(space->machine(), state->m_flipscreen);
 }
 
 /***************************************************************************
@@ -47,8 +45,9 @@ WRITE8_HANDLER( amspdwy_flipscreen_w )
 
 static TILE_GET_INFO( get_tile_info )
 {
-	UINT8 code	=	videoram[ tile_index ];
-	UINT8 color	=	colorram[ tile_index ];
+	amspdwy_state *state = machine.driver_data<amspdwy_state>();
+	UINT8 code = state->m_videoram[tile_index];
+	UINT8 color = state->m_colorram[tile_index];
 	SET_TILE_INFO(
 			0,
 			code + ((color & 0x18)<<5),
@@ -58,28 +57,30 @@ static TILE_GET_INFO( get_tile_info )
 
 WRITE8_HANDLER( amspdwy_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	amspdwy_state *state = space->machine().driver_data<amspdwy_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( amspdwy_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	amspdwy_state *state = space->machine().driver_data<amspdwy_state>();
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 
 /* logical (col,row) -> memory offset */
 static TILEMAP_MAPPER( tilemap_scan_cols_back )
 {
-	return col*num_rows + (num_rows - row - 1);
+	return col * num_rows + (num_rows - row - 1);
 }
 
 
 VIDEO_START( amspdwy )
 {
-	bg_tilemap	=	tilemap_create(	machine, get_tile_info,	tilemap_scan_cols_back,
-									8,8,	0x20, 0x20 );
+	amspdwy_state *state = machine.driver_data<amspdwy_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_cols_back, 8, 8, 0x20, 0x20);
 }
 
 
@@ -102,28 +103,32 @@ Offset:     Format:     Value:
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	amspdwy_state *state = machine.driver_data<amspdwy_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int i;
-	int max_x = video_screen_get_width(machine->primary_screen)  - 1;
-	int max_y = video_screen_get_height(machine->primary_screen) - 1;
+	int max_x = machine.primary_screen->width()  - 1;
+	int max_y = machine.primary_screen->height() - 1;
 
-	for (i = 0; i < spriteram_size ; i += 4)
+	for (i = 0; i < state->m_spriteram_size ; i += 4)
 	{
-		int y		=	spriteram[i+0];
-		int x		=	spriteram[i+1];
-		int code	=	spriteram[i+2];
-		int attr	=	spriteram[i+3];
-		int flipx	=	attr & 0x80;
-		int flipy	=	attr & 0x40;
+		int y = spriteram[i + 0];
+		int x = spriteram[i + 1];
+		int code = spriteram[i + 2];
+		int attr = spriteram[i + 3];
+		int flipx = attr & 0x80;
+		int flipy = attr & 0x40;
 
 		if (flip_screen_get(machine))
 		{
-			x = max_x - x - 8;	y = max_y - y - 8;
-			flipx = !flipx;	flipy = !flipy;
+			x = max_x - x - 8;
+			y = max_y - y - 8;
+			flipx = !flipx;
+			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
 //              code + ((attr & 0x18)<<5),
 				code + ((attr & 0x08)<<5),
 				attr,
@@ -141,9 +146,10 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 ***************************************************************************/
 
-VIDEO_UPDATE( amspdwy )
+SCREEN_UPDATE_IND16( amspdwy )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	draw_sprites(screen->machine, bitmap,cliprect);
+	amspdwy_state *state = screen.machine().driver_data<amspdwy_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }

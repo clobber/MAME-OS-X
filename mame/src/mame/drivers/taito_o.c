@@ -28,47 +28,45 @@ TODO:
 
 *****************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "video/taitoic.h"
 #include "sound/2203intf.h"
+#include "includes/taito_o.h"
 
-static const int clear_hack=1;
-
-VIDEO_START( parentj );
-VIDEO_UPDATE( parentj );
+static const int clear_hack = 1;
 
 static WRITE16_HANDLER(io_w)
 {
 	switch(offset)
 	{
-		case 2: watchdog_reset(space->machine); break;
+		case 2: watchdog_reset(space->machine()); break;
 
-		default: logerror("IO W %x %x %x\n",offset,data,mem_mask);
+		default: logerror("IO W %x %x %x\n", offset, data, mem_mask);
 	}
 }
 
 static READ16_HANDLER(io_r)
 {
-	int retval=0;
+	int retval = 0;
+
 	switch(offset)
 	{
-		case 0: retval=input_port_read(space->machine, "IN0")&(clear_hack?0xf7ff:0xffff);break;
-		case 1: retval=input_port_read(space->machine, "IN1")&(clear_hack?0xfff7:0xffff);break;
-		default: logerror("IO R %x %x = %x @ %x\n",offset,mem_mask,retval,cpu_get_pc(space->cpu));
+		case 0: retval = input_port_read(space->machine(), "IN0") & (clear_hack ? 0xf7ff : 0xffff); break;
+		case 1: retval = input_port_read(space->machine(), "IN1") & (clear_hack ? 0xfff7 : 0xffff); break;
+		default: logerror("IO R %x %x = %x @ %x\n", offset, mem_mask, retval, cpu_get_pc(&space->device()));
 	}
 	return retval;
 }
 
-static ADDRESS_MAP_START( parentj_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( parentj_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM
 	AM_RANGE(0x200000, 0x20000f) AM_READWRITE(io_r, io_w) /* TC0220IOC ? */
-	AM_RANGE(0x300000, 0x300003) AM_DEVREADWRITE8("ym", ym2203_r, ym2203_w, 0x00ff)
-	AM_RANGE(0x400000, 0x420fff) AM_READWRITE(TC0080VCO_word_r, TC0080VCO_word_w)
-	AM_RANGE(0x500800, 0x500fff) AM_RAM AM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x300000, 0x300003) AM_DEVREADWRITE8("ymsnd", ym2203_r, ym2203_w, 0x00ff)
+	AM_RANGE(0x400000, 0x420fff) AM_DEVREADWRITE("tc0080vco", tc0080vco_word_r, tc0080vco_word_w)
+	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( parentj )
@@ -102,9 +100,7 @@ static INPUT_PORTS_START( parentj )
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_CODE(KEYCODE_Y) PORT_NAME("Opto 2L")
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_CODE(KEYCODE_I) PORT_NAME("All Clear")
 
-	PORT_DIPNAME(0x0010,  0x10, "Test Mode") /* sometimes */
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x000, DEF_STR( On ) )
+	PORT_SERVICE_NO_TOGGLE(0x0010, IP_ACTIVE_LOW )
 	PORT_DIPNAME(0x0020,  0x20, "IN1 5")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -215,10 +211,17 @@ static GFXDECODE_START( parentj )
 	GFXDECODE_ENTRY( "gfx1", 0, parentj_layout,  0x0, 0x400/16  )
 GFXDECODE_END
 
-
-static INTERRUPT_GEN( parentj_interrupt )
+/* unknown sources ... */
+static TIMER_DEVICE_CALLBACK( parentj_interrupt )
 {
-	cpu_set_input_line(device, cpu_getiloops(device)?4:5 , HOLD_LINE);
+	taitoo_state *state = timer.machine().driver_data<taitoo_state>();
+	int scanline = param;
+
+	if(scanline == 448)
+		device_set_input_line(state->m_maincpu, 4, HOLD_LINE);
+
+	if(scanline == 0)
+		device_set_input_line(state->m_maincpu, 5, HOLD_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -232,35 +235,50 @@ static const ym2203_interface ym2203_config =
 	NULL
 };
 
-static MACHINE_DRIVER_START( parentj )
+static const tc0080vco_interface parentj_intf =
+{
+	0, 1,	/* gfxnum, txnum */
+	1, 1, -2,
+	0
+};
 
+static MACHINE_START( taitoo )
+{
+	taitoo_state *state = machine.driver_data<taitoo_state>();
 
-	MDRV_CPU_ADD("maincpu", M68000,12000000 )		/*?? MHz */
-	MDRV_CPU_PROGRAM_MAP(parentj_map)
-	MDRV_CPU_VBLANK_INT_HACK(parentj_interrupt,2)
+	state->m_maincpu = machine.device("maincpu");
+	state->m_tc0080vco = machine.device("tc0080vco");
+}
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*16, 64*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 3*16, 31*16-1)
+static MACHINE_CONFIG_START( parentj, taitoo_state )
 
-	MDRV_GFXDECODE(parentj)
-	MDRV_PALETTE_LENGTH(33*16)
+	MCFG_CPU_ADD("maincpu", M68000,12000000 )		/*?? MHz */
+	MCFG_CPU_PROGRAM_MAP(parentj_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", parentj_interrupt, "screen", 0, 1)
 
-	MDRV_VIDEO_START(parentj)
-	MDRV_VIDEO_UPDATE(parentj)
+	MCFG_MACHINE_START(taitoo)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*16, 64*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 3*16, 31*16-1)
+	MCFG_SCREEN_UPDATE_STATIC(parentj)
 
-	MDRV_SOUND_ADD("ym", YM2203, 2000000) /*?? MHz */
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono",  0.25)
-	MDRV_SOUND_ROUTE(0, "mono", 0.25)
-	MDRV_SOUND_ROUTE(1, "mono",  1.0)
-	MDRV_SOUND_ROUTE(2, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(parentj)
+	MCFG_PALETTE_LENGTH(33*16)
+
+	MCFG_TC0080VCO_ADD("tc0080vco", parentj_intf)
+
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ymsnd", YM2203, 2000000) /*?? MHz */
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(0, "mono",  0.25)
+	MCFG_SOUND_ROUTE(0, "mono", 0.25)
+	MCFG_SOUND_ROUTE(1, "mono",  1.0)
+	MCFG_SOUND_ROUTE(2, "mono", 1.0)
+MACHINE_CONFIG_END
 
 ROM_START( parentj )
 	ROM_REGION( 0x20000, "maincpu", 0 ) /* 68000 Code */
@@ -281,4 +299,4 @@ ROM_START( parentj )
 	ROM_LOAD( "ampal22v10a-0233.c42", 0x000, 0x2dd, CRC(0c030a81) SHA1(0f8198df2cb046683d2db9ac8e609cdff53083ed) )
 ROM_END
 
-GAME( 1989, parentj,  0,        parentj,  parentj,  0, 		 ROT0,    "Taito", "Parent Jack", GAME_NOT_WORKING)
+GAME( 1989, parentj,  0,        parentj,  parentj,  0,        ROT0,    "Taito", "Parent Jack", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

@@ -18,16 +18,41 @@
     * Discrete filters
     * Starfield
 
+
+    Custom Chip 084 (Starfield generation)
+
+    * Inputs:
+    *
+    *      NE555 ==> 10 (approx 1 HZ)
+    *       401  ==>  1  (crystal clock, most likely around 6 MHz)
+    *       109  ==>  2  (Video related)
+    *       403  ==>  3  (Video related)
+    *       403  ==>  4  (Video related)
+    *       405  ==>  5  (Video related)
+    *       406  ==>  6  (Video related)
+    *       420  ==> 20  (Video related)
+    *       421  ==> 21  (Video related)
+    *       422  ==> 22  (Video related)
+    *       423  ==> 23  (Video horizontal signal H1)
+    *0x8206 HFF  ==>  7 (Horizontal flip)
+    *0x8204 407  ==>  8  (Enable ???)
+    *
+    *Outputs:
+    *   13      Red
+    *   14      Red
+    *   15      Green
+    *   16      Green
+    *   17      Blue
+    *   18      Blue
+
+
 ***************************************************************************/
 
-#include "driver.h"
-#include "tutankhm.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
+#include "includes/konamipt.h"
 #include "audio/timeplt.h"
-#include "konamipt.h"
-
-static UINT8 irq_toggle;
-static UINT8 irq_enable;
+#include "includes/tutankhm.h"
 
 
 /*************************************
@@ -38,20 +63,23 @@ static UINT8 irq_enable;
 
 static INTERRUPT_GEN( tutankhm_interrupt )
 {
+	tutankhm_state *state = device->machine().driver_data<tutankhm_state>();
+
 	/* flip flops cause the interrupt to be signalled every other frame */
-	irq_toggle ^= 1;
-	if (irq_toggle && irq_enable)
-		cpu_set_input_line(device, 0, ASSERT_LINE);
+	state->m_irq_toggle ^= 1;
+	if (state->m_irq_toggle && state->m_irq_enable)
+		device_set_input_line(device, 0, ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( irq_enable_w )
 {
-	irq_enable = data & 1;
-	if (!irq_enable)
-		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
-}
+	tutankhm_state *state = space->machine().driver_data<tutankhm_state>();
 
+	state->m_irq_enable = data & 1;
+	if (!state->m_irq_enable)
+		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
+}
 
 
 /*************************************
@@ -60,19 +88,10 @@ static WRITE8_HANDLER( irq_enable_w )
  *
  *************************************/
 
-static MACHINE_START( tutankhm )
-{
-	memory_configure_bank(machine, 1, 0, 16, memory_region(machine, "maincpu") + 0x10000, 0x1000);
-	state_save_register_global(machine, irq_toggle);
-	state_save_register_global(machine, irq_enable);
-}
-
-
 static WRITE8_HANDLER( tutankhm_bankselect_w )
 {
-	memory_set_bank(space->machine, 1, data & 0x0f);
+	memory_set_bank(space->machine(), "bank1", data & 0x0f);
 }
-
 
 
 /*************************************
@@ -83,15 +102,14 @@ static WRITE8_HANDLER( tutankhm_bankselect_w )
 
 static WRITE8_HANDLER( sound_mute_w )
 {
-	sound_global_enable(space->machine, ~data & 1);
+	space->machine().sound().system_mute(data & 1);
 }
 
 
 static WRITE8_HANDLER( tutankhm_coin_counter_w )
 {
-	coin_counter_w(offset ^ 1, data);
+	coin_counter_w(space->machine(), offset ^ 1, data);
 }
-
 
 
 /*************************************
@@ -100,18 +118,19 @@ static WRITE8_HANDLER( tutankhm_coin_counter_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0x8000, 0x800f) AM_MIRROR(0x00f0) AM_RAM AM_BASE(&paletteram)
-	AM_RANGE(0x8100, 0x8100) AM_MIRROR(0x000f) AM_RAM AM_BASE(&tutankhm_scroll)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_RAM AM_BASE_MEMBER(tutankhm_state, m_videoram)
+	AM_RANGE(0x8000, 0x800f) AM_MIRROR(0x00f0) AM_RAM AM_BASE_MEMBER(tutankhm_state, m_paletteram)
+	AM_RANGE(0x8100, 0x8100) AM_MIRROR(0x000f) AM_RAM AM_BASE_MEMBER(tutankhm_state, m_scroll)
 	AM_RANGE(0x8120, 0x8120) AM_MIRROR(0x000f) AM_READ(watchdog_reset_r)
 	AM_RANGE(0x8160, 0x8160) AM_MIRROR(0x000f) AM_READ_PORT("DSW2")	/* DSW2 (inverted bits) */
 	AM_RANGE(0x8180, 0x8180) AM_MIRROR(0x000f) AM_READ_PORT("IN0")	/* IN0 I/O: Coin slots, service, 1P/2P buttons */
 	AM_RANGE(0x81a0, 0x81a0) AM_MIRROR(0x000f) AM_READ_PORT("IN1")	/* IN1: Player 1 I/O */
 	AM_RANGE(0x81c0, 0x81c0) AM_MIRROR(0x000f) AM_READ_PORT("IN2")	/* IN2: Player 2 I/O */
 	AM_RANGE(0x81e0, 0x81e0) AM_MIRROR(0x000f) AM_READ_PORT("DSW1")	/* DSW1 (inverted bits) */
-	AM_RANGE(0x8200, 0x8200) AM_MIRROR(0x00f8) AM_READWRITE(SMH_NOP, irq_enable_w)
+	AM_RANGE(0x8200, 0x8200) AM_MIRROR(0x00f8) AM_READNOP AM_WRITE(irq_enable_w)
 	AM_RANGE(0x8202, 0x8203) AM_MIRROR(0x00f8) AM_WRITE(tutankhm_coin_counter_w)
+	AM_RANGE(0x8204, 0x8204) AM_MIRROR(0x00f8) AM_WRITENOP // starfield?
 	AM_RANGE(0x8205, 0x8205) AM_MIRROR(0x00f8) AM_WRITE(sound_mute_w)
 	AM_RANGE(0x8206, 0x8206) AM_MIRROR(0x00f8) AM_WRITE(tutankhm_flip_screen_x_w)
 	AM_RANGE(0x8207, 0x8207) AM_MIRROR(0x00f8) AM_WRITE(tutankhm_flip_screen_y_w)
@@ -119,10 +138,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8600, 0x8600) AM_MIRROR(0x00ff) AM_WRITE(timeplt_sh_irqtrigger_w)
 	AM_RANGE(0x8700, 0x8700) AM_MIRROR(0x00ff) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x8800, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9fff) AM_ROMBANK(1)
+	AM_RANGE(0x9000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
-
 
 
 /*************************************
@@ -137,14 +155,14 @@ static INPUT_PORTS_START( tutankhm )
 	PORT_DIPSETTING(    0x03, "3" )
 	PORT_DIPSETTING(    0x01, "4" )
 	PORT_DIPSETTING(    0x02, "5" )
-	PORT_DIPSETTING(    0x00, "256 (Cheat)")
+	PORT_DIPSETTING(    0x00, "255 (Cheat)")
 	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )     PORT_DIPLOCATION("SW2:3")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
 	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Bonus_Life ) )  PORT_DIPLOCATION("SW2:4")
 	PORT_DIPSETTING(    0x08, "30000" )
 	PORT_DIPSETTING(    0x00, "40000" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )  PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPNAME( 0x30, 0x20, DEF_STR( Difficulty ) )  PORT_DIPLOCATION("SW2:5,6")
 	PORT_DIPSETTING(    0x30, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
@@ -171,37 +189,57 @@ static INPUT_PORTS_START( tutankhm )
 INPUT_PORTS_END
 
 
-
 /*************************************
  *
  *  Machine drivers
  *
  *************************************/
 
-static MACHINE_DRIVER_START( tutankhm )
+static MACHINE_START( tutankhm )
+{
+	tutankhm_state *state = machine.driver_data<tutankhm_state>();
+
+	memory_configure_bank(machine, "bank1", 0, 16, machine.region("maincpu")->base() + 0x10000, 0x1000);
+
+	state->m_maincpu = machine.device<cpu_device>("maincpu");
+
+	state->save_item(NAME(state->m_irq_toggle));
+	state->save_item(NAME(state->m_irq_enable));
+	state->save_item(NAME(state->m_flip_x));
+	state->save_item(NAME(state->m_flip_y));
+}
+
+static MACHINE_RESET( tutankhm )
+{
+	tutankhm_state *state = machine.driver_data<tutankhm_state>();
+
+	state->m_irq_toggle = 0;
+	state->m_irq_enable = 0;
+	state->m_flip_x = 0;
+	state->m_flip_y = 0;
+}
+
+static MACHINE_CONFIG_START( tutankhm, tutankhm_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, 1500000)			/* 1.5 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", tutankhm_interrupt)
+	MCFG_CPU_ADD("maincpu", M6809, XTAL_18_432MHz/12)	/* 1.5 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", tutankhm_interrupt)
 
-	MDRV_MACHINE_START(tutankhm)
+	MCFG_MACHINE_START(tutankhm)
+	MCFG_MACHINE_RESET(tutankhm)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)	/* not sure about the visible area */
-
-	MDRV_VIDEO_START(tutankhm)
-	MDRV_VIDEO_UPDATE(tutankhm)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)	/* not sure about the visible area */
+	MCFG_SCREEN_UPDATE_STATIC(tutankhm)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(timeplt_sound)
-MACHINE_DRIVER_END
-
+	MCFG_FRAGMENT_ADD(timeplt_sound)
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -279,4 +317,4 @@ ROM_END
  *************************************/
 
 GAME( 1982, tutankhm, 0,        tutankhm, tutankhm, 0, ROT90, "Konami", "Tutankham", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS)
-GAME( 1982, tutankhms,tutankhm, tutankhm, tutankhm, 0, ROT90, "[Konami] (Stern license)", "Tutankham (Stern)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS)
+GAME( 1982, tutankhms,tutankhm, tutankhm, tutankhm, 0, ROT90, "Konami (Stern Electronics license)", "Tutankham (Stern Electronics)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS)

@@ -14,8 +14,6 @@
 #ifndef __MACHINE_GENERIC_H__
 #define __MACHINE_GENERIC_H__
 
-#include "mamecore.h"
-
 
 
 /***************************************************************************
@@ -33,21 +31,6 @@
 
 
 /***************************************************************************
-    GLOBAL VARIABLES
-***************************************************************************/
-
-extern UINT32 dispensed_tickets;
-extern UINT32 coin_count[COIN_COUNTERS];
-extern UINT32 coinlockedout[COIN_COUNTERS];
-
-extern size_t generic_nvram_size;
-extern UINT8 *generic_nvram;
-extern UINT16 *generic_nvram16;
-extern UINT32 *generic_nvram32;
-extern UINT64 *generic_nvram64;
-
-
-/***************************************************************************
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
@@ -55,75 +38,76 @@ extern UINT64 *generic_nvram64;
 /* ----- initialization ----- */
 
 /* set up all the common systems */
-void generic_machine_init(running_machine *machine);
+void generic_machine_init(running_machine &machine);
+
+
+
+/* ----- tickets ----- */
+
+/* return the number of tickets dispensed */
+int get_dispensed_tickets(running_machine &machine);
+
+/* increment the number of dispensed tickets */
+void increment_dispensed_tickets(running_machine &machine, int delta);
 
 
 
 /* ----- coin counters ----- */
 
 /* write to a particular coin counter (clocks on active high edge) */
-void coin_counter_w(int num, int on);
+void coin_counter_w(running_machine &machine, int num, int on);
+
+/* return the coin count for a given coin */
+int coin_counter_get_count(running_machine &machine, int num);
 
 /* enable/disable coin lockout for a particular coin */
-void coin_lockout_w(int num, int on);
+void coin_lockout_w(running_machine &machine, int num, int on);
+
+/* return current lockout state for a particular coin */
+int coin_lockout_get_state(running_machine &machine, int num);
 
 /* enable/disable global coin lockout */
-void coin_lockout_global_w(int on);
+void coin_lockout_global_w(running_machine &machine, int on);
 
 
 
 /* ----- NVRAM management ----- */
 
-/* open an NVRAM file directly */
-mame_file *nvram_fopen(running_machine *machine, UINT32 openflags);
-
 /* load NVRAM from a file */
-void nvram_load(running_machine *machine);
+void nvram_load(running_machine &machine);
 
 /* save NVRAM to a file */
-void nvram_save(running_machine *machine);
-
-/* generic NVRAM handler that defaults to a 0 fill */
-NVRAM_HANDLER( generic_0fill );
-
-/* generic NVRAM handler that defaults to a 1 fill */
-NVRAM_HANDLER( generic_1fill );
-
-/* generic NVRAM handler that defaults to a random fill */
-NVRAM_HANDLER( generic_randfill );
+void nvram_save(running_machine &machine);
 
 
 
 /* ----- memory card management ----- */
 
 /* create a new memory card with the given index */
-int memcard_create(running_machine *machine, int index, int overwrite);
+int memcard_create(running_machine &machine, int index, int overwrite);
 
 /* "insert" a memory card with the given index and load its data */
-int memcard_insert(running_machine *machine, int index);
+int memcard_insert(running_machine &machine, int index);
 
 /* "eject" a memory card and save its data */
-void memcard_eject(running_machine *machine);
+void memcard_eject(running_machine &machine);
 
 /* returns the index of the current memory card, or -1 if none */
-int memcard_present(void);
+int memcard_present(running_machine &machine);
 
 
 
 /* ----- miscellaneous bits & pieces ----- */
 
 /* set the status of an LED */
-void set_led_status(int num, int value);
+void set_led_status(running_machine &machine, int num, int value);
 
 
 
 /* ----- interrupt enable and vector helpers ----- */
 
-void generic_pulse_irq_line(const device_config *device, int irqline);
-void generic_pulse_irq_line_and_vector(const device_config *device, int irqline, int vector);
-void cpu_interrupt_enable(const device_config *device, int enabled);
-READ8_HANDLER( interrupt_enable_r );
-WRITE8_HANDLER( interrupt_enable_w );
+void generic_pulse_irq_line(device_t *device, int irqline);
+void generic_pulse_irq_line_and_vector(device_t *device, int irqline, int vector);
 
 
 

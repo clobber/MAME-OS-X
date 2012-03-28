@@ -63,10 +63,9 @@ pb 8bit io
 pc 8bit
 */
 
-#include "cpuintrf.h"
 
 
-typedef UINT8 (*lh5801_in_func)(const device_config *device);
+typedef UINT8 (*lh5801_in_func)(device_t *device);
 
 typedef struct _lh5801_cpu_core lh5801_cpu_core;
 struct _lh5801_cpu_core
@@ -74,11 +73,13 @@ struct _lh5801_cpu_core
 	lh5801_in_func	in;
 };
 
-#define LH5801_INT_NONE 0
-#define LH5801_IRQ 1
+// input lines
+enum
+{
+	LH5801_LINE_MI,		//maskable interrupt
+};
 
-CPU_GET_INFO( lh5801 );
-#define CPU_LH5801 CPU_GET_INFO_NAME( lh5801 )
+DECLARE_LEGACY_CPU_DEVICE(LH5801, lh5801);
 extern CPU_DISASSEMBLE( lh5801 );
 
 #endif /* __LH5801_H__ */

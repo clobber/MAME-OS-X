@@ -226,19 +226,14 @@
 
 #define MASTER_CLOCK	XTAL_16MHz
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "machine/8255ppi.h"
-
+#include "machine/nvram.h"
 #include "poker41.lh"
 #include "pulltabs.lh"
-
-/* from video */
-WRITE8_HANDLER( gat_videoram_w );
-PALETTE_INIT( gat );
-VIDEO_START( gat );
-VIDEO_UPDATE( gat );
+#include "includes/gatron.h"
 
 
 /****************************
@@ -342,15 +337,15 @@ static const ppi8255_interface ppi8255_intf =
 * Memory Map Information *
 *************************/
 
-static ADDRESS_MAP_START( gat_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gat_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x63ff) AM_RAM_WRITE(gat_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* battery backed RAM */
-	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("sn", sn76496_w)							/* PSG */
+	AM_RANGE(0x6000, 0x63ff) AM_RAM_WRITE(gat_videoram_w) AM_BASE_MEMBER(gatron_state, m_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_SHARE("nvram")	/* battery backed RAM */
+	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("snsnd", sn76496_w)							/* PSG */
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(output_port_0_w)										/* lamps */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gat_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( gat_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ppi8255", ppi8255_r, ppi8255_w)
 ADDRESS_MAP_END
@@ -437,37 +432,36 @@ GFXDECODE_END
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_DRIVER_START( gat )
+static MACHINE_CONFIG_START( gat, gatron_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/24)	/* 666.66 kHz, guess */
-	MDRV_CPU_PROGRAM_MAP(gat_map)
-	MDRV_CPU_IO_MAP(gat_portmap)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/24)	/* 666.66 kHz, guess */
+	MCFG_CPU_PROGRAM_MAP(gat_map)
+	MCFG_CPU_IO_MAP(gat_portmap)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_PPI8255_ADD( "ppi8255", ppi8255_intf )
+	MCFG_PPI8255_ADD( "ppi8255", ppi8255_intf )
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(48*8, 16*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 16*16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(48*8, 16*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 16*16-1)
+	MCFG_SCREEN_UPDATE_STATIC(gat)
 
-	MDRV_GFXDECODE(gat)
-	MDRV_PALETTE_INIT(gat)
-	MDRV_PALETTE_LENGTH(8)
-	MDRV_VIDEO_START(gat)
-	MDRV_VIDEO_UPDATE(gat)
+	MCFG_GFXDECODE(gat)
+	MCFG_PALETTE_INIT(gat)
+	MCFG_PALETTE_LENGTH(8)
+	MCFG_VIDEO_START(gat)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("sn", SN76496, MASTER_CLOCK/8 )	/* 2 MHz, guess */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.00)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("snsnd", SN76496, MASTER_CLOCK/8 )	/* 2 MHz, guess */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.00)
+MACHINE_CONFIG_END
 
 
 /*************************

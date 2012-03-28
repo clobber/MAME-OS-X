@@ -3,16 +3,15 @@
 #ifndef __LR35902_H__
 #define __LR35902_H__
 
-#include "cpuintrf.h"
 
-typedef void (*lr35902_timer_fired_func)(const device_config *device, int cycles);
+typedef void (*lr35902_timer_fired_func)(device_t *device, int cycles);
 
 typedef struct _lr35902_cpu_core lr35902_cpu_core;
 struct _lr35902_cpu_core
 {
 	const UINT16	*regs;
 	UINT8			features;
-	lr35902_timer_fired_func timer_fired_func;
+	lr35902_timer_fired_func timer_expired_func;
 };
 
 enum
@@ -30,8 +29,7 @@ enum
 /****************************************************************************/
 /* Return register contents                                                 */
 /****************************************************************************/
-extern CPU_GET_INFO( lr35902 );
-#define CPU_LR35902 CPU_GET_INFO_NAME( lr35902 )
+DECLARE_LEGACY_CPU_DEVICE(LR35902, lr35902);
 
 extern CPU_DISASSEMBLE( lr35902 );
 

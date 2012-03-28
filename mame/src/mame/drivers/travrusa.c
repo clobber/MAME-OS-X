@@ -47,29 +47,18 @@ and 2764 eprom (swapped D3/D4 and D5/D6 data lines)
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "audio/irem.h"
-
-extern UINT8 *travrusa_videoram;
-
-PALETTE_INIT( travrusa );
-PALETTE_INIT( shtrider );
-VIDEO_START( travrusa );
-WRITE8_HANDLER( travrusa_videoram_w );
-WRITE8_HANDLER( travrusa_scroll_x_low_w );
-WRITE8_HANDLER( travrusa_scroll_x_high_w );
-WRITE8_HANDLER( travrusa_flipscreen_w );
-VIDEO_UPDATE( travrusa );
+#include "includes/travrusa.h"
 
 
-
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE(&travrusa_videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE_MEMBER(travrusa_state, m_videoram)
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(travrusa_scroll_x_low_w)
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(travrusa_scroll_x_high_w)
-	AM_RANGE(0xc800, 0xc9ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(travrusa_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(travrusa_flipscreen_w)	/* + coin counters - not written by shtrider */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("SYSTEM")		/* IN0 */
@@ -300,45 +289,50 @@ static GFXDECODE_START( shtrider )
 	GFXDECODE_ENTRY( "gfx2", 0, shtrider_spritelayout, 16*8, 16 )
 GFXDECODE_END
 
+static MACHINE_RESET( travrusa )
+{
+	travrusa_state *state = machine.driver_data<travrusa_state>();
 
+	state->m_scrollx[0] = 0;
+	state->m_scrollx[1] = 0;
+}
 
-static MACHINE_DRIVER_START( travrusa )
+static MACHINE_CONFIG_START( travrusa, travrusa_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_MACHINE_RESET(travrusa)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(56.75)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(56.75)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
 				/* the Lode Runner manual (similar but different hardware) */
 				/* talks about 55Hz and 1790ms vblank duration. */
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(travrusa)
 
-	MDRV_GFXDECODE(travrusa)
+	MCFG_GFXDECODE(travrusa)
 
-	MDRV_PALETTE_LENGTH(16*8+16*8)
+	MCFG_PALETTE_LENGTH(16*8+16*8)
 
-	MDRV_PALETTE_INIT(travrusa)
-	MDRV_VIDEO_START(travrusa)
-	MDRV_VIDEO_UPDATE(travrusa)
+	MCFG_PALETTE_INIT(travrusa)
+	MCFG_VIDEO_START(travrusa)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(m52_sound_c_audio)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( shtrider )
-
-	MDRV_IMPORT_FROM(travrusa)
+static MACHINE_CONFIG_DERIVED( shtrider, travrusa )
 
 	/* video hardware */
-	MDRV_GFXDECODE(shtrider)
-	MDRV_PALETTE_INIT(shtrider)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(shtrider)
+	MCFG_PALETTE_INIT(shtrider)
+MACHINE_CONFIG_END
 
 
 
@@ -458,26 +452,26 @@ ROM_END
 
 static DRIVER_INIT( motorace )
 {
-	int A,j;
-	UINT8 *rom = memory_region(machine, "maincpu");
-	UINT8 *buffer = alloc_array_or_die(UINT8, 0x2000);
+	int A, j;
+	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *buffer = auto_alloc_array(machine, UINT8, 0x2000);
 
-		memcpy(buffer,rom,0x2000);
+	memcpy(buffer, rom, 0x2000);
 
-		/* The first CPU ROM has the address and data lines scrambled */
-		for (A = 0;A < 0x2000;A++)
-		{
-			j = BITSWAP16(A,15,14,13,9,7,5,3,1,12,10,8,6,4,2,0,11);
-			rom[j] = BITSWAP8(buffer[A],2,7,4,1,6,3,0,5);
-		}
+	/* The first CPU ROM has the address and data lines scrambled */
+	for (A = 0; A < 0x2000; A++)
+	{
+		j = BITSWAP16(A,15,14,13,9,7,5,3,1,12,10,8,6,4,2,0,11);
+		rom[j] = BITSWAP8(buffer[A],2,7,4,1,6,3,0,5);
+	}
 
-		free(buffer);
+	auto_free(machine, buffer);
 }
 
 static DRIVER_INIT( shtridra )
 {
 	int A;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* D3/D4  and  D5/D6 swapped */
 	for (A = 0; A < 0x2000; A++)
@@ -486,7 +480,7 @@ static DRIVER_INIT( shtridra )
 
 
 
-GAME( 1983, travrusa, 0,        travrusa, travrusa, 0,        ROT270, "Irem", "Traverse USA / Zippy Race", 0 )
-GAME( 1983, motorace, travrusa, travrusa, motorace, motorace, ROT270, "Irem (Williams license)", "MotoRace USA", 0 )
-GAME( 1985, shtrider, 0,        shtrider, shtrider, 0,        ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu", "Shot Rider", 0 )
-GAME( 1984, shtridera,shtrider, shtrider, shtrider, shtridra, ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu (Sigma license)", "Shot Rider (Sigma license)", 0 )
+GAME( 1983, travrusa, 0,        travrusa, travrusa, 0,        ROT270, "Irem", "Traverse USA / Zippy Race", GAME_SUPPORTS_SAVE )
+GAME( 1983, motorace, travrusa, travrusa, motorace, motorace, ROT270, "Irem (Williams license)", "MotoRace USA", GAME_SUPPORTS_SAVE )
+GAME( 1985, shtrider, 0,        shtrider, shtrider, 0,        ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu", "Shot Rider", GAME_SUPPORTS_SAVE )
+GAME( 1984, shtridera,shtrider, shtrider, shtrider, shtridra, ROT270|ORIENTATION_FLIP_X, "Seibu Kaihatsu (Sigma license)", "Shot Rider (Sigma license)", GAME_SUPPORTS_SAVE )

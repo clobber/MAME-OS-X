@@ -167,18 +167,15 @@ Cisco Heat.
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-#include "megasys1.h"
+#include "machine/jalcrpt.h"
 #include "includes/cischeat.h"
 
-static UINT16 *rom_1, *rom_2, *rom_3;
-static UINT16 *sharedram1, *sharedram2;
-
-
+#include "cischeat.lh"
+#include "f1gpstar.lh"
 
 /**************************************************************************
 
@@ -188,16 +185,6 @@ static UINT16 *sharedram1, *sharedram2;
 
 **************************************************************************/
 
-static READ16_HANDLER( sharedram1_r )  {return sharedram1[offset];}
-static READ16_HANDLER( sharedram2_r )  {return sharedram2[offset];}
-
-static WRITE16_HANDLER( sharedram1_w ) {COMBINE_DATA(&sharedram1[offset]);}
-static WRITE16_HANDLER( sharedram2_w ) {COMBINE_DATA(&sharedram2[offset]);}
-
-static READ16_HANDLER( rom_1_r ) {return rom_1[offset];}
-static READ16_HANDLER( rom_2_r ) {return rom_2[offset];}
-static READ16_HANDLER( rom_3_r ) {return rom_3[offset];}
-
 
 /**************************************************************************
                                 Big Run
@@ -205,41 +192,41 @@ static READ16_HANDLER( rom_3_r ) {return rom_3[offset];}
 
 static WRITE16_HANDLER( bigrun_paletteram16_w )
 {
-	UINT16 word = COMBINE_DATA(&paletteram16[offset]);
+	UINT16 word = COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
 	int r = pal5bit(((word >> 11) & 0x1E ) | ((word >> 3) & 0x01));
 	int g = pal5bit(((word >> 7 ) & 0x1E ) | ((word >> 2) & 0x01));
 	int b = pal5bit(((word >> 3 ) & 0x1E ) | ((word >> 1) & 0x01));
 
 	// Scroll 0
-	if ( (offset >= 0x0e00/2) && (offset <= 0x0fff/2) ) { palette_set_color(space->machine, 0x000 + offset - 0x0e00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x0e00/2) && (offset <= 0x0fff/2) ) { palette_set_color(space->machine(), 0x000 + offset - 0x0e00/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 1
-	if ( (offset >= 0x1600/2) && (offset <= 0x17ff/2) ) { palette_set_color(space->machine, 0x100 + offset - 0x1600/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x1600/2) && (offset <= 0x17ff/2) ) { palette_set_color(space->machine(), 0x100 + offset - 0x1600/2, MAKE_RGB(r,g,b) ); return;}
 	// Road 0
-	if ( (offset >= 0x1800/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine, 0x200 + offset - 0x1800/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x1800/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine(), 0x200 + offset - 0x1800/2, MAKE_RGB(r,g,b) ); return;}
 	// Road 1
-	if ( (offset >= 0x2000/2) && (offset <= 0x27ff/2) ) { palette_set_color(space->machine, 0x600 + offset - 0x2000/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x2000/2) && (offset <= 0x27ff/2) ) { palette_set_color(space->machine(), 0x600 + offset - 0x2000/2, MAKE_RGB(r,g,b) ); return;}
 	// Sprites
-	if ( (offset >= 0x2800/2) && (offset <= 0x2fff/2) ) { palette_set_color(space->machine, 0xa00 + offset - 0x2800/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x2800/2) && (offset <= 0x2fff/2) ) { palette_set_color(space->machine(), 0xa00 + offset - 0x2800/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 2
-	if ( (offset >= 0x3600/2) && (offset <= 0x37ff/2) ) { palette_set_color(space->machine, 0xe00 + offset - 0x3600/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x3600/2) && (offset <= 0x37ff/2) ) { palette_set_color(space->machine(), 0xe00 + offset - 0x3600/2, MAKE_RGB(r,g,b) ); return;}
 }
 
-static ADDRESS_MAP_START( bigrun_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bigrun_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM																	// ROM
-	AM_RANGE(0x080000, 0x083fff) AM_READWRITE(bigrun_vregs_r, bigrun_vregs_w) AM_BASE(&megasys1_vregs)	// Vregs
-	AM_RANGE(0x084000, 0x087fff) AM_WRITE(SMH_RAM)														// Linking with other units
-	AM_RANGE(0x088000, 0x08bfff) AM_READWRITE(sharedram2_r, sharedram2_w) AM_BASE(&sharedram2)			// Sharedram with sub CPU#2
-	AM_RANGE(0x08c000, 0x08ffff) AM_READWRITE(sharedram1_r, sharedram1_w) AM_BASE(&sharedram1)			// Sharedram with sub CPU#1
+	AM_RANGE(0x080000, 0x083fff) AM_READWRITE(bigrun_vregs_r, bigrun_vregs_w) AM_BASE_MEMBER(cischeat_state, m_vregs)	// Vregs
+	AM_RANGE(0x084000, 0x087fff) AM_RAM													// Linking with other units
+	AM_RANGE(0x088000, 0x08bfff) AM_RAM AM_SHARE("share2") // Sharedram with sub CPU#2
+	AM_RANGE(0x08c000, 0x08ffff) AM_RAM AM_SHARE("share1") // Sharedram with sub CPU#1
 
 	/* Only writes to the first 0x40000 bytes affect the tilemaps:             */
 	/* either these games support larger tilemaps or have more ram than needed */
-	AM_RANGE(0x090000, 0x093fff) AM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])		// Scroll ram 0
-	AM_RANGE(0x094000, 0x097fff) AM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])		// Scroll ram 1
-	AM_RANGE(0x098000, 0x09bfff) AM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])		// Scroll ram 2
+	AM_RANGE(0x090000, 0x093fff) AM_WRITE(cischeat_scrollram_0_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[0])		// Scroll ram 0
+	AM_RANGE(0x094000, 0x097fff) AM_WRITE(cischeat_scrollram_1_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[1])		// Scroll ram 1
+	AM_RANGE(0x098000, 0x09bfff) AM_WRITE(cischeat_scrollram_2_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[2])		// Scroll ram 2
 
-	AM_RANGE(0x09c000, 0x09ffff) AM_WRITE(bigrun_paletteram16_w) AM_BASE(&paletteram16	)				// Palettes
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)											// RAM
-	AM_RANGE(0x100000, 0x13ffff) AM_READWRITE(rom_1_r, SMH_ROM)											// ROM
+	AM_RANGE(0x09c000, 0x09ffff) AM_WRITE(bigrun_paletteram16_w) AM_BASE_GENERIC(paletteram)				// Palettes
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_ram)											// RAM
+	AM_RANGE(0x100000, 0x13ffff) AM_ROM AM_REGION("user1",0)														// ROM
 ADDRESS_MAP_END
 
 
@@ -258,28 +245,28 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( cischeat_paletteram16_w )
 {
-	UINT16 word = COMBINE_DATA(&paletteram16[offset]);
+	UINT16 word = COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
 	int r = pal5bit(((word >> 11) & 0x1E ) | ((word >> 3) & 0x01));
 	int g = pal5bit(((word >> 7 ) & 0x1E ) | ((word >> 2) & 0x01));
 	int b = pal5bit(((word >> 3 ) & 0x1E ) | ((word >> 1) & 0x01));
 
 	// Scroll 0
-	if ( (offset >= 0x1c00/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine, 0x000 + offset - 0x1c00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x1c00/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine(), 0x000 + offset - 0x1c00/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 1
-	if ( (offset >= 0x2c00/2) && (offset <= 0x2fff/2) ) { palette_set_color(space->machine, 0x200 + offset - 0x2c00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x2c00/2) && (offset <= 0x2fff/2) ) { palette_set_color(space->machine(), 0x200 + offset - 0x2c00/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 2
-	if ( (offset >= 0x6c00/2) && (offset <= 0x6fff/2) ) { palette_set_color(space->machine, 0x400 + offset - 0x6c00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x6c00/2) && (offset <= 0x6fff/2) ) { palette_set_color(space->machine(), 0x400 + offset - 0x6c00/2, MAKE_RGB(r,g,b) ); return;}
 	// Road 0
-	if ( (offset >= 0x3800/2) && (offset <= 0x3fff/2) ) { palette_set_color(space->machine, 0x600 + offset - 0x3800/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x3800/2) && (offset <= 0x3fff/2) ) { palette_set_color(space->machine(), 0x600 + offset - 0x3800/2, MAKE_RGB(r,g,b) ); return;}
 	// Road 1
-	if ( (offset >= 0x4800/2) && (offset <= 0x4fff/2) ) { palette_set_color(space->machine, 0xa00 + offset - 0x4800/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x4800/2) && (offset <= 0x4fff/2) ) { palette_set_color(space->machine(), 0xa00 + offset - 0x4800/2, MAKE_RGB(r,g,b) ); return;}
 	// Sprites
-	if ( (offset >= 0x5000/2) && (offset <= 0x5fff/2) ) { palette_set_color(space->machine, 0xe00 + offset - 0x5000/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x5000/2) && (offset <= 0x5fff/2) ) { palette_set_color(space->machine(), 0xe00 + offset - 0x5000/2, MAKE_RGB(r,g,b) ); return;}
 }
 
-static ADDRESS_MAP_START( cischeat_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( cischeat_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM 																	// ROM
-	AM_RANGE(0x080000, 0x087fff) AM_READWRITE(cischeat_vregs_r, cischeat_vregs_w)  AM_BASE(&megasys1_vregs)	// Vregs
+	AM_RANGE(0x080000, 0x087fff) AM_READWRITE(cischeat_vregs_r, cischeat_vregs_w)  AM_BASE_MEMBER(cischeat_state, m_vregs)	// Vregs
 	AM_RANGE(0x088000, 0x088fff) AM_RAM 																	// Linking with other units
 
 /*  Only the first 0x800 bytes are tested but:
@@ -288,19 +275,19 @@ static ADDRESS_MAP_START( cischeat_map, ADDRESS_SPACE_PROGRAM, 16 )
     No mem access error from the other CPU's, though.. */
 
 	/* this is the right order of sharedram's */
-	AM_RANGE(0x090000, 0x097fff) AM_READWRITE(sharedram2_r, sharedram2_w) AM_BASE(&sharedram2) 				// Sharedram with sub CPU#2
-	AM_RANGE(0x098000, 0x09ffff) AM_READWRITE(sharedram1_r, sharedram1_w) AM_BASE(&sharedram1) 				// Sharedram with sub CPU#1
+	AM_RANGE(0x090000, 0x097fff) AM_RAM AM_SHARE("share2") // Sharedram with sub CPU#2
+	AM_RANGE(0x098000, 0x09ffff) AM_RAM AM_SHARE("share1") // Sharedram with sub CPU#1
 
 	/* Only writes to the first 0x40000 bytes affect the tilemaps:             */
 	/* either these games support larger tilemaps or have more ram than needed */
-	AM_RANGE(0x0a0000, 0x0a7fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0]) 		// Scroll ram 0
-	AM_RANGE(0x0a8000, 0x0affff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1]) 		// Scroll ram 1
-	AM_RANGE(0x0b0000, 0x0b7fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2]) 		// Scroll ram 2
+	AM_RANGE(0x0a0000, 0x0a7fff) AM_RAM_WRITE(cischeat_scrollram_0_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[0])		// Scroll ram 0
+	AM_RANGE(0x0a8000, 0x0affff) AM_RAM_WRITE(cischeat_scrollram_1_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[1])		// Scroll ram 1
+	AM_RANGE(0x0b0000, 0x0b7fff) AM_RAM_WRITE(cischeat_scrollram_2_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[2])		// Scroll ram 2
 
-	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(cischeat_paletteram16_w) AM_BASE(&paletteram16) 				// Palettes
+	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(cischeat_paletteram16_w) AM_BASE_GENERIC(paletteram)				// Palettes
 
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)												// RAM
-	AM_RANGE(0x100000, 0x17ffff) AM_READWRITE(rom_1_r, SMH_ROM)												// ROM
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_ram)												// RAM
+	AM_RANGE(0x100000, 0x17ffff) AM_ROM AM_REGION("user1",0)															// ROM
 ADDRESS_MAP_END
 
 
@@ -310,23 +297,23 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( f1gpstar_paletteram16_w )
 {
-	UINT16 word = COMBINE_DATA(&paletteram16[offset]);
+	UINT16 word = COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
 	int r = pal5bit(((word >> 11) & 0x1E ) | ((word >> 3) & 0x01));
 	int g = pal5bit(((word >> 7 ) & 0x1E ) | ((word >> 2) & 0x01));
 	int b = pal5bit(((word >> 3 ) & 0x1E ) | ((word >> 1) & 0x01));
 
 	// Scroll 0
-	if ( (offset >= 0x1e00/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine, 0x000 + offset - 0x1e00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x1e00/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine(), 0x000 + offset - 0x1e00/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 1
-	if ( (offset >= 0x2e00/2) && (offset <= 0x2fff/2) ) { palette_set_color(space->machine, 0x100 + offset - 0x2e00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x2e00/2) && (offset <= 0x2fff/2) ) { palette_set_color(space->machine(), 0x100 + offset - 0x2e00/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 2
-	if ( (offset >= 0x6e00/2) && (offset <= 0x6fff/2) ) { palette_set_color(space->machine, 0x200 + offset - 0x6e00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x6e00/2) && (offset <= 0x6fff/2) ) { palette_set_color(space->machine(), 0x200 + offset - 0x6e00/2, MAKE_RGB(r,g,b) ); return;}
 	// Road 0
-	if ( (offset >= 0x3800/2) && (offset <= 0x3fff/2) ) { palette_set_color(space->machine, 0x300 + offset - 0x3800/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x3800/2) && (offset <= 0x3fff/2) ) { palette_set_color(space->machine(), 0x300 + offset - 0x3800/2, MAKE_RGB(r,g,b) ); return;}
 	// Road 1
-	if ( (offset >= 0x4800/2) && (offset <= 0x4fff/2) ) { palette_set_color(space->machine, 0x700 + offset - 0x4800/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x4800/2) && (offset <= 0x4fff/2) ) { palette_set_color(space->machine(), 0x700 + offset - 0x4800/2, MAKE_RGB(r,g,b) ); return;}
 	// Sprites
-	if ( (offset >= 0x5000/2) && (offset <= 0x5fff/2) ) { palette_set_color(space->machine, 0xb00 + offset - 0x5000/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x5000/2) && (offset <= 0x5fff/2) ) { palette_set_color(space->machine(), 0xb00 + offset - 0x5000/2, MAKE_RGB(r,g,b) ); return;}
 }
 
 /*  F1 GP Star tests:
@@ -337,24 +324,24 @@ static WRITE16_HANDLER( f1gpstar_paletteram16_w )
     098800-099000
     0F8000-0F9000   */
 
-static ADDRESS_MAP_START( f1gpstar_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gpstar_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM 																	// ROM
-	AM_RANGE(0x080000, 0x087fff) AM_READWRITE(f1gpstar_vregs_r, f1gpstar_vregs_w) AM_BASE(&megasys1_vregs)	// Vregs
+	AM_RANGE(0x080000, 0x087fff) AM_READWRITE(f1gpstar_vregs_r, f1gpstar_vregs_w) AM_BASE_MEMBER(cischeat_state, m_vregs)	// Vregs
 	AM_RANGE(0x088000, 0x088fff) AM_RAM																		// Linking with other units
 
-	AM_RANGE(0x090000, 0x097fff) AM_READWRITE(sharedram2_r, sharedram2_w) AM_BASE(&sharedram2)				// Sharedram with sub CPU#2
-	AM_RANGE(0x098000, 0x09ffff) AM_READWRITE(sharedram1_r, sharedram1_w) AM_BASE(&sharedram1)				// Sharedram with sub CPU#1
+	AM_RANGE(0x090000, 0x097fff) AM_RAM AM_SHARE("share2") // Sharedram with sub CPU#2
+	AM_RANGE(0x098000, 0x09ffff) AM_RAM AM_SHARE("share1") // Sharedram with sub CPU#1
 
 	/* Only writes to the first 0x40000 bytes affect the tilemaps:             */
 	/* either these games support larger tilemaps or have more ram than needed */
-	AM_RANGE(0x0a0000, 0x0a7fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])		// Scroll ram 0
-	AM_RANGE(0x0a8000, 0x0affff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])		// Scroll ram 1
-	AM_RANGE(0x0b0000, 0x0b7fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])		// Scroll ram 2
+	AM_RANGE(0x0a0000, 0x0a7fff) AM_RAM_WRITE(cischeat_scrollram_0_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[0])		// Scroll ram 0
+	AM_RANGE(0x0a8000, 0x0affff) AM_RAM_WRITE(cischeat_scrollram_1_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[1])		// Scroll ram 1
+	AM_RANGE(0x0b0000, 0x0b7fff) AM_RAM_WRITE(cischeat_scrollram_2_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[2])		// Scroll ram 2
 
-	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(f1gpstar_paletteram16_w) AM_BASE(&paletteram16)				// Palettes
+	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(f1gpstar_paletteram16_w) AM_BASE_GENERIC(paletteram)				// Palettes
 
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)												// RAM
-	AM_RANGE(0x100000, 0x17ffff) AM_READWRITE(rom_1_r, SMH_ROM)												// ROM
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_ram)												// RAM
+	AM_RANGE(0x100000, 0x17ffff) AM_ROM AM_REGION("user1",0)															// ROM
 ADDRESS_MAP_END
 
 
@@ -363,24 +350,24 @@ ADDRESS_MAP_END
 **************************************************************************/
 
 // Same as f1gpstar, but vregs are slightly different:
-static ADDRESS_MAP_START( f1gpstr2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gpstr2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM																		// ROM
-	AM_RANGE(0x080000, 0x087fff) AM_READWRITE(f1gpstr2_vregs_r, f1gpstr2_vregs_w) AM_BASE(&megasys1_vregs)	// Vregs (slightly different from f1gpstar)
+	AM_RANGE(0x080000, 0x087fff) AM_READWRITE(f1gpstr2_vregs_r, f1gpstr2_vregs_w) AM_BASE_MEMBER(cischeat_state, m_vregs)	// Vregs (slightly different from f1gpstar)
 	AM_RANGE(0x088000, 0x088fff) AM_RAM																		// Linking with other units
 
-	AM_RANGE(0x090000, 0x097fff) AM_READWRITE(sharedram2_r, sharedram2_w) AM_BASE(&sharedram2)				// Sharedram with sub CPU#2
-	AM_RANGE(0x098000, 0x09ffff) AM_READWRITE(sharedram2_r, sharedram1_w) AM_BASE(&sharedram1)				// Sharedram with sub CPU#1
+	AM_RANGE(0x090000, 0x097fff) AM_RAM AM_SHARE("share2") // Sharedram with sub CPU#2
+	AM_RANGE(0x098000, 0x09ffff) AM_RAM AM_SHARE("share1") // Sharedram with sub CPU#1
 
 	/* Only writes to the first 0x40000 bytes affect the tilemaps:             */
 	/* either these games support larger tilemaps or have more ram than needed */
-	AM_RANGE(0x0a0000, 0x0a7fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])		// Scroll ram 0
-	AM_RANGE(0x0a8000, 0x0affff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])		// Scroll ram 1
-	AM_RANGE(0x0b0000, 0x0b7fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])		// Scroll ram 2
+	AM_RANGE(0x0a0000, 0x0a7fff) AM_RAM_WRITE(cischeat_scrollram_0_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[0])		// Scroll ram 0
+	AM_RANGE(0x0a8000, 0x0affff) AM_RAM_WRITE(cischeat_scrollram_1_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[1])		// Scroll ram 1
+	AM_RANGE(0x0b0000, 0x0b7fff) AM_RAM_WRITE(cischeat_scrollram_2_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[2])		// Scroll ram 2
 
-	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(f1gpstar_paletteram16_w) AM_BASE(&paletteram16)				// Palettes
+	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(f1gpstar_paletteram16_w) AM_BASE_GENERIC(paletteram)				// Palettes
 
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)												// RAM
-	AM_RANGE(0x100000, 0x17ffff) AM_READWRITE(rom_1_r, SMH_ROM)												// ROM
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_ram)												// RAM
+	AM_RANGE(0x100000, 0x17ffff) AM_ROM AM_REGION("user1",0)															// ROM
 ADDRESS_MAP_END
 
 
@@ -390,22 +377,21 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( scudhamm_paletteram16_w )
 {
-	int newword = COMBINE_DATA(&paletteram16[offset]);
+	int newword = COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
 
 	int r = pal5bit(((newword >> 11) & 0x1E ) | ((newword >> 3) & 0x01));
 	int g = pal5bit(((newword >> 7 ) & 0x1E ) | ((newword >> 2) & 0x01));
 	int b = pal5bit(((newword >> 3 ) & 0x1E ) | ((newword >> 1) & 0x01));
 
 	// Scroll 0
-	if ( (offset >= 0x1e00/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine, 0x000 + offset - 0x1e00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x1e00/2) && (offset <= 0x1fff/2) ) { palette_set_color(space->machine(), 0x000 + offset - 0x1e00/2, MAKE_RGB(r,g,b) ); return;}
 	// Scroll 2
-	if ( (offset >= 0x4e00/2) && (offset <= 0x4fff/2) ) { palette_set_color(space->machine, 0x100 + offset - 0x4e00/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x4e00/2) && (offset <= 0x4fff/2) ) { palette_set_color(space->machine(), 0x100 + offset - 0x4e00/2, MAKE_RGB(r,g,b) ); return;}
 	// Sprites
-	if ( (offset >= 0x3000/2) && (offset <= 0x3fff/2) ) { palette_set_color(space->machine, 0x200 + offset - 0x3000/2, MAKE_RGB(r,g,b) ); return;}
+	if ( (offset >= 0x3000/2) && (offset <= 0x3fff/2) ) { palette_set_color(space->machine(), 0x200 + offset - 0x3000/2, MAKE_RGB(r,g,b) ); return;}
 }
 
 
-UINT16 scudhamm_motor_command;
 
 /*  Motor Status.
 
@@ -417,7 +403,8 @@ UINT16 scudhamm_motor_command;
 
 READ16_HANDLER( scudhamm_motor_status_r )
 {
-	return scudhamm_motor_command;	// Motor Status
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	return state->m_scudhamm_motor_command;	// Motor Status
 }
 
 
@@ -437,22 +424,23 @@ READ16_HANDLER( scudhamm_motor_pos_r )
 
 static WRITE16_HANDLER( scudhamm_motor_command_w )
 {
-	COMBINE_DATA( &scudhamm_motor_command );
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	COMBINE_DATA( &state->m_scudhamm_motor_command );
 }
 
 
 READ16_HANDLER( scudhamm_analog_r )
 {
-	static int prev=0;
-	int i=input_port_read(space->machine, "IN1"),j;
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	int i=input_port_read(space->machine(), "IN1"),j;
 
-	if ((i^prev)&0x4000) {
-		if (i<prev) prev-=0x8000;
-		else prev+=0x8000;
+	if ((i^state->m_prev)&0x4000) {
+		if (i<state->m_prev) state->m_prev-=0x8000;
+		else state->m_prev+=0x8000;
 	}
 
-	j=i-prev;
-	prev=i;
+	j=i-state->m_prev;
+	state->m_prev=i;
 
 	/* effect of hammer collision 'accelerometer':
     $00 - $09 - no hit
@@ -472,15 +460,15 @@ static WRITE16_HANDLER( scudhamm_leds_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
- 		set_led_status(0, data & 0x0100);	// 3 buttons
-		set_led_status(1, data & 0x0200);
-		set_led_status(2, data & 0x0400);
+		set_led_status(space->machine(), 0, data & 0x0100);	// 3 buttons
+		set_led_status(space->machine(), 1, data & 0x0200);
+		set_led_status(space->machine(), 2, data & 0x0400);
 	}
 
 	if (ACCESSING_BITS_0_7)
 	{
-//      set_led_status(3, data & 0x0010);   // if we had more leds..
-//      set_led_status(4, data & 0x0020);
+//      set_led_status(space->machine(), 3, data & 0x0010);   // if we had more leds..
+//      set_led_status(space->machine(), 4, data & 0x0020);
 	}
 }
 
@@ -498,24 +486,26 @@ static WRITE16_HANDLER( scudhamm_oki_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki1"), 0x40000 * ((data >> 0) & 0x3) );
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki2"), 0x40000 * ((data >> 4) & 0x3) );
+		okim6295_device *oki1 = space->machine().device<okim6295_device>("oki1");
+		okim6295_device *oki2 = space->machine().device<okim6295_device>("oki2");
+		oki1->set_bank_base(0x40000 * ((data >> 0) & 0x3) );
+		oki2->set_bank_base(0x40000 * ((data >> 4) & 0x3) );
 	}
 }
 
-static ADDRESS_MAP_START( scudhamm_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( scudhamm_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM																	// ROM
-	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(scudhamm_vregs_w) AM_BASE(&megasys1_vregs)				// Video Registers + RAM
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])	// Scroll RAM 0
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])	// Scroll RAM 2
-	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(scudhamm_paletteram16_w) AM_BASE(&paletteram16)			// Palette
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)											// Work RAM + Spriteram
- 	AM_RANGE(0x100000, 0x100001) AM_WRITE(scudhamm_oki_bank_w)											// Sound
+	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(scudhamm_vregs_w) AM_BASE_MEMBER(cischeat_state, m_vregs)				// Video Registers + RAM
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM_WRITE(cischeat_scrollram_0_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[0])	// Scroll RAM 0
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(cischeat_scrollram_2_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[2])	// Scroll RAM 2
+	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(scudhamm_paletteram16_w) AM_BASE_GENERIC(paletteram)			// Palette
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_ram)											// Work RAM + Spriteram
+	AM_RANGE(0x100000, 0x100001) AM_WRITE(scudhamm_oki_bank_w)											// Sound
 	AM_RANGE(0x100008, 0x100009) AM_READ_PORT("IN0") AM_WRITE(scudhamm_leds_w)							// Buttons
-	AM_RANGE(0x100014, 0x100015) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)				// Sound
-	AM_RANGE(0x100018, 0x100019) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)				//
+	AM_RANGE(0x100014, 0x100015) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)				// Sound
+	AM_RANGE(0x100018, 0x100019) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)				//
 	AM_RANGE(0x10001c, 0x10001d) AM_WRITE(scudhamm_enable_w)											// ?
-	AM_RANGE(0x100040, 0x100041) AM_READ(scudhamm_analog_r) AM_WRITE(SMH_NOP)							// A / D
+	AM_RANGE(0x100040, 0x100041) AM_READ(scudhamm_analog_r) AM_WRITENOP							// A / D
 	AM_RANGE(0x100044, 0x100045) AM_READ(scudhamm_motor_pos_r)									// Motor Position
 	AM_RANGE(0x100050, 0x100051) AM_READWRITE(scudhamm_motor_status_r, scudhamm_motor_command_w)		// Motor Limit Switches
 	AM_RANGE(0x10005c, 0x10005d) AM_READ_PORT("IN2")													// 2 x DSW
@@ -533,25 +523,26 @@ static READ16_HANDLER( armchmp2_motor_status_r )
 
 static WRITE16_HANDLER( armchmp2_motor_command_w )
 {
-	COMBINE_DATA( &scudhamm_motor_command );
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	COMBINE_DATA( &state->m_scudhamm_motor_command );
 }
 
 static READ16_HANDLER( armchmp2_analog_r )
 {
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
 	int armdelta;
-	static int armold = 0;
 
-	armdelta = input_port_read(space->machine, "IN1") - armold;
-	armold = input_port_read(space->machine, "IN1");
+	armdelta = input_port_read(space->machine(), "IN1") - state->m_armold;
+	state->m_armold = input_port_read(space->machine(), "IN1");
 
-	return ~( scudhamm_motor_command + armdelta );	// + x : x<=0 and player loses, x>0 and player wins
+	return ~( state->m_scudhamm_motor_command + armdelta );	// + x : x<=0 and player loses, x>0 and player wins
 }
 
 static READ16_HANDLER( armchmp2_buttons_r )
 {
-	int arm_x = input_port_read(space->machine, "IN1");
+	int arm_x = input_port_read(space->machine(), "IN1");
 
-	UINT16 ret = input_port_read(space->machine, "IN0");
+	UINT16 ret = input_port_read(space->machine(), "IN0");
 
 	if (arm_x < 0x40)		ret &= ~1;
 	else if (arm_x > 0xc0)	ret &= ~2;
@@ -572,33 +563,33 @@ static WRITE16_HANDLER( armchmp2_leds_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		set_led_status(0, data & 0x0100);
- 		set_led_status(1, data & 0x1000);
-		set_led_status(2, data & 0x2000);
-		set_led_status(3, data & 0x4000);
+		set_led_status(space->machine(), 0, data & 0x0100);
+		set_led_status(space->machine(), 1, data & 0x1000);
+		set_led_status(space->machine(), 2, data & 0x2000);
+		set_led_status(space->machine(), 3, data & 0x4000);
 	}
 
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0, data & 0x0040);
-		coin_counter_w(1, data & 0x0080);
+		coin_counter_w(space->machine(), 0, data & 0x0040);
+		coin_counter_w(space->machine(), 1, data & 0x0080);
 	}
 }
 
-static ADDRESS_MAP_START( armchmp2_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( armchmp2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM 																// ROM
-	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(scudhamm_vregs_w) AM_BASE(&megasys1_vregs)				// Video Registers + RAM
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])	// Scroll RAM 0
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])	// Scroll RAM 2
-	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(scudhamm_paletteram16_w) AM_BASE(&paletteram16)			// Palette
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)											// Work RAM + Spriteram
+	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(scudhamm_vregs_w) AM_BASE_MEMBER(cischeat_state, m_vregs)				// Video Registers + RAM
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_RAM_WRITE(cischeat_scrollram_0_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[0])	// Scroll RAM 0
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(cischeat_scrollram_2_w) AM_BASE_MEMBER(cischeat_state, m_scrollram[2])	// Scroll RAM 2
+	AM_RANGE(0x0b8000, 0x0bffff) AM_RAM_WRITE(scudhamm_paletteram16_w) AM_BASE_GENERIC(paletteram)			// Palette
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_ram)											// Work RAM + Spriteram
 	AM_RANGE(0x100000, 0x100001) AM_READ_PORT("IN2") AM_WRITE(scudhamm_oki_bank_w)						// DSW + Sound
 	AM_RANGE(0x100004, 0x100005) AM_READ_PORT("IN3")													// DSW
 	AM_RANGE(0x100008, 0x100009) AM_READWRITE(armchmp2_buttons_r, armchmp2_leds_w)						// Leds + Coin Counters + Buttons + Sensors
-	AM_RANGE(0x10000c, 0x10000d) AM_READ(armchmp2_analog_r) AM_WRITE(SMH_NOP)							// A / D
+	AM_RANGE(0x10000c, 0x10000d) AM_READ(armchmp2_analog_r) AM_WRITENOP							// A / D
 	AM_RANGE(0x100010, 0x100011) AM_READWRITE(armchmp2_motor_status_r, armchmp2_motor_command_w)		// Motor Limit Switches?
-	AM_RANGE(0x100014, 0x100015) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff	)			// Sound
-	AM_RANGE(0x100018, 0x100019) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff	)			//
+	AM_RANGE(0x100014, 0x100015) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff	)			// Sound
+	AM_RANGE(0x100018, 0x100019) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff	)			//
 ADDRESS_MAP_END
 
 
@@ -614,18 +605,18 @@ ADDRESS_MAP_END
                                 Big Run
 **************************************************************************/
 
-static ADDRESS_MAP_START( bigrun_map2, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM 									// ROM
-	AM_RANGE(0x040000, 0x047fff) AM_READWRITE(sharedram1_r, sharedram1_w)	// Shared RAM (with Main CPU)
-	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE(&cischeat_roadram[0])		// Road RAM
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM 									// RAM
+static ADDRESS_MAP_START( bigrun_map2, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x03ffff) AM_ROM 												// ROM
+	AM_RANGE(0x040000, 0x047fff) AM_RAM AM_SHARE("share1")								// Shared RAM (with Main CPU)
+	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_roadram[0])	// Road RAM
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM 												// RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bigrun_map3, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM										// ROM
-	AM_RANGE(0x040000, 0x047fff) AM_READWRITE(sharedram2_r, sharedram1_w)	// Shared RAM (with Main CPU)
-	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE(&cischeat_roadram[1])		// Road RAM
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM										// RAM
+static ADDRESS_MAP_START( bigrun_map3, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
+	AM_RANGE(0x040000, 0x047fff) AM_RAM AM_SHARE("share2")								// Shared RAM (with Main CPU)
+	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_roadram[1])	// Road RAM
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM													// RAM
 ADDRESS_MAP_END
 
 
@@ -633,22 +624,22 @@ ADDRESS_MAP_END
                                 Cisco Heat
 **************************************************************************/
 
-static ADDRESS_MAP_START( cischeat_map2, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM										// ROM
-	AM_RANGE(0x040000, 0x047fff) AM_READWRITE(sharedram1_r, sharedram1_w)	// Shared RAM (with Main CPU)
-	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE(&cischeat_roadram[0])		// Road RAM
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM										// RAM
-	AM_RANGE(0x100000, 0x100001) AM_WRITE(SMH_NOP)							// watchdog
-	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE(rom_2_r, SMH_ROM)				// ROM
+static ADDRESS_MAP_START( cischeat_map2, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
+	AM_RANGE(0x040000, 0x047fff) AM_RAM AM_SHARE("share1")								// Shared RAM (with Main CPU)
+	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_roadram[0])	// Road RAM
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM													// RAM
+	AM_RANGE(0x100000, 0x100001) AM_WRITENOP											// watchdog
+	AM_RANGE(0x200000, 0x23ffff) AM_ROM AM_REGION("cpu2",0x40000)										// ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cischeat_map3, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM										// ROM
-	AM_RANGE(0x040000, 0x047fff) AM_READWRITE(sharedram2_r, sharedram2_w)	// Shared RAM (with Main CPU)
-	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE(&cischeat_roadram[1])		// Road RAM
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM										// RAM
-	AM_RANGE(0x100000, 0x100001) AM_WRITE(SMH_NOP)							// watchdog
-	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE(rom_3_r, SMH_ROM)				// ROM
+static ADDRESS_MAP_START( cischeat_map3, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
+	AM_RANGE(0x040000, 0x047fff) AM_RAM AM_SHARE("share2")								// Shared RAM (with Main CPU)
+	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_roadram[1])	// Road RAM
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM													// RAM
+	AM_RANGE(0x100000, 0x100001) AM_WRITENOP											// watchdog
+	AM_RANGE(0x200000, 0x23ffff) AM_ROM AM_REGION("cpu3",0x40000)										// ROM
 ADDRESS_MAP_END
 
 
@@ -657,20 +648,20 @@ ADDRESS_MAP_END
                             F1 GrandPrix Star
 **************************************************************************/
 
-static ADDRESS_MAP_START( f1gpstar_map2, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM										// ROM
-	AM_RANGE(0x080000, 0x0807ff) AM_READWRITE(sharedram1_r, sharedram1_w)	// Shared RAM (with Main CPU)
-	AM_RANGE(0x100000, 0x1007ff) AM_RAM AM_BASE(&cischeat_roadram[0])		// Road RAM
-	AM_RANGE(0x180000, 0x183fff) AM_RAM										// RAM
-	AM_RANGE(0x200000, 0x200001) AM_WRITE(SMH_NOP)							// watchdog
+static ADDRESS_MAP_START( f1gpstar_map2, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
+	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_SHARE("share1")								// Shared RAM (with Main CPU)
+	AM_RANGE(0x100000, 0x1007ff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_roadram[0])	// Road RAM
+	AM_RANGE(0x180000, 0x183fff) AM_RAM													// RAM
+	AM_RANGE(0x200000, 0x200001) AM_WRITENOP											// watchdog
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( f1gpstar_map3, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM										// ROM
-	AM_RANGE(0x080000, 0x0807ff) AM_READWRITE(sharedram2_r, sharedram2_w)	// Shared RAM (with Main CPU)
-	AM_RANGE(0x100000, 0x1007ff) AM_RAM AM_BASE(&cischeat_roadram[1])		// Road RAM
-	AM_RANGE(0x180000, 0x183fff) AM_RAM										// RAM
-	AM_RANGE(0x200000, 0x200001) AM_WRITE(SMH_NOP)							// watchdog
+static ADDRESS_MAP_START( f1gpstar_map3, AS_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
+	AM_RANGE(0x080000, 0x0807ff) AM_RAM AM_SHARE("share2")								// Shared RAM (with Main CPU)
+	AM_RANGE(0x100000, 0x1007ff) AM_RAM AM_BASE_MEMBER(cischeat_state, m_roadram[1])	// Road RAM
+	AM_RANGE(0x180000, 0x183fff) AM_RAM													// RAM
+	AM_RANGE(0x200000, 0x200001) AM_WRITENOP											// watchdog
 ADDRESS_MAP_END
 
 
@@ -693,18 +684,20 @@ static WRITE16_HANDLER( bigrun_soundbank_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki1"), 0x40000 * ((data >> 0) & 1) );
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki2"), 0x40000 * ((data >> 4) & 1) );
+		okim6295_device *oki1 = space->machine().device<okim6295_device>("oki1");
+		okim6295_device *oki2 = space->machine().device<okim6295_device>("oki2");
+		oki1->set_bank_base(0x40000 * ((data >> 0) & 1) );
+		oki2->set_bank_base(0x40000 * ((data >> 4) & 1) );
 	}
 }
 
-static ADDRESS_MAP_START( bigrun_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bigrun_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
 	AM_RANGE(0x040000, 0x040001) AM_READWRITE(soundlatch_word_r, bigrun_soundbank_w)	// From Main CPU
 	AM_RANGE(0x060000, 0x060001) AM_WRITE(soundlatch2_word_w)							// To Main CPU
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
-	AM_RANGE(0x0a0000, 0x0a0001) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x0c0000, 0x0c0001) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM													// RAM
 ADDRESS_MAP_END
 
@@ -715,18 +708,19 @@ ADDRESS_MAP_END
 
 static WRITE16_DEVICE_HANDLER( cischeat_soundbank_w )
 {
-	if (ACCESSING_BITS_0_7)	okim6295_set_bank_base(device, 0x40000 * (data & 1) );
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	if (ACCESSING_BITS_0_7)	oki->set_bank_base(0x40000 * (data & 1) );
 }
 
-static ADDRESS_MAP_START( cischeat_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( cischeat_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
 	AM_RANGE(0x040002, 0x040003) AM_DEVWRITE("oki1", cischeat_soundbank_w)				// Sample Banking
 	AM_RANGE(0x040004, 0x040005) AM_DEVWRITE("oki2", cischeat_soundbank_w)				// Sample Banking
 	AM_RANGE(0x060002, 0x060003) AM_WRITE(soundlatch2_word_w)							// To Main CPU
 	AM_RANGE(0x060004, 0x060005) AM_READ(soundlatch_word_r)								// From Main CPU
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
-	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM													// RAM
 ADDRESS_MAP_END
 
@@ -735,14 +729,14 @@ ADDRESS_MAP_END
                             F1 GrandPrix Star
 **************************************************************************/
 
-static ADDRESS_MAP_START( f1gpstar_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gpstar_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM													// ROM
 	AM_RANGE(0x040004, 0x040005) AM_DEVWRITE("oki1", cischeat_soundbank_w)				// Sample Banking   (cischeat: 40002)
 	AM_RANGE(0x040008, 0x040009) AM_DEVWRITE("oki2", cischeat_soundbank_w)				// Sample Banking   (cischeat: 40004)
 	AM_RANGE(0x060000, 0x060001) AM_READWRITE(soundlatch_word_r, soundlatch2_word_w)	// From Main CPU    (cischeat: 60004)
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
-	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x0e0000, 0x0fffff) AM_RAM													// RAM              (cischeat: f0000-fffff)
 ADDRESS_MAP_END
 
@@ -751,15 +745,15 @@ ADDRESS_MAP_END
                             F1 GrandPrix Star II
 **************************************************************************/
 
-static ADDRESS_MAP_START( f1gpstr2_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gpstr2_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM // ROM
 	AM_RANGE(0x040004, 0x040005) AM_DEVWRITE("oki1", cischeat_soundbank_w)					// Sample Banking
 	AM_RANGE(0x040008, 0x040009) AM_DEVWRITE("oki2", cischeat_soundbank_w)					// Sample Banking
-	AM_RANGE(0x04000e, 0x04000f) AM_WRITE(SMH_NOP)											// ? 0              (f1gpstar: no)
+	AM_RANGE(0x04000e, 0x04000f) AM_WRITENOP											// ? 0              (f1gpstar: no)
 	AM_RANGE(0x060004, 0x060005) AM_READWRITE(soundlatch_word_r, soundlatch2_word_w)		// From Main CPU    (f1gpstar: 60000)
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
-	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x0e0000, 0x0fffff) AM_RAM														// RAM
 ADDRESS_MAP_END
 
@@ -771,15 +765,24 @@ ADDRESS_MAP_END
 
 **************************************************************************/
 
-static READ16_HANDLER ( f1gpstr2_io_r )	{ return megasys1_vregs[offset + 0x1000/2]; }
-static WRITE16_HANDLER( f1gpstr2_io_w )	{ COMBINE_DATA(&megasys1_vregs[offset + 0x1000/2]); }
+static READ16_HANDLER ( f1gpstr2_io_r )
+{
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	return state->m_vregs[offset + 0x1000/2];
+}
 
-static ADDRESS_MAP_START( f1gpstr2_io_map, ADDRESS_SPACE_PROGRAM, 16 )
+static WRITE16_HANDLER( f1gpstr2_io_w )
+{
+	cischeat_state *state = space->machine().driver_data<cischeat_state>();
+	COMBINE_DATA(&state->m_vregs[offset + 0x1000/2]);
+}
+
+static ADDRESS_MAP_START( f1gpstr2_io_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM											// ROM
 	AM_RANGE(0x080000, 0x080fff) AM_READWRITE(f1gpstr2_io_r, f1gpstr2_io_w)		//
-	AM_RANGE(0x100000, 0x100001) AM_WRITE(SMH_RAM) AM_BASE(&f1gpstr2_ioready)	//
+	AM_RANGE(0x100000, 0x100001) AM_WRITEONLY AM_BASE_MEMBER(cischeat_state, m_f1gpstr2_ioready)	//
 	AM_RANGE(0x180000, 0x183fff) AM_RAM											// RAM
-	AM_RANGE(0x200000, 0x200001) AM_WRITE(SMH_NOP)								//
+	AM_RANGE(0x200000, 0x200001) AM_WRITENOP								//
 ADDRESS_MAP_END
 
 
@@ -804,30 +807,25 @@ ADDRESS_MAP_END
 //                  [4] DSW 1 & 2   [5] DSW 3       [6] Driving Wheel
 
 static INPUT_PORTS_START( bigrun )
-  	PORT_START("FAKE")	// IN0 - Fake input port - Buttons status
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P1 Accelerator")
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P1 Low Gear")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P1 High Gear")
-
 	PORT_START("IN1")	// Coins - $80000.w
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW ) 	// called "Test"
+	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW )	// called "Test"
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")	//Controls - $80002.w
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Brake")	// Brake
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(cischeat_shift_r, NULL)	// Shift - We handle it using buttons 3&4
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("P1 Brake")	// Brake
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Gear Shift") PORT_TOGGLE // Shift
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("P1 Horn")	// Horn
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("P1 Horn")	// Horn
 
 	PORT_START("IN3")	// Motor Control? - $80004.w
 	PORT_DIPNAME( 0x01, 0x01, "Up Limit SW" )	// Limit the Cockpit movements?
@@ -893,7 +891,7 @@ static INPUT_PORTS_START( bigrun )
 	PORT_DIPSETTING(      0x1400, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(      0x0400, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW301:6,5,4") PORT_CONDITION("IN4", 0x0003, PORTCOND_NOTEQUALS, 0x0003)
+	PORT_DIPNAME( 0x1c00, 0x1c00, "Set Coin B" ) PORT_DIPLOCATION("SW301:6,5,4") PORT_CONDITION("IN4", 0x0003, PORTCOND_NOTEQUALS, 0x0003)
 	PORT_DIPSETTING(      0x1c00, DEF_STR( Unused ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
 	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW301:3,2,1")
@@ -925,6 +923,9 @@ static INPUT_PORTS_START( bigrun )
 
 	PORT_START("IN6")	// Driving Wheel - $80010.w(0)
 	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(30) PORT_KEYDELTA(30)
+
+	PORT_START("PEDAL")	// Accelerator Pedal
+	PORT_BIT( 0xff, 0x00, IPT_PEDAL ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(40)
 INPUT_PORTS_END
 
 
@@ -937,15 +938,11 @@ INPUT_PORTS_END
 //                  [4] DSW 1 & 2   [5] DSW 3       [6] Driving Wheel
 
 static INPUT_PORTS_START( cischeat )
-	PORT_START("FAKE")	// Fake input port - Buttons status
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P1 Low Gear")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P1 High Gear")
-
 	PORT_START("IN1")	// Coins - $80000.w
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW) 	// called "Test"
+	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW)	// called "Test"
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -953,13 +950,13 @@ static INPUT_PORTS_START( cischeat )
 
 	PORT_START("IN2")	// Controls - $80002.w
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Brake")	// Brake
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(cischeat_shift_r, NULL)	// Shift - We handle it using buttons 3&4
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("P1 Gear Shift") PORT_TOGGLE // Shift
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("P1 Accelerator")	// Accel
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("P1 Horn")	// Horn
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("P1 Horn")	// Horn
 
 	PORT_START("IN3")	// Motor Control? - $80004.w
 	PORT_DIPNAME( 0x01, 0x01, "Up Limit SW" )	// Limit the Cockpit movements?
@@ -1051,11 +1048,6 @@ INPUT_PORTS_END
 //                  [4] DSW 3           [5] Driving Wheel
 
 static INPUT_PORTS_START( f1gpstar )
-	PORT_START("FAKE")	// Fake input port - Buttons status
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P1 Accelerator")
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P1 Low Gear")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P1 High Gear")
-
 /*  [Country]
     Japan       "race together" in Test Mode, Always Choose Race
                 Japanese, Km/h, "handle shock"  , "(c)1991",
@@ -1144,8 +1136,8 @@ static INPUT_PORTS_START( f1gpstar )
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_SERVICE_NO_TOGGLE( 0x0008, IP_ACTIVE_LOW) // -> f0100 (called "Test")
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0020, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(cischeat_shift_r, NULL)	// Shift -> !f900e - We handle it with 2 buttons
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Brake")// Brake -> !f9010
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Gear Shift") PORT_TOGGLE // Shift
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("P1 Brake")// Brake -> !f9010
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 ) // "Race Together"
 
 	PORT_START("IN3")	// ? Read at boot only - $80006.w
@@ -1190,6 +1182,9 @@ static INPUT_PORTS_START( f1gpstar )
 						//       Accelerator   - $80010.b ->  !f9004.w
 	PORT_START("IN5")	// Driving Wheel - $80011.b ->  !f9008.w
 	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(30) PORT_KEYDELTA(30)
+
+	PORT_START("PEDAL")	// Accelerator Pedal
+	PORT_BIT( 0xff, 0x00, IPT_PEDAL ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(40) PORT_REVERSE
 INPUT_PORTS_END
 
 
@@ -1537,22 +1532,22 @@ GFXDECODE_END
                     Big Run, Cisco Heat, F1 GrandPrix Star
 **************************************************************************/
 
-/* CPU # 1 */
-#define CISCHEAT_INTERRUPT_NUM	3
-static INTERRUPT_GEN( cischeat_interrupt )
+/* TODO: this is hackish */
+static TIMER_DEVICE_CALLBACK( bigrun_scanline )
 {
-	if (cpu_getiloops(device)==0)
-		cpu_set_input_line(device, 4, HOLD_LINE); /* Once */
-	else
-	{
-		if (cpu_getiloops(device)%2)	cpu_set_input_line(device, 2, HOLD_LINE);
-		else 					cpu_set_input_line(device, 1, HOLD_LINE);
-	}
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "cpu1", 4, HOLD_LINE);
+
+	if(scanline == 154)
+		cputag_set_input_line(timer.machine(), "cpu1", 2, HOLD_LINE);
+
+	if(scanline == 69)
+		cputag_set_input_line(timer.machine(), "cpu1", 1, HOLD_LINE);
 }
 
 
-/* CPU # 4 */
-#define CISCHEAT_SOUND_INTERRUPT_NUM	16
 
 #define STD_FM_CLOCK	3000000
 #define STD_OKI_CLOCK	  (1584000)
@@ -1560,128 +1555,129 @@ static INTERRUPT_GEN( cischeat_interrupt )
 
 
 
-static MACHINE_DRIVER_START( bigrun )
+static MACHINE_CONFIG_START( bigrun, cischeat_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("cpu1", M68000, 10000000)
-	MDRV_CPU_PROGRAM_MAP(bigrun_map)
-	MDRV_CPU_VBLANK_INT_HACK(cischeat_interrupt,CISCHEAT_INTERRUPT_NUM)
+	MCFG_CPU_ADD("cpu1", M68000, 10000000)
+	MCFG_CPU_PROGRAM_MAP(bigrun_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", bigrun_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("cpu2", M68000, 10000000)
-	MDRV_CPU_PROGRAM_MAP(bigrun_map2)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("cpu2", M68000, 10000000)
+	MCFG_CPU_PROGRAM_MAP(bigrun_map2)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("cpu3", M68000, 10000000)
-	MDRV_CPU_PROGRAM_MAP(bigrun_map3)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("cpu3", M68000, 10000000)
+	MCFG_CPU_PROGRAM_MAP(bigrun_map3)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("soundcpu", M68000, 6000000)
-	MDRV_CPU_PROGRAM_MAP(bigrun_sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq4_line_hold,CISCHEAT_SOUND_INTERRUPT_NUM)
+	MCFG_CPU_ADD("soundcpu", M68000, 6000000)
+	MCFG_CPU_PROGRAM_MAP(bigrun_sound_map)
+	MCFG_CPU_PERIODIC_INT(irq4_line_hold,16*30)
 
-	MDRV_QUANTUM_TIME(HZ(1200))
+	MCFG_QUANTUM_TIME(attotime::from_hz(1200))
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK | VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK | VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(30)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1,	0+16, 256-16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(30) //TODO: wrong!
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1,	0+16, 256-16-1)
+	MCFG_SCREEN_UPDATE_STATIC(bigrun)
 
-	MDRV_GFXDECODE(bigrun)
-	MDRV_PALETTE_LENGTH(16*16 * 3 + 64*16 * 2 + 64*16)	/* scroll 0,1,2; road 0,1; sprites */
+	MCFG_GFXDECODE(bigrun)
+	MCFG_PALETTE_LENGTH(16*16 * 3 + 64*16 * 2 + 64*16)	/* scroll 0,1,2; road 0,1; sprites */
 
-	MDRV_VIDEO_START(bigrun)
-	MDRV_VIDEO_UPDATE(bigrun)
+	MCFG_VIDEO_START(bigrun)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, STD_FM_CLOCK)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.75)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.75)
+	MCFG_SOUND_ADD("ymsnd", YM2151, STD_FM_CLOCK)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, STD_OKI_CLOCK)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_OKIM6295_ADD("oki1", STD_OKI_CLOCK, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, STD_OKI_CLOCK)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", STD_OKI_CLOCK, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cischeat )
+static MACHINE_CONFIG_DERIVED( cischeat, bigrun )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(bigrun)
-	MDRV_CPU_MODIFY("cpu1")
-	MDRV_CPU_PROGRAM_MAP(cischeat_map)
+	MCFG_CPU_MODIFY("cpu1")
+	MCFG_CPU_PROGRAM_MAP(cischeat_map)
 
-	MDRV_CPU_MODIFY("cpu2")
-	MDRV_CPU_PROGRAM_MAP(cischeat_map2)
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_PROGRAM_MAP(cischeat_map2)
 
-	MDRV_CPU_MODIFY("cpu3")
-	MDRV_CPU_PROGRAM_MAP(cischeat_map3)
+	MCFG_CPU_MODIFY("cpu3")
+	MCFG_CPU_PROGRAM_MAP(cischeat_map3)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(cischeat_sound_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(cischeat_sound_map)
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1,	0+16, 256-16-8-1)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1,	0+16, 256-16-8-1)
+	MCFG_SCREEN_UPDATE_STATIC(cischeat)
 
-	MDRV_GFXDECODE(cischeat)
-	MDRV_PALETTE_LENGTH(32*16 * 3 + 64*16 * 2 + 128*16)	/* scroll 0,1,2; road 0,1; sprites */
+	MCFG_GFXDECODE(cischeat)
+	MCFG_PALETTE_LENGTH(32*16 * 3 + 64*16 * 2 + 128*16)	/* scroll 0,1,2; road 0,1; sprites */
 
-	MDRV_VIDEO_START(cischeat)
-	MDRV_VIDEO_UPDATE(cischeat)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(cischeat)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( f1gpstar )
+static MACHINE_CONFIG_DERIVED( f1gpstar, bigrun )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(bigrun)
-	MDRV_CPU_REPLACE("cpu1", M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(f1gpstar_map)
+	MCFG_CPU_MODIFY("cpu1")
+	MCFG_CPU_CLOCK(12000000)
+	MCFG_CPU_PROGRAM_MAP(f1gpstar_map)
 
-	MDRV_CPU_REPLACE("cpu2", M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(f1gpstar_map2)
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_CLOCK(12000000)
+	MCFG_CPU_PROGRAM_MAP(f1gpstar_map2)
 
-	MDRV_CPU_REPLACE("cpu3", M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(f1gpstar_map3)
+	MCFG_CPU_MODIFY("cpu3")
+	MCFG_CPU_CLOCK(12000000)
+	MCFG_CPU_PROGRAM_MAP(f1gpstar_map3)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(f1gpstar_sound_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(f1gpstar_sound_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(f1gpstar)
-	MDRV_PALETTE_LENGTH(16*16 * 3 + 64*16 * 2 + 128*16)	/* scroll 0,1,2; road 0,1; sprites */
+	MCFG_GFXDECODE(f1gpstar)
+	MCFG_PALETTE_LENGTH(16*16 * 3 + 64*16 * 2 + 128*16)	/* scroll 0,1,2; road 0,1; sprites */
 
-	MDRV_VIDEO_START(f1gpstar)
-	MDRV_VIDEO_UPDATE(f1gpstar)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(f1gpstar)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(f1gpstar)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( f1gpstr2 )
+static MACHINE_CONFIG_DERIVED( f1gpstr2, f1gpstar )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(f1gpstar)
 
-	MDRV_CPU_MODIFY("cpu1")
-	MDRV_CPU_PROGRAM_MAP(f1gpstr2_map)
+	MCFG_CPU_MODIFY("cpu1")
+	MCFG_CPU_PROGRAM_MAP(f1gpstr2_map)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(f1gpstr2_sound_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(f1gpstr2_sound_map)
 
-	MDRV_CPU_ADD("cpu5", M68000, 12000000/* was 10000000 */)
-	MDRV_CPU_PROGRAM_MAP(f1gpstr2_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
-MACHINE_DRIVER_END
+	MCFG_CPU_ADD("cpu5", M68000, 10000000)
+	MCFG_CPU_PROGRAM_MAP(f1gpstr2_io_map)
+
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
+MACHINE_CONFIG_END
 
 
 /**************************************************************************
@@ -1694,81 +1690,76 @@ MACHINE_DRIVER_END
     3]          game
     4]          == 3
 */
-#define INTERRUPT_NUM_SCUDHAMM		30
-static INTERRUPT_GEN( interrupt_scudhamm )
+
+static TIMER_DEVICE_CALLBACK( scudhamm_scanline )
 {
-	switch ( cpu_getiloops(device) )
-	{
-		case 0:		cpu_set_input_line(device, 3, HOLD_LINE); break;	// update palette, layers etc. Not the sprites.
-		case 14:	cpu_set_input_line(device, 2, HOLD_LINE); break;	// "real" vblank. It just sets a flag that
-											// the main loop polls before updating the sprites.
-		default: break;
-	}
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 3, HOLD_LINE);
+
+	if(scanline == 120) // timer irq (clears a flag, presumably sprite DMA end)
+		cputag_set_input_line(timer.machine(), "maincpu", 2, HOLD_LINE);
 }
 
-
-static MACHINE_DRIVER_START( scudhamm )
+static MACHINE_CONFIG_START( scudhamm, cischeat_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(scudhamm_map)
-	MDRV_CPU_VBLANK_INT_HACK(interrupt_scudhamm,INTERRUPT_NUM_SCUDHAMM)
+	MCFG_CPU_ADD("maincpu",M68000, 12000000)
+	MCFG_CPU_PROGRAM_MAP(scudhamm_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", scudhamm_scanline, "screen", 0, 1)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK | VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK | VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(30)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500 * 3) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0 +16, 256-1 -16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(30) //TODO: wrong!
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500 * 3) /* not accurate */)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0 +16, 256-1 -16)
+	MCFG_SCREEN_UPDATE_STATIC(scudhamm)
 
-	MDRV_GFXDECODE(scudhamm)
-	MDRV_PALETTE_LENGTH(16*16+16*16+128*16)
+	MCFG_GFXDECODE(scudhamm)
+	MCFG_PALETTE_LENGTH(16*16+16*16+128*16)
 
-	MDRV_VIDEO_START(f1gpstar)
-	MDRV_VIDEO_UPDATE(scudhamm)
+	MCFG_VIDEO_START(f1gpstar)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 2112000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_OKIM6295_ADD("oki1", 2112000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.5)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.5)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 2112000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", 2112000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.5)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.5)
+MACHINE_CONFIG_END
 
 
 /**************************************************************************
                             Arm Champs II
 **************************************************************************/
 
-static INTERRUPT_GEN( interrupt_armchmp2)
+static TIMER_DEVICE_CALLBACK( armchamp2_scanline )
 {
-	switch ( cpu_getiloops(device) )
-	{
-		case 0:		cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 14:	cpu_set_input_line(device, 2, HOLD_LINE); break;
+	int scanline = param;
 
-		default: break;
-	}
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 2, HOLD_LINE);
+
+	if(scanline == 120) // timer irq (TODO: timing)
+		cputag_set_input_line(timer.machine(), "maincpu", 4, HOLD_LINE);
 }
 
-static MACHINE_DRIVER_START( armchmp2 )
+static MACHINE_CONFIG_DERIVED( armchmp2, scudhamm )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(scudhamm)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(armchmp2_map)
-	MDRV_CPU_VBLANK_INT_HACK(interrupt_armchmp2,INTERRUPT_NUM_SCUDHAMM)
-
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(armchmp2_map)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_CALLBACK(armchamp2_scanline)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -1790,10 +1781,10 @@ MACHINE_DRIVER_END
 
     We need to untangle it
 */
-static void cischeat_untangle_sprites(running_machine *machine, const char *region)
+static void cischeat_untangle_sprites(running_machine &machine, const char *region)
 {
-	UINT8		*src = memory_region(machine, region);
-	const UINT8	*end = src + memory_region_length(machine, region);
+	UINT8		*src = machine.region(region)->base();
+	const UINT8	*end = src + machine.region(region)->bytes();
 
 	while (src < end)
 	{
@@ -1945,9 +1936,6 @@ ROM_END
 
 static DRIVER_INIT( bigrun )
 {
-	/* Split ROMs */
-	rom_1 = (UINT16 *) memory_region(machine, "user1");
-
 	cischeat_untangle_sprites(machine, "gfx4");	// Untangle sprites
 	phantasm_rom_decode(machine, "soundcpu");					// Decrypt sound cpu code
 }
@@ -2023,8 +2011,8 @@ ROM_START( cischeat )
 	ROM_REGION16_BE( 0x100000, "user1", 0 )	/* second halves of program ROMs */
 	ROM_LOAD16_BYTE( "ch9071.04",   0x000000, 0x040000, CRC(7fb48cbc) SHA1(7f0442ce37b39e830fe8bcb8230cf7da2103059d) )	// cpu #1
 	ROM_LOAD16_BYTE( "ch9071.02",   0x000001, 0x040000, CRC(a5d0f4dc) SHA1(2e7aaa915e27ab31e38ca6759301ffe33a12b427) )
-	// cpu #2 (0x40000 bytes will be copied here)
-	// cpu #3 (0x40000 bytes will be copied here)
+	ROM_COPY( "cpu2", 0x40000, 0x80000, 0x40000 )
+	ROM_COPY( "cpu3", 0x40000, 0xc0000, 0x40000 )
 
 	ROM_REGION( 0x040000, "gfx1", 0 )
 	ROM_LOAD( "ch9071.a14",  0x000000, 0x040000, CRC(7a6d147f) SHA1(8f52e012d9699311c2a2409130c6200c6d2e1c51) ) // scroll 0
@@ -2067,19 +2055,6 @@ ROM_END
 
 static DRIVER_INIT( cischeat )
 {
-	/* Split ROMs */
-	rom_1 = (UINT16 *) (memory_region(machine, "user1") + 0x00000);
-	rom_2 = (UINT16 *) (memory_region(machine, "cpu2")  + 0x40000);
-	rom_3 = (UINT16 *) (memory_region(machine, "cpu3")  + 0x40000);
-
-	memcpy(memory_region(machine, "user1") + 0x80000, rom_2, 0x40000);
-	memset(rom_2, 0, 0x40000);
-	rom_2 = (UINT16 *) (memory_region(machine, "user1") + 0x80000);
-
-	memcpy(memory_region(machine, "user1") + 0xc0000, rom_3, 0x40000);
-	memset(rom_3, 0, 0x40000);
-	rom_3 = (UINT16 *) (memory_region(machine, "user1") + 0xc0000);
-
 	cischeat_untangle_sprites(machine, "gfx4");	// Untangle sprites
 	astyanax_rom_decode(machine, "soundcpu");					// Decrypt sound cpu code
 }
@@ -2294,9 +2269,6 @@ ROM_END
 
 static DRIVER_INIT( f1gpstar )
 {
-	/* Split ROMs */
-	rom_1 = (UINT16 *) memory_region(machine, "user1");
-
 	cischeat_untangle_sprites(machine, "gfx4");
 }
 
@@ -2509,7 +2481,7 @@ ROM_END
 
 static DRIVER_INIT( wildplt )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "cpu1", ADDRESS_SPACE_PROGRAM), 0x080000, 0x087fff, 0, 0, wildplt_vregs_r );
+	machine.device("cpu1")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x080000, 0x087fff, FUNC(wildplt_vregs_r) );
 
 	DRIVER_INIT_CALL(f1gpstar);
 }
@@ -3028,11 +3000,11 @@ ROM_END
 
 ***************************************************************************/
 
-GAME( 1989, bigrun,   0,        bigrun,   bigrun,   bigrun,   ROT0,   "Jaleco", "Big Run (11th Rallye version)", GAME_IMPERFECT_GRAPHICS )	// there's a 13th Rallye version (1991)
-GAME( 1990, cischeat, 0,        cischeat, cischeat, cischeat, ROT0,   "Jaleco", "Cisco Heat",                    GAME_IMPERFECT_GRAPHICS )
-GAME( 1991, f1gpstar, 0,        f1gpstar, f1gpstar, f1gpstar, ROT0,   "Jaleco", "Grand Prix Star",               GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, armchmp2, 0,        armchmp2, armchmp2, 0,        ROT270, "Jaleco", "Arm Champs II v2.6",            GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, armchmp2o,armchmp2, armchmp2, armchmp2, 0,        ROT270, "Jaleco", "Arm Champs II v1.7",            GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, wildplt,  0,        f1gpstr2, wildplt,  wildplt,  ROT0,   "Jaleco", "Wild Pilot",                    GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, f1gpstr2, 0,        f1gpstr2, f1gpstar, f1gpstar, ROT0,   "Jaleco", "F-1 Grand Prix Star II",        GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, scudhamm, 0,        scudhamm, scudhamm, 0,        ROT270, "Jaleco", "Scud Hammer",                   GAME_IMPERFECT_GRAPHICS )
+GAMEL( 1989, bigrun,   0,        bigrun,   bigrun,   bigrun,   ROT0,   "Jaleco", "Big Run (11th Rallye version)", GAME_IMPERFECT_GRAPHICS, layout_cischeat )	// there's a 13th Rallye version (1991)
+GAMEL( 1990, cischeat, 0,        cischeat, cischeat, cischeat, ROT0,   "Jaleco", "Cisco Heat",                    GAME_IMPERFECT_GRAPHICS, layout_cischeat )
+GAMEL( 1991, f1gpstar, 0,        f1gpstar, f1gpstar, f1gpstar, ROT0,   "Jaleco", "Grand Prix Star",               GAME_IMPERFECT_GRAPHICS, layout_f1gpstar )
+GAME ( 1992, armchmp2, 0,        armchmp2, armchmp2, 0,        ROT270, "Jaleco", "Arm Champs II v2.6",            GAME_IMPERFECT_GRAPHICS )
+GAME ( 1992, armchmp2o,armchmp2, armchmp2, armchmp2, 0,        ROT270, "Jaleco", "Arm Champs II v1.7",            GAME_IMPERFECT_GRAPHICS )
+GAME ( 1992, wildplt,  0,        f1gpstr2, wildplt,  wildplt,  ROT0,   "Jaleco", "Wild Pilot",                    GAME_IMPERFECT_GRAPHICS )
+GAMEL( 1993, f1gpstr2, 0,        f1gpstr2, f1gpstar, f1gpstar, ROT0,   "Jaleco", "F-1 Grand Prix Star II",        GAME_IMPERFECT_GRAPHICS, layout_f1gpstar )
+GAME ( 1994, scudhamm, 0,        scudhamm, scudhamm, 0,        ROT270, "Jaleco", "Scud Hammer",                   GAME_IMPERFECT_GRAPHICS )

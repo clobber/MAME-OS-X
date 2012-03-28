@@ -183,14 +183,15 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/atari_vg.h"
 #include "video/avgdvg.h"
 #include "video/vector.h"
 #include "sound/tms5220.h"
 #include "sound/pokey.h"
-#include "mhavoc.h"
+#include "machine/nvram.h"
+#include "includes/mhavoc.h"
 
 /*************************************
  *
@@ -205,9 +206,9 @@ static READ8_HANDLER( dual_pokey_r )
 	int pokey_reg = (offset % 8) | control;
 
 	if (pokey_num == 0)
-		return pokey_r(devtag_get_device(space->machine, "pokey1"), pokey_reg);
+		return pokey_r(space->machine().device("pokey1"), pokey_reg);
 	else
-		return pokey_r(devtag_get_device(space->machine, "pokey2"), pokey_reg);
+		return pokey_r(space->machine().device("pokey2"), pokey_reg);
 }
 
 
@@ -218,9 +219,9 @@ static WRITE8_HANDLER( dual_pokey_w )
 	int pokey_reg = (offset % 8) | control;
 
 	if (pokey_num == 0)
-		pokey_w(devtag_get_device(space->machine, "pokey1"), pokey_reg, data);
+		pokey_w(space->machine().device("pokey1"), pokey_reg, data);
 	else
-		pokey_w(devtag_get_device(space->machine, "pokey2"), pokey_reg, data);
+		pokey_w(space->machine().device("pokey2"), pokey_reg, data);
 }
 
 
@@ -230,14 +231,14 @@ static WRITE8_HANDLER( dual_pokey_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( alpha_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( alpha_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0200, 0x07ff) AM_RAMBANK(1) AM_BASE(&mhavoc_zram0)
+	AM_RANGE(0x0200, 0x07ff) AM_RAMBANK("bank1") AM_BASE_MEMBER(mhavoc_state, m_zram0)
 	AM_RANGE(0x0800, 0x09ff) AM_RAM
-	AM_RANGE(0x0a00, 0x0fff) AM_RAMBANK(1) AM_BASE(&mhavoc_zram1)
+	AM_RANGE(0x0a00, 0x0fff) AM_RAMBANK("bank1") AM_BASE_MEMBER(mhavoc_state, m_zram1)
 	AM_RANGE(0x1000, 0x1000) AM_READ(mhavoc_gamma_r)			/* Gamma Read Port */
 	AM_RANGE(0x1200, 0x1200) AM_READ_PORT("IN0") AM_WRITENOP	/* Alpha Input Port 0 */
-	AM_RANGE(0x1400, 0x141f) AM_RAM AM_BASE(&mhavoc_colorram)	/* ColorRAM */
+	AM_RANGE(0x1400, 0x141f) AM_RAM AM_BASE(&avgdvg_colorram)	/* ColorRAM */
 	AM_RANGE(0x1600, 0x1600) AM_WRITE(mhavoc_out_0_w)			/* Control Signals */
 	AM_RANGE(0x1640, 0x1640) AM_WRITE(avgdvg_go_w)				/* Vector Generator GO */
 	AM_RANGE(0x1680, 0x1680) AM_WRITE(watchdog_reset_w)			/* Watchdog Clear */
@@ -247,10 +248,10 @@ static ADDRESS_MAP_START( alpha_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1780, 0x1780) AM_WRITE(mhavoc_ram_banksel_w)		/* Program RAM Page Select */
 	AM_RANGE(0x17c0, 0x17c0) AM_WRITE(mhavoc_gamma_w)			/* Gamma Communication Write Port */
 	AM_RANGE(0x1800, 0x1fff) AM_RAM								/* Shared Beta Ram */
-	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK(2)						/* Paged Program ROM (32K) */
-	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("alpha", 0x4000)	/* Vector Generator RAM */
+	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank2")						/* Paged Program ROM (32K) */
+	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("alpha", 0x4000)	/* Vector Generator RAM */
 	AM_RANGE(0x5000, 0x7fff) AM_ROM								/* Vector ROM */
-	AM_RANGE(0x8000, 0xffff) AM_READ(SMH_ROM)					/* Program ROM (32K) */
+	AM_RANGE(0x8000, 0xffff) AM_ROM					/* Program ROM (32K) */
 ADDRESS_MAP_END
 
 
@@ -261,7 +262,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( gamma_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gamma_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM								/* Program RAM (2K) */
     AM_RANGE(0x0800, 0x0fff) AM_RAM AM_MIRROR (0x1800)
 	AM_RANGE(0x2000, 0x203f) AM_READWRITE(quad_pokey_r, quad_pokey_w)	/* Quad Pokey read  */
@@ -271,8 +272,8 @@ static ADDRESS_MAP_START( gamma_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW2") AM_WRITE(mhavoc_gamma_irq_ack_w)	/* DSW at 8S, IRQ Acknowledge*/
 	AM_RANGE(0x4800, 0x4800) AM_WRITE(mhavoc_out_1_w)			/* Coin Counters    */
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(mhavoc_alpha_w)			/* Alpha Comm. Write Port */
-	AM_RANGE(0x6000, 0x61ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* EEROM */
-	AM_RANGE(0x8000, 0xffff) AM_READ(SMH_ROM)					/* Program ROM (16K)    */
+	AM_RANGE(0x6000, 0x61ff) AM_RAM AM_SHARE("nvram")	/* EEROM */
+	AM_RANGE(0x8000, 0xffff) AM_ROM					/* Program ROM (16K)    */
 ADDRESS_MAP_END
 
 
@@ -284,11 +285,11 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( alphaone_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( alphaone_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0200, 0x07ff) AM_RAMBANK(1) AM_BASE(&mhavoc_zram0)
+	AM_RANGE(0x0200, 0x07ff) AM_RAMBANK("bank1") AM_BASE_MEMBER(mhavoc_state, m_zram0)
 	AM_RANGE(0x0800, 0x09ff) AM_RAM
-	AM_RANGE(0x0a00, 0x0fff) AM_RAMBANK(1) AM_BASE(&mhavoc_zram1)
+	AM_RANGE(0x0a00, 0x0fff) AM_RAMBANK("bank1") AM_BASE_MEMBER(mhavoc_state, m_zram1)
 	AM_RANGE(0x1020, 0x103f) AM_READWRITE(dual_pokey_r, dual_pokey_w)
 	AM_RANGE(0x1040, 0x1040) AM_READ_PORT("IN0") AM_WRITENOP	/* Alpha Input Port 0 */
 	AM_RANGE(0x1060, 0x1060) AM_READ_PORT("IN1")				/* Gamma Input Port */
@@ -300,10 +301,10 @@ static ADDRESS_MAP_START( alphaone_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x10b0, 0x10b0) AM_WRITE(mhavoc_alpha_irq_ack_w)	/* IRQ ack */
 	AM_RANGE(0x10b4, 0x10b4) AM_WRITE(mhavoc_rom_banksel_w)
 	AM_RANGE(0x10b8, 0x10b8) AM_WRITE(mhavoc_ram_banksel_w)
-	AM_RANGE(0x10e0, 0x10ff) AM_WRITE(SMH_RAM) AM_BASE(&mhavoc_colorram)	/* ColorRAM */
-	AM_RANGE(0x1800, 0x18ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* EEROM */
-	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK(2)						/* Paged Program ROM (32K) */
-	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("alpha", 0x4000) /* Vector Generator RAM */
+	AM_RANGE(0x10e0, 0x10ff) AM_WRITEONLY AM_BASE(&avgdvg_colorram)	/* ColorRAM */
+	AM_RANGE(0x1800, 0x18ff) AM_RAM AM_SHARE("nvram")	/* EEROM */
+	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank2")						/* Paged Program ROM (32K) */
+	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("alpha", 0x4000) /* Vector Generator RAM */
 	AM_RANGE(0x5000, 0x7fff) AM_ROM								/* Vector ROM */
 	AM_RANGE(0x8000, 0xffff) AM_ROM								/* Program ROM (32K) */
 ADDRESS_MAP_END
@@ -319,7 +320,7 @@ ADDRESS_MAP_END
 static CUSTOM_INPUT( clock_r )
 {
 	/* 2.4kHz (divide 2.5MHz by 1024) */
-	return (cputag_get_total_cycles(field->port->machine, "alpha") & 0x400) ? 0 : 1;
+	return (field.machine().device<cpu_device>("alpha")->total_cycles() & 0x400) ? 0 : 1;
 }
 
 
@@ -418,7 +419,7 @@ static INPUT_PORTS_START( mhavocrv )
 
 	PORT_MODIFY("IN1")
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(tms5220_r, NULL)
-	PORT_BIT( 0x0b, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( mhavocp )
@@ -471,74 +472,75 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( mhavoc )
+static MACHINE_CONFIG_START( mhavoc, mhavoc_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("alpha", M6502, MHAVOC_CLOCK_2_5M)		/* 2.5 MHz */
-	MDRV_CPU_PROGRAM_MAP(alpha_map)
+	MCFG_CPU_ADD("alpha", M6502, MHAVOC_CLOCK_2_5M)		/* 2.5 MHz */
+	MCFG_CPU_PROGRAM_MAP(alpha_map)
 
-	MDRV_CPU_ADD("gamma", M6502, MHAVOC_CLOCK_1_25M)	/* 1.25 MHz */
-	MDRV_CPU_PROGRAM_MAP(gamma_map)
+	MCFG_CPU_ADD("gamma", M6502, MHAVOC_CLOCK_1_25M)	/* 1.25 MHz */
+	MCFG_CPU_PROGRAM_MAP(gamma_map)
 
-	MDRV_MACHINE_RESET(mhavoc)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MCFG_MACHINE_START(mhavoc)
+	MCFG_MACHINE_RESET(mhavoc)
+	MCFG_NVRAM_ADD_1FILL("nvram")
+
+	MCFG_TIMER_ADD_PERIODIC("5k_timer", mhavoc_cpu_irq_clock, attotime::from_hz(MHAVOC_CLOCK_5K))
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(50)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(0, 300, 0, 260)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(0, 300, 0, 260)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(avg_mhavoc)
-	MDRV_VIDEO_UPDATE(vector)
+	MCFG_VIDEO_START(avg_mhavoc)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey1", POKEY, MHAVOC_CLOCK_1_25M)
-	MDRV_SOUND_CONFIG(pokey_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("pokey1", POKEY, MHAVOC_CLOCK_1_25M)
+	MCFG_SOUND_CONFIG(pokey_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("pokey2", POKEY, MHAVOC_CLOCK_1_25M)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("pokey2", POKEY, MHAVOC_CLOCK_1_25M)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("pokey3", POKEY, MHAVOC_CLOCK_1_25M)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("pokey3", POKEY, MHAVOC_CLOCK_1_25M)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("pokey4", POKEY, MHAVOC_CLOCK_1_25M)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( mhavocrv )
-	MDRV_IMPORT_FROM( mhavoc )
-
-	MDRV_SOUND_ADD("tms", TMS5220, MHAVOC_CLOCK/2/9)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("pokey4", POKEY, MHAVOC_CLOCK_1_25M)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( alphaone )
+static MACHINE_CONFIG_DERIVED( mhavocrv, mhavoc )
+
+	MCFG_SOUND_ADD("tms", TMS5220, MHAVOC_CLOCK/2/9)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( alphaone, mhavoc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mhavoc)
-	MDRV_CPU_MODIFY("alpha")
-	MDRV_CPU_PROGRAM_MAP(alphaone_map)
-	MDRV_DEVICE_REMOVE("gamma")
+	MCFG_CPU_MODIFY("alpha")
+	MCFG_CPU_PROGRAM_MAP(alphaone_map)
+	MCFG_DEVICE_REMOVE("gamma")
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 580, 0, 500)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0, 580, 0, 500)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("pokey1", POKEY, MHAVOC_CLOCK_1_25M)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_REPLACE("pokey1", POKEY, MHAVOC_CLOCK_1_25M)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_REPLACE("pokey2", POKEY, MHAVOC_CLOCK_1_25M)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_REPLACE("pokey2", POKEY, MHAVOC_CLOCK_1_25M)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_DEVICE_REMOVE("pokey3")
-	MDRV_DEVICE_REMOVE("pokey4")
-MACHINE_DRIVER_END
+	MCFG_DEVICE_REMOVE("pokey3")
+	MCFG_DEVICE_REMOVE("pokey4")
+MACHINE_CONFIG_END
 
 
 
@@ -739,9 +741,9 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, mhavoc,   0,      mhavoc,   mhavoc,   0,        ROT0, "Atari", "Major Havoc (rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mhavoc2,  mhavoc, mhavoc,   mhavoc,   0,        ROT0, "Atari", "Major Havoc (rev 2)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mhavocrv, mhavoc, mhavocrv, mhavocrv, mhavocrv, ROT0, "JMA",   "Major Havoc (Return to Vax)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mhavocp,  mhavoc, mhavoc,   mhavocp,  0,        ROT0, "Atari", "Major Havoc (prototype)", GAME_SUPPORTS_SAVE )
-GAME( 1983, alphaone, mhavoc, alphaone, alphaone, 0,        ROT0, "Atari", "Alpha One (prototype, 3 lives)", GAME_SUPPORTS_SAVE )
-GAME( 1983, alphaonea,mhavoc, alphaone, alphaone, 0,        ROT0, "Atari", "Alpha One (prototype, 5 lives)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavoc,   0,      mhavoc,   mhavoc,   0,        ROT0, "Atari",         "Major Havoc (rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavoc2,  mhavoc, mhavoc,   mhavoc,   0,        ROT0, "Atari",         "Major Havoc (rev 2)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavocrv, mhavoc, mhavocrv, mhavocrv, mhavocrv, ROT0, "Atari / JMA",   "Major Havoc (Return to Vax)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavocp,  mhavoc, mhavoc,   mhavocp,  0,        ROT0, "Atari",         "Major Havoc (prototype)", GAME_SUPPORTS_SAVE )
+GAME( 1983, alphaone, mhavoc, alphaone, alphaone, 0,        ROT0, "Atari",         "Alpha One (prototype, 3 lives)", GAME_SUPPORTS_SAVE )
+GAME( 1983, alphaonea,mhavoc, alphaone, alphaone, 0,        ROT0, "Atari",         "Alpha One (prototype, 5 lives)", GAME_SUPPORTS_SAVE )

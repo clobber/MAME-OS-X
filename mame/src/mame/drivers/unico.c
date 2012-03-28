@@ -22,10 +22,10 @@ Year + Game         PCB             Notes
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
-#include "unico.h"
+#include "includes/unico.h"
 #include "sound/2151intf.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
@@ -53,11 +53,11 @@ static WRITE16_DEVICE_HANDLER( burglarx_sound_bank_w )
 	if (ACCESSING_BITS_8_15)
 	{
 		int bank = (data >> 8 ) & 1;
-		okim6295_set_bank_base(device, 0x40000 * bank );
+		downcast<okim6295_device *>(device)->set_bank_base(0x40000 * bank );
 	}
 }
 
-static ADDRESS_MAP_START( burglarx_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( burglarx_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM														// ROM
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM														// RAM
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("INPUTS")
@@ -65,23 +65,16 @@ static ADDRESS_MAP_START( burglarx_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x80001a, 0x80001b) AM_READ_PORT("DSW1")
 	AM_RANGE(0x80001c, 0x80001d) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800030, 0x800031) AM_WRITENOP												// ? 0
-	AM_RANGE(0x80010c, 0x80010d) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrollx_0)				// Scroll
-	AM_RANGE(0x80010e, 0x80010f) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrolly_0)				//
-	AM_RANGE(0x800110, 0x800111) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrolly_2)				//
-	AM_RANGE(0x800114, 0x800115) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrollx_2)				//
-	AM_RANGE(0x800116, 0x800117) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrollx_1)				//
-	AM_RANGE(0x800120, 0x800121) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrolly_1)				//
-	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)	// Sound
-	AM_RANGE(0x80018a, 0x80018b) AM_DEVWRITE8("ym", ym3812_write_port_w, 0xff00			)	//
-	AM_RANGE(0x80018c, 0x80018d) AM_DEVREADWRITE8("ym", ym3812_status_port_r, ym3812_control_port_w, 0xff00		)	//
+	AM_RANGE(0x80010c, 0x800121) AM_WRITEONLY AM_BASE_MEMBER(unico_state, m_scroll)				// Scroll
+	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)	// Sound
+	AM_RANGE(0x80018a, 0x80018b) AM_DEVWRITE8("ymsnd", ym3812_write_port_w, 0xff00			)	//
+	AM_RANGE(0x80018c, 0x80018d) AM_DEVREADWRITE8("ymsnd", ym3812_status_port_r, ym3812_control_port_w, 0xff00		)	//
 	AM_RANGE(0x80018e, 0x80018f) AM_DEVWRITE("oki", burglarx_sound_bank_w)					//
 	AM_RANGE(0x8001e0, 0x8001e1) AM_WRITENOP												// IRQ Ack
-	AM_RANGE(0x904000, 0x907fff) AM_RAM_WRITE(unico_vram_1_w) AM_BASE(&unico_vram_1	)		// Layers
-	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(unico_vram_2_w) AM_BASE(&unico_vram_2	)		//
-	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(unico_vram_0_w) AM_BASE(&unico_vram_0	)		//
+	AM_RANGE(0x904000, 0x90ffff) AM_RAM_WRITE(unico_vram_w) AM_BASE_MEMBER(unico_state, m_vram)		// Layers 1, 2, 0
 	AM_RANGE(0x920000, 0x923fff) AM_RAM														// ? 0
-	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size	)	// Sprites
-	AM_RANGE(0x940000, 0x947fff) AM_RAM_WRITE(unico_palette_w) AM_BASE(&paletteram16	)	// Palette
+	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE_SIZE_MEMBER(unico_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0x940000, 0x947fff) AM_RAM_WRITE(unico_palette_w) AM_BASE_GENERIC(paletteram)	// Palette
 ADDRESS_MAP_END
 
 
@@ -98,85 +91,78 @@ static WRITE16_HANDLER( zeropnt_sound_bank_w )
            contains garbage. Indeed, only banks 0&1 are used */
 
 		int bank = (data >> 8 ) & 1;
-		UINT8 *dst	= memory_region(space->machine, "oki");
+		UINT8 *dst	= space->machine().region("oki")->base();
 		UINT8 *src	= dst + 0x80000 + 0x20000 + 0x20000 * bank;
 		memcpy(dst + 0x20000, src, 0x20000);
 
-		coin_counter_w(0,data & 0x1000);
-		set_led_status(0,data & 0x0800);	// Start 1
-		set_led_status(1,data & 0x0400);	// Start 2
+		coin_counter_w(space->machine(), 0,data & 0x1000);
+		set_led_status(space->machine(), 0,data & 0x0800);	// Start 1
+		set_led_status(space->machine(), 1,data & 0x0400);	// Start 2
 	}
 }
 
 /* Light Gun - need to wiggle the input slightly otherwise fire doesn't work */
 static READ16_HANDLER( unico_gunx_0_msb_r )
 {
-	int x=input_port_read(space->machine, "X0");
+	int x=input_port_read(space->machine(), "X0");
 
 	x=x*384/256; /* On screen pixel X */
 	if (x<0x160) x=0x30 + (x*0xd0/0x15f);
 	else x=((x-0x160) * 0x20)/0x1f;
 
-	return ((x&0xff) ^ (video_screen_get_frame_number(space->machine->primary_screen)&1))<<8;
+	return ((x&0xff) ^ (space->machine().primary_screen->frame_number()&1))<<8;
 }
 
 static READ16_HANDLER( unico_guny_0_msb_r )
 {
-	int y=input_port_read(space->machine, "Y0");
+	int y=input_port_read(space->machine(), "Y0");
 
 	y=0x18+((y*0xe0)/0xff);
 
-	return ((y&0xff) ^ (video_screen_get_frame_number(space->machine->primary_screen)&1))<<8;
+	return ((y&0xff) ^ (space->machine().primary_screen->frame_number()&1))<<8;
 }
 
 static READ16_HANDLER( unico_gunx_1_msb_r )
 {
-	int x=input_port_read(space->machine, "X1");
+	int x=input_port_read(space->machine(), "X1");
 
 	x=x*384/256; /* On screen pixel X */
 	if (x<0x160) x=0x30 + (x*0xd0/0x15f);
 	else x=((x-0x160) * 0x20)/0x1f;
 
-	return ((x&0xff) ^ (video_screen_get_frame_number(space->machine->primary_screen)&1))<<8;
+	return ((x&0xff) ^ (space->machine().primary_screen->frame_number()&1))<<8;
 }
 
 static READ16_HANDLER( unico_guny_1_msb_r )
 {
-	int y=input_port_read(space->machine, "Y1");
+	int y=input_port_read(space->machine(), "Y1");
 
 	y=0x18+((y*0xe0)/0xff);
 
-	return ((y&0xff) ^ (video_screen_get_frame_number(space->machine->primary_screen)&1))<<8;
+	return ((y&0xff) ^ (space->machine().primary_screen->frame_number()&1))<<8;
 }
 
-static ADDRESS_MAP_START( zeropnt_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( zeropnt_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM	// ROM
 	AM_RANGE(0xef0000, 0xefffff) AM_RAM	// RAM
 	AM_RANGE(0x800030, 0x800031) AM_WRITENOP	// ? 0
 	AM_RANGE(0x800018, 0x800019) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x80001a, 0x80001b) AM_READ_PORT("DSW1")
 	AM_RANGE(0x80001c, 0x80001d) AM_READ_PORT("DSW2")
-	AM_RANGE(0x80010c, 0x80010d) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrollx_0		)	// Scroll
-	AM_RANGE(0x80010e, 0x80010f) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrolly_0		)	//
-	AM_RANGE(0x800110, 0x800111) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrolly_2		)	//
-	AM_RANGE(0x800114, 0x800115) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrollx_2		)	//
-	AM_RANGE(0x800116, 0x800117) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrollx_1		)	//
-	AM_RANGE(0x800120, 0x800121) AM_WRITE(SMH_RAM) AM_BASE(&unico_scrolly_1		)	//
+	AM_RANGE(0x80010c, 0x800121) AM_WRITEONLY AM_BASE_MEMBER(unico_state, m_scroll)	// Scroll
 	AM_RANGE(0x800170, 0x800171) AM_READ(unico_guny_0_msb_r			)	// Light Guns
 	AM_RANGE(0x800174, 0x800175) AM_READ(unico_gunx_0_msb_r			)	//
 	AM_RANGE(0x800178, 0x800179) AM_READ(unico_guny_1_msb_r			)	//
 	AM_RANGE(0x80017c, 0x80017d) AM_READ(unico_gunx_1_msb_r			)	//
-	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff				)	// Sound
-	AM_RANGE(0x80018a, 0x80018b) AM_DEVWRITE8("ym", ym3812_write_port_w, 0xff00			)	//
-	AM_RANGE(0x80018c, 0x80018d) AM_DEVREADWRITE8("ym", ym3812_status_port_r, ym3812_control_port_w, 0xff00		)	//
+	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff				)	// Sound
+	AM_RANGE(0x80018a, 0x80018b) AM_DEVWRITE8("ymsnd", ym3812_write_port_w, 0xff00			)	//
+	AM_RANGE(0x80018c, 0x80018d) AM_DEVREADWRITE8("ymsnd", ym3812_status_port_r, ym3812_control_port_w, 0xff00		)	//
 	AM_RANGE(0x80018e, 0x80018f) AM_WRITE(zeropnt_sound_bank_w				)	//
-	AM_RANGE(0x8001e0, 0x8001e1) AM_WRITE(SMH_RAM							)	// ? IRQ Ack
-	AM_RANGE(0x904000, 0x907fff) AM_RAM_WRITE(unico_vram_1_w) AM_BASE(&unico_vram_1	)	// Layers
-	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(unico_vram_2_w) AM_BASE(&unico_vram_2	)	//
-	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(unico_vram_0_w) AM_BASE(&unico_vram_0	)	//
+	AM_RANGE(0x8001e0, 0x8001e1) AM_WRITEONLY	// ? IRQ Ack
+	AM_RANGE(0x904000, 0x90ffff) AM_RAM_WRITE(unico_vram_w) AM_BASE_MEMBER(unico_state, m_vram)	// Layers 1, 2, 0
 	AM_RANGE(0x920000, 0x923fff) AM_RAM	// ? 0
-	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size	)	// Sprites
-	AM_RANGE(0x940000, 0x947fff) AM_RAM_WRITE(unico_palette_w) AM_BASE(&paletteram16	)	// Palette
+	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE_SIZE_MEMBER(unico_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0x940000, 0x947fff) AM_RAM_WRITE(unico_palette_w) AM_BASE_GENERIC(paletteram)	// Palette
 ADDRESS_MAP_END
 
 
@@ -194,7 +180,7 @@ static WRITE32_HANDLER( zeropnt2_sound_bank_w )
 	if (ACCESSING_BITS_24_31)
 	{
 		int bank = ((data >> 24) & 3) % 4;
-		UINT8 *dst	= memory_region(space->machine, "oki1");
+		UINT8 *dst	= space->machine().region("oki1")->base();
 		UINT8 *src	= dst + 0x80000 + 0x20000 + 0x20000 * bank;
 		memcpy(dst + 0x20000, src, 0x20000);
 	}
@@ -204,39 +190,40 @@ static WRITE32_HANDLER( zeropnt2_leds_w )
 {
 	if (ACCESSING_BITS_16_23)
 	{
-		coin_counter_w(0,data & 0x00010000);
-		set_led_status(0,data & 0x00800000);	// Start 1
-		set_led_status(1,data & 0x00400000);	// Start 2
+		coin_counter_w(space->machine(), 0,data & 0x00010000);
+		set_led_status(space->machine(), 0,data & 0x00800000);	// Start 1
+		set_led_status(space->machine(), 1,data & 0x00400000);	// Start 2
 	}
 }
 
-static WRITE32_HANDLER( zeropnt2_eeprom_w )
+static WRITE32_DEVICE_HANDLER( zeropnt2_eeprom_w )
 {
 	if (data & ~0xfe00000)
-		logerror("CPU #0 PC: %06X - Unknown EEPROM bit written %04X\n",cpu_get_pc(space->cpu),data);
+		logerror("%s - Unknown EEPROM bit written %04X\n",device->machine().describe_context(),data);
 
 	if ( ACCESSING_BITS_24_31 )
 	{
 		// latch the bit
-		eeprom_write_bit(data & 0x04000000);
+		eeprom_device *eeprom = downcast<eeprom_device *>(device);
+		eeprom->write_bit(data & 0x04000000);
 
 		// reset line asserted: reset.
-		eeprom_set_cs_line((data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom->set_cs_line((data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE);
 
 		// clock line asserted: write latch or select next bit to read
-		eeprom_set_clock_line((data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom->set_clock_line((data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
-static ADDRESS_MAP_START( zeropnt2_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( zeropnt2_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM												// ROM
 	AM_RANGE(0x800018, 0x80001b) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x800024, 0x800027) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff0000	)	// Sound
-	AM_RANGE(0x800028, 0x80002f) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff0000)	//
-	AM_RANGE(0x800030, 0x800033) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff0000	)	//
+	AM_RANGE(0x800024, 0x800027) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff0000	)	// Sound
+	AM_RANGE(0x800028, 0x80002f) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff0000)	//
+	AM_RANGE(0x800030, 0x800033) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff0000	)	//
 	AM_RANGE(0x800034, 0x800037) AM_WRITE(zeropnt2_sound_bank_w				)	//
 	AM_RANGE(0x800038, 0x80003b) AM_WRITE(zeropnt2_leds_w					)	// ?
-	AM_RANGE(0x80010c, 0x800123) AM_WRITE(SMH_RAM) AM_BASE(&unico_scroll32		)	// Scroll
+	AM_RANGE(0x80010c, 0x800123) AM_WRITEONLY AM_BASE_MEMBER(unico_state, m_scroll32		)	// Scroll
 	AM_RANGE(0x800140, 0x800143) AM_READ(zeropnt2_guny_0_msb_r			)	// Light Guns
 	AM_RANGE(0x800144, 0x800147) AM_READ(zeropnt2_gunx_0_msb_r			)	//
 	AM_RANGE(0x800148, 0x80014b) AM_READ(zeropnt2_guny_1_msb_r			)	//
@@ -245,13 +232,11 @@ static ADDRESS_MAP_START( zeropnt2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x800154, 0x800157) AM_READ_PORT("DSW2")
 	AM_RANGE(0x80015c, 0x80015f) AM_READ_PORT("BUTTONS")
 	AM_RANGE(0x8001e0, 0x8001e3) AM_WRITENOP									// ? IRQ Ack
-	AM_RANGE(0x8001f0, 0x8001f3) AM_WRITE(zeropnt2_eeprom_w)					// EEPROM
-	AM_RANGE(0x904000, 0x907fff) AM_RAM_WRITE(unico_vram32_1_w) AM_BASE(&unico_vram32_1	)	// Layers
-	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(unico_vram32_2_w) AM_BASE(&unico_vram32_2	)	//
-	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(unico_vram32_0_w) AM_BASE(&unico_vram32_0	)	//
+	AM_RANGE(0x8001f0, 0x8001f3) AM_DEVWRITE("eeprom", zeropnt2_eeprom_w)					// EEPROM
+	AM_RANGE(0x904000, 0x90ffff) AM_RAM_WRITE(unico_vram32_w) AM_BASE_MEMBER(unico_state, m_vram32)	// Layers 1, 2, 0
 	AM_RANGE(0x920000, 0x923fff) AM_RAM											// ? 0
-	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE(&spriteram32) AM_SIZE(&spriteram_size	)	// Sprites
-	AM_RANGE(0x940000, 0x947fff) AM_RAM_WRITE(unico_palette32_w) AM_BASE(&paletteram32	)	// Palette
+	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE_SIZE_MEMBER(unico_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0x940000, 0x947fff) AM_RAM_WRITE(unico_palette32_w) AM_BASE_GENERIC(paletteram )	// Palette
 	AM_RANGE(0xfe0000, 0xffffff) AM_RAM											// RAM
 ADDRESS_MAP_END
 
@@ -523,7 +508,7 @@ static INPUT_PORTS_START( zeropnt2 )
 	PORT_BIT( 0x10000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x20000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	// EEPROM
+	PORT_BIT( 0x80000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)	// EEPROM
 
 	PORT_START("Y0")	/* $800140.b */
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(35) PORT_KEYDELTA(15) PORT_PLAYER(2)
@@ -596,57 +581,44 @@ static const eeprom_interface zeropnt2_eeprom_interface =
 //  "*10010xxxx"    // erase all    1 00 10xxxx
 };
 
-static NVRAM_HANDLER( zeropnt2 )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &zeropnt2_eeprom_interface);
-		if (file)	eeprom_load(file);
-	}
-}
-
 
 /***************************************************************************
                                 Burglar X
 ***************************************************************************/
 
-static MACHINE_DRIVER_START( burglarx )
+static MACHINE_CONFIG_START( burglarx, unico_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 16000000)
-	MDRV_CPU_PROGRAM_MAP(burglarx_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 16000000)
+	MCFG_CPU_PROGRAM_MAP(burglarx_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_MACHINE_RESET(unico)
+	MCFG_MACHINE_RESET(unico)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x180, 0xe0)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x180-1, 0, 0xe0-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x180, 0xe0)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x180-1, 0, 0xe0-1)
+	MCFG_SCREEN_UPDATE_STATIC(unico)
 
-	MDRV_GFXDECODE(unico)
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_GFXDECODE(unico)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(unico)
-	MDRV_VIDEO_UPDATE(unico)
+	MCFG_VIDEO_START(unico)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3579545) /* 14.31818MHz OSC divided by 4 */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM3812, 3579545) /* 14.31818MHz OSC divided by 4 */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+MACHINE_CONFIG_END
 
 
 
@@ -659,41 +631,39 @@ static MACHINE_RESET( zeropt )
 	MACHINE_RESET_CALL(unico);
 }
 
-static MACHINE_DRIVER_START( zeropnt )
+static MACHINE_CONFIG_START( zeropnt, unico_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 16000000)
-	MDRV_CPU_PROGRAM_MAP(zeropnt_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 16000000)
+	MCFG_CPU_PROGRAM_MAP(zeropnt_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_MACHINE_RESET(zeropt)
+	MCFG_MACHINE_RESET(zeropt)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x180, 0xe0)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x180-1, 0, 0xe0-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x180, 0xe0)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x180-1, 0, 0xe0-1)
+	MCFG_SCREEN_UPDATE_STATIC(unico)
 
-	MDRV_GFXDECODE(unico)
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_GFXDECODE(unico)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(unico)
-	MDRV_VIDEO_UPDATE(unico)
+	MCFG_VIDEO_START(unico)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3579545) /* 14.31818MHz OSC divided by 4 */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM3812, 3579545) /* 14.31818MHz OSC divided by 4 */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+MACHINE_CONFIG_END
 
 
 
@@ -701,46 +671,43 @@ MACHINE_DRIVER_END
                                 Zero Point 2
 ***************************************************************************/
 
-static MACHINE_DRIVER_START( zeropnt2 )
+static MACHINE_CONFIG_START( zeropnt2, unico_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68EC020, 16000000)
-	MDRV_CPU_PROGRAM_MAP(zeropnt2_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MCFG_CPU_ADD("maincpu", M68EC020, 16000000)
+	MCFG_CPU_PROGRAM_MAP(zeropnt2_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_MACHINE_RESET(zeropt)
+	MCFG_MACHINE_RESET(zeropt)
 
-	MDRV_NVRAM_HANDLER(zeropnt2)
+	MCFG_EEPROM_ADD("eeprom", zeropnt2_eeprom_interface)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x180, 0xe0)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x180-1, 0, 0xe0-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x180, 0xe0)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x180-1, 0, 0xe0-1)
+	MCFG_SCREEN_UPDATE_STATIC(zeropnt2)
 
-	MDRV_GFXDECODE(unico)
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_GFXDECODE(unico)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(zeropnt2)
-	MDRV_VIDEO_UPDATE(zeropnt2)
+	MCFG_VIDEO_START(zeropnt2)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.70)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.70)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.70)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.70)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+	MCFG_OKIM6295_ADD("oki1", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 3960000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.20)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", 3960000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.20)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -1031,7 +998,7 @@ DIPSW-B
                       |  V.Hard  |                       |on |on |
 ------------------------------------------------------------------
 
-* Denotes Factory Defualts
+* Denotes Factory Defaults
 
 
 BrianT

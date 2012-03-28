@@ -1,117 +1,108 @@
 /***************************************************************************
 
-Blue Print memory map (preliminary)
+    Blue Print memory map (preliminary)
 
-driver by Nicola Salmoria
+    driver by Nicola Salmoria
 
 
-CPU #1
-0000-4fff ROM
-8000-87ff RAM
-9000-93ff Video RAM
-b000-b0ff Sprite RAM
-f000-f3ff Color RAM
+    CPU #1
+    0000-4fff ROM
+    8000-87ff RAM
+    9000-93ff Video RAM
+    b000-b0ff Sprite RAM
+    f000-f3ff Color RAM
 
-read:
-c000      IN0
-c001      IN1
-c003      read dip switches from the second CPU
+    read:
+    c000      IN0
+    c001      IN1
+    c003      read dip switches from the second CPU
 
-e000      Watchdog reset
+    e000      Watchdog reset
 
-write:
-c000      bit 0,1 = coin counters
-d000      command for the second CPU
-e000      bit 1 = flip screen
+    write:
+    c000      bit 0,1 = coin counters
+    d000      command for the second CPU
+    e000      bit 1 = flip screen
 
-CPU #2
-0000-0fff ROM
-2000-2fff ROM
-4000-43ff RAM
+    CPU #2
+    0000-0fff ROM
+    2000-2fff ROM
+    4000-43ff RAM
 
-read:
-6002      8910 #0 read
-8002      8910 #1 read
+    read:
+    6002      8910 #0 read
+    8002      8910 #1 read
 
-write:
-6000      8910 #0 control
-6001      8910 #0 write
-8000      8910 #1 control
-8001      8910 #1 write
-
-***************************************************************************/
-
-/*
-
-    TODO:
-
-    - the cross hatch pattern test in service mode is too fast, each phase
-      should take 15 seconds according to the service manual
+    write:
+    6000      8910 #0 control
+    6001      8910 #0 write
+    8000      8910 #1 control
+    8001      8910 #1 write
 
 
     DIP locations verified for:
     - blueprnt (manual)
 
-*/
+***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
+#include "includes/blueprnt.h"
 
-extern UINT8 *blueprnt_scrollram;
-
-extern WRITE8_HANDLER( blueprnt_videoram_w );
-extern WRITE8_HANDLER( blueprnt_colorram_w );
-extern WRITE8_HANDLER( blueprnt_flipscreen_w );
-
-extern PALETTE_INIT( blueprnt );
-extern VIDEO_START( blueprnt );
-extern VIDEO_UPDATE( blueprnt );
-
-/* Read/Write Handlers */
-
-static int dipsw;
+/*************************************
+ *
+ *  Memory handlers
+ *
+ *************************************/
 
 static WRITE8_DEVICE_HANDLER( dipsw_w )
 {
-	dipsw = data;
+	blueprnt_state *state = device->machine().driver_data<blueprnt_state>();
+	state->m_dipsw = data;
 }
 
 static READ8_HANDLER( blueprnt_sh_dipsw_r )
 {
-	return dipsw;
+	blueprnt_state *state = space->machine().driver_data<blueprnt_state>();
+	return state->m_dipsw;
 }
 
 static WRITE8_HANDLER( blueprnt_sound_command_w )
 {
+	blueprnt_state *state = space->machine().driver_data<blueprnt_state>();
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( blueprnt_coin_counter_w )
 {
-	coin_counter_w(0, data & 0x01);
-	coin_counter_w(1, data & 0x02);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
 }
 
-/* Memory Maps */
+/*************************************
+ *
+ *  Address maps
+ *
+ *************************************/
 
-static ADDRESS_MAP_START( blueprnt_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( blueprnt_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM // service mode checks for 8 chips = 64K
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(blueprnt_videoram_w) AM_MIRROR(0x400) AM_BASE(&videoram)
-	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE(&blueprnt_scrollram)
-	AM_RANGE(0xb000, 0xb0ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(blueprnt_videoram_w) AM_MIRROR(0x400) AM_BASE_MEMBER(blueprnt_state, m_videoram)
+	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_MEMBER(blueprnt_state, m_scrollram)
+	AM_RANGE(0xb000, 0xb0ff) AM_RAM AM_BASE_SIZE_MEMBER(blueprnt_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("P1") AM_WRITE(blueprnt_coin_counter_w)
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P2")
 	AM_RANGE(0xc003, 0xc003) AM_READ(blueprnt_sh_dipsw_r)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(blueprnt_sound_command_w)
 	AM_RANGE(0xe000, 0xe000) AM_READWRITE(watchdog_reset_r, blueprnt_flipscreen_w)
-	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(blueprnt_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(blueprnt_colorram_w) AM_BASE_MEMBER(blueprnt_state, m_colorram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
@@ -121,7 +112,12 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8002, 0x8002) AM_DEVREAD("ay2", ay8910_r)
 ADDRESS_MAP_END
 
-/* Input Ports */
+
+/*************************************
+ *
+ *  Input ports
+ *
+ *************************************/
 
 static INPUT_PORTS_START( blueprnt )
 	PORT_START("P1")
@@ -223,7 +219,12 @@ static INPUT_PORTS_START( saturn )
 	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x80, "DILSW2:8" )
 INPUT_PORTS_END
 
-/* Graphics Layouts */
+
+/*************************************
+ *
+ *  Graphics definitions
+ *
+ *************************************/
 
 static const gfx_layout spritelayout =
 {
@@ -237,14 +238,18 @@ static const gfx_layout spritelayout =
 	16*8	/* every sprite takes 16 consecutive bytes */
 };
 
-/* Graphics Decode Info */
 
 static GFXDECODE_START( blueprnt )
 	GFXDECODE_ENTRY( "gfx1", 0, gfx_8x8x2_planar,     0, 128 )
 	GFXDECODE_ENTRY( "gfx2", 0, spritelayout,     128*4,   1 )
 GFXDECODE_END
 
-/* Sound Interfaces */
+
+/*************************************
+ *
+ *  Sound interfaces
+ *
+ *************************************/
 
 static const ay8910_interface ay8910_interface_1 =
 {
@@ -266,47 +271,78 @@ static const ay8910_interface ay8910_interface_2 =
 	DEVCB_NULL
 };
 
-/* Machine Driver */
 
-static MACHINE_DRIVER_START( blueprnt )
-	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", Z80, 7000000/2)	// 3.5 MHz
-	MDRV_CPU_PROGRAM_MAP(blueprnt_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+/*************************************
+ *
+ *  Machine driver
+ *
+ *************************************/
 
-	MDRV_CPU_ADD("audiocpu", Z80, 10000000/2/2/2)	// 1.25 MHz (2H)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)	// IRQs connected to 32V
-											// NMIs are caused by the main CPU
-	// video hardware
+static MACHINE_START( blueprnt )
+{
+	blueprnt_state *state = machine.driver_data<blueprnt_state>();
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	state->m_audiocpu = machine.device("audiocpu");
 
-	MDRV_GFXDECODE(blueprnt)
-	MDRV_PALETTE_LENGTH(128*4+8)
+	state->save_item(NAME(state->m_dipsw));
+}
 
-	MDRV_PALETTE_INIT(blueprnt)
-	MDRV_VIDEO_START(blueprnt)
-	MDRV_VIDEO_UPDATE(blueprnt)
+static MACHINE_RESET( blueprnt )
+{
+	blueprnt_state *state = machine.driver_data<blueprnt_state>();
 
-	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	state->m_gfx_bank = 0;
+	state->m_dipsw = 0;
+}
 
-	MDRV_SOUND_ADD("ay1", AY8910, 10000000/2/2/2)
-	MDRV_SOUND_CONFIG(ay8910_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 10000000/2/2/2/2)
-	MDRV_SOUND_CONFIG(ay8910_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_START( blueprnt, blueprnt_state )
 
-/* ROMs */
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", Z80, 7000000/2)	// 3.5 MHz
+	MCFG_CPU_PROGRAM_MAP(blueprnt_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_CPU_ADD("audiocpu", Z80, 10000000/2/2/2)	// 1.25 MHz (2H)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 4*60)	// IRQs connected to 32V
+									// NMIs are caused by the main CPU
+
+	MCFG_MACHINE_START(blueprnt)
+	MCFG_MACHINE_RESET(blueprnt)
+
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(blueprnt)
+
+	MCFG_GFXDECODE(blueprnt)
+	MCFG_PALETTE_LENGTH(128*4+8)
+
+	MCFG_PALETTE_INIT(blueprnt)
+	MCFG_VIDEO_START(blueprnt)
+
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ay1", AY8910, 10000000/2/2/2)
+	MCFG_SOUND_CONFIG(ay8910_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+
+	MCFG_SOUND_ADD("ay2", AY8910, 10000000/2/2/2/2)
+	MCFG_SOUND_CONFIG(ay8910_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
+
+
+/*************************************
+ *
+ *  ROM definition(s)
+ *
+ *************************************/
 
 ROM_START( blueprnt )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -352,7 +388,7 @@ ROM_START( blueprntj )
 	ROM_LOAD( "greenj.20d", 0x2000, 0x1000, CRC(23026765) SHA1(9b16de37922208f4f2d2afc94189f11f5e5011fa) )
 ROM_END
 
-ROM_START( saturn )
+ROM_START( saturnzi )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "r1",           0x0000, 0x1000, CRC(18a6d68e) SHA1(816baca24dd75c6f9d4c91c86f90825dbb9a1347) )
 	ROM_LOAD( "r2",           0x1000, 0x1000, CRC(a7dd2665) SHA1(02d03fb436c704ccdbad751ccf034742fcd4ae43) )
@@ -375,8 +411,13 @@ ROM_START( saturn )
 	ROM_LOAD( "r13",          0x2000, 0x1000, CRC(8b3e8c32) SHA1(65e2bf4a9f45be39419d85b2ee46b9c5eeff8f57) )
 ROM_END
 
-/* Game Drivers */
 
-GAME( 1982, blueprnt, 0,        blueprnt, blueprnt, 0, ROT270, "[Zilec Electronics] Bally Midway", "Blue Print (Midway)", 0 )
-GAME( 1982, blueprntj,blueprnt, blueprnt, blueprnt, 0, ROT270, "[Zilec Electronics] Jaleco", "Blue Print (Jaleco)", 0 )
-GAME( 1983, saturn,   0,        blueprnt, saturn,   0, ROT270, "[Zilec Electronics] Jaleco", "Saturn", 0 )
+/*************************************
+ *
+ *  Game driver(s)
+ *
+ *************************************/
+
+GAME( 1982, blueprnt,  0,        blueprnt, blueprnt, 0, ROT270, "Zilec Electronics / Bally Midway", "Blue Print (Midway)", GAME_SUPPORTS_SAVE )
+GAME( 1982, blueprntj, blueprnt, blueprnt, blueprnt, 0, ROT270, "Zilec Electronics / Jaleco",       "Blue Print (Jaleco)", GAME_SUPPORTS_SAVE )
+GAME( 1983, saturnzi,  0,        blueprnt, saturn,   0, ROT270, "Zilec Electronics / Jaleco",       "Saturn", GAME_SUPPORTS_SAVE )

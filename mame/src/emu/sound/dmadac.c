@@ -5,8 +5,7 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "dmadac.h"
 
 
@@ -56,13 +55,11 @@ struct _dmadac_state
 };
 
 
-INLINE dmadac_state *get_safe_token(const device_config *device)
+INLINE dmadac_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_DMADAC);
-	return (dmadac_state *)device->token;
+	assert(device->type() == DMADAC);
+	return (dmadac_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -83,14 +80,17 @@ static STREAM_UPDATE( dmadac_update )
 
 	/* feed as much as we can */
 	while (curout != curin && samples-- > 0)
-		*output++ = (source[curout++ % BUFFER_SIZE] * volume) >> 8;
+	{
+		*output++ = (source[curout] * volume) >> 8;
+		curout = (curout + 1) % BUFFER_SIZE;
+	}
 
 	/* fill the rest with silence */
 	while (samples-- > 0)
 		*output++ = 0;
 
 	/* save the new output pointer */
-	ch->bufout = curout % BUFFER_SIZE;
+	ch->bufout = curout;
 }
 
 
@@ -106,21 +106,21 @@ static DEVICE_START( dmadac )
 	dmadac_state *info = get_safe_token(device);
 
 	/* allocate a clear a buffer */
-	info->buffer = auto_alloc_array_clear(device->machine, INT16, BUFFER_SIZE);
+	info->buffer = auto_alloc_array_clear(device->machine(), INT16, BUFFER_SIZE);
 
 	/* reset the state */
 	info->volume = 0x100;
 
 	/* allocate a stream channel */
-	info->channel = stream_create(device, 0, 1, DEFAULT_SAMPLE_RATE, info, dmadac_update);
+	info->channel = device->machine().sound().stream_alloc(*device, 0, 1, DEFAULT_SAMPLE_RATE, info, dmadac_update);
 
 	/* register with the save state system */
-	state_save_register_device_item(device, 0, info->bufin);
-	state_save_register_device_item(device, 0, info->bufout);
-	state_save_register_device_item(device, 0, info->volume);
-	state_save_register_device_item(device, 0, info->enabled);
-	state_save_register_device_item(device, 0, info->frequency);
-	state_save_register_device_item_pointer(device, 0, info->buffer, BUFFER_SIZE);
+	device->save_item(NAME(info->bufin));
+	device->save_item(NAME(info->bufout));
+	device->save_item(NAME(info->volume));
+	device->save_item(NAME(info->enabled));
+	device->save_item(NAME(info->frequency));
+	device->save_pointer(NAME(info->buffer), BUFFER_SIZE);
 }
 
 
@@ -131,7 +131,7 @@ static DEVICE_START( dmadac )
  *
  *************************************/
 
-void dmadac_transfer(const device_config **devlist, UINT8 num_channels, offs_t channel_spacing, offs_t frame_spacing, offs_t total_frames, INT16 *data)
+void dmadac_transfer(dmadac_sound_device **devlist, UINT8 num_channels, offs_t channel_spacing, offs_t frame_spacing, offs_t total_frames, INT16 *data)
 {
 	int i, j;
 
@@ -139,7 +139,7 @@ void dmadac_transfer(const device_config **devlist, UINT8 num_channels, offs_t c
 	for (i = 0; i < num_channels; i++)
 	{
 		dmadac_state *info = get_safe_token(devlist[i]);
-		stream_update(info->channel);
+		info->channel->update();
 	}
 
 	/* loop over all channels and accumulate the data */
@@ -155,7 +155,8 @@ void dmadac_transfer(const device_config **devlist, UINT8 num_channels, offs_t c
 			/* copy the data */
 			for (j = 0; j < total_frames && curin != maxin; j++)
 			{
-				ch->buffer[curin++ % BUFFER_SIZE] = *src;
+				ch->buffer[curin] = *src;
+				curin = (curin + 1) % BUFFER_SIZE;
 				src += frame_spacing;
 			}
 			ch->bufin = curin;
@@ -177,7 +178,7 @@ void dmadac_transfer(const device_config **devlist, UINT8 num_channels, offs_t c
  *
  *************************************/
 
-void dmadac_enable(const device_config **devlist, UINT8 num_channels, UINT8 enable)
+void dmadac_enable(dmadac_sound_device **devlist, UINT8 num_channels, UINT8 enable)
 {
 	int i;
 
@@ -185,7 +186,7 @@ void dmadac_enable(const device_config **devlist, UINT8 num_channels, UINT8 enab
 	for (i = 0; i < num_channels; i++)
 	{
 		dmadac_state *info = get_safe_token(devlist[i]);
-		stream_update(info->channel);
+		info->channel->update();
 		info->enabled = enable;
 		if (!enable)
 			info->bufin = info->bufout = 0;
@@ -200,7 +201,7 @@ void dmadac_enable(const device_config **devlist, UINT8 num_channels, UINT8 enab
  *
  *************************************/
 
-void dmadac_set_frequency(const device_config **devlist, UINT8 num_channels, double frequency)
+void dmadac_set_frequency(dmadac_sound_device **devlist, UINT8 num_channels, double frequency)
 {
 	int i;
 
@@ -208,7 +209,7 @@ void dmadac_set_frequency(const device_config **devlist, UINT8 num_channels, dou
 	for (i = 0; i < num_channels; i++)
 	{
 		dmadac_state *info = get_safe_token(devlist[i]);
-		stream_set_sample_rate(info->channel, frequency);
+		info->channel->set_sample_rate(frequency);
 	}
 }
 
@@ -220,7 +221,7 @@ void dmadac_set_frequency(const device_config **devlist, UINT8 num_channels, dou
  *
  *************************************/
 
-void dmadac_set_volume(const device_config **devlist, UINT8 num_channels, UINT16 volume)
+void dmadac_set_volume(dmadac_sound_device **devlist, UINT8 num_channels, UINT16 volume)
 {
 	int i;
 
@@ -228,7 +229,7 @@ void dmadac_set_volume(const device_config **devlist, UINT8 num_channels, UINT16
 	for (i = 0; i < num_channels; i++)
 	{
 		dmadac_state *info = get_safe_token(devlist[i]);
-		stream_update(info->channel);
+		info->channel->update();
 		info->volume = volume;
 	}
 }
@@ -239,7 +240,7 @@ void dmadac_set_volume(const device_config **devlist, UINT8 num_channels, UINT16
  * Generic get_info
  **************************************************************************/
 
-DEVICE_GET_INFO( dmadac )
+DEVICE_GET_INFO( dmadac_sound )
 {
 	switch (state)
 	{
@@ -260,3 +261,5 @@ DEVICE_GET_INFO( dmadac )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(DMADAC, dmadac_sound);

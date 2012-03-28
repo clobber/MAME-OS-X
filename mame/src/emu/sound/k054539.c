@@ -17,10 +17,8 @@ CHANNEL_DEBUG enables the following keys:
 
 *********************************************************/
 
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "k054539.h"
-#include <math.h>
 
 #define CHANNEL_DEBUG 0
 #define VERBOSE 0
@@ -69,7 +67,7 @@ struct _k054539_channel {
 typedef struct _k054539_state k054539_state;
 struct _k054539_state {
 	const k054539_interface *intf;
-	const device_config *device;
+	device_t *device;
 	double voltab[256];
 	double pantab[0xf];
 
@@ -92,24 +90,22 @@ struct _k054539_state {
 	k054539_channel channels[8];
 };
 
-INLINE k054539_state *get_safe_token(const device_config *device)
+INLINE k054539_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_K054539);
-	return (k054539_state *)device->token;
+	assert(device->type() == K054539);
+	return (k054539_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 //*
 
-void k054539_init_flags(const device_config *device, int flags)
+void k054539_init_flags(device_t *device, int flags)
 {
 	k054539_state *info = get_safe_token(device);
 	info->k054539_flags = flags;
 }
 
-void k054539_set_gain(const device_config *device, int channel, double gain)
+void k054539_set_gain(device_t *device, int channel, double gain)
 {
 	k054539_state *info = get_safe_token(device);
 	if (gain >= 0) info->k054539_gain[channel] = gain;
@@ -388,7 +384,7 @@ else
 		double gc_f0;
 		int gc_i, gc_j, gc_k, gc_l;
 
-		if (input_code_pressed_once(device->machine, KEYCODE_DEL_PAD))
+		if (device->machine().input().code_pressed_once(KEYCODE_DEL_PAD))
 		{
 			gc_active ^= 1;
 			if (!gc_active) popmessage(NULL);
@@ -396,23 +392,23 @@ else
 
 		if (gc_active)
 		{
-			if (input_code_pressed_once(device->machine, KEYCODE_0_PAD)) gc_chip ^= 1;
+			if (device->machine().input().code_pressed_once(KEYCODE_0_PAD)) gc_chip ^= 1;
 
 			gc_i = gc_pos[gc_chip];
 			gc_j = 0;
-			if (input_code_pressed_once(device->machine, KEYCODE_4_PAD)) { gc_i--; gc_j = 1; }
-			if (input_code_pressed_once(device->machine, KEYCODE_6_PAD)) { gc_i++; gc_j = 1; }
+			if (device->machine().input().code_pressed_once(KEYCODE_4_PAD)) { gc_i--; gc_j = 1; }
+			if (device->machine().input().code_pressed_once(KEYCODE_6_PAD)) { gc_i++; gc_j = 1; }
 			if (gc_j) { gc_i &= 7; gc_pos[gc_chip] = gc_i; }
 
-			if (input_code_pressed_once(device->machine, KEYCODE_5_PAD))
+			if (device->machine().input().code_pressed_once(KEYCODE_5_PAD))
 				info->k054539_gain[gc_i] = 1.0;
 			else
 			{
 				gc_fptr = &info->k054539_gain[gc_i];
 				gc_f0 = *gc_fptr;
 				gc_j = 0;
-				if (input_code_pressed_once(device->machine, KEYCODE_2_PAD)) { gc_f0 -= 0.1; gc_j = 1; }
-				if (input_code_pressed_once(device->machine, KEYCODE_8_PAD)) { gc_f0 += 0.1; gc_j = 1; }
+				if (device->machine().input().code_pressed_once(KEYCODE_2_PAD)) { gc_f0 -= 0.1; gc_j = 1; }
+				if (device->machine().input().code_pressed_once(KEYCODE_8_PAD)) { gc_f0 += 0.1; gc_j = 1; }
 				if (gc_j) { if (gc_f0 < 0) gc_f0 = 0; *gc_fptr = gc_f0; }
 			}
 
@@ -446,7 +442,7 @@ static TIMER_CALLBACK( k054539_irq )
 		info->intf->irq(info->device);
 }
 
-static void k054539_init_chip(const device_config *device, k054539_state *info)
+static void k054539_init_chip(device_t *device, k054539_state *info)
 {
 	int i;
 
@@ -455,18 +451,14 @@ static void k054539_init_chip(const device_config *device, k054539_state *info)
 	info->k054539_flags |= K054539_UPDATE_AT_KEYON; //* make it default until proven otherwise
 
 	// Real size of 0x4000, the addon is to simplify the reverb buffer computations
-	info->ram = auto_alloc_array(device->machine, unsigned char, 0x4000*2+device->clock/50*2);
+	info->ram = auto_alloc_array(device->machine(), unsigned char, 0x4000*2+device->clock()/50*2);
 	info->reverb_pos = 0;
 	info->cur_ptr = 0;
-	memset(info->ram, 0, 0x4000*2+device->clock/50*2);
+	memset(info->ram, 0, 0x4000*2+device->clock()/50*2);
 
-	info->rom = device->region;
-	info->rom_size = device->regionbytes;
-	if (info->intf->rgnoverride != NULL)
-	{
-		info->rom = memory_region(device->machine, info->intf->rgnoverride);
-		info->rom_size = memory_region_length(device->machine, info->intf->rgnoverride);
-	}
+	const memory_region *region = (info->intf->rgnoverride != NULL) ? device->machine().region(info->intf->rgnoverride) : device->region();
+	info->rom = *region;
+	info->rom_size = region->bytes();
 	info->rom_mask = 0xffffffffU;
 	for(i=0; i<32; i++)
 		if((1U<<i) >= info->rom_size) {
@@ -478,13 +470,13 @@ static void k054539_init_chip(const device_config *device, k054539_state *info)
 		// One or more of the registers must be the timer period
 		// And anyway, this particular frequency is probably wrong
 		// 480 hz is TRUSTED by gokuparo disco stage - the looping sample doesn't line up otherwise
-		timer_pulse(device->machine, ATTOTIME_IN_HZ(480), info, 0, k054539_irq);
+		device->machine().scheduler().timer_pulse(attotime::from_hz(480), FUNC(k054539_irq), 0, info);
 
-	info->stream = stream_create(device, 0, 2, device->clock, info, k054539_update);
+	info->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock(), info, k054539_update);
 
-	state_save_register_device_item_array(device, 0, info->regs);
-	state_save_register_device_item_pointer(device, 0, info->ram,  0x4000);
-	state_save_register_device_item(device, 0, info->cur_ptr);
+	device->save_item(NAME(info->regs));
+	device->save_pointer(NAME(info->ram), 0x4000);
+	device->save_item(NAME(info->cur_ptr));
 }
 
 WRITE8_DEVICE_HANDLER( k054539_w )
@@ -612,9 +604,8 @@ WRITE8_DEVICE_HANDLER( k054539_w )
 	regbase[offset] = data;
 }
 
-static STATE_POSTLOAD( reset_zones )
+static void reset_zones(k054539_state *info)
 {
-	k054539_state *info = (k054539_state *)param;
 	int data = info->regs[0x22e];
 	info->cur_zone =
 		data == 0x80 ? info->ram :
@@ -656,7 +647,7 @@ static DEVICE_START( k054539 )
 		info->k054539_gain[i] = 1.0;
 	info->k054539_flags = K054539_RESET_FLAGS;
 
-	info->intf = (device->static_config != NULL) ? (const k054539_interface *)device->static_config : &defintrf;
+	info->intf = (device->static_config() != NULL) ? (const k054539_interface *)device->static_config() : &defintrf;
 
 	/*
         I've tried various equations on volume control but none worked consistently.
@@ -682,7 +673,7 @@ static DEVICE_START( k054539 )
 
 	k054539_init_chip(device, info);
 
-	state_save_register_postload(device->machine, reset_zones, info);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(reset_zones), info));
 }
 
 
@@ -713,3 +704,5 @@ DEVICE_GET_INFO( k054539 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(K054539, k054539);

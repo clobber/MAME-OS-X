@@ -181,66 +181,52 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "machine/tait8741.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
 #include "sound/msm5205.h"
-
-
-/*Video functions*/
-extern UINT8 *gladiatr_videoram, *gladiatr_colorram,*gladiatr_textram;
-WRITE8_HANDLER( gladiatr_videoram_w );
-WRITE8_HANDLER( gladiatr_colorram_w );
-WRITE8_HANDLER( gladiatr_textram_w );
-WRITE8_HANDLER( gladiatr_paletteram_w );
-WRITE8_HANDLER( ppking_video_registers_w );
-WRITE8_HANDLER( gladiatr_video_registers_w );
-WRITE8_HANDLER( gladiatr_spritebuffer_w );
-WRITE8_HANDLER( gladiatr_spritebank_w );
-VIDEO_START( ppking );
-VIDEO_UPDATE( ppking );
-VIDEO_START( gladiatr );
-VIDEO_UPDATE( gladiatr );
+#include "machine/nvram.h"
+#include "includes/gladiatr.h"
 
 
 /*Rom bankswitching*/
 static WRITE8_HANDLER( gladiatr_bankswitch_w )
 {
-	UINT8 *rom = memory_region(space->machine, "maincpu") + 0x10000;
+	UINT8 *rom = space->machine().region("maincpu")->base() + 0x10000;
 
-	memory_set_bankptr(space->machine, 1, rom + 0x6000 * (data & 0x01));
+	memory_set_bankptr(space->machine(), "bank1", rom + 0x6000 * (data & 0x01));
 }
 
 
 static READ8_HANDLER( gladiator_dsw1_r )
 {
-	int orig = input_port_read(space->machine, "DSW1")^0xff;
+	int orig = input_port_read(space->machine(), "DSW1")^0xff;
 
 	return BITSWAP8(orig, 0,1,2,3,4,5,6,7);
 }
 
 static READ8_HANDLER( gladiator_dsw2_r )
 {
-	int orig = input_port_read(space->machine, "DSW2")^0xff;
+	int orig = input_port_read(space->machine(), "DSW2")^0xff;
 
 	return BITSWAP8(orig, 2,3,4,5,6,7,1,0);
 }
 
-static READ8_HANDLER( gladiator_controll_r )
+static READ8_HANDLER( gladiator_controls_r )
 {
 	int coins = 0;
 
-	if( input_port_read(space->machine, "COINS") & 0xc0 ) coins = 0x80;
+	if( input_port_read(space->machine(), "COINS") & 0xc0 ) coins = 0x80;
 	switch(offset)
 	{
 	case 0x01: /* start button , coins */
-		return input_port_read(space->machine, "IN0") | coins;
+		return input_port_read(space->machine(), "IN0") | coins;
 	case 0x02: /* Player 1 Controller , coins */
-		return input_port_read(space->machine, "IN1") | coins;
+		return input_port_read(space->machine(), "IN1") | coins;
 	case 0x04: /* Player 2 Controller , coins */
-		return input_port_read(space->machine, "IN2") | coins;
+		return input_port_read(space->machine(), "IN2") | coins;
 	}
 	/* unknown */
 	return 0;
@@ -251,28 +237,28 @@ static READ8_HANDLER( gladiator_button3_r )
 	switch(offset)
 	{
 	case 0x01: /* button 3 */
-		return input_port_read(space->machine, "IN3");
+		return input_port_read(space->machine(), "IN3");
 	}
 	/* unknown */
 	return 0;
 }
 
-static const struct TAITO8741interface gsword_8741interface=
+static const struct TAITO8741interface gladiator_8741interface=
 {
 	4,         /* 4 chips */
 	{TAITO8741_MASTER,TAITO8741_SLAVE,TAITO8741_PORT,TAITO8741_PORT},/* program mode */
 	{1,0,0,0},	/* serial port connection */
-	{gladiator_dsw1_r,gladiator_dsw2_r,gladiator_button3_r,gladiator_controll_r}	/* port handler */
+	{gladiator_dsw1_r,gladiator_dsw2_r,gladiator_button3_r,gladiator_controls_r}	/* port handler */
 };
 
 static MACHINE_RESET( gladiator )
 {
-	TAITO8741_start(&gsword_8741interface);
+	TAITO8741_start(&gladiator_8741interface);
 	/* 6809 bank memory set */
 	{
-		UINT8 *rom = memory_region(machine, "audiocpu") + 0x10000;
-		memory_set_bankptr(machine, 2,rom);
-		device_reset(cputag_get_cpu(machine, "audiocpu"));
+		UINT8 *rom = machine.region("audiocpu")->base() + 0x10000;
+		memory_set_bankptr(machine, "bank2",rom);
+		machine.device("audiocpu")->reset();
 	}
 }
 
@@ -284,19 +270,19 @@ static WRITE8_DEVICE_HANDLER( gladiator_int_control_w )
 	/* bit 0   : ??                    */
 }
 /* YM2203 IRQ */
-static void gladiator_ym_irq(const device_config *device, int irq)
+static void gladiator_ym_irq(device_t *device, int irq)
 {
 	/* NMI IRQ is not used by gladiator sound program */
-	cputag_set_input_line(device->machine, "sub", INPUT_LINE_NMI, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "sub", INPUT_LINE_NMI, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 /*Sound Functions*/
 static WRITE8_DEVICE_HANDLER( glad_adpcm_w )
 {
-	UINT8 *rom = memory_region(device->machine, "audiocpu") + 0x10000;
+	UINT8 *rom = device->machine().region("audiocpu")->base() + 0x10000;
 
 	/* bit6 = bank offset */
-	memory_set_bankptr(device->machine, 2,rom + ((data & 0x40) ? 0xc000 : 0));
+	memory_set_bankptr(device->machine(), "bank2",rom + ((data & 0x40) ? 0xc000 : 0));
 
 	msm5205_data_w(device,data);         /* bit0..3  */
 	msm5205_reset_w(device,(data>>5)&1); /* bit 5    */
@@ -306,18 +292,18 @@ static WRITE8_DEVICE_HANDLER( glad_adpcm_w )
 static WRITE8_HANDLER( glad_cpu_sound_command_w )
 {
 	soundlatch_w(space,0,data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static READ8_HANDLER( glad_cpu_sound_command_r )
 {
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
 	return soundlatch_r(space,0);
 }
 
 static WRITE8_HANDLER( gladiatr_flipscreen_w )
 {
-	flip_screen_set(space->machine, data & 1);
+	flip_screen_set(space->machine(), data & 1);
 }
 
 
@@ -325,7 +311,7 @@ static WRITE8_HANDLER( gladiatr_flipscreen_w )
 /* !!!!! patch to IRQ timming for 2nd CPU !!!!! */
 static WRITE8_HANDLER( gladiatr_irq_patch_w )
 {
-	cputag_set_input_line(space->machine, "sub", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "sub", 0, HOLD_LINE);
 }
 #endif
 
@@ -334,23 +320,24 @@ static WRITE8_HANDLER( gladiatr_irq_patch_w )
 
 
 
-static int data1,data2,flag1,flag2;
 
 static WRITE8_HANDLER(qx0_w)
 {
+	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
 	if(!offset)
 	{
-		data2=data;
-		flag2=1;
+		state->m_data2=data;
+		state->m_flag2=1;
 	}
 }
 
 static WRITE8_HANDLER(qx1_w)
 {
+	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
 	if(!offset)
 	{
-		data1=data;
-		flag1=1;
+		state->m_data1=data;
+		state->m_flag1=1;
 	}
 }
 
@@ -358,60 +345,63 @@ static WRITE8_HANDLER(qx2_w){ }
 
 static WRITE8_HANDLER(qx3_w){ }
 
-static READ8_HANDLER(qx2_r){ return mame_rand(space->machine); }
+static READ8_HANDLER(qx2_r){ return space->machine().rand(); }
 
-static READ8_HANDLER(qx3_r){ return mame_rand(space->machine)&0xf; }
+static READ8_HANDLER(qx3_r){ return space->machine().rand()&0xf; }
 
 static READ8_HANDLER(qx0_r)
 {
+	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
 	if(!offset)
-		 return data1;
+		 return state->m_data1;
 	else
-		return flag2;
+		return state->m_flag2;
 }
 
 static READ8_HANDLER(qx1_r)
 {
+	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
 	if(!offset)
-		return data2;
+		return state->m_data2;
 	else
-		return flag1;
+		return state->m_flag1;
 }
 
 static MACHINE_RESET( ppking )
 {
-	data1 = data2 = 0;
-	flag1 = flag2 = 1;
+	gladiatr_state *state = machine.driver_data<gladiatr_state>();
+	state->m_data1 = state->m_data2 = 0;
+	state->m_flag1 = state->m_flag2 = 1;
 }
 
-static ADDRESS_MAP_START( ppking_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ppking_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcbff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0xc000, 0xcbff) AM_RAM AM_BASE_MEMBER(gladiatr_state, m_spriteram)
 	AM_RANGE(0xcc00, 0xcfff) AM_WRITE(ppking_video_registers_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(gladiatr_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(gladiatr_videoram_w) AM_BASE(&gladiatr_videoram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(gladiatr_colorram_w) AM_BASE(&gladiatr_colorram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(gladiatr_textram_w) AM_BASE(&gladiatr_textram)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) /* battery backed RAM */
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(gladiatr_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(gladiatr_videoram_w) AM_BASE_MEMBER(gladiatr_state, m_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(gladiatr_colorram_w) AM_BASE_MEMBER(gladiatr_state, m_colorram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(gladiatr_textram_w) AM_BASE_MEMBER(gladiatr_state, m_textram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram") /* battery backed RAM */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ppking_cpu3_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ppking_cpu3_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2fff) AM_ROM
 	AM_RANGE(0xc000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ppking_cpu1_io, ADDRESS_SPACE_IO, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITE(gladiatr_spritebuffer_w)
-	AM_RANGE(0x04, 0x04) AM_NOP	// WRITE(ppking_irq_patch_w)
-	AM_RANGE(0x9e, 0x9f) AM_READ(qx0_r) AM_WRITE(qx0_w)
-	AM_RANGE(0xbf, 0xbf) AM_NOP
+static ADDRESS_MAP_START( ppking_cpu1_io, AS_IO, 8 )
+//  ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0xc000, 0xc000) AM_WRITE(gladiatr_spritebuffer_w)
+	AM_RANGE(0xc004, 0xc004) AM_NOP	// WRITE(ppking_irq_patch_w)
+	AM_RANGE(0xc09e, 0xc09f) AM_READ(qx0_r) AM_WRITE(qx0_w)
+	AM_RANGE(0xc0bf, 0xc0bf) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ppking_cpu2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ppking_cpu2_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x20, 0x21) AM_READ(qx1_r) AM_WRITE(qx1_w)
 	AM_RANGE(0x40, 0x40) AM_READNOP
 	AM_RANGE(0x60, 0x61) AM_READ(qx2_r) AM_WRITE(qx2_w)
@@ -421,44 +411,44 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( gladiatr_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gladiatr_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xcbff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x6000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xcbff) AM_RAM AM_BASE_MEMBER(gladiatr_state, m_spriteram)
 	AM_RANGE(0xcc00, 0xcfff) AM_WRITE(gladiatr_video_registers_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(gladiatr_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(gladiatr_videoram_w) AM_BASE(&gladiatr_videoram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(gladiatr_colorram_w) AM_BASE(&gladiatr_colorram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(gladiatr_textram_w) AM_BASE(&gladiatr_textram)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) /* battery backed RAM */
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(gladiatr_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(gladiatr_videoram_w) AM_BASE_MEMBER(gladiatr_state, m_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(gladiatr_colorram_w) AM_BASE_MEMBER(gladiatr_state, m_colorram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(gladiatr_textram_w) AM_BASE_MEMBER(gladiatr_state, m_textram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram") /* battery backed RAM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gladiatr_cpu3_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gladiatr_cpu3_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x1fff) AM_DEVWRITE("msm", glad_adpcm_w)
 	AM_RANGE(0x2000, 0x2fff) AM_READ(glad_cpu_sound_command_r)
-	AM_RANGE(0x4000, 0xffff) AM_ROMBANK(2)
+	AM_RANGE(0x4000, 0xffff) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( gladiatr_cpu1_io, ADDRESS_SPACE_IO, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITE(gladiatr_spritebuffer_w)
-	AM_RANGE(0x01, 0x01) AM_WRITE(gladiatr_spritebank_w)
-	AM_RANGE(0x02, 0x02) AM_WRITE(gladiatr_bankswitch_w)
-	AM_RANGE(0x04, 0x04) AM_WRITE(gladiatr_irq_patch_w) /* !!! patch to 2nd CPU IRQ !!! */
-	AM_RANGE(0x07, 0x07) AM_WRITE(gladiatr_flipscreen_w)
-	AM_RANGE(0x9e, 0x9f) AM_READWRITE(TAITO8741_0_r, TAITO8741_0_w)
-	AM_RANGE(0xbf, 0xbf) AM_NOP	// watchdog_reset_w doesn't work
+static ADDRESS_MAP_START( gladiatr_cpu1_io, AS_IO, 8 )
+//  ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0xc000, 0xc000) AM_WRITE(gladiatr_spritebuffer_w)
+	AM_RANGE(0xc001, 0xc001) AM_WRITE(gladiatr_spritebank_w)
+	AM_RANGE(0xc002, 0xc002) AM_WRITE(gladiatr_bankswitch_w)
+	AM_RANGE(0xc004, 0xc004) AM_WRITE(gladiatr_irq_patch_w) /* !!! patch to 2nd CPU IRQ !!! */
+	AM_RANGE(0xc007, 0xc007) AM_WRITE(gladiatr_flipscreen_w)
+	AM_RANGE(0xc09e, 0xc09f) AM_READWRITE(TAITO8741_0_r, TAITO8741_0_w)
+	AM_RANGE(0xc0bf, 0xc0bf) AM_NOP	// watchdog_reset_w doesn't work
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gladiatr_cpu2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( gladiatr_cpu2_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x20, 0x21) AM_READWRITE(TAITO8741_1_r, TAITO8741_1_w)
 	AM_RANGE(0x40, 0x40) AM_NOP	// WRITE(sub_irq_ack_w)
 	AM_RANGE(0x60, 0x61) AM_READWRITE(TAITO8741_2_r, TAITO8741_2_w)
@@ -637,7 +627,7 @@ GFXDECODE_END
 
 static READ8_DEVICE_HANDLER(f1_r)
 {
-	return mame_rand(device->machine);
+	return device->machine().rand();
 }
 
 static const ym2203_interface ppking_ym2203_interface =
@@ -659,7 +649,7 @@ static const ym2203_interface gladiatr_ym2203_interface =
 		AY8910_LEGACY_OUTPUT,
 		AY8910_DEFAULT_LOADS,
 		DEVCB_NULL,
-		DEVCB_INPUT_PORT("DSW3"),         		/* port B read */
+		DEVCB_INPUT_PORT("DSW3"),       		/* port B read */
 		DEVCB_HANDLER(gladiator_int_control_w), /* port A write */
 		DEVCB_NULL,
 	},
@@ -674,104 +664,102 @@ static const msm5205_interface msm5205_config =
 
 
 
-static MACHINE_DRIVER_START( ppking )
+static MACHINE_CONFIG_START( ppking, gladiatr_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(ppking_cpu1_map)
-	MDRV_CPU_IO_MAP(ppking_cpu1_io)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(ppking_cpu1_map)
+	MCFG_CPU_IO_MAP(ppking_cpu1_io)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", Z80, XTAL_12MHz/4) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(cpu2_map)
-	MDRV_CPU_IO_MAP(ppking_cpu2_io)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("sub", Z80, XTAL_12MHz/4) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(cpu2_map)
+	MCFG_CPU_IO_MAP(ppking_cpu2_io)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", M6809, XTAL_12MHz/16) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(ppking_cpu3_map)
+	MCFG_CPU_ADD("audiocpu", M6809, XTAL_12MHz/16) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(ppking_cpu3_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
-	MDRV_MACHINE_RESET(ppking)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_MACHINE_RESET(ppking)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ppking)
 
-	MDRV_GFXDECODE(ppking)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(ppking)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(ppking)
-	MDRV_VIDEO_UPDATE(ppking)
+	MCFG_VIDEO_START(ppking)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, XTAL_12MHz/8) /* verified on pcb */
-	MDRV_SOUND_CONFIG(ppking_ym2203_interface)
-	MDRV_SOUND_ROUTE(0, "mono", 0.60)
-	MDRV_SOUND_ROUTE(1, "mono", 0.60)
-	MDRV_SOUND_ROUTE(2, "mono", 0.60)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
+	MCFG_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/8) /* verified on pcb */
+	MCFG_SOUND_CONFIG(ppking_ym2203_interface)
+	MCFG_SOUND_ROUTE(0, "mono", 0.60)
+	MCFG_SOUND_ROUTE(1, "mono", 0.60)
+	MCFG_SOUND_ROUTE(2, "mono", 0.60)
+	MCFG_SOUND_ROUTE(3, "mono", 0.50)
 
-	MDRV_SOUND_ADD("msm", MSM5205, XTAL_455kHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("msm", MSM5205, XTAL_455kHz) /* verified on pcb */
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gladiatr )
+static MACHINE_CONFIG_START( gladiatr, gladiatr_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(gladiatr_cpu1_map)
-	MDRV_CPU_IO_MAP(gladiatr_cpu1_io)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(gladiatr_cpu1_map)
+	MCFG_CPU_IO_MAP(gladiatr_cpu1_io)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", Z80, XTAL_12MHz/4) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(cpu2_map)
-	MDRV_CPU_IO_MAP(gladiatr_cpu2_io)
+	MCFG_CPU_ADD("sub", Z80, XTAL_12MHz/4) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(cpu2_map)
+	MCFG_CPU_IO_MAP(gladiatr_cpu2_io)
 
-	MDRV_CPU_ADD("audiocpu", M6809, XTAL_12MHz/16) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(gladiatr_cpu3_map)
+	MCFG_CPU_ADD("audiocpu", M6809, XTAL_12MHz/16) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(gladiatr_cpu3_map)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
-	MDRV_MACHINE_RESET(gladiator)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_MACHINE_RESET(gladiator)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(gladiatr)
 
-	MDRV_GFXDECODE(gladiatr)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(gladiatr)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(gladiatr)
-	MDRV_VIDEO_UPDATE(gladiatr)
+	MCFG_VIDEO_START(gladiatr)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, XTAL_12MHz/8) /* verified on pcb */
-	MDRV_SOUND_CONFIG(gladiatr_ym2203_interface)
-	MDRV_SOUND_ROUTE(0, "mono", 0.60)
-	MDRV_SOUND_ROUTE(1, "mono", 0.60)
-	MDRV_SOUND_ROUTE(2, "mono", 0.60)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
+	MCFG_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/8) /* verified on pcb */
+	MCFG_SOUND_CONFIG(gladiatr_ym2203_interface)
+	MCFG_SOUND_ROUTE(0, "mono", 0.60)
+	MCFG_SOUND_ROUTE(1, "mono", 0.60)
+	MCFG_SOUND_ROUTE(2, "mono", 0.60)
+	MCFG_SOUND_ROUTE(3, "mono", 0.50)
 
-	MDRV_SOUND_ADD("msm", MSM5205, XTAL_455kHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(msm5205_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("msm", MSM5205, XTAL_455kHz) /* verified on pcb */
+	MCFG_SOUND_CONFIG(msm5205_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -829,7 +817,7 @@ ROM_START( gladiatr )
 	ROM_CONTINUE(               0x18000, 0x4000 )
 
 	ROM_REGION( 0x10000, "sub", 0 ) /* Code for the 2nd CPU */
-	ROM_LOAD( "qb0-17",       	0x0000, 0x4000, CRC(e78be010) SHA1(157231d858d13a006b57a4ab419368168e64edb7) )
+	ROM_LOAD( "qb0-17",     	0x0000, 0x4000, CRC(e78be010) SHA1(157231d858d13a006b57a4ab419368168e64edb7) )
 
 	ROM_REGION( 0x28000, "audiocpu", 0 )  /* 6809 Code & ADPCM data */
 	ROM_LOAD( "qb0-20",         0x10000, 0x4000, CRC(15916eda) SHA1(6558bd2ae6f14d630ae93e66ce7d09be33870cce) )
@@ -840,22 +828,22 @@ ROM_START( gladiatr )
 	ROM_CONTINUE(               0x24000, 0x4000 )
 
 	ROM_REGION( 0x02000, "gfx1", 0 )
-	ROM_LOAD( "qc0-15",       	0x00000, 0x2000, CRC(a7efa340) SHA1(f87e061b8e4d8cd0834fab301779a8493549419b) ) /* (monochrome) */
+	ROM_LOAD( "qc0-15",     	0x00000, 0x2000, CRC(a7efa340) SHA1(f87e061b8e4d8cd0834fab301779a8493549419b) ) /* (monochrome) */
 
 	ROM_REGION( 0x20000, "gfx2", 0 )	/* tiles */
-	ROM_LOAD( "qb0-12",       	0x00000, 0x8000, CRC(0585d9ac) SHA1(e3cb07e9dc5ec2fcfa0c90294d32f0b751f67752) ) /* plane 3 */
+	ROM_LOAD( "qb0-12",     	0x00000, 0x8000, CRC(0585d9ac) SHA1(e3cb07e9dc5ec2fcfa0c90294d32f0b751f67752) ) /* plane 3 */
 	/* space to unpack plane 3 */
-	ROM_LOAD( "qb0-13",       	0x10000, 0x8000, CRC(a6bb797b) SHA1(852e9993270e5557c1a0350007d0beaec5ca6286) ) /* planes 1,2 */
-	ROM_LOAD( "qb0-14",       	0x18000, 0x8000, CRC(85b71211) SHA1(81545cd168da4a707e263fdf0ee9902e3a13ba93) ) /* planes 1,2 */
+	ROM_LOAD( "qb0-13",     	0x10000, 0x8000, CRC(a6bb797b) SHA1(852e9993270e5557c1a0350007d0beaec5ca6286) ) /* planes 1,2 */
+	ROM_LOAD( "qb0-14",     	0x18000, 0x8000, CRC(85b71211) SHA1(81545cd168da4a707e263fdf0ee9902e3a13ba93) ) /* planes 1,2 */
 
 	ROM_REGION( 0x30000, "gfx3", 0 )	/* sprites */
-	ROM_LOAD( "qc1-6",        	0x00000, 0x4000, CRC(651e6e44) SHA1(78ce576e6c29e43d590c42f0d4926cff82fd0268) ) /* plane 3 */
-	ROM_LOAD( "qc2-7",        	0x04000, 0x8000, CRC(c992c4f7) SHA1(3263973474af07c8b93c4ec97924568848cb7201) ) /* plane 3 */
+	ROM_LOAD( "qc1-6",      	0x00000, 0x4000, CRC(651e6e44) SHA1(78ce576e6c29e43d590c42f0d4926cff82fd0268) ) /* plane 3 */
+	ROM_LOAD( "qc2-7",      	0x04000, 0x8000, CRC(c992c4f7) SHA1(3263973474af07c8b93c4ec97924568848cb7201) ) /* plane 3 */
 	/* space to unpack plane 3 */
-	ROM_LOAD( "qc0-8",        	0x18000, 0x4000, CRC(1c7ffdad) SHA1(b224fd4cce078186f22e6393a38c7a2d84dc0066) ) /* planes 1,2 */
-	ROM_LOAD( "qc1-9",        	0x1c000, 0x4000, CRC(01043e03) SHA1(6a6dddc0a036873135dceaa989e757bdd2455ae7) ) /* planes 1,2 */
-	ROM_LOAD( "qc1-10",       	0x20000, 0x8000, CRC(364cdb58) SHA1(4d8548f9dfa9d105dd277c61cf3d56583a5ebbcb) ) /* planes 1,2 */
-	ROM_LOAD( "qc2-11",       	0x28000, 0x8000, CRC(c9fecfff) SHA1(7c13ace4293fbfab7fe924b7b24c498d8cefc7ac) ) /* planes 1,2 */
+	ROM_LOAD( "qc0-8",      	0x18000, 0x4000, CRC(1c7ffdad) SHA1(b224fd4cce078186f22e6393a38c7a2d84dc0066) ) /* planes 1,2 */
+	ROM_LOAD( "qc1-9",      	0x1c000, 0x4000, CRC(01043e03) SHA1(6a6dddc0a036873135dceaa989e757bdd2455ae7) ) /* planes 1,2 */
+	ROM_LOAD( "qc1-10",     	0x20000, 0x8000, CRC(364cdb58) SHA1(4d8548f9dfa9d105dd277c61cf3d56583a5ebbcb) ) /* planes 1,2 */
+	ROM_LOAD( "qc2-11",     	0x28000, 0x8000, CRC(c9fecfff) SHA1(7c13ace4293fbfab7fe924b7b24c498d8cefc7ac) ) /* planes 1,2 */
 
 	ROM_REGION( 0x00040, "proms", 0 )	/* unused */
 	ROM_LOAD( "q3.2b",          0x00000, 0x0020, CRC(6a7c3c60) SHA1(5125bfeb03752c8d76b140a4e74d5cac29dcdaa6) )	/* address decoding */
@@ -872,7 +860,7 @@ ROM_START( ogonsiro )
 	ROM_CONTINUE(               0x18000, 0x4000 )
 
 	ROM_REGION( 0x10000, "sub", 0 ) /* Code for the 2nd CPU */
-	ROM_LOAD( "qb0-17",       	0x0000, 0x4000, CRC(e78be010) SHA1(157231d858d13a006b57a4ab419368168e64edb7) )
+	ROM_LOAD( "qb0-17",     	0x0000, 0x4000, CRC(e78be010) SHA1(157231d858d13a006b57a4ab419368168e64edb7) )
 
 	ROM_REGION( 0x28000, "audiocpu", 0 )  /* 6809 Code & ADPCM data */
 	ROM_LOAD( "qb0-20",         0x10000, 0x4000, CRC(15916eda) SHA1(6558bd2ae6f14d630ae93e66ce7d09be33870cce) )
@@ -883,22 +871,22 @@ ROM_START( ogonsiro )
 	ROM_CONTINUE(               0x24000, 0x4000 )
 
 	ROM_REGION( 0x02000, "gfx1", 0 )
-	ROM_LOAD( "qb0_15",       	0x00000, 0x2000, CRC(5e1332b8) SHA1(fab6e2c7ea9bc94c1245bf759b4004a70c57d666) ) /* (monochrome) */
+	ROM_LOAD( "qb0_15",     	0x00000, 0x2000, CRC(5e1332b8) SHA1(fab6e2c7ea9bc94c1245bf759b4004a70c57d666) ) /* (monochrome) */
 
 	ROM_REGION( 0x20000, "gfx2", 0 )	/* tiles */
-	ROM_LOAD( "qb0-12",       	0x00000, 0x8000, CRC(0585d9ac) SHA1(e3cb07e9dc5ec2fcfa0c90294d32f0b751f67752) ) /* plane 3 */
+	ROM_LOAD( "qb0-12",     	0x00000, 0x8000, CRC(0585d9ac) SHA1(e3cb07e9dc5ec2fcfa0c90294d32f0b751f67752) ) /* plane 3 */
 	/* space to unpack plane 3 */
-	ROM_LOAD( "qb0-13",       	0x10000, 0x8000, CRC(a6bb797b) SHA1(852e9993270e5557c1a0350007d0beaec5ca6286) ) /* planes 1,2 */
-	ROM_LOAD( "qb0-14",       	0x18000, 0x8000, CRC(85b71211) SHA1(81545cd168da4a707e263fdf0ee9902e3a13ba93) ) /* planes 1,2 */
+	ROM_LOAD( "qb0-13",     	0x10000, 0x8000, CRC(a6bb797b) SHA1(852e9993270e5557c1a0350007d0beaec5ca6286) ) /* planes 1,2 */
+	ROM_LOAD( "qb0-14",     	0x18000, 0x8000, CRC(85b71211) SHA1(81545cd168da4a707e263fdf0ee9902e3a13ba93) ) /* planes 1,2 */
 
 	ROM_REGION( 0x30000, "gfx3", 0 )	/* sprites */
-	ROM_LOAD( "qb0_6",        	0x00000, 0x4000, CRC(1a2bc769) SHA1(498861f4d0cffeaff90609c8000c921a114756b6) ) /* plane 3 */
-	ROM_LOAD( "qb0_7",        	0x04000, 0x8000, CRC(4b677bd9) SHA1(3314ef58ff5307faf0ecd8f99950d43d571c91a6) ) /* plane 3 */
+	ROM_LOAD( "qb0_6",      	0x00000, 0x4000, CRC(1a2bc769) SHA1(498861f4d0cffeaff90609c8000c921a114756b6) ) /* plane 3 */
+	ROM_LOAD( "qb0_7",      	0x04000, 0x8000, CRC(4b677bd9) SHA1(3314ef58ff5307faf0ecd8f99950d43d571c91a6) ) /* plane 3 */
 	/* space to unpack plane 3 */
-	ROM_LOAD( "qc0-8",        	0x18000, 0x4000, CRC(1c7ffdad) SHA1(b224fd4cce078186f22e6393a38c7a2d84dc0066) ) /* planes 1,2 */
-	ROM_LOAD( "qb0_9",        	0x1c000, 0x4000, CRC(38f5152d) SHA1(fbb7b13a625999807d180a3212e6e12870629438) ) /* planes 1,2 */
-	ROM_LOAD( "qb0_10",       	0x20000, 0x8000, CRC(87ab6cc4) SHA1(50bc1108ff5609c0e7dad615e92e16eb72b7bc03) ) /* planes 1,2 */
-	ROM_LOAD( "qb0_11",       	0x28000, 0x8000, CRC(25eaa4ff) SHA1(3547fc600a617ba7fe5240a7830edb90230b6c51) ) /* planes 1,2 */
+	ROM_LOAD( "qc0-8",      	0x18000, 0x4000, CRC(1c7ffdad) SHA1(b224fd4cce078186f22e6393a38c7a2d84dc0066) ) /* planes 1,2 */
+	ROM_LOAD( "qb0_9",      	0x1c000, 0x4000, CRC(38f5152d) SHA1(fbb7b13a625999807d180a3212e6e12870629438) ) /* planes 1,2 */
+	ROM_LOAD( "qb0_10",     	0x20000, 0x8000, CRC(87ab6cc4) SHA1(50bc1108ff5609c0e7dad615e92e16eb72b7bc03) ) /* planes 1,2 */
+	ROM_LOAD( "qb0_11",     	0x28000, 0x8000, CRC(25eaa4ff) SHA1(3547fc600a617ba7fe5240a7830edb90230b6c51) ) /* planes 1,2 */
 
 	ROM_REGION( 0x00040, "proms", 0 ) /* unused */
 	ROM_LOAD( "q3.2b",          0x00000, 0x0020, CRC(6a7c3c60) SHA1(5125bfeb03752c8d76b140a4e74d5cac29dcdaa6) )	/* address decoding */
@@ -929,16 +917,16 @@ ROM_START( greatgur )
 	ROM_LOAD( "qb0_15",         0x00000, 0x2000, CRC(5e1332b8) SHA1(fab6e2c7ea9bc94c1245bf759b4004a70c57d666) ) /* (monochrome) */
 
 	ROM_REGION( 0x20000, "gfx2", 0 )	/* tiles */
-	ROM_LOAD( "qb0-12",       	0x00000, 0x8000, CRC(0585d9ac) SHA1(e3cb07e9dc5ec2fcfa0c90294d32f0b751f67752) ) /* plane 3 */
+	ROM_LOAD( "qb0-12",     	0x00000, 0x8000, CRC(0585d9ac) SHA1(e3cb07e9dc5ec2fcfa0c90294d32f0b751f67752) ) /* plane 3 */
 	/* space to unpack plane 3 */
-	ROM_LOAD( "qb0-13",       	0x10000, 0x8000, CRC(a6bb797b) SHA1(852e9993270e5557c1a0350007d0beaec5ca6286) ) /* planes 1,2 */
-	ROM_LOAD( "qb0-14",       	0x18000, 0x8000, CRC(85b71211) SHA1(81545cd168da4a707e263fdf0ee9902e3a13ba93) ) /* planes 1,2 */
+	ROM_LOAD( "qb0-13",     	0x10000, 0x8000, CRC(a6bb797b) SHA1(852e9993270e5557c1a0350007d0beaec5ca6286) ) /* planes 1,2 */
+	ROM_LOAD( "qb0-14",     	0x18000, 0x8000, CRC(85b71211) SHA1(81545cd168da4a707e263fdf0ee9902e3a13ba93) ) /* planes 1,2 */
 
 	ROM_REGION( 0x30000, "gfx3", 0 )	/* sprites */
 	ROM_LOAD( "qc0-06.bin",     0x00000, 0x4000, CRC(96b20201) SHA1(212270d3ba72974f22e96744c752860cc5ffba5b) ) /* plane 3 */
 	ROM_LOAD( "qc0-07.bin",     0x04000, 0x8000, CRC(9e89fa8f) SHA1(b133ae2ac62f43a7a51fa0d1a023a4f95fef2996) ) /* plane 3 */
 	/* space to unpack plane 3 */
-	ROM_LOAD( "qc0-8",        	0x18000, 0x4000, CRC(1c7ffdad) SHA1(b224fd4cce078186f22e6393a38c7a2d84dc0066) ) /* planes 1,2 */
+	ROM_LOAD( "qc0-8",      	0x18000, 0x4000, CRC(1c7ffdad) SHA1(b224fd4cce078186f22e6393a38c7a2d84dc0066) ) /* planes 1,2 */
 	ROM_LOAD( "qc0-09.bin",     0x1c000, 0x4000, CRC(204cd385) SHA1(e7a8720feeac8ced581d72190345daed5750379f) ) /* planes 1,2 */
 	ROM_LOAD( "qc1-10",         0x20000, 0x8000, CRC(364cdb58) SHA1(4d8548f9dfa9d105dd277c61cf3d56583a5ebbcb) ) /* planes 1,2 */
 	ROM_LOAD( "qc1-11.bin",     0x28000, 0x8000, CRC(b2aabbf5) SHA1(9eb4d80f38a30f6e45231a9bfd1aff7a124c6ee9) ) /* planes 1,2 */
@@ -972,7 +960,7 @@ static DRIVER_INIT( gladiatr )
 	UINT8 *rom;
 	int i,j;
 
-	rom = memory_region(machine, "gfx2");
+	rom = machine.region("gfx2")->base();
 	// unpack 3bpp graphics
 	for (j = 3; j >= 0; j--)
 	{
@@ -986,7 +974,7 @@ static DRIVER_INIT( gladiatr )
 	swap_block(rom + 0x14000, rom + 0x18000, 0x4000);
 
 
-	rom = memory_region(machine, "gfx3");
+	rom = machine.region("gfx3")->base();
 	// unpack 3bpp graphics
 	for (j = 5; j >= 0; j--)
 	{
@@ -1003,17 +991,18 @@ static DRIVER_INIT( gladiatr )
 	swap_block(rom + 0x24000, rom + 0x28000, 0x4000);
 
 	/* make sure bank is valid in cpu-reset */
-	rom = memory_region(machine, "audiocpu") + 0x10000;
-	memory_set_bankptr(machine, 2,rom);
+	rom = machine.region("audiocpu")->base() + 0x10000;
+	memory_set_bankptr(machine, "bank2",rom);
 }
 
 
 static READ8_HANDLER(f6a3_r)
 {
-	if(cpu_get_previouspc(space->cpu)==0x8e)
-		generic_nvram[0x6a3]=1;
+	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
+	if(cpu_get_previouspc(&space->device())==0x8e)
+		state->m_nvram[0x6a3]=1;
 
-	return generic_nvram[0x6a3];
+	return state->m_nvram[0x6a3];
 }
 
 static DRIVER_INIT(ppking)
@@ -1021,14 +1010,14 @@ static DRIVER_INIT(ppking)
 	UINT8 *rom;
 	int i,j;
 
-	rom = memory_region(machine, "gfx2");
+	rom = machine.region("gfx2")->base();
 	// unpack 3bpp graphics
 	for (i = 0; i < 0x2000; i++)
 	{
 		rom[i+0x2000] = rom[i] >> 4;
 	}
 
-	rom = memory_region(machine, "gfx3");
+	rom = machine.region("gfx3")->base();
 	// unpack 3bpp graphics
 	for (j = 1; j >= 0; j--)
 	{
@@ -1039,7 +1028,7 @@ static DRIVER_INIT(ppking)
 		}
 	}
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xf6a3,0xf6a3,0,0, f6a3_r );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xf6a3,0xf6a3,FUNC(f6a3_r) );
 }
 
 

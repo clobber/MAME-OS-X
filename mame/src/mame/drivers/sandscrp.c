@@ -70,41 +70,54 @@ Is there another alt program rom set labeled 9 & 10?
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "machine/eeprom.h"
 #include "includes/kaneko16.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 #include "video/kan_pand.h"
 
+
+class sandscrp_state : public kaneko16_state
+{
+public:
+	sandscrp_state(const machine_config &mconfig, device_type type, const char *tag)
+		: kaneko16_state(mconfig, type, tag) { }
+
+	UINT8 m_sprite_irq;
+	UINT8 m_unknown_irq;
+	UINT8 m_vblank_irq;
+	UINT8 m_latch1_full;
+	UINT8 m_latch2_full;
+};
+
+
 static MACHINE_RESET( sandscrp )
 {
-	kaneko16_sprite_type  = 0;
+	sandscrp_state *state = machine.driver_data<sandscrp_state>();
+	state->m_sprite_type  = 0;
 
-	kaneko16_sprite_xoffs = 0;
-	kaneko16_sprite_yoffs = 0;
+	state->m_sprite_xoffs = 0;
+	state->m_sprite_yoffs = 0;
 
-	kaneko16_priority.sprite[0] = 1;	// above tile[0],   below the others
-	kaneko16_priority.sprite[1] = 2;	// above tile[0-1], below the others
-	kaneko16_priority.sprite[2] = 3;	// above tile[0-2], below the others
-	kaneko16_priority.sprite[3] = 8;	// above all
-	kaneko16_sprite_type = 3;	// "different" sprites layout
+	state->m_priority.sprite[0] = 1;	// above tile[0],   below the others
+	state->m_priority.sprite[1] = 2;	// above tile[0-1], below the others
+	state->m_priority.sprite[2] = 3;	// above tile[0-2], below the others
+	state->m_priority.sprite[3] = 8;	// above all
+	state->m_sprite_type = 3;	// "different" sprites layout
 }
 
 /* Sand Scorpion */
 
-static UINT8 sprite_irq;
-static UINT8 unknown_irq;
-static UINT8 vblank_irq;
 
 
 /* Update the IRQ state based on all possible causes */
-static void update_irq_state(running_machine *machine)
+static void update_irq_state(running_machine &machine)
 {
-	if (vblank_irq || sprite_irq || unknown_irq)
+	sandscrp_state *state = machine.driver_data<sandscrp_state>();
+	if (state->m_vblank_irq || state->m_sprite_irq || state->m_unknown_irq)
 		cputag_set_input_line(machine, "maincpu", 1, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 1, CLEAR_LINE);
@@ -115,41 +128,50 @@ static void update_irq_state(running_machine *machine)
 /* Called once/frame to generate the VBLANK interrupt */
 static INTERRUPT_GEN( sandscrp_interrupt )
 {
-	vblank_irq = 1;
-	update_irq_state(device->machine);
+	sandscrp_state *state = device->machine().driver_data<sandscrp_state>();
+	state->m_vblank_irq = 1;
+	update_irq_state(device->machine());
 }
 
 
-static VIDEO_EOF( sandscrp )
+static SCREEN_VBLANK( sandscrp )
 {
-	sprite_irq = 1;
-	update_irq_state(machine);
-	pandora_eof(machine);
+	// rising edge
+	if (vblank_on)
+	{
+		sandscrp_state *state = screen.machine().driver_data<sandscrp_state>();
+		device_t *pandora = screen.machine().device("pandora");
+		state->m_sprite_irq = 1;
+		update_irq_state(screen.machine());
+		pandora_eof(pandora);
+	}
 }
 
 /* Reads the cause of the interrupt */
 static READ16_HANDLER( sandscrp_irq_cause_r )
 {
-	return 	( sprite_irq  ?  0x08  : 0 ) |
-			( unknown_irq ?  0x10  : 0 ) |
-			( vblank_irq  ?  0x20  : 0 ) ;
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
+	return	( state->m_sprite_irq  ?  0x08  : 0 ) |
+			( state->m_unknown_irq ?  0x10  : 0 ) |
+			( state->m_vblank_irq  ?  0x20  : 0 ) ;
 }
 
 
 /* Clear the cause of the interrupt */
 static WRITE16_HANDLER( sandscrp_irq_cause_w )
 {
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		kaneko16_sprite_flipx	=	data & 1;
-		kaneko16_sprite_flipy	=	data & 1;
+		state->m_sprite_flipx	=	data & 1;
+		state->m_sprite_flipy	=	data & 1;
 
-		if (data & 0x08)	sprite_irq  = 0;
-		if (data & 0x10)	unknown_irq = 0;
-		if (data & 0x20)	vblank_irq  = 0;
+		if (data & 0x08)	state->m_sprite_irq  = 0;
+		if (data & 0x10)	state->m_unknown_irq = 0;
+		if (data & 0x20)	state->m_vblank_irq  = 0;
 	}
 
-	update_irq_state(space->machine);
+	update_irq_state(space->machine());
 }
 
 
@@ -162,59 +184,61 @@ static WRITE16_HANDLER( sandscrp_coin_counter_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,   data  & 0x0001);
-		coin_counter_w(1,   data  & 0x0002);
+		coin_counter_w(space->machine(), 0,   data  & 0x0001);
+		coin_counter_w(space->machine(), 1,   data  & 0x0002);
 	}
 }
 
-static UINT8 latch1_full;
-static UINT8 latch2_full;
 
 static READ16_HANDLER( sandscrp_latchstatus_word_r )
 {
-	return	(latch1_full ? 0x80 : 0) |
-			(latch2_full ? 0x40 : 0) ;
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
+	return	(state->m_latch1_full ? 0x80 : 0) |
+			(state->m_latch2_full ? 0x40 : 0) ;
 }
 
 static WRITE16_HANDLER( sandscrp_latchstatus_word_w )
 {
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		latch1_full = data & 0x80;
-		latch2_full = data & 0x40;
+		state->m_latch1_full = data & 0x80;
+		state->m_latch2_full = data & 0x40;
 	}
 }
 
 static READ16_HANDLER( sandscrp_soundlatch_word_r )
 {
-	latch2_full = 0;
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
+	state->m_latch2_full = 0;
 	return soundlatch2_r(space,0);
 }
 
 static WRITE16_HANDLER( sandscrp_soundlatch_word_w )
 {
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		latch1_full = 1;
+		state->m_latch1_full = 1;
 		soundlatch_w(space, 0, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
-		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(100));	// Allow the other cpu to reply
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		device_spin_until_time(&space->device(), attotime::from_usec(100));	// Allow the other cpu to reply
 	}
 }
 
-static ADDRESS_MAP_START( sandscrp, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sandscrp, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM		// ROM
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(sandscrp_irq_cause_w)	// IRQ Ack
 
 	AM_RANGE(0x700000, 0x70ffff) AM_RAM		// RAM
 	AM_RANGE(0x200000, 0x20001f) AM_READWRITE(galpanib_calc_r,galpanib_calc_w)	// Protection
-	AM_RANGE(0x300000, 0x30000f) AM_RAM_WRITE(kaneko16_layers_0_regs_w) AM_BASE(&kaneko16_layers_0_regs)	// Layers 0 Regs
-	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(kaneko16_vram_1_w) AM_BASE(&kaneko16_vram_1)	// Layers 0
-	AM_RANGE(0x401000, 0x401fff) AM_RAM_WRITE(kaneko16_vram_0_w) AM_BASE(&kaneko16_vram_0)	//
-	AM_RANGE(0x402000, 0x402fff) AM_RAM AM_BASE(&kaneko16_vscroll_1)									//
-	AM_RANGE(0x403000, 0x403fff) AM_RAM AM_BASE(&kaneko16_vscroll_0)									//
-	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(pandora_spriteram_LSB_r, pandora_spriteram_LSB_w ) // sprites
-	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE(&paletteram16)	// Palette
+	AM_RANGE(0x300000, 0x30000f) AM_RAM_WRITE(kaneko16_layers_0_regs_w) AM_BASE_MEMBER(sandscrp_state, m_layers_0_regs)	// Layers 0 Regs
+	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(kaneko16_vram_1_w) AM_BASE_MEMBER(sandscrp_state, m_vram[1])	// Layers 0
+	AM_RANGE(0x401000, 0x401fff) AM_RAM_WRITE(kaneko16_vram_0_w) AM_BASE_MEMBER(sandscrp_state, m_vram[0])	//
+	AM_RANGE(0x402000, 0x402fff) AM_RAM AM_BASE_MEMBER(sandscrp_state, m_vscroll[1])									//
+	AM_RANGE(0x403000, 0x403fff) AM_RAM AM_BASE_MEMBER(sandscrp_state, m_vscroll[0])									//
+	AM_RANGE(0x500000, 0x501fff) AM_DEVREADWRITE("pandora", pandora_spriteram_LSB_r, pandora_spriteram_LSB_w ) // sprites
+	AM_RANGE(0x600000, 0x600fff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// Palette
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(sandscrp_coin_counter_w)	// Coin Counters (Lockout unused)
 	AM_RANGE(0xb00000, 0xb00001) AM_READ_PORT("P1")
 	AM_RANGE(0xb00002, 0xb00003) AM_READ_PORT("P2")
@@ -234,46 +258,49 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( sandscrp_bankswitch_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 	int bank = data & 0x07;
 
-	if ( bank != data )	logerror("CPU #1 - PC %04X: Bank %02X\n",cpu_get_pc(space->cpu),data);
+	if ( bank != data )	logerror("CPU #1 - PC %04X: Bank %02X\n",cpu_get_pc(&space->device()),data);
 
 	if (bank < 3)	RAM = &RAM[0x4000 * bank];
 	else			RAM = &RAM[0x4000 * (bank-3) + 0x10000];
 
-	memory_set_bankptr(space->machine, 1, RAM);
+	memory_set_bankptr(space->machine(), "bank1", RAM);
 }
 
 static READ8_HANDLER( sandscrp_latchstatus_r )
 {
-	return	(latch2_full ? 0x80 : 0) |	// swapped!?
-			(latch1_full ? 0x40 : 0) ;
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
+	return	(state->m_latch2_full ? 0x80 : 0) |	// swapped!?
+			(state->m_latch1_full ? 0x40 : 0) ;
 }
 
 static READ8_HANDLER( sandscrp_soundlatch_r )
 {
-	latch1_full = 0;
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
+	state->m_latch1_full = 0;
 	return soundlatch_r(space,0);
 }
 
 static WRITE8_HANDLER( sandscrp_soundlatch_w )
 {
-	latch2_full = 1;
+	sandscrp_state *state = space->machine().driver_data<sandscrp_state>();
+	state->m_latch2_full = 1;
 	soundlatch2_w(space,0,data);
 }
 
-static ADDRESS_MAP_START( sandscrp_soundmem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sandscrp_soundmem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM		// ROM
-	AM_RANGE(0x8000, 0xbfff) AM_READWRITE(SMH_BANK(1), SMH_ROM)	// Banked ROM
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")	// Banked ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM		// RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sandscrp_soundport, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sandscrp_soundport, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sandscrp_bankswitch_w)	// ROM Bank
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)		// PORTA/B read
-	AM_RANGE(0x04, 0x04) AM_DEVWRITE("oki", okim6295_w)		// OKIM6295
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)		// PORTA/B read
+	AM_RANGE(0x04, 0x04) AM_DEVWRITE_MODERN("oki", okim6295_device, write)		// OKIM6295
 	AM_RANGE(0x06, 0x06) AM_WRITE(sandscrp_soundlatch_w)	//
 	AM_RANGE(0x07, 0x07) AM_READ(sandscrp_soundlatch_r)		//
 	AM_RANGE(0x08, 0x08) AM_READ(sandscrp_latchstatus_r)	//
@@ -412,9 +439,9 @@ GFXDECODE_END
 
 /* YM3014B + YM2203C */
 
-static void irq_handler(const device_config *device, int irq)
+static void irq_handler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_intf_sandscrp =
@@ -431,49 +458,56 @@ static const ym2203_interface ym2203_intf_sandscrp =
 };
 
 
-static MACHINE_DRIVER_START( sandscrp )
+static const kaneko_pandora_interface sandscrp_pandora_config =
+{
+	"screen",	/* screen tag */
+	0,	/* gfx_region */
+	0, 0	/* x_offs, y_offs */
+};
+
+static MACHINE_CONFIG_START( sandscrp, sandscrp_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000,12000000)	/* TMP68HC000N-12 */
-	MDRV_CPU_PROGRAM_MAP(sandscrp)
-	MDRV_CPU_VBLANK_INT("screen", sandscrp_interrupt)
+	MCFG_CPU_ADD("maincpu", M68000,12000000)	/* TMP68HC000N-12 */
+	MCFG_CPU_PROGRAM_MAP(sandscrp)
+	MCFG_CPU_VBLANK_INT("screen", sandscrp_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80,4000000)	/* Z8400AB1, Reads the DSWs: it can't be disabled */
-	MDRV_CPU_PROGRAM_MAP(sandscrp_soundmem)
-	MDRV_CPU_IO_MAP(sandscrp_soundport)
+	MCFG_CPU_ADD("audiocpu", Z80,4000000)	/* Z8400AB1, Reads the DSWs: it can't be disabled */
+	MCFG_CPU_PROGRAM_MAP(sandscrp_soundmem)
+	MCFG_CPU_IO_MAP(sandscrp_soundport)
 
-	MDRV_WATCHDOG_TIME_INIT(SEC(3))	/* a guess, and certainly wrong */
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(3))	/* a guess, and certainly wrong */
 
-	MDRV_MACHINE_RESET(sandscrp)
+	MCFG_MACHINE_RESET(sandscrp)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME( ATTOSECONDS_IN_USEC(2500) /* not accurate */ )
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0+16, 256-16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME( ATTOSECONDS_IN_USEC(2500) /* not accurate */ )
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0+16, 256-16-1)
+	MCFG_SCREEN_UPDATE_STATIC(sandscrp)
+	MCFG_SCREEN_VBLANK_STATIC(sandscrp)
 
-	MDRV_GFXDECODE(sandscrp)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(sandscrp)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(sandscrp_1xVIEW2)
-	MDRV_VIDEO_EOF(sandscrp)
-	MDRV_VIDEO_UPDATE(sandscrp)
+	MCFG_KANEKO_PANDORA_ADD("pandora", sandscrp_pandora_config)
+
+	MCFG_VIDEO_START(sandscrp_1xVIEW2)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 12000000/6)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
+	MCFG_OKIM6295_ADD("oki", 12000000/6, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
 
-	MDRV_SOUND_ADD("ym", YM2203, 4000000)
-	MDRV_SOUND_CONFIG(ym2203_intf_sandscrp)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2203, 4000000)
+	MCFG_SOUND_CONFIG(ym2203_intf_sandscrp)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
+MACHINE_CONFIG_END
 
 
 
@@ -528,8 +562,9 @@ ROM_END
 
 ROM_START( sandscrpb ) /* Different rev PCB */
 	ROM_REGION( 0x080000, "maincpu", 0 )		/* 68000 Code */
-	ROM_LOAD16_BYTE( "11.ic4", 0x000000, 0x040000, CRC(80020cab) SHA1(4f1f4d8ea07ad745f2d6d3f800686f07fe4bf20f) )
-	ROM_LOAD16_BYTE( "12.ic5", 0x000001, 0x040000, CRC(8df1d42f) SHA1(2a9db5c4b99a8a3f62bffa9ddd96a95e2042602b) )
+	ROM_LOAD16_BYTE( "11.ic4", 0x000000, 0x040000, CRC(80020cab) SHA1(4f1f4d8ea07ad745f2d6d3f800686f07fe4bf20f) ) /* Chinese title screen */
+	ROM_LOAD16_BYTE( "12.ic5", 0x000001, 0x040000, CRC(8df1d42f) SHA1(2a9db5c4b99a8a3f62bffa9ddd96a95e2042602b) ) /* Game & test menu in English */
+	/* internet translators come up with "fighter lion king" and / or "Hits lion Emperor Quickly" */
 
 	ROM_REGION( 0x24000, "audiocpu", 0 )		/* Z80 Code */
 	ROM_LOAD( "8.ic51", 0x00000, 0x0c000, CRC(6f3e9db1) SHA1(06a04fa17f44319986913bff70433510c89e38f1) )
@@ -548,4 +583,4 @@ ROM_END
 
 GAME( 1992, sandscrp,  0,        sandscrp, sandscrp, 0,          ROT90, "Face",   "Sand Scorpion", 0 )
 GAME( 1992, sandscrpa, sandscrp, sandscrp, sandscrp, 0,          ROT90, "Face",   "Sand Scorpion (Earlier)", 0 )
-GAME( 1992, sandscrpb, sandscrp, sandscrp, sandscrp, 0,          ROT90, "Face",   "Sand Scorpion (Revised Hardware)", 0 )
+GAME( 1992, sandscrpb, sandscrp, sandscrp, sandscrp, 0,          ROT90, "Face",   "Sand Scorpion (Chinese Title Screen, Revised Hardware)", 0 )

@@ -111,12 +111,22 @@ CN4               CN5
 
 ******************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "video/tms9928a.h"
-#include "machine/i8255a.h"
+#include "machine/i8255.h"
 #include "machine/segacrpt.h"
+
+
+class sg1000a_state : public driver_device
+{
+public:
+	sg1000a_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+};
+
 
 /*************************************
  *
@@ -124,18 +134,18 @@ CN4               CN5
  *
  *************************************/
 
-static ADDRESS_MAP_START( program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM // separate region needed for decrypting
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_MIRROR(0x400)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x7f, 0x7f) AM_DEVWRITE("sn", sn76496_w)
-	AM_RANGE(0xbe, 0xbe) AM_READWRITE(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0xbf, 0xbf) AM_READWRITE(TMS9928A_register_r, TMS9928A_register_w)
-	AM_RANGE(0xdc, 0xdf) AM_DEVREADWRITE("ppi8255", i8255a_r, i8255a_w)
+	AM_RANGE(0x7f, 0x7f) AM_DEVWRITE("snsnd", sn76496_w)
+	AM_RANGE(0xbe, 0xbe) AM_DEVREADWRITE_MODERN("tms9928a", tms9928a_device, vram_read, vram_write)
+	AM_RANGE(0xbf, 0xbf) AM_DEVREADWRITE_MODERN("tms9928a", tms9928a_device, register_read, register_write)
+	AM_RANGE(0xdc, 0xdf) AM_DEVREADWRITE_MODERN("ppi8255", i8255_device, read, write)
 ADDRESS_MAP_END
 
 /*************************************
@@ -224,36 +234,30 @@ static INPUT_PORTS_START( dokidoki )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
-static INTERRUPT_GEN( sg1000a_interrupt )
+static WRITE_LINE_DEVICE_HANDLER(vdp_interrupt)
 {
-	TMS9928A_interrupt(device->machine);
+	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_IRQ0, state);
 }
 
-static void vdp_interrupt(running_machine *machine, int state)
+static TMS9928A_INTERFACE(sg1000a_tms9928a_interface)
 {
-	cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ0, state);
-}
-
-static const TMS9928a_interface tms9928a_interface =
-{
-	TMS99x8A,
+	"screen",
 	0x4000,
-	0,0,
-	vdp_interrupt
+	DEVCB_LINE(vdp_interrupt)
 };
 
 static WRITE8_DEVICE_HANDLER( sg1000a_coin_counter_w )
 {
-	coin_counter_w(0, data & 0x01);
+	coin_counter_w(device->machine(), 0, data & 0x01);
 }
 
-static I8255A_INTERFACE( ppi8255_intf )
+static I8255_INTERFACE( ppi8255_intf )
 {
 	DEVCB_INPUT_PORT("P1"),
+	DEVCB_NULL,
 	DEVCB_INPUT_PORT("P2"),
+	DEVCB_NULL,
 	DEVCB_INPUT_PORT("DSW"),
-	DEVCB_NULL,
-	DEVCB_NULL,
 	DEVCB_HANDLER(sg1000a_coin_counter_w)
 };
 
@@ -263,28 +267,25 @@ static I8255A_INTERFACE( ppi8255_intf )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( sg1000a )
+static MACHINE_CONFIG_START( sg1000a, sg1000a_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, XTAL_3_579545MHz)
-	MDRV_CPU_PROGRAM_MAP(program_map)
-	MDRV_CPU_IO_MAP(io_map)
-	MDRV_CPU_VBLANK_INT("screen", sg1000a_interrupt)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_3_579545MHz)
+	MCFG_CPU_PROGRAM_MAP(program_map)
+	MCFG_CPU_IO_MAP(io_map)
 
-	MDRV_I8255A_ADD( "ppi8255", ppi8255_intf )
+	MCFG_I8255_ADD( "ppi8255", ppi8255_intf )
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(tms9928a)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_REFRESH_RATE((float)XTAL_10_738635MHz/2/342/262)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_TMS9928A_ADD( "tms9928a", TMS9928A, sg1000a_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_NTSC( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9928a", tms9928a_device, screen_update )
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76489, XTAL_3_579545MHz)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("snsnd", SN76489, XTAL_3_579545MHz)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -321,7 +322,6 @@ ROM_END
 
 static DRIVER_INIT( sg1000a )
 {
-	TMS9928A_configure(&tms9928a_interface);
 }
 
 static DRIVER_INIT(chwrestl)

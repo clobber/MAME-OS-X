@@ -16,9 +16,7 @@
 * NOTES
 *
 ******************************************************************************/
-#include "sndintrf.h"
-#include "streams.h"
-#include "cpuintrf.h"
+#include "emu.h"
 #include "3812intf.h"
 #include "fm.h"
 #include "sound/fmopl.h"
@@ -31,17 +29,15 @@ struct _ym3812_state
 	emu_timer *		timer[2];
 	void *			chip;
 	const ym3812_interface *intf;
-	const device_config *device;
+	device_t *device;
 };
 
 
-INLINE ym3812_state *get_safe_token(const device_config *device)
+INLINE ym3812_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_YM3812);
-	return (ym3812_state *)device->token;
+	assert(device->type() == YM3812);
+	return (ym3812_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -66,13 +62,13 @@ static TIMER_CALLBACK( timer_callback_1 )
 static void TimerHandler(void *param,int c,attotime period)
 {
 	ym3812_state *info = (ym3812_state *)param;
-	if( attotime_compare(period, attotime_zero) == 0 )
+	if( period == attotime::zero )
 	{	/* Reset FM Timer */
-		timer_enable(info->timer[c], 0);
+		info->timer[c]->enable(false);
 	}
 	else
 	{	/* Start FM Timer */
-		timer_adjust_oneshot(info->timer[c], period, 0);
+		info->timer[c]->adjust(period);
 	}
 }
 
@@ -86,7 +82,7 @@ static STREAM_UPDATE( ym3812_stream_update )
 static void _stream_update(void * param, int interval)
 {
 	ym3812_state *info = (ym3812_state *)param;
-	stream_update(info->stream);
+	info->stream->update();
 }
 
 
@@ -94,24 +90,24 @@ static DEVICE_START( ym3812 )
 {
 	static const ym3812_interface dummy = { 0 };
 	ym3812_state *info = get_safe_token(device);
-	int rate = device->clock/72;
+	int rate = device->clock()/72;
 
-	info->intf = device->static_config ? (const ym3812_interface *)device->static_config : &dummy;
+	info->intf = device->static_config() ? (const ym3812_interface *)device->static_config() : &dummy;
 	info->device = device;
 
 	/* stream system initialize */
-	info->chip = ym3812_init(device,device->clock,rate);
+	info->chip = ym3812_init(device,device->clock(),rate);
 	assert_always(info->chip != NULL, "Error creating YM3812 chip");
 
-	info->stream = stream_create(device,0,1,rate,info,ym3812_stream_update);
+	info->stream = device->machine().sound().stream_alloc(*device,0,1,rate,info,ym3812_stream_update);
 
 	/* YM3812 setup */
 	ym3812_set_timer_handler (info->chip, TimerHandler, info);
 	ym3812_set_irq_handler   (info->chip, IRQHandler, info);
 	ym3812_set_update_handler(info->chip, _stream_update, info);
 
-	info->timer[0] = timer_alloc(device->machine, timer_callback_0, info);
-	info->timer[1] = timer_alloc(device->machine, timer_callback_1, info);
+	info->timer[0] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_0), info);
+	info->timer[1] = device->machine().scheduler().timer_alloc(FUNC(timer_callback_1), info);
 }
 
 static DEVICE_STOP( ym3812 )
@@ -169,3 +165,6 @@ DEVICE_GET_INFO( ym3812 )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
+
+
+DEFINE_LEGACY_SOUND_DEVICE(YM3812, ym3812);

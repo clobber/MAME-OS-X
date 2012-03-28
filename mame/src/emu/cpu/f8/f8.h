@@ -24,7 +24,6 @@
 #ifndef __F8_H__
 #define _F8_H
 
-#include "cpuintrf.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,11 +43,9 @@ enum
         F8_R56, F8_R57, F8_R58, F8_R59, F8_R60, F8_R61, F8_R62, F8_R63
 };
 
-#define F8_INT_NONE  0
-#define F8_INT_INTR  1
+#define F8_INPUT_LINE_INT_REQ	1
 
-CPU_GET_INFO( f8 );
-#define CPU_F8 CPU_GET_INFO_NAME( f8 )
+DECLARE_LEGACY_CPU_DEVICE(F8, f8);
 
 #ifdef __cplusplus
 }

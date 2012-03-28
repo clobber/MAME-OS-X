@@ -6,6 +6,7 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "r3000.h"
 
@@ -136,9 +137,10 @@ struct _r3000_state
 	int			icount;
 	int			interrupt_cycles;
 	int			hasfpu;
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
 
 	/* endian-dependent load/store */
 	void		(*lwl)(r3000_state *r3000, UINT32 op);
@@ -149,7 +151,7 @@ struct _r3000_state
 	/* memory accesses */
 	UINT8		bigendian;
 	data_accessors cur;
-	const data_accessors *memory_hand;
+	data_accessors memory_hand;
 	const data_accessors *cache_hand;
 
 	/* cache memory */
@@ -161,16 +163,14 @@ struct _r3000_state
 	size_t		dcache_size;
 };
 
-INLINE r3000_state *get_safe_token(const device_config *device)
+INLINE r3000_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_R3000BE ||
-		   cpu_get_type(device) == CPU_R3000LE ||
-		   cpu_get_type(device) == CPU_R3041BE ||
-		   cpu_get_type(device) == CPU_R3041LE);
-	return (r3000_state *)device->token;
+	assert(device->type() == R3000BE ||
+		   device->type() == R3000LE ||
+		   device->type() == R3041BE ||
+		   device->type() == R3041LE);
+	return (r3000_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 
@@ -188,19 +188,19 @@ static void lwr_le(r3000_state *r3000, UINT32 op);
 static void swl_le(r3000_state *r3000, UINT32 op);
 static void swr_le(r3000_state *r3000, UINT32 op);
 
-static UINT8 readcache_be(const address_space *space, offs_t offset);
-static UINT16 readcache_be_word(const address_space *space, offs_t offset);
-static UINT32 readcache_be_dword(const address_space *space, offs_t offset);
-static void writecache_be(const address_space *space, offs_t offset, UINT8 data);
-static void writecache_be_word(const address_space *space, offs_t offset, UINT16 data);
-static void writecache_be_dword(const address_space *space, offs_t offset, UINT32 data);
+static UINT8 readcache_be(address_space *space, offs_t offset);
+static UINT16 readcache_be_word(address_space *space, offs_t offset);
+static UINT32 readcache_be_dword(address_space *space, offs_t offset);
+static void writecache_be(address_space *space, offs_t offset, UINT8 data);
+static void writecache_be_word(address_space *space, offs_t offset, UINT16 data);
+static void writecache_be_dword(address_space *space, offs_t offset, UINT32 data);
 
-static UINT8 readcache_le(const address_space *space, offs_t offset);
-static UINT16 readcache_le_word(const address_space *space, offs_t offset);
-static UINT32 readcache_le_dword(const address_space *space, offs_t offset);
-static void writecache_le(const address_space *space, offs_t offset, UINT8 data);
-static void writecache_le_word(const address_space *space, offs_t offset, UINT16 data);
-static void writecache_le_dword(const address_space *space, offs_t offset, UINT32 data);
+static UINT8 readcache_le(address_space *space, offs_t offset);
+static UINT16 readcache_le_word(address_space *space, offs_t offset);
+static UINT32 readcache_le_dword(address_space *space, offs_t offset);
+static void writecache_le(address_space *space, offs_t offset, UINT8 data);
+static void writecache_le_word(address_space *space, offs_t offset, UINT16 data);
+static void writecache_le_dword(address_space *space, offs_t offset, UINT32 data);
 
 
 
@@ -226,7 +226,7 @@ static const data_accessors le_cache =
     MEMORY ACCESSORS
 ***************************************************************************/
 
-#define ROPCODE(R,pc)		memory_decrypted_read_dword((R)->program, pc)
+#define ROPCODE(R,pc)		(R)->direct->read_decrypted_dword(pc)
 
 
 
@@ -299,12 +299,12 @@ static void set_irq_line(r3000_state *r3000, int irqline, int state)
 
 static CPU_INIT( r3000 )
 {
-	const r3000_cpu_core *configdata = (const r3000_cpu_core *)device->static_config;
+	const r3000_cpu_core *configdata = (const r3000_cpu_core *)device->static_config();
 	r3000_state *r3000 = get_safe_token(device);
 
 	/* allocate memory */
-	r3000->icache = auto_alloc_array(device->machine, UINT32, configdata->icache/4);
-	r3000->dcache = auto_alloc_array(device->machine, UINT32, configdata->dcache/4);
+	r3000->icache = auto_alloc_array(device->machine(), UINT32, configdata->icache/4);
+	r3000->dcache = auto_alloc_array(device->machine(), UINT32, configdata->dcache/4);
 
 	r3000->icache_size = configdata->icache;
 	r3000->dcache_size = configdata->dcache;
@@ -312,7 +312,8 @@ static CPU_INIT( r3000 )
 
 	r3000->irq_callback = irqcallback;
 	r3000->device = device;
-	r3000->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	r3000->program = device->space(AS_PROGRAM);
+	r3000->direct = &r3000->program->direct();
 }
 
 
@@ -320,9 +321,9 @@ static void r3000_reset(r3000_state *r3000, int bigendian)
 {
 	/* set up the endianness */
 	r3000->bigendian = bigendian;
+	r3000->program->accessors(r3000->memory_hand);
 	if (r3000->bigendian)
 	{
-		r3000->memory_hand = &r3000->program->accessors;
 		r3000->cache_hand = &be_cache;
 		r3000->lwl = lwl_be;
 		r3000->lwr = lwr_be;
@@ -331,7 +332,6 @@ static void r3000_reset(r3000_state *r3000, int bigendian)
 	}
 	else
 	{
-		r3000->memory_hand = &r3000->program->accessors;
 		r3000->cache_hand = &le_cache;
 		r3000->lwl = lwl_le;
 		r3000->lwr = lwr_le;
@@ -340,7 +340,7 @@ static void r3000_reset(r3000_state *r3000, int bigendian)
 	}
 
 	/* initialize the rest of the config */
-	r3000->cur = *r3000->memory_hand;
+	r3000->cur = r3000->memory_hand;
 	r3000->cache = r3000->dcache;
 	r3000->cache_size = r3000->dcache_size;
 
@@ -397,7 +397,7 @@ INLINE void set_cop0_reg(r3000_state *r3000, int idx, UINT32 val)
 			if (val & SR_IsC)
 				r3000->cur = *r3000->cache_hand;
 			else
-				r3000->cur = *r3000->memory_hand;
+				r3000->cur = r3000->memory_hand;
 		}
 
 		/* handle cache switching */
@@ -693,7 +693,6 @@ static CPU_EXECUTE( r3000 )
 	r3000_state *r3000 = get_safe_token(device);
 
 	/* count cycles and interrupt cycles */
-	r3000->icount = cycles;
 	r3000->icount -= r3000->interrupt_cycles;
 	r3000->interrupt_cycles = 0;
 
@@ -852,7 +851,7 @@ static CPU_EXECUTE( r3000 )
 			case 0x25:	/* LHU */		temp = RWORD(r3000, SIMMVAL+r3000->RSVAL); if (RTREG) r3000->RTVAL = (UINT16)temp; break;
 			case 0x26:	/* LWR */		(*r3000->lwr)(r3000, op);														break;
 			case 0x28:	/* SB */		WBYTE(r3000, SIMMVAL+r3000->RSVAL, r3000->RTVAL);								break;
-			case 0x29:	/* SH */		WWORD(r3000, SIMMVAL+r3000->RSVAL, r3000->RTVAL); 								break;
+			case 0x29:	/* SH */		WWORD(r3000, SIMMVAL+r3000->RSVAL, r3000->RTVAL);								break;
 			case 0x2a:	/* SWL */		(*r3000->swl)(r3000, op);														break;
 			case 0x2b:	/* SW */		WLONG(r3000, SIMMVAL+r3000->RSVAL, r3000->RTVAL);								break;
 			case 0x2e:	/* SWR */		(*r3000->swr)(r3000, op);														break;
@@ -881,7 +880,6 @@ static CPU_EXECUTE( r3000 )
 
 	r3000->icount -= r3000->interrupt_cycles;
 	r3000->interrupt_cycles = 0;
-	return cycles - r3000->icount;
 }
 
 
@@ -895,86 +893,86 @@ static CPU_EXECUTE( r3000 )
     CACHE I/O
 ***************************************************************************/
 
-static UINT8 readcache_be(const address_space *space, offs_t offset)
+static UINT8 readcache_be(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? r3000->cache[BYTE4_XOR_BE(offset)] : 0xff;
 }
 
-static UINT16 readcache_be_word(const address_space *space, offs_t offset)
+static UINT16 readcache_be_word(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT16 *)&r3000->cache[WORD_XOR_BE(offset)] : 0xffff;
 }
 
-static UINT32 readcache_be_dword(const address_space *space, offs_t offset)
+static UINT32 readcache_be_dword(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT32 *)&r3000->cache[offset] : 0xffffffff;
 }
 
-static void writecache_be(const address_space *space, offs_t offset, UINT8 data)
+static void writecache_be(address_space *space, offs_t offset, UINT8 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) r3000->cache[BYTE4_XOR_BE(offset)] = data;
 }
 
-static void writecache_be_word(const address_space *space, offs_t offset, UINT16 data)
+static void writecache_be_word(address_space *space, offs_t offset, UINT16 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT16 *)&r3000->cache[WORD_XOR_BE(offset)] = data;
 }
 
-static void writecache_be_dword(const address_space *space, offs_t offset, UINT32 data)
+static void writecache_be_dword(address_space *space, offs_t offset, UINT32 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT32 *)&r3000->cache[offset] = data;
 }
 
-static UINT8 readcache_le(const address_space *space, offs_t offset)
+static UINT8 readcache_le(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? r3000->cache[BYTE4_XOR_LE(offset)] : 0xff;
 }
 
-static UINT16 readcache_le_word(const address_space *space, offs_t offset)
+static UINT16 readcache_le_word(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT16 *)&r3000->cache[WORD_XOR_LE(offset)] : 0xffff;
 }
 
-static UINT32 readcache_le_dword(const address_space *space, offs_t offset)
+static UINT32 readcache_le_dword(address_space *space, offs_t offset)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	return (offset * 4 < r3000->cache_size) ? *(UINT32 *)&r3000->cache[offset] : 0xffffffff;
 }
 
-static void writecache_le(const address_space *space, offs_t offset, UINT8 data)
+static void writecache_le(address_space *space, offs_t offset, UINT8 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) r3000->cache[BYTE4_XOR_LE(offset)] = data;
 }
 
-static void writecache_le_word(const address_space *space, offs_t offset, UINT16 data)
+static void writecache_le_word(address_space *space, offs_t offset, UINT16 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT16 *)&r3000->cache[WORD_XOR_LE(offset)] = data;
 }
 
-static void writecache_le_dword(const address_space *space, offs_t offset, UINT32 data)
+static void writecache_le_dword(address_space *space, offs_t offset, UINT32 data)
 {
-	r3000_state *r3000 = get_safe_token(space->cpu);
+	r3000_state *r3000 = get_safe_token(&space->device());
 	offset &= 0x1fffffff;
 	if (offset * 4 < r3000->cache_size) *(UINT32 *)&r3000->cache[offset] = data;
 }
@@ -1163,7 +1161,7 @@ static CPU_SET_INFO( r3000 )
 
 static CPU_GET_INFO( r3000 )
 {
-	r3000_state *r3000 = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	r3000_state *r3000 = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -1178,15 +1176,15 @@ static CPU_GET_INFO( r3000 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;									break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;									break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 29;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 29;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;							break;
 
 		case CPUINFO_INT_INPUT_STATE + R3000_IRQ0:		info->i = (r3000->cpr[0][COP0_Cause] & 0x400) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + R3000_IRQ1:		info->i = (r3000->cpr[0][COP0_Cause] & 0x800) ? ASSERT_LINE : CLEAR_LINE; break;
@@ -1250,23 +1248,23 @@ static CPU_GET_INFO( r3000 )
 		case DEVINFO_STR_FAMILY:					strcpy(info->s, "MIPS II");						break;
 		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");							break;
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Aaron Giles"); 		break;
+		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Aaron Giles");		break;
 
 		case CPUINFO_STR_FLAGS:							strcpy(info->s, " ");							break;
 
-		case CPUINFO_STR_REGISTER + R3000_PC:  			sprintf(info->s, "PC: %08X", r3000->pc); 		break;
-		case CPUINFO_STR_REGISTER + R3000_SR:  			sprintf(info->s, "SR: %08X", r3000->SR); 		break;
+		case CPUINFO_STR_REGISTER + R3000_PC:			sprintf(info->s, "PC: %08X", r3000->pc);		break;
+		case CPUINFO_STR_REGISTER + R3000_SR:			sprintf(info->s, "SR: %08X", r3000->SR);		break;
 
-		case CPUINFO_STR_REGISTER + R3000_R0:			sprintf(info->s, "R0: %08X", r3000->r[0]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R1:			sprintf(info->s, "R1: %08X", r3000->r[1]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R2:			sprintf(info->s, "R2: %08X", r3000->r[2]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R3:			sprintf(info->s, "R3: %08X", r3000->r[3]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R4:			sprintf(info->s, "R4: %08X", r3000->r[4]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R5:			sprintf(info->s, "R5: %08X", r3000->r[5]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R6:			sprintf(info->s, "R6: %08X", r3000->r[6]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R7:			sprintf(info->s, "R7: %08X", r3000->r[7]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R8:			sprintf(info->s, "R8: %08X", r3000->r[8]); 		break;
-		case CPUINFO_STR_REGISTER + R3000_R9:			sprintf(info->s, "R9: %08X", r3000->r[9]); 		break;
+		case CPUINFO_STR_REGISTER + R3000_R0:			sprintf(info->s, "R0: %08X", r3000->r[0]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R1:			sprintf(info->s, "R1: %08X", r3000->r[1]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R2:			sprintf(info->s, "R2: %08X", r3000->r[2]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R3:			sprintf(info->s, "R3: %08X", r3000->r[3]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R4:			sprintf(info->s, "R4: %08X", r3000->r[4]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R5:			sprintf(info->s, "R5: %08X", r3000->r[5]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R6:			sprintf(info->s, "R6: %08X", r3000->r[6]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R7:			sprintf(info->s, "R7: %08X", r3000->r[7]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R8:			sprintf(info->s, "R8: %08X", r3000->r[8]);		break;
+		case CPUINFO_STR_REGISTER + R3000_R9:			sprintf(info->s, "R9: %08X", r3000->r[9]);		break;
 		case CPUINFO_STR_REGISTER + R3000_R10:			sprintf(info->s, "R10:%08X", r3000->r[10]); 	break;
 		case CPUINFO_STR_REGISTER + R3000_R11:			sprintf(info->s, "R11:%08X", r3000->r[11]); 	break;
 		case CPUINFO_STR_REGISTER + R3000_R12:			sprintf(info->s, "R12:%08X", r3000->r[12]); 	break;
@@ -1371,3 +1369,9 @@ CPU_GET_INFO( r3041le )
 		default:										CPU_GET_INFO_CALL(r3000);						break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(R3000BE, r3000be);
+DEFINE_LEGACY_CPU_DEVICE(R3000LE, r3000le);
+
+DEFINE_LEGACY_CPU_DEVICE(R3041BE, r3041be);
+DEFINE_LEGACY_CPU_DEVICE(R3041LE, r3041le);

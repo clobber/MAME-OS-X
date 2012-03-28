@@ -6,27 +6,57 @@
 
 ***************************************************************************/
 
+#pragma once
+
 #ifndef __MB3773_H__
 #define __MB3773_H__
 
 
-/***************************************************************************
-    MACROS / CONSTANTS
-***************************************************************************/
+//**************************************************************************
+//  INTERFACE CONFIGURATION MACROS
+//**************************************************************************
 
-#define MB3773		DEVICE_GET_INFO_NAME(mb3773)
-
-#define MDRV_MB3773_ADD(_tag) \
-	MDRV_DEVICE_ADD(_tag, MB3773, 0)
+#define MCFG_MB3773_ADD(_tag) \
+	MCFG_DEVICE_ADD(_tag, MB3773, 0)
 
 
-/***************************************************************************
-    PROTOTYPES
-***************************************************************************/
+// ======================> mb3773_device
 
-/* device interface */
-DEVICE_GET_INFO( mb3773 );
+class mb3773_device :
+	public device_t
+{
+public:
+	// construction/destruction
+	mb3773_device( const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock );
 
-extern WRITE8_DEVICE_HANDLER( mb3773_set_ck );
+	// I/O operations
+	void set_ck( int state );
 
-#endif	/* __MB3773_H__ */
+protected:
+	// device-level overrides
+	virtual void device_config_complete();
+	virtual void device_validity_check(validity_checker &valid) const;
+	virtual void device_start();
+	virtual void device_reset();
+
+	// internal helpers
+	static TIMER_CALLBACK( watchdog_timeout );
+	void reset_timer();
+
+	// internal state
+	emu_timer *m_watchdog_timer;
+	int m_ck;
+};
+
+
+// device type definition
+extern const device_type MB3773;
+
+
+//**************************************************************************
+//  READ/WRITE HANDLERS
+//**************************************************************************
+
+WRITE_LINE_DEVICE_HANDLER( mb3773_set_ck );
+
+#endif

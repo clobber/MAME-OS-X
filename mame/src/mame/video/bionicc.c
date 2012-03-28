@@ -1,35 +1,30 @@
 /***************************************************************************
 
-Bionic Commando Video Hardware
+    Bionic Commando Video Hardware
 
-This board handles tile/tile and tile/sprite priority with a PROM. Its
-working is complicated and hardcoded in the driver.
+    This board handles tile/tile and tile/sprite priority with a PROM. Its
+    working is complicated and hardcoded in the driver.
 
-The PROM is a 256x4 chip, with address inputs wired as follows:
+    The PROM is a 256x4 chip, with address inputs wired as follows:
 
-A0 bg opaque
-A1 \
-A2 |  fg pen
-A3 |
-A4 /
-A5 fg has priority over sprites (bit 5 of tile attribute)
-A6 fg has not priority over bg (bits 6 & 7 of tile attribute both set)
-A7 sprite opaque
+    A0 bg opaque
+    A1 \
+    A2 |  fg pen
+    A3 |
+    A4 /
+    A5 fg has priority over sprites (bit 5 of tile attribute)
+    A6 fg has not priority over bg (bits 6 & 7 of tile attribute both set)
+    A7 sprite opaque
 
-The output selects the active layer, it can be:
-0  bg
-1  fg
-2  sprite
+    The output selects the active layer, it can be:
+    0  bg
+    1  fg
+    2  sprite
 
 ***************************************************************************/
 
-#include "driver.h"
-
-UINT16 *bionicc_fgvideoram;
-UINT16 *bionicc_bgvideoram;
-UINT16 *bionicc_txvideoram;
-
-static tilemap *tx_tilemap, *bg_tilemap, *fg_tilemap;
+#include "emu.h"
+#include "includes/bionicc.h"
 
 
 /***************************************************************************
@@ -40,45 +35,51 @@ static tilemap *tx_tilemap, *bg_tilemap, *fg_tilemap;
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int attr = bionicc_bgvideoram[2*tile_index+1];
+	bionicc_state *state = machine.driver_data<bionicc_state>();
+
+	int attr = state->m_bgvideoram[2 * tile_index + 1];
 	SET_TILE_INFO(
 			1,
-			(bionicc_bgvideoram[2*tile_index] & 0xff) + ((attr & 0x07) << 8),
+			(state->m_bgvideoram[2 * tile_index] & 0xff) + ((attr & 0x07) << 8),
 			(attr & 0x18) >> 3,
 			TILE_FLIPXY((attr & 0xc0) >> 6));
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int attr = bionicc_fgvideoram[2*tile_index+1];
+	bionicc_state *state = machine.driver_data<bionicc_state>();
+
+	int attr = state->m_fgvideoram[2 * tile_index + 1];
 	int flags;
 
 	if ((attr & 0xc0) == 0xc0)
 	{
-		tileinfo->category = 1;
-		tileinfo->group = 0;
+		tileinfo.category = 1;
+		tileinfo.group = 0;
 		flags = 0;
 	}
 	else
 	{
-		tileinfo->category = 0;
-		tileinfo->group = (attr & 0x20) >> 5;
+		tileinfo.category = 0;
+		tileinfo.group = (attr & 0x20) >> 5;
 		flags = TILE_FLIPXY((attr & 0xc0) >> 6);
 	}
 
 	SET_TILE_INFO(
 			2,
-			(bionicc_fgvideoram[2*tile_index] & 0xff) + ((attr & 0x07) << 8),
+			(state->m_fgvideoram[2 * tile_index] & 0xff) + ((attr & 0x07) << 8),
 			(attr & 0x18) >> 3,
 			flags);
 }
 
 static TILE_GET_INFO( get_tx_tile_info )
 {
-	int attr = bionicc_txvideoram[tile_index + 0x400];
+	bionicc_state *state = machine.driver_data<bionicc_state>();
+
+	int attr = state->m_txvideoram[tile_index + 0x400];
 	SET_TILE_INFO(
 			0,
-			(bionicc_txvideoram[tile_index] & 0xff) + ((attr & 0x00c0) << 2),
+			(state->m_txvideoram[tile_index] & 0xff) + ((attr & 0x00c0) << 2),
 			attr & 0x3f,
 			0);
 }
@@ -93,14 +94,16 @@ static TILE_GET_INFO( get_tx_tile_info )
 
 VIDEO_START( bionicc )
 {
-	tx_tilemap = tilemap_create(machine, get_tx_tile_info,tilemap_scan_rows, 8, 8,32,32);
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,16,16,64,64);
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows, 8, 8,64,64);
+	bionicc_state *state = machine.driver_data<bionicc_state>();
 
-	tilemap_set_transparent_pen(tx_tilemap,3);
-	tilemap_set_transmask(fg_tilemap,0,0xffff,0x8000); /* split type 0 is completely transparent in front half */
-	tilemap_set_transmask(fg_tilemap,1,0xffc1,0x803e); /* split type 1 has pens 1-5 opaque in front half */
-	tilemap_set_transparent_pen(bg_tilemap,15);
+	state->m_tx_tilemap = tilemap_create(machine, get_tx_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 16, 16, 64, 64);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,  8, 8, 64, 64);
+
+	state->m_tx_tilemap->set_transparent_pen(3);
+	state->m_fg_tilemap->set_transmask(0, 0xffff, 0x8000); /* split type 0 is completely transparent in front half */
+	state->m_fg_tilemap->set_transmask(1, 0xffc1, 0x803e); /* split type 1 has pens 1-5 opaque in front half */
+	state->m_bg_tilemap->set_transparent_pen(15);
 }
 
 
@@ -113,32 +116,39 @@ VIDEO_START( bionicc )
 
 WRITE16_HANDLER( bionicc_bgvideoram_w )
 {
-	COMBINE_DATA(&bionicc_bgvideoram[offset]);
-	tilemap_mark_tile_dirty(bg_tilemap,offset/2);
+	bionicc_state *state = space->machine().driver_data<bionicc_state>();
+
+	COMBINE_DATA(&state->m_bgvideoram[offset]);
+	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
 }
 
 WRITE16_HANDLER( bionicc_fgvideoram_w )
 {
-	COMBINE_DATA(&bionicc_fgvideoram[offset]);
-	tilemap_mark_tile_dirty(fg_tilemap,offset/2);
+	bionicc_state *state = space->machine().driver_data<bionicc_state>();
+
+	COMBINE_DATA(&state->m_fgvideoram[offset]);
+	state->m_fg_tilemap->mark_tile_dirty(offset / 2);
 }
 
 WRITE16_HANDLER( bionicc_txvideoram_w )
 {
-	COMBINE_DATA(&bionicc_txvideoram[offset]);
-	tilemap_mark_tile_dirty(tx_tilemap,offset&0x3ff);
+	bionicc_state *state = space->machine().driver_data<bionicc_state>();
+
+	COMBINE_DATA(&state->m_txvideoram[offset]);
+	state->m_tx_tilemap->mark_tile_dirty(offset & 0x3ff);
 }
 
 WRITE16_HANDLER( bionicc_paletteram_w )
 {
+	bionicc_state *state = space->machine().driver_data<bionicc_state>();
 	int r, g, b, bright;
-	data = COMBINE_DATA(&paletteram16[offset]);
+	data = COMBINE_DATA(&state->m_paletteram[offset]);
 
-	bright = (data&0x0f);
+	bright = (data & 0x0f);
 
-	r = ((data>>12)&0x0f) * 0x11;
-	g = ((data>>8 )&0x0f) * 0x11;
-	b = ((data>>4 )&0x0f) * 0x11;
+	r = ((data >> 12) & 0x0f) * 0x11;
+	g = ((data >> 8 ) & 0x0f) * 0x11;
+	b = ((data >> 4 ) & 0x0f) * 0x11;
 
 	if ((bright & 0x08) == 0)
 	{
@@ -147,43 +157,45 @@ WRITE16_HANDLER( bionicc_paletteram_w )
 		b = b * (0x07 + bright) / 0x0e;
 	}
 
-	palette_set_color (space->machine, offset, MAKE_RGB(r, g, b));
+	palette_set_color (space->machine(), offset, MAKE_RGB(r, g, b));
 }
 
 WRITE16_HANDLER( bionicc_scroll_w )
 {
-	static UINT16 scroll[4];
+	bionicc_state *state = space->machine().driver_data<bionicc_state>();
 
-	data = COMBINE_DATA(&scroll[offset]);
+	data = COMBINE_DATA(&state->m_scroll[offset]);
 
 	switch (offset)
 	{
 		case 0:
-			tilemap_set_scrollx(fg_tilemap,0,data);
+			state->m_fg_tilemap->set_scrollx(0, data);
 			break;
 		case 1:
-			tilemap_set_scrolly(fg_tilemap,0,data);
+			state->m_fg_tilemap->set_scrolly(0, data);
 			break;
 		case 2:
-			tilemap_set_scrollx(bg_tilemap,0,data);
+			state->m_bg_tilemap->set_scrollx(0, data);
 			break;
 		case 3:
-			tilemap_set_scrolly(bg_tilemap,0,data);
+			state->m_bg_tilemap->set_scrolly(0, data);
 			break;
 	}
 }
 
 WRITE16_HANDLER( bionicc_gfxctrl_w )
 {
+	bionicc_state *state = space->machine().driver_data<bionicc_state>();
+
 	if (ACCESSING_BITS_8_15)
 	{
-		flip_screen_set(space->machine, data & 0x0100);
+		flip_screen_set(space->machine(), data & 0x0100);
 
-		tilemap_set_enable(bg_tilemap,data & 0x2000);	/* guess */
-		tilemap_set_enable(fg_tilemap,data & 0x1000);	/* guess */
+		state->m_bg_tilemap->enable(data & 0x2000);	/* guess */
+		state->m_fg_tilemap->enable(data & 0x1000);	/* guess */
 
-		coin_counter_w(0,data & 0x8000);
-		coin_counter_w(1,data & 0x4000);
+		coin_counter_w(space->machine(), 0, data & 0x8000);
+		coin_counter_w(space->machine(), 1, data & 0x4000);
 	}
 }
 
@@ -195,22 +207,28 @@ WRITE16_HANDLER( bionicc_gfxctrl_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	UINT16 *buffered_spriteram = machine.generic.buffered_spriteram.u16;
+//  bionicc_state *state = machine.driver_data<bionicc_state>();
 	int offs;
-	const gfx_element *gfx = machine->gfx[3];
+	const gfx_element *gfx = machine.gfx[3];
 
-	for (offs = (spriteram_size-8)/2;offs >= 0;offs -= 4)
+	for (offs = (machine.generic.spriteram_size - 8) / 2; offs >= 0; offs -= 4)
 	{
-		int tile_number = buffered_spriteram16[offs] & 0x7ff;
-		if( tile_number!=0x7FF ){
-			int attr = buffered_spriteram16[offs+1];
-			int color = (attr&0x3C)>>2;
-			int flipx = attr&0x02;
+		int tile_number = buffered_spriteram[offs] & 0x7ff;
+		if( tile_number != 0x7ff )
+		{
+			int attr = buffered_spriteram[offs + 1];
+			int color = (attr & 0x3c) >> 2;
+			int flipx = attr & 0x02;
 			int flipy = 0;
-			int sx = (INT16)buffered_spriteram16[offs+3];	/* signed */
-			int sy = (INT16)buffered_spriteram16[offs+2];	/* signed */
-			if(sy>512-16) sy-=512;
+			int sx = (INT16)buffered_spriteram[offs + 3];	/* signed */
+			int sy = (INT16)buffered_spriteram[offs + 2];	/* signed */
+
+			if (sy > 512 - 16)
+				sy -= 512;
+
 			if (flip_screen_get(machine))
 			{
 				sx = 240 - sx;
@@ -228,21 +246,27 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	}
 }
 
-VIDEO_UPDATE( bionicc )
+SCREEN_UPDATE_IND16( bionicc )
 {
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
-	tilemap_draw(bitmap,cliprect,fg_tilemap,1|TILEMAP_DRAW_LAYER1,0);	/* nothing in FRONT */
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0|TILEMAP_DRAW_LAYER1,0);
-	draw_sprites(screen->machine,bitmap,cliprect);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0|TILEMAP_DRAW_LAYER0,0);
-	tilemap_draw(bitmap,cliprect,tx_tilemap,0,0);
+	bionicc_state *state = screen.machine().driver_data<bionicc_state>();
+
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 1 | TILEMAP_DRAW_LAYER1, 0);	/* nothing in FRONT */
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0 | TILEMAP_DRAW_LAYER1, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0 | TILEMAP_DRAW_LAYER0, 0);
+	state->m_tx_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-VIDEO_EOF( bionicc )
+SCREEN_VBLANK( bionicc )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	// rising edge
+	if (vblank_on)
+	{
+		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
 
-	buffer_spriteram16_w(space, 0, 0, 0xffff);
+		buffer_spriteram16_w(space, 0, 0, 0xffff);
+	}
 }

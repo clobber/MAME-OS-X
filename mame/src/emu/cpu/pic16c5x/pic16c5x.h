@@ -15,7 +15,6 @@
 #define __PIC16C5X_H__
 
 
-#include "cpuintrf.h"
 
 
 /**************************************************************************
@@ -44,28 +43,15 @@ enum
  *  the value if known (available in HEX dumps of the ROM).
  */
 
-void pic16c5x_set_config(const device_config *cpu, int data);
+void pic16c5x_set_config(device_t *cpu, int data);
 
 
 
-CPU_GET_INFO( pic16c54 );
-#define CPU_PIC16C54 CPU_GET_INFO_NAME( pic16c54 )
-
-
-CPU_GET_INFO( pic16c55 );
-#define CPU_PIC16C55 CPU_GET_INFO_NAME( pic16c55 )
-
-
-CPU_GET_INFO( pic16c56 );
-#define CPU_PIC16C56 CPU_GET_INFO_NAME( pic16c56 )
-
-
-CPU_GET_INFO( pic16c57 );
-#define CPU_PIC16C57 CPU_GET_INFO_NAME( pic16c57 )
-
-
-CPU_GET_INFO( pic16c58 );
-#define CPU_PIC16C58 CPU_GET_INFO_NAME( pic16c58 )
+DECLARE_LEGACY_CPU_DEVICE(PIC16C54, pic16c54);
+DECLARE_LEGACY_CPU_DEVICE(PIC16C55, pic16c55);
+DECLARE_LEGACY_CPU_DEVICE(PIC16C56, pic16c56);
+DECLARE_LEGACY_CPU_DEVICE(PIC16C57, pic16c57);
+DECLARE_LEGACY_CPU_DEVICE(PIC16C58, pic16c58);
 
 
 CPU_DISASSEMBLE( pic16c5x );

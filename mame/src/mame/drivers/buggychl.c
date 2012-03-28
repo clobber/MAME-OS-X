@@ -10,10 +10,6 @@ TODO:
   correct.
 - Tilemap and sprite placement might not be accurate, there aren't many
   references.
-- The way I'm handling opaqueness in the top portion of the screen is definitely
-  wrong (see the high score entry screen). Actually there doesn't seem to be
-  a way to make the fg opaque, but not doing so leaves parts of the bg visible
-  at the top of the screen.
 - The gradient sky is completely wrong - it's more of a placeholder to show
   that it's supposed to be there. It is supposed to skew along with the
   background, and the gradient can move around (the latter doesn't seem to
@@ -79,12 +75,12 @@ Dip locations and factory settings verified from dip listing
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6805/m6805.h"
 #include "sound/ay8910.h"
 #include "sound/msm5232.h"
+#include "machine/buggychl.h"
 #include "includes/buggychl.h"
 
 #include "buggychl.lh"
@@ -92,61 +88,64 @@ Dip locations and factory settings verified from dip listing
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bankptr(space->machine, 1,&memory_region(space->machine, "maincpu")[0x10000 + (data & 7) * 0x2000]);
+	memory_set_bank(space->machine(), "bank1", data & 0x07);	// shall we check if data&7 < # banks?
 }
-
-
-static int sound_nmi_enable,pending_nmi;
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	if (sound_nmi_enable) cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
-	else pending_nmi = 1;
+	buggychl_state *state = machine.driver_data<buggychl_state>();
+
+	if (state->m_sound_nmi_enable)
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	else
+		state->m_pending_nmi = 1;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
 	soundlatch_w(space, 0, data);
-	timer_call_after_resynch(space->machine, NULL, data, nmi_callback);
+	space->machine().scheduler().synchronize(FUNC(nmi_callback), data);
 }
 
 static WRITE8_HANDLER( nmi_disable_w )
 {
-	sound_nmi_enable = 0;
+	buggychl_state *state = space->machine().driver_data<buggychl_state>();
+	state->m_sound_nmi_enable = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	sound_nmi_enable = 1;
-	if (pending_nmi)
+	buggychl_state *state = space->machine().driver_data<buggychl_state>();
+	state->m_sound_nmi_enable = 1;
+	if (state->m_pending_nmi)
 	{
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
-		pending_nmi = 0;
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		state->m_pending_nmi = 0;
 	}
 }
 
 static WRITE8_HANDLER( sound_enable_w )
 {
-	sound_global_enable(space->machine, data & 1);
+	space->machine().sound().system_enable(data & 1);
 }
 
 
 
-static ADDRESS_MAP_START( buggychl_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( buggychl_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM /* A22-04 (23) */
 	AM_RANGE(0x4000, 0x7fff) AM_ROM /* A22-05 (22) */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM /* 6116 SRAM (36) */
 	AM_RANGE(0x8800, 0x8fff) AM_RAM /* 6116 SRAM (35) */
 	AM_RANGE(0x9000, 0x9fff) AM_WRITE(buggychl_sprite_lookup_w)
-	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK(1) AM_WRITE(buggychl_chargen_w) AM_BASE(&buggychl_character_ram)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1") AM_WRITE(buggychl_chargen_w) AM_BASE_MEMBER(buggychl_state, m_charram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE_SIZE_MEMBER(buggychl_state, m_videoram, m_videoram_size)
 	AM_RANGE(0xd100, 0xd100) AM_WRITE(buggychl_ctrl_w)
 	AM_RANGE(0xd200, 0xd200) AM_WRITE(bankswitch_w)
 	AM_RANGE(0xd300, 0xd300) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xd303, 0xd303) AM_WRITE(buggychl_sprite_lookup_bank_w)
-	AM_RANGE(0xd400, 0xd400) AM_READWRITE(buggychl_mcu_r, buggychl_mcu_w)
-	AM_RANGE(0xd401, 0xd401) AM_READ(buggychl_mcu_status_r)
-	AM_RANGE(0xd500, 0xd57f) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd400, 0xd400) AM_DEVREADWRITE("bmcu", buggychl_mcu_r, buggychl_mcu_w)
+	AM_RANGE(0xd401, 0xd401) AM_DEVREAD("bmcu", buggychl_mcu_status_r)
+	AM_RANGE(0xd500, 0xd57f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(buggychl_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xd600, 0xd600) AM_READ_PORT("DSW1")
 	AM_RANGE(0xd601, 0xd601) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd602, 0xd602) AM_READ_PORT("DSW3")
@@ -157,14 +156,14 @@ static ADDRESS_MAP_START( buggychl_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0xd60b, 0xd60b) // other inputs, not used?
 	AM_RANGE(0xd610, 0xd610) AM_WRITE(sound_command_w)
 	AM_RANGE(0xd618, 0xd618) AM_WRITENOP	/* accelerator clear */
-	AM_RANGE(0xd700, 0xd7ff) AM_WRITE(paletteram_xxxxRRRRGGGGBBBB_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0xd840, 0xd85f) AM_WRITEONLY AM_BASE(&buggychl_scrollv)
-	AM_RANGE(0xdb00, 0xdbff) AM_WRITEONLY AM_BASE(&buggychl_scrollh)
+	AM_RANGE(0xd700, 0xd7ff) AM_WRITE(paletteram_xxxxRRRRGGGGBBBB_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd840, 0xd85f) AM_WRITEONLY AM_BASE_MEMBER(buggychl_state, m_scrollv)
+	AM_RANGE(0xdb00, 0xdbff) AM_WRITEONLY AM_BASE_MEMBER(buggychl_state, m_scrollh)
 	AM_RANGE(0xdc04, 0xdc04) AM_WRITEONLY /* should be fg scroll */
 	AM_RANGE(0xdc06, 0xdc06) AM_WRITE(buggychl_bg_scrollx_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x4800, 0x4801) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -178,18 +177,6 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x5002, 0x5002) AM_WRITE(nmi_disable_w)
 	AM_RANGE(0x5003, 0x5003) AM_WRITE(sound_enable_w)
 	AM_RANGE(0xe000, 0xefff) AM_ROM	/* space for diagnostics ROM */
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
-	AM_RANGE(0x0000, 0x0000) AM_READWRITE(buggychl_68705_portA_r, buggychl_68705_portA_w)
-	AM_RANGE(0x0001, 0x0001) AM_READWRITE(buggychl_68705_portB_r, buggychl_68705_portB_w)
-	AM_RANGE(0x0002, 0x0002) AM_READWRITE(buggychl_68705_portC_r, buggychl_68705_portC_w)
-	AM_RANGE(0x0004, 0x0004) AM_WRITE(buggychl_68705_ddrA_w)
-	AM_RANGE(0x0005, 0x0005) AM_WRITE(buggychl_68705_ddrB_w)
-	AM_RANGE(0x0006, 0x0006) AM_WRITE(buggychl_68705_ddrC_w)
-	AM_RANGE(0x0010, 0x007f) AM_RAM
-	AM_RANGE(0x0080, 0x07ff) AM_ROM
 ADDRESS_MAP_END
 
 /******************************************************************************/
@@ -327,19 +314,19 @@ GFXDECODE_END
 
 
 
-static WRITE8_DEVICE_HANDLER( portA_0_w )
+static WRITE8_DEVICE_HANDLER( port_a_0_w )
 {
 	/* VOL/BAL   for the 7630 on this 8910 output */
 }
-static WRITE8_DEVICE_HANDLER( portB_0_w )
+static WRITE8_DEVICE_HANDLER( port_b_0_w )
 {
 	/* TRBL/BASS for the 7630 on this 8910 output */
 }
-static WRITE8_DEVICE_HANDLER( portA_1_w )
+static WRITE8_DEVICE_HANDLER( port_a_1_w )
 {
 	/* VOL/BAL   for the 7630 on this 8910 output */
 }
-static WRITE8_DEVICE_HANDLER( portB_1_w )
+static WRITE8_DEVICE_HANDLER( port_b_1_w )
 {
 	/* TRBL/BASS for the 7630 on this 8910 output */
 }
@@ -351,8 +338,8 @@ static const ay8910_interface ay8910_interface_1 =
 	AY8910_DEFAULT_LOADS,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(portA_0_w),
-	DEVCB_HANDLER(portB_0_w)
+	DEVCB_HANDLER(port_a_0_w),
+	DEVCB_HANDLER(port_b_0_w)
 };
 
 static const ay8910_interface ay8910_interface_2 =
@@ -361,8 +348,8 @@ static const ay8910_interface ay8910_interface_2 =
 	AY8910_DEFAULT_LOADS,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_HANDLER(portA_1_w),
-	DEVCB_HANDLER(portB_1_w)
+	DEVCB_HANDLER(port_a_1_w),
+	DEVCB_HANDLER(port_b_1_w)
 };
 
 static const msm5232_interface msm5232_config =
@@ -371,63 +358,98 @@ static const msm5232_interface msm5232_config =
 };
 
 
-static MACHINE_DRIVER_START( buggychl )
+static MACHINE_START( buggychl )
+{
+	buggychl_state *state = machine.driver_data<buggychl_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 6, &ROM[0x10000], 0x2000);
+
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_sound_nmi_enable));
+	state->save_item(NAME(state->m_pending_nmi));
+	state->save_item(NAME(state->m_sprite_lookup));
+	state->save_item(NAME(state->m_sl_bank));
+	state->save_item(NAME(state->m_bg_on));
+	state->save_item(NAME(state->m_sky_on));
+	state->save_item(NAME(state->m_sprite_color_base));
+	state->save_item(NAME(state->m_bg_scrollx));
+}
+
+static MACHINE_RESET( buggychl )
+{
+	buggychl_state *state = machine.driver_data<buggychl_state>();
+
+	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
+
+	state->m_sound_nmi_enable = 0;
+	state->m_pending_nmi = 0;
+	state->m_sl_bank = 0;
+	state->m_bg_on = 0;
+	state->m_sky_on = 0;
+	state->m_sprite_color_base = 0;
+	state->m_bg_scrollx = 0;
+}
+
+static MACHINE_CONFIG_START( buggychl, buggychl_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 4000000) /* 4 MHz??? */
-	MDRV_CPU_PROGRAM_MAP(buggychl_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, 4000000) /* 4 MHz??? */
+	MCFG_CPU_PROGRAM_MAP(buggychl_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 4000000) /* 4 MHz??? */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,60)	/* irq is timed, tied to the cpu clock and not to vblank */
+	MCFG_CPU_ADD("audiocpu", Z80, 4000000) /* 4 MHz??? */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,60*60)	/* irq is timed, tied to the cpu clock and not to vblank */
 							/* nmi is caused by the main cpu */
 
-	MDRV_CPU_ADD("mcu", M68705,8000000/2)  /* 4 MHz */
-	MDRV_CPU_PROGRAM_MAP(mcu_map)
+	MCFG_CPU_ADD("mcu", M68705,8000000/2)  /* 4 MHz */
+	MCFG_CPU_PROGRAM_MAP(buggychl_mcu_map)
+	MCFG_DEVICE_ADD("bmcu", BUGGYCHL_MCU, 0)
+
+	MCFG_MACHINE_START(buggychl)
+	MCFG_MACHINE_RESET(buggychl)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(buggychl)
 
-	MDRV_GFXDECODE(buggychl)
-	MDRV_PALETTE_LENGTH(128+128)
+	MCFG_GFXDECODE(buggychl)
+	MCFG_PALETTE_LENGTH(128+128)
 
-	MDRV_MACHINE_RESET(buggychl)
-
-	MDRV_PALETTE_INIT(buggychl)
-	MDRV_VIDEO_START(buggychl)
-	MDRV_VIDEO_UPDATE(buggychl)
+	MCFG_PALETTE_INIT(buggychl)
+	MCFG_VIDEO_START(buggychl)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 8000000/4)
-	MDRV_SOUND_CONFIG(ay8910_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("ay1", AY8910, 8000000/4)
+	MCFG_SOUND_CONFIG(ay8910_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 8000000/4)
-	MDRV_SOUND_CONFIG(ay8910_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("ay2", AY8910, 8000000/4)
+	MCFG_SOUND_CONFIG(ay8910_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("msm", MSM5232, 2000000)
-	MDRV_SOUND_CONFIG(msm5232_config)
-	MDRV_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
-	MDRV_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
-	MDRV_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
-	MDRV_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
-	MDRV_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
-	MDRV_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
-	MDRV_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
-	MDRV_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
+	MCFG_SOUND_ADD("msm", MSM5232, 2000000)
+	MCFG_SOUND_CONFIG(msm5232_config)
+	MCFG_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
+	MCFG_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
+	MCFG_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
+	MCFG_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
+	MCFG_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
+	MCFG_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
+	MCFG_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
+	MCFG_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
 	// pin 1 SOLO  8'       not mapped
 	// pin 2 SOLO 16'       not mapped
 	// pin 22 Noise Output  not mapped
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

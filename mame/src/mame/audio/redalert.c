@@ -7,7 +7,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/rescap.h"
@@ -15,7 +15,7 @@
 #include "machine/6821pia.h"
 #include "sound/ay8910.h"
 #include "sound/hc55516.h"
-#include "redalert.h"
+#include "includes/redalert.h"
 
 
 
@@ -31,17 +31,6 @@
 #define DEMONEYE_AUDIO_PCB_CLOCK	(XTAL_3_579545MHz)
 #define DEMONEYE_AUDIO_CPU_CLOCK	(DEMONEYE_AUDIO_PCB_CLOCK / 4)  /* what's the real divisor? */
 #define DEMONEYE_AY8910_CLOCK		(DEMONEYE_AUDIO_PCB_CLOCK / 2)  /* what's the real divisor? */
-
-
-
-/*************************************
- *
- *  Statics
- *
- *************************************/
-
-static UINT8 ay8910_latch_1;
-static UINT8 ay8910_latch_2;
 
 
 
@@ -81,12 +70,13 @@ WRITE8_HANDLER( redalert_audio_command_w )
 	/* D7 is also connected to the NMI input of the CPU -
        the NMI is actually toggled by a 74121 */
 	if ((data & 0x80) == 0x00)
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static WRITE8_DEVICE_HANDLER( redalert_AY8910_w )
 {
+	redalert_state *state = device->machine().driver_data<redalert_state>();
 	/* BC2 is connected to a pull-up resistor, so BC2=1 always */
 	switch (data & 0x03)
 	{
@@ -96,7 +86,7 @@ static WRITE8_DEVICE_HANDLER( redalert_AY8910_w )
 
 		/* BC1=1, BDIR=0 : read from PSG */
 		case 0x01:
-			ay8910_latch_1 = ay8910_r(device, 0);
+			state->m_ay8910_latch_1 = ay8910_r(device, 0);
 			break;
 
 		/* BC1=0, BDIR=1 : write to PSG */
@@ -104,7 +94,7 @@ static WRITE8_DEVICE_HANDLER( redalert_AY8910_w )
 		case 0x02:
 		case 0x03:
 		default:
-			ay8910_data_address_w(device, data, ay8910_latch_2);
+			ay8910_data_address_w(device, data, state->m_ay8910_latch_2);
 			break;
 	}
 }
@@ -112,13 +102,15 @@ static WRITE8_DEVICE_HANDLER( redalert_AY8910_w )
 
 static READ8_HANDLER( redalert_ay8910_latch_1_r )
 {
-	return ay8910_latch_1;
+	redalert_state *state = space->machine().driver_data<redalert_state>();
+	return state->m_ay8910_latch_1;
 }
 
 
 static WRITE8_HANDLER( redalert_ay8910_latch_2_w )
 {
-	ay8910_latch_2 = data;
+	redalert_state *state = space->machine().driver_data<redalert_state>();
+	state->m_ay8910_latch_2 = data;
 }
 
 
@@ -133,10 +125,10 @@ static const ay8910_interface redalert_ay8910_interface =
 };
 
 
-static ADDRESS_MAP_START( redalert_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( redalert_audio_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x0c00) AM_RAM
-	AM_RANGE(0x1000, 0x1000) AM_MIRROR(0x0ffe) AM_READNOP AM_DEVWRITE("ay", redalert_AY8910_w)
+	AM_RANGE(0x1000, 0x1000) AM_MIRROR(0x0ffe) AM_READNOP AM_DEVWRITE("aysnd", redalert_AY8910_w)
 	AM_RANGE(0x1001, 0x1001) AM_MIRROR(0x0ffe) AM_READWRITE(redalert_ay8910_latch_1_r, redalert_ay8910_latch_2_w)
 	AM_RANGE(0x2000, 0x6fff) AM_NOP
 	AM_RANGE(0x7000, 0x77ff) AM_MIRROR(0x0800) AM_ROM
@@ -150,8 +142,9 @@ ADDRESS_MAP_END
 
 static SOUND_START( redalert_audio )
 {
-	state_save_register_global(machine, ay8910_latch_1);
-	state_save_register_global(machine, ay8910_latch_2);
+	redalert_state *state = machine.driver_data<redalert_state>();
+	state->save_item(NAME(state->m_ay8910_latch_1));
+	state->save_item(NAME(state->m_ay8910_latch_2));
 }
 
 
@@ -164,19 +157,19 @@ static SOUND_START( redalert_audio )
 WRITE8_HANDLER( redalert_voice_command_w )
 {
 	soundlatch2_w(space, 0, (data & 0x78) >> 3);
-	cputag_set_input_line(space->machine, "voice", I8085_RST75_LINE, (~data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "voice", I8085_RST75_LINE, (~data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static WRITE_LINE_DEVICE_HANDLER( sod_callback )
 {
-	hc55516_digit_w(devtag_get_device(device->machine, "cvsd"), state);
+	hc55516_digit_w(device->machine().device("cvsd"), state);
 }
 
 
 static READ_LINE_DEVICE_HANDLER( sid_callback )
 {
-	return hc55516_clock_state_r(devtag_get_device(device->machine, "cvsd"));
+	return hc55516_clock_state_r(device->machine().device("cvsd"));
 }
 
 
@@ -189,11 +182,11 @@ static I8085_CONFIG( redalert_voice_i8085_config )
 };
 
 
-static ADDRESS_MAP_START( redalert_voice_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( redalert_voice_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_NOP
 	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x3c00) AM_RAM
-	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x3fff) AM_READWRITE(soundlatch2_r, SMH_NOP)
+	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x3fff) AM_READ(soundlatch2_r) AM_WRITENOP
 ADDRESS_MAP_END
 
 
@@ -217,19 +210,19 @@ static SOUND_START( redalert )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( redalert_audio_m37b )
+static MACHINE_CONFIG_FRAGMENT( redalert_audio_m37b )
 
-	MDRV_CPU_ADD("audiocpu", M6502, REDALERT_AUDIO_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(redalert_audio_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold, REDALERT_AUDIO_CPU_IRQ_FREQ)
+	MCFG_CPU_ADD("audiocpu", M6502, REDALERT_AUDIO_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(redalert_audio_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, REDALERT_AUDIO_CPU_IRQ_FREQ)
 
-	MDRV_SOUND_ADD("ay", AY8910, REDALERT_AY8910_CLOCK)
-	MDRV_SOUND_CONFIG(redalert_ay8910_interface)
-	MDRV_SOUND_ROUTE(0, "mono", 0.50)
-	MDRV_SOUND_ROUTE(1, "mono", 0.50)
+	MCFG_SOUND_ADD("aysnd", AY8910, REDALERT_AY8910_CLOCK)
+	MCFG_SOUND_CONFIG(redalert_ay8910_interface)
+	MCFG_SOUND_ROUTE(0, "mono", 0.50)
+	MCFG_SOUND_ROUTE(1, "mono", 0.50)
 	/* channel C is used a noise source and is not connected to a speaker */
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -237,32 +230,15 @@ MACHINE_DRIVER_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( redalert_audio_voice )
+static MACHINE_CONFIG_FRAGMENT( redalert_audio_voice )
 
-	MDRV_CPU_ADD("voice", 8085A, REDALERT_VOICE_CPU_CLOCK)
-	MDRV_CPU_CONFIG(redalert_voice_i8085_config)
-	MDRV_CPU_PROGRAM_MAP(redalert_voice_map)
+	MCFG_CPU_ADD("voice", I8085A, REDALERT_VOICE_CPU_CLOCK)
+	MCFG_CPU_CONFIG(redalert_voice_i8085_config)
+	MCFG_CPU_PROGRAM_MAP(redalert_voice_map)
 
-	MDRV_SOUND_ADD("cvsd", HC55516, REDALERT_HC55516_CLOCK)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
-
-/*************************************
- *
- *  Red Alert
- *
- *************************************/
-
-MACHINE_DRIVER_START( redalert_audio )
-
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_IMPORT_FROM( redalert_audio_m37b )
-	MDRV_IMPORT_FROM( redalert_audio_voice )
-
-	MDRV_SOUND_START( redalert )
-
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("cvsd", HC55516, REDALERT_HC55516_CLOCK)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -270,15 +246,32 @@ MACHINE_DRIVER_END
  *
  *************************************/
 
-MACHINE_DRIVER_START( ww3_audio )
+MACHINE_CONFIG_FRAGMENT( redalert_audio )
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_IMPORT_FROM( redalert_audio_m37b )
+	MCFG_FRAGMENT_ADD( redalert_audio_m37b )
+	MCFG_FRAGMENT_ADD( redalert_audio_voice )
 
-	MDRV_SOUND_START( redalert_audio )
+	MCFG_SOUND_START( redalert )
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
+
+/*************************************
+ *
+ *  Red Alert
+ *
+ *************************************/
+
+MACHINE_CONFIG_FRAGMENT( ww3_audio )
+
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_FRAGMENT_ADD( redalert_audio_m37b )
+
+	MCFG_SOUND_START( redalert_audio )
+
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -291,67 +284,70 @@ WRITE8_HANDLER( demoneye_audio_command_w )
 {
 	/* the byte is connected to port A of the AY8910 */
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static WRITE8_DEVICE_HANDLER( demoneye_ay8910_latch_1_w )
 {
-	ay8910_latch_1 = data;
+	redalert_state *state = device->machine().driver_data<redalert_state>();
+	state->m_ay8910_latch_1 = data;
 }
 
 
 static READ8_DEVICE_HANDLER( demoneye_ay8910_latch_2_r )
 {
-	return ay8910_latch_2;
+	redalert_state *state = device->machine().driver_data<redalert_state>();
+	return state->m_ay8910_latch_2;
 }
 
 
 static WRITE8_DEVICE_HANDLER( demoneye_ay8910_data_w )
 {
-	const device_config *ay1 = devtag_get_device(device->machine, "ay1");
-	const device_config *ay2 = devtag_get_device(device->machine, "ay2");
+	redalert_state *state = device->machine().driver_data<redalert_state>();
+	device_t *ay1 = device->machine().device("ay1");
+	device_t *ay2 = device->machine().device("ay2");
 
-	switch (ay8910_latch_1 & 0x03)
+	switch (state->m_ay8910_latch_1 & 0x03)
 	{
 		case 0x00:
-			if (ay8910_latch_1 & 0x10)
+			if (state->m_ay8910_latch_1 & 0x10)
 				ay8910_data_w(ay1, 0, data);
 
-			if (ay8910_latch_1 & 0x20)
+			if (state->m_ay8910_latch_1 & 0x20)
 				ay8910_data_w(ay2, 0, data);
 
 			break;
 
 		case 0x01:
-			if (ay8910_latch_1 & 0x10)
-				ay8910_latch_2 = ay8910_r(ay1, 0);
+			if (state->m_ay8910_latch_1 & 0x10)
+				state->m_ay8910_latch_2 = ay8910_r(ay1, 0);
 
-			if (ay8910_latch_1 & 0x20)
-				ay8910_latch_2 = ay8910_r(ay2, 0);
+			if (state->m_ay8910_latch_1 & 0x20)
+				state->m_ay8910_latch_2 = ay8910_r(ay2, 0);
 
 			break;
 
 		case 0x03:
-			if (ay8910_latch_1 & 0x10)
+			if (state->m_ay8910_latch_1 & 0x10)
 				ay8910_address_w(ay1, 0, data);
 
-			if (ay8910_latch_1 & 0x20)
+			if (state->m_ay8910_latch_1 & 0x20)
 				ay8910_address_w(ay2, 0, data);
 
 			break;
 
 		default:
-			logerror("demoneye_ay8910_data_w called with latch %02X  data %02X\n", ay8910_latch_1, data);
+			logerror("demoneye_ay8910_data_w called with latch %02X  data %02X\n", state->m_ay8910_latch_1, data);
 			break;
 	}
 }
 
 
-static ADDRESS_MAP_START( demoneye_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( demoneye_audio_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x007f) AM_RAM
-	AM_RANGE(0x0500, 0x0503) AM_DEVREADWRITE("sndpia", pia6821_r, pia6821_w)
+	AM_RANGE(0x0500, 0x0503) AM_DEVREADWRITE_MODERN("sndpia", pia6821_device, read, write)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -393,8 +389,9 @@ static const pia6821_interface demoneye_pia_intf =
 
 static SOUND_START( demoneye )
 {
-	state_save_register_global(machine, ay8910_latch_1);
-	state_save_register_global(machine, ay8910_latch_2);
+	redalert_state *state = machine.driver_data<redalert_state>();
+	state->save_item(NAME(state->m_ay8910_latch_1));
+	state->save_item(NAME(state->m_ay8910_latch_2));
 }
 
 
@@ -405,22 +402,22 @@ static SOUND_START( demoneye )
  *
  *************************************/
 
-MACHINE_DRIVER_START( demoneye_audio )
+MACHINE_CONFIG_FRAGMENT( demoneye_audio )
 
-	MDRV_CPU_ADD("audiocpu", M6802, DEMONEYE_AUDIO_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(demoneye_audio_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold, REDALERT_AUDIO_CPU_IRQ_FREQ)  /* guess */
+	MCFG_CPU_ADD("audiocpu", M6802, DEMONEYE_AUDIO_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(demoneye_audio_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, REDALERT_AUDIO_CPU_IRQ_FREQ)  /* guess */
 
-	MDRV_PIA6821_ADD("sndpia", demoneye_pia_intf)
+	MCFG_PIA6821_ADD("sndpia", demoneye_pia_intf)
 
-	MDRV_SOUND_START( demoneye )
+	MCFG_SOUND_START( demoneye )
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, DEMONEYE_AY8910_CLOCK)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("ay1", AY8910, DEMONEYE_AY8910_CLOCK)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ay2", AY8910, DEMONEYE_AY8910_CLOCK)
-	MDRV_SOUND_CONFIG(demoneye_ay8910_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, DEMONEYE_AY8910_CLOCK)
+	MCFG_SOUND_CONFIG(demoneye_ay8910_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END

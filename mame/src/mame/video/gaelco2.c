@@ -76,16 +76,9 @@ Multi monitor notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/gaelco2.h"
 
-UINT16 *gaelco2_vregs;
-static UINT16 *gaelco2_videoram;
-
-/* tilemaps */
-static tilemap *pant[2];
-
-static int dual_monitor;
 
 /***************************************************************************
 
@@ -110,8 +103,9 @@ static int dual_monitor;
 
 static TILE_GET_INFO( get_tile_info_gaelco2_screen0 )
 {
-	int data = gaelco2_videoram[(((gaelco2_vregs[0] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
-	int data2 = gaelco2_videoram[(((gaelco2_vregs[0] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
+	gaelco2_state *state = machine.driver_data<gaelco2_state>();
+	int data = state->m_videoram[(((state->m_vregs[0] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
+	int data2 = state->m_videoram[(((state->m_vregs[0] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
 	int code = ((data & 0x07) << 16) | (data2 & 0xffff);
 
 	SET_TILE_INFO(0, code, ((data >> 9) & 0x7f), TILE_FLIPXY((data >> 6) & 0x03));
@@ -119,8 +113,9 @@ static TILE_GET_INFO( get_tile_info_gaelco2_screen0 )
 
 static TILE_GET_INFO( get_tile_info_gaelco2_screen1 )
 {
-	int data = gaelco2_videoram[(((gaelco2_vregs[1] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
-	int data2 = gaelco2_videoram[(((gaelco2_vregs[1] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
+	gaelco2_state *state = machine.driver_data<gaelco2_state>();
+	int data = state->m_videoram[(((state->m_vregs[1] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
+	int data2 = state->m_videoram[(((state->m_vregs[1] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
 	int code = ((data & 0x07) << 16) | (data2 & 0xffff);
 
 	SET_TILE_INFO(0, code, ((data >> 9) & 0x7f), TILE_FLIPXY((data >> 6) & 0x03));
@@ -151,8 +146,9 @@ static TILE_GET_INFO( get_tile_info_gaelco2_screen1 )
 
 static TILE_GET_INFO( get_tile_info_gaelco2_screen0_dual )
 {
-	int data = gaelco2_videoram[(((gaelco2_vregs[0] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
-	int data2 = gaelco2_videoram[(((gaelco2_vregs[0] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
+	gaelco2_state *state = machine.driver_data<gaelco2_state>();
+	int data = state->m_videoram[(((state->m_vregs[0] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
+	int data2 = state->m_videoram[(((state->m_vregs[0] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
 	int code = ((data & 0x07) << 16) | (data2 & 0xffff);
 
 	SET_TILE_INFO(0, code, ((data >> 9) & 0x3f), TILE_FLIPXY((data >> 6) & 0x03));
@@ -160,8 +156,9 @@ static TILE_GET_INFO( get_tile_info_gaelco2_screen0_dual )
 
 static TILE_GET_INFO( get_tile_info_gaelco2_screen1_dual )
 {
-	int data = gaelco2_videoram[(((gaelco2_vregs[1] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
-	int data2 = gaelco2_videoram[(((gaelco2_vregs[1] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
+	gaelco2_state *state = machine.driver_data<gaelco2_state>();
+	int data = state->m_videoram[(((state->m_vregs[1] >> 9) & 0x07)*0x2000/2) + (tile_index << 1)];
+	int data2 = state->m_videoram[(((state->m_vregs[1] >> 9) & 0x07)*0x2000/2) + ((tile_index << 1) + 1)];
 	int code = ((data & 0x07) << 16) | (data2 & 0xffff);
 
 	SET_TILE_INFO(0, code, 0x40 + ((data >> 9) & 0x3f), TILE_FLIPXY((data >> 6) & 0x03));
@@ -176,21 +173,22 @@ static TILE_GET_INFO( get_tile_info_gaelco2_screen1_dual )
 
 WRITE16_HANDLER( gaelco2_vram_w )
 {
-	int pant0_start = ((gaelco2_vregs[0] >> 9) & 0x07)*0x1000;
+	gaelco2_state *state = space->machine().driver_data<gaelco2_state>();
+	int pant0_start = ((state->m_vregs[0] >> 9) & 0x07)*0x1000;
 	int pant0_end = pant0_start + 0x1000;
-	int pant1_start = ((gaelco2_vregs[1] >> 9) & 0x07)*0x1000;
+	int pant1_start = ((state->m_vregs[1] >> 9) & 0x07)*0x1000;
 	int pant1_end = pant1_start + 0x1000;
 
-	COMBINE_DATA(&gaelco2_videoram[offset]);
+	COMBINE_DATA(&state->m_videoram[offset]);
 
 	/* tilemap 0 writes */
 	if ((offset >= pant0_start) && (offset < pant0_end)){
-		tilemap_mark_tile_dirty(pant[0], ((offset << 1) & 0x1fff) >> 2);
+		state->m_pant[0]->mark_tile_dirty(((offset << 1) & 0x1fff) >> 2);
 	}
 
 	/* tilemap 1 writes */
 	if ((offset >= pant1_start) && (offset < pant1_end)){
-		tilemap_mark_tile_dirty(pant[1], ((offset << 1) & 0x1fff) >> 2);
+		state->m_pant[1]->mark_tile_dirty(((offset << 1) & 0x1fff) >> 2);
 	}
 }
 
@@ -228,8 +226,8 @@ WRITE16_HANDLER( gaelco2_palette_w )
 {
 	int i, color, r, g, b, auxr, auxg, auxb;
 
-	COMBINE_DATA(&paletteram16[offset]);
-	color = paletteram16[offset];
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	color = space->machine().generic.paletteram.u16[offset];
 
 	/* extract RGB components */
 	r = (color >> 10) & 0x1f;
@@ -241,7 +239,7 @@ WRITE16_HANDLER( gaelco2_palette_w )
 	b = pal5bit(b);
 
 	/* update game palette */
-	palette_set_color(space->machine, 4096*0 + offset, MAKE_RGB(r, g, b));
+	palette_set_color(space->machine(), 4096*0 + offset, MAKE_RGB(r, g, b));
 
 	/* update shadow/highligh palettes */
 	for (i = 1; i < 16; i++){
@@ -253,7 +251,7 @@ WRITE16_HANDLER( gaelco2_palette_w )
 		auxg = ADJUST_COLOR(g + pen_color_adjust[i]);
 		auxb = ADJUST_COLOR(b + pen_color_adjust[i]);
 
-		palette_set_color(space->machine, 4096*i + offset, MAKE_RGB(auxr, auxg, auxb));
+		palette_set_color(space->machine(), 4096*i + offset, MAKE_RGB(auxr, auxg, auxb));
 	}
 }
 
@@ -265,42 +263,44 @@ WRITE16_HANDLER( gaelco2_palette_w )
 
 VIDEO_START( gaelco2 )
 {
-	gaelco2_videoram = spriteram16;
+	gaelco2_state *state = machine.driver_data<gaelco2_state>();
+	state->m_videoram = machine.generic.spriteram.u16;
 
 	/* create tilemaps */
-	pant[0] = tilemap_create(machine, get_tile_info_gaelco2_screen0,tilemap_scan_rows,16,16,64,32);
-	pant[1] = tilemap_create(machine, get_tile_info_gaelco2_screen1,tilemap_scan_rows,16,16,64,32);
+	state->m_pant[0] = tilemap_create(machine, get_tile_info_gaelco2_screen0,tilemap_scan_rows,16,16,64,32);
+	state->m_pant[1] = tilemap_create(machine, get_tile_info_gaelco2_screen1,tilemap_scan_rows,16,16,64,32);
 
 	/* set tilemap properties */
-	tilemap_set_transparent_pen(pant[0],0);
-	tilemap_set_transparent_pen(pant[1],0);
+	state->m_pant[0]->set_transparent_pen(0);
+	state->m_pant[1]->set_transparent_pen(0);
 
-	tilemap_set_scroll_rows(pant[0], 512);
-	tilemap_set_scroll_cols(pant[0], 1);
-	tilemap_set_scroll_rows(pant[1], 512);
-	tilemap_set_scroll_cols(pant[1], 1);
+	state->m_pant[0]->set_scroll_rows(512);
+	state->m_pant[0]->set_scroll_cols(1);
+	state->m_pant[1]->set_scroll_rows(512);
+	state->m_pant[1]->set_scroll_cols(1);
 
-	dual_monitor = 0;
+	state->m_dual_monitor = 0;
 }
 
 VIDEO_START( gaelco2_dual )
 {
-	gaelco2_videoram = spriteram16;
+	gaelco2_state *state = machine.driver_data<gaelco2_state>();
+	state->m_videoram = machine.generic.spriteram.u16;
 
 	/* create tilemaps */
-	pant[0] = tilemap_create(machine, get_tile_info_gaelco2_screen0_dual,tilemap_scan_rows,16,16,64,32);
-	pant[1] = tilemap_create(machine, get_tile_info_gaelco2_screen1_dual,tilemap_scan_rows,16,16,64,32);
+	state->m_pant[0] = tilemap_create(machine, get_tile_info_gaelco2_screen0_dual,tilemap_scan_rows,16,16,64,32);
+	state->m_pant[1] = tilemap_create(machine, get_tile_info_gaelco2_screen1_dual,tilemap_scan_rows,16,16,64,32);
 
 	/* set tilemap properties */
-	tilemap_set_transparent_pen(pant[0],0);
-	tilemap_set_transparent_pen(pant[1],0);
+	state->m_pant[0]->set_transparent_pen(0);
+	state->m_pant[1]->set_transparent_pen(0);
 
-	tilemap_set_scroll_rows(pant[0], 512);
-	tilemap_set_scroll_cols(pant[0], 1);
-	tilemap_set_scroll_rows(pant[1], 512);
-	tilemap_set_scroll_cols(pant[1], 1);
+	state->m_pant[0]->set_scroll_rows(512);
+	state->m_pant[0]->set_scroll_cols(1);
+	state->m_pant[1]->set_scroll_rows(512);
+	state->m_pant[1]->set_scroll_cols(1);
 
-	dual_monitor = 1;
+	state->m_dual_monitor = 1;
 }
 
 /***************************************************************************
@@ -339,17 +339,19 @@ VIDEO_START( gaelco2_dual )
 
 ***************************************************************************/
 
-static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const rectangle *cliprect, int mask, int xoffs)
+static void draw_sprites(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, int mask, int xoffs)
 {
+	gaelco2_state *state = screen.machine().driver_data<gaelco2_state>();
+	UINT16 *buffered_spriteram16 = screen.machine().generic.buffered_spriteram.u16;
 	int j, x, y, ex, ey, px, py;
-	const gfx_element *gfx = screen->machine->gfx[0];
+	const gfx_element *gfx = screen.machine().gfx[0];
 
 	/* get sprite ram start and end offsets */
-	int start_offset = (gaelco2_vregs[1] & 0x10)*0x100;
+	int start_offset = (state->m_vregs[1] & 0x10)*0x100;
 	int end_offset = start_offset + 0x1000;
 
 	/* sprite offset is based on the visible area */
-	int spr_x_adjust = (video_screen_get_visible_area(screen)->max_x - 320 + 1) - (511 - 320 - 1) - ((gaelco2_vregs[0] >> 4) & 0x01) + xoffs;
+	int spr_x_adjust = (screen.visible_area().max_x - 320 + 1) - (511 - 320 - 1) - ((state->m_vregs[0] >> 4) & 0x01) + xoffs;
 
 	for (j = start_offset; j < end_offset; j += 8){
 		int data = buffered_spriteram16[(j/2) + 0];
@@ -366,7 +368,7 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const re
 		int xsize = ((data3 >> 12) & 0x0f) + 1;
 		int ysize = ((data2 >> 12) & 0x0f) + 1;
 
-		if (dual_monitor && ((data & 0x8000) != mask)) continue;
+		if (state->m_dual_monitor && ((data & 0x8000) != mask)) continue;
 
 		/* if it's enabled, draw it */
 		if ((data2 & 0x0200) != 0){
@@ -376,7 +378,7 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const re
 					int data5 = buffered_spriteram16[((data4/2) + (y*xsize + x)) & 0x7fff];
 					int number = ((data & 0x1ff) << 10) + (data5 & 0x0fff);
 					int color = ((data >> 9) & 0x7f) + ((data5 >> 12) & 0x0f);
-					int color_effect = dual_monitor ? ((color & 0x3f) == 0x3f) : (color == 0x7f);
+					int color_effect = state->m_dual_monitor ? ((color & 0x3f) == 0x3f) : (color == 0x7f);
 
 					ex = xflip ? (xsize - 1 - x) : x;
 					ey = yflip ? (ysize - 1 - y) : y;
@@ -396,11 +398,11 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const re
 						for (py = 0; py < gfx->height; py++){
 							/* get a pointer to the current line in the screen bitmap */
 							int ypos = ((sy + ey*16 + py) & 0x1ff);
-							UINT16 *srcy = BITMAP_ADDR16(bitmap, ypos, 0);
+							UINT16 *srcy = &bitmap.pix16(ypos);
 
 							int gfx_py = yflip ? (gfx->height - 1 - py) : py;
 
-							if ((ypos < cliprect->min_y) || (ypos > cliprect->max_y)) continue;
+							if ((ypos < cliprect.min_y) || (ypos > cliprect.max_y)) continue;
 
 							for (px = 0; px < gfx->width; px++){
 								/* get current pixel */
@@ -415,7 +417,7 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const re
 
 								if ((gfx_pen == 0) || (gfx_pen >= 16)) continue;
 
-								if ((xpos < cliprect->min_x) || (xpos > cliprect->max_x)) continue;
+								if ((xpos < cliprect.min_x) || (xpos > cliprect.max_x)) continue;
 
 								/* make background color darker or brighter */
 								*pixel = src_color + 4096*gfx_pen;
@@ -434,82 +436,79 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const re
 
 ***************************************************************************/
 
-VIDEO_UPDATE( gaelco2 )
+SCREEN_UPDATE_IND16( gaelco2 )
 {
+	gaelco2_state *state = screen.machine().driver_data<gaelco2_state>();
 	int i;
 
 	/* read scroll values */
- 	int scroll0x = gaelco2_videoram[0x2802/2] + 0x14;
-	int scroll1x = gaelco2_videoram[0x2806/2] + 0x10;
-	int scroll0y = gaelco2_videoram[0x2800/2] + 0x01;
-	int scroll1y = gaelco2_videoram[0x2804/2] + 0x01;
+	int scroll0x = state->m_videoram[0x2802/2] + 0x14;
+	int scroll1x = state->m_videoram[0x2806/2] + 0x10;
+	int scroll0y = state->m_videoram[0x2800/2] + 0x01;
+	int scroll1y = state->m_videoram[0x2804/2] + 0x01;
 
 	/* set y scroll registers */
-	tilemap_set_scrolly(pant[0], 0, scroll0y & 0x1ff);
-	tilemap_set_scrolly(pant[1], 0, scroll1y & 0x1ff);
+	state->m_pant[0]->set_scrolly(0, scroll0y & 0x1ff);
+	state->m_pant[1]->set_scrolly(0, scroll1y & 0x1ff);
 
 	/* set x linescroll registers */
 	for (i = 0; i < 512; i++){
-		tilemap_set_scrollx(pant[0], i & 0x1ff, (gaelco2_vregs[0] & 0x8000) ? (gaelco2_videoram[(0x2000/2) + i] + 0x14) & 0x3ff : scroll0x & 0x3ff);
-		tilemap_set_scrollx(pant[1], i & 0x1ff, (gaelco2_vregs[1] & 0x8000) ? (gaelco2_videoram[(0x2400/2) + i] + 0x10) & 0x3ff : scroll1x & 0x3ff);
+		state->m_pant[0]->set_scrollx(i & 0x1ff, (state->m_vregs[0] & 0x8000) ? (state->m_videoram[(0x2000/2) + i] + 0x14) & 0x3ff : scroll0x & 0x3ff);
+		state->m_pant[1]->set_scrollx(i & 0x1ff, (state->m_vregs[1] & 0x8000) ? (state->m_videoram[(0x2400/2) + i] + 0x10) & 0x3ff : scroll1x & 0x3ff);
 	}
 
 	/* draw screen */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	tilemap_draw(bitmap, cliprect, pant[1], 0, 0);
-	tilemap_draw(bitmap, cliprect, pant[0], 0, 0);
+	state->m_pant[1]->draw(bitmap, cliprect, 0, 0);
+	state->m_pant[0]->draw(bitmap, cliprect, 0, 0);
 	draw_sprites(screen, bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-VIDEO_UPDATE( gaelco2_dual )
+static UINT32 dual_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, int index)
 {
+	gaelco2_state *state = screen.machine().driver_data<gaelco2_state>();
 	int i;
 
-	const device_config *left_screen  = devtag_get_device(screen->machine, "lscreen");
-	const device_config *right_screen = devtag_get_device(screen->machine, "rscreen");
-
 	/* read scroll values */
-	int scroll0x = gaelco2_videoram[0x2802/2] + 0x14;
-	int scroll1x = gaelco2_videoram[0x2806/2] + 0x10;
-	int scroll0y = gaelco2_videoram[0x2800/2] + 0x01;
-	int scroll1y = gaelco2_videoram[0x2804/2] + 0x01;
+	int scroll0x = state->m_videoram[0x2802/2] + 0x14;
+	int scroll1x = state->m_videoram[0x2806/2] + 0x10;
+	int scroll0y = state->m_videoram[0x2800/2] + 0x01;
+	int scroll1y = state->m_videoram[0x2804/2] + 0x01;
 
 	/* set y scroll registers */
-	tilemap_set_scrolly(pant[0], 0, scroll0y & 0x1ff);
-	tilemap_set_scrolly(pant[1], 0, scroll1y & 0x1ff);
+	state->m_pant[0]->set_scrolly(0, scroll0y & 0x1ff);
+	state->m_pant[1]->set_scrolly(0, scroll1y & 0x1ff);
 
 	/* set x linescroll registers */
 	for (i = 0; i < 512; i++){
-		tilemap_set_scrollx(pant[0], i & 0x1ff, (gaelco2_vregs[0] & 0x8000) ? (gaelco2_videoram[(0x2000/2) + i] + 0x14) & 0x3ff : scroll0x & 0x3ff);
-		tilemap_set_scrollx(pant[1], i & 0x1ff, (gaelco2_vregs[1] & 0x8000) ? (gaelco2_videoram[(0x2400/2) + i] + 0x10) & 0x3ff : scroll1x & 0x3ff);
+		state->m_pant[0]->set_scrollx(i & 0x1ff, (state->m_vregs[0] & 0x8000) ? (state->m_videoram[(0x2000/2) + i] + 0x14) & 0x3ff : scroll0x & 0x3ff);
+		state->m_pant[1]->set_scrollx(i & 0x1ff, (state->m_vregs[1] & 0x8000) ? (state->m_videoram[(0x2400/2) + i] + 0x10) & 0x3ff : scroll1x & 0x3ff);
 	}
 
 	/* draw screen */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	if (screen == right_screen)
-	{
-		/* monitor 2 output */
-		tilemap_draw(bitmap,cliprect,pant[1], 0, 0);
-		draw_sprites(screen,bitmap,cliprect, 0x8000, 0);
-	}
-	else if (screen == left_screen)
-	{
-		/* monitor 1 output */
-		tilemap_draw(bitmap,cliprect,pant[0], 0, 0);
-		draw_sprites(screen,bitmap,cliprect, 0x0000, 0);
-	}
+	state->m_pant[index]->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen,bitmap,cliprect, 0x8000 * index, 0);
 
 	return 0;
 }
 
+SCREEN_UPDATE_IND16( gaelco2_left ) { return dual_update(screen, bitmap, cliprect, 0); }
+SCREEN_UPDATE_IND16( gaelco2_right ) { return dual_update(screen, bitmap, cliprect, 1); }
 
-VIDEO_EOF( gaelco2 )
+
+
+SCREEN_VBLANK( gaelco2 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	// rising edge
+	if (vblank_on)
+	{
+		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
 
-	/* sprites are one frame ahead */
-	buffer_spriteram16_w(space, 0, 0, 0xffff);
+		/* sprites are one frame ahead */
+		buffer_spriteram16_w(space, 0, 0, 0xffff);
+	}
 }

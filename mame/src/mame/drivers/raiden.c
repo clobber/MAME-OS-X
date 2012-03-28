@@ -35,66 +35,82 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/nec/nec.h"
 #include "cpu/z80/z80.h"
 #include "audio/seibu.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
+#include "includes/raiden.h"
 
-WRITE16_HANDLER( raiden_background_w );
-WRITE16_HANDLER( raiden_foreground_w );
-WRITE16_HANDLER( raiden_text_w );
-VIDEO_START( raiden );
-VIDEO_START( raidena );
-WRITE16_HANDLER( raiden_control_w );
-WRITE16_HANDLER( raidena_control_w );
-VIDEO_UPDATE( raiden );
-
-static UINT16 *raiden_shared_ram;
-extern UINT16 *raiden_back_data,*raiden_fore_data,*raiden_scroll_ram;
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
-	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE(1) AM_BASE(&raiden_shared_ram)
+	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(raiden_state, m_shared_ram)
 	AM_RANGE(0x0b000, 0x0b001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0b002, 0x0b003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0b000, 0x0b007) AM_WRITE(raiden_control_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE(&videoram16)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, m_videoram)
 	AM_RANGE(0x0d000, 0x0d00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0d060, 0x0d067) AM_WRITE(SMH_RAM) AM_BASE(&raiden_scroll_ram)
+	AM_RANGE(0x0d060, 0x0d067) AM_WRITEONLY AM_BASE_MEMBER(raiden_state, m_scroll_ram)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x01fff) AM_RAM
-	AM_RANGE(0x02000, 0x027ff) AM_RAM_WRITE(raiden_background_w) AM_BASE(&raiden_back_data)
-	AM_RANGE(0x02800, 0x02fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE(&raiden_fore_data)
-	AM_RANGE(0x03000, 0x03fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x02000, 0x027ff) AM_RAM_WRITE(raiden_background_w) AM_BASE_MEMBER(raiden_state, m_back_data)
+	AM_RANGE(0x02800, 0x02fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE_MEMBER(raiden_state, m_fore_data)
+	AM_RANGE(0x03000, 0x03fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x07ffe, 0x0afff) AM_WRITENOP
 	AM_RANGE(0xc0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 /************************* Alternate board set ************************/
 
-static ADDRESS_MAP_START( alt_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( alt_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
-	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE(1) AM_BASE(&raiden_shared_ram)
+	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(raiden_state, m_shared_ram)
 	AM_RANGE(0x0a000, 0x0a00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE(&videoram16)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, m_videoram)
 	AM_RANGE(0x0e000, 0x0e001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0e000, 0x0e007) AM_WRITE(raidena_control_w)
 	AM_RANGE(0x0e002, 0x0e003) AM_READ_PORT("DSW")
-	AM_RANGE(0x0f000, 0x0f035) AM_WRITE(SMH_RAM) AM_BASE(&raiden_scroll_ram)
+	AM_RANGE(0x0f000, 0x0f035) AM_WRITEONLY AM_BASE_MEMBER(raiden_state, m_scroll_ram)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 /******************************************************************************/
+
+static ADDRESS_MAP_START( raidenu_main_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000, 0x06fff) AM_RAM
+	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x08000, 0x08035) AM_WRITEONLY AM_BASE_MEMBER(raiden_state, m_scroll_ram)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(raiden_state, m_shared_ram)
+	AM_RANGE(0x0b000, 0x0b001) AM_READ_PORT("P1_P2")
+	AM_RANGE(0x0b002, 0x0b003) AM_READ_PORT("DSW")
+	AM_RANGE(0x0b000, 0x0b007) AM_WRITE(raidena_control_w)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_WRITE(raiden_text_w) AM_BASE_MEMBER(raiden_state, m_videoram)
+	AM_RANGE(0x0d000, 0x0d00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
+	AM_RANGE(0xa0000, 0xfffff) AM_ROM
+ADDRESS_MAP_END
+
+
+static ADDRESS_MAP_START( raidenu_sub_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000, 0x05fff) AM_RAM
+	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(raiden_background_w) AM_BASE_MEMBER(raiden_state, m_back_data)
+	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(raiden_foreground_w) AM_BASE_MEMBER(raiden_state, m_fore_data)
+	AM_RANGE(0x07000, 0x07fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1")
+	//AM_RANGE(0x07ffe, 0x0afff) AM_WRITENOP
+	AM_RANGE(0xc0000, 0xfffff) AM_ROM
+ADDRESS_MAP_END
+
+/*****************************************************************************/
 
 static INPUT_PORTS_START( raiden )
 	SEIBU_COIN_INPUTS	/* coin inputs read through sound cpu */
@@ -223,91 +239,74 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( raiden_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
 }
 
-static VIDEO_EOF( raiden )
+static SCREEN_VBLANK( raiden )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	buffer_spriteram16_w(space,0,0,0xffff); /* Could be a memory location instead */
+	// rising edge
+	if (vblank_on)
+	{
+		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
+		buffer_spriteram16_w(space,0,0,0xffff); /* Could be a memory location instead */
+	}
 }
 
-static MACHINE_DRIVER_START( raiden )
+static MACHINE_CONFIG_START( raiden, raiden_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V30,XTAL_20MHz/2) /* NEC V30 CPU, 20MHz verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", raiden_interrupt)
+	MCFG_CPU_ADD("maincpu", V30,XTAL_20MHz/2) /* NEC V30 CPU, 20MHz verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", raiden_interrupt)
 
-	MDRV_CPU_ADD("sub", V30,XTAL_20MHz/2) /* NEC V30 CPU, 20MHz verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(sub_map)
-	MDRV_CPU_VBLANK_INT("screen", raiden_interrupt)
+	MCFG_CPU_ADD("sub", V30,XTAL_20MHz/2) /* NEC V30 CPU, 20MHz verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MCFG_CPU_VBLANK_INT("screen", raiden_interrupt)
 
 	SEIBU_SOUND_SYSTEM_CPU(XTAL_14_31818MHz/4) /* verified on pcb */
 
-	MDRV_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
 
-	MDRV_MACHINE_RESET(seibu_sound)
+	MCFG_MACHINE_RESET(seibu_sound)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(59.60)    /* verified on pcb */
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(59.60)    /* verified on pcb */
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(raiden)
+	MCFG_SCREEN_VBLANK_STATIC(raiden)
 
-	MDRV_GFXDECODE(raiden)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(raiden)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(raiden)
-	MDRV_VIDEO_EOF(raiden)
-	MDRV_VIDEO_UPDATE(raiden)
+	MCFG_VIDEO_START(raiden)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM3812_RAIDEN_INTERFACE(XTAL_14_31818MHz/4,XTAL_12MHz/12) // frequency and pin 7 verified (pin set in audio\seibu.h)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
+static MACHINE_CONFIG_DERIVED( raidena, raiden )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(alt_main_map)
 
-static MACHINE_DRIVER_START( raidena )
+	MCFG_VIDEO_START(raidena)
+MACHINE_CONFIG_END
 
-	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V30,XTAL_20MHz/2) /* NEC V30 CPU, 20MHz verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(alt_map)
-	MDRV_CPU_VBLANK_INT("screen", raiden_interrupt)
+static MACHINE_CONFIG_DERIVED( raidenu, raiden )
 
-	MDRV_CPU_ADD("sub", V30,XTAL_20MHz/2) /* NEC V30 CPU, 20MHz verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(sub_map)
-	MDRV_CPU_VBLANK_INT("screen", raiden_interrupt)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(raidenu_main_map)
 
-	SEIBU_SOUND_SYSTEM_CPU(XTAL_14_31818MHz/4) /* verified on pcb */
+	MCFG_CPU_MODIFY("sub")
+	MCFG_CPU_PROGRAM_MAP(raidenu_sub_map)
 
-	MDRV_QUANTUM_TIME(HZ(7200))
+	MCFG_VIDEO_START(raidena)
+MACHINE_CONFIG_END
 
-	MDRV_MACHINE_RESET(seibu_sound)
-
-	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(59.60)    /* verified on pcb */
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-
-	MDRV_GFXDECODE(raiden)
-	MDRV_PALETTE_LENGTH(2048)
-
-	MDRV_VIDEO_START(raidena)
-	MDRV_VIDEO_EOF(raiden)
-	MDRV_VIDEO_UPDATE(raiden)
-
-	/* sound hardware */
-	SEIBU_SOUND_SYSTEM_YM3812_RAIDEN_INTERFACE(XTAL_14_31818MHz/4,XTAL_12MHz/12) /* frequency and pin 7 verified on pcb */
-MACHINE_DRIVER_END
 
 /***************************************************************************/
 
@@ -360,7 +359,7 @@ ROM_START( raidena )
 	ROM_LOAD16_BYTE( "raiden06.rom",   0x0c0001, 0x20000, CRC(a19d5b5d) SHA1(aa5e5be60b737913e5677f88ebc218302245e5af) )
 
 	ROM_REGION( 0x20000, "audiocpu", 0 ) /* 64k code for sound Z80 */
-	ROM_LOAD( "raiden08.rom", 0x000000, 0x08000, CRC(731adb43) SHA1(d460ffc5dbec25482c695e6c4ac7b66655a67304) )
+	ROM_LOAD( "raiden08.rom", 0x000000, 0x08000, CRC(cbe055c7) SHA1(34a06a541d059c621d87fdf41546c9d052a61963) )
 	ROM_CONTINUE(             0x010000, 0x08000 )
 	ROM_COPY( "audiocpu", 0, 0x018000, 0x08000 )
 
@@ -447,47 +446,120 @@ ROM_START( raident )
 	ROM_LOAD( "rai7.bin", 0x00000, 0x10000, CRC(8f927822) SHA1(592f2719f2c448c3b4b239eeaec078b411e12dbb) )
 ROM_END
 
+
+ROM_START( raidenu )
+	ROM_REGION( 0x100000, "maincpu", 0 ) /* v30 main cpu */
+	ROM_LOAD16_BYTE( "1.c8",     0x0a0000, 0x10000, CRC(a4b12785) SHA1(446314e82ce01315cb3e3d1f323eaa2ad6fb48dd) )
+	ROM_LOAD16_BYTE( "2.c7",     0x0a0001, 0x10000, CRC(17640bd5) SHA1(5bbc99900426b1a072b52537ae9a50220c378a0d) )
+	ROM_LOAD16_BYTE( "3dd.e8",   0x0c0000, 0x20000, CRC(b6f3bad2) SHA1(214474ab9fa65e2716155b77d7825951cc98148a) )
+	ROM_LOAD16_BYTE( "4dd.e7",   0x0c0001, 0x20000, CRC(d294dfc1) SHA1(03606ddfa35d5cb34c447fa370495e1fbb0cad0e) )
+
+	ROM_REGION( 0x100000, "sub", 0 ) /* v30 sub cpu */
+	ROM_LOAD16_BYTE( "5.p8",   0x0c0000, 0x20000, CRC(15c1cf45) SHA1(daac732a1d3e8f36fa665f984e05651cbca74fef) )
+	ROM_LOAD16_BYTE( "6.p7",   0x0c0001, 0x20000, CRC(261c381b) SHA1(64a9e0ea9abcba6287829cf4abb806362b62c806) )
+
+	ROM_REGION( 0x20000, "audiocpu", 0 ) /* 64k code for sound Z80 */
+	ROM_LOAD( "8.w8",   0x000000, 0x08000, CRC(105b9c11) SHA1(eb142806f8410d584d914b91207361a15ab18e6f) )
+	ROM_CONTINUE(                 0x10000, 0x08000 )
+	ROM_COPY( "audiocpu", 0,      0x18000, 0x08000 )
+
+	ROM_REGION( 0x010000, "gfx1", 0 )
+	ROM_LOAD( "9.u016",     0x00000, 0x08000, CRC(1922b25e) SHA1(da27122dd1c43770e7385ad602ef397c64d2f754) ) /* chars */
+	ROM_LOAD( "10.u017",    0x08000, 0x08000, CRC(5f90786a) SHA1(4f63b07c6afbcf5196a433f3356bef984fe303ef) )
+
+	ROM_REGION( 0x080000, "gfx2", 0 )
+	ROM_LOAD( "sei420.u011", 0x00000, 0x80000, CRC(da151f0b) SHA1(02682497caf5f058331f18c652471829fa08d54f) ) /* tiles */
+
+	ROM_REGION( 0x080000, "gfx3", 0 )
+	ROM_LOAD( "sei430.u013", 0x00000, 0x80000, CRC(ac1f57ac) SHA1(1de926a0db73b99904ef119ac816c53d1551156a) ) /* tiles */
+
+	ROM_REGION( 0x090000, "gfx4", 0 )
+	ROM_LOAD( "sei440.u012",  0x00000, 0x80000, CRC(946d7bde) SHA1(30e8755c2b1ca8bff6278710b8422b51f75eec10) ) /* sprites */
+
+	ROM_REGION( 0x40000, "oki", 0 )	 /* ADPCM samples */
+	ROM_LOAD( "7.x10", 0x00000, 0x10000, CRC(2051263e) SHA1(dff96caa11adf619360d88704e3af8427ddfe524) )
+ROM_END
+
+/* from a board with 2 daughter cards, no official board #s? */
+ROM_START( raidenua )
+	ROM_REGION( 0x100000, "maincpu", 0 ) /* v30 main cpu */
+	ROM_LOAD16_BYTE( "1.uo253",     0x0a0000, 0x10000, CRC(a4b12785) SHA1(446314e82ce01315cb3e3d1f323eaa2ad6fb48dd) )
+	ROM_LOAD16_BYTE( "2.uo252",     0x0a0001, 0x10000, CRC(17640bd5) SHA1(5bbc99900426b1a072b52537ae9a50220c378a0d) )
+	ROM_LOAD16_BYTE( "3a.uo22",     0x0c0000, 0x20000, CRC(a8fadbdd) SHA1(a23729a51c45c1dba4e625503a37d111ae72ced0) )
+	ROM_LOAD16_BYTE( "4a.uo23",     0x0c0001, 0x20000, CRC(bafb268d) SHA1(132d3ebf9d9d5fffa3040338106fad428c54dbaa) )
+
+	ROM_REGION( 0x100000, "sub", 0 ) /* v30 sub cpu */
+	ROM_LOAD16_BYTE( "5.uo42",   0x0c0000, 0x20000, CRC(ed03562e) SHA1(bf6b44fb53fa2321cd52c00fcb43b8ceb6ceffff) )
+	ROM_LOAD16_BYTE( "6.uo43",   0x0c0001, 0x20000, CRC(a19d5b5d) SHA1(aa5e5be60b737913e5677f88ebc218302245e5af) )
+
+	ROM_REGION( 0x20000, "audiocpu", 0 ) /* 64k code for sound Z80 */
+	ROM_LOAD( "8.u214",   0x000000, 0x08000, CRC(cbe055c7) SHA1(34a06a541d059c621d87fdf41546c9d052a61963) ) // same as taiwan set
+	ROM_CONTINUE(             0x010000, 0x08000 )
+	ROM_COPY( "audiocpu", 0, 0x018000, 0x08000 )
+
+	ROM_REGION( 0x010000, "gfx1", 0 )
+	ROM_LOAD( "rai9.bin",     0x00000, 0x08000, CRC(1922b25e) SHA1(da27122dd1c43770e7385ad602ef397c64d2f754) ) /* chars */
+	ROM_LOAD( "rai10.bin",    0x08000, 0x08000, CRC(5f90786a) SHA1(4f63b07c6afbcf5196a433f3356bef984fe303ef) )
+
+	ROM_REGION( 0x080000, "gfx2", 0 )
+	ROM_LOAD( "raiu0919.bin", 0x00000, 0x80000, CRC(da151f0b) SHA1(02682497caf5f058331f18c652471829fa08d54f) ) /* tiles */
+
+	ROM_REGION( 0x080000, "gfx3", 0 )
+	ROM_LOAD( "raiu0920.bin", 0x00000, 0x80000, CRC(ac1f57ac) SHA1(1de926a0db73b99904ef119ac816c53d1551156a) ) /* tiles */
+
+	ROM_REGION( 0x090000, "gfx4", 0 )
+	ROM_LOAD( "raiu165.bin",  0x00000, 0x80000, CRC(946d7bde) SHA1(30e8755c2b1ca8bff6278710b8422b51f75eec10) ) /* sprites */
+
+	ROM_REGION( 0x40000, "oki", 0 )	 /* ADPCM samples */
+	ROM_LOAD( "7.u203", 0x00000, 0x10000, CRC(8f927822) SHA1(592f2719f2c448c3b4b239eeaec078b411e12dbb) )
+ROM_END
+
 /***************************************************************************/
 
-/* Spin the sub-cpu if it is waiting on the master cpu */
+
+
+/* this used to be needed to stop the collisions from breaking (high interleave didn't help), is it still required? */
+//#define SYNC_HACK
+
+#ifdef SYNC_HACK
 static READ16_HANDLER( sub_cpu_spin_r )
 {
-	int pc=cpu_get_pc(space->cpu);
-	int ret=raiden_shared_ram[0x4];
+	raiden_state *state = space->machine().driver_data<raiden_state>();
+	int pc=cpu_get_pc(&space->device());
+	int ret=state->m_shared_ram[0x4];
 
+	// main set
 	if (pc==0xfcde6 && ret!=0x40)
-		cpu_spin(space->cpu);
+		device_spin(&space->device());
 
-	return ret;
-}
-
-static READ16_HANDLER( sub_cpu_spina_r )
-{
-	int pc=cpu_get_pc(space->cpu);
-	int ret=raiden_shared_ram[0x4];
-
+	// alt sets
 	if (pc==0xfcde8 && ret!=0x40)
-		cpu_spin(space->cpu);
+		device_spin(&space->device());
 
 	return ret;
 }
+#endif
 
 static DRIVER_INIT( raiden )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0x4008, 0x4009, 0, 0, sub_cpu_spin_r);
+#ifdef SYNC_HACK
+	machine.device("sub")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x4008, 0x4009, FUNC(sub_cpu_spin_r));
+#endif
 }
 
-static void memory_patcha(running_machine *machine)
+static DRIVER_INIT( raidenu )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0x4008, 0x4009, 0, 0, sub_cpu_spina_r);
+	DRIVER_INIT_CALL(raiden);
+	seibu_sound_decrypt(machine,"audiocpu",0x20000);
 }
 
 /* This is based on code by Niclas Karlsson Mate, who figured out the
 encryption method! The technique is a combination of a XOR table plus
 bit-swapping */
-static void common_decrypt(running_machine *machine)
+static void common_decrypt(running_machine &machine)
 {
-	UINT16 *RAM = (UINT16 *)memory_region(machine, "maincpu");
+
+	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
 	int i;
 
 	for (i = 0; i < 0x20000; i++)
@@ -499,7 +571,7 @@ static void common_decrypt(running_machine *machine)
 		RAM[0xc0000/2 + i] = data;
 	}
 
-	RAM = (UINT16 *)memory_region(machine, "sub");
+	RAM = (UINT16 *)machine.region("sub")->base();
 
 	for (i = 0; i < 0x20000; i++)
 	{
@@ -513,20 +585,24 @@ static void common_decrypt(running_machine *machine)
 
 static DRIVER_INIT( raidenk )
 {
-	memory_patcha(machine);
+	DRIVER_INIT_CALL(raiden);
 	common_decrypt(machine);
 }
 
 static DRIVER_INIT( raidena )
 {
-	memory_patcha(machine);
+	DRIVER_INIT_CALL(raiden);
 	common_decrypt(machine);
 	seibu_sound_decrypt(machine,"audiocpu",0x20000);
 }
 
+
+
 /***************************************************************************/
 
-GAME( 1990, raiden,  0,      raiden,  raiden, raiden,  ROT270, "Seibu Kaihatsu", "Raiden", 0 )
-GAME( 1990, raidena, raiden, raidena, raiden, raidena, ROT270, "Seibu Kaihatsu", "Raiden (Alternate Hardware)", 0 )
-GAME( 1990, raidenk, raiden, raidena, raiden, raidenk, ROT270, "Seibu Kaihatsu (IBL Corporation license)", "Raiden (Korea)", 0 )
+GAME( 1990, raiden,  0,      raiden,  raiden, raiden,  ROT270, "Seibu Kaihatsu", "Raiden", 0 ) // main/sub/sound not encrypted
+GAME( 1990, raidenu, raiden, raidenu, raiden, raidenu, ROT270, "Seibu Kaihatsu (Fabtek license)", "Raiden (US, set 1, SEI8904 + SEI9008 PCBs)", 0 ) // main/sub not encrypted
+GAME( 1990, raidenua,raiden, raidena, raiden, raidena, ROT270, "Seibu Kaihatsu (Fabtek license)", "Raiden (US, set 2)", 0 )
+GAME( 1990, raidena, raiden, raidena, raiden, raidena, ROT270, "Seibu Kaihatsu", "Raiden (alternate hardware)", 0 )
+GAME( 1990, raidenk, raiden, raidena, raiden, raidenk, ROT270, "Seibu Kaihatsu (IBL Corporation license)", "Raiden (Korea)", 0 ) // sound not encrypted
 GAME( 1990, raident, raiden, raidena, raiden, raidena, ROT270, "Seibu Kaihatsu (Liang HWA Electronics license)", "Raiden (Taiwan)", 0 )

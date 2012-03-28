@@ -4,50 +4,175 @@
 
 **************************************************************************/
 
+#include "cpu/m68000/m68000.h"
 #include "cpu/tms34010/tms34010.h"
+#include "cpu/tms32010/tms32010.h"
+#include "cpu/adsp2100/adsp2100.h"
+#include "cpu/dsp32/dsp32.h"
+#include "machine/atarigen.h"
+
+class harddriv_state : public atarigen_state
+{
+public:
+	harddriv_state(const machine_config &mconfig, device_type type, const char *tag)
+		: atarigen_state(mconfig, type, tag),
+		  m_maincpu(*this, "maincpu"),
+		  m_gsp(*this, "gsp"),
+		  m_msp(*this, "msp"),
+		  m_adsp(*this, "adsp"),
+		  m_soundcpu(*this, "soundcpu"),
+		  m_sounddsp(*this, "sounddsp"),
+		  m_jsacpu(*this, "jsacpu"),
+		  m_dsp32(*this, "dsp32"),
+		  m_ds4cpu1(*this, "ds4cpu1"),
+		  m_ds4cpu2(*this, "ds4cpu2"),
+		  m_duart_timer(*this, "duart_timer") { }
+
+	required_device<cpu_device> m_maincpu;
+	required_device<tms34010_device> m_gsp;
+	optional_device<cpu_device> m_msp;
+	required_device<adsp21xx_device> m_adsp;
+	optional_device<cpu_device> m_soundcpu;
+	optional_device<cpu_device> m_sounddsp;
+	optional_device<cpu_device> m_jsacpu;
+	optional_device<dsp32c_device> m_dsp32;
+	optional_device<adsp2105_device> m_ds4cpu1;
+	optional_device<adsp2105_device> m_ds4cpu2;
+
+	UINT8					m_hd34010_host_access;
+	UINT8					m_dsk_pio_access;
+
+	UINT16 *				m_msp_ram;
+	UINT16 *				m_dsk_ram;
+	UINT16 *				m_dsk_rom;
+	UINT16 *				m_dsk_zram;
+	UINT16 *				m_m68k_slapstic_base;
+	UINT16 *				m_m68k_sloop_alt_base;
+
+	UINT16 *				m_adsp_data_memory;
+	UINT32 *				m_adsp_pgm_memory;
+
+	UINT16 *				m_gsp_protection;
+	UINT16 *				m_stmsp_sync[3];
+
+	UINT16 *				m_gsp_speedup_addr[2];
+	offs_t					m_gsp_speedup_pc;
+
+	UINT16 *				m_msp_speedup_addr;
+	offs_t					m_msp_speedup_pc;
+
+	UINT16 *				m_ds3_speedup_addr;
+	offs_t					m_ds3_speedup_pc;
+	offs_t					m_ds3_transfer_pc;
+
+	UINT32 *				m_rddsp32_sync[2];
+
+	UINT32					m_gsp_speedup_count[4];
+	UINT32					m_msp_speedup_count[4];
+	UINT32					m_adsp_speedup_count[4];
+
+	UINT16 *				m_sounddsp_ram;
+
+	UINT8					m_gsp_multisync;
+	UINT8 *					m_gsp_vram;
+	UINT16 *				m_gsp_control_lo;
+	UINT16 *				m_gsp_control_hi;
+	UINT16 *				m_gsp_paletteram_lo;
+	UINT16 *				m_gsp_paletteram_hi;
+	size_t					m_gsp_vram_size;
+
+	/* machine state */
+	UINT8					m_irq_state;
+	UINT8					m_gsp_irq_state;
+	UINT8					m_msp_irq_state;
+	UINT8					m_adsp_irq_state;
+	UINT8					m_duart_irq_state;
+
+	UINT8					m_duart_read_data[16];
+	UINT8					m_duart_write_data[16];
+	UINT8					m_duart_output_port;
+	optional_device<timer_device> m_duart_timer;
+
+	UINT8					m_last_gsp_shiftreg;
+
+	UINT8					m_m68k_zp1;
+	UINT8					m_m68k_zp2;
+	UINT8					m_m68k_adsp_buffer_bank;
+
+	UINT8					m_adsp_halt;
+	UINT8					m_adsp_br;
+	UINT8					m_adsp_xflag;
+	UINT16					m_adsp_sim_address;
+	UINT16					m_adsp_som_address;
+	UINT32					m_adsp_eprom_base;
+
+	UINT16 *				m_sim_memory;
+	UINT32					m_sim_memory_size;
+	UINT16					m_som_memory[0x8000/2];
+	UINT16 *				m_adsp_pgm_memory_word;
+
+	UINT8					m_ds3_gcmd;
+	UINT8					m_ds3_gflag;
+	UINT8					m_ds3_g68irqs;
+	UINT8					m_ds3_gfirqs;
+	UINT8					m_ds3_g68flag;
+	UINT8					m_ds3_send;
+	UINT8					m_ds3_reset;
+	UINT16					m_ds3_gdata;
+	UINT16					m_ds3_g68data;
+	UINT32					m_ds3_sim_address;
+
+	UINT16					m_adc_control;
+	UINT8					m_adc8_select;
+	UINT8					m_adc8_data;
+	UINT8					m_adc12_select;
+	UINT8					m_adc12_byte;
+	UINT16					m_adc12_data;
+
+	UINT16					m_hdc68k_last_wheel;
+	UINT16					m_hdc68k_last_port1;
+	UINT8					m_hdc68k_wheel_edge;
+	UINT8					m_hdc68k_shifter_state;
+
+	UINT8					m_st68k_sloop_bank;
+	offs_t					m_st68k_last_alt_sloop_offset;
+
+	#define MAX_MSP_SYNC	16
+	UINT32 *				m_dataptr[MAX_MSP_SYNC];
+	UINT32					m_dataval[MAX_MSP_SYNC];
+	int 					m_next_msp_sync;
+
+	/* audio state */
+	UINT8					m_soundflag;
+	UINT8					m_mainflag;
+	UINT16					m_sounddata;
+	UINT16					m_maindata;
+
+	UINT8					m_dacmute;
+	UINT8					m_cramen;
+	UINT8					m_irq68k;
+
+	offs_t					m_sound_rom_offs;
+
+	UINT8 *					m_rombase;
+	UINT32					m_romsize;
+	UINT16					m_comram[0x400/2];
+	UINT64					m_last_bio_cycles;
+
+	/* video state */
+	offs_t					m_vram_mask;
+
+	UINT8					m_shiftreg_enable;
+
+	UINT32					m_mask_table[65536 * 4];
+	UINT8 *					m_gsp_shiftreg_source;
+
+	INT8					m_gfx_finescroll;
+	UINT8					m_gfx_palettebank;
+};
+
 
 /*----------- defined in machine/harddriv.c -----------*/
-
-extern const device_config *hdcpu_main;
-extern const device_config *hdcpu_gsp;
-extern const device_config *hdcpu_msp;
-extern const device_config *hdcpu_adsp;
-extern const device_config *hdcpu_sound;
-extern const device_config *hdcpu_sounddsp;
-extern const device_config *hdcpu_jsa;
-extern const device_config *hdcpu_dsp32;
-
-extern UINT8 hd34010_host_access;
-extern UINT8 hddsk_pio_access;
-
-extern UINT16 *hdmsp_ram;
-extern UINT16 *hddsk_ram;
-extern UINT16 *hddsk_rom;
-extern UINT16 *hddsk_zram;
-extern UINT16 *hd68k_slapstic_base;
-extern UINT16 *st68k_sloop_alt_base;
-
-extern UINT16 *hdadsp_data_memory;
-extern UINT32 *hdadsp_pgm_memory;
-
-extern UINT16 *hdgsp_protection;
-extern UINT16 *stmsp_sync[3];
-
-extern UINT16 *hdgsp_speedup_addr[2];
-extern offs_t hdgsp_speedup_pc;
-
-extern UINT16 *hdmsp_speedup_addr;
-extern offs_t hdmsp_speedup_pc;
-
-extern UINT16 *hdds3_speedup_addr;
-extern offs_t hdds3_speedup_pc;
-extern offs_t hdds3_transfer_pc;
-
-extern UINT32 *rddsp32_sync[2];
-
-extern UINT32 gsp_speedup_count[4];
-extern UINT32 msp_speedup_count[4];
-extern UINT32 adsp_speedup_count[4];
 
 /* Driver/Multisync board */
 MACHINE_START( harddriv );
@@ -55,8 +180,8 @@ MACHINE_RESET( harddriv );
 
 INTERRUPT_GEN( hd68k_irq_gen );
 WRITE16_HANDLER( hd68k_irq_ack_w );
-void hdgsp_irq_gen(const device_config *device, int state);
-void hdmsp_irq_gen(const device_config *device, int state);
+void hdgsp_irq_gen(device_t *device, int state);
+void hdmsp_irq_gen(device_t *device, int state);
 
 READ16_HANDLER( hd68k_gsp_io_r );
 WRITE16_HANDLER( hd68k_gsp_io_w );
@@ -82,6 +207,7 @@ WRITE16_HANDLER( hdc68k_wheel_edge_reset_w );
 READ16_HANDLER( hd68k_zram_r );
 WRITE16_HANDLER( hd68k_zram_w );
 
+TIMER_DEVICE_CALLBACK( hd68k_duart_callback );
 READ16_HANDLER( hd68k_duart_r );
 WRITE16_HANDLER( hd68k_duart_w );
 
@@ -128,7 +254,7 @@ READ16_HANDLER( hd68k_ds3_program_r );
 WRITE16_HANDLER( hd68k_ds3_program_w );
 
 /* DSK board */
-void hddsk_update_pif(const device_config *device, UINT32 pins);
+void hddsk_update_pif(dsp32c_device &device, UINT32 pins);
 WRITE16_HANDLER( hd68k_dsk_control_w );
 READ16_HANDLER( hd68k_dsk_ram_r );
 WRITE16_HANDLER( hd68k_dsk_ram_w );
@@ -173,9 +299,7 @@ READ16_HANDLER( hdds3_speedup_r );
 
 /*----------- defined in audio/harddriv.c -----------*/
 
-void hdsnd_init(running_machine *machine);
-
-extern UINT16 *hdsnddsp_ram;
+void hdsnd_init(running_machine &machine);
 
 READ16_HANDLER( hd68k_snd_data_r );
 READ16_HANDLER( hd68k_snd_status_r );
@@ -215,17 +339,9 @@ READ16_HANDLER( hdsnddsp_compare_r );
 
 /*----------- defined in video/harddriv.c -----------*/
 
-extern UINT8 hdgsp_multisync;
-extern UINT8 *hdgsp_vram;
-extern UINT16 *hdgsp_control_lo;
-extern UINT16 *hdgsp_control_hi;
-extern UINT16 *hdgsp_paletteram_lo;
-extern UINT16 *hdgsp_paletteram_hi;
-extern size_t hdgsp_vram_size;
-
 VIDEO_START( harddriv );
-void hdgsp_write_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg);
-void hdgsp_read_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg);
+void hdgsp_write_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
+void hdgsp_read_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
 
 READ16_HANDLER( hdgsp_control_lo_r );
 WRITE16_HANDLER( hdgsp_control_lo_w );
@@ -241,5 +357,5 @@ WRITE16_HANDLER( hdgsp_paletteram_lo_w );
 READ16_HANDLER( hdgsp_paletteram_hi_r );
 WRITE16_HANDLER( hdgsp_paletteram_hi_w );
 
-void harddriv_scanline_driver(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
-void harddriv_scanline_multisync(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
+void harddriv_scanline_driver(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params);
+void harddriv_scanline_multisync(screen_device &screen, bitmap_ind16 &bitmap, int scanline, const tms34010_display_params *params);

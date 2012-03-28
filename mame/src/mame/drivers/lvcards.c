@@ -73,119 +73,115 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
+#include "includes/lvcards.h"
 
-extern WRITE8_HANDLER( lvcards_videoram_w );
-extern WRITE8_HANDLER( lvcards_colorram_w );
-
-extern PALETTE_INIT( lvcards );
-extern PALETTE_INIT( ponttehk );
-extern VIDEO_START( lvcards );
-extern VIDEO_UPDATE( lvcards );
-
-static UINT8 payout;
-static UINT8 pulse;
-static UINT8 result;
 
 static MACHINE_START( lvpoker )
 {
-	state_save_register_global(machine, payout);
-	state_save_register_global(machine, pulse);
-	state_save_register_global(machine, result);
+	lvcards_state *state = machine.driver_data<lvcards_state>();
+	state_save_register_global(machine, state->m_payout);
+	state_save_register_global(machine, state->m_pulse);
+	state_save_register_global(machine, state->m_result);
 }
 
 static MACHINE_RESET( lvpoker )
 {
-	payout = 0;
-	pulse = 0;
-	result = 0;
+	lvcards_state *state = machine.driver_data<lvcards_state>();
+	state->m_payout = 0;
+	state->m_pulse = 0;
+	state->m_result = 0;
 }
 
 static WRITE8_HANDLER(control_port_2_w)
 {
+	lvcards_state *state = space->machine().driver_data<lvcards_state>();
 	switch (data)
 	{
 		case 0x60:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		case 0xc0:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		default:
-		payout = 0;
+		state->m_payout = 0;
 		break;
 	}
 }
 
 static WRITE8_HANDLER(control_port_2a_w)
 {
+	lvcards_state *state = space->machine().driver_data<lvcards_state>();
 	switch (data)
 	{
 		case 0x60:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		case 0x80:
-		payout = 1;
+		state->m_payout = 1;
 		break;
 		default:
-		payout = 0;
+		state->m_payout = 0;
 		break;
 	}
 }
 
 static READ8_HANDLER( payout_r )
 {
-	result = input_port_read(space->machine, "IN2");
+	lvcards_state *state = space->machine().driver_data<lvcards_state>();
+	state->m_result = input_port_read(space->machine(), "IN2");
 
-	if (payout)
+	if (state->m_payout)
 	{
-    	if ( pulse < 3 )
+    	if ( state->m_pulse < 3 )
 		{
-			result = result | 0x40;
-	        pulse++;
+			state->m_result = state->m_result | 0x40;
+	        state->m_pulse++;
         }
        else
     	{
-        	pulse = 0;
+        	state->m_pulse = 0;
         }
    }
-   return result;
+   return state->m_result;
 }
 
-static ADDRESS_MAP_START( ponttehk_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ponttehk_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE_MEMBER(lvcards_state, m_videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE_MEMBER(lvcards_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP // lamps
 	AM_RANGE(0xa002, 0xa002) AM_READ(payout_r) AM_WRITE(control_port_2a_w)//AM_WRITENOP // ???
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lvcards_map, ADDRESS_SPACE_PROGRAM, 8  )
+static ADDRESS_MAP_START( lvcards_map, AS_PROGRAM, 8  )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE_MEMBER(lvcards_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE_MEMBER(lvcards_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP
 	AM_RANGE(0xa002, 0xa002) AM_READ_PORT("IN2") AM_WRITENOP
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lvcards_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( lvcards_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lvpoker_map, ADDRESS_SPACE_PROGRAM, 8  )
+static ADDRESS_MAP_START( lvpoker_map, AS_PROGRAM, 8  )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE_MEMBER(lvcards_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE_MEMBER(lvcards_state, m_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP // lamps
 	AM_RANGE(0xa002, 0xa002) AM_READ(payout_r) AM_WRITE(control_port_2_w)
@@ -277,7 +273,7 @@ static INPUT_PORTS_START( lvcards )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( lvpoker )
-  	PORT_START("IN0")
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Analyzer") PORT_TOGGLE
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_CODE(KEYCODE_MINUS) PORT_NAME("Memory Reset")
@@ -327,7 +323,7 @@ static INPUT_PORTS_START( lvpoker )
 	PORT_DIPSETTING(    0x00, "Credit In/Coin Out")
 	PORT_DIPSETTING(    0x20, "Credit In/Credit Out")
 	PORT_DIPSETTING(    0x40, "Coin In/Coin Out")
-  	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out") Again, clearly no Coin in, Credit out
+	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out") Again, clearly no Coin in, Credit out
 	PORT_DIPNAME( 0x80, 0x80, "Memory Reset Switch" )
 	PORT_DIPSETTING(    0x80, "Disabled" )
 	PORT_DIPSETTING(    0x00, "Enabled" )
@@ -405,7 +401,7 @@ static INPUT_PORTS_START( ponttehk )
 	PORT_DIPSETTING(    0x00, "Credit In/Coin Out" )
 	PORT_DIPSETTING(    0x20, "Coin In/Coin Out" )
 	PORT_DIPSETTING(    0x40, "Credit In/Credit Out" )
-  	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out" ) Again, clearly no Coin in, Credit out
+	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out" ) Again, clearly no Coin in, Credit out
 	PORT_DIPNAME( 0x80, 0x80, "Reset All Switch" )
 	PORT_DIPSETTING(    0x80, "Disabled" )
 	PORT_DIPSETTING(    0x00, "Enabled" )
@@ -468,61 +464,58 @@ static const ay8910_interface lcay8910_interface =
 };
 
 
-static MACHINE_DRIVER_START( lvcards )
+static MACHINE_CONFIG_START( lvcards, lvcards_state )
 	// basic machine hardware
- 	MDRV_CPU_ADD("maincpu",Z80, 18432000/6)	// 3.072 MHz ?
+	MCFG_CPU_ADD("maincpu",Z80, 18432000/6)	// 3.072 MHz ?
 
-	MDRV_CPU_PROGRAM_MAP(lvcards_map)
-	MDRV_CPU_IO_MAP(lvcards_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_PROGRAM_MAP(lvcards_map)
+	MCFG_CPU_IO_MAP(lvcards_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	// video hardware
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(8*0, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(8*0, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(lvcards)
 
-	MDRV_GFXDECODE(lvcards)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(lvcards)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_PALETTE_INIT(lvcards)
-	MDRV_VIDEO_START(lvcards)
-	MDRV_VIDEO_UPDATE(lvcards)
+	MCFG_PALETTE_INIT(lvcards)
+	MCFG_VIDEO_START(lvcards)
 
 	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 18432000/12)
-	MDRV_SOUND_CONFIG(lcay8910_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("aysnd", AY8910, 18432000/12)
+	MCFG_SOUND_CONFIG(lcay8910_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( lvpoker )
-	MDRV_IMPORT_FROM( lvcards )
-
-	// basic machine hardware
-	MDRV_NVRAM_HANDLER(generic_1fill)
- 	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(lvpoker_map)
-	MDRV_MACHINE_START(lvpoker)
-	MDRV_MACHINE_RESET(lvpoker)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( ponttehk )
-	MDRV_IMPORT_FROM( lvcards )
+static MACHINE_CONFIG_DERIVED( lvpoker, lvcards )
 
 	// basic machine hardware
-	MDRV_NVRAM_HANDLER(generic_1fill)
- 	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(ponttehk_map)
-	MDRV_MACHINE_RESET(lvpoker)
+	MCFG_NVRAM_ADD_1FILL("nvram")
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(lvpoker_map)
+	MCFG_MACHINE_START(lvpoker)
+	MCFG_MACHINE_RESET(lvpoker)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( ponttehk, lvcards )
+
+	// basic machine hardware
+	MCFG_NVRAM_ADD_1FILL("nvram")
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(ponttehk_map)
+	MCFG_MACHINE_RESET(lvpoker)
 
 	// video hardware
-	MDRV_PALETTE_INIT(ponttehk)
-MACHINE_DRIVER_END
+	MCFG_PALETTE_INIT(ponttehk)
+MACHINE_CONFIG_END
 
 ROM_START( lvpoker )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -585,6 +578,6 @@ ROM_START( ponttehk )
 	ROM_LOAD( "pon24s10.001", 0x0200, 0x0100, CRC(c64ecee8) SHA1(80c9ec21e135235f7f2d41ce7900cf3904123823) )  /* blue component */
 ROM_END
 
-GAME( 1985, lvcards,  		0, lvcards,  lvcards,  0, ROT0, "Tehkan", "Lovely Cards", 0 )
+GAME( 1985, lvcards,		0, lvcards,  lvcards,  0, ROT0, "Tehkan", "Lovely Cards", 0 )
 GAME( 1985, lvpoker,  lvcards, lvpoker,  lvpoker,  0, ROT0, "Tehkan", "Lovely Poker [BET]", 0 )
 GAME( 1985, ponttehk,		0, ponttehk, ponttehk, 0, ROT0, "Tehkan", "Pontoon (Tehkan)", 0 )

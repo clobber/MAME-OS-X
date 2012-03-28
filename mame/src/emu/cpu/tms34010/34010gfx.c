@@ -11,7 +11,7 @@
 
 
 #define LOG_GFX_OPS 0
-#define LOGGFX(x) do { if (LOG_GFX_OPS && input_code_pressed(tms->device->machine, KEYCODE_L)) logerror x; } while (0)
+#define LOGGFX(x) do { if (LOG_GFX_OPS && tms->device->machine().input().code_pressed(KEYCODE_L)) logerror x; } while (0)
 
 
 /* Graphics Instructions */
@@ -25,7 +25,7 @@ static void line(tms34010_state *tms, UINT16 op)
 
 		tms->st |= STBIT_P;
 		TEMP(tms) = (op & 0x80) ? 1 : 0;  /* boundary value depends on the algorithm */
-		LOGGFX(("%08X(%3d):LINE (%d,%d)-(%d,%d)\n", tms->pc, video_screen_get_vpos(tms->screen), DADDR_X(tms), DADDR_Y(tms), DADDR_X(tms) + DYDX_X(tms), DADDR_Y(tms) + DYDX_Y(tms)));
+		LOGGFX(("%08X(%3d):LINE (%d,%d)-(%d,%d)\n", tms->pc, tms->screen->vpos(), DADDR_X(tms), DADDR_Y(tms), DADDR_X(tms) + DYDX_X(tms), DADDR_Y(tms) + DYDX_Y(tms)));
 	}
 
 	if (COUNT(tms) > 0)
@@ -201,18 +201,28 @@ static int compute_pixblt_b_cycles(int left_partials, int right_partials, int fu
 
 
 /* Shift register handling */
-static void shiftreg_w(const address_space *space, offs_t offset,UINT16 data)
+static void memory_w(address_space *space, offs_t offset,UINT16 data)
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	space->write_word(offset, data);
+}
+
+static UINT16 memory_r(address_space *space, offs_t offset)
+{
+	return space->read_word(offset);
+}
+
+static void shiftreg_w(address_space *space, offs_t offset,UINT16 data)
+{
+	tms34010_state *tms = get_safe_token(&space->device());
 	if (tms->config->from_shiftreg)
 		(*tms->config->from_shiftreg)(space, (UINT32)(offset << 3) & ~15, &tms->shiftreg[0]);
 	else
 		logerror("From ShiftReg function not set. PC = %08X\n", tms->pc);
 }
 
-static UINT16 shiftreg_r(const address_space *space, offs_t offset)
+static UINT16 shiftreg_r(address_space *space, offs_t offset)
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	tms34010_state *tms = get_safe_token(&space->device());
 	if (tms->config->to_shiftreg)
 		(*tms->config->to_shiftreg)(space, (UINT32)(offset << 3) & ~15, &tms->shiftreg[0]);
 	else
@@ -220,9 +230,9 @@ static UINT16 shiftreg_r(const address_space *space, offs_t offset)
 	return tms->shiftreg[0];
 }
 
-static UINT16 dummy_shiftreg_r(const address_space *space, offs_t offset)
+static UINT16 dummy_shiftreg_r(address_space *space, offs_t offset)
 {
-	tms34010_state *tms = get_safe_token(space->cpu);
+	tms34010_state *tms = get_safe_token(&space->device());
 	return tms->shiftreg[0];
 }
 
@@ -710,9 +720,9 @@ static void (*const fill_op_table[])(tms34010_state *tms, int) =
 #define RECURSIVE_INCLUDE
 
 /* non-transparent replace ops */
-#define PIXEL_OP(src, mask, pixel) 		pixel = pixel
-#define PIXEL_OP_TIMING			 		2
-#define PIXEL_OP_REQUIRES_SOURCE 		0
+#define PIXEL_OP(src, mask, pixel)		pixel = pixel
+#define PIXEL_OP_TIMING					2
+#define PIXEL_OP_REQUIRES_SOURCE		0
 #define TRANSPARENCY					0
 
 	/* 1bpp cases */
@@ -756,9 +766,9 @@ static void (*const fill_op_table[])(tms34010_state *tms, int) =
 #undef PIXEL_OP
 
 
-#define PIXEL_OP(src, mask, pixel) 		pixel = (*pixel_op)(src, mask, pixel)
-#define PIXEL_OP_TIMING			 		pixel_op_timing
-#define PIXEL_OP_REQUIRES_SOURCE 		1
+#define PIXEL_OP(src, mask, pixel)		pixel = (*pixel_op)(src, mask, pixel)
+#define PIXEL_OP_TIMING					pixel_op_timing
+#define PIXEL_OP_REQUIRES_SOURCE		1
 #define TRANSPARENCY					0
 
 	/* 1bpp cases */
@@ -803,9 +813,9 @@ static void (*const fill_op_table[])(tms34010_state *tms, int) =
 
 
 /* transparent replace ops */
-#define PIXEL_OP(src, mask, pixel) 		pixel = pixel
-#define PIXEL_OP_REQUIRES_SOURCE 		0
-#define PIXEL_OP_TIMING			 		4
+#define PIXEL_OP(src, mask, pixel)		pixel = pixel
+#define PIXEL_OP_REQUIRES_SOURCE		0
+#define PIXEL_OP_TIMING					4
 #define TRANSPARENCY					1
 
 	/* 1bpp cases */
@@ -849,8 +859,8 @@ static void (*const fill_op_table[])(tms34010_state *tms, int) =
 #undef PIXEL_OP
 
 
-#define PIXEL_OP(src, mask, pixel) 		pixel = (*pixel_op)(src, mask, pixel)
-#define PIXEL_OP_REQUIRES_SOURCE 		1
+#define PIXEL_OP(src, mask, pixel)		pixel = (*pixel_op)(src, mask, pixel)
+#define PIXEL_OP_REQUIRES_SOURCE		1
 #define PIXEL_OP_TIMING					(2+pixel_op_timing)
 #define TRANSPARENCY					1
 
@@ -906,7 +916,7 @@ static void pixblt_b_l(tms34010_state *tms, UINT16 op)
 	int trans = (IOREG(tms, REG_CONTROL) & 0x20) >> 5;
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT B,L (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT B,L (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	(*pixblt_b_op_table[ix])(tms, 1);
@@ -918,7 +928,7 @@ static void pixblt_b_xy(tms34010_state *tms, UINT16 op)
 	int trans = (IOREG(tms, REG_CONTROL) & 0x20) >> 5;
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT B,XY (%d,%d) (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DADDR_X(tms), DADDR_Y(tms), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT B,XY (%d,%d) (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DADDR_X(tms), DADDR_Y(tms), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	(*pixblt_b_op_table[ix])(tms, 0);
@@ -931,7 +941,7 @@ static void pixblt_l_l(tms34010_state *tms, UINT16 op)
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int pbh = (IOREG(tms, REG_CONTROL) >> 8) & 1;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT L,L (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT L,L (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	if (!pbh)
@@ -947,7 +957,7 @@ static void pixblt_l_xy(tms34010_state *tms, UINT16 op)
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int pbh = (IOREG(tms, REG_CONTROL) >> 8) & 1;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT L,XY (%d,%d) (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DADDR_X(tms), DADDR_Y(tms), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT L,XY (%d,%d) (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DADDR_X(tms), DADDR_Y(tms), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	if (!pbh)
@@ -963,7 +973,7 @@ static void pixblt_xy_l(tms34010_state *tms, UINT16 op)
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int pbh = (IOREG(tms, REG_CONTROL) >> 8) & 1;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT XY,L (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT XY,L (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	if (!pbh)
@@ -979,7 +989,7 @@ static void pixblt_xy_xy(tms34010_state *tms, UINT16 op)
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int pbh = (IOREG(tms, REG_CONTROL) >> 8) & 1;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT XY,XY (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):PIXBLT XY,XY (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	if (!pbh)
@@ -994,7 +1004,7 @@ static void fill_l(tms34010_state *tms, UINT16 op)
 	int trans = (IOREG(tms, REG_CONTROL) & 0x20) >> 5;
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):FILL L (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):FILL L (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	(*fill_op_table[ix])(tms, 1);
@@ -1006,7 +1016,7 @@ static void fill_xy(tms34010_state *tms, UINT16 op)
 	int trans = (IOREG(tms, REG_CONTROL) & 0x20) >> 5;
 	int rop = (IOREG(tms, REG_CONTROL) >> 10) & 0x1f;
 	int ix = trans | (rop << 1) | (psize << 6);
-	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):FILL XY (%d,%d) (%dx%d) depth=%d\n", tms->pc, video_screen_get_vpos(tms->screen), DADDR_X(tms), DADDR_Y(tms), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
+	if (!P_FLAG(tms)) LOGGFX(("%08X(%3d):FILL XY (%d,%d) (%dx%d) depth=%d\n", tms->pc, tms->screen->vpos(), DADDR_X(tms), DADDR_Y(tms), DYDX_X(tms), DYDX_Y(tms), IOREG(tms, REG_PSIZE) ? IOREG(tms, REG_PSIZE) : 32));
 	pixel_op = pixel_op_table[rop];
 	pixel_op_timing = pixel_op_timing_table[rop];
 	(*fill_op_table[ix])(tms, 0);
@@ -1028,8 +1038,8 @@ static void FUNCTION_NAME(pixblt)(tms34010_state *tms, int src_is_linear, int ds
 	if (!P_FLAG(tms))
 	{
 		int dx, dy, x, y, /*words,*/ yreverse;
-		void (*word_write)(const address_space *space,offs_t address,UINT16 data);
-		UINT16 (*word_read)(const address_space *space,offs_t address);
+		void (*word_write)(address_space *space,offs_t address,UINT16 data);
+		UINT16 (*word_read)(address_space *space,offs_t address);
 		UINT32 readwrites = 0;
 		UINT32 saddr, daddr;
 		XY dstxy = { 0 };
@@ -1042,8 +1052,8 @@ static void FUNCTION_NAME(pixblt)(tms34010_state *tms, int src_is_linear, int ds
 		}
 		else
 		{
-			word_write = memory_write_word_16le;
-			word_read = memory_read_word_16le;
+			word_write = memory_w;
+			word_read = memory_r;
 		}
 
 		/* compute the starting addresses */
@@ -1375,8 +1385,8 @@ static void FUNCTION_NAME(pixblt_r)(tms34010_state *tms, int src_is_linear, int 
 	if (!P_FLAG(tms))
 	{
 		int dx, dy, x, y, words, yreverse;
-		void (*word_write)(const address_space *space,offs_t address,UINT16 data);
-		UINT16 (*word_read)(const address_space *space,offs_t address);
+		void (*word_write)(address_space *space,offs_t address,UINT16 data);
+		UINT16 (*word_read)(address_space *space,offs_t address);
 		UINT32 saddr, daddr;
 		XY dstxy = { 0 };
 
@@ -1388,8 +1398,8 @@ static void FUNCTION_NAME(pixblt_r)(tms34010_state *tms, int src_is_linear, int 
 		}
 		else
 		{
-			word_write = memory_write_word_16le;
-			word_read = memory_read_word_16le;
+			word_write = memory_w;
+			word_read = memory_r;
 		}
 
 		/* compute the starting addresses */
@@ -1640,8 +1650,8 @@ static void FUNCTION_NAME(pixblt_b)(tms34010_state *tms, int dst_is_linear)
 	if (!P_FLAG(tms))
 	{
 		int dx, dy, x, y, words, left_partials, right_partials, full_words;
-		void (*word_write)(const address_space *space,offs_t address,UINT16 data);
-		UINT16 (*word_read)(const address_space *space,offs_t address);
+		void (*word_write)(address_space *space,offs_t address,UINT16 data);
+		UINT16 (*word_read)(address_space *space,offs_t address);
 		UINT32 saddr, daddr;
 		XY dstxy = { 0 };
 
@@ -1653,8 +1663,8 @@ static void FUNCTION_NAME(pixblt_b)(tms34010_state *tms, int dst_is_linear)
 		}
 		else
 		{
-			word_write = memory_write_word_16le;
-			word_read = memory_read_word_16le;
+			word_write = memory_w;
+			word_read = memory_r;
 		}
 
 		/* compute the starting addresses */
@@ -1854,8 +1864,8 @@ static void FUNCTION_NAME(fill)(tms34010_state *tms, int dst_is_linear)
 	if (!P_FLAG(tms))
 	{
 		int dx, dy, x, y, words, left_partials, right_partials, full_words;
-		void (*word_write)(const address_space *space,offs_t address,UINT16 data);
-		UINT16 (*word_read)(const address_space *space,offs_t address);
+		void (*word_write)(address_space *space,offs_t address,UINT16 data);
+		UINT16 (*word_read)(address_space *space,offs_t address);
 		UINT32 daddr;
 		XY dstxy = { 0 };
 
@@ -1867,8 +1877,8 @@ static void FUNCTION_NAME(fill)(tms34010_state *tms, int dst_is_linear)
 		}
 		else
 		{
-			word_write = memory_write_word_16le;
-			word_read = memory_read_word_16le;
+			word_write = memory_w;
+			word_read = memory_r;
 		}
 
 		/* compute the bounds of the operation */

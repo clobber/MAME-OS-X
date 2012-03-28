@@ -6,13 +6,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-
-
-UINT8 *mrdo_bgvideoram,*mrdo_fgvideoram;
-static tilemap *bg_tilemap,*fg_tilemap;
-static int flipscreen;
-
+#include "emu.h"
+#include "includes/mrdo.h"
 
 
 /***************************************************************************
@@ -46,6 +41,7 @@ static int flipscreen;
   200 ohm pulldown on all three components
 
 ***************************************************************************/
+
 PALETTE_INIT( mrdo )
 {
 	int i;
@@ -75,10 +71,11 @@ PALETTE_INIT( mrdo )
 		else pot[i] = 0;
 
 		weight[i] = 0xff * pot[i] / pot[0x0f];
+		if (weight[i] < 0) weight[i] = 0;
 	}
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x100);
+	machine.colortable = colortable_alloc(machine, 0x100);
 
 	for (i = 0; i < 0x100; i++)
 	{
@@ -104,7 +101,7 @@ PALETTE_INIT( mrdo )
 		bits2 = (color_prom[a2] >> 4) & 0x03;
 		b = weight[bits0 + (bits2 << 2)];
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -112,7 +109,7 @@ PALETTE_INIT( mrdo )
 
 	/* characters */
 	for (i = 0; i < 0x100; i++)
-		colortable_entry_set_value(machine->colortable, i, i);
+		colortable_entry_set_value(machine.colortable, i, i);
 
 	/* sprites */
 	for (i = 0x100; i < 0x140; i++)
@@ -124,7 +121,7 @@ PALETTE_INIT( mrdo )
 		else
 			ctabentry &= 0x0f;	/* low 4 bits are for sprite color n */
 
-		colortable_entry_set_value(machine->colortable, i, ctabentry + ((ctabentry & 0x0c) << 3));
+		colortable_entry_set_value(machine.colortable, i, ctabentry + ((ctabentry & 0x0c) << 3));
 	}
 }
 
@@ -138,20 +135,22 @@ PALETTE_INIT( mrdo )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	UINT8 attr = mrdo_bgvideoram[tile_index];
+	mrdo_state *state = machine.driver_data<mrdo_state>();
+	UINT8 attr = state->m_bgvideoram[tile_index];
 	SET_TILE_INFO(
 			1,
-			mrdo_bgvideoram[tile_index+0x400] + ((attr & 0x80) << 1),
+			state->m_bgvideoram[tile_index + 0x400] + ((attr & 0x80) << 1),
 			attr & 0x3f,
 			(attr & 0x40) ? TILE_FORCE_LAYER0 : 0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	UINT8 attr = mrdo_fgvideoram[tile_index];
+	mrdo_state *state = machine.driver_data<mrdo_state>();
+	UINT8 attr = state->m_fgvideoram[tile_index];
 	SET_TILE_INFO(
 			0,
-			mrdo_fgvideoram[tile_index+0x400] + ((attr & 0x80) << 1),
+			state->m_fgvideoram[tile_index+0x400] + ((attr & 0x80) << 1),
 			attr & 0x3f,
 			(attr & 0x40) ? TILE_FORCE_LAYER0 : 0);
 }
@@ -166,18 +165,22 @@ static TILE_GET_INFO( get_fg_tile_info )
 
 VIDEO_START( mrdo )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,8,8,32,32);
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,32,32);
+	mrdo_state *state = machine.driver_data<mrdo_state>();
 
-	tilemap_set_transparent_pen(bg_tilemap,0);
-	tilemap_set_transparent_pen(fg_tilemap,0);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,8,8,32,32);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,32,32);
 
-	tilemap_set_scrolldx(bg_tilemap, 0, 56);
-	tilemap_set_scrolldx(fg_tilemap, 0, 56);
-	tilemap_set_scrolldy(bg_tilemap, 0, 6);
-	tilemap_set_scrolldy(fg_tilemap, 0, 6);
+	state->m_bg_tilemap->set_transparent_pen(0);
+	state->m_fg_tilemap->set_transparent_pen(0);
 
-    state_save_register_global(machine, flipscreen);
+	state->m_bg_tilemap->set_scrolldx(0, 56);
+	state->m_fg_tilemap->set_scrolldx(0, 56);
+	state->m_bg_tilemap->set_scrolldy(0, 6);
+	state->m_fg_tilemap->set_scrolldy(0, 6);
+
+	state->m_flipscreen = 0;
+
+	state->save_item(NAME(state->m_flipscreen));
 }
 
 
@@ -190,38 +193,46 @@ VIDEO_START( mrdo )
 
 WRITE8_HANDLER( mrdo_bgvideoram_w )
 {
-	mrdo_bgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x3ff);
+	mrdo_state *state = space->machine().driver_data<mrdo_state>();
+	state->m_bgvideoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset & 0x3ff);
 }
 
 WRITE8_HANDLER( mrdo_fgvideoram_w )
 {
-	mrdo_fgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset & 0x3ff);
+	mrdo_state *state = space->machine().driver_data<mrdo_state>();
+	state->m_fgvideoram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset & 0x3ff);
 }
 
 
 WRITE8_HANDLER( mrdo_scrollx_w )
 {
-	tilemap_set_scrollx(bg_tilemap,0,data);
+	mrdo_state *state = space->machine().driver_data<mrdo_state>();
+	state->m_bg_tilemap->set_scrollx(0, data);
 }
 
 WRITE8_HANDLER( mrdo_scrolly_w )
 {
-	/* This is NOT affected by flipscreen (so stop it happening) */
+	mrdo_state *state = space->machine().driver_data<mrdo_state>();
 
-	if (flipscreen) tilemap_set_scrolly(bg_tilemap,0,((256-data) & 0xff));
-	else tilemap_set_scrolly(bg_tilemap,0,data);
+	/* This is NOT affected by flipscreen (so stop it happening) */
+	if (state->m_flipscreen)
+		state->m_bg_tilemap->set_scrolly(0,((256 - data) & 0xff));
+	else
+		state->m_bg_tilemap->set_scrolly(0, data);
 }
 
 
 WRITE8_HANDLER( mrdo_flipscreen_w )
 {
+	mrdo_state *state = space->machine().driver_data<mrdo_state>();
+
 	/* bits 1-3 control the playfield priority, but they are not used by */
 	/* Mr. Do! so we don't emulate them */
 
-	flipscreen = data & 0x01;
-	tilemap_set_flip_all(space->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	state->m_flipscreen = data & 0x01;
+	space->machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 }
 
 
@@ -232,28 +243,31 @@ WRITE8_HANDLER( mrdo_flipscreen_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect )
 {
+	mrdo_state *state = machine.driver_data<mrdo_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-
-	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = state->m_spriteram_size - 4; offs >= 0; offs -= 4)
 	{
 		if (spriteram[offs + 1] != 0)
 		{
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
-					spriteram[offs],spriteram[offs + 2] & 0x0f,
-					spriteram[offs + 2] & 0x10,spriteram[offs + 2] & 0x20,
-					spriteram[offs + 3],256 - spriteram[offs + 1],0);
+			drawgfx_transpen(bitmap, cliprect, machine.gfx[2],
+					spriteram[offs], spriteram[offs + 2] & 0x0f,
+					spriteram[offs + 2] & 0x10, spriteram[offs + 2] & 0x20,
+					spriteram[offs + 3], 256 - spriteram[offs + 1], 0);
 		}
 	}
 }
 
-VIDEO_UPDATE( mrdo )
+SCREEN_UPDATE_IND16( mrdo )
 {
-	bitmap_fill(bitmap,cliprect,0);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
-	draw_sprites(screen->machine,bitmap,cliprect);
+	mrdo_state *state = screen.machine().driver_data<mrdo_state>();
+
+	bitmap.fill(0, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }

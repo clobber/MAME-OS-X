@@ -1,8 +1,9 @@
 /* IBM/Motorola PowerPC 4xx/6xx Emulator */
 
 #include <setjmp.h>
-#include "ppc.h"
+#include "emu.h"
 #include "debugger.h"
+#include "ppc.h"
 
 // PLL Configuration based on the table in MPC603EUM page 7-31
 static const int mpc603e_pll_config[12][9] =
@@ -280,7 +281,7 @@ typedef struct {
 	UINT32 dccr;
 	UINT32 pit;
 	UINT32 pit_counter;
- 	UINT32 pit_int_enable;
+	UINT32 pit_int_enable;
 	UINT32 tsr;
 	UINT32 dbsr;
 	UINT32 sgr;
@@ -304,9 +305,9 @@ typedef struct {
 
 	UINT64 tb;			/* 56-bit timebase register */
 
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
 
 	// STUFF added for the 6xx series
 	UINT32 dec, dec_frac;
@@ -329,20 +330,20 @@ typedef struct {
 
 	/* PowerPC function pointers for memory accesses/exceptions */
 	jmp_buf exception_jmpbuf;
-	UINT8 (*read8)(const address_space *space, offs_t address);
-	UINT16 (*read16)(const address_space *space, offs_t address);
-	UINT32 (*read32)(const address_space *space, offs_t address);
-	UINT64 (*read64)(const address_space *space, offs_t address);
-	void (*write8)(const address_space *space, offs_t address, UINT8 data);
-	void (*write16)(const address_space *space, offs_t address, UINT16 data);
-	void (*write32)(const address_space *space, offs_t address, UINT32 data);
-	void (*write64)(const address_space *space, offs_t address, UINT64 data);
-	UINT16 (*read16_unaligned)(const address_space *space, offs_t address);
-	UINT32 (*read32_unaligned)(const address_space *space, offs_t address);
-	UINT64 (*read64_unaligned)(const address_space *space, offs_t address);
-	void (*write16_unaligned)(const address_space *space, offs_t address, UINT16 data);
-	void (*write32_unaligned)(const address_space *space, offs_t address, UINT32 data);
-	void (*write64_unaligned)(const address_space *space, offs_t address, UINT64 data);
+	UINT8 (*read8)(address_space *space, offs_t address);
+	UINT16 (*read16)(address_space *space, offs_t address);
+	UINT32 (*read32)(address_space *space, offs_t address);
+	UINT64 (*read64)(address_space *space, offs_t address);
+	void (*write8)(address_space *space, offs_t address, UINT8 data);
+	void (*write16)(address_space *space, offs_t address, UINT16 data);
+	void (*write32)(address_space *space, offs_t address, UINT32 data);
+	void (*write64)(address_space *space, offs_t address, UINT64 data);
+	UINT16 (*read16_unaligned)(address_space *space, offs_t address);
+	UINT32 (*read32_unaligned)(address_space *space, offs_t address);
+	UINT64 (*read64_unaligned)(address_space *space, offs_t address);
+	void (*write16_unaligned)(address_space *space, offs_t address, UINT16 data);
+	void (*write32_unaligned)(address_space *space, offs_t address, UINT32 data);
+	void (*write64_unaligned)(address_space *space, offs_t address, UINT64 data);
 
 	void (* optable19[1024])(UINT32);
 	void (* optable31[1024])(UINT32);
@@ -785,14 +786,14 @@ INLINE UINT32 ppc_get_spr(int spr)
 	return 0;
 }
 
-static UINT8 ppc_read8_translated(const address_space *space, offs_t address);
-static UINT16 ppc_read16_translated(const address_space *space, offs_t address);
-static UINT32 ppc_read32_translated(const address_space *space, offs_t address);
-static UINT64 ppc_read64_translated(const address_space *space, offs_t address);
-static void ppc_write8_translated(const address_space *space, offs_t address, UINT8 data);
-static void ppc_write16_translated(const address_space *space, offs_t address, UINT16 data);
-static void ppc_write32_translated(const address_space *space, offs_t address, UINT32 data);
-static void ppc_write64_translated(const address_space *space, offs_t address, UINT64 data);
+static UINT8 ppc_read8_translated(address_space *space, offs_t address);
+static UINT16 ppc_read16_translated(address_space *space, offs_t address);
+static UINT32 ppc_read32_translated(address_space *space, offs_t address);
+static UINT64 ppc_read64_translated(address_space *space, offs_t address);
+static void ppc_write8_translated(address_space *space, offs_t address, UINT8 data);
+static void ppc_write16_translated(address_space *space, offs_t address, UINT16 data);
+static void ppc_write32_translated(address_space *space, offs_t address, UINT32 data);
+static void ppc_write64_translated(address_space *space, offs_t address, UINT64 data);
 
 INLINE void ppc_set_msr(UINT32 value)
 {
@@ -928,7 +929,7 @@ static void ppc_init(void)
 // !!! probably should move this stuff elsewhere !!!
 static CPU_INIT( ppc403 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->static_config();
 
 	ppc_init();
 
@@ -946,8 +947,8 @@ static CPU_INIT( ppc403 )
 	// !!! why is rfci here !!!
 	ppc.optable19[51] = ppc_rfci;
 
-	ppc.spu.rx_timer = timer_alloc(device->machine, ppc403_spu_rx_callback, NULL);
-	ppc.spu.tx_timer = timer_alloc(device->machine, ppc403_spu_tx_callback, NULL);
+	ppc.spu.rx_timer = device->machine().scheduler().timer_alloc(FUNC(ppc403_spu_rx_callback));
+	ppc.spu.tx_timer = device->machine().scheduler().timer_alloc(FUNC(ppc403_spu_tx_callback));
 
 	ppc.read8 = ppc403_read8;
 	ppc.read16 = ppc403_read16;
@@ -962,7 +963,7 @@ static CPU_INIT( ppc403 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 }
@@ -974,7 +975,7 @@ static CPU_EXIT( ppc403 )
 
 static CPU_INIT( ppc603 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->static_config();
 	int pll_config = 0;
 	float multiplier;
 	int i ;
@@ -1087,7 +1088,7 @@ static CPU_INIT( ppc603 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1119,7 +1120,7 @@ static CPU_EXIT( ppc603 )
 static CPU_INIT( ppc602 )
 {
 	float multiplier;
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->static_config();
 
 	int i ;
 
@@ -1235,7 +1236,7 @@ static CPU_INIT( ppc602 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1262,7 +1263,7 @@ static void mpc8240_tlbld(UINT32 op)
 static CPU_INIT( mpc8240 )
 {
 	float multiplier;
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->static_config();
 
 	int i ;
 
@@ -1376,7 +1377,7 @@ static CPU_INIT( mpc8240 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1392,7 +1393,7 @@ static CPU_EXIT( mpc8240 )
 
 static CPU_INIT( ppc601 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->static_config();
 	float multiplier;
 	int i ;
 
@@ -1502,7 +1503,7 @@ static CPU_INIT( ppc601 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1520,7 +1521,7 @@ static CPU_EXIT( ppc601 )
 
 static CPU_INIT( ppc604 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->static_config();
 	float multiplier;
 	int i ;
 
@@ -1632,7 +1633,7 @@ static CPU_INIT( ppc604 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1660,11 +1661,11 @@ static CPU_SET_INFO( ppc )
 	{
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + PPC_PC:				ppc.pc = info->i;						break;
-		case CPUINFO_INT_REGISTER + PPC_MSR:			ppc_set_msr(info->i);				 	break;
-		case CPUINFO_INT_REGISTER + PPC_CR:				ppc_set_cr(info->i);			 		break;
+		case CPUINFO_INT_REGISTER + PPC_MSR:			ppc_set_msr(info->i);					break;
+		case CPUINFO_INT_REGISTER + PPC_CR:				ppc_set_cr(info->i);					break;
 		case CPUINFO_INT_REGISTER + PPC_LR:				LR = info->i;							break;
 		case CPUINFO_INT_REGISTER + PPC_CTR:			CTR = info->i;							break;
-		case CPUINFO_INT_REGISTER + PPC_XER:			XER = info->i;						 	break;
+		case CPUINFO_INT_REGISTER + PPC_XER:			XER = info->i;							break;
 		case CPUINFO_INT_REGISTER + PPC_SRR0:			SRR0 = info->i;							break;
 		case CPUINFO_INT_REGISTER + PPC_SRR1:			SRR1 = info->i;							break;
 
@@ -1749,15 +1750,15 @@ static CPU_GET_INFO( ppc )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 
@@ -1900,10 +1901,10 @@ CPU_GET_INFO( ppc603 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_PAGE_SHIFT_PROGRAM: 	info->i = 17;					break;
+		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 17;					break;
 		case CPUINFO_INT_REGISTER + PPC_DEC:			info->i = read_decrementer();			break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
@@ -1948,8 +1949,8 @@ CPU_GET_INFO( ppc602 )
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 		case CPUINFO_INT_REGISTER + PPC_IBR:			info->i = ppc.ibr;						break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(ppc602);		break;
@@ -1992,8 +1993,8 @@ CPU_GET_INFO( mpc8240 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(mpc8240);		break;
@@ -2033,8 +2034,8 @@ CPU_GET_INFO( ppc601 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(ppc601);		break;
@@ -2074,8 +2075,8 @@ CPU_GET_INFO( ppc604 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(ppc604);		break;
@@ -2093,3 +2094,15 @@ CPU_GET_INFO( ppc604 )
 		default:										CPU_GET_INFO_CALL(ppc);				break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(PPC403GA, ppc403ga);
+DEFINE_LEGACY_CPU_DEVICE(PPC403GCX, ppc403gcx);
+
+DEFINE_LEGACY_CPU_DEVICE(PPC601, ppc601);
+DEFINE_LEGACY_CPU_DEVICE(PPC602, ppc602);
+DEFINE_LEGACY_CPU_DEVICE(PPC603, ppc603);
+DEFINE_LEGACY_CPU_DEVICE(PPC603E, ppc603e);
+DEFINE_LEGACY_CPU_DEVICE(PPC603R, ppc603r);
+DEFINE_LEGACY_CPU_DEVICE(PPC604, ppc604);
+DEFINE_LEGACY_CPU_DEVICE(MPC8240, mpc8240);
+

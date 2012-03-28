@@ -21,6 +21,24 @@
 #define DOMINOS_ATTRACT_EN         SPRINT2_ATTRACT_EN
 
 
+class sprint2_state : public driver_device
+{
+public:
+	sprint2_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	int m_attract;
+	int m_steering[2];
+	int m_gear[2];
+	int m_game;
+	UINT8 m_dial[2];
+	UINT8* m_video_ram;
+	tilemap_t* m_bg_tilemap;
+	bitmap_ind16 m_helper;
+	int m_collision[2];
+};
+
+
 /*----------- defined in audio/sprint2.c -----------*/
 
 DISCRETE_SOUND_EXTERN( sprint2 );
@@ -38,8 +56,7 @@ WRITE8_HANDLER( sprint2_collision_reset2_w );
 WRITE8_HANDLER( sprint2_video_ram_w );
 
 PALETTE_INIT( sprint2 );
-VIDEO_UPDATE( sprint2 );
+SCREEN_UPDATE_IND16( sprint2 );
 VIDEO_START( sprint2 );
-VIDEO_EOF( sprint2 );
+SCREEN_VBLANK( sprint2 );
 
-extern UINT8* sprint2_video_ram;

@@ -14,17 +14,12 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i8085/i8085.h"
-#include "hitme.h"
+#include "includes/hitme.h"
 #include "sound/discrete.h"
 
 #define MASTER_CLOCK (XTAL_8_945MHz) /* confirmed on schematic */
-
-static tilemap *hitme_tilemap;
-static attotime timeout_time;
-static UINT8 *hitme_vidram;
-
 
 
 /*************************************
@@ -35,17 +30,21 @@ static UINT8 *hitme_vidram;
 
 static TILE_GET_INFO( get_hitme_tile_info )
 {
+	hitme_state *state = machine.driver_data<hitme_state>();
+
 	/* the code is the low 6 bits */
-	UINT8 code = hitme_vidram[tile_index] & 0x3f;
+	UINT8 code = state->m_videoram[tile_index] & 0x3f;
 	SET_TILE_INFO(0, code, 0, 0);
 }
 
 
 static WRITE8_HANDLER( hitme_vidram_w )
 {
+	hitme_state *state = space->machine().driver_data<hitme_state>();
+
 	/* mark this tile dirty */
-	hitme_vidram[offset] = data;
-	tilemap_mark_tile_dirty(hitme_tilemap, offset);
+	state->m_videoram[offset] = data;
+	state->m_tilemap->mark_tile_dirty(offset);
 }
 
 
@@ -56,22 +55,25 @@ static WRITE8_HANDLER( hitme_vidram_w )
  *
  *************************************/
 
-static VIDEO_START(hitme)
+static VIDEO_START( hitme )
 {
-	hitme_tilemap = tilemap_create(machine, get_hitme_tile_info,tilemap_scan_rows, 8,10, 40,19);
+	hitme_state *state = machine.driver_data<hitme_state>();
+	state->m_tilemap = tilemap_create(machine, get_hitme_tile_info, tilemap_scan_rows, 8, 10, 40, 19);
 }
 
 
-static VIDEO_START(barricad)
+static VIDEO_START( barricad )
 {
-	hitme_tilemap = tilemap_create(machine, get_hitme_tile_info,tilemap_scan_rows, 8,8, 32,24);
+	hitme_state *state = machine.driver_data<hitme_state>();
+	state->m_tilemap = tilemap_create(machine, get_hitme_tile_info, tilemap_scan_rows, 8, 8, 32, 24);
 }
 
 
-static VIDEO_UPDATE(hitme)
+static SCREEN_UPDATE_IND16( hitme )
 {
+	hitme_state *state = screen.machine().driver_data<hitme_state>();
 	/* the card width resistor comes from an input port, scaled to the range 0-25 kOhms */
-	double width_resist = input_port_read(screen->machine, "WIDTH") * 25000 / 100;
+	double width_resist = input_port_read(screen.machine(), "WIDTH") * 25000 / 100;
 	/* this triggers a oneshot for the following length of time */
 	double width_duration = 0.45 * 1000e-12 * width_resist;
 	/* the dot clock runs at the standard horizontal frequency * 320+16 clocks per scanline */
@@ -82,32 +84,32 @@ static VIDEO_UPDATE(hitme)
 	offs_t offs = 0;
 
 	/* start by drawing the tilemap */
-	tilemap_draw(bitmap,cliprect,hitme_tilemap,0,0);
+	state->m_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* now loop over and invert anything */
 	for (y = 0; y < 19; y++)
 	{
-		int dy = bitmap->rowpixels;
+		int dy = bitmap.rowpixels();
 		for (inv = x = 0; x < 40; x++, offs++)
 		{
 			/* if the high bit is set, reset the oneshot */
-			if (hitme_vidram[y*40+x] & 0x80)
+			if (state->m_videoram[y * 40 + x] & 0x80)
 				inv = width_pixels;
 
 			/* invert pixels until we run out */
 			for (xx = 0; xx < 8 && inv; xx++, inv--)
 			{
-				UINT16 *dest = BITMAP_ADDR16(bitmap, y*10, x*8 + xx);
-				dest[0*dy] ^= 1;
-				dest[1*dy] ^= 1;
-				dest[2*dy] ^= 1;
-				dest[3*dy] ^= 1;
-				dest[4*dy] ^= 1;
-				dest[5*dy] ^= 1;
-				dest[6*dy] ^= 1;
-				dest[7*dy] ^= 1;
-				dest[8*dy] ^= 1;
-				dest[9*dy] ^= 1;
+				UINT16 *dest = &bitmap.pix16(y * 10, x * 8 + xx);
+				dest[0 * dy] ^= 1;
+				dest[1 * dy] ^= 1;
+				dest[2 * dy] ^= 1;
+				dest[3 * dy] ^= 1;
+				dest[4 * dy] ^= 1;
+				dest[5 * dy] ^= 1;
+				dest[6 * dy] ^= 1;
+				dest[7 * dy] ^= 1;
+				dest[8 * dy] ^= 1;
+				dest[9 * dy] ^= 1;
 			}
 		}
 	}
@@ -115,9 +117,10 @@ static VIDEO_UPDATE(hitme)
 }
 
 
-static VIDEO_UPDATE(barricad)
+static SCREEN_UPDATE_IND16( barricad )
 {
-	tilemap_draw(bitmap,cliprect,hitme_tilemap,0,0);
+	hitme_state *state = screen.machine().driver_data<hitme_state>();
+	state->m_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
@@ -129,21 +132,22 @@ static VIDEO_UPDATE(barricad)
  *
  *************************************/
 
-static UINT8 read_port_and_t0(running_machine *machine, int port)
+static UINT8 read_port_and_t0( running_machine &machine, int port )
 {
+	hitme_state *state = machine.driver_data<hitme_state>();
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3" };
 
 	UINT8 val = input_port_read(machine, portnames[port]);
-	if (attotime_compare(timer_get_time(machine), timeout_time) > 0)
+	if (machine.time() > state->m_timeout_time)
 		val ^= 0x80;
 	return val;
 }
 
 
-static UINT8 read_port_and_t0_and_hblank(running_machine *machine, int port)
+static UINT8 read_port_and_t0_and_hblank( running_machine &machine, int port )
 {
 	UINT8 val = read_port_and_t0(machine, port);
-	if (video_screen_get_hpos(machine->primary_screen) < (video_screen_get_width(machine->primary_screen) * 9 / 10))
+	if (machine.primary_screen->hpos() < (machine.primary_screen->width() * 9 / 10))
 		val ^= 0x04;
 	return val;
 }
@@ -151,25 +155,25 @@ static UINT8 read_port_and_t0_and_hblank(running_machine *machine, int port)
 
 static READ8_HANDLER( hitme_port_0_r )
 {
-	return read_port_and_t0_and_hblank(space->machine, 0);
+	return read_port_and_t0_and_hblank(space->machine(), 0);
 }
 
 
 static READ8_HANDLER( hitme_port_1_r )
 {
-	return read_port_and_t0(space->machine, 1);
+	return read_port_and_t0(space->machine(), 1);
 }
 
 
 static READ8_HANDLER( hitme_port_2_r )
 {
-	return read_port_and_t0_and_hblank(space->machine, 2);
+	return read_port_and_t0_and_hblank(space->machine(), 2);
 }
 
 
 static READ8_HANDLER( hitme_port_3_r )
 {
-	return read_port_and_t0(space->machine, 3);
+	return read_port_and_t0(space->machine(), 3);
 }
 
 
@@ -188,10 +192,11 @@ static WRITE8_DEVICE_HANDLER( output_port_0_w )
         In fact, it is very important that our timing calculation timeout AFTER the sound
         system's equivalent computation, or else we will hang notes.
     */
-	UINT8 raw_game_speed = input_port_read(device->machine, "R3");
+	hitme_state *state = device->machine().driver_data<hitme_state>();
+	UINT8 raw_game_speed = input_port_read(device->machine(), "R3");
 	double resistance = raw_game_speed * 25000 / 100;
-	attotime duration = attotime_make(0, ATTOSECONDS_PER_SECOND * 0.45 * 6.8e-6 * resistance * (data+1));
-	timeout_time = attotime_add(timer_get_time(device->machine), duration);
+	attotime duration = attotime(0, ATTOSECONDS_PER_SECOND * 0.45 * 6.8e-6 * resistance * (data + 1));
+	state->m_timeout_time = device->machine().time() + duration;
 
 	discrete_sound_w(device, HITME_DOWNCOUNT_VAL, data);
 	discrete_sound_w(device, HITME_OUT0, 1);
@@ -219,10 +224,10 @@ static WRITE8_DEVICE_HANDLER( output_port_1_w )
     upper 8 bits.
 */
 
-static ADDRESS_MAP_START( hitme_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( hitme_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x1fff)
-	AM_RANGE(0x0000, 0x07ff) AM_ROM
-	AM_RANGE(0x0c00, 0x0eff) AM_RAM_WRITE(hitme_vidram_w) AM_BASE(&hitme_vidram)
+	AM_RANGE(0x0000, 0x09ff) AM_ROM
+	AM_RANGE(0x0c00, 0x0eff) AM_RAM_WRITE(hitme_vidram_w) AM_BASE_MEMBER(hitme_state, m_videoram)
 	AM_RANGE(0x1000, 0x10ff) AM_MIRROR(0x300) AM_RAM
 	AM_RANGE(0x1400, 0x14ff) AM_READ(hitme_port_0_r)
 	AM_RANGE(0x1500, 0x15ff) AM_READ(hitme_port_1_r)
@@ -235,7 +240,7 @@ static ADDRESS_MAP_START( hitme_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( hitme_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hitme_portmap, AS_IO, 8 )
 	AM_RANGE(0x14, 0x14) AM_READ(hitme_port_0_r)
 	AM_RANGE(0x15, 0x15) AM_READ(hitme_port_1_r)
 	AM_RANGE(0x16, 0x16) AM_READ(hitme_port_2_r)
@@ -300,34 +305,47 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( hitme )
+static MACHINE_START( hitme )
+{
+}
+
+static MACHINE_RESET( hitme )
+{
+	hitme_state *state = machine.driver_data<hitme_state>();
+
+	state->m_timeout_time = attotime::zero;
+}
+
+static MACHINE_CONFIG_START( hitme, hitme_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, MASTER_CLOCK/16)
-	MDRV_CPU_PROGRAM_MAP(hitme_map)
-	MDRV_CPU_IO_MAP(hitme_portmap)
+	MCFG_CPU_ADD("maincpu", I8080, MASTER_CLOCK/16)
+	MCFG_CPU_PROGRAM_MAP(hitme_map)
+	MCFG_CPU_IO_MAP(hitme_portmap)
+
+	MCFG_MACHINE_START(hitme)
+	MCFG_MACHINE_RESET(hitme)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 19*10)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 19*10-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 19*10)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 19*10-1)
+	MCFG_SCREEN_UPDATE_STATIC(hitme)
 
-	MDRV_GFXDECODE(hitme)
-	MDRV_PALETTE_LENGTH(2)
+	MCFG_GFXDECODE(hitme)
+	MCFG_PALETTE_LENGTH(2)
 
-	MDRV_PALETTE_INIT(black_and_white)
-	MDRV_VIDEO_START(hitme)
-	MDRV_VIDEO_UPDATE(hitme)
+	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_VIDEO_START(hitme)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(hitme)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(hitme)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -338,19 +356,18 @@ MACHINE_DRIVER_END
     Barricade or is the resolution set by a dip switch?
 */
 
-static MACHINE_DRIVER_START( barricad )
-	MDRV_IMPORT_FROM(hitme)
+static MACHINE_CONFIG_DERIVED( barricad, hitme )
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_SIZE(32*8, 24*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 24*8-1)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_SIZE(32*8, 24*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 24*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(barricad)
 
-	MDRV_GFXDECODE(barricad)
+	MCFG_GFXDECODE(barricad)
 
-	MDRV_VIDEO_START(barricad)
-	MDRV_VIDEO_UPDATE(barricad)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(barricad)
+MACHINE_CONFIG_END
 
 
 
@@ -396,7 +413,7 @@ static INPUT_PORTS_START( hitme )
 	PORT_START("IN3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )				/* Time out counter (TOC1) */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )					/* Always high */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )					/* Aux 2 dipswitch - Unused*/
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )					/* Aux 2 dipswitch - Unused */
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )					/* Always high */
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(4)	/* P4 Stand button */
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(4)	/* P4 Hit button */
@@ -436,6 +453,61 @@ static INPUT_PORTS_START( hitme )
 	PORT_ADJUSTER(50, "Card Width")
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( super21 )
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN4 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SPECIAL )				/* Hblank */
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )				/* Always high */
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(4)	/* P4 Stand button */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(4)	/* P4 Hit button */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(4)	/* P4 Ante button */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL )				/* Time out counter (*TO) */
+
+	PORT_START("IN1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN3 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )				/* Aux 2 dipswitch? */
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(3)	/* P3 Stand button */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(3)	/* P3 Hit button */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(3)	/* P3 Ante button */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL )				/* Time out counter (*TO) */
+
+	PORT_START("IN2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )				/* Aux 1 dipswitch? */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SPECIAL )				/* Hblank */
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)	/* P2 Stand button */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)	/* P2 Hit button */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)	/* P2 Ante button */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL )				/* Time out counter (*TO) */
+
+	PORT_START("IN3")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )				/* Time out counter (TOC1) */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )				/* Aux 2 dipswitch? */
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)	/* P1 Stand button */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)	/* P1 Hit button */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)	/* P1 Ante button */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL )				/* Time out counter (*TO) */
+
+	PORT_START("IN4")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+
+	PORT_START("IN5") // bit 2 is chip/bet related, but also causes gfx glitches when set
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+
+	/* this is actually a variable resistor */
+	PORT_START("R3")
+	PORT_ADJUSTER(30, "Game Speed")
+
+	/* this is actually a variable resistor */
+	PORT_START("WIDTH")
+	PORT_ADJUSTER(50, "Card Width")
+INPUT_PORTS_END
 
 static INPUT_PORTS_START( barricad )
 	PORT_START("IN0")
@@ -471,7 +543,7 @@ static INPUT_PORTS_START( barricad )
 	PORT_START("IN3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )						/* Time out counter (TOC1) */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )						/* Always high */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )						/* Aux 2 dipswitch - Unused*/
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )						/* Aux 2 dipswitch - Unused */
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN  ) PORT_PLAYER(2)
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT  ) PORT_PLAYER(2)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT  ) PORT_PLAYER(2)
@@ -521,7 +593,48 @@ INPUT_PORTS_END
  *
  *************************************/
 
+/*
+Hit me by Ramtek
+
+Etched in copper on board   HIT ME by RAMTEK Made in U.S.A
+                ASSY 550596 D               D was as sticker
+                SER 957                 957 was a sticker
+
+Etched in copper on back    FAB 550595-C
+
+.b7         stamped     15347 7625
+                    HM2-0
+
+
+.c7 IM5605      handwritten HM-2-2
+
+.d7         stamped     15349 7625
+                    HM1-4
+
+.e7         stamped     15350 7625
+                    HM1-6
+
+.f7         stamped     15351 7625
+                    HM2-8
+
+.h7 IM560?      handwritten HM0-CG  hard to read
+
+All chips we read as 82s141 - guessed because of 24 pin pinout and 512x8 rom according to mame
+*/
+
 ROM_START( hitme )
+	ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
+	ROM_LOAD( "hm2-0.b7", 0x0000, 0x0200, CRC(1b94caad) SHA1(30987e5cb0d55f3666dd63f04132a0e65988caea) )
+	ROM_LOAD( "hm-2-2.c7",0x0200, 0x0200, CRC(fa7e8c33) SHA1(2d04635cee32d49cccd9a9a855b3a2be4295c2a5) )
+	ROM_LOAD( "hm1-4.d7", 0x0400, 0x0200, CRC(10dd4581) SHA1(eaa7c9e75f79befc8abf0bd0913bbf15dd04230e) )
+	ROM_LOAD( "hm1-6.e7", 0x0600, 0x0200, CRC(18e4c83c) SHA1(bce987da371b7946262d7dff65f61ff2fcb55bf6) )
+	ROM_LOAD( "hm2-8.f7", 0x0800, 0x0200, CRC(f28983f8) SHA1(89167cf41ba71d90cd6133751158bb99bfc5e829) )
+
+	ROM_REGION( 0x0400, "gfx1", ROMREGION_ERASE00 )
+	ROM_LOAD( "hmcg.h7", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
+ROM_END
+
+ROM_START( hitme1 )
 	ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
 	ROM_LOAD( "hm0.b7", 0x0000, 0x0200, CRC(6c48c50f) SHA1(42dc7c3461687e5be4393cc21d695bc84ae4f5dc) )
 	ROM_LOAD( "hm2.c7", 0x0200, 0x0200, CRC(25d47ba4) SHA1(6f3bb4ca6918dc07f37d0c0c7fe5ec53aa7171a5) )
@@ -529,9 +642,8 @@ ROM_START( hitme )
 	ROM_LOAD( "hm6.e7", 0x0600, 0x0200, CRC(8aa87118) SHA1(aca395a4f6a1981cd89ca99e05935d72adcb69ca) )
 
 	ROM_REGION( 0x0400, "gfx1", ROMREGION_ERASE00 )
-    ROM_LOAD( "hmcg.h7", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
+	ROM_LOAD( "hmcg.h7", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
 ROM_END
-
 
 ROM_START( m21 )
 	ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
@@ -541,9 +653,20 @@ ROM_START( m21 )
 	ROM_LOAD( "hm6.e7", 0x0600, 0x0200, CRC(8aa87118) SHA1(aca395a4f6a1981cd89ca99e05935d72adcb69ca) )
 
 	ROM_REGION( 0x0400, "gfx1", ROMREGION_ERASE00 )
-    ROM_LOAD( "hmcg.h7", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
+	ROM_LOAD( "hmcg.h7", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
 ROM_END
 
+ROM_START( super21 )
+	ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
+	ROM_LOAD( "1.h1", 0x0000, 0x0200, CRC(cecf2224) SHA1(794d7b9f2533f7c00bbe1c7b3d37eb08c25a09bb) )
+	ROM_LOAD( "3.h2", 0x0200, 0x0200, CRC(eb62ea5f) SHA1(e4b9fafe2cab5a31549504ce430eadc230e3da39) )
+	ROM_LOAD( "2.j1", 0x0400, 0x0200, CRC(fea88bf2) SHA1(a18081cecd29c7929e589c5fda7ba1033ef8e7c3) )
+	ROM_LOAD( "4.j2", 0x0600, 0x0200, CRC(63238ddb) SHA1(7197640e758d7ef93c659eeea098424d3aa50314) )
+	ROM_LOAD( "5.k2", 0x0800, 0x0200, CRC(89983131) SHA1(c22c02a3bff0a61c5f341f1c2b3b37150ad2c1e3) )
+
+	ROM_REGION( 0x0400, "gfx1", ROMREGION_ERASE00 )
+	ROM_LOAD( "7.h6", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
+ROM_END
 
 ROM_START( barricad )
    ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
@@ -555,7 +678,6 @@ ROM_START( barricad )
    ROM_REGION( 0x0400, "gfx1", 0 )
    ROM_LOAD( "550805.7h",   0x0000, 0x0200, CRC(35197599) SHA1(3c49af89b1bc1d495e1d6265ff3feaf33c56facb) )
 ROM_END
-
 
 ROM_START( brickyrd )
    ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
@@ -576,7 +698,9 @@ ROM_END
  *
  *************************************/
 
-GAME( 1976, hitme,    0,        hitme,    hitme,    0, ROT0, "RamTek", "Hit Me", 0 )
-GAME( 1976, m21,      hitme,    hitme,    hitme,    0, ROT0, "Mirco", "21 (Mirco)", 0 )
-GAME( 1976, barricad, 0,        barricad, barricad, 0, ROT0, "RamTek", "Barricade", GAME_IMPERFECT_SOUND  )
-GAME( 1976, brickyrd, barricad, barricad, barricad, 0, ROT0, "RamTek", "Brickyard", GAME_IMPERFECT_SOUND  )
+GAME( 1976, hitme,    0,        hitme,    hitme,    0, ROT0, "RamTek", "Hit Me (set 1)",  GAME_SUPPORTS_SAVE )	// 05/1976
+GAME( 1976, hitme1,   hitme,    hitme,    hitme,    0, ROT0, "RamTek", "Hit Me (set 2)",  GAME_SUPPORTS_SAVE )
+GAME( 1976, m21,      hitme,    hitme,    hitme,    0, ROT0, "Mirco Games",  "21 (Mirco)", GAME_SUPPORTS_SAVE )	// 08/1976, licensed?
+GAME( 1978, super21,  0,        hitme,    super21,  0, ROT0, "Mirco Games",  "Super Twenty One", GAME_SUPPORTS_SAVE )
+GAME( 1976, barricad, 0,        barricad, barricad, 0, ROT0, "RamTek", "Barricade",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1976, brickyrd, barricad, barricad, barricad, 0, ROT0, "RamTek", "Brickyard",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

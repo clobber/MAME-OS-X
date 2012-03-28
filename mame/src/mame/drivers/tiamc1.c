@@ -114,30 +114,30 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "includes/tiamc1.h"
 
 static MACHINE_RESET( tiamc1 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	tiamc1_bankswitch_w(space, 0, 0);
 }
 
 static WRITE8_HANDLER( tiamc1_control_w )
 {
-	coin_lockout_w(0, ~data & 0x02);
-	coin_counter_w(0, data & 0x04);
+	coin_lockout_w(space->machine(), 0, ~data & 0x02);
+	coin_counter_w(space->machine(), 0, data & 0x04);
 }
 
 
-static ADDRESS_MAP_START( tiamc1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tiamc1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xb7ff) AM_WRITE(tiamc1_videoram_w)
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tiamc1_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( tiamc1_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x4f) AM_WRITE(tiamc1_sprite_y_w) /* sprites Y */
 	AM_RANGE(0x50, 0x5f) AM_WRITE(tiamc1_sprite_x_w) /* sprites X */
@@ -148,14 +148,14 @@ static ADDRESS_MAP_START( tiamc1_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xbd, 0xbd) AM_WRITE(tiamc1_bg_vshift_w)/* background V scroll */
 	AM_RANGE(0xbe, 0xbe) AM_WRITE(tiamc1_bankswitch_w) /* VRAM selector */
 	AM_RANGE(0xbf, 0xbf) AM_WRITENOP                 /* charset control */
-	AM_RANGE(0xc0, 0xc3) AM_WRITE(tiamc1_timer0_w)   /* timer 0 */
+	AM_RANGE(0xc0, 0xc3) AM_DEVWRITE("2x8253", tiamc1_timer0_w)   /* timer 0 */
 	AM_RANGE(0xd0, 0xd0) AM_READ_PORT("IN0")
 	AM_RANGE(0xd1, 0xd1) AM_READ_PORT("IN1")
 	AM_RANGE(0xd2, 0xd2) AM_READ_PORT("IN2")
 	AM_RANGE(0xd2, 0xd2) AM_WRITE(tiamc1_control_w)  /* coin counter and lockout */
 	AM_RANGE(0xd3, 0xd3) AM_WRITENOP                 /* 8255 ctrl. Used for i/o ports */
-	AM_RANGE(0xd4, 0xd7) AM_WRITE(tiamc1_timer1_w)   /* timer 1 */
-	AM_RANGE(0xda, 0xda) AM_WRITE(tiamc1_timer1_gate_w) /* timer 1 gate control */
+	AM_RANGE(0xd4, 0xd7) AM_DEVWRITE("2x8253", tiamc1_timer1_w)   /* timer 1 */
+	AM_RANGE(0xda, 0xda) AM_DEVWRITE("2x8253", tiamc1_timer1_gate_w) /* timer 1 gate control */
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( tiamc1 )
@@ -181,7 +181,7 @@ static INPUT_PORTS_START( tiamc1 )
 
 	PORT_START("IN2")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL ) 	/* OUT:coin lockout */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* OUT:coin lockout */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL )	/* OUT:game counter */
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* RAZR ??? */
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_COIN1 )
@@ -218,37 +218,36 @@ static GFXDECODE_START( tiamc1 )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( tiamc1 )
+static MACHINE_CONFIG_START( tiamc1, tiamc1_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080,16000000/9)		 /* 16 MHz */
-	MDRV_CPU_PROGRAM_MAP(tiamc1_map)
-	MDRV_CPU_IO_MAP(tiamc1_io_map)
+	MCFG_CPU_ADD("maincpu", I8080,16000000/9)		 /* 16 MHz */
+	MCFG_CPU_PROGRAM_MAP(tiamc1_map)
+	MCFG_CPU_IO_MAP(tiamc1_io_map)
 
-	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MDRV_MACHINE_RESET(tiamc1)
+	MCFG_MACHINE_RESET(tiamc1)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(50)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1600))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(50)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1600))
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
+	MCFG_SCREEN_UPDATE_STATIC(tiamc1)
 
-	MDRV_GFXDECODE(tiamc1)
-	MDRV_PALETTE_LENGTH(16)
+	MCFG_GFXDECODE(tiamc1)
+	MCFG_PALETTE_LENGTH(16)
 
-	MDRV_PALETTE_INIT(tiamc1)
-	MDRV_VIDEO_START(tiamc1)
-	MDRV_VIDEO_UPDATE(tiamc1)
+	MCFG_PALETTE_INIT(tiamc1)
+	MCFG_VIDEO_START(tiamc1)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("2x8253", TIAMC1, 16000000/9)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("2x8253", TIAMC1, 16000000/9)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( konek )

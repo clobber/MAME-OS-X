@@ -137,17 +137,17 @@ A few notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 #include "sound/discrete.h"
 #include "includes/btime.h"
 
-#define MASTER_CLOCK 	XTAL_12MHz
-#define HCLK			(MASTER_CLOCK/2)
-#define HCLK1			(HCLK/2)
-#define HCLK2			(HCLK1/2)
-#define HCLK4			(HCLK2/2)
+#define MASTER_CLOCK      XTAL_12MHz
+#define HCLK             (MASTER_CLOCK/2)
+#define HCLK1            (HCLK/2)
+#define HCLK2            (HCLK1/2)
+#define HCLK4            (HCLK2/2)
 
 
 enum
@@ -157,56 +157,46 @@ enum
 	AUDIO_ENABLE_AY8910			/* via ay-8910 port A */
 };
 
+
 static WRITE8_HANDLER( audio_command_w );
 static READ8_HANDLER( audio_command_r );
 static READ8_HANDLER( zoar_dsw1_read );
 
 static UINT8 *decrypted;
-static UINT8 *rambase;
-static UINT8 *audio_rambase;
-
-static UINT8 audio_nmi_enable_type;
-static UINT8 audio_nmi_enabled;
-static UINT8 audio_nmi_state;
-
-
-
-static MACHINE_START( btime )
-{
-	/* by default, the audio NMI is disabled, except for bootlegs which don't use the enable */
-	audio_nmi_enabled = (audio_nmi_enable_type == AUDIO_ENABLE_NONE);
-}
 
 static WRITE8_HANDLER( audio_nmi_enable_w )
 {
+	btime_state *state = space->machine().driver_data<btime_state>();
+
 	/* for most games, this serves as the NMI enable for the audio CPU; however,
        lnc and disco use bit 0 of the first AY-8910's port A instead; many other
        games also write there in addition to this address */
-	if (audio_nmi_enable_type == AUDIO_ENABLE_DIRECT)
+	if (state->m_audio_nmi_enable_type == AUDIO_ENABLE_DIRECT)
 	{
-		audio_nmi_enabled = data & 1;
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, (audio_nmi_enabled && audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
+		state->m_audio_nmi_enabled = data & 1;
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, (state->m_audio_nmi_enabled && state->m_audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
 
 static WRITE8_DEVICE_HANDLER( ay_audio_nmi_enable_w )
 {
+	btime_state *state = device->machine().driver_data<btime_state>();
+
 	/* port A bit 0, when 1, inhibits the NMI */
-	if (audio_nmi_enable_type == AUDIO_ENABLE_AY8910)
+	if (state->m_audio_nmi_enable_type == AUDIO_ENABLE_AY8910)
 	{
-		audio_nmi_enabled = ~data & 1;
-		cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_NMI, (audio_nmi_enabled && audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
+		state->m_audio_nmi_enabled = ~data & 1;
+		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, (state->m_audio_nmi_enabled && state->m_audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
 
 static TIMER_DEVICE_CALLBACK( audio_nmi_gen )
 {
+	btime_state *state = timer.machine().driver_data<btime_state>();
 	int scanline = param;
-	audio_nmi_state = scanline & 8;
-	cputag_set_input_line(timer->machine, "audiocpu", INPUT_LINE_NMI, (audio_nmi_enabled && audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
+	state->m_audio_nmi_state = scanline & 8;
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, (state->m_audio_nmi_enabled && state->m_audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
 }
-
-
 
 
 
@@ -216,8 +206,9 @@ INLINE UINT8 swap_bits_5_6(UINT8 data)
 }
 
 
-static void btime_decrypt(const address_space *space)
+static void btime_decrypt( address_space *space )
 {
+	btime_state *state = space->machine().driver_data<btime_state>();
 	UINT8 *src, *src1;
 	int addr, addr1;
 
@@ -228,17 +219,17 @@ static void btime_decrypt(const address_space *space)
 	/* xxxx xxx1 xxxx x1xx are encrypted. */
 
 	/* get the address of the next opcode */
-	addr = cpu_get_pc(space->cpu);
+	addr = cpu_get_pc(&space->device());
 
 	/* however if the previous instruction was JSR (which caused a write to */
 	/* the stack), fetch the address of the next instruction. */
-	addr1 = cpu_get_previouspc(space->cpu);
-	src1 = (addr1 < 0x9000) ? rambase : memory_region(space->machine, "maincpu");
+	addr1 = cpu_get_previouspc(&space->device());
+	src1 = (addr1 < 0x9000) ? state->m_rambase : space->machine().region("maincpu")->base();
 	if (decrypted[addr1] == 0x20)	/* JSR $xxxx */
-		addr = src1[addr1+1] + 256 * src1[addr1+2];
+		addr = src1[addr1 + 1] + 256 * src1[addr1 + 2];
 
 	/* If the address of the next instruction is xxxx xxx1 xxxx x1xx, decode it. */
-	src = (addr < 0x9000) ? rambase : memory_region(space->machine, "maincpu");
+	src = (addr < 0x9000) ? state->m_rambase : space->machine().region("maincpu")->base();
 	if ((addr & 0x0104) == 0x0104)
 	{
 		/* 76543210 -> 65342710 bit rotation */
@@ -248,18 +239,20 @@ static void btime_decrypt(const address_space *space)
 
 static WRITE8_HANDLER( lnc_w )
 {
+	btime_state *state = space->machine().driver_data<btime_state>();
+
 	if      (offset <= 0x3bff)                       ;
-	else if (offset >= 0x3c00 && offset <= 0x3fff) { lnc_videoram_w(space,offset - 0x3c00,data); return; }
-	else if (offset >= 0x7c00 && offset <= 0x7fff) { lnc_mirrorvideoram_w(space,offset - 0x7c00,data); return; }
+	else if (offset >= 0x3c00 && offset <= 0x3fff) { lnc_videoram_w(space, offset - 0x3c00, data); return; }
+	else if (offset >= 0x7c00 && offset <= 0x7fff) { lnc_mirrorvideoram_w(space, offset - 0x7c00, data); return; }
 	else if (offset == 0x8000)                     { return; }  /* AM_NOP */
-	else if (offset == 0x8001)                     { bnj_video_control_w(space,0,data); return; }
+	else if (offset == 0x8001)                     { bnj_video_control_w(space, 0, data); return; }
 	else if (offset == 0x8003)                       ;
 	else if (offset == 0x9000)                     { return; }  /* AM_NOP */
-	else if (offset == 0x9002)                     { audio_command_w(space,0,data); return; }
+	else if (offset == 0x9002)                     { audio_command_w(space, 0, data); return; }
 	else if (offset >= 0xb000 && offset <= 0xb1ff)   ;
-	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n", space->device().tag(), cpu_get_pc(&space->device()), data, offset);
 
-	rambase[offset] = data;
+	state->m_rambase[offset] = data;
 
 	/* Swap bits 5 & 6 for opcodes */
 	decrypted[offset] = swap_bits_5_6(data);
@@ -267,17 +260,19 @@ static WRITE8_HANDLER( lnc_w )
 
 static WRITE8_HANDLER( mmonkey_w )
 {
+	btime_state *state = space->machine().driver_data<btime_state>();
+
 	if      (offset <= 0x3bff)                       ;
-	else if (offset >= 0x3c00 && offset <= 0x3fff) { lnc_videoram_w(space,offset - 0x3c00,data); return; }
-	else if (offset >= 0x7c00 && offset <= 0x7fff) { lnc_mirrorvideoram_w(space,offset - 0x7c00,data); return; }
-	else if (offset == 0x8001)                     { bnj_video_control_w(space,0,data); return; }
+	else if (offset >= 0x3c00 && offset <= 0x3fff) { lnc_videoram_w(space, offset - 0x3c00, data); return; }
+	else if (offset >= 0x7c00 && offset <= 0x7fff) { lnc_mirrorvideoram_w(space, offset - 0x7c00, data); return; }
+	else if (offset == 0x8001)                     { bnj_video_control_w(space, 0, data); return; }
 	else if (offset == 0x8003)                       ;
 	else if (offset == 0x9000)                     { return; }  /* AM_NOP */
-	else if (offset == 0x9002)                     { audio_command_w(space,0,data); return; }
-	else if (offset >= 0xb000 && offset <= 0xbfff) { mmonkey_protection_w(space,offset - 0xb000, data); return; }
-	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+	else if (offset == 0x9002)                     { audio_command_w(space, 0, data); return; }
+	else if (offset >= 0xb000 && offset <= 0xbfff) { mmonkey_protection_w(space, offset - 0xb000, data); return; }
+	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n", space->device().tag(), cpu_get_pc(&space->device()), data, offset);
 
-	rambase[offset] = data;
+	state->m_rambase[offset] = data;
 
 	/* Swap bits 5 & 6 for opcodes */
 	decrypted[offset] = swap_bits_5_6(data);
@@ -285,81 +280,88 @@ static WRITE8_HANDLER( mmonkey_w )
 
 static WRITE8_HANDLER( btime_w )
 {
-	if      (offset <= 0x07ff)                     ;
-	else if (offset >= 0x0c00 && offset <= 0x0c0f) btime_paletteram_w(space,offset - 0x0c00,data);
-	else if (offset >= 0x1000 && offset <= 0x17ff) ;
-	else if (offset >= 0x1800 && offset <= 0x1bff) btime_mirrorvideoram_w(space,offset - 0x1800,data);
-	else if (offset >= 0x1c00 && offset <= 0x1fff) btime_mirrorcolorram_w(space,offset - 0x1c00,data);
-	else if (offset == 0x4002)                     btime_video_control_w(space,0,data);
-	else if (offset == 0x4003)                     audio_command_w(space,0,data);
-	else if (offset == 0x4004)                     bnj_scroll1_w(space,0,data);
-	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+	btime_state *state = space->machine().driver_data<btime_state>();
 
-	rambase[offset] = data;
+	if      (offset <= 0x07ff)                     ;
+	else if (offset >= 0x0c00 && offset <= 0x0c0f) btime_paletteram_w(space, offset - 0x0c00, data);
+	else if (offset >= 0x1000 && offset <= 0x17ff) ;
+	else if (offset >= 0x1800 && offset <= 0x1bff) btime_mirrorvideoram_w(space, offset - 0x1800, data);
+	else if (offset >= 0x1c00 && offset <= 0x1fff) btime_mirrorcolorram_w(space, offset - 0x1c00, data);
+	else if (offset == 0x4002)                     btime_video_control_w(space, 0, data);
+	else if (offset == 0x4003)                     audio_command_w(space, 0, data);
+	else if (offset == 0x4004)                     bnj_scroll1_w(space, 0, data);
+	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n", space->device().tag(), cpu_get_pc(&space->device()), data, offset);
+
+	state->m_rambase[offset] = data;
 
 	btime_decrypt(space);
 }
 
 static WRITE8_HANDLER( tisland_w )
 {
+	btime_state *state = space->machine().driver_data<btime_state>();
+
 	if      (offset <= 0x07ff)                     ;
-	else if (offset >= 0x0c00 && offset <= 0x0c0f) btime_paletteram_w(space,offset - 0x0c00,data);
+	else if (offset >= 0x0c00 && offset <= 0x0c0f) btime_paletteram_w(space, offset - 0x0c00, data);
 	else if (offset >= 0x1000 && offset <= 0x17ff) ;
-	else if (offset >= 0x1800 && offset <= 0x1bff) btime_mirrorvideoram_w(space,offset - 0x1800,data);
-	else if (offset >= 0x1c00 && offset <= 0x1fff) btime_mirrorcolorram_w(space,offset - 0x1c00,data);
-	else if (offset == 0x4002)                     btime_video_control_w(space,0,data);
-	else if (offset == 0x4003)                     audio_command_w(space,0,data);
-	else if (offset == 0x4004)                     bnj_scroll1_w(space,0,data);
-	else if (offset == 0x4005)					   bnj_scroll2_w(space,0,data);
+	else if (offset >= 0x1800 && offset <= 0x1bff) btime_mirrorvideoram_w(space, offset - 0x1800, data);
+	else if (offset >= 0x1c00 && offset <= 0x1fff) btime_mirrorcolorram_w(space, offset - 0x1c00, data);
+	else if (offset == 0x4002)                     btime_video_control_w(space, 0, data);
+	else if (offset == 0x4003)                     audio_command_w(space, 0, data);
+	else if (offset == 0x4004)                     bnj_scroll1_w(space, 0, data);
+	else if (offset == 0x4005)			     bnj_scroll2_w(space, 0, data);
 //  else if (offset == 0x8000)                     btime_video_control_w(space,0,data);
-	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n", space->device().tag(), cpu_get_pc(&space->device()), data, offset);
 
-
-	rambase[offset] = data;
+	state->m_rambase[offset] = data;
 
 	btime_decrypt(space);
 }
 
 static WRITE8_HANDLER( zoar_w )
 {
-	if      (offset <= 0x07ff) 					   ;
-	else if (offset >= 0x8000 && offset <= 0x87ff) ;
-	else if (offset >= 0x8800 && offset <= 0x8bff) btime_mirrorvideoram_w(space,offset - 0x8800,data);
-	else if (offset >= 0x8c00 && offset <= 0x8fff) btime_mirrorcolorram_w(space,offset - 0x8c00,data);
-	else if (offset == 0x9000)					   zoar_video_control_w(space,0, data);
-	else if (offset >= 0x9800 && offset <= 0x9803) ;
-	else if (offset == 0x9804)                     bnj_scroll2_w(space,0,data);
-	else if (offset == 0x9805)                     bnj_scroll1_w(space,0,data);
-	else if (offset == 0x9806)                     audio_command_w(space,0,data);
-	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+	btime_state *state = space->machine().driver_data<btime_state>();
 
-	rambase[offset] = data;
+	if      (offset <= 0x07ff)					   ;
+	else if (offset >= 0x8000 && offset <= 0x87ff) ;
+	else if (offset >= 0x8800 && offset <= 0x8bff) btime_mirrorvideoram_w(space, offset - 0x8800, data);
+	else if (offset >= 0x8c00 && offset <= 0x8fff) btime_mirrorcolorram_w(space, offset - 0x8c00, data);
+	else if (offset == 0x9000)					   zoar_video_control_w(space, 0, data);
+	else if (offset >= 0x9800 && offset <= 0x9803) ;
+	else if (offset == 0x9804)                     bnj_scroll2_w(space, 0, data);
+	else if (offset == 0x9805)                     bnj_scroll1_w(space, 0, data);
+	else if (offset == 0x9806)                     audio_command_w(space, 0, data);
+	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n", space->device().tag(), cpu_get_pc(&space->device()), data, offset);
+
+	state->m_rambase[offset] = data;
 
 	btime_decrypt(space);
 }
 
 static WRITE8_HANDLER( disco_w )
 {
-	if      (offset <= 0x04ff)                     ;
-	else if (offset >= 0x2000 && offset <= 0x7fff) deco_charram_w(space,offset - 0x2000,data);
-	else if (offset >= 0x8000 && offset <= 0x881f) ;
-	else if (offset == 0x9a00)                     audio_command_w(space,0,data);
-	else if (offset == 0x9c00)                     disco_video_control_w(space,0,data);
-	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+	btime_state *state = space->machine().driver_data<btime_state>();
 
-	rambase[offset] = data;
+	if      (offset <= 0x04ff)                     ;
+	else if (offset >= 0x2000 && offset <= 0x7fff) deco_charram_w(space, offset - 0x2000, data);
+	else if (offset >= 0x8000 && offset <= 0x881f) ;
+	else if (offset == 0x9a00)                     audio_command_w(space, 0, data);
+	else if (offset == 0x9c00)                     disco_video_control_w(space, 0, data);
+	else logerror("CPU '%s' PC %04x: warning - write %02x to unmapped memory address %04x\n", space->device().tag(), cpu_get_pc(&space->device()), data, offset);
+
+	state->m_rambase[offset] = data;
 
 	btime_decrypt(space);
 }
 
 
-static ADDRESS_MAP_START( btime_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( btime_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(btime_w)	/* override the following entries to */
 												/* support ROM decryption */
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x0c00, 0x0c0f) AM_WRITE(btime_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE(&btime_colorram)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
+	AM_RANGE(0x0c00, 0x0c0f) AM_WRITE(btime_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
 	AM_RANGE(0x1800, 0x1bff) AM_READWRITE(btime_mirrorvideoram_r, btime_mirrorvideoram_w)
 	AM_RANGE(0x1c00, 0x1fff) AM_READWRITE(btime_mirrorcolorram_r, btime_mirrorcolorram_w)
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("P1") AM_WRITENOP
@@ -370,16 +372,16 @@ static ADDRESS_MAP_START( btime_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cookrace_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE(&rambase)
+static ADDRESS_MAP_START( cookrace_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
 	AM_RANGE(0x0500, 0x3fff) AM_ROM
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM AM_BASE(&btime_colorram)
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
 	AM_RANGE(0xc800, 0xcbff) AM_READWRITE(btime_mirrorvideoram_r, btime_mirrorvideoram_w)
 	AM_RANGE(0xcc00, 0xcfff) AM_READWRITE(btime_mirrorcolorram_r, btime_mirrorcolorram_w)
 	AM_RANGE(0xd000, 0xd0ff) AM_RAM							/* background? */
 	AM_RANGE(0xd100, 0xd3ff) AM_RAM							/* ? */
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_BASE(&bnj_backgroundram) AM_SIZE(&bnj_backgroundram_size)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_bnj_backgroundram, m_bnj_backgroundram_size)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("DSW1") AM_WRITE(bnj_video_control_w)
 	AM_RANGE(0xe300, 0xe300) AM_READ_PORT("DSW1")	/* mirror address used on high score name entry */
 													/* screen */
@@ -390,13 +392,13 @@ static ADDRESS_MAP_START( cookrace_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xfff9, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tisland_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tisland_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(tisland_w)	/* override the following entries to */
 													/* support ROM decryption */
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x0c00, 0x0c0f) AM_WRITE(btime_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE(&btime_colorram)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
+	AM_RANGE(0x0c00, 0x0c0f) AM_WRITE(btime_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
 	AM_RANGE(0x1800, 0x1bff) AM_READWRITE(btime_mirrorvideoram_r, btime_mirrorvideoram_w)
 	AM_RANGE(0x1c00, 0x1fff) AM_READWRITE(btime_mirrorcolorram_r, btime_mirrorcolorram_w)
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("P1") AM_WRITENOP
@@ -408,12 +410,12 @@ static ADDRESS_MAP_START( tisland_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x9000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( zoar_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( zoar_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(zoar_w)	/* override the following entries to */
 												/* support ROM decryption */
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x8000, 0x83ff) AM_WRITEONLY AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x8400, 0x87ff) AM_WRITEONLY AM_BASE(&btime_colorram)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
+	AM_RANGE(0x8000, 0x83ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x8400, 0x87ff) AM_WRITEONLY AM_BASE_MEMBER(btime_state, m_colorram)
 	AM_RANGE(0x8800, 0x8bff) AM_WRITE(btime_mirrorvideoram_w)
 	AM_RANGE(0x8c00, 0x8fff) AM_WRITE(btime_mirrorcolorram_w)
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(zoar_video_control_w)
@@ -421,23 +423,23 @@ static ADDRESS_MAP_START( zoar_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x9801, 0x9801) AM_READ_PORT("DSW2")
 	AM_RANGE(0x9802, 0x9802) AM_READ_PORT("P1")
 	AM_RANGE(0x9803, 0x9803) AM_READ_PORT("P2")
-	AM_RANGE(0x9800, 0x9803) AM_WRITEONLY AM_BASE(&zoar_scrollram)
+	AM_RANGE(0x9800, 0x9803) AM_WRITEONLY AM_BASE_MEMBER(btime_state, m_zoar_scrollram)
 	AM_RANGE(0x9804, 0x9804) AM_READ_PORT("SYSTEM") AM_WRITE(bnj_scroll2_w)
 	AM_RANGE(0x9805, 0x9805) AM_WRITE(bnj_scroll1_w)
 	AM_RANGE(0x9806, 0x9806) AM_WRITE(audio_command_w)
 	AM_RANGE(0xd000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lnc_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( lnc_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(lnc_w)	/* override the following entries to */
 												/* support ROM decryption */
-	AM_RANGE(0x0000, 0x3bff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(lnc_videoram_w) AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x7800, 0x7bff) AM_WRITEONLY AM_BASE(&btime_colorram)  /* this is just here to initialize the pointer */
+	AM_RANGE(0x0000, 0x3bff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
+	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(lnc_videoram_w) AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x7800, 0x7bff) AM_WRITEONLY AM_BASE_MEMBER(btime_state, m_colorram)  /* this is just here to initialize the pointer */
 	AM_RANGE(0x7c00, 0x7fff) AM_READWRITE(btime_mirrorvideoram_r, lnc_mirrorvideoram_w)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("DSW1") AM_WRITENOP     /* ??? */
 	AM_RANGE(0x8001, 0x8001) AM_READ_PORT("DSW2") AM_WRITE(bnj_video_control_w)
-	AM_RANGE(0x8003, 0x8003) AM_WRITEONLY AM_BASE(&lnc_charbank)
+	AM_RANGE(0x8003, 0x8003) AM_WRITEONLY AM_BASE_MEMBER(btime_state, m_lnc_charbank)
 	AM_RANGE(0x9000, 0x9000) AM_READ_PORT("P1") AM_WRITENOP     /* IRQ ack??? */
 	AM_RANGE(0x9001, 0x9001) AM_READ_PORT("P2")
 	AM_RANGE(0x9002, 0x9002) AM_READ_PORT("SYSTEM") AM_WRITE(audio_command_w)
@@ -445,16 +447,16 @@ static ADDRESS_MAP_START( lnc_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mmonkey_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mmonkey_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(mmonkey_w)	/* override the following entries to */
 													/* support ROM decryption */
-	AM_RANGE(0x0000, 0x3bff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(lnc_videoram_w) AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x7800, 0x7bff) AM_WRITEONLY AM_BASE(&btime_colorram)		/* this is just here to initialize the pointer */
+	AM_RANGE(0x0000, 0x3bff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
+	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(lnc_videoram_w) AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x7800, 0x7bff) AM_WRITEONLY AM_BASE_MEMBER(btime_state, m_colorram)		/* this is just here to initialize the pointer */
 	AM_RANGE(0x7c00, 0x7fff) AM_READWRITE(btime_mirrorvideoram_r, lnc_mirrorvideoram_w)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("DSW1")
 	AM_RANGE(0x8001, 0x8001) AM_READ_PORT("DSW2") AM_WRITE(bnj_video_control_w)
-	AM_RANGE(0x8003, 0x8003) AM_WRITEONLY AM_BASE(&lnc_charbank)
+	AM_RANGE(0x8003, 0x8003) AM_WRITEONLY AM_BASE_MEMBER(btime_state, m_lnc_charbank)
 	AM_RANGE(0x9000, 0x9000) AM_READ_PORT("P1") AM_WRITENOP	/* IRQ ack??? */
 	AM_RANGE(0x9001, 0x9001) AM_READ_PORT("P2")
 	AM_RANGE(0x9002, 0x9002) AM_READ_PORT("SYSTEM") AM_WRITE(audio_command_w)
@@ -462,32 +464,32 @@ static ADDRESS_MAP_START( mmonkey_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bnj_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&rambase)
+static ADDRESS_MAP_START( bnj_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1001, 0x1001) AM_READ_PORT("DSW2") AM_WRITE(bnj_video_control_w)
 	AM_RANGE(0x1002, 0x1002) AM_READ_PORT("P1") AM_WRITE(audio_command_w)
 	AM_RANGE(0x1003, 0x1003) AM_READ_PORT("P2")
 	AM_RANGE(0x1004, 0x1004) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x4400, 0x47ff) AM_RAM AM_BASE(&btime_colorram)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x4400, 0x47ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
 	AM_RANGE(0x4800, 0x4bff) AM_READWRITE(btime_mirrorvideoram_r, btime_mirrorvideoram_w)
 	AM_RANGE(0x4c00, 0x4fff) AM_READWRITE(btime_mirrorcolorram_r, btime_mirrorcolorram_w)
-	AM_RANGE(0x5000, 0x51ff) AM_WRITE(bnj_background_w) AM_BASE(&bnj_backgroundram) AM_SIZE(&bnj_backgroundram_size)
+	AM_RANGE(0x5000, 0x51ff) AM_WRITE(bnj_background_w) AM_BASE_SIZE_MEMBER(btime_state, m_bnj_backgroundram, m_bnj_backgroundram_size)
 	AM_RANGE(0x5400, 0x5400) AM_WRITE(bnj_scroll1_w)
 	AM_RANGE(0x5800, 0x5800) AM_WRITE(bnj_scroll2_w)
-	AM_RANGE(0x5c00, 0x5c0f) AM_WRITE(btime_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x5c00, 0x5c0f) AM_WRITE(btime_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( disco_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( disco_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(disco_w)	/* override the following entries to */
 												/* support ROM decryption */
-	AM_RANGE(0x0000, 0x04ff) AM_RAM AM_BASE(&rambase)
-	AM_RANGE(0x2000, 0x7fff) AM_RAM_WRITE(deco_charram_w) AM_BASE(&deco_charram)
-	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE(&btime_videoram) AM_SIZE(&btime_videoram_size)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE(&btime_colorram)
-	AM_RANGE(0x8800, 0x881f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x0000, 0x04ff) AM_RAM AM_BASE_MEMBER(btime_state, m_rambase)
+	AM_RANGE(0x2000, 0x7fff) AM_RAM_WRITE(deco_charram_w) AM_BASE_MEMBER(btime_state, m_deco_charram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE_MEMBER(btime_state, m_colorram)
+	AM_RANGE(0x8800, 0x881f) AM_RAM AM_BASE_SIZE_MEMBER(btime_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9000, 0x9000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x9200, 0x9200) AM_READ_PORT("P1")
 	AM_RANGE(0x9400, 0x9400) AM_READ_PORT("P2")
@@ -499,8 +501,8 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x1c00) AM_RAM AM_BASE(&audio_rambase)
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x1c00) AM_RAM AM_BASE_MEMBER(btime_state, m_audio_rambase)
 	AM_RANGE(0x2000, 0x3fff) AM_DEVWRITE("ay1", ay8910_data_w)
 	AM_RANGE(0x4000, 0x5fff) AM_DEVWRITE("ay1", ay8910_address_w)
 	AM_RANGE(0x6000, 0x7fff) AM_DEVWRITE("ay2", ay8910_data_w)
@@ -510,7 +512,7 @@ static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xefff) AM_MIRROR(0x1000) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( disco_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( disco_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x4000, 0x4fff) AM_DEVWRITE("ay1", ay8910_data_w)
 	AM_RANGE(0x5000, 0x5fff) AM_DEVWRITE("ay1", ay8910_address_w)
@@ -523,37 +525,44 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted_irq_hi )
 {
+	btime_state *state = field.machine().driver_data<btime_state>();
+
 	if (newval)
-		cputag_set_input_line(field->port->machine, "maincpu", 0, HOLD_LINE);
+		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
 }
 
 static INPUT_CHANGED( coin_inserted_irq_lo )
 {
+	btime_state *state = field.machine().driver_data<btime_state>();
+
 	if (!newval)
-		cputag_set_input_line(field->port->machine, "maincpu", 0, HOLD_LINE);
+		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
 }
 
 static INPUT_CHANGED( coin_inserted_nmi_lo )
 {
-	cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+	btime_state *state = field.machine().driver_data<btime_state>();
+	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( audio_command_w )
 {
-	soundlatch_w(space,offset,data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, ASSERT_LINE);
+	btime_state *state = space->machine().driver_data<btime_state>();
+	soundlatch_w(space, offset, data);
+	device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
 }
 
 static READ8_HANDLER( audio_command_r )
 {
-	cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
-	return soundlatch_r(space,offset);
+	btime_state *state = space->machine().driver_data<btime_state>();
+	device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
+	return soundlatch_r(space, offset);
 }
 
 static READ8_HANDLER( zoar_dsw1_read )
 {
-	return (!video_screen_get_vblank(space->machine->primary_screen) << 7) | (input_port_read(space->machine, "DSW1") & 0x7f);
+	return (!space->machine().primary_screen->vblank() << 7) | (input_port_read(space->machine(), "DSW1") & 0x7f);
 }
 
 static INPUT_PORTS_START( btime )
@@ -761,9 +770,11 @@ static INPUT_PORTS_START( zoar )
 	PORT_DIPNAME( 0x40, 0x00, "Control Panel" ) PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Cocktail ) )
+//  PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW1:8")
+//  PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
+//  PORT_DIPSETTING(    0x80, DEF_STR( Cocktail ) )
+	/* I can't use IPT_VBLANK as players would have almost no time to enter their initials */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL )
 
 	PORT_START("DSW2")
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1")
@@ -1349,7 +1360,7 @@ static const discrete_mixer_desc btime_sound_mixer_desc =
  */
 #define BTIME_R49	RES_K(47)	/* pcb: 47.4k */
 
-/* The input divider R51 R50 is not independant of R52, which
+/* The input divider R51 R50 is not independent of R52, which
  * also depends on ay internal resistance.
  * FIXME: Develop proper model when I am retired.
  *
@@ -1367,7 +1378,7 @@ static const discrete_mixer_desc btime_sound_mixer_desc =
  */
 
 #define BTIME_R52	RES_K(1)	/* pcb: .912k = 1K || 11k */
-#define BTIME_R51	RES_K(5) 	/* pcb: .923k = 1k || 11k schematics 1k */
+#define BTIME_R51	RES_K(5)	/* pcb: .923k = 1k || 11k schematics 1k */
 #define BTIME_R50	RES_K(10)	/* pcb: 1.667k = 10k || 2k */
 
 static const discrete_op_amp_filt_info btime_opamp_desc =
@@ -1396,7 +1407,7 @@ static DISCRETE_SOUND_START( btime_sound )
 
 	/* Amplifier is upc1181H3
      *
-     * http://www.mydarc.de/dj7oh/fad/ics/upc1181/upc1181.htm
+     * http://www.ic-ts-histo.de/fad/ics/upc1181/upc1181.htm
      *
      * A linear frequency response is mentioned as well as a lower
      * edge frequency determined by cap on pin3, however no formula given.
@@ -1412,172 +1423,251 @@ static DISCRETE_SOUND_START( btime_sound )
 DISCRETE_SOUND_END
 
 
-static MACHINE_DRIVER_START( btime )
+static MACHINE_START( btime )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_btime_palette));
+	state->save_item(NAME(state->m_bnj_scroll1));
+	state->save_item(NAME(state->m_bnj_scroll2));
+	state->save_item(NAME(state->m_btime_tilemap));
+	state->save_item(NAME(state->m_audio_nmi_enabled));
+	state->save_item(NAME(state->m_audio_nmi_state));
+}
+
+static MACHINE_START( mmonkey )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+
+	MACHINE_START_CALL(btime);
+
+	state->save_item(NAME(state->m_protection_command));
+	state->save_item(NAME(state->m_protection_status));
+	state->save_item(NAME(state->m_protection_value));
+	state->save_item(NAME(state->m_protection_ret));
+}
+
+static MACHINE_RESET( btime )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+
+	/* by default, the audio NMI is disabled, except for bootlegs which don't use the enable */
+	state->m_audio_nmi_enabled = (state->m_audio_nmi_enable_type == AUDIO_ENABLE_NONE);
+
+	state->m_btime_palette = 0;
+	state->m_bnj_scroll1 = 0;
+	state->m_bnj_scroll2 = 0;
+	state->m_btime_tilemap[0] = 0;
+	state->m_btime_tilemap[1] = 0;
+	state->m_btime_tilemap[2] = 0;
+	state->m_btime_tilemap[3] = 0;
+	state->m_audio_nmi_state = 0;
+}
+
+static MACHINE_RESET( lnc )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+	*state->m_lnc_charbank = 1;
+
+	MACHINE_RESET_CALL(btime);
+}
+
+static MACHINE_RESET( mmonkey )
+{
+	btime_state *state = machine.driver_data<btime_state>();
+
+	MACHINE_RESET_CALL(lnc);
+
+	state->m_protection_command = 0;
+	state->m_protection_status = 0;
+	state->m_protection_value = 0;
+	state->m_protection_ret = 0;
+}
+
+static MACHINE_CONFIG_START( btime, btime_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, HCLK2)	/* seletable between H2/H4 via jumper */
-	MDRV_CPU_PROGRAM_MAP(btime_map)
+	MCFG_CPU_ADD("maincpu", M6502, HCLK2)	/* seletable between H2/H4 via jumper */
+	MCFG_CPU_PROGRAM_MAP(btime_map)
 
-	MDRV_CPU_ADD("audiocpu", M6502, HCLK1/3/2)
-	MDRV_CPU_PROGRAM_MAP(audio_map)
-	MDRV_TIMER_ADD_SCANLINE("audionmi", audio_nmi_gen, "screen", 0, 8)
+	MCFG_CPU_ADD("audiocpu", M6502, HCLK1/3/2)
+	MCFG_CPU_PROGRAM_MAP(audio_map)
+	MCFG_TIMER_ADD_SCANLINE("audionmi", audio_nmi_gen, "screen", 0, 8)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(HCLK, 384, 8, 248, 272, 8, 248)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(HCLK, 384, 8, 248, 272, 8, 248)
+	MCFG_SCREEN_UPDATE_STATIC(btime)
 
-	MDRV_MACHINE_START(btime)
+	MCFG_MACHINE_START(btime)
+	MCFG_MACHINE_RESET(btime)
 
-	MDRV_GFXDECODE(btime)
-	MDRV_PALETTE_LENGTH(16)
+	MCFG_GFXDECODE(btime)
+	MCFG_PALETTE_LENGTH(16)
 
-	MDRV_PALETTE_INIT(btime)
-	MDRV_VIDEO_START(btime)
-	MDRV_VIDEO_UPDATE(btime)
+	MCFG_PALETTE_INIT(btime)
+	MCFG_VIDEO_START(btime)
 
 	/* audio hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, HCLK2)
-	MDRV_SOUND_CONFIG(ay1_intf)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 1)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 2)
+	MCFG_SOUND_ADD("ay1", AY8910, HCLK2)
+	MCFG_SOUND_CONFIG(ay1_intf)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 1)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 2)
 
-	MDRV_SOUND_ADD("ay2", AY8910, HCLK2)
-	MDRV_SOUND_CONFIG(ay2_intf)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 3)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 4)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 5)
+	MCFG_SOUND_ADD("ay2", AY8910, HCLK2)
+	MCFG_SOUND_CONFIG(ay2_intf)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 3)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 4)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 5)
 
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(btime_sound)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(btime_sound)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cookrace )
+static MACHINE_CONFIG_DERIVED( cookrace, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(cookrace_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(cookrace_map)
 
-	MDRV_CPU_MODIFY("audiocpu")
-	MDRV_CPU_PROGRAM_MAP(audio_map)
+	MCFG_CPU_MODIFY("audiocpu")
+	MCFG_CPU_PROGRAM_MAP(audio_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(cookrace)
-	MDRV_PALETTE_LENGTH(16)
+	MCFG_GFXDECODE(cookrace)
+	MCFG_PALETTE_LENGTH(16)
 
-	MDRV_VIDEO_UPDATE(cookrace)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(cookrace)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( lnc )
+static MACHINE_CONFIG_DERIVED( lnc, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(lnc_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(lnc_map)
 
-	MDRV_MACHINE_RESET(lnc)
+	MCFG_MACHINE_RESET(lnc)
 
 	/* video hardware */
-	MDRV_GFXDECODE(lnc)
-	MDRV_PALETTE_LENGTH(8)
+	MCFG_GFXDECODE(lnc)
+	MCFG_PALETTE_LENGTH(8)
 
-	MDRV_PALETTE_INIT(lnc)
-	MDRV_VIDEO_UPDATE(lnc)
-MACHINE_DRIVER_END
+	MCFG_PALETTE_INIT(lnc)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(lnc)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wtennis )
+static MACHINE_CONFIG_DERIVED( wtennis, lnc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(lnc)
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(eggs)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(eggs)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mmonkey )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(wtennis)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(mmonkey_map)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( bnj )
+static MACHINE_CONFIG_DERIVED( mmonkey, wtennis )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_REPLACE("maincpu", M6502, HCLK4)
-	MDRV_CPU_PROGRAM_MAP(bnj_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(mmonkey_map)
+
+	MCFG_MACHINE_START(mmonkey)
+	MCFG_MACHINE_RESET(mmonkey)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( sdtennis, btime )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(HCLK4)
+	MCFG_CPU_PROGRAM_MAP(bnj_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(bnj)
-	MDRV_PALETTE_LENGTH(16)
+	MCFG_GFXDECODE(bnj)
+	MCFG_PALETTE_LENGTH(16)
 
-	MDRV_VIDEO_START(bnj)
-	MDRV_VIDEO_UPDATE(bnj)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( zoar )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(zoar_map)
-
-	/* video hardware */
-	MDRV_GFXDECODE(zoar)
-	MDRV_PALETTE_LENGTH(64)
-
-	MDRV_VIDEO_UPDATE(zoar)
-
-	MDRV_SOUND_REPLACE("ay1", AY8910, HCLK1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
-	MDRV_SOUND_CONFIG(ay1_intf)
-
-	MDRV_SOUND_REPLACE("ay2", AY8910, HCLK1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(bnj)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(bnj)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( disco )
+static MACHINE_CONFIG_DERIVED( bnj, sdtennis )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_REPLACE("maincpu", M6502, HCLK4)
-	MDRV_CPU_PROGRAM_MAP(disco_map)
-
-	MDRV_CPU_MODIFY("audiocpu")
-	MDRV_CPU_PROGRAM_MAP(disco_audio_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(disco)
-	MDRV_PALETTE_LENGTH(32)
-
-	MDRV_VIDEO_UPDATE(disco)
-MACHINE_DRIVER_END
+	MCFG_DEVICE_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1) // 256 * 240, confirmed
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tisland )
+static MACHINE_CONFIG_DERIVED( zoar, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(tisland_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(zoar_map)
 
 	/* video hardware */
-	MDRV_GFXDECODE(zoar)
-MACHINE_DRIVER_END
+	MCFG_DEVICE_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1) // 256 * 240, confirmed
+
+	MCFG_GFXDECODE(zoar)
+	MCFG_PALETTE_LENGTH(64)
+
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(zoar)
+
+	MCFG_SOUND_REPLACE("ay1", AY8910, HCLK1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
+	MCFG_SOUND_CONFIG(ay1_intf)
+
+	MCFG_SOUND_REPLACE("ay2", AY8910, HCLK1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( disco, btime )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(HCLK4)
+	MCFG_CPU_PROGRAM_MAP(disco_map)
+
+	MCFG_CPU_MODIFY("audiocpu")
+	MCFG_CPU_PROGRAM_MAP(disco_audio_map)
+
+	/* video hardware */
+	MCFG_GFXDECODE(disco)
+	MCFG_PALETTE_LENGTH(32)
+
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(disco)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( tisland, btime )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(tisland_map)
+
+	/* video hardware */
+	MCFG_GFXDECODE(zoar)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -1734,7 +1824,7 @@ ROM_START( tisland )
 ROM_END
 
 /* There is a flyer with a screen shot for Lock'n'Chase at:
-   http://www.gamearchive.com/flyers/video/taito/locknchase_f.jpg  */
+   http://www.arcadeflyers.com/?page=flyer&db=videodb&id=608&image=1  */
 
 ROM_START( lnc )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -1978,26 +2068,26 @@ ROM_START( sdtennis )
 	ROM_LOAD( "ao_04.10f",   0x1000, 0x1000, CRC(921952af) SHA1(4e9248f3493a5f4651278f27c11f507571242317) )
 ROM_END
 
-static void decrypt_C10707_cpu(running_machine *machine, const char *cputag)
+static void decrypt_C10707_cpu(running_machine &machine, const char *cputag)
 {
-	const address_space *space = cputag_get_address_space(machine, cputag, ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device(cputag)->memory().space(AS_PROGRAM);
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x10000);
-	UINT8 *rom = memory_region(machine, cputag);
+	UINT8 *rom = machine.region(cputag)->base();
 	offs_t addr;
 
-	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypt);
+	space->set_decrypted_region(0x0000, 0xffff, decrypt);
 
 	/* Swap bits 5 & 6 for opcodes */
 	for (addr = 0; addr < 0x10000; addr++)
 		decrypt[addr] = swap_bits_5_6(rom[addr]);
 
-	if (space->cpu == cputag_get_cpu(machine, "maincpu"))
+	if (&space->device() == machine.device("maincpu"))
 		decrypted = decrypt;
 }
 
 static READ8_HANDLER( wtennis_reset_hack_r )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 
 	/* Otherwise the game goes into test mode and there is no way out that I
        can see.  I'm not sure how it can work, it probably somehow has to do
@@ -2008,13 +2098,13 @@ static READ8_HANDLER( wtennis_reset_hack_r )
 	return RAM[0xc15f];
 }
 
-static void init_rom1(running_machine *machine)
+static void init_rom1(running_machine &machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT8 *rom = memory_region(machine, "maincpu");
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	decrypted = auto_alloc_array(machine, UINT8, 0x10000);
-	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypted);
+	space->set_decrypted_region(0x0000, 0xffff, decrypted);
 
 	/* For now, just copy the RAM array over to ROM. Decryption will happen */
 	/* at run time, since the CPU applies the decryption only if the previous */
@@ -2024,13 +2114,15 @@ static void init_rom1(running_machine *machine)
 
 static DRIVER_INIT( btime )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	init_rom1(machine);
-	audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 static DRIVER_INIT( zoar )
 {
-	UINT8 *rom = memory_region(machine, "maincpu");
+	btime_state *state = machine.driver_data<btime_state>();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* At location 0xD50A is what looks like an undocumented opcode. I tried
        implementing it given what opcode 0x23 should do, but it still didn't
@@ -2039,12 +2131,13 @@ static DRIVER_INIT( zoar )
 	memset(&rom[0xd50a],0xea,8);
 
 	init_rom1(machine);
-	audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( tisland )
 {
-	UINT8 *rom = memory_region(machine, "maincpu");
+	btime_state *state = machine.driver_data<btime_state>();
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* At location 0xa2b6 there's a strange RLA followed by a BPL that reads from an
     unmapped area that causes the game to fail in several circumstances.On the Cassette
@@ -2053,74 +2146,81 @@ static DRIVER_INIT( tisland )
 	memset(&rom[0xa2b6],0x24,1);
 
 	init_rom1(machine);
-	audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 static DRIVER_INIT( lnc )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
-	audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( bnj )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
-	audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 static DRIVER_INIT( disco )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	DRIVER_INIT_CALL(btime);
-	audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( cookrace )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x0200, 0x0fff, 0, 0, (read8_space_func)SMH_BANK(10));
-	memory_set_bankptr(machine, 10, memory_region(machine, "audiocpu") + 0xe200);
-	audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
+	machine.device("audiocpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0200, 0x0fff, "bank10");
+	memory_set_bankptr(machine, "bank10", machine.region("audiocpu")->base() + 0xe200);
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 static DRIVER_INIT( protennb )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	DRIVER_INIT_CALL(btime);
-	audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( wtennis )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc15f, 0xc15f, 0, 0, wtennis_reset_hack_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc15f, 0xc15f, FUNC(wtennis_reset_hack_r));
 
-	memory_install_read8_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x0200, 0x0fff, 0, 0, (read8_space_func)SMH_BANK(10));
-	memory_set_bankptr(machine, 10, memory_region(machine, "audiocpu") + 0xe200);
-	audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
+	machine.device("audiocpu")->memory().space(AS_PROGRAM)->install_read_bank(0x0200, 0x0fff, "bank10");
+	memory_set_bankptr(machine, "bank10", machine.region("audiocpu")->base() + 0xe200);
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( sdtennis )
 {
+	btime_state *state = machine.driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 	decrypt_C10707_cpu(machine, "audiocpu");
-	audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
+	state->m_audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 
-GAME( 1982, btime,    0,       btime,    btime,    btime,    ROT270, "Data East Corporation", "Burger Time (Data East set 1)", 0 )
-GAME( 1982, btime2,   btime,   btime,    btime,    btime,    ROT270, "Data East Corporation", "Burger Time (Data East set 2)", 0 )
-GAME( 1982, btimem,   btime,   btime,    btime,    btime,    ROT270, "Data East (Bally Midway license)", "Burger Time (Midway)", 0 )
-GAME( 1982, cookrace, btime,   cookrace, cookrace, cookrace, ROT270, "bootleg", "Cook Race", 0 )
-GAME( 1981, tisland,  0,       tisland,  btime,    tisland,  ROT270, "Data East Corporation", "Treasure Island", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS )
-GAME( 1981, lnc,      0,       lnc,      lnc,      lnc,      ROT270, "Data East Corporation", "Lock'n'Chase", 0 )
-GAME( 1982, protennb, 0,       disco,    disco,    protennb, ROT270, "bootleg", "Tennis (bootleg of Pro Tennis)", 0 )
-GAME( 1982, wtennis,  0,       wtennis,  wtennis,  wtennis,  ROT270, "bootleg", "World Tennis", 0 )
-GAME( 1982, mmonkey,  0,       mmonkey,  mmonkey,  lnc,      ROT270, "Technos Japan + Roller Tron", "Minky Monkey", 0 )
-GAME( 1982, brubber,  0,       bnj,      bnj,      bnj,      ROT270, "Data East", "Burnin' Rubber", 0 )
-GAME( 1982, bnj,      brubber, bnj,      bnj,      bnj,      ROT270, "Data East USA (Bally Midway license)", "Bump 'n' Jump", 0 )
-GAME( 1982, caractn,  brubber, bnj,      bnj,      bnj,      ROT270, "bootleg", "Car Action", 0 )
-GAME( 1982, zoar,     0,       zoar,     zoar,     zoar,     ROT270, "Data East USA", "Zoar", 0 )
-GAME( 1982, disco,    0,       disco,    disco,    disco,    ROT270, "Data East", "Disco No.1", 0 )
-GAME( 1982, discof,   disco,   disco,    disco,    disco,    ROT270, "Data East", "Disco No.1 (Rev.F)", 0 )
-GAME( 1983, sdtennis, 0,       bnj,      sdtennis, sdtennis, ROT270, "Data East Corporation", "Super Doubles Tennis", 0 )
+GAME( 1982, btime,    0,       btime,    btime,    btime,    ROT270, "Data East Corporation", "Burger Time (Data East set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1982, btime2,   btime,   btime,    btime,    btime,    ROT270, "Data East Corporation", "Burger Time (Data East set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1982, btimem,   btime,   btime,    btime,    btime,    ROT270, "Data East (Bally Midway license)", "Burger Time (Midway)", GAME_SUPPORTS_SAVE )
+GAME( 1982, cookrace, btime,   cookrace, cookrace, cookrace, ROT270, "bootleg", "Cook Race", GAME_SUPPORTS_SAVE )
+GAME( 1981, tisland,  0,       tisland,  btime,    tisland,  ROT270, "Data East Corporation", "Treasure Island", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1981, lnc,      0,       lnc,      lnc,      lnc,      ROT270, "Data East Corporation", "Lock'n'Chase", GAME_SUPPORTS_SAVE )
+GAME( 1982, protennb, 0,       disco,    disco,    protennb, ROT270, "bootleg", "Tennis (bootleg of Pro Tennis)", GAME_SUPPORTS_SAVE )
+GAME( 1982, wtennis,  0,       wtennis,  wtennis,  wtennis,  ROT270, "bootleg", "World Tennis", GAME_SUPPORTS_SAVE )
+GAME( 1982, mmonkey,  0,       mmonkey,  mmonkey,  lnc,      ROT270, "Technos Japan / Roller Tron", "Minky Monkey", GAME_SUPPORTS_SAVE )
+GAME( 1982, brubber,  0,       bnj,      bnj,      bnj,      ROT270, "Data East", "Burnin' Rubber", GAME_SUPPORTS_SAVE )
+GAME( 1982, bnj,      brubber, bnj,      bnj,      bnj,      ROT270, "Data East USA (Bally Midway license)", "Bump 'n' Jump", GAME_SUPPORTS_SAVE )
+GAME( 1982, caractn,  brubber, bnj,      bnj,      bnj,      ROT270, "bootleg", "Car Action", GAME_SUPPORTS_SAVE )
+GAME( 1982, zoar,     0,       zoar,     zoar,     zoar,     ROT270, "Data East USA", "Zoar", GAME_SUPPORTS_SAVE )
+GAME( 1982, disco,    0,       disco,    disco,    disco,    ROT270, "Data East", "Disco No.1", GAME_SUPPORTS_SAVE )
+GAME( 1982, discof,   disco,   disco,    disco,    disco,    ROT270, "Data East", "Disco No.1 (Rev.F)", GAME_SUPPORTS_SAVE )
+GAME( 1983, sdtennis, 0,       sdtennis, sdtennis, sdtennis, ROT270, "Data East Corporation", "Super Doubles Tennis", GAME_SUPPORTS_SAVE )

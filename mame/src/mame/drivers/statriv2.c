@@ -24,6 +24,10 @@
 *     it generates lots of errors in error.log, even though the  *
 *     sound seems to make sense. Can someone with a PCB stomach  *
 *     the game long enough to verify one way or the other?       *
+*                                                                *
+* RF: Reworked the Status Fun Casino inputs. Lowered the CPU     *
+*     clock to get it working properly. Added technical notes.   *
+*                                                                *
 ******************************************************************
 
 ******************************************************************
@@ -64,25 +68,32 @@ quaquiz2 - no inputs, needs NVRAM
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/ay8910.h"
 #include "machine/8255ppi.h"
 #include "video/tms9927.h"
+#include "machine/nvram.h"
+
+
+class statriv2_state : public driver_device
+{
+public:
+	statriv2_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram;
+	tilemap_t *m_tilemap;
+	UINT8 *m_question_offset;
+	UINT8 m_question_offset_low;
+	UINT8 m_question_offset_mid;
+	UINT8 m_question_offset_high;
+	UINT8 m_latched_coin;
+	UINT8 m_last_coin;
+};
+
 
 #define MASTER_CLOCK		12440000
-
-
-static tilemap *statriv2_tilemap;
-static UINT8 *question_offset;
-
-static UINT8 question_offset_low;
-static UINT8 question_offset_mid;
-static UINT8 question_offset_high;
-
-static UINT8 latched_coin;
-static UINT8 last_coin;
-
 
 
 /*************************************
@@ -93,6 +104,8 @@ static UINT8 last_coin;
 
 static TILE_GET_INFO( horizontal_tile_info )
 {
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	UINT8 *videoram = state->m_videoram;
 	int code = videoram[0x400+tile_index];
 	int attr = videoram[tile_index] & 0x3f;
 
@@ -101,6 +114,8 @@ static TILE_GET_INFO( horizontal_tile_info )
 
 static TILE_GET_INFO( vertical_tile_info )
 {
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	UINT8 *videoram = state->m_videoram;
 	int code = videoram[0x400+tile_index];
 	int attr = videoram[tile_index] & 0x3f;
 
@@ -128,12 +143,14 @@ static PALETTE_INIT( statriv2 )
 
 static VIDEO_START( horizontal )
 {
-	statriv2_tilemap = tilemap_create(machine, horizontal_tile_info ,tilemap_scan_rows, 8,15, 64,16);
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	state->m_tilemap = tilemap_create(machine, horizontal_tile_info ,tilemap_scan_rows, 8,15, 64,16);
 }
 
 static VIDEO_START( vertical )
 {
-	statriv2_tilemap = tilemap_create(machine, vertical_tile_info, tilemap_scan_rows, 8,8, 32,32);
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	state->m_tilemap = tilemap_create(machine, vertical_tile_info, tilemap_scan_rows, 8,8, 32,32);
 }
 
 
@@ -146,8 +163,10 @@ static VIDEO_START( vertical )
 
 static WRITE8_HANDLER( statriv2_videoram_w )
 {
+	statriv2_state *state = space->machine().driver_data<statriv2_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	tilemap_mark_tile_dirty(statriv2_tilemap, offset & 0x3ff);
+	state->m_tilemap->mark_tile_dirty(offset & 0x3ff);
 }
 
 
@@ -158,12 +177,13 @@ static WRITE8_HANDLER( statriv2_videoram_w )
  *
  *************************************/
 
-static VIDEO_UPDATE( statriv2 )
+static SCREEN_UPDATE_IND16( statriv2 )
 {
-	if (tms9927_screen_reset(devtag_get_device(screen->machine, "tms")))
-		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+	statriv2_state *state = screen.machine().driver_data<statriv2_state>();
+	if (tms9927_screen_reset(screen.machine().device("tms")))
+		bitmap.fill(get_black_pen(screen.machine()), cliprect);
 	else
-		tilemap_draw(bitmap, cliprect, statriv2_tilemap, 0, 0);
+		state->m_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
@@ -177,14 +197,15 @@ static VIDEO_UPDATE( statriv2 )
 
 static INTERRUPT_GEN( statriv2_interrupt )
 {
-	UINT8 new_coin = input_port_read(device->machine, "COIN");
+	statriv2_state *state = device->machine().driver_data<statriv2_state>();
+	UINT8 new_coin = input_port_read(device->machine(), "COIN");
 
 	/* check the coin inputs once per frame */
-	latched_coin |= new_coin & (new_coin ^ last_coin);
-	last_coin = new_coin;
+	state->m_latched_coin |= new_coin & (new_coin ^ state->m_last_coin);
+	state->m_last_coin = new_coin;
 
-	cpu_set_input_line(device, I8085_RST75_LINE, ASSERT_LINE);
-	cpu_set_input_line(device, I8085_RST75_LINE, CLEAR_LINE);
+	device_set_input_line(device, I8085_RST75_LINE, ASSERT_LINE);
+	device_set_input_line(device, I8085_RST75_LINE, CLEAR_LINE);
 }
 
 
@@ -197,17 +218,18 @@ static INTERRUPT_GEN( statriv2_interrupt )
 
 static READ8_HANDLER( question_data_r )
 {
-	const UINT8 *qrom = memory_region(space->machine, "questions");
-	UINT32 qromsize = memory_region_length(space->machine, "questions");
+	statriv2_state *state = space->machine().driver_data<statriv2_state>();
+	const UINT8 *qrom = space->machine().region("questions")->base();
+	UINT32 qromsize = space->machine().region("questions")->bytes();
 	UINT32 address;
 
-	if (question_offset_high == 0xff)
-		question_offset[question_offset_low]++;
+	if (state->m_question_offset_high == 0xff)
+		state->m_question_offset[state->m_question_offset_low]++;
 
-	address = question_offset[question_offset_low];
-	address |= question_offset[question_offset_mid] << 8;
-	if (question_offset_high != 0xff)
-		address |= question_offset[question_offset_high] << 16;
+	address = state->m_question_offset[state->m_question_offset_low];
+	address |= state->m_question_offset[state->m_question_offset_mid] << 8;
+	if (state->m_question_offset_high != 0xff)
+		address |= state->m_question_offset[state->m_question_offset_high] << 16;
 
 	return (address < qromsize) ? qrom[address] : 0xff;
 }
@@ -222,15 +244,17 @@ static READ8_HANDLER( question_data_r )
 
 static CUSTOM_INPUT( latched_coin_r )
 {
-	return latched_coin;
+	statriv2_state *state = field.machine().driver_data<statriv2_state>();
+	return state->m_latched_coin;
 }
 
 
 static WRITE8_DEVICE_HANDLER( ppi_portc_hi_w )
 {
+	statriv2_state *state = device->machine().driver_data<statriv2_state>();
 	data >>= 4;
 	if (data != 0x0f)
-		latched_coin = 0;
+		state->m_latched_coin = 0;
 }
 
 
@@ -251,8 +275,8 @@ static const ppi8255_interface ppi8255_intf =
 	DEVCB_INPUT_PORT("IN0"),		/* Port A read */
 	DEVCB_INPUT_PORT("IN1"),		/* Port B read */
 	DEVCB_INPUT_PORT("IN2"),		/* Port C read (Lower Nibble as Input) */
-	DEVCB_NULL,   					/* Port A write */
-	DEVCB_NULL,  		 			/* Port B write */
+	DEVCB_NULL, 					/* Port A write */
+	DEVCB_NULL, 					/* Port B write */
 	DEVCB_HANDLER(ppi_portc_hi_w)	/* Port C write (High nibble as Output) */
 };
 
@@ -264,28 +288,30 @@ static const ppi8255_interface ppi8255_intf =
  *
  *************************************/
 
-static ADDRESS_MAP_START( statriv2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( statriv2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
-	AM_RANGE(0x4800, 0x48ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(statriv2_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x4800, 0x48ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(statriv2_videoram_w) AM_BASE_MEMBER(statriv2_state, m_videoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( statriv2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( statriv2_io_map, AS_IO, 8 )
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE("ppi", ppi8255_r, ppi8255_w)
-	AM_RANGE(0x28, 0x2b) AM_READ(question_data_r) AM_WRITEONLY AM_BASE(&question_offset)
-	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x28, 0x2b) AM_READ(question_data_r) AM_WRITEONLY AM_BASE_MEMBER(statriv2_state, m_question_offset)
+	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xcf) AM_DEVREADWRITE("tms", tms9927_r, tms9927_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( statusbj_io, ADDRESS_SPACE_IO, 8 )
+#ifdef UNUSED_CODE
+static ADDRESS_MAP_START( statusbj_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE("ppi", ppi8255_r, ppi8255_w)
-	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xcf) AM_DEVREADWRITE("tms", tms9927_r, tms9927_w)
 ADDRESS_MAP_END
+#endif
 
 
 
@@ -330,18 +356,18 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( funcsino )
 	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Bet")
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("Deal")
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("Draw")
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Card 1")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Card 2")
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Card 3")
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Card 4")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Card 5")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_BET )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_GAMBLE_DEAL )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 )     PORT_NAME("Draw")      PORT_CODE(KEYCODE_3)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_POKER_HOLD1 ) PORT_NAME("Discard 1 / Horse 1 / Point")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_HOLD2 ) PORT_NAME("Discard 2 / Horse 2")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_POKER_HOLD3 ) PORT_NAME("Discard 3 / Horse 3")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_POKER_HOLD4 ) PORT_NAME("Discard 4 / Horse 4")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_POKER_HOLD5 ) PORT_NAME("Discard 5 / Horse 5 / No Point")
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON7 ) PORT_NAME("Stand")
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 ) PORT_NAME("Select Game")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Stand")         PORT_CODE(KEYCODE_4)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Select Game")   PORT_CODE(KEYCODE_S)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(latched_coin_r, "COIN")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_DIPNAME( 0x10, 0x10, "DIP switch? 10" )
@@ -375,7 +401,7 @@ static INPUT_PORTS_START( hangman )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Spinner")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
- 	PORT_START("IN1")
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Left")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -414,7 +440,7 @@ static INPUT_PORTS_START( statriv2 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Button D")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
- 	PORT_START("IN1")
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Play 1000")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(latched_coin_r, "COIN")
@@ -443,7 +469,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( statriv4 )
 	PORT_INCLUDE(statriv2)
 
- 	PORT_MODIFY("IN1")
+	PORT_MODIFY("IN1")
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
@@ -491,7 +517,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( sextriv )
 	PORT_INCLUDE(statriv2)
 
- 	PORT_MODIFY("IN1")
+	PORT_MODIFY("IN1")
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
@@ -561,50 +587,57 @@ static const tms9927_interface tms9927_intf =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( statriv2 )
+static MACHINE_CONFIG_START( statriv2, statriv2_state )
 	/* basic machine hardware */
 	/* FIXME: The 8085A had a max clock of 6MHz, internally divided by 2! */
-    MDRV_CPU_ADD("maincpu", 8085A, MASTER_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(statriv2_map)
-	MDRV_CPU_IO_MAP(statriv2_io_map)
-	MDRV_CPU_VBLANK_INT("screen", statriv2_interrupt)
+    MCFG_CPU_ADD("maincpu", I8085A, MASTER_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(statriv2_map)
+	MCFG_CPU_IO_MAP(statriv2_io_map)
+	MCFG_CPU_VBLANK_INT("screen", statriv2_interrupt)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* 1x 8255 */
-	MDRV_PPI8255_ADD("ppi", ppi8255_intf)
+	MCFG_PPI8255_ADD("ppi", ppi8255_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 384, 0, 320, 270, 0, 240)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 384, 0, 320, 270, 0, 240)
+	MCFG_SCREEN_UPDATE_STATIC(statriv2)
 
-	MDRV_TMS9927_ADD("tms", MASTER_CLOCK/2, tms9927_intf)
+	MCFG_TMS9927_ADD("tms", MASTER_CLOCK/2, tms9927_intf)
 
-	MDRV_GFXDECODE(horizontal)
-	MDRV_PALETTE_LENGTH(2*64)
+	MCFG_GFXDECODE(horizontal)
+	MCFG_PALETTE_LENGTH(2*64)
 
-	MDRV_PALETTE_INIT(statriv2)
-	MDRV_VIDEO_START(horizontal)
-	MDRV_VIDEO_UPDATE(statriv2)
+	MCFG_PALETTE_INIT(statriv2)
+	MCFG_VIDEO_START(horizontal)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( statriv2v )
+static MACHINE_CONFIG_DERIVED( statriv2v, statriv2 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(statriv2)
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 392, 0, 256, 262, 0, 256)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 392, 0, 256, 262, 0, 256)
 
-	MDRV_VIDEO_START(vertical)
-	MDRV_GFXDECODE(vertical)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(vertical)
+	MCFG_GFXDECODE(vertical)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( funcsino, statriv2 )
+
+	/* basic machine hardware */
+
+    MCFG_CPU_MODIFY("maincpu")
+    MCFG_CPU_CLOCK(MASTER_CLOCK/2)	/* 3 MHz?? seems accurate */
+MACHINE_CONFIG_END
 
 
 
@@ -656,6 +689,24 @@ ROM_START( tripdraw )
 	ROM_LOAD( "prom.u22", 0x0040, 0x0100, NO_DUMP ) /* Soldered in */
 ROM_END
 
+/*
+
+Fun Casino
+Status Game Corp., 1982
+
+8085
+xtal 12.44MHz
+8255
+TMS9937
+AY3-8910
+5101 RAM x2
+2114 RAM x6
+2732 EPROMs x4
+74S287 PROM x1
+74S288 PROM x2
+4-position DSW x1
+
+*/
 ROM_START( funcsino )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "u7", 0x0000, 0x1000, CRC(e7380a81) SHA1(dbc9646a33bd61cdfab9f8a5ac7db996cfc0eaf9) )
@@ -950,33 +1001,37 @@ ROM_END
 /* question address is stored as L/H/X (low/high/don't care) */
 static DRIVER_INIT( addr_lhx )
 {
-	question_offset_low = 0;
-	question_offset_mid = 1;
-	question_offset_high = 0xff;
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	state->m_question_offset_low = 0;
+	state->m_question_offset_mid = 1;
+	state->m_question_offset_high = 0xff;
 }
 
 /* question address is stored as X/L/H (don't care/low/high) */
 static DRIVER_INIT( addr_xlh )
 {
-	question_offset_low = 1;
-	question_offset_mid = 2;
-	question_offset_high = 0xff;
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	state->m_question_offset_low = 1;
+	state->m_question_offset_mid = 2;
+	state->m_question_offset_high = 0xff;
 }
 
 /* question address is stored as X/H/L (don't care/high/low) */
 static DRIVER_INIT( addr_xhl )
 {
-	question_offset_low = 2;
-	question_offset_mid = 1;
-	question_offset_high = 0xff;
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	state->m_question_offset_low = 2;
+	state->m_question_offset_mid = 1;
+	state->m_question_offset_high = 0xff;
 }
 
 /* question address is stored as L/M/H (low/mid/high) */
 static DRIVER_INIT( addr_lmh )
 {
-	question_offset_low = 0;
-	question_offset_mid = 1;
-	question_offset_high = 2;
+	statriv2_state *state = machine.driver_data<statriv2_state>();
+	state->m_question_offset_low = 0;
+	state->m_question_offset_mid = 1;
+	state->m_question_offset_high = 2;
 }
 
 static DRIVER_INIT( addr_lmhe )
@@ -1043,8 +1098,8 @@ static DRIVER_INIT( addr_lmhe )
     *                                                   *
     \***************************************************/
 
-	UINT8 *qrom = memory_region(machine, "questions");
-	UINT32 length = memory_region_length(machine, "questions");
+	UINT8 *qrom = machine.region("questions")->base();
+	UINT32 length = machine.region("questions")->bytes();
 	UINT32 address;
 
 	for (address = 0; address < length; address++)
@@ -1059,19 +1114,19 @@ static READ8_HANDLER( laserdisc_io_r )
 	UINT8 result = 0x00;
 	if (offset == 1)
 		result = 0x18;
-	mame_printf_debug("%s:ld read ($%02X) = %02X\n", cpuexec_describe_context(space->machine), 0x28 + offset, result);
+	mame_printf_debug("%s:ld read ($%02X) = %02X\n", space->machine().describe_context(), 0x28 + offset, result);
 	return result;
 }
 
 static WRITE8_HANDLER( laserdisc_io_w )
 {
-	mame_printf_debug("%s:ld write ($%02X) = %02X\n", cpuexec_describe_context(space->machine), 0x28 + offset, data);
+	mame_printf_debug("%s:ld write ($%02X) = %02X\n", space->machine().describe_context(), 0x28 + offset, data);
 }
 
 static DRIVER_INIT( laserdisc )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	memory_install_readwrite8_handler(iospace, 0x28, 0x2b, 0, 0, laserdisc_io_r, laserdisc_io_w);
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	iospace->install_legacy_readwrite_handler(0x28, 0x2b, FUNC(laserdisc_io_r), FUNC(laserdisc_io_w));
 }
 
 
@@ -1083,7 +1138,7 @@ static DRIVER_INIT( laserdisc )
  *************************************/
 
 GAME( 1981, statusbj, 0,        statriv2,  statusbj, 0,         ROT0, "Status Games", "Status Black Jack (V1.0c)", GAME_SUPPORTS_SAVE )
-GAME( 1981, funcsino, 0,        statriv2,  funcsino, 0,         ROT0, "Status Games", "Status Fun Casino (V1.3s)", GAME_SUPPORTS_SAVE )
+GAME( 1981, funcsino, 0,        funcsino,  funcsino, 0,         ROT0, "Status Games", "Status Fun Casino (V1.3s)", GAME_SUPPORTS_SAVE )
 GAME( 1981, tripdraw, 0,        statriv2,  funcsino, 0,         ROT0, "Status Games", "Tripple Draw (V3.1 s)", GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
 GAME( 1984, hangman,  0,        statriv2,  hangman,  addr_lmh,  ROT0, "Status Games", "Hangman", GAME_SUPPORTS_SAVE )
 GAME( 1984, trivquiz, 0,        statriv2,  statriv2, addr_lhx,  ROT0, "Status Games", "Triv Quiz", GAME_SUPPORTS_SAVE )

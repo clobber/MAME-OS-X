@@ -8,113 +8,148 @@
  Games Supported:
 
 
-    Minigame Cool Collection   (c) 1999 SemiCom
-    Jumping Break              (c) 1999 F2 System
-    Lup Lup Puzzle             (c) 1999 Omega System       (version 3.0 and 2.9)
-    Puzzle Bang Bang           (c) 1999 Omega System       (version 2.8)
-    Super Lup Lup Puzzle       (c) 1999 Omega System       (version 4.0)
-    Vamf 1/2                   (c) 1999 Danbi & F2 System  (Europe version)
-    Vamp 1/2                   (c) 1999 Danbi & F2 System  (Korea version)
-    Date Quiz Go Go Episode 2  (c) 2000 SemiCom
-    Mission Craft              (c) 2000 Sun                (version 2.4)
-    Final Godori               (c) 2001 SemiCom            (version 2.20.5915)
-    Wyvern Wings               (c) 2001 SemiCom
-    Age Of Heroes - Silkroad 2 (c) 2001 Unico              (v0.63 - 2001/02/07)
+    Minigame Cool Collection        (c) 1999 SemiCom
+    Jumping Break                   (c) 1999 F2 System
+    Lup Lup Puzzle                  (c) 1999 Omega System       (version 3.0 and 2.9)
+    Puzzle Bang Bang                (c) 1999 Omega System       (version 2.8)
+    Super Lup Lup Puzzle            (c) 1999 Omega System       (version 4.0)
+    Vamf 1/2                        (c) 1999 Danbi & F2 System  (Europe version)
+    Vamp 1/2                        (c) 1999 Danbi & F2 System  (Korea version)
+    Date Quiz Go Go Episode 2       (c) 2000 SemiCom
+    Mission Craft                   (c) 2000 Sun                (version 2.4)
+    Mr. Dig                         (c) 2000 Sun
+    Final Godori                    (c) 2001 SemiCom            (version 2.20.5915)
+    Wyvern Wings                    (c) 2001 SemiCom
+    Mr. Kicker                      (c) 2001 SemiCom [1]
+    Toy Land Adventure              (c) 2001 SemiCom
+    Age Of Heroes - Silkroad 2      (c) 2001 Unico              (v0.63 - 2001/02/07)
+    Boong-Ga Boong-Ga (Spank 'em)   (c) 2001 Taff System
 
  Real games bugs:
  - dquizgo2: bugged video test
 
+ Notes:
+ [1]    Mr. Kicker game code crashes if the eeprom values are empty, because it replaces
+        the SP register with a bogus value at PC = $18D0 before crashing. It could be an
+        original game bug or a hyperstone core bug. Also happens with High Score update.
+
+ Mr Kicker is also known to exist (not dumped) on the F-E1-16-010 PCB that
+   Semicom also used for Toy Land Adventure & SemiComDate Quiz Go Go Episode 2 game.
+
+ Boong-Ga Boong-Ga: the test mode is usable with a standard input configuration like the "common" one
+
+ Undumped Semicom games on similar hardware:
+   Wivern Wings - Semicom's orginal release with alt spelling of title
+   Red Wyvern - A semi-sequel or update?
+ Same time era, but unknown hardware:
+   Gaia The last Choice of the Earth (c) 1998 (might be Byron Future Assault type hardware)
+   Diet Family (c) 2001
+   Choice III: Joker's Dream (c) 2001
+
+TODO:
+- boonggab: simulate photo sensors with a "stroke strength"
+- boonggab: what are sensors bit used for? are they used in the japanese version?
+
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mcs51/mcs51.h"
 #include "cpu/e132xs/e132xs.h"
 #include "machine/eeprom.h"
+#include "machine/nvram.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 
-static UINT16 *tiles = NULL, *wram;
-static UINT32 *tiles32 = NULL, *wram32;
-static int flip_bit, flipscreen = 0;
-static int palshift;
 
-static int semicom_prot_idx;
-static int semicom_prot_which = 0;
-static UINT16 semicom_prot_data[2];
-
-static UINT16 finalgdr_backupram_bank;
-static UINT8 *finalgdr_backupram;
-
-static READ16_DEVICE_HANDLER( oki_r )
+class vamphalf_state : public driver_device
 {
-	if(offset)
-		return okim6295_r(device, 0);
-	else
-		return 0;
-}
+public:
+	vamphalf_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag)
+		{
+			m_has_extra_gfx = 0;
+		}
 
-static WRITE16_DEVICE_HANDLER( oki_w )
-{
-	if(offset)
-		okim6295_w(device, 0, data);
-}
+	UINT16 *m_tiles;
+	UINT16 *m_wram;
+	UINT32 *m_tiles32;
+	UINT32 *m_wram32;
+	int m_flip_bit;
+	int m_flipscreen;
+	int m_palshift;
+	int m_semicom_prot_idx;
+	int m_semicom_prot_which;
+	UINT16 m_semicom_prot_data[2];
+	UINT16 m_finalgdr_backupram_bank;
+	UINT8 *m_finalgdr_backupram;
+	int m_has_extra_gfx;
+};
 
-static READ16_HANDLER( eeprom_r )
-{
-	if(offset)
-		return eeprom_read_bit();
-	else
-		return 0;
-}
-
-static READ32_HANDLER( eeprom32_r )
-{
-	return eeprom_read_bit();
-}
-
-static WRITE16_HANDLER( eeprom_w )
+static READ16_DEVICE_HANDLER( eeprom_r )
 {
 	if(offset)
 	{
-		eeprom_write_bit(data & 0x01);
-		eeprom_set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE );
-		eeprom_set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_device *eeprom = downcast<eeprom_device *>(device);
+		return eeprom->read_bit();
+	}
+	else
+		return 0;
+}
+
+static READ32_DEVICE_HANDLER( eeprom32_r )
+{
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	return eeprom->read_bit();
+}
+
+static WRITE16_DEVICE_HANDLER( eeprom_w )
+{
+	if(offset)
+	{
+		eeprom_device *eeprom = downcast<eeprom_device *>(device);
+		eeprom->write_bit(data & 0x01);
+		eeprom->set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom->set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE );
 
 		// data & 8?
 	}
 }
 
-static WRITE32_HANDLER( eeprom32_w )
+static WRITE32_DEVICE_HANDLER( eeprom32_w )
 {
-	eeprom_write_bit(data & 0x01);
-	eeprom_set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE );
-	eeprom_set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE );
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->write_bit(data & 0x01);
+	eeprom->set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE );
+	eeprom->set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE );
 }
 
-static WRITE32_HANDLER( finalgdr_eeprom_w )
+static WRITE32_DEVICE_HANDLER( finalgdr_eeprom_w )
 {
-	eeprom_write_bit(data & 0x4000);
-	eeprom_set_cs_line((data & 0x1000) ? CLEAR_LINE : ASSERT_LINE );
-	eeprom_set_clock_line((data & 0x2000) ? ASSERT_LINE : CLEAR_LINE );
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->write_bit(data & 0x4000);
+	eeprom->set_cs_line((data & 0x1000) ? CLEAR_LINE : ASSERT_LINE );
+	eeprom->set_clock_line((data & 0x2000) ? ASSERT_LINE : CLEAR_LINE );
 }
 
 static WRITE16_HANDLER( flipscreen_w )
 {
 	if(offset)
 	{
-		flipscreen = data & flip_bit;
+		vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+		state->m_flipscreen = data & state->m_flip_bit;
 	}
 }
 
 static WRITE32_HANDLER( flipscreen32_w )
 {
-	flipscreen = data & flip_bit;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_flipscreen = data & state->m_flip_bit;
 }
-
 
 static WRITE16_HANDLER( jmpbreak_flipscreen_w )
 {
-	flipscreen = data & 0x8000;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_flipscreen = data & 0x8000;
 }
 
 
@@ -122,35 +157,39 @@ static WRITE32_HANDLER( paletteram32_w )
 {
 	UINT16 paldata;
 
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine().generic.paletteram.u32[offset]);
 
-	paldata = paletteram32[offset] & 0xffff;
-	palette_set_color_rgb(space->machine, offset*2 + 1, pal5bit(paldata >> 10), pal5bit(paldata >> 5), pal5bit(paldata >> 0));
+	paldata = space->machine().generic.paletteram.u32[offset] & 0xffff;
+	palette_set_color_rgb(space->machine(), offset*2 + 1, pal5bit(paldata >> 10), pal5bit(paldata >> 5), pal5bit(paldata >> 0));
 
-	paldata = (paletteram32[offset] >> 16) & 0xffff;
-	palette_set_color_rgb(space->machine, offset*2 + 0, pal5bit(paldata >> 10), pal5bit(paldata >> 5), pal5bit(paldata >> 0));
+	paldata = (space->machine().generic.paletteram.u32[offset] >> 16) & 0xffff;
+	palette_set_color_rgb(space->machine(), offset*2 + 0, pal5bit(paldata >> 10), pal5bit(paldata >> 5), pal5bit(paldata >> 0));
 }
 
 static READ32_HANDLER( wyvernwg_prot_r )
 {
-	semicom_prot_idx--;
-	return (semicom_prot_data[semicom_prot_which] & (1 << semicom_prot_idx)) >> semicom_prot_idx;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_semicom_prot_idx--;
+	return (state->m_semicom_prot_data[state->m_semicom_prot_which] & (1 << state->m_semicom_prot_idx)) >> state->m_semicom_prot_idx;
 }
 
 static WRITE32_HANDLER( wyvernwg_prot_w )
 {
-	semicom_prot_which = data & 1;
-	semicom_prot_idx = 8;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_semicom_prot_which = data & 1;
+	state->m_semicom_prot_idx = 8;
 }
 
 static READ32_HANDLER( finalgdr_prot_r )
 {
-	semicom_prot_idx--;
-	return (semicom_prot_data[semicom_prot_which] & (1 << semicom_prot_idx)) ? 0x8000 : 0;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_semicom_prot_idx--;
+	return (state->m_semicom_prot_data[state->m_semicom_prot_which] & (1 << state->m_semicom_prot_idx)) ? 0x8000 : 0;
 }
 
 static WRITE32_HANDLER( finalgdr_prot_w )
 {
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
 /*
 41C6
 967E
@@ -158,31 +197,34 @@ static WRITE32_HANDLER( finalgdr_prot_w )
 F94B
 */
 	if(data == 0x41c6 || data == 0x446b)
-		semicom_prot_which = 0;
+		state->m_semicom_prot_which = 0;
 	else
-		semicom_prot_which =  1;
+		state->m_semicom_prot_which =  1;
 
-	semicom_prot_idx = 8;
+	state->m_semicom_prot_idx = 8;
 }
 
 static WRITE32_DEVICE_HANDLER( finalgdr_oki_bank_w )
 {
-	okim6295_set_bank_base(device, 0x40000 * ((data & 0x300) >> 8));
+	downcast<okim6295_device *>(device)->set_bank_base(0x40000 * ((data & 0x300) >> 8));
 }
 
 static WRITE32_HANDLER( finalgdr_backupram_bank_w )
 {
-	finalgdr_backupram_bank = (data & 0xff000000) >> 24;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_finalgdr_backupram_bank = (data & 0xff000000) >> 24;
 }
 
 static READ32_HANDLER( finalgdr_backupram_r )
 {
-	return finalgdr_backupram[offset + finalgdr_backupram_bank * 0x80] << 24;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	return state->m_finalgdr_backupram[offset + state->m_finalgdr_backupram_bank * 0x80] << 24;
 }
 
 static WRITE32_HANDLER( finalgdr_backupram_w )
 {
-	finalgdr_backupram[offset + finalgdr_backupram_bank * 0x80] = data >> 24;
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	state->m_finalgdr_backupram[offset + state->m_finalgdr_backupram_bank * 0x80] = data >> 24;
 }
 
 static WRITE32_HANDLER( finalgdr_prize_w )
@@ -205,118 +247,206 @@ static WRITE32_HANDLER( finalgdr_prize_w )
 
 static WRITE32_DEVICE_HANDLER( aoh_oki_bank_w )
 {
-	okim6295_set_bank_base(device, 0x40000 * (data & 0x3));
+	downcast<okim6295_device *>(device)->set_bank_base(0x40000 * (data & 0x3));
 }
 
-static ADDRESS_MAP_START( common_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE(&wram)
-	AM_RANGE(0x40000000, 0x4003ffff) AM_RAM AM_BASE(&tiles)
-	AM_RANGE(0x80000000, 0x8000ffff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+static WRITE16_DEVICE_HANDLER( boonggab_oki_bank_w )
+{
+	if(offset)
+		downcast<okim6295_device *>(device)->set_bank_base(0x40000 * (data & 0x7));
+}
+
+static WRITE16_HANDLER( boonggab_prize_w )
+{
+	if(offset)
+	{
+		// data & 0x01 == motor 1 on
+		// data & 0x02 == motor 2 on
+		// data & 0x04 == motor 3 on
+		// data & 0x08 == prize power 1 on
+		// data & 0x10 == prize lamp 1 off
+		// data & 0x20 == prize lamp 2 off
+		// data & 0x40 == prize lamp 3 off
+	}
+}
+
+static WRITE16_HANDLER( boonggab_lamps_w )
+{
+	if(offset == 1)
+	{
+		// data & 0x0001 == lamp  7 on (why is data & 0x8000 set too?)
+		// data & 0x0002 == lamp  8 on
+		// data & 0x0004 == lamp  9 on
+		// data & 0x0008 == lamp 10 on
+		// data & 0x0010 == lamp 11 on
+		// data & 0x0020 == lamp 12 on
+		// data & 0x0040 == lamp 13 on
+	}
+	else if(offset == 3)
+	{
+		// data & 0x0100 == lamp  0 on
+		// data & 0x0200 == lamp  1 on
+		// data & 0x0400 == lamp  2 on
+		// data & 0x0800 == lamp  3 on
+		// data & 0x1000 == lamp  4 on
+		// data & 0x2000 == lamp  5 on
+		// data & 0x4000 == lamp  6 on
+	}
+}
+
+static ADDRESS_MAP_START( common_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(vamphalf_state, m_wram)
+	AM_RANGE(0x40000000, 0x4003ffff) AM_RAM AM_BASE_MEMBER(vamphalf_state, m_tiles)
+	AM_RANGE(0x80000000, 0x8000ffff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfff00000, 0xffffffff) AM_ROM AM_REGION("user1",0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( common_32bit_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE(&wram32)
-	AM_RANGE(0x40000000, 0x4003ffff) AM_RAM AM_BASE(&tiles32)
-	AM_RANGE(0x80000000, 0x8000ffff) AM_RAM_WRITE(paletteram32_w) AM_BASE(&paletteram32)
+static ADDRESS_MAP_START( common_32bit_map, AS_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(vamphalf_state, m_wram32)
+	AM_RANGE(0x40000000, 0x4003ffff) AM_RAM AM_BASE_MEMBER(vamphalf_state, m_tiles32)
+	AM_RANGE(0x80000000, 0x8000ffff) AM_RAM_WRITE(paletteram32_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfff00000, 0xffffffff) AM_ROM AM_REGION("user1",0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vamphalf_io, ADDRESS_SPACE_IO, 16 )
-	AM_RANGE(0x0c0, 0x0c3) AM_DEVREADWRITE("oki", oki_r, oki_w)
-	AM_RANGE(0x140, 0x143) AM_DEVWRITE8("ym", ym2151_register_port_w, 0x00ff)
-	AM_RANGE(0x146, 0x147) AM_DEVREADWRITE8("ym", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
-	AM_RANGE(0x1c0, 0x1c3) AM_READ(eeprom_r)
+static ADDRESS_MAP_START( vamphalf_io, AS_IO, 16 )
+	AM_RANGE(0x0c0, 0x0c1) AM_NOP // return 0, when oki chip is read / written
+	AM_RANGE(0x0c2, 0x0c3) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x140, 0x143) AM_DEVWRITE8("ymsnd", ym2151_register_port_w, 0x00ff)
+	AM_RANGE(0x146, 0x147) AM_DEVREADWRITE8("ymsnd", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
+	AM_RANGE(0x1c0, 0x1c3) AM_DEVREAD("eeprom", eeprom_r)
 	AM_RANGE(0x240, 0x243) AM_WRITE(flipscreen_w)
 	AM_RANGE(0x600, 0x603) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x604, 0x607) AM_READ_PORT("P1_P2")
-	AM_RANGE(0x608, 0x60b) AM_WRITE(eeprom_w)
+	AM_RANGE(0x608, 0x60b) AM_DEVWRITE("eeprom", eeprom_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( misncrft_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( misncrft_io, AS_IO, 16 )
 	AM_RANGE(0x100, 0x103) AM_WRITE(flipscreen_w)
 	AM_RANGE(0x200, 0x203) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x240, 0x243) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x3c0, 0x3c3) AM_WRITE(eeprom_w)
-	AM_RANGE(0x580, 0x583) AM_READ(eeprom_r)
+	AM_RANGE(0x3c0, 0x3c3) AM_DEVWRITE("eeprom", eeprom_w)
+	AM_RANGE(0x580, 0x583) AM_DEVREAD("eeprom", eeprom_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( coolmini_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( coolmini_io, AS_IO, 16 )
 	AM_RANGE(0x200, 0x203) AM_WRITE(flipscreen_w)
 	AM_RANGE(0x300, 0x303) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x304, 0x307) AM_READ_PORT("P1_P2")
-	AM_RANGE(0x308, 0x30b) AM_WRITE(eeprom_w)
-	AM_RANGE(0x4c0, 0x4c3) AM_DEVREADWRITE("oki", oki_r, oki_w)
-	AM_RANGE(0x540, 0x543) AM_DEVWRITE8("ym", ym2151_register_port_w, 0x00ff)
-	AM_RANGE(0x546, 0x547) AM_DEVREADWRITE8("ym", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
-	AM_RANGE(0x7c0, 0x7c3) AM_READ(eeprom_r)
+	AM_RANGE(0x308, 0x30b) AM_DEVWRITE("eeprom", eeprom_w)
+	AM_RANGE(0x4c0, 0x4c1) AM_NOP // return 0, when oki chip is read / written
+	AM_RANGE(0x4c2, 0x4c3) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x540, 0x543) AM_DEVWRITE8("ymsnd", ym2151_register_port_w, 0x00ff)
+	AM_RANGE(0x544, 0x547) AM_DEVREADWRITE8("ymsnd", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
+	AM_RANGE(0x7c0, 0x7c3) AM_DEVREAD("eeprom", eeprom_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( suplup_io, ADDRESS_SPACE_IO, 16 )
-	AM_RANGE(0x020, 0x023) AM_WRITE(eeprom_w)
+static ADDRESS_MAP_START( suplup_io, AS_IO, 16 )
+	AM_RANGE(0x020, 0x023) AM_DEVWRITE("eeprom", eeprom_w)
 	AM_RANGE(0x040, 0x043) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x060, 0x063) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x080, 0x083) AM_DEVREADWRITE("oki", oki_r, oki_w)
-	AM_RANGE(0x0c0, 0x0c3) AM_DEVWRITE8("ym", ym2151_register_port_w, 0x00ff)
-	AM_RANGE(0x0c4, 0x0c7) AM_DEVREADWRITE8("ym", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
-	AM_RANGE(0x100, 0x103) AM_READ(eeprom_r)
+	AM_RANGE(0x080, 0x081) AM_NOP // return 0, when oki chip is read / written
+	AM_RANGE(0x082, 0x083) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c0, 0x0c3) AM_DEVWRITE8("ymsnd", ym2151_register_port_w, 0x00ff)
+	AM_RANGE(0x0c4, 0x0c7) AM_DEVREADWRITE8("ymsnd", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
+	AM_RANGE(0x100, 0x103) AM_DEVREAD("eeprom", eeprom_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( wyvernwg_io, ADDRESS_SPACE_IO, 32 )
+static ADDRESS_MAP_START( wyvernwg_io, AS_IO, 32 )
 	AM_RANGE(0x1800, 0x1803) AM_READWRITE(wyvernwg_prot_r, wyvernwg_prot_w)
 	AM_RANGE(0x2000, 0x2003) AM_WRITE(flipscreen32_w)
 	AM_RANGE(0x2800, 0x2803) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x3000, 0x3003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x5400, 0x5403) AM_WRITENOP // soundlatch
-	AM_RANGE(0x7000, 0x7003) AM_WRITE(eeprom32_w)
-	AM_RANGE(0x7c00, 0x7c03) AM_READ(eeprom32_r)
+	AM_RANGE(0x7000, 0x7003) AM_DEVWRITE("eeprom", eeprom32_w)
+	AM_RANGE(0x7c00, 0x7c03) AM_DEVREAD("eeprom", eeprom32_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( finalgdr_io, ADDRESS_SPACE_IO, 32 )
+static ADDRESS_MAP_START( finalgdr_io, AS_IO, 32 )
 	AM_RANGE(0x2400, 0x2403) AM_READ(finalgdr_prot_r)
 	AM_RANGE(0x2800, 0x2803) AM_WRITE(finalgdr_backupram_bank_w)
 	AM_RANGE(0x2c00, 0x2dff) AM_READWRITE(finalgdr_backupram_r, finalgdr_backupram_w)
-	AM_RANGE(0x3000, 0x3007) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x0000ff00)
+	AM_RANGE(0x3000, 0x3007) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x0000ff00)
 	AM_RANGE(0x3800, 0x3803) AM_READ_PORT("P1_P2")
-	AM_RANGE(0x3400, 0x3403) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x0000ff00)
+	AM_RANGE(0x3400, 0x3403) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x0000ff00)
 	AM_RANGE(0x3c00, 0x3c03) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x4400, 0x4403) AM_READ(eeprom32_r)
+	AM_RANGE(0x4400, 0x4403) AM_DEVREAD("eeprom", eeprom32_r)
 	AM_RANGE(0x6000, 0x6003) AM_READNOP //?
-	AM_RANGE(0x6000, 0x6003) AM_WRITE(finalgdr_eeprom_w)
+	AM_RANGE(0x6000, 0x6003) AM_DEVWRITE("eeprom", finalgdr_eeprom_w)
 	AM_RANGE(0x6040, 0x6043) AM_WRITE(finalgdr_prot_w)
 	//AM_RANGE(0x6080, 0x6083) AM_WRITE(flipscreen32_w) //?
 	AM_RANGE(0x6060, 0x6063) AM_WRITE(finalgdr_prize_w)
 	AM_RANGE(0x60a0, 0x60a3) AM_DEVWRITE("oki", finalgdr_oki_bank_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( jmpbreak_io, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( mrkicker_io, AS_IO, 32 )
+	AM_RANGE(0x2400, 0x2403) AM_DEVREAD("eeprom", eeprom32_r)
+	AM_RANGE(0x4000, 0x4003) AM_READNOP //?
+	AM_RANGE(0x4000, 0x4003) AM_DEVWRITE("eeprom", finalgdr_eeprom_w)
+	AM_RANGE(0x4040, 0x4043) AM_WRITE(finalgdr_prot_w)
+	AM_RANGE(0x4084, 0x4087) AM_WRITENOP //?
+	AM_RANGE(0x40a0, 0x40a3) AM_DEVWRITE("oki", finalgdr_oki_bank_w)
+	AM_RANGE(0x6400, 0x6403) AM_READ(finalgdr_prot_r)
+	AM_RANGE(0x7000, 0x7007) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x0000ff00)
+	AM_RANGE(0x7400, 0x7403) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x0000ff00)
+	AM_RANGE(0x7800, 0x7803) AM_READ_PORT("P1_P2")
+	AM_RANGE(0x7c00, 0x7c03) AM_READ_PORT("SYSTEM")
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( jmpbreak_io, AS_IO, 16 )
 	AM_RANGE(0x0c0, 0x0c3) AM_NOP // ?
 	AM_RANGE(0x100, 0x103) AM_WRITENOP // ?
 	AM_RANGE(0x240, 0x243) AM_READ_PORT("P1_P2")
-	AM_RANGE(0x280, 0x283) AM_WRITE(eeprom_w)
-	AM_RANGE(0x2c0, 0x2c3) AM_READ(eeprom_r)
-	AM_RANGE(0x440, 0x443) AM_DEVREADWRITE("oki", oki_r, oki_w)
+	AM_RANGE(0x280, 0x283) AM_DEVWRITE("eeprom", eeprom_w)
+	AM_RANGE(0x2c0, 0x2c3) AM_DEVREAD("eeprom", eeprom_r)
+	AM_RANGE(0x440, 0x441) AM_NOP // return 0, when oki chip is read / written
+	AM_RANGE(0x442, 0x443) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x540, 0x543) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x680, 0x683) AM_DEVWRITE8("ym", ym2151_register_port_w, 0x00ff)
-	AM_RANGE(0x684, 0x687) AM_DEVREADWRITE8("ym", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
+	AM_RANGE(0x680, 0x683) AM_DEVWRITE8("ymsnd", ym2151_register_port_w, 0x00ff)
+	AM_RANGE(0x684, 0x687) AM_DEVREADWRITE8("ymsnd", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
 ADDRESS_MAP_END
 
+static ADDRESS_MAP_START( mrdig_io, AS_IO, 16 )
+	AM_RANGE(0x500, 0x503) AM_READ_PORT("P1_P2")
+	AM_RANGE(0x3c0, 0x3c3) AM_DEVWRITE("eeprom", eeprom_w)
+	AM_RANGE(0x180, 0x183) AM_DEVREAD("eeprom", eeprom_r)
+	AM_RANGE(0x080, 0x081) AM_NOP // return 0, when oki chip is read / written
+	AM_RANGE(0x082, 0x083) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x280, 0x283) AM_READ_PORT("SYSTEM")
+	AM_RANGE(0x0c0, 0x0c3) AM_DEVWRITE8("ymsnd", ym2151_register_port_w, 0x00ff)
+	AM_RANGE(0x0c4, 0x0c7) AM_DEVREADWRITE8("ymsnd", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
+ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( aoh_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE(&wram32)
-	AM_RANGE(0x40000000, 0x4003ffff) AM_RAM AM_BASE(&tiles32)
-	AM_RANGE(0x80000000, 0x8000ffff) AM_RAM_WRITE(paletteram32_w) AM_BASE(&paletteram32)
+static ADDRESS_MAP_START( aoh_map, AS_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE_MEMBER(vamphalf_state, m_wram32)
+	AM_RANGE(0x40000000, 0x4003ffff) AM_RAM AM_BASE_MEMBER(vamphalf_state, m_tiles32)
+	AM_RANGE(0x80000000, 0x8000ffff) AM_RAM_WRITE(paletteram32_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x80210000, 0x80210003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x80220000, 0x80220003) AM_READ_PORT("P1_P2")
 	AM_RANGE(0xffc00000, 0xffffffff) AM_ROM AM_REGION("user1",0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( aoh_io, ADDRESS_SPACE_IO, 32 )
-	AM_RANGE(0x0480, 0x0483) AM_WRITE(eeprom32_w)
-	AM_RANGE(0x0620, 0x0623) AM_DEVREADWRITE8("oki_2", okim6295_r, okim6295_w, 0x0000ff00)
-	AM_RANGE(0x0660, 0x0663) AM_DEVREADWRITE8("oki_1", okim6295_r, okim6295_w, 0x0000ff00)
-	AM_RANGE(0x0640, 0x0647) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x0000ff00)
+static ADDRESS_MAP_START( aoh_io, AS_IO, 32 )
+	AM_RANGE(0x0480, 0x0483) AM_DEVWRITE("eeprom", eeprom32_w)
+	AM_RANGE(0x0620, 0x0623) AM_DEVREADWRITE8_MODERN("oki_2", okim6295_device, read, write, 0x0000ff00)
+	AM_RANGE(0x0660, 0x0663) AM_DEVREADWRITE8_MODERN("oki_1", okim6295_device, read, write, 0x0000ff00)
+	AM_RANGE(0x0640, 0x0647) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x0000ff00)
 	AM_RANGE(0x0680, 0x0683) AM_DEVWRITE("oki_2", aoh_oki_bank_w)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( boonggab_io, AS_IO, 16 )
+	AM_RANGE(0x0c0, 0x0c3) AM_DEVREAD("eeprom", eeprom_r)
+	AM_RANGE(0x200, 0x203) AM_NOP // seems unused
+	AM_RANGE(0x300, 0x303) AM_WRITE(flipscreen_w)
+	AM_RANGE(0x400, 0x403) AM_READ_PORT("SYSTEM")
+	AM_RANGE(0x404, 0x407) AM_READ_PORT("P1_P2")
+	AM_RANGE(0x408, 0x40b) AM_DEVWRITE("eeprom", eeprom_w)
+	AM_RANGE(0x410, 0x413) AM_WRITE(boonggab_prize_w)
+	AM_RANGE(0x414, 0x41b) AM_WRITE(boonggab_lamps_w)
+	AM_RANGE(0x600, 0x603) AM_DEVWRITE("oki", boonggab_oki_bank_w)
+	AM_RANGE(0x700, 0x701) AM_NOP // return 0, when oki chip is read / written
+	AM_RANGE(0x702, 0x703) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x740, 0x743) AM_DEVWRITE8("ymsnd", ym2151_register_port_w, 0x00ff)
+	AM_RANGE(0x744, 0x747) AM_DEVREADWRITE8("ymsnd", ym2151_status_port_r, ym2151_data_port_w, 0x00ff)
 ADDRESS_MAP_END
 
 /*
@@ -339,20 +469,21 @@ or
 Offset+3
 -------x xxxxxxxx X offs
 */
-static void draw_sprites(const device_config *screen, bitmap_t *bitmap)
+static void draw_sprites(screen_device &screen, bitmap_ind16 &bitmap)
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
+	vamphalf_state *state = screen.machine().driver_data<vamphalf_state>();
+	const gfx_element *gfx = screen.machine().gfx[0];
 	UINT32 cnt;
 	int block, offs;
 	int code,color,x,y,fx,fy;
 	rectangle clip;
 
-	clip.min_x = video_screen_get_visible_area(screen)->min_x;
-	clip.max_x = video_screen_get_visible_area(screen)->max_x;
+	clip.min_x = screen.visible_area().min_x;
+	clip.max_x = screen.visible_area().max_x;
 
 	for (block=0; block<0x8000; block+=0x800)
 	{
-		if(flipscreen)
+		if(state->m_flipscreen)
 		{
 			clip.min_y = 256 - (16-(block/0x800))*16;
 			clip.max_y = 256 - ((16-(block/0x800))*16)+15;
@@ -368,37 +499,43 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap)
 			offs = (block + cnt) / 2;
 
 			// 16bit version
-			if(tiles != NULL)
+			if(state->m_tiles != NULL)
 			{
-				if(tiles[offs] & 0x0100) continue;
+				if(state->m_tiles[offs] & 0x0100) continue;
 
-				code  = tiles[offs+1];
-				color = (tiles[offs+2] >> palshift) & 0x7f;
+				code  = state->m_tiles[offs+1];
+				color = (state->m_tiles[offs+2] >> state->m_palshift) & 0x7f;
 
-				x = tiles[offs+3] & 0x01ff;
-				y = 256 - (tiles[offs] & 0x00ff);
+				// boonggab
+				if(state->m_has_extra_gfx)
+				{
+					code  |= ((state->m_tiles[offs+2] & 0x100) << 8);
+				}
 
-				fx = tiles[offs] & 0x8000;
-				fy = tiles[offs] & 0x4000;
+				x = state->m_tiles[offs+3] & 0x01ff;
+				y = 256 - (state->m_tiles[offs] & 0x00ff);
+
+				fx = state->m_tiles[offs] & 0x8000;
+				fy = state->m_tiles[offs] & 0x4000;
 			}
 			// 32bit version
 			else
 			{
 				offs /= 2;
 
-				if(tiles32[offs] & 0x01000000) continue;
+				if(state->m_tiles32[offs] & 0x01000000) continue;
 
-				code  = tiles32[offs] & 0xffff;
-				color = ((tiles32[offs+1] >> palshift) & 0x7f0000) >> 16;
+				code  = state->m_tiles32[offs] & 0xffff;
+				color = ((state->m_tiles32[offs+1] >> state->m_palshift) & 0x7f0000) >> 16;
 
-				x = tiles32[offs+1] & 0x01ff;
-				y = 256 - ((tiles32[offs] & 0x00ff0000) >> 16);
+				x = state->m_tiles32[offs+1] & 0x01ff;
+				y = 256 - ((state->m_tiles32[offs] & 0x00ff0000) >> 16);
 
-				fx = tiles32[offs] & 0x80000000;
-				fy = tiles32[offs] & 0x40000000;
+				fx = state->m_tiles32[offs] & 0x80000000;
+				fy = state->m_tiles32[offs] & 0x40000000;
 			}
 
-			if(flipscreen)
+			if(state->m_flipscreen)
 			{
 				fx = !fx;
 				fy = !fy;
@@ -407,25 +544,26 @@ static void draw_sprites(const device_config *screen, bitmap_t *bitmap)
 				y = 256 - y;
 			}
 
-			drawgfx_transpen(bitmap,&clip,gfx,code,color,fx,fy,x,y,0);
+			drawgfx_transpen(bitmap,clip,gfx,code,color,fx,fy,x,y,0);
 		}
 	}
 }
 
-static void draw_sprites_aoh(const device_config *screen, bitmap_t *bitmap)
+static void draw_sprites_aoh(screen_device &screen, bitmap_ind16 &bitmap)
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
+	vamphalf_state *state = screen.machine().driver_data<vamphalf_state>();
+	const gfx_element *gfx = screen.machine().gfx[0];
 	UINT32 cnt;
 	int block, offs;
 	int code,color,x,y,fx,fy;
 	rectangle clip;
 
-	clip.min_x = video_screen_get_visible_area(screen)->min_x;
-	clip.max_x = video_screen_get_visible_area(screen)->max_x;
+	clip.min_x = screen.visible_area().min_x;
+	clip.max_x = screen.visible_area().max_x;
 
 	for (block=0; block<0x8000; block+=0x800)
 	{
-		if(flipscreen)
+		if(state->m_flipscreen)
 		{
 			clip.min_y = 256 - (16-(block/0x800))*16;
 			clip.max_y = 256 - ((16-(block/0x800))*16)+15;
@@ -441,17 +579,17 @@ static void draw_sprites_aoh(const device_config *screen, bitmap_t *bitmap)
 			offs = (block + cnt) / 2;
 			{
 				offs /= 2;
-				code  = (tiles32[offs] & 0xffff) | ((tiles32[offs] & 0x3000000) >> 8);
-				color = ((tiles32[offs+1] >> palshift) & 0x7f0000) >> 16;
+				code  = (state->m_tiles32[offs] & 0xffff) | ((state->m_tiles32[offs] & 0x3000000) >> 8);
+				color = ((state->m_tiles32[offs+1] >> state->m_palshift) & 0x7f0000) >> 16;
 
-				x = tiles32[offs+1] & 0x01ff;
-				y = 256 - ((tiles32[offs] & 0x00ff0000) >> 16);
+				x = state->m_tiles32[offs+1] & 0x01ff;
+				y = 256 - ((state->m_tiles32[offs] & 0x00ff0000) >> 16);
 
-				fx = tiles32[offs] & 0x4000000;
-				fy = 0; // not used ? or it's tiles32[offs] & 0x8000000?
+				fx = state->m_tiles32[offs] & 0x4000000;
+				fy = 0; // not used ? or it's state->m_tiles32[offs] & 0x8000000?
 			}
 
-			if(flipscreen)
+			if(state->m_flipscreen)
 			{
 				fx = !fx;
 				fy = !fy;
@@ -460,24 +598,56 @@ static void draw_sprites_aoh(const device_config *screen, bitmap_t *bitmap)
 				y = 256 - y;
 			}
 
-			drawgfx_transpen(bitmap,&clip,gfx,code,color,fx,fy,x,y,0);
+			drawgfx_transpen(bitmap,clip,gfx,code,color,fx,fy,x,y,0);
 		}
 	}
 }
 
 
-static VIDEO_UPDATE( common )
+static SCREEN_UPDATE_IND16( common )
 {
-	bitmap_fill(bitmap,cliprect,0);
+	bitmap.fill(0, cliprect);
 	draw_sprites(screen, bitmap);
 	return 0;
 }
 
-static VIDEO_UPDATE( aoh )
+static SCREEN_UPDATE_IND16( aoh )
 {
-	bitmap_fill(bitmap,cliprect,0);
+	bitmap.fill(0, cliprect);
 	draw_sprites_aoh(screen, bitmap);
 	return 0;
+}
+
+static CUSTOM_INPUT( boonggab_photo_sensors_r )
+{
+	static const UINT16 photo_sensors_table[8] = { 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00 };
+	UINT8 res = input_port_read(field.machine(), "PHOTO_SENSORS");
+
+	switch(res)
+	{
+		case 0x01:
+			return photo_sensors_table[1]; // 5 - 7 points
+
+		case 0x02:
+			return photo_sensors_table[2]; // 8 - 10 points
+
+		case 0x04:
+			return photo_sensors_table[3]; // 11 - 13 points
+
+		case 0x08:
+			return photo_sensors_table[4]; // 14 - 16 points
+
+		case 0x10:
+			return photo_sensors_table[5]; // 17 - 19 points
+
+		case 0x20:
+			return photo_sensors_table[6]; // 20 - 22 points
+
+		case 0x40:
+			return photo_sensors_table[7]; // 23 - 25 points
+	}
+
+	return photo_sensors_table[0];
 }
 
 
@@ -568,7 +738,7 @@ static INPUT_PORTS_START( aoh )
 	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x00000004, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000008, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x00000010, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL) // eeprom bit
+	PORT_BIT( 0x00000010, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit) // eeprom bit
 	PORT_BIT( 0x00000020, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x00000040, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000080, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -582,6 +752,44 @@ static INPUT_PORTS_START( aoh )
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00800000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0xff000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( boonggab )
+	PORT_START("P1_P2")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(1)
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_SPECIAL ) // sensor 1
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_SPECIAL ) // sensor 2
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_SPECIAL ) // sensor 3
+	PORT_BIT( 0x3800, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(boonggab_photo_sensors_r, NULL) // photo sensors 1, 2 and 3
+	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("SYSTEM")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_SERVICE )
+	PORT_SERVICE_NO_TOGGLE( 0x0010, IP_ACTIVE_LOW )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("PHOTO_SENSORS")
+	PORT_BIT( 0x0001, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0002, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0004, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0008, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0020, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_BUTTON7 ) PORT_PLAYER(1)
 INPUT_PORTS_END
 
 static const gfx_layout sprites_layout =
@@ -600,233 +808,188 @@ static GFXDECODE_START( vamphalf )
 GFXDECODE_END
 
 
-static const UINT8 suplup_default_nvram[128] = {
-	0xE8, 0xFE, 0xFF, 0xFF, 0x10, 0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x96, 0x2D, 0xB4, 0x80, 0x00,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xAA, 0xAA
-};
-
-static const UINT8 misncrft_default_nvram[128] = {
-	0x67, 0xBE, 0x00, 0x01, 0x80, 0xFE, 0x04, 0x10, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xAA, 0xAA
-};
-
-static NVRAM_HANDLER( 93C46_vamphalf )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C46);
-		if (file)
-		{
-			eeprom_load(file);
-		}
-		else
-		{
-			if (!strcmp(machine->gamedrv->name,"suplup")) eeprom_set_data(suplup_default_nvram,128);
-			if (!strcmp(machine->gamedrv->name,"misncrft")) eeprom_set_data(misncrft_default_nvram,128);
-		}
-	}
-}
-
-static NVRAM_HANDLER( finalgdr )
-{
-	if (read_or_write)
-	{
-		eeprom_save(file);
-		mame_fwrite(file, finalgdr_backupram, 0x80*0x100);
-	}
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C46);
-		if (file)
-		{
-			eeprom_load(file);
-			mame_fread(file, finalgdr_backupram, 0x80*0x100);
-		}
-	}
-}
-
-static ADDRESS_MAP_START( qs1000_prg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( qs1000_prg_map, AS_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( qs1000_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( qs1000_io_map, AS_IO, 8 )
 	AM_RANGE( 0x0000, 0x007f) AM_RAM	// RAM?  wavetable registers?  not sure.
 ADDRESS_MAP_END
 
-static MACHINE_DRIVER_START( common )
-	MDRV_CPU_ADD("maincpu", E116T, 50000000)	/* 50 MHz */
-	MDRV_CPU_PROGRAM_MAP(common_map)
-	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
+static MACHINE_CONFIG_START( common, vamphalf_state )
+	MCFG_CPU_ADD("maincpu", E116T, 50000000)	/* 50 MHz */
+	MCFG_CPU_PROGRAM_MAP(common_map)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MDRV_NVRAM_HANDLER(93C46_vamphalf)
-
-	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 512)
-	MDRV_SCREEN_VISIBLE_AREA(31, 350, 16, 255)
-
-	MDRV_PALETTE_LENGTH(0x8000)
-	MDRV_GFXDECODE(vamphalf)
-
-	MDRV_VIDEO_UPDATE(common)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( sound_ym_oki )
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MDRV_SOUND_ADD("ym", YM2151, 28000000/8)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-
-	MDRV_SOUND_ADD("oki", OKIM6295, 28000000/16 )
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( sound_suplup )
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MDRV_SOUND_ADD("ym", YM2151, 14318180/4)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-
-	MDRV_SOUND_ADD("oki", OKIM6295, 1789772.5 )
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( sound_qs1000 )
-	MDRV_CPU_ADD("audiocpu", I8052, 24000000/4)	/* 6 MHz? */
-	MDRV_CPU_PROGRAM_MAP(qs1000_prg_map)
-	MDRV_CPU_IO_MAP( qs1000_io_map)
-
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( vamphalf )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(vamphalf_io)
-
-	MDRV_IMPORT_FROM(sound_ym_oki)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( misncrft )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_REPLACE("maincpu", GMS30C2116, 50000000)	/* 50 MHz */
-	MDRV_CPU_IO_MAP(misncrft_io)
-
-	MDRV_IMPORT_FROM(sound_qs1000)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( coolmini )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(coolmini_io)
-
-	MDRV_IMPORT_FROM(sound_ym_oki)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( suplup )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(suplup_io)
-
-	MDRV_IMPORT_FROM(sound_suplup)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( jmpbreak )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(jmpbreak_io)
-
-	MDRV_IMPORT_FROM(sound_ym_oki)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( wyvernwg )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_REPLACE("maincpu", E132T, 50000000)	/* 50 MHz */
-	MDRV_CPU_PROGRAM_MAP(common_32bit_map)
-	MDRV_CPU_IO_MAP(wyvernwg_io)
-
-	MDRV_IMPORT_FROM(sound_qs1000)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( finalgdr )
-	MDRV_IMPORT_FROM(common)
-	MDRV_CPU_REPLACE("maincpu", E132T, 50000000)	/* 50 MHz */
-	MDRV_CPU_PROGRAM_MAP(common_32bit_map)
-	MDRV_CPU_IO_MAP(finalgdr_io)
-
-	MDRV_NVRAM_HANDLER(finalgdr)
-
-	MDRV_IMPORT_FROM(sound_ym_oki)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( aoh )
-	MDRV_CPU_ADD("maincpu", E132XN, 20000000*4)	/* 4x internal multiplier */
-	MDRV_CPU_PROGRAM_MAP(aoh_map)
-	MDRV_CPU_IO_MAP(aoh_io)
-	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
-
-	MDRV_NVRAM_HANDLER(93C46)
+	MCFG_EEPROM_93C46_ADD("eeprom")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(59.185)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 512)
-	MDRV_SCREEN_VISIBLE_AREA(64, 511-64, 16, 255-16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(512, 512)
+	MCFG_SCREEN_VISIBLE_AREA(31, 350, 16, 255)
+	MCFG_SCREEN_UPDATE_STATIC(common)
 
-	MDRV_PALETTE_LENGTH(0x8000)
-	MDRV_GFXDECODE(vamphalf)
+	MCFG_PALETTE_LENGTH(0x8000)
+	MCFG_GFXDECODE(vamphalf)
+MACHINE_CONFIG_END
 
-	MDRV_VIDEO_UPDATE(aoh)
+static MACHINE_CONFIG_FRAGMENT( sound_ym_oki )
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	MCFG_SOUND_ADD("ymsnd", YM2151, 28000000/8)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+
+	MCFG_OKIM6295_ADD("oki", 28000000/16 , OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_FRAGMENT( sound_suplup )
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	MCFG_SOUND_ADD("ymsnd", YM2151, 14318180/4)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+
+	MCFG_OKIM6295_ADD("oki", 1789772.5 , OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_FRAGMENT( sound_qs1000 )
+	MCFG_CPU_ADD("audiocpu", I8052, 24000000/4)	/* 6 MHz? */
+	MCFG_CPU_PROGRAM_MAP(qs1000_prg_map)
+	MCFG_CPU_IO_MAP( qs1000_io_map)
+
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( vamphalf, common )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(vamphalf_io)
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( misncrft, common )
+	MCFG_CPU_REPLACE("maincpu", GMS30C2116, 50000000)	/* 50 MHz */
+	MCFG_CPU_PROGRAM_MAP(common_map)
+	MCFG_CPU_IO_MAP(misncrft_io)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+
+	MCFG_FRAGMENT_ADD(sound_qs1000)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( coolmini, common )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(coolmini_io)
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( suplup, common )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(suplup_io)
+
+	MCFG_FRAGMENT_ADD(sound_suplup)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( jmpbreak, common )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(jmpbreak_io)
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( mrdig, common )
+	MCFG_CPU_REPLACE("maincpu", GMS30C2116, 50000000)	/* 50 MHz */
+	MCFG_CPU_PROGRAM_MAP(common_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(mrdig_io)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( wyvernwg, common )
+	MCFG_CPU_REPLACE("maincpu", E132T, 50000000)	/* 50 MHz */
+	MCFG_CPU_PROGRAM_MAP(common_32bit_map)
+	MCFG_CPU_IO_MAP(wyvernwg_io)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+
+	MCFG_FRAGMENT_ADD(sound_qs1000)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( finalgdr, common )
+	MCFG_CPU_REPLACE("maincpu", E132T, 50000000)	/* 50 MHz */
+	MCFG_CPU_PROGRAM_MAP(common_32bit_map)
+	MCFG_CPU_IO_MAP(finalgdr_io)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+
+	MCFG_NVRAM_ADD_0FILL("nvram")
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( mrkicker, common )
+	MCFG_CPU_REPLACE("maincpu", E132T, 50000000)	/* 50 MHz */
+	MCFG_CPU_PROGRAM_MAP(common_32bit_map)
+	MCFG_CPU_IO_MAP(mrkicker_io)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+
+	MCFG_NVRAM_ADD_0FILL("nvram")
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_START( aoh, vamphalf_state )
+	MCFG_CPU_ADD("maincpu", E132XN, 20000000*4)	/* 4x internal multiplier */
+	MCFG_CPU_PROGRAM_MAP(aoh_map)
+	MCFG_CPU_IO_MAP(aoh_io)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+
+	MCFG_EEPROM_93C46_ADD("eeprom")
+
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(59.185)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(512, 512)
+	MCFG_SCREEN_VISIBLE_AREA(64, 511-64, 16, 255-16)
+	MCFG_SCREEN_UPDATE_STATIC(aoh)
+
+	MCFG_PALETTE_LENGTH(0x8000)
+	MCFG_GFXDECODE(vamphalf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki_1", OKIM6295, 32000000/8)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_OKIM6295_ADD("oki_1", 32000000/8, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki_2", OKIM6295, 32000000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki_2", 32000000/32, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( boonggab, common )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(boonggab_io)
+
+	MCFG_FRAGMENT_ADD(sound_ym_oki)
+MACHINE_CONFIG_END
 
 /*
 
 Vamp 1/2 (Semi Vamp)
 Danbi, 1999
-
-Official page here...
-http://f2.co.kr/eng/product/intro1-17.asp
 
 
 PCB Layout
@@ -953,6 +1116,9 @@ ROM_START( suplup ) /* version 4.0 / 990518 - also has 'Puzzle Bang Bang' title 
 
 	ROM_REGION( 0x40000, "oki", 0 ) /* Oki Samples */
 	ROM_LOAD( "vrom1.bin", 0x00000, 0x40000, CRC(34a56987) SHA1(4d8983648a7f0acf43ff4c9c8aa6c8640ee2bbfe) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 ) /* Default EEPROM */
+	ROM_LOAD( "eeprom-suplup.bin", 0x0000, 0x0080, CRC(e60c9883) SHA1(662dd8fb85eb97a8a4d53886198b269a5f6a6268) )
 ROM_END
 
 ROM_START( luplup ) /* version 3.0 / 990128 */
@@ -1071,6 +1237,69 @@ ROM_END
 
 /*
 
+Mr. Dig
+SUN, 2000
+
+Rip-off of Mr. Driller series
+
+F-E1-16-002
++----------------------------------------------+
+|     VR1                   M6295  VROM1 28MHz |
+|                 YM3012                       |
+|                 YM2151            MEM2       |
+|                                   MEM3       |
+|               CRAM1               MEM5       |
+|               CRAM2               MEM7       |
+|J                                             |
+|A              MEM1U  +----------++----------+|
+|M                     |          ||          ||
+|M              MEM1L  |Quicklogic||Quicklogic||
+|A                     | QL2003-  || QL2003-  ||
+|                      | XPL84C   || XPL84C   ||
+|                      |          ||          ||
+|                      +----------++----------+|
+|                                              |
+| 93C46          DRAM1      ROM1 ROML00  ROMH00|
+|P1 P2   50MHz  GMS30C2116  ROM2   *       *   |
+|                                              |
++----------------------------------------------+
+
+Notes:
+CPU: HYUNDAI GMS30C2116 (Hyperstone E1-16T compatible) @ 50.000MHz
+
+     DRAM1 - LG Semi GM71C18163 1M x16 EDO DRAM (SOJ44)
+MEMx/CRAMx - NKK N341256SJ-15 32K x8 SRAM (SOJ28)
+
+Oki M6295 rebaged as AD-65
+YM3012/YM2151 rebaged as KA12/KB2001
+
+ P1 - Setup push button
+ P2 - Reset push button
+VR1 - Volume adjust pot
+
+ROMs:
+    ROML00 & ROMH00 - Macronix MX29F1610MC-12 SOP44 16MBit FlashROM
+  * ROML01 & ROMH01 - Unpopulated space for MX29F1610MC-12 SOP44 16MBit FlashROM
+    VROM1           - Atmel AT27C020 2MBit DIP32 EPROM
+    ROM1/2          - MX 27C4000 4MBit DIP32 EPROM
+
+*/
+
+ROM_START( mrdig )
+	ROM_REGION16_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
+	ROM_LOAD( "rom1.bin", 0x00000, 0x80000, CRC(5b960320) SHA1(adf5499a39987041fc93e409bdb5fd07dacec4f9) )
+	ROM_LOAD( "rom2.bin", 0x80000, 0x80000, CRC(75d48b64) SHA1(c9c492fb9cabafcf0bc05f44bf80ee6df3c21a1b) )
+
+	ROM_REGION( 0x800000, "gfx1", 0 ) /* 16x16x8 Sprites */
+	ROM_LOAD32_WORD( "roml00.bin", 0x000000, 0x200000, CRC(f6b161ea) SHA1(c417a4c877ffa2fdf5857ecc9c78ffc0c09dc516) )
+	ROM_LOAD32_WORD( "romh00.bin", 0x000002, 0x200000, CRC(5477efed) SHA1(e4991ee1b41d512eaa508351b6a78261dfde5a3d) )
+
+	ROM_REGION( 0x40000, "oki", 0 ) /* Oki Samples */
+	ROM_LOAD( "vrom1.bin", 0x00000, 0x40000, CRC(5fd9e1c6) SHA1(fef82ef816af69f31d12fc4634d06d825e8b7416) )
+ROM_END
+
+/*
+
 Cool Minigame Collection
 SemiCom, 1999
 
@@ -1122,12 +1351,57 @@ ROM_START( coolmini )
 	ROM_LOAD( "cm-vrom1.020", 0x00000, 0x40000, CRC(fcc28081) SHA1(44031df0ee28ca49df12bcb73c83299fac205e21) )
 ROM_END
 
+
 /*
 
 Date Quiz Go Go Episode 2
 SemiCom, 2000
 
+PCB Layout
+----------
+
 F-E1-16-010
++-----------------------------------------------+
+|     VR1          YM3012  VROM1                |
+|                  YM2151  M6295   ROML03 ROMU03|
+|               CRAM2              ROML02 ROMU02|
+|               CRAM1              ROML01 ROMU01|
+|               MEM1L              ROML00 ROMU00|
+|J              MEM1U                           |
+|A              MEM2  +----------++----------+  |
+|M                    |          ||          |  |
+|M              MEM3  |Quicklogic||Quicklogic| 2|
+|A                    | QL2003-  || QL2003-  | 8|
+|               MEM6  | XPL84C   || XPL84C   | M|
+|                     |          ||          | H|
+|               MEM7  +----------++----------+ z|
+|                      GAL                      |
+|    93C46                       ROM1           |
+|P1 P2   50MHz E1-16T   DRAM1    ROM2           |
++-----------------------------------------------+
+
+Notes:
+CPU - Hyperstone E1-16T @ 50.000MHz
+
+DRAM1 - LG Semi GM71C18163 1M x16 EDO DRAM (SOJ44)
+CRAMx - W24M257AK-15 32K x8 SRAM (SOJ28)
+MEMx  - UM61256FK-15 32K x8 SRAM (SOJ28)
+
+Oki M6295 rebaged as AD-65
+YM3012/YM2151 rebaged as BS902/KA51
+
+ P1 - Reset push button
+ P2 - Setup push button
+VR1 - Volume adjust pot
+
+ROMs:
+    ROML00 & ROMH00 - Macronix MX29F1610MC-12 SOP44 16MBit FlashROM
+    ROML01 & ROMH01 - Macronix MX29F1610MC-12 SOP44 16MBit FlashROM
+    ROML02 & ROMH02 - Macronix MX29F1610MC-12 SOP44 16MBit FlashROM
+    ROML03 & ROMH03 - Unpopulated space for MX29F1610MC-12 SOP44 16MBit FlashROM
+    VROM1           - 27C020 2MBit DIP32 EPROM
+    ROM1            - 27C040 4MBit DIP32 EPROM
+    ROM2            - 27C040 4MBit DIP32 EPROM
 
 */
 
@@ -1148,6 +1422,82 @@ ROM_START( dquizgo2 )
 
 	ROM_REGION( 0x40000, "oki", 0 ) /* Oki Samples */
 	ROM_LOAD( "vrom1", 0x00000, 0x40000, CRC(24d5b55f) SHA1(cb4d3a22440831e37df0a7fe5433bea708d60f31) )
+ROM_END
+
+/*
+
+Toy Land Adventure
+SemiCom, 2001
+
+PCB Layout
+----------
+
+F-E1-16-010
++-----------------------------------------------+
+|     VR1          YM3012  VROM1                |
+|                  YM2151  M6295   ROML03 ROMU03|
+|               CRAM2              ROML02 ROMU02|
+|               CRAM1              ROML01 ROMU01|
+|               MEM1L              ROML00 ROMU00|
+|J              MEM1U                           |
+|A              MEM2  +----------++----------+  |
+|M                    |          ||          |  |
+|M              MEM3  |Quicklogic||Quicklogic| 2|
+|A                    | QL2003-  || QL2003-  | 8|
+|               MEM6  | XPL84C   || XPL84C   | M|
+|                     |          ||          | H|
+|               MEM7  +----------++----------+ z|
+|                      GAL                      |
+|    93C46                       ROM1*          |
+|P1 P2   50MHz E1-16T   DRAM1    ROM2           |
++-----------------------------------------------+
+
+Notes:
+CPU - Hyperstone E1-16T @ 50.000MHz
+
+DRAM1 - LG Semi GM71C18163 1M x16 EDO DRAM (SOJ44)
+CRAMx - W24M257AK-15 32K x8 SRAM (SOJ28)
+MEMx  - UM61256FK-15 32K x8 SRAM (SOJ28)
+
+Oki M6295 rebaged as AD-65
+YM3012/YM2151 rebaged as BS902/KA51
+
+ P1 - Reset push button
+ P2 - Setup push button
+VR1 - Volume adjust pot
+
+ROMs:
+    ROML00 & ROMH00 - Macronix MX29F1610MC-12 SOP44 16MBit FlashROM
+    ROML01 & ROMH01 - Macronix MX29F1610MC-12 SOP44 16MBit FlashROM
+    ROML02 & ROMH02 - Unpopulated space for MX29F1610MC-12 SOP44 16MBit FlashROM
+    ROML03 & ROMH03 - Unpopulated space for MX29F1610MC-12 SOP44 16MBit FlashROM
+    VROM1           - MX 27C2000 2MBit DIP32 EPROM
+  * ROM1            - Unpopulated space for DIP32 EPROM (up to 4MBit)
+    ROM2            - TMS 27C040 4MBit DIP32 EPROM
+
+*/
+
+ROM_START( toyland )
+	ROM_REGION16_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
+	/* ROM1 empty */
+	ROM_LOAD( "rom2.bin",         0x80000, 0x080000, CRC(e3455002) SHA1(5ad7884f82fb125d70829accec02f238e7d9593c) )
+
+	ROM_REGION( 0xc00000, "gfx1", 0 ) /* 16x16x8 Sprites */
+	ROM_LOAD32_WORD( "roml00.bin", 0x000000, 0x200000, CRC(06f5673d) SHA1(23769015fc9a37d36b0fe4924964650aeca77573) )
+	ROM_LOAD32_WORD( "romu00.bin", 0x000002, 0x200000, CRC(8c3db0e4) SHA1(6101ec550ae165338333fb04e0762edee65ca253) )
+	ROM_LOAD32_WORD( "roml01.bin", 0x400000, 0x200000, CRC(076a84e1) SHA1(f58cb4cd874e1f3f266a5ccbf8ffb5e0111034d3) )
+	ROM_LOAD32_WORD( "romu01.bin", 0x400002, 0x200000, CRC(1bc33d01) SHA1(a2a3e6b473cefe463dbd60bda98cb5a4df2bc81b) )
+	/* roml02 empty */
+	/* romu02 empty */
+	/* roml03 empty */
+	/* romu03 empty */
+
+	ROM_REGION( 0x40000, "oki", 0 ) /* Oki Samples */
+	ROM_LOAD( "vrom1.bin", 0x00000, 0x40000, CRC(d7e6fc5d) SHA1(ab5bca4035299214d98b222320276fbcaedb0898) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 ) /* Default EEPROM */
+	ROM_LOAD( "epr1.ic3", 0x0000, 0x0080, CRC(812f3d87) SHA1(744919ff4b44eaa3c4dcc75a1cc2f231ccbb4a3e) )
+
 ROM_END
 
 /*
@@ -1207,7 +1557,7 @@ ROM1 & ROM2 are both ST 27c4000D
 */
 
 ROM_START( wyvernwg )
-	ROM_REGION32_BE( 0x100000, "user1", 0 ) /* Hyperstone CPU Code */
+	ROM_REGION32_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
 	ROM_LOAD( "rom1.bin", 0x000000, 0x080000, CRC(66bf3a5c) SHA1(037d5e7a6ef6f5b4ac08a9c811498c668a9d2522) )
 	ROM_LOAD( "rom2.bin", 0x080000, 0x080000, CRC(fd9b5911) SHA1(a01e8c6e5a9009024af385268ba3ba90e1ebec50) )
 
@@ -1275,12 +1625,14 @@ Notes:
       SW2        - PCB Reset
       *          - Empty socket for additional program ROM
 
+Version 2.7 known to exist, just not currently dumped
+
 */
 
 ROM_START( misncrft )
 	ROM_REGION16_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
 	/* 0 - 0x80000 empty */
-	ROM_LOAD( "prg-rom2.bin", 0x80000, 0x80000, CRC(059ae8c1) SHA1(2c72fcf560166cb17cd8ad665beae302832d551c) )
+	ROM_LOAD( "prg-rom2.bin", 0x80000, 0x80000, CRC(059ae8c1) SHA1(2c72fcf560166cb17cd8ad665beae302832d551c) ) /* Version 2.4 */
 
 	ROM_REGION( 0x400000, "audiocpu", 0 )	/* i8052 code */
 	ROM_LOAD( "snd-rom2.us1", 0x00000, 0x20000, CRC(8821e5b9) SHA1(4b8df97bc61b48aa16ed411614fcd7ed939cac33) )
@@ -1296,6 +1648,9 @@ ROM_START( misncrft )
 
 	ROM_REGION( 0x80000, "wavetable", 0 )
 	ROM_LOAD( "qs1001a.u17", 0x00000, 0x80000, CRC(d13c6407) SHA1(57b14f97c7d4f9b5d9745d3571a0b7115fbe3176) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "eeprom-misncrft.bin", 0x0000, 0x0080, CRC(9ad27077) SHA1(7f0e98eff9cf6e1b60c19fc1016b888e50b087e0) )
 ROM_END
 
 /*
@@ -1307,7 +1662,7 @@ SEMICOM-003a
 +---------------------------------------------+
 |                     +------+                |
 |            YM3012   |  U7  |                |
-|                     +------+                |
+| VR1                 +------+                |
 |            YM2151   M6295                   |
 |                                             |
 |            +-----+      MEM1l  +----------+ |
@@ -1334,7 +1689,7 @@ SEMICOM-003a
 ROM1 & U7 are 27C040
 ROML00 & ROMH00 are MX 29F1610MC flashroms
 ROM0, ROML01 & ROMH01 are unpopulated
-YM2151, YM3012 & M6295 badged as BS901, BS902 U6295
+YM2151, YM3012 & M6295 badged as BS901, BS902 & U6295
 CRAM are MCM6206BAEJ15
 DRAM are KM416C1204AJ-6
 MEM are MCM6206BAEJ15
@@ -1342,11 +1697,12 @@ MEM are MCM6206BAEJ15
 
 SW1 is the reset button
 SW2 is the setup button
+VR1 is the volume adjust pot
 
 */
 
 ROM_START( finalgdr ) /* version 2.20.5915, Korea only */
-	ROM_REGION32_BE( 0x100000, "user1", 0 ) /* Hyperstone CPU Code */
+	ROM_REGION32_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
 	/* rom0 empty */
 	ROM_LOAD( "rom1", 0x080000, 0x080000, CRC(45815931) SHA1(80ba7a366994e40a1f520ea18fad82e6b068b279) )
 
@@ -1370,6 +1726,84 @@ ROM_START( finalgdr ) /* version 2.20.5915, Korea only */
 	ROM_COPY( "user2", 0x040000, 0x0a0000, 0x020000)
 	ROM_COPY( "user2", 0x000000, 0x0c0000, 0x020000)
 	ROM_COPY( "user2", 0x060000, 0x0e0000, 0x020000)
+ROM_END
+
+/*
+
+Mr. Kicker (c) SemiCom
+
+SEMICOM-003b
+
++---------------------------------------------+
+|                     +------+                |
+|            YM3012   |  U7  |                |
+| VR1                 +------+                |
+|            YM2151   M6295                   |
+|                                             |
+|            +-----+      MEM1l  +----------+ |
+|            |CRAM2|             |QuickLogic| |
+|            +-----+             | QL12X16B | |
+|            +-----+             | XPL84C   | |
+|  +-------+ |CRAM2|      MEM1U  |          | |
+|J | DRAM1 | +-----+             +----------+ |
+|A +-------+ +----------+ MEM3                |
+|M +-------+ |          |        +----------+ |
+|M | DRAM2 | |HyperStone| MEM7   |QuickLogic| |
+|A +-------+ |  E1-32T  |        | QL12X16B | |
+|            |          | MEM6   | XPL84C   | |
+|     PAL    +----------+        |          | |
+|                         MEM2   +----------+ |
+|SW1 SW2       61L256S                        |
+|        ROM0*  +--------+ +--------+  28MHz  |
+|        ROM1   | ROML00 | | ROMH00 |  +-----+|
+|               +--------+ +--------+  |93C46||
+|   50MHz         ROML01*    ROMH01*   +-----+|
+|                                             |
++---------------------------------------------+
+
+ROM1 & U7 are 27C040
+ROML00 & ROMH00 are MX 29F1610MC flashroms
+ROM0, ROML01 & ROMH01 are unpopulated
+YM2151, YM3012 & M6295 badged as U6651, U6612 & AD-65
+CRAM are MCM6206BAEJ15
+DRAM are KM416C1204AJ-6
+MEM are MCM6206BAEJ15
+61L256S - 32K x 8 bit High Speed CMOS SRAM (game's so called "Backup Data")
+
+SW1 is the reset button
+SW2 is the setup button
+VR1 is the volume adjust pot
+
+*/
+
+ROM_START( mrkicker )
+	ROM_REGION32_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
+	/* rom0 empty */
+	ROM_LOAD( "2-semicom.rom1", 0x080000, 0x080000, CRC(d3da29ca) SHA1(b843c650096a1c6d50f99e354ec0c93eb4406c5b) )
+
+	ROM_REGION( 0x800000, "gfx1", 0 )  /* gfx data */
+	ROM_LOAD32_WORD( "roml00", 0x000000, 0x200000, CRC(c677aac3) SHA1(356073a29260e8e6c29dd12b2113b30140c6108c) )
+	ROM_LOAD32_WORD( "romh00", 0x000002, 0x200000, CRC(b6337d4a) SHA1(2f46e2933af7fd0f71083900d5e6e4f602ab4c66) )
+	/* roml01 empty */
+	/* romh01 empty */
+
+	ROM_REGION( 0x080000, "user2", 0 ) /* Oki Samples */
+	ROM_LOAD( "at27c040.u7", 0x000000, 0x080000, CRC(e8141fcd) SHA1(256fd1987030e0a1df0a66a228c1fea996cda686) ) /* Mask ROM */
+
+	/* $00000-$20000 stays the same in all sound banks, */
+	/* the second half of the bank is what gets switched */
+	ROM_REGION( 0x100000, "oki", 0 ) /* Samples */
+	ROM_COPY( "user2", 0x000000, 0x000000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x020000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x040000, 0x020000)
+	ROM_COPY( "user2", 0x020000, 0x060000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x080000, 0x020000)
+	ROM_COPY( "user2", 0x040000, 0x0a0000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x0c0000, 0x020000)
+	ROM_COPY( "user2", 0x060000, 0x0e0000, 0x020000)
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 ) /* Default EEPROM (it doesn't boot without and the game code crashes) */
+	ROM_LOAD( "eeprom-mrkicker.bin", 0x0000, 0x0080, CRC(87afb8f7) SHA1(444203b793c1d7929fc5916f18b510198719cd38) )
 ROM_END
 
 /*
@@ -1450,9 +1884,70 @@ ROM_START( aoh )
 	ROM_COPY( "user2", 0x060000, 0x0e0000, 0x020000)
 ROM_END
 
-static int irq_active(const address_space *space)
+/*
+
+Boong-Ga Boong-Ga (Spank'em!)
+Taff System, 2001
+
+*/
+
+ROM_START( boonggab )
+	ROM_REGION16_BE( 0x100000, "user1", ROMREGION_ERASE00 ) /* Hyperstone CPU Code */
+	/* rom2 empty */
+	/* rom3 empty */
+	ROM_LOAD( "2.rom0",       0x80000, 0x80000, CRC(3395541b) SHA1(4e822a52d6070bde232285e7ad8fbe74594bbf28) )
+	ROM_LOAD( "1.rom1",       0x00000, 0x80000, CRC(50522da1) SHA1(28f92fc818513d7a4934b9f8e5d39243d720cc80) )
+
+	ROM_REGION( 0x2000000, "gfx1", ROMREGION_ERASE00 )  /* 16x16x8 Sprites */
+	ROM_LOAD32_WORD( "boong-ga.roml00", 0x0000000, 0x200000, CRC(18be5f92) SHA1(abccc578e5e9652a7829165b485776671938b9d9) )
+	ROM_LOAD32_WORD( "boong-ga.romu00", 0x0000002, 0x200000, CRC(0158ba9e) SHA1(b6cb699f0779b26d578043c42a0ce14a59fd8ac5) )
+	ROM_LOAD32_WORD( "boong-ga.roml05", 0x0400000, 0x200000, CRC(76d60553) SHA1(13a47aed2e7213be98e55a938887a3c2fb314fbe) )
+	ROM_LOAD32_WORD( "boong-ga.romu05", 0x0400002, 0x200000, CRC(35ee8fb5) SHA1(79bd1775087bfaf7624978cec4e912553ca1f027) )
+	ROM_LOAD32_WORD( "boong-ga.roml01", 0x0800000, 0x200000, CRC(636e9d5d) SHA1(d478ec905d6e56e4c46889430d8c32de98e9dc14) )
+	ROM_LOAD32_WORD( "boong-ga.romu01", 0x0800002, 0x200000, CRC(b8dcf6b7) SHA1(8ea590f92832e6b6a4c27fb1f2aa18bb000f41e0) )
+	ROM_LOAD32_WORD( "boong-ga.roml06", 0x0c00000, 0x200000, CRC(8dc521b7) SHA1(37021bb05a582b80a4883bddf677c1d41e6777d2) )
+	ROM_LOAD32_WORD( "boong-ga.romu06", 0x0c00002, 0x200000, CRC(f6b83270) SHA1(7971fdb99987ac701c76958a626b0cb75ba31451) )
+	ROM_LOAD32_WORD( "boong-ga.roml02", 0x1000000, 0x200000, CRC(d0661c69) SHA1(94f95df19b448565642db8c5aafb2532c0febc37) )
+	ROM_LOAD32_WORD( "boong-ga.romu02", 0x1000002, 0x200000, CRC(eac01eb8) SHA1(c730078d8422d566378d6a4b0deb42d2814f0dab) )
+	ROM_LOAD32_WORD( "boong-ga.roml07", 0x1400000, 0x200000, CRC(3301813a) SHA1(61997f07ca516eb77c9d9478b42950fd6fc42ac5) )
+	ROM_LOAD32_WORD( "boong-ga.romu07", 0x1400002, 0x200000, CRC(3f1c3682) SHA1(969491b0d3be054ddc199db2ced38c76c8f561ee) )
+	ROM_LOAD32_WORD( "boong-ga.roml03", 0x1800000, 0x200000, CRC(4d4260b3) SHA1(11a5d0b472b783094d44a5c931ee1cbe816b2a05) )
+	ROM_LOAD32_WORD( "boong-ga.romu03", 0x1800002, 0x200000, CRC(4ba00032) SHA1(de9e0640e80204f4906576b20eeaa17f03694b3f) )
+	/* roml08 empty */
+	/* romu08 empty */
+	/* roml04 empty */
+	/* romu04 empty */
+	/* roml09 empty */
+	/* romu09 empty */
+
+	ROM_REGION( 0x100000, "user2", 0 ) /* Oki Samples */
+	ROM_LOAD( "3.vrom1",      0x00000, 0x80000, CRC(0696bfcb) SHA1(bba61f3cae23271215bbbf8214ce3b73459d5da5) )
+	ROM_LOAD( "4.vrom2",      0x80000, 0x80000, CRC(305c2b16) SHA1(fa199c4cd4ebb952d934e3863fca8740eeba9294) )
+
+	/* $00000-$20000 stays the same in all sound banks, */
+	/* the second half of the bank is what gets switched */
+	ROM_REGION( 0x200000, "oki", 0 ) /* Samples */
+	ROM_COPY( "user2", 0x000000, 0x000000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x020000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x040000, 0x020000)
+	ROM_COPY( "user2", 0x020000, 0x060000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x080000, 0x020000)
+	ROM_COPY( "user2", 0x040000, 0x0a0000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x0c0000, 0x020000)
+	ROM_COPY( "user2", 0x060000, 0x0e0000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x100000, 0x020000)
+	ROM_COPY( "user2", 0x080000, 0x120000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x140000, 0x020000)
+	ROM_COPY( "user2", 0x0a0000, 0x160000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x180000, 0x020000)
+	ROM_COPY( "user2", 0x0c0000, 0x1a0000, 0x020000)
+	ROM_COPY( "user2", 0x000000, 0x1c0000, 0x020000)
+	ROM_COPY( "user2", 0x0e0000, 0x1e0000, 0x020000)
+ROM_END
+
+static int irq_active(address_space *space)
 {
-	UINT32 FCR = cpu_get_reg(space->cpu, 27);
+	UINT32 FCR = cpu_get_reg(&space->device(), 27);
 	if( !(FCR&(1<<29)) ) // int 2 (irq 4)
 		return 1;
 	else
@@ -1461,287 +1956,413 @@ static int irq_active(const address_space *space)
 
 static READ16_HANDLER( vamphalf_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x82de)
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x82de)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x4a840/2)+offset];
+	return state->m_wram[(0x4a840/2)+offset];
 }
 
 static READ16_HANDLER( vamphafk_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x82de)
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x82de)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x4a6d0/2)+offset];
+	return state->m_wram[(0x4a6d0/2)+offset];
 }
 
 static READ16_HANDLER( misncrft_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xecc8)
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xecc8)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x72eb4/2)+offset];
+	return state->m_wram[(0x72eb4/2)+offset];
 }
 
 static READ16_HANDLER( coolmini_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x75f7a)
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x75f7a)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0xd2e80/2)+offset];
+	return state->m_wram[(0xd2e80/2)+offset];
 }
 
 static READ16_HANDLER( suplup_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xaf18a )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xaf18a )
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x11605c/2)+offset];
+	return state->m_wram[(0x11605c/2)+offset];
 }
 
 static READ16_HANDLER( luplup_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xaefac )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xaefac )
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x115e84/2)+offset];
+	return state->m_wram[(0x115e84/2)+offset];
 }
 
 static READ16_HANDLER( luplup29_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xae6c0 )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xae6c0 )
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x113f08/2)+offset];
+	return state->m_wram[(0x113f08/2)+offset];
 }
 
 static READ16_HANDLER( puzlbang_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xae6d2 )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xae6d2 )
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x113ecc/2)+offset];
+	return state->m_wram[(0x113ecc/2)+offset];
 }
 
 static READ32_HANDLER( wyvernwg_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x10758 )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x10758 )
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram32[0x00b56fc/4];
+	return state->m_wram32[0x00b56fc/4];
 }
 
 static READ32_HANDLER( finalgdr_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x1c212 )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x1c212)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram32[0x005e874/4];
+	return state->m_wram32[0x005e874/4];
 }
+
+static READ32_HANDLER( mrkicker_speedup_r )
+{
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	UINT32 pc = cpu_get_pc(&space->device());
+	if(pc == 0x469de || pc == 0x46a36)
+	{
+//      if(irq_active(space))
+//          device_spin_until_interrupt(&space->device());
+//      else
+			device_eat_cycles(&space->device(), 50);
+	}
+
+	return state->m_wram32[0x00701a4/4];
+}
+
 
 static READ16_HANDLER( dquizgo2_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xaa622)
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xaa622)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0xcde70/2)+offset];
+	return state->m_wram[(0xcde70/2)+offset];
 }
 
 static READ32_HANDLER( aoh_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xb994 )
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0xb994 )
 	{
-		cpu_eat_cycles(space->cpu, 500);
+		device_eat_cycles(&space->device(), 500);
 	}
-	else if (cpu_get_pc(space->cpu) == 0xba40 )
+	else if (cpu_get_pc(&space->device()) == 0xba40 )
 	{
-		cpu_eat_cycles(space->cpu, 500);
+		device_eat_cycles(&space->device(), 500);
 	}
 
 
-	return wram32[0x28a09c/4];
+	return state->m_wram32[0x28a09c/4];
 }
 
 static READ16_HANDLER( jmpbreak_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x983c)
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x983c)
 	{
 		if(irq_active(space))
-			cpu_spinuntil_int(space->cpu);
+			device_spin_until_interrupt(&space->device());
 		else
-			cpu_eat_cycles(space->cpu, 50);
+			device_eat_cycles(&space->device(), 50);
 	}
 
-	return wram[(0x00906fc / 2)+offset];
+	return state->m_wram[(0x00906fc / 2)+offset];
+}
+
+static READ16_HANDLER( mrdig_speedup_r )
+{
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x1710)
+	{
+		if(irq_active(space))
+			device_spin_until_interrupt(&space->device());
+		else
+			device_eat_cycles(&space->device(), 50);
+	}
+
+	return state->m_wram[(0x00a99c / 2)+offset];
+}
+
+static READ16_HANDLER( toyland_speedup_r )
+{
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+
+	if (cpu_get_pc(&space->device()) == 0x130c2)
+		device_spin_until_interrupt(&space->device());
+
+	return state->m_wram[0x780d8 / 2];
+
+}
+
+static READ16_HANDLER( boonggab_speedup_r )
+{
+	vamphalf_state *state = space->machine().driver_data<vamphalf_state>();
+	if(cpu_get_pc(&space->device()) == 0x13198)
+	{
+		if(irq_active(space))
+			device_spin_until_interrupt(&space->device());
+	}
+
+	return state->m_wram[(0xf1b7c / 2)+offset];
 }
 
 static DRIVER_INIT( vamphalf )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0004a840, 0x0004a843, 0, 0, vamphalf_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0004a840, 0x0004a843, FUNC(vamphalf_speedup_r) );
 
-	palshift = 0;
-	flip_bit = 0x80;
+	state->m_palshift = 0;
+	state->m_flip_bit = 0x80;
 }
 
 static DRIVER_INIT( vamphafk )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0004a6d0, 0x0004a6d3, 0, 0, vamphafk_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0004a6d0, 0x0004a6d3, FUNC(vamphafk_speedup_r) );
 
-	palshift = 0;
-	flip_bit = 0x80;
+	state->m_palshift = 0;
+	state->m_flip_bit = 0x80;
 }
 
 static DRIVER_INIT( misncrft )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00072eb4, 0x00072eb7, 0, 0, misncrft_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00072eb4, 0x00072eb7, FUNC(misncrft_speedup_r) );
 
-	palshift = 0;
-	flip_bit = 1;
+	state->m_palshift = 0;
+	state->m_flip_bit = 1;
 }
 
 static DRIVER_INIT( coolmini )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x000d2e80, 0x000d2e83, 0, 0, coolmini_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x000d2e80, 0x000d2e83, FUNC(coolmini_speedup_r) );
 
-	palshift = 0;
-	flip_bit = 1;
+	state->m_palshift = 0;
+	state->m_flip_bit = 1;
 }
 
 static DRIVER_INIT( suplup )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0011605c, 0x0011605f, 0, 0, suplup_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x0011605c, 0x0011605f, FUNC(suplup_speedup_r) );
 
-	palshift = 8;
+	state->m_palshift = 8;
 	/* no flipscreen */
 }
 
 static DRIVER_INIT( luplup )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00115e84, 0x00115e87, 0, 0, luplup_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00115e84, 0x00115e87, FUNC(luplup_speedup_r) );
 
-	palshift = 8;
+	state->m_palshift = 8;
 	/* no flipscreen */
 }
 
 static DRIVER_INIT( luplup29 )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00113f08, 0x00113f0b, 0, 0, luplup29_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00113f08, 0x00113f0b, FUNC(luplup29_speedup_r) );
 
-	palshift = 8;
+	state->m_palshift = 8;
 	/* no flipscreen */
 }
 
 static DRIVER_INIT( puzlbang )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00113ecc, 0x00113ecf, 0, 0, puzlbang_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00113ecc, 0x00113ecf, FUNC(puzlbang_speedup_r) );
 
-	palshift = 8;
+	state->m_palshift = 8;
 	/* no flipscreen */
 }
 
 static DRIVER_INIT( wyvernwg )
 {
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00b56fc, 0x00b56ff, 0, 0, wyvernwg_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00b56fc, 0x00b56ff, FUNC(wyvernwg_speedup_r) );
 
-	palshift = 0;
-	flip_bit = 1;
+	state->m_palshift = 0;
+	state->m_flip_bit = 1;
 
-	semicom_prot_idx = 8;
-	semicom_prot_data[0] = 2;
-	semicom_prot_data[1] = 1;
+	state->m_semicom_prot_idx = 8;
+	state->m_semicom_prot_data[0] = 2;
+	state->m_semicom_prot_data[1] = 1;
 }
 
 static DRIVER_INIT( finalgdr )
 {
-	finalgdr_backupram_bank = 1;
-	finalgdr_backupram = auto_alloc_array(machine, UINT8, 0x80*0x100);
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x005e874, 0x005e877, 0, 0, finalgdr_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	state->m_finalgdr_backupram_bank = 1;
+	state->m_finalgdr_backupram = auto_alloc_array(machine, UINT8, 0x80*0x100);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x005e874, 0x005e877, FUNC(finalgdr_speedup_r) );
+	machine.device<nvram_device>("nvram")->set_base(state->m_finalgdr_backupram, 0x80*0x100);
 
-	palshift = 0;
-	flip_bit = 1; //?
+	state->m_palshift = 0;
+	state->m_flip_bit = 1; //?
 
-	semicom_prot_idx = 8;
-	semicom_prot_data[0] = 2;
-	semicom_prot_data[1] = 3;
+	state->m_semicom_prot_idx = 8;
+	state->m_semicom_prot_data[0] = 2;
+	state->m_semicom_prot_data[1] = 3;
+}
+
+static DRIVER_INIT( mrkicker )
+{
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	// backup ram isn't used
+	state->m_finalgdr_backupram_bank = 1;
+	state->m_finalgdr_backupram = auto_alloc_array(machine, UINT8, 0x80*0x100);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00701a4, 0x00701a7, FUNC(mrkicker_speedup_r) );
+	machine.device<nvram_device>("nvram")->set_base(state->m_finalgdr_backupram, 0x80*0x100);
+
+	state->m_palshift = 0;
+	state->m_flip_bit = 1; //?
+
+	state->m_semicom_prot_idx = 8;
+	state->m_semicom_prot_data[0] = 2;
+	state->m_semicom_prot_data[1] = 3;
 }
 
 static DRIVER_INIT( dquizgo2 )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00cde70, 0x00cde73, 0, 0, dquizgo2_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00cde70, 0x00cde73, FUNC(dquizgo2_speedup_r) );
 
-	palshift = 0;
-	flip_bit = 1;
+	state->m_palshift = 0;
+	state->m_flip_bit = 1;
+}
+
+static DRIVER_INIT( toyland )
+{
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x780d8, 0x780d9, FUNC(toyland_speedup_r) );
+
+	state->m_palshift = 0;
+	state->m_flip_bit = 1;
 }
 
 static DRIVER_INIT( aoh )
 {
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x028a09c, 0x028a09f, 0, 0, aoh_speedup_r );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x028a09c, 0x028a09f, FUNC(aoh_speedup_r) );
 
-	palshift = 0;
+	state->m_palshift = 0;
 	/* no flipscreen */
 }
 
 static DRIVER_INIT( jmpbreak )
 {
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00906fc, 0x00906ff, 0, 0, jmpbreak_speedup_r );
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe0000000, 0xe0000003, 0, 0, jmpbreak_flipscreen_w );
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00906fc, 0x00906ff, FUNC(jmpbreak_speedup_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xe0000000, 0xe0000003, FUNC(jmpbreak_flipscreen_w) );
 
-	palshift = 0;
+	state->m_palshift = 0;
+}
+
+static DRIVER_INIT( mrdig )
+{
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00a99c, 0x00a99f, FUNC(mrdig_speedup_r) );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xe0000000, 0xe0000003, FUNC(jmpbreak_flipscreen_w) );
+
+	state->m_palshift = 0;
+}
+
+
+static DRIVER_INIT( boonggab )
+{
+	vamphalf_state *state = machine.driver_data<vamphalf_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x000f1b7c, 0x000f1b7f, FUNC(boonggab_speedup_r) );
+
+	state->m_palshift = 0;
+	state->m_has_extra_gfx = 1;
+	state->m_flip_bit = 1;
 }
 
 GAME( 1999, coolmini, 0,        coolmini, common,   coolmini, ROT0,   "SemiCom",           "Cool Minigame Collection", 0 )
@@ -1749,11 +2370,15 @@ GAME( 1999, jmpbreak, 0,        jmpbreak, common,   jmpbreak, ROT0,   "F2 System
 GAME( 1999, suplup,   0,        suplup,   common,   suplup,   ROT0,   "Omega System",      "Super Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 4.0 / 990518)" , 0 )
 GAME( 1999, luplup,   suplup,   suplup,   common,   luplup,   ROT0,   "Omega System",      "Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 3.0 / 990128)", 0 )
 GAME( 1999, luplup29, suplup,   suplup,   common,   luplup29, ROT0,   "Omega System",      "Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 2.9 / 990108)", 0 )
-GAME( 1999, puzlbang, suplup,   suplup,   common,   puzlbang, ROT0,   "Omega System",      "Puzzle Bang Bang (version 2.8 / 990106)", 0 )
-GAME( 1999, vamphalf, 0,        vamphalf, common,   vamphalf, ROT0,   "Danbi & F2 System", "Vamf x1/2 (Europe)", 0 )
-GAME( 1999, vamphalfk,vamphalf, vamphalf, common,   vamphafk, ROT0,   "Danbi & F2 System", "Vamp x1/2 (Korea)", 0 )
+GAME( 1999, puzlbang, suplup,   suplup,   common,   puzlbang, ROT0,   "Omega System",      "Puzzle Bang Bang (Korea, version 2.8 / 990106)", 0 )
+GAME( 1999, vamphalf, 0,        vamphalf, common,   vamphalf, ROT0,   "Danbi / F2 System", "Vamf x1/2 (Europe)", 0 )
+GAME( 1999, vamphalfk,vamphalf, vamphalf, common,   vamphafk, ROT0,   "Danbi / F2 System", "Vamp x1/2 (Korea)", 0 )
 GAME( 2000, dquizgo2, 0,        coolmini, common,   dquizgo2, ROT0,   "SemiCom",           "Date Quiz Go Go Episode 2" , 0)
 GAME( 2000, misncrft, 0,        misncrft, common,   misncrft, ROT90,  "Sun",               "Mission Craft (version 2.4)", GAME_NO_SOUND )
+GAME( 2000, mrdig,    0,        mrdig,    common,   mrdig,    ROT0,   "Sun",               "Mr. Dig", 0 )
 GAME( 2001, finalgdr, 0,        finalgdr, finalgdr, finalgdr, ROT0,   "SemiCom",           "Final Godori (Korea, version 2.20.5915)", 0 )
-GAME( 2001, wyvernwg, 0,        wyvernwg, common,   wyvernwg, ROT270, "SemiCom (Game Vision License)", "Wyvern Wings", GAME_NO_SOUND )
+GAME( 2001, mrkicker, 0,        mrkicker, finalgdr, mrkicker, ROT0,   "SemiCom",           "Mr. Kicker", GAME_NOT_WORKING ) // game stops booting / working properly after you get a high score, or if you don't have a default eeprom with 'valid data.  It's never worked properly, CPU core issue?
+GAME( 2001, toyland,  0,        coolmini, common,   toyland,  ROT0,   "SemiCom",           "Toy Land Adventure", 0 )
+GAME( 2001, wyvernwg, 0,        wyvernwg, common,   wyvernwg, ROT270, "SemiCom (Game Vision license)", "Wyvern Wings", GAME_NO_SOUND )
 GAME( 2001, aoh,      0,        aoh,      aoh,      aoh,      ROT0,   "Unico",             "Age Of Heroes - Silkroad 2 (v0.63 - 2001/02/07)", 0 )
+GAME( 2001, boonggab, 0,        boonggab, boonggab, boonggab, ROT270, "Taff System",	   "Boong-Ga Boong-Ga (Spank'em!)", 0 )

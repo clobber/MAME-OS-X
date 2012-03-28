@@ -23,10 +23,8 @@ added external port callback, and functions to set the volume of the channels
 */
 
 
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "k007232.h"
-#include <math.h>
 
 
 #define  KDAC_A_PCM_MAX    (2)		/* Channels per chip */
@@ -41,28 +39,26 @@ typedef struct kdacApcm
 	UINT32			bank[KDAC_A_PCM_MAX];
 	int				play[KDAC_A_PCM_MAX];
 
-	UINT8 			wreg[0x10];	/* write data */
+	UINT8			wreg[0x10];	/* write data */
 	UINT8 *			pcmbuf[2];	/* Channel A & B pointers */
 
 	UINT32  		clock;          /* chip clock */
 	UINT32  		pcmlimit;
 
-	sound_stream * 	stream;
+	sound_stream *	stream;
 	const k007232_interface *intf;
-	UINT32 			fncode[0x200];
+	UINT32			fncode[0x200];
 } KDAC_A_PCM;
 
 
 #define   BASE_SHIFT    (12)
 
 
-INLINE KDAC_A_PCM *get_safe_token(const device_config *device)
+INLINE KDAC_A_PCM *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_K007232);
-	return (KDAC_A_PCM *)device->token;
+	assert(device->type() == K007232);
+	return (KDAC_A_PCM *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -308,15 +304,15 @@ static DEVICE_START( k007232 )
 	int i;
 	KDAC_A_PCM *info = get_safe_token(device);
 
-	info->intf = (device->static_config != NULL) ? (const k007232_interface *)device->static_config : &defintrf;
+	info->intf = (device->static_config() != NULL) ? (const k007232_interface *)device->static_config() : &defintrf;
 
 	/* Set up the chips */
 
-	info->pcmbuf[0] = device->region;
-	info->pcmbuf[1] = device->region;
-	info->pcmlimit  = device->regionbytes;
+	info->pcmbuf[0] = *device->region();
+	info->pcmbuf[1] = *device->region();
+	info->pcmlimit  = device->region()->bytes();
 
-	info->clock = device->clock;
+	info->clock = device->clock();
 
 	for( i = 0; i < KDAC_A_PCM_MAX; i++ )
 	{
@@ -332,7 +328,7 @@ static DEVICE_START( k007232 )
 
 	for( i = 0; i < 0x10; i++ )  info->wreg[i] = 0;
 
-	info->stream = stream_create(device,0,2,device->clock/128,info,KDAC_A_update);
+	info->stream = device->machine().sound().stream_alloc(*device,0,2,device->clock()/128,info,KDAC_A_update);
 
 	KDAC_A_make_fncode(info);
 }
@@ -346,7 +342,7 @@ WRITE8_DEVICE_HANDLER( k007232_w )
   int r = offset;
   int v = data;
 
-  stream_update(info->stream);
+  info->stream->update();
 
   info->wreg[r] = v;			/* stock write data */
 
@@ -431,14 +427,14 @@ READ8_DEVICE_HANDLER( k007232_r )
 
 /*****************************************************************************/
 
-void k007232_set_volume(const device_config *device,int channel,int volumeA,int volumeB)
+void k007232_set_volume(device_t *device,int channel,int volumeA,int volumeB)
 {
   KDAC_A_PCM *info = get_safe_token(device);
   info->vol[channel][0] = volumeA;
   info->vol[channel][1] = volumeB;
 }
 
-void k007232_set_bank( const device_config *device, int chABank, int chBBank )
+void k007232_set_bank( device_t *device, int chABank, int chBBank )
 {
   KDAC_A_PCM *info = get_safe_token(device);
   info->bank[0] = chABank<<17;
@@ -476,3 +472,5 @@ DEVICE_GET_INFO( k007232 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(K007232, k007232);

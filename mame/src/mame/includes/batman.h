@@ -4,11 +4,23 @@
 
 *************************************************************************/
 
+#include "machine/atarigen.h"
+
+class batman_state : public atarigen_state
+{
+public:
+	batman_state(const machine_config &mconfig, device_type type, const char *tag)
+		: atarigen_state(mconfig, type, tag) { }
+
+	UINT16			m_latch_data;
+
+	UINT8			m_alpha_tile_bank;
+};
+
+
 /*----------- defined in video/batman.c -----------*/
 
-extern UINT8 batman_alpha_tile_bank;
-
 VIDEO_START( batman );
-VIDEO_UPDATE( batman );
+SCREEN_UPDATE_IND16( batman );
 
-void batman_scanline_update(const device_config *screen, int scanline);
+void batman_scanline_update(screen_device &screen, int scanline);

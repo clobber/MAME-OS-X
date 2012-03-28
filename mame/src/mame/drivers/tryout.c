@@ -20,56 +20,45 @@ $208 strikes count
 
 ****************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/2203intf.h"
-
-extern UINT8 *tryout_gfx_control;
-
-extern READ8_HANDLER( tryout_vram_r );
-extern WRITE8_HANDLER( tryout_videoram_w );
-extern WRITE8_HANDLER( tryout_vram_w );
-extern WRITE8_HANDLER( tryout_vram_bankswitch_w );
-extern WRITE8_HANDLER( tryout_flipscreen_w );
-
-extern PALETTE_INIT( tryout );
-extern VIDEO_START( tryout );
-extern VIDEO_UPDATE( tryout );
+#include "includes/tryout.h"
 
 static WRITE8_HANDLER( tryout_nmi_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE );
+	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE );
 }
 
 static WRITE8_HANDLER( tryout_sound_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
 /*this is actually irq/nmi mask, polls only four values at start up (81->01->81->01) and then
   stays on this state.*/
 static WRITE8_HANDLER( tryout_sound_irq_ack_w )
 {
-//  cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
+//  cputag_set_input_line(space->machine(), "audiocpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( tryout_bankswitch_w )
 {
- 	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 	int bankaddress;
 
 	bankaddress = 0x10000 + (data & 0x01) * 0x2000;
-	memory_set_bankptr(space->machine, 1, &RAM[bankaddress]);
+	memory_set_bankptr(space->machine(), "bank1", &RAM[bankaddress]);
 }
 
-static ADDRESS_MAP_START( main_cpu, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_cpu, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(tryout_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK(1)
+	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(tryout_videoram_w) AM_BASE_MEMBER(tryout_state, m_videoram)
+	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0xbfff) AM_ROM
-	AM_RANGE(0xc800, 0xc87f) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE(&spriteram_2)
+	AM_RANGE(0xc800, 0xc87f) AM_RAM AM_BASE_MEMBER(tryout_state, m_spriteram)
+	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE_MEMBER(tryout_state, m_spriteram2)
 	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(tryout_vram_r, tryout_vram_w)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("DSW")
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("P1")
@@ -78,15 +67,15 @@ static ADDRESS_MAP_START( main_cpu, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe301, 0xe301) AM_WRITE(tryout_flipscreen_w)
 	AM_RANGE(0xe302, 0xe302) AM_WRITE(tryout_bankswitch_w)
 	AM_RANGE(0xe401, 0xe401) AM_WRITE(tryout_vram_bankswitch_w)
-	AM_RANGE(0xe402, 0xe404) AM_WRITEONLY AM_BASE(&tryout_gfx_control)
+	AM_RANGE(0xe402, 0xe404) AM_WRITEONLY AM_BASE_MEMBER(tryout_state, m_gfx_control)
 	AM_RANGE(0xe414, 0xe414) AM_WRITE(tryout_sound_w)
 	AM_RANGE(0xe417, 0xe417) AM_WRITE(tryout_nmi_ack_w)
 	AM_RANGE(0xfff0, 0xffff) AM_ROM AM_REGION("maincpu", 0xbff0) /* reset vectors */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_cpu, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_cpu, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(tryout_sound_irq_ack_w)
 	AM_RANGE(0xc000, 0xffff) AM_ROM
@@ -95,7 +84,7 @@ ADDRESS_MAP_END
 static INPUT_CHANGED( coin_inserted )
 {
 	if(newval != oldval)
-		cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+		cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( tryout )
@@ -196,36 +185,35 @@ static GFXDECODE_START( tryout )
 	GFXDECODE_ENTRY( NULL,	 0, vramlayout,   0, 4 )
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( tryout )
+static MACHINE_CONFIG_START( tryout, tryout_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 2000000)		/* ? */
-	MDRV_CPU_PROGRAM_MAP(main_cpu)
+	MCFG_CPU_ADD("maincpu", M6502, 2000000)		/* ? */
+	MCFG_CPU_PROGRAM_MAP(main_cpu)
 
-	MDRV_CPU_ADD("audiocpu", M6502, 1500000)	/* ? */
-	MDRV_CPU_PROGRAM_MAP(sound_cpu)
-	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,1000) /* controls BGM tempo, 1000 is an hand-tuned value to match a side-by-side video */
+	MCFG_CPU_ADD("audiocpu", M6502, 1500000)	/* ? */
+	MCFG_CPU_PROGRAM_MAP(sound_cpu)
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,1000) /* controls BGM tempo, 1000 is an hand-tuned value to match a side-by-side video */
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(tryout)
 
-	MDRV_GFXDECODE(tryout)
-	MDRV_PALETTE_LENGTH(0x20)
-	MDRV_PALETTE_INIT(tryout)
+	MCFG_GFXDECODE(tryout)
+	MCFG_PALETTE_LENGTH(0x20)
+	MCFG_PALETTE_INIT(tryout)
 
-	MDRV_VIDEO_START(tryout)
-	MDRV_VIDEO_UPDATE(tryout)
+	MCFG_VIDEO_START(tryout)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2203, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 ROM_START( tryout )
 	ROM_REGION( 0x14000, "maincpu", 0 )

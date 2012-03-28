@@ -3,8 +3,8 @@
     audio\videopin.c
 
 *************************************************************************/
-#include "driver.h"
-#include "videopin.h"
+#include "emu.h"
+#include "includes/videopin.h"
 #include "sound/discrete.h"
 
 

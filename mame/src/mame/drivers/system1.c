@@ -185,35 +185,36 @@ Notes:
       VSync - 60.0952Hz
       HSync - 15.4442kHz
 
+Flicky sets version notes:
+
+flicky, flickyo
+---------------
+The both seem to be very similar programs.  Difficulty is easier than the S1,S2 sets.
+DIPs are also shared 100% with each other.
+
+flickys1, flickys2
+------------------
+Very noticibly more difficult than the other two sets.  DIPs have changes (less lives
+and bonus options).  There is no screen which shows the bonus lives values like the
+other two sets, either.  flickys1 allows for DEMO SOUND which none of the others sets
+seem to have access to.
+
 ******************************************************************************/
 
-#include "driver.h"
-#include "video/system1.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs51/mcs51.h"
 #include "machine/z80pio.h"
 #include "machine/8255ppi.h"
 #include "machine/segacrpt.h"
+#include "machine/segacrp2.h"
 #include "machine/mc8123.h"
 #include "sound/sn76496.h"
+#include "includes/system1.h"
 
 
 #define MASTER_CLOCK	XTAL_20MHz
 #define SOUND_CLOCK		XTAL_8MHz
-
-
-/* driver config */
-static void (*videomode_custom)(running_machine *machine, UINT8 data, UINT8 prevdata);
-static UINT8 mute_xor;
-
-static UINT8 *system1_ram;
-static UINT8 dakkochn_mux_data;
-static UINT8 videomode_prev;
-static UINT8 mcu_control;
-static UINT8 *nob_mcu_status;
-static UINT8 *nob_mcu_latch;
-static UINT8 nob_maincpu_latch;
-
 
 
 /*************************************
@@ -249,10 +250,11 @@ static const UINT8 cc_op[0x100] = {
  4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 7*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 7*5+1*2, 4*5+1*2,
  4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 7*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 7*5+1*2, 4*5+1*2,
  4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 7*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 4*5+1*2, 7*5+1*2, 4*5+1*2,
- 5*5+1*2,10*5+1*2,10*5+3*2,10*5+3*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2,10*5+1*2,10*5+3*2, 0*5+1*2,10*5+3*2,17*5+3*2, 7*5+2*2,11*5+1*2,
+ 5*5+1*2,10*5+1*2,10*5+3*2,10*5+3*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2,10*5+1*2,10*5+3*2, 0*5    ,10*5+3*2,17*5+3*2, 7*5+2*2,11*5+1*2,
  5*5+1*2,10*5+1*2,10*5+3*2,11*5+2*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 4*5+1*2,10*5+3*2,11*5+2*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2,
  5*5+1*2,10*5+1*2,10*5+3*2,19*5+1*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 4*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2,
- 5*5+1*2,10*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 6*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2};
+ 5*5+1*2,10*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 6*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2
+};
 
 static const UINT8 cc_cb[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
@@ -270,7 +272,8 @@ static const UINT8 cc_cb[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
- 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2};
+ 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2
+};
 
 static const UINT8 cc_ed[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
@@ -288,12 +291,13 @@ static const UINT8 cc_ed[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
- 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2};
+ 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2
+};
 
 static const UINT8 cc_xy[0x100] = {
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,15*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,15*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
- 4*5+2*2,14*5+4*2,20*5+4*2,10*5+2*2, 9*5+2*2, 9*5+2*2, 9*5+3*2, 4*5+2*2, 4*5+2*2,15*5+2*2,20*5+4*2,10*5+2*2, 9*5+2*2, 9*5+2*2, 9*5+3*2, 4*5+2*2,
+ 4*5+2*2,14*5+4*2,20*5+4*2,10*5+2*2, 9*5+2*2, 9*5+2*2,11*5+3*2, 4*5+2*2, 4*5+2*2,15*5+2*2,20*5+4*2,10*5+2*2, 9*5+2*2, 9*5+2*2,11*5+3*2, 4*5+2*2,
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,23*5+3*2,23*5+3*2,19*5+4*2, 4*5+2*2, 4*5+2*2,15*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 9*5+2*2, 9*5+2*2,19*5+3*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 9*5+2*2, 9*5+2*2,19*5+3*2, 4*5+2*2,
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 9*5+2*2, 9*5+2*2,19*5+3*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 9*5+2*2, 9*5+2*2,19*5+3*2, 4*5+2*2,
@@ -306,7 +310,8 @@ static const UINT8 cc_xy[0x100] = {
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 0*5    , 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
  4*5+2*2,14*5+2*2, 4*5+2*2,23*5+2*2, 4*5+2*2,15*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 8*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
- 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,10*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2};
+ 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,10*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2
+};
 
 static const UINT8 cc_xycb[0x100] = {
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
@@ -324,7 +329,8 @@ static const UINT8 cc_xycb[0x100] = {
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
-23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2};
+23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2
+};
 
 /* extra cycles if jr/jp/call taken and 'interrupt latency' on rst 0-7 */
 static const UINT8 cc_ex[0x100] = {
@@ -343,40 +349,44 @@ static const UINT8 cc_ex[0x100] = {
  6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5,
  6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5,
  6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5,
- 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5};
+ 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5
+};
 
 
 static MACHINE_START( system1 )
 {
-	UINT32 numbanks = (memory_region_length(machine, "maincpu") - 0x10000) / 0x4000;
+	system1_state *state = machine.driver_data<system1_state>();
+	UINT32 numbanks = (machine.region("maincpu")->bytes() - 0x10000) / 0x4000;
 
 	if (numbanks > 0)
-		memory_configure_bank(machine, 1, 0, numbanks, memory_region(machine, "maincpu") + 0x10000, 0x4000);
+		memory_configure_bank(machine, "bank1", 0, numbanks, machine.region("maincpu")->base() + 0x10000, 0x4000);
 	else
-		memory_configure_bank(machine, 1, 0, 1, memory_region(machine, "maincpu") + 0x8000, 0);
-	memory_set_bank(machine, 1, 0);
+		memory_configure_bank(machine, "bank1", 0, 1, machine.region("maincpu")->base() + 0x8000, 0);
+	memory_set_bank(machine, "bank1", 0);
 
-	z80_set_cycle_tables(cputag_get_cpu(machine, "maincpu"), cc_op, cc_cb, cc_ed, cc_xy, cc_xycb, cc_ex);
+	z80_set_cycle_tables(machine.device("maincpu"), cc_op, cc_cb, cc_ed, cc_xy, cc_xycb, cc_ex);
 
-	mute_xor = 0x00;
+	state->m_mute_xor = 0x00;
 
-	state_save_register_global(machine, dakkochn_mux_data);
-	state_save_register_global(machine, videomode_prev);
-	state_save_register_global(machine, mcu_control);
-	state_save_register_global(machine, nob_maincpu_latch);
+	state_save_register_global(machine, state->m_dakkochn_mux_data);
+	state_save_register_global(machine, state->m_videomode_prev);
+	state_save_register_global(machine, state->m_mcu_control);
+	state_save_register_global(machine, state->m_nob_maincpu_latch);
 }
 
 
 static MACHINE_START( system2 )
 {
+	system1_state *state = machine.driver_data<system1_state>();
 	MACHINE_START_CALL(system1);
-	mute_xor = 0x01;
+	state->m_mute_xor = 0x01;
 }
 
 
 static MACHINE_RESET( system1 )
 {
-	dakkochn_mux_data = 0;
+	system1_state *state = machine.driver_data<system1_state>();
+	state->m_dakkochn_mux_data = 0;
 }
 
 
@@ -387,35 +397,36 @@ static MACHINE_RESET( system1 )
  *
  *************************************/
 
-static void bank44_custom_w(running_machine *machine, UINT8 data, UINT8 prevdata)
+static void bank44_custom_w(running_machine &machine, UINT8 data, UINT8 prevdata)
 {
 	/* bank bits are bits 6 and 2 */
-	memory_set_bank(machine, 1, ((data & 0x40) >> 5) | ((data & 0x04) >> 2));
+	memory_set_bank(machine, "bank1", ((data & 0x40) >> 5) | ((data & 0x04) >> 2));
 }
 
 
-static void bank0c_custom_w(running_machine *machine, UINT8 data, UINT8 prevdata)
+static void bank0c_custom_w(running_machine &machine, UINT8 data, UINT8 prevdata)
 {
 	/* bank bits are bits 3 and 2 */
-	memory_set_bank(machine, 1, (data & 0x0c) >> 2);
+	memory_set_bank(machine, "bank1", (data & 0x0c) >> 2);
 }
 
 
 static WRITE8_HANDLER( videomode_w )
 {
-	const device_config *i8751 = cputag_get_cpu(space->machine, "mcu");
+	system1_state *state = space->machine().driver_data<system1_state>();
+	device_t *i8751 = space->machine().device("mcu");
 
 	/* bit 6 is connected to the 8751 IRQ */
 	if (i8751 != NULL)
-		cpu_set_input_line(i8751, MCS51_INT1_LINE, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
+		device_set_input_line(i8751, MCS51_INT1_LINE, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* handle any custom banking or other stuff */
-	if (videomode_custom != NULL)
-		(*videomode_custom)(space->machine, data, videomode_prev);
-	videomode_prev = data;
+	if (state->m_videomode_custom != NULL)
+		(*state->m_videomode_custom)(space->machine(), data, state->m_videomode_prev);
+	state->m_videomode_prev = data;
 
 	/* bit 0 is for the coin counters */
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine(), 0, data & 1);
 
 	/* remaining signals are video-related */
 	system1_videomode_w(space, 0, data);
@@ -431,23 +442,26 @@ static WRITE8_HANDLER( videomode_w )
 
 static CUSTOM_INPUT( dakkochn_mux_data_r )
 {
+	system1_state *state = field.machine().driver_data<system1_state>();
 	static const char *const ports[] = { "KEY0", "KEY1", "KEY2", "KEY3", "KEY4", "KEY5", "KEY6" };
-	return input_port_read(field->port->machine, ports[dakkochn_mux_data]);
+	return input_port_read(field.machine(), ports[state->m_dakkochn_mux_data]);
 }
 
 
 static CUSTOM_INPUT( dakkochn_mux_status_r )
 {
+	system1_state *state = field.machine().driver_data<system1_state>();
 	/* reads from here indicate which mux port is selected */
-	return 1 << (dakkochn_mux_data);
+	return 1 << (state->m_dakkochn_mux_data);
 }
 
 
-static void dakkochn_custom_w(running_machine *machine, UINT8 data, UINT8 prevdata)
+static void dakkochn_custom_w(running_machine &machine, UINT8 data, UINT8 prevdata)
 {
+	system1_state *state = machine.driver_data<system1_state>();
 	/* bit 1 toggling on clocks the mux; we store the previous state in the high bit of dakkochn_mux_data */
 	if ((data & 0x02) && !(prevdata & 0x02))
-		dakkochn_mux_data = (dakkochn_mux_data + 1) % 7;
+		state->m_dakkochn_mux_data = (state->m_dakkochn_mux_data + 1) % 7;
 
 	/* remaining stuff acts like bank0c */
 	bank0c_custom_w(machine, data, prevdata);
@@ -463,13 +477,14 @@ static void dakkochn_custom_w(running_machine *machine, UINT8 data, UINT8 prevda
 
 static WRITE8_DEVICE_HANDLER( sound_control_w )
 {
+	system1_state *state = device->machine().driver_data<system1_state>();
 	/* bit 0 = MUTE (inverted sense on System 2) */
-	sound_global_enable(device->machine, ~(data ^ mute_xor) & 1);
+	device->machine().sound().system_mute((data ^ state->m_mute_xor) & 1);
 
 	/* bit 6 = feedback from sound board that read occurrred */
 
 	/* bit 7 controls the sound CPU's NMI line */
-	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, (data & 0x80) ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(device->machine(), "soundcpu", INPUT_LINE_NMI, (data & 0x80) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* remaining bits are used for video RAM banking */
 	system1_videoram_bank_w(device, offset, data);
@@ -478,8 +493,8 @@ static WRITE8_DEVICE_HANDLER( sound_control_w )
 
 static READ8_HANDLER( sound_data_r )
 {
-	const device_config *ppi = devtag_get_device(space->machine, "ppi");
-	const device_config *pio = devtag_get_device(space->machine, "pio");
+	ppi8255_device *ppi = space->machine().device<ppi8255_device>("ppi");
+	z80pio_device *pio = space->machine().device<z80pio_device>("pio");
 
 	/* if we have an 8255 PPI, get the data from the port and toggle the ack */
 	if (ppi != NULL)
@@ -490,9 +505,14 @@ static READ8_HANDLER( sound_data_r )
 		return soundlatch_r(space, offset);
 	}
 
-	/* if we have a Z80 PIO, just do a port read which will auto-ack */
+	/* if we have a Z80 PIO, get the data from the port and toggle the strobe */
 	else if (pio != NULL)
-		return z80pio_p_r(pio, 0);
+	{
+		UINT8 data = pio->port_read(z80pio_device::PORT_A);
+		pio->strobe(z80pio_device::PORT_A, false);
+		pio->strobe(z80pio_device::PORT_A, true);
+		return data;
+	}
 
 	return 0xff;
 }
@@ -502,20 +522,14 @@ static WRITE8_HANDLER( soundport_w )
 {
 	/* boost interleave when communicating with the sound CPU */
 	soundlatch_w(space, 0, data);
-	cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(100));
+	space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(100));
 }
 
 
 static TIMER_DEVICE_CALLBACK( soundirq_gen )
 {
 	/* sound IRQ is generated on 32V, 96V, ... and auto-acknowledged */
-	cputag_set_input_line(timer->machine, "soundcpu", 0, HOLD_LINE);
-}
-
-
-static WRITE_LINE_DEVICE_HANDLER( pio_ready_w )
-{
-	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(timer.machine(), "soundcpu", 0, HOLD_LINE);
 }
 
 
@@ -528,6 +542,7 @@ static WRITE_LINE_DEVICE_HANDLER( pio_ready_w )
 
 static WRITE8_HANDLER( mcu_control_w )
 {
+	system1_state *state = space->machine().driver_data<system1_state>();
 	/*
         Bit 7 -> connects to TD62003 pins 5 & 6 @ IC151
         Bit 6 -> via PLS153, when high, asserts the BUSREQ signal, halting the Z80
@@ -538,27 +553,28 @@ static WRITE8_HANDLER( mcu_control_w )
         Bit 1 -> n/c
         Bit 0 -> Directly connected to Z80 /INT line
     */
-	mcu_control = data;
-	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_HALT, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(space->machine, "maincpu", 0, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+	state->m_mcu_control = data;
+	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_HALT, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( mcu_io_w )
 {
-	switch ((mcu_control >> 3) & 3)
+	system1_state *state = space->machine().driver_data<system1_state>();
+	switch ((state->m_mcu_control >> 3) & 3)
 	{
 		case 0:
-			memory_write_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), offset, data);
+			space->machine().device<z80_device>("maincpu")->space(AS_PROGRAM)->write_byte(offset, data);
 			break;
 
 		case 2:
-			memory_write_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_IO), offset, data);
+			space->machine().device<z80_device>("maincpu")->space(AS_IO)->write_byte(offset, data);
 			break;
 
 		default:
 			logerror("%03X: MCU movx write mode %02X offset %04X = %02X\n",
-					 cpu_get_pc(space->cpu), mcu_control, offset, data);
+					 cpu_get_pc(&space->device()), state->m_mcu_control, offset, data);
 			break;
 	}
 }
@@ -566,20 +582,21 @@ static WRITE8_HANDLER( mcu_io_w )
 
 static READ8_HANDLER( mcu_io_r )
 {
-	switch ((mcu_control >> 3) & 3)
+	system1_state *state = space->machine().driver_data<system1_state>();
+	switch ((state->m_mcu_control >> 3) & 3)
 	{
 		case 0:
-			return memory_read_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), offset);
+			return space->machine().device<z80_device>("maincpu")->space(AS_PROGRAM)->read_byte(offset);
 
 		case 1:
-			return memory_region(space->machine, "maincpu")[offset + 0x10000];
+			return space->machine().region("maincpu")->base()[offset + 0x10000];
 
 		case 2:
-			return memory_read_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_IO), offset);
+			return space->machine().device<z80_device>("maincpu")->space(AS_IO)->read_byte(offset);
 
 		default:
 			logerror("%03X: MCU movx read mode %02X offset %04X\n",
-					 cpu_get_pc(space->cpu), mcu_control, offset);
+					 cpu_get_pc(&space->device()), state->m_mcu_control, offset);
 			return 0xff;
 	}
 }
@@ -588,23 +605,25 @@ static READ8_HANDLER( mcu_io_r )
 static INTERRUPT_GEN( mcu_irq_assert )
 {
 	/* toggle the INT0 line on the MCU */
-	cpu_set_input_line(device, MCS51_INT0_LINE, ASSERT_LINE);
-	cpu_set_input_line(device, MCS51_INT0_LINE, CLEAR_LINE);
+	device_set_input_line(device, MCS51_INT0_LINE, ASSERT_LINE);
+	device_set_input_line(device, MCS51_INT0_LINE, CLEAR_LINE);
 
 	/* boost interleave to ensure that the MCU can break the Z80 out of a HALT */
-	cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(10));
+	device->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(10));
 }
 
 
 static TIMER_DEVICE_CALLBACK( mcu_t0_callback )
 {
-	/* the T0 line is clocked by something; if it is not clocked fast
+	/* The T0 line is clocked by something; if it is not clocked fast
        enough, the MCU will fail; on shtngmst this happens after 3
-       VBLANKs without a tick */
+       VBLANKs without a tick.
+       choplift is even more picky about it, affecting scroll speed
+    */
 
-	const device_config *mcu = cputag_get_cpu(timer->machine, "mcu");
-	cpu_set_input_line(mcu, MCS51_T0_LINE, ASSERT_LINE);
-	cpu_set_input_line(mcu, MCS51_T0_LINE, CLEAR_LINE);
+	device_t *mcu = timer.machine().device("mcu");
+	device_set_input_line(mcu, MCS51_T0_LINE, ASSERT_LINE);
+	device_set_input_line(mcu, MCS51_T0_LINE, CLEAR_LINE);
 }
 
 
@@ -617,43 +636,49 @@ static TIMER_DEVICE_CALLBACK( mcu_t0_callback )
 
 static WRITE8_HANDLER( nob_mcu_control_p2_w )
 {
+	system1_state *state = space->machine().driver_data<system1_state>();
 	/* bit 0 triggers a read from MCU port 0 */
-	if (((mcu_control ^ data) & 0x01) && !(data & 0x01))
-		*nob_mcu_latch = nob_maincpu_latch;
+	if (((state->m_mcu_control ^ data) & 0x01) && !(data & 0x01))
+		*state->m_nob_mcu_latch = state->m_nob_maincpu_latch;
 
 	/* bit 1 triggers a write from MCU port 0 */
-	if (((mcu_control ^ data) & 0x02) && !(data & 0x02))
-		nob_maincpu_latch = *nob_mcu_latch;
+	if (((state->m_mcu_control ^ data) & 0x02) && !(data & 0x02))
+		state->m_nob_maincpu_latch = *state->m_nob_mcu_latch;
 
 	/* bit 2 is toggled once near the end of an IRQ */
-	if (((mcu_control ^ data) & 0x04) && !(data & 0x04))
-		cpu_set_input_line(space->cpu, MCS51_INT0_LINE, CLEAR_LINE);
+	if (((state->m_mcu_control ^ data) & 0x04) && !(data & 0x04))
+		device_set_input_line(&space->device(), MCS51_INT0_LINE, CLEAR_LINE);
 
 	/* bit 3 is toggled once at the start of an IRQ, and again at the end */
-	if (((mcu_control ^ data) & 0x08) && !(data & 0x08))
-		;//logerror("MCU IRQ(8) toggle\n");
+	if (((state->m_mcu_control ^ data) & 0x08) && !(data & 0x08))
+	{
+		//logerror("MCU IRQ(8) toggle\n");
+	}
 
-	mcu_control = data;
+	state->m_mcu_control = data;
 }
 
 
 static READ8_HANDLER( nob_maincpu_latch_r )
 {
-	return nob_maincpu_latch;
+	system1_state *state = space->machine().driver_data<system1_state>();
+	return state->m_nob_maincpu_latch;
 }
 
 
 static WRITE8_HANDLER( nob_maincpu_latch_w )
 {
-	nob_maincpu_latch = data;
-	cputag_set_input_line(space->machine, "mcu", MCS51_INT0_LINE, ASSERT_LINE);
-	cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(100));
+	system1_state *state = space->machine().driver_data<system1_state>();
+	state->m_nob_maincpu_latch = data;
+	cputag_set_input_line(space->machine(), "mcu", MCS51_INT0_LINE, ASSERT_LINE);
+	space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(100));
 }
 
 
 static READ8_HANDLER( nob_mcu_status_r )
 {
-	return *nob_mcu_status;
+	system1_state *state = space->machine().driver_data<system1_state>();
+	return *state->m_nob_mcu_status;
 }
 
 
@@ -665,30 +690,31 @@ static READ8_HANDLER( nob_mcu_status_r )
  *************************************/
 
 // nobb - these ports are used for some kind of replacement protection system used by the bootleg
-static int nobb_inport23_step;
 
 static READ8_HANDLER( nobb_inport1c_r )
 {
-//  logerror("IN  $1c : pc = %04x - data = 0x80\n",cpu_get_pc(space->cpu));
+//  logerror("IN  $1c : pc = %04x - data = 0x80\n",cpu_get_pc(&space->device()));
 	return(0x80);	// infinite loop (at 0x0fb3) until bit 7 is set
 }
 
 static READ8_HANDLER( nobb_inport22_r )
 {
-//  logerror("IN  $22 : pc = %04x - data = %02x\n",cpu_get_pc(space->cpu),nobb_inport17_step);
+//  logerror("IN  $22 : pc = %04x - data = %02x\n",cpu_get_pc(&space->device()),nobb_inport17_step);
 	return(0);//nobb_inport17_step);
 }
 
 static READ8_HANDLER( nobb_inport23_r )
 {
-//  logerror("IN  $23 : pc = %04x - step = %02x\n",cpu_get_pc(space->cpu),nobb_inport23_step);
-	return(nobb_inport23_step);
+	system1_state *state = space->machine().driver_data<system1_state>();
+//  logerror("IN  $23 : pc = %04x - step = %02x\n",cpu_get_pc(&space->device()),state->m_nobb_inport23_step);
+	return(state->m_nobb_inport23_step);
 }
 
 static WRITE8_HANDLER( nobb_outport24_w )
 {
-//  logerror("OUT $24 : pc = %04x - data = %02x\n",cpu_get_pc(space->cpu),data);
-	nobb_inport23_step = data;
+	system1_state *state = space->machine().driver_data<system1_state>();
+//  logerror("OUT $24 : pc = %04x - data = %02x\n",cpu_get_pc(&space->device()),data);
+	state->m_nobb_inport23_step = data;
 }
 
 
@@ -700,12 +726,12 @@ static WRITE8_HANDLER( nobb_outport24_w )
  *************************************/
 
 /* main memory map */
-static ADDRESS_MAP_START( system1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( system1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE(&system1_ram)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_MEMBER(system1_state, m_ram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_MEMBER(system1_state, m_spriteram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe000, 0xefff) AM_READWRITE(system1_videoram_r, system1_videoram_w)
 	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE(system1_mixer_collision_r, system1_mixer_collision_w)
 	AM_RANGE(0xf400, 0xf7ff) AM_WRITE(system1_mixer_collision_reset_w)
@@ -714,21 +740,21 @@ static ADDRESS_MAP_START( system1_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 /* same as normal System 1 except address map is shuffled (RAM/collision are swapped) */
-static ADDRESS_MAP_START( nobo_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nobo_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc3ff) AM_READWRITE(system1_mixer_collision_r, system1_mixer_collision_w)
 	AM_RANGE(0xc400, 0xc7ff) AM_WRITE(system1_mixer_collision_reset_w)
 	AM_RANGE(0xc800, 0xcbff) AM_READWRITE(system1_sprite_collision_r, system1_sprite_collision_w)
 	AM_RANGE(0xcc00, 0xcfff) AM_WRITE(system1_sprite_collision_reset_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_MEMBER(system1_state, m_spriteram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe000, 0xefff) AM_READWRITE(system1_videoram_r, system1_videoram_w)
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&system1_ram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_MEMBER(system1_state, m_ram)
 ADDRESS_MAP_END
 
 /* I/O map for systems with an 8255 PPI */
-static ADDRESS_MAP_START( system1_ppi_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( system1_ppi_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x1f)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x03) AM_READ_PORT("P1")
 	AM_RANGE(0x04, 0x04) AM_MIRROR(0x03) AM_READ_PORT("P2")
@@ -740,7 +766,7 @@ static ADDRESS_MAP_START( system1_ppi_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 /* I/O map for systems with a Z80 PIO chip */
-static ADDRESS_MAP_START( system1_pio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( system1_pio_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x1f)
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0x03) AM_READ_PORT("P1")
 	AM_RANGE(0x04, 0x04) AM_MIRROR(0x03) AM_READ_PORT("P2")
@@ -748,7 +774,7 @@ static ADDRESS_MAP_START( system1_pio_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0c, 0x0c) AM_MIRROR(0x02) AM_READ_PORT("SWA")	/* DIP2 */
 	AM_RANGE(0x0d, 0x0d) AM_MIRROR(0x02) AM_READ_PORT("SWB")	/* DIP1 some games read it from here... */
 	AM_RANGE(0x10, 0x10) AM_MIRROR(0x03) AM_READ_PORT("SWB")	/* DIP1 ... and some others from here but there are games which check BOTH! */
-	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE("pio", z80pio_r, z80pio_w)
+	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE("pio", z80pio_cd_ba_r, z80pio_cd_ba_w)
 ADDRESS_MAP_END
 
 
@@ -759,7 +785,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x1800) AM_RAM
 	AM_RANGE(0xa000, 0xa003) AM_MIRROR(0x1fff) AM_DEVWRITE("sn1", sn76496_w)
@@ -775,17 +801,17 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xffff) AM_READWRITE(mcu_io_r, mcu_io_w)
 	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_WRITE(mcu_control_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( nob_mcu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( nob_mcu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P0) AM_RAM AM_BASE(&nob_mcu_latch)
-	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_WRITEONLY AM_BASE(&nob_mcu_status)
+	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P0) AM_RAM AM_BASE_MEMBER(system1_state, m_nob_mcu_latch)
+	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_WRITEONLY AM_BASE_MEMBER(system1_state, m_nob_mcu_status)
 	AM_RANGE(MCS51_PORT_P2, MCS51_PORT_P2) AM_WRITE(nob_mcu_control_p2_w)
 ADDRESS_MAP_END
 
@@ -1079,6 +1105,32 @@ static INPUT_PORTS_START( flicky )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SWB:7")
 	PORT_DIPSETTING(	0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Hard ) )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( flickys1 )
+	PORT_INCLUDE( flicky )
+
+	PORT_MODIFY("SWB")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SWB:2")
+	PORT_DIPSETTING(	0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0c, 0x08, DEF_STR( Lives ) )		PORT_DIPLOCATION("SWB:3,4")
+	PORT_DIPSETTING(	0x0c, "2" )
+	PORT_DIPSETTING(	0x08, "3" )
+	PORT_DIPSETTING(	0x04, "4" )
+	PORT_DIPSETTING(	0x00, "5 (Infinite)" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SWB:5,6")
+	PORT_DIPSETTING(	0x30, "80000" )
+	PORT_DIPSETTING(	0x20, "160000" )
+	PORT_DIPSETTING(	0x10, "240000" )
+	PORT_DIPSETTING(	0x00, "320000" )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( flickys2 )
+	PORT_INCLUDE( flickys1 )
+
+	PORT_MODIFY("SWB")
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SWB:2" )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( wmatch )
@@ -2071,14 +2123,14 @@ static const ppi8255_interface ppi_interface =
 	DEVCB_HANDLER(sound_control_w)
 };
 
-static const z80pio_interface pio_interface =
+static Z80PIO_INTERFACE( pio_interface )
 {
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_NULL,
 	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, soundport_w),
+	DEVCB_CPU_INPUT_LINE("soundcpu", INPUT_LINE_NMI),
+	DEVCB_NULL,
 	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, videomode_w),
-	DEVCB_LINE(pio_ready_w),
 	DEVCB_NULL
 };
 
@@ -2091,142 +2143,136 @@ static const z80pio_interface pio_interface =
  *************************************/
 
 /* original board with 64kbit ROMs and an 8255 PPI for outputs */
-static MACHINE_DRIVER_START( sys1ppi )
+static MACHINE_CONFIG_START( sys1ppi, system1_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK)	/* not really, see notes above */
-	MDRV_CPU_PROGRAM_MAP(system1_map)
-	MDRV_CPU_IO_MAP(system1_ppi_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK)	/* not really, see notes above */
+	MCFG_CPU_PROGRAM_MAP(system1_map)
+	MCFG_CPU_IO_MAP(system1_ppi_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("soundcpu", Z80, SOUND_CLOCK/2)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_TIMER_ADD_SCANLINE("soundirq", soundirq_gen, "screen", 32, 64)
+	MCFG_CPU_ADD("soundcpu", Z80, SOUND_CLOCK/2)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_TIMER_ADD_SCANLINE("soundirq", soundirq_gen, "screen", 32, 64)
 
-	MDRV_MACHINE_START(system1)
-	MDRV_MACHINE_RESET(system1)
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
-	MDRV_PPI8255_ADD("ppi", ppi_interface)
+	MCFG_MACHINE_START(system1)
+	MCFG_MACHINE_RESET(system1)
+
+	MCFG_PPI8255_ADD("ppi", ppi_interface)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)	/* needed for proper hardware collisions */
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)	/* needed for proper hardware collisions */
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK/4, 320, 0, 256, 260, 0, 224)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 640, 0, 512, 260, 0, 224)
+	MCFG_SCREEN_UPDATE_STATIC(system1)
 
-	MDRV_GFXDECODE(system1)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(system1)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(system1)
-	MDRV_VIDEO_UPDATE(system1)
+	MCFG_VIDEO_START(system1)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn1", SN76489A, SOUND_CLOCK/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("sn1", SN76489A, SOUND_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn2", SN76489A, SOUND_CLOCK/2)	/* selectable via jumper */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("sn2", SN76489A, SOUND_CLOCK/2)	/* selectable via jumper */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 /* reduced visible area for scrolling games */
-static MACHINE_DRIVER_START( sys1ppis )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( sys1ppis, sys1ppi )
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0*8+8, 32*8-1-8, 0*8, 28*8-1)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(2*(0*8+8), 2*(32*8-1-8), 0*8, 28*8-1)
+MACHINE_CONFIG_END
 
 
 
 /* revised board with 128kbit ROMs and a Z80 PIO for outputs */
-static MACHINE_DRIVER_START( sys1pio )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( sys1pio, sys1ppi )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(system1_pio_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(system1_pio_io_map)
 
-	MDRV_DEVICE_REMOVE("ppi")
-	MDRV_Z80PIO_ADD("pio", pio_interface)
-MACHINE_DRIVER_END
+	MCFG_DEVICE_REMOVE("ppi")
+	MCFG_Z80PIO_ADD("pio", MASTER_CLOCK, pio_interface)
+MACHINE_CONFIG_END
 
 /* reduced visible area for scrolling games */
-static MACHINE_DRIVER_START( sys1pios )
-	MDRV_IMPORT_FROM( sys1pio )
+static MACHINE_CONFIG_DERIVED( sys1pios, sys1pio )
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0*8+8, 32*8-1-8, 0*8, 28*8-1)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(2*(0*8+8), 2*(32*8-1-8), 0*8, 28*8-1)
+MACHINE_CONFIG_END
 
 
 
 /* this describes the additional 8751 MCU when present */
-static MACHINE_DRIVER_START( mcu )
+static MACHINE_CONFIG_FRAGMENT( mcu )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_VBLANK_INT(NULL, NULL)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_VBLANK_INT(NULL, NULL)
 
-	MDRV_CPU_ADD("mcu", I8751, SOUND_CLOCK)
-	MDRV_CPU_IO_MAP(mcu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", mcu_irq_assert)
+	MCFG_CPU_ADD("mcu", I8751, SOUND_CLOCK)
+	MCFG_CPU_IO_MAP(mcu_io_map)
+	MCFG_CPU_VBLANK_INT("screen", mcu_irq_assert)
 
-	MDRV_TIMER_ADD_PERIODIC("mcu_t0", mcu_t0_callback, MSEC(20))	/* ??? actual clock unknown */
-MACHINE_DRIVER_END
+	MCFG_TIMER_ADD_PERIODIC("mcu_t0", mcu_t0_callback, attotime::from_usec(2500))	/* ??? actual clock unknown */
+MACHINE_CONFIG_END
 
 
 
 /* alternate program map with RAM/collision swapped */
-static MACHINE_DRIVER_START( nob )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( nob, sys1ppi )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(nobo_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(nobo_map)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( nobm )
-	MDRV_IMPORT_FROM( nob )
+static MACHINE_CONFIG_DERIVED( nobm, nob )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("mcu", I8751, SOUND_CLOCK)
-	MDRV_CPU_IO_MAP(nob_mcu_io_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_ADD("mcu", I8751, SOUND_CLOCK)
+	MCFG_CPU_IO_MAP(nob_mcu_io_map)
+MACHINE_CONFIG_END
 
 
 
 /* system2 video */
-static MACHINE_DRIVER_START( sys2 )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( sys2, sys1ppi )
 
-	MDRV_MACHINE_START(system2)
+	MCFG_MACHINE_START(system2)
 
 	/* video hardware */
-	MDRV_VIDEO_START(system2)
-	MDRV_VIDEO_UPDATE(system2)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(system2)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(system2)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sys2m )
-	MDRV_IMPORT_FROM( sys2 )
-	MDRV_IMPORT_FROM( mcu )
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( sys2m, sys2 )
+	MCFG_FRAGMENT_ADD( mcu )
+MACHINE_CONFIG_END
 
 /* system2 with rowscroll */
-static MACHINE_DRIVER_START( sys2row )
-	MDRV_IMPORT_FROM( sys2 )
+static MACHINE_CONFIG_DERIVED( sys2row, sys2 )
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(system2_rowscroll)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(system2_rowscroll)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sys2rowm )
-	MDRV_IMPORT_FROM( sys2row )
-	MDRV_IMPORT_FROM( mcu )
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( sys2rowm, sys2row )
+	MCFG_FRAGMENT_ADD( mcu )
+MACHINE_CONFIG_END
 
 
 
@@ -4243,7 +4289,7 @@ ROM_END
 ROM_START( ufosensib )
 	ROM_REGION( 0x40000, "maincpu", 0 )
 	ROM_LOAD( "k108.ic18.3-4s", 0x20000, 0x8000, CRC(6b1d0955) SHA1(dbda145d40eaecd30c1d55a9675c58a2967c20c4) )
-	ROM_CONTINUE(            	0x00000, 0x8000 )             /* Now load the operands in RAM */
+	ROM_CONTINUE(           	0x00000, 0x8000 )             /* Now load the operands in RAM */
 	ROM_LOAD( "k109.ic19.4s",   0x30000, 0x8000, CRC(fc543b26) SHA1(b9e1d2ca6f9811bf341edf104fe209dbf56e4b2d) )
 	ROM_CONTINUE(               0x10000, 0x8000 )
 	ROM_LOAD( "k110.ic20.4-5s", 0x38000, 0x8000, CRC(6ba2dc77) SHA1(09a65f55988ae28e285d402af9a2a1f1dc05a82c) )
@@ -4491,9 +4537,22 @@ ROM_END
  *
  *************************************/
 
-static DRIVER_INIT( bank00 )	{ videomode_custom = NULL; }
-static DRIVER_INIT( bank44 )	{ videomode_custom = bank44_custom_w; }
-static DRIVER_INIT( bank0c )	{ videomode_custom = bank0c_custom_w; }
+static DRIVER_INIT( bank00 )
+{
+	system1_state *state = machine.driver_data<system1_state>();
+	state->m_videomode_custom = NULL;
+}
+static DRIVER_INIT( bank44 )
+{
+	system1_state *state = machine.driver_data<system1_state>();
+	state->m_videomode_custom = bank44_custom_w;
+}
+
+static DRIVER_INIT( bank0c )
+{
+	system1_state *state = machine.driver_data<system1_state>();
+	state->m_videomode_custom = bank0c_custom_w;
+}
 
 static DRIVER_INIT( regulus )	{ DRIVER_INIT_CALL(bank00); regulus_decode(machine, "maincpu"); }
 static DRIVER_INIT( mrviking )	{ DRIVER_INIT_CALL(bank00); mrviking_decode(machine, "maincpu"); }
@@ -4508,33 +4567,33 @@ static DRIVER_INIT( seganinj )	{ DRIVER_INIT_CALL(bank00); seganinj_decode(machi
 static DRIVER_INIT( imsorry )	{ DRIVER_INIT_CALL(bank00); imsorry_decode(machine, "maincpu"); }
 static DRIVER_INIT( teddybb )	{ DRIVER_INIT_CALL(bank00); teddybb_decode(machine, "maincpu"); }
 static DRIVER_INIT( myheroj )	{ DRIVER_INIT_CALL(bank00); myheroj_decode(machine, "maincpu"); }
-static DRIVER_INIT( 4dwarrio )	{ DRIVER_INIT_CALL(bank00); fdwarrio_decode(machine, "maincpu"); }
-static DRIVER_INIT( wboy )		{ DRIVER_INIT_CALL(bank00); astrofl_decode(machine, "maincpu"); }
-static DRIVER_INIT( wboy2 )		{ DRIVER_INIT_CALL(bank00); wboy2_decode(machine, "maincpu"); }
+static DRIVER_INIT( 4dwarrio )	{ DRIVER_INIT_CALL(bank00); sega_315_5162_decode(machine, "maincpu"); }
+static DRIVER_INIT( wboy )		{ DRIVER_INIT_CALL(bank00); sega_315_5177_decode(machine, "maincpu"); }
+static DRIVER_INIT( wboy2 )		{ DRIVER_INIT_CALL(bank00); sega_315_5178_decode(machine, "maincpu"); }
 static DRIVER_INIT( wboyo )		{ DRIVER_INIT_CALL(bank00); hvymetal_decode(machine, "maincpu"); }
-static DRIVER_INIT( blockgal )	{ DRIVER_INIT_CALL(bank00); mc8123_decrypt_rom(machine, "maincpu", "key", 0, 0); }
+static DRIVER_INIT( blockgal )	{ DRIVER_INIT_CALL(bank00); mc8123_decrypt_rom(machine, "maincpu", "key", NULL, 0); }
 
 static DRIVER_INIT( hvymetal )	{ DRIVER_INIT_CALL(bank44); hvymetal_decode(machine, "maincpu"); }
-static DRIVER_INIT( gardia )	{ DRIVER_INIT_CALL(bank44); gardia_decode(machine, "maincpu"); }
-static DRIVER_INIT( gardiab )	{ DRIVER_INIT_CALL(bank44); gardiab_decode(machine, "maincpu"); }
+static DRIVER_INIT( gardia )	{ DRIVER_INIT_CALL(bank44); sega_317_0006_decode(machine, "maincpu"); }
+static DRIVER_INIT( gardiab )	{ DRIVER_INIT_CALL(bank44); sega_317_0007_decode(machine, "maincpu"); }
 
-static DRIVER_INIT( wbml )		{ DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", 1, 4); }
-static DRIVER_INIT( ufosensi )  { DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", 1, 4); }
-static DRIVER_INIT( wboysys2 )	{ DRIVER_INIT_CALL(bank0c); astrofl_decode(machine, "maincpu"); }
+static DRIVER_INIT( wbml )		{ DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", "bank1", 4); }
+static DRIVER_INIT( ufosensi )  { DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", "bank1", 4); }
+static DRIVER_INIT( wboysys2 )	{ DRIVER_INIT_CALL(bank0c); sega_315_5177_decode(machine, "maincpu"); }
 
 
 static DRIVER_INIT( dakkochn )
 {
-	DRIVER_INIT_CALL(bank0c);
-	videomode_custom = dakkochn_custom_w;
+	system1_state *state = machine.driver_data<system1_state>();
+	state->m_videomode_custom = dakkochn_custom_w;
 
-	mc8123_decrypt_rom(machine, "maincpu", "key", 1, 4);
+	mc8123_decrypt_rom(machine, "maincpu", "key", "bank1", 4);
 
-//  memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x00, 0, 0, dakkochn_port_00_r);
-//  memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x03, 0x03, 0, 0, dakkochn_port_03_r);
-//  memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x04, 0x04, 0, 0, dakkochn_port_04_r);
+//  machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x00, 0x00, FUNC(dakkochn_port_00_r));
+//  machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x03, 0x03, FUNC(dakkochn_port_03_r));
+//  machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x04, 0x04, FUNC(dakkochn_port_04_r));
 
-//  memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x15, 0x15, 0, 0, dakkochn_port_15_w);
+//  machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x15, 0x15, FUNC(dakkochn_port_15_w));
 }
 
 
@@ -4547,12 +4606,12 @@ static DRIVER_INIT( myherok )
 
 	/* additionally to the usual protection, all the program ROMs have data lines */
 	/* D0 and D1 swapped. */
-	rom = memory_region(machine, "maincpu");
+	rom = machine.region("maincpu")->base();
 	for (A = 0;A < 0xc000;A++)
 		rom[A] = (rom[A] & 0xfc) | ((rom[A] & 1) << 1) | ((rom[A] & 2) >> 1);
 
 	/* the tile gfx ROMs are mangled as well: */
-	rom = memory_region(machine, "tiles");
+	rom = machine.region("tiles")->base();
 
 	/* the first ROM has data lines D0 and D6 swapped. */
 	for (A = 0x0000;A < 0x4000;A++)
@@ -4587,24 +4646,24 @@ static DRIVER_INIT( myherok )
 static READ8_HANDLER( nob_start_r )
 {
 	/* in reality, it's likely some M1-dependent behavior */
-	return (cpu_get_pc(space->cpu) <= 0x0003) ? 0x80 : memory_region(space->machine, "maincpu")[1];
+	return (cpu_get_pc(&space->device()) <= 0x0003) ? 0x80 : space->machine().region("maincpu")->base()[1];
 }
 
 static DRIVER_INIT( nob )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
 	DRIVER_INIT_CALL(bank44);
 
 	/* hack to fix incorrect JMP at start, which should obviously be to $0080 */
 	/* patching the ROM causes errors in the self-test */
 	/* in real-life, it could be some behavior dependent upon M1 */
-	memory_install_read8_handler(space, 0x0001, 0x0001, 0x0000, 0x0000, nob_start_r);
+	space->install_legacy_read_handler(0x0001, 0x0001, FUNC(nob_start_r));
 
 	/* install MCU communications */
-	memory_install_readwrite8_handler(iospace, 0x18, 0x18, 0x00, 0x00, nob_maincpu_latch_r, nob_maincpu_latch_w);
-	memory_install_read8_handler(iospace, 0x1c, 0x1c, 0x00, 0x00, nob_mcu_status_r);
+	iospace->install_legacy_readwrite_handler(0x18, 0x18, 0x00, 0x00, FUNC(nob_maincpu_latch_r), FUNC(nob_maincpu_latch_w));
+	iospace->install_legacy_read_handler(0x1c, 0x1c, FUNC(nob_mcu_status_r));
 }
 
 static DRIVER_INIT( nobb )
@@ -4612,7 +4671,7 @@ static DRIVER_INIT( nobb )
 	/* Patch to get PRG ROMS ('T', 'R' and 'S) status as "GOOD" in the "test mode" */
 	/* not really needed */
 
-//  UINT8 *ROM = memory_region(machine, "maincpu");
+//  UINT8 *ROM = machine.region("maincpu")->base();
 
 //  ROM[0x3296] = 0x18;     // 'jr' instead of 'jr z' - 'T' (PRG Main ROM)
 //  ROM[0x32be] = 0x18;     // 'jr' instead of 'jr z' - 'R' (Banked ROM 1)
@@ -4624,39 +4683,39 @@ static DRIVER_INIT( nobb )
 //  ROM[0x10000 + 0 * 0x8000 + 0x3347] = 0x18;  // 'jr' instead of 'jr z'
 
 	/* Patch to get sound in later levels(the program enters into a tight loop)*/
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	UINT8 *ROM2 = memory_region(machine, "soundcpu");
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	UINT8 *ROM2 = machine.region("soundcpu")->base();
 
 	ROM2[0x02f9] = 0x28;//'jr z' instead of 'jr'
 
 	DRIVER_INIT_CALL(bank44);
 
-	memory_install_read8_handler(iospace, 0x1c, 0x1c, 0x00, 0x00, nobb_inport1c_r);
-	memory_install_read8_handler(iospace, 0x22, 0x22, 0x00, 0x00, nobb_inport22_r);
-	memory_install_read8_handler(iospace, 0x23, 0x23, 0x00, 0x00, nobb_inport23_r);
-	memory_install_write8_handler(iospace, 0x24, 0x24, 0x00, 0x00, nobb_outport24_w);
+	iospace->install_legacy_read_handler(0x1c, 0x1c, FUNC(nobb_inport1c_r));
+	iospace->install_legacy_read_handler(0x22, 0x22, FUNC(nobb_inport22_r));
+	iospace->install_legacy_read_handler(0x23, 0x23, FUNC(nobb_inport23_r));
+	iospace->install_legacy_write_handler(0x24, 0x24, FUNC(nobb_outport24_w));
 }
 
 
 static DRIVER_INIT( bootleg )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x10000);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, machine.region("maincpu")->base() + 0x10000);
 	DRIVER_INIT_CALL(bank00);
 }
 
 
 static DRIVER_INIT( bootsys2 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x20000);
-	memory_configure_bank_decrypted(machine, 1, 0, 4, memory_region(machine, "maincpu") + 0x30000, 0x4000);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, machine.region("maincpu")->base() + 0x20000);
+	memory_configure_bank_decrypted(machine, "bank1", 0, 4, machine.region("maincpu")->base() + 0x30000, 0x4000);
 	DRIVER_INIT_CALL(bank0c);
 }
 
 static DRIVER_INIT( choplift )
 {
-	UINT8 *mcurom = memory_region(machine, "mcu");
+	UINT8 *mcurom = machine.region("mcu")->base();
 
 	/* the ROM dump we have is bad; the following patches make it work */
 	mcurom[0x100] = 0x55;		/* D5 in current dump */
@@ -4668,11 +4727,11 @@ static DRIVER_INIT( choplift )
 
 static DRIVER_INIT( shtngmst )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	memory_install_read_port_handler(iospace, 0x12, 0x12, 0x00, 0x00, "TRIGGER");
-	memory_install_read_port_handler(iospace, 0x18, 0x18, 0x00, 0x03, "18");
-	memory_install_read_port_handler(iospace, 0x1c, 0x1c, 0x00, 0x02, "GUNX");
-	memory_install_read_port_handler(iospace, 0x1d, 0x1d, 0x00, 0x02, "GUNY");
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	iospace->install_read_port(0x12, 0x12, 0x00, 0x00, "TRIGGER");
+	iospace->install_read_port(0x18, 0x18, 0x00, 0x03, "18");
+	iospace->install_read_port(0x1c, 0x1c, 0x00, 0x02, "GUNX");
+	iospace->install_read_port(0x1d, 0x1d, 0x00, 0x02, "GUNY");
 	DRIVER_INIT_CALL(bank0c);
 }
 
@@ -4686,7 +4745,7 @@ static DRIVER_INIT( shtngmst )
 
 /* PPI-based System 1 */
 GAME( 1983, starjack,   0,        sys1ppis, starjack,  bank00,   ROT270, "Sega",            "Star Jacker (Sega)", GAME_SUPPORTS_SAVE )
-GAME( 1983, starjacks,  starjack, sys1ppis, starjacks, bank00,   ROT270, "Stern",           "Star Jacker (Stern)", GAME_SUPPORTS_SAVE )
+GAME( 1983, starjacks,  starjack, sys1ppis, starjacks, bank00,   ROT270, "Sega (Stern Electronics license)", "Star Jacker (Stern Electronics)", GAME_SUPPORTS_SAVE )
 GAME( 1983, upndown,    0,        sys1ppi,  upndown,   nprinces, ROT270, "Sega",            "Up'n Down (315-5030)", GAME_SUPPORTS_SAVE )
 GAME( 1983, upndownu,   upndown,  sys1ppi,  upndown,   bank00,   ROT270, "Sega",            "Up'n Down (not encrypted)", GAME_SUPPORTS_SAVE )
 GAME( 1983, regulus,    0,        sys1ppi,  regulus,   regulus,  ROT270, "Sega",            "Regulus (315-5033, Rev A.)", GAME_SUPPORTS_SAVE )
@@ -4696,20 +4755,20 @@ GAME( 1984, mrviking,   0,        sys1ppis, mrviking,  mrviking, ROT270, "Sega",
 GAME( 1984, mrvikingj,  mrviking, sys1ppis, mrvikingj, mrviking, ROT270, "Sega",            "Mister Viking (315-5041, Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1984, swat,       0,        sys1ppi,  swat,      swat,     ROT270, "Coreland / Sega", "SWAT (315-5048)", GAME_SUPPORTS_SAVE )
 GAME( 1984, flickyo,    flicky,   sys1ppi,  flicky,    flicky,   ROT0,   "Sega",            "Flicky (64k Version, System 1, 315-5051, set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1984, flickys1,   flicky,   sys1ppi,  flicky,    flicky,   ROT0,   "Sega",            "Flicky (64k Version, System 1, 315-5051, set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1984, flickys1,   flicky,   sys1ppi,  flickys1,  flicky,   ROT0,   "Sega",            "Flicky (64k Version, System 1, 315-5051, set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1984, wmatch,     0,        sys1ppis, wmatch,    wmatch,   ROT270, "Sega",            "Water Match (315-5064)", GAME_SUPPORTS_SAVE )
 GAME( 1984, bullfgt,    0,        sys1ppi,  bullfgt,   bullfgtj, ROT0,   "Coreland / Sega", "Bullfight (315-5065)", GAME_SUPPORTS_SAVE )
 GAME( 1985, nprinces,   seganinj, sys1ppi,  seganinj,  flicky,   ROT0,   "bootleg?",        "Ninja Princess (315-5051, 64k Ver. bootleg?)", GAME_SUPPORTS_SAVE )
 GAME( 1985, nprincesu,  seganinj, sys1ppi,  seganinj,  bank00,   ROT0,   "Sega",            "Ninja Princess (64k Ver. not encrypted)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboy2,      wboy,     sys1ppi,  wboy,      wboy2,    ROT0,   "Sega (Escape license)", "Wonder Boy (set 2, 315-5178)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboy2u,     wboy,     sys1ppi,  wboy,      bank00,   ROT0,   "Sega (Escape license)", "Wonder Boy (set 2, not encrypted)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wbdeluxe,   wboy,     sys1ppi,  wbdeluxe,  bank00,   ROT0,   "Sega (Escape license)", "Wonder Boy Deluxe", GAME_SUPPORTS_SAVE )
-GAME( 1986, nob,        0,        nobm,     nob,       nob,      ROT270, "Data East Corporation", "Noboranka (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1986, nobb,       nob,      nob,      nob,       nobb,     ROT270, "bootleg",               "Noboranka (Japan, bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboy2,      wboy,     sys1ppi,  wboy,      wboy2,    ROT0,   "Escape (Sega license)", "Wonder Boy (set 2, 315-5178)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboy2u,     wboy,     sys1ppi,  wboy,      bank00,   ROT0,   "Escape (Sega license)", "Wonder Boy (set 2, not encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wbdeluxe,   wboy,     sys1ppi,  wbdeluxe,  bank00,   ROT0,   "Escape (Sega license)", "Wonder Boy Deluxe", GAME_SUPPORTS_SAVE )
+GAME( 1986, nob,        0,        nobm,     nob,       nob,      ROT270, "Coreland / Data East Corporation", "Noboranka (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1986, nobb,       nob,      nob,      nob,       nobb,     ROT270, "bootleg (Game Electronics)", "Noboranka (Japan, bootleg)", GAME_SUPPORTS_SAVE )
 
 /* PIO-based System 1 */
 GAME( 1984, flicky,     0,        sys1pio,  flicky,    flicky,   ROT0,   "Sega",            "Flicky (128k Version, System 2, 315-5051)", GAME_SUPPORTS_SAVE )
-GAME( 1984, flickys2,   flicky,   sys1pio,  flicky,    bank00,   ROT0,   "Sega",            "Flicky (128k Version, System 2, not encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1984, flickys2,   flicky,   sys1pio,  flickys2,  bank00,   ROT0,   "Sega",            "Flicky (128k Version, System 2, not encrypted)", GAME_SUPPORTS_SAVE )
 GAME( 1984, thetogyu,   bullfgt,  sys1pio,  bullfgt,   bullfgtj, ROT0,   "Coreland / Sega", "The Togyu (315-5065, Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1984, spatter,    0,        sys1pios, spatter,   spatter,  ROT0,   "Sega",            "Spatter", GAME_SUPPORTS_SAVE )
 GAME( 1984, ssanchan,   spatter,  sys1pios, spatter,   spatter,  ROT0,   "Sega",            "Sanrin San Chan (Japan)", GAME_SUPPORTS_SAVE )
@@ -4725,16 +4784,16 @@ GAME( 1985, imsorry,    0,        sys1pio,  imsorry,   imsorry,  ROT0,   "Corela
 GAME( 1985, imsorryj,   imsorry,  sys1pio,  imsorry,   imsorry,  ROT0,   "Coreland / Sega", "Gonbee no I'm Sorry (315-5110, Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1985, teddybb,    0,        sys1pio,  teddybb,   teddybb,  ROT0,   "Sega",            "TeddyBoy Blues (315-5115, New Ver.)", GAME_SUPPORTS_SAVE )
 GAME( 1985, teddybbo,   teddybb,  sys1pio,  teddybb,   teddybb,  ROT0,   "Sega",            "TeddyBoy Blues (315-5115, Old Ver.)", GAME_SUPPORTS_SAVE )
-GAME( 1985, myhero,     0,        sys1pio,  myhero,    bank00,   ROT0,   "Sega",            "My Hero (US, not encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1985, myhero,     0,        sys1pio,  myhero,    bank00,   ROT0,   "Coreland / Sega", "My Hero (US, not encrypted)", GAME_SUPPORTS_SAVE )
 GAME( 1985, sscandal,   myhero,   sys1pio,  myhero,    myheroj,  ROT0,   "Coreland / Sega", "Seishun Scandal (315-5132, Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1985, myherok,    myhero,   sys1pio,  myhero,    myherok,  ROT0,   "Coreland / Sega", "My Hero (Korea)", GAME_SUPPORTS_SAVE )
 GAME( 1985, 4dwarrio,   0,        sys1pio,  4dwarrio,  4dwarrio, ROT0,   "Coreland / Sega", "4-D Warriors (315-5162)", GAME_SUPPORTS_SAVE )
 GAME( 1986, raflesia,   0,        sys1pio,  raflesia,  4dwarrio, ROT270, "Coreland / Sega", "Rafflesia (315-5162)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboy,       0,        sys1pio,  wboy,      wboy,     ROT0,   "Sega (Escape license)", "Wonder Boy (set 1, 315-5177)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboyo,      wboy,     sys1pio,  wboy,      wboyo,    ROT0,   "Sega (Escape license)", "Wonder Boy (set 1, 315-5135)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboy3,      wboy,     sys1pio,  wboy3,     wboyo,    ROT0,   "Sega (Escape license)", "Wonder Boy (set 3, 315-5135)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboy4,      wboy,     sys1pio,  wboy,      4dwarrio, ROT0,   "Sega (Escape license)", "Wonder Boy (315-5162, 4-D Warriors Conversion)", GAME_SUPPORTS_SAVE )
-GAME( 1986, wboyu,      wboy,     sys1pio,  wboyu,     bank00,   ROT0,   "Sega (Escape license)", "Wonder Boy (prototype?)", GAME_SUPPORTS_SAVE ) // appears to be a very early / unfinished version.
+GAME( 1986, wboy,       0,        sys1pio,  wboy,      wboy,     ROT0,   "Escape (Sega license)", "Wonder Boy (set 1, 315-5177)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboyo,      wboy,     sys1pio,  wboy,      wboyo,    ROT0,   "Escape (Sega license)", "Wonder Boy (set 1, 315-5135)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboy3,      wboy,     sys1pio,  wboy3,     wboyo,    ROT0,   "Escape (Sega license)", "Wonder Boy (set 3, 315-5135)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboy4,      wboy,     sys1pio,  wboy,      4dwarrio, ROT0,   "Escape (Sega license)", "Wonder Boy (315-5162, 4-D Warriors Conversion)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboyu,      wboy,     sys1pio,  wboyu,     bank00,   ROT0,   "Escape (Sega license)", "Wonder Boy (prototype?)", GAME_SUPPORTS_SAVE ) // appears to be a very early / unfinished version.
 GAME( 1987, blockgal,   0,        sys1pio,  blockgal,  blockgal, ROT90,  "Sega / Vic Tokai", "Block Gal (MC-8123B, 317-0029)", GAME_SUPPORTS_SAVE)
 
 /* PIO-based System 1 with ROM banking */
@@ -4747,16 +4806,16 @@ GAME( 1985, choplift,   0,        sys2rowm, choplift,  choplift, ROT0,   "Sega",
 GAME( 1985, chopliftu,  choplift, sys2row,  choplift,  bank0c,   ROT0,   "Sega",            "Choplifter (unprotected)", GAME_SUPPORTS_SAVE )
 GAME( 1985, chopliftbl, choplift, sys2row,  choplift,  bank0c,   ROT0,   "bootleg",         "Choplifter (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1985, shtngmst,   0,        sys2m,    shtngmst,  shtngmst, ROT0,   "Sega",            "Shooting Master (8751 315-5159)", GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
-GAME( 1985, shtngmste,  shtngmst, sys2m,    shtngmst,  shtngmst, ROT0,   "Sega [EVG]",      "Shooting Master (EVG, 8751 315-5159a)", GAME_SUPPORTS_SAVE )
+GAME( 1985, shtngmste,  shtngmst, sys2m,    shtngmst,  shtngmst, ROT0,   "Sega / EVG",      "Shooting Master (EVG, 8751 315-5159a)", GAME_SUPPORTS_SAVE )
 GAME( 1986, gardiab,    gardia,   sys2,     gardia,    gardiab,  ROT270, "bootleg",         "Gardia (317-0007?, bootleg)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1986, wboysys2,   wboy,     sys2,     wboysys2,  wboysys2, ROT0,   "Sega (Escape license)", "Wonder Boy (system 2)", GAME_SUPPORTS_SAVE )
+GAME( 1986, wboysys2,   wboy,     sys2,     wboysys2,  wboysys2, ROT0,   "Escape (Sega license)", "Wonder Boy (system 2)", GAME_SUPPORTS_SAVE )
 GAME( 1987, tokisens,   0,        sys2,     tokisens,  bank0c,   ROT90,  "Sega",            "Toki no Senshi - Chrono Soldier", GAME_SUPPORTS_SAVE )
 GAME( 1987, wbml,       0,        sys2,     wbml,      wbml,     ROT0,   "Sega / Westone",  "Wonder Boy in Monster Land (Japan New Ver., MC-8123, 317-0043)", GAME_SUPPORTS_SAVE )
 GAME( 1987, wbmljo,     wbml,     sys2,     wbml,      wbml,     ROT0,   "Sega / Westone",  "Wonder Boy in Monster Land (Japan Old Ver., MC-8123, 317-0043)", GAME_SUPPORTS_SAVE )
 GAME( 1987, wbmljb,     wbml,     sys2,     wbml,      bootsys2, ROT0,   "bootleg",         "Wonder Boy in Monster Land (Japan not encrypted)", GAME_SUPPORTS_SAVE )
 GAME( 1987, wbmlb,      wbml,     sys2,     wbml,      bootsys2, ROT0,   "bootleg",         "Wonder Boy in Monster Land (English bootleg)", GAME_SUPPORTS_SAVE)
-GAME( 1987, wbmlbg,     wbml,     sys2,     wbml,      bootsys2, ROT0,   "bootleg",         "Wonder Boy in Monster Land (Galaxy Electronics English bootleg)", GAME_SUPPORTS_SAVE)
-GAME( 1987, dakkochn,   0,        sys2,     dakkochn,  dakkochn, ROT0,   "Whiteboard",      "DakkoChan House (MC-8123, 317-0014)", GAME_SUPPORTS_SAVE )
+GAME( 1987, wbmlbg,     wbml,     sys2,     wbml,      bootsys2, ROT0,   "bootleg (Galaxy Electronics)", "Wonder Boy in Monster Land (Galaxy Electronics English bootleg)", GAME_SUPPORTS_SAVE)
+GAME( 1987, dakkochn,   0,        sys2,     dakkochn,  dakkochn, ROT0,   "White Board",     "DakkoChan House (MC-8123, 317-0014)", GAME_SUPPORTS_SAVE )
 GAME( 1987, blockgalb,  blockgal, sys2,     blockgal,  bootleg,  ROT90,  "bootleg",         "Block Gal (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1988, ufosensi,   0,        sys2row,  ufosensi,  ufosensi, ROT0,   "Sega",            "Ufo Senshi Yohko Chan (MC-8123, 317-0064)", GAME_SUPPORTS_SAVE )
 GAME( 1988, ufosensib,  ufosensi, sys2row,  ufosensi,  bootsys2, ROT0,   "bootleg",         "Ufo Senshi Yohko Chan (not encrypted)", GAME_SUPPORTS_SAVE )

@@ -1,103 +1,101 @@
 /***************************************************************************
 
-Super Contra / Thunder Cross
+    Super Contra / Thunder Cross
 
-driver by Bryan McPhail, Manuel Abadia
+    driver by Bryan McPhail, Manuel Abadia
 
-K052591 emulation by Eddie Edwards
+    K052591 emulation by Eddie Edwards
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/konami/konami.h" /* for the callback and the firq irq definition */
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "sound/2151intf.h"
 #include "sound/k007232.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
+#include "includes/thunderx.h"
 
-static MACHINE_RESET( scontra );
-static MACHINE_RESET( thunderx );
 static KONAMI_SETLINES_CALLBACK( thunderx_banking );
-
-extern int scontra_priority;
-VIDEO_START( scontra );
-VIDEO_UPDATE( scontra );
-
-static UINT8 thunderx_1f98_data = 0;
 
 /***************************************************************************/
 
 static INTERRUPT_GEN( scontra_interrupt )
 {
-	if (K052109_is_IRQ_enabled())
-		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
+	thunderx_state *state = device->machine().driver_data<thunderx_state>();
+
+	if (k052109_is_irq_enabled(state->m_k052109))
+		device_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
 
 static TIMER_CALLBACK( thunderx_firq_callback )
 {
-	cputag_set_input_line(machine, "maincpu", KONAMI_FIRQ_LINE, HOLD_LINE);
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+	device_set_input_line(state->m_maincpu, KONAMI_FIRQ_LINE, HOLD_LINE);
 }
-
-
-static int palette_selected;
-static int rambank,pmcbank;
-static UINT8 *ram,*pmcram;
 
 static READ8_HANDLER( scontra_bankedram_r )
 {
-	if (palette_selected)
-		return paletteram[offset];
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	if (state->m_palette_selected)
+		return space->machine().generic.paletteram.u8[offset];
 	else
-		return ram[offset];
+		return state->m_ram[offset];
 }
 
 static WRITE8_HANDLER( scontra_bankedram_w )
 {
-	if (palette_selected)
-		paletteram_xBBBBBGGGGGRRRRR_be_w(space,offset,data);
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	if (state->m_palette_selected)
+		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 	else
-		ram[offset] = data;
+		state->m_ram[offset] = data;
 }
 
 static READ8_HANDLER( thunderx_bankedram_r )
 {
-	if (rambank & 0x01)
-		return ram[offset];
-	else if (rambank & 0x10)
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	if (state->m_rambank & 0x01)
+		return state->m_ram[offset];
+	else if (state->m_rambank & 0x10)
 	{
-		if (pmcbank)
+		if (state->m_pmcbank)
 		{
-//          logerror("%04x read pmcram %04x\n",cpu_get_pc(space->cpu),offset);
-			return pmcram[offset];
+//          logerror("%04x read pmcram %04x\n",cpu_get_pc(&space->device()),offset);
+			return state->m_pmcram[offset];
 		}
 		else
 		{
-			logerror("%04x read pmc internal ram %04x\n",cpu_get_pc(space->cpu),offset);
+			logerror("%04x read pmc internal ram %04x\n",cpu_get_pc(&space->device()),offset);
 			return 0;
 		}
 	}
 	else
-		return paletteram[offset];
+		return space->machine().generic.paletteram.u8[offset];
 }
 
 static WRITE8_HANDLER( thunderx_bankedram_w )
 {
-	if (rambank & 0x01)
-		ram[offset] = data;
-	else if (rambank & 0x10)
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	if (state->m_rambank & 0x01)
+		state->m_ram[offset] = data;
+	else if (state->m_rambank & 0x10)
 	{
-//          if (offset == 0x200)    debug_signal_breakpoint(1);
-		if (pmcbank)
+		if (state->m_pmcbank)
 		{
-			logerror("%04x pmcram %04x = %02x\n",cpu_get_pc(space->cpu),offset,data);
-			pmcram[offset] = data;
+			logerror("%04x pmcram %04x = %02x\n",cpu_get_pc(&space->device()),offset,data);
+			state->m_pmcram[offset] = data;
 		}
 		else
-			logerror("%04x pmc internal ram %04x = %02x\n",cpu_get_pc(space->cpu),offset,data);
+			logerror("%04x pmc internal ram %04x = %02x\n",cpu_get_pc(&space->device()),offset,data);
 	}
 	else
-		paletteram_xBBBBBGGGGGRRRRR_be_w(space,offset,data);
+		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
 }
 
 /*
@@ -187,16 +185,17 @@ this is the data written to internal ram on startup:
 // +3 : x (2 pixel units) of center of object
 // +4 : y (2 pixel units) of center of object
 
-static void run_collisions(int s0, int e0, int s1, int e1, int cm, int hm)
+static void run_collisions( running_machine &machine, int s0, int e0, int s1, int e1, int cm, int hm )
 {
-	UINT8*	p0;
-	UINT8*	p1;
-	int				ii,jj;
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+	UINT8* p0;
+	UINT8* p1;
+	int ii, jj;
 
-	p0 = &pmcram[16 + 5*s0];
+	p0 = &state->m_pmcram[16 + 5 * s0];
 	for (ii = s0; ii < e0; ii++, p0 += 5)
 	{
-		int	l0,r0,b0,t0;
+		int	l0, r0, b0, t0;
 
 		// check valid
 		if (!(p0[0] & cm))			continue;
@@ -207,7 +206,7 @@ static void run_collisions(int s0, int e0, int s1, int e1, int cm, int hm)
 		t0 = p0[4] - p0[2];
 		b0 = p0[4] + p0[2];
 
-		p1 = &pmcram[16 + 5*s1];
+		p1 = &state->m_pmcram[16 + 5 * s1];
 		for (jj = s1; jj < e1; jj++,p1 += 5)
 		{
 			int	l1,r1,b1,t1;
@@ -238,8 +237,9 @@ static void run_collisions(int s0, int e0, int s1, int e1, int cm, int hm)
 //
 // emulates K052591 collision detection
 
-static void calculate_collisions( void )
+static void calculate_collisions( running_machine &machine )
 {
+	thunderx_state *state = machine.driver_data<thunderx_state>();
 	int	X0,Y0;
 	int	X1,Y1;
 	int	CM,HM;
@@ -263,100 +263,106 @@ static void calculate_collisions( void )
 	// hit mask is 40 to set bit on object 0 and object 1
 	// hit mask is 20 to set bit on object 1 only
 
-	Y0 = pmcram[0];
-	Y0 = (Y0 << 8) + pmcram[1];
+	Y0 = state->m_pmcram[0];
+	Y0 = (Y0 << 8) + state->m_pmcram[1];
 	Y0 = (Y0 - 15) / 5;
-	Y1 = (pmcram[2] - 15) / 5;
+	Y1 = (state->m_pmcram[2] - 15) / 5;
 
-	if (pmcram[5] < 16)
+	if (state->m_pmcram[5] < 16)
 	{
 		// US Thunder Cross uses this form
-		X0 = pmcram[5];
-		X0 = (X0 << 8) + pmcram[6];
+		X0 = state->m_pmcram[5];
+		X0 = (X0 << 8) + state->m_pmcram[6];
 		X0 = (X0 - 16) / 5;
-		X1 = (pmcram[7] - 16) / 5;
+		X1 = (state->m_pmcram[7] - 16) / 5;
 	}
 	else
 	{
 		// Japan Thunder Cross uses this form
-		X0 = (pmcram[5] - 16) / 5;
-		X1 = (pmcram[6] - 16) / 5;
+		X0 = (state->m_pmcram[5] - 16) / 5;
+		X1 = (state->m_pmcram[6] - 16) / 5;
 	}
 
-	CM = pmcram[3];
-	HM = pmcram[4];
+	CM = state->m_pmcram[3];
+	HM = state->m_pmcram[4];
 
-	run_collisions(X0,Y0,X1,Y1,CM,HM);
+	run_collisions(machine, X0, Y0, X1, Y1, CM, HM);
 }
 
 static READ8_HANDLER( thunderx_1f98_r )
 {
-	return thunderx_1f98_data;
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	return state->m_1f98_data;
 }
 
 static WRITE8_HANDLER( thunderx_1f98_w )
 {
-// logerror("%04x: 1f98_w %02x\n",cpu_get_pc(space->cpu),data);
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	// logerror("%04x: 1f98_w %02x\n", cpu_get_pc(&space->device()),data);
 
 	/* bit 0 = enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line((data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(state->m_k052109, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 1 = PMC-BK */
-	pmcbank = (data & 0x02) >> 1;
+	state->m_pmcbank = (data & 0x02) >> 1;
 
 	/* bit 2 = do collision detection when 0->1 */
-	if ((data & 4) && !(thunderx_1f98_data & 4))
+	if ((data & 4) && !(state->m_1f98_data & 4))
 	{
-		calculate_collisions();
+		calculate_collisions(space->machine());
 
 		/* 100 cycle delay is arbitrary */
-		timer_set(space->machine, cpu_clocks_to_attotime(space->cpu,100), NULL, 0, thunderx_firq_callback);
+		space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(100), FUNC(thunderx_firq_callback));
 	}
 
-	thunderx_1f98_data = data;
+	state->m_1f98_data = data;
 }
 
 static WRITE8_HANDLER( scontra_bankswitch_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 	int offs;
 
-//logerror("%04x: bank switch %02x\n",cpu_get_pc(space->cpu),data);
+//logerror("%04x: bank switch %02x\n",cpu_get_pc(&space->device()),data);
 
 	/* bits 0-3 ROM bank */
 	offs = 0x10000 + (data & 0x0f)*0x2000;
-	memory_set_bankptr(space->machine,  1, &RAM[offs] );
+	memory_set_bankptr(space->machine(),  "bank1", &RAM[offs] );
 
 	/* bit 4 select work RAM or palette RAM at 5800-5fff */
-	palette_selected = ~data & 0x10;
+	state->m_palette_selected = ~data & 0x10;
 
 	/* bits 5/6 coin counters */
-	coin_counter_w(0,data & 0x20);
-	coin_counter_w(1,data & 0x40);
+	coin_counter_w(space->machine(), 0, data & 0x20);
+	coin_counter_w(space->machine(), 1, data & 0x40);
 
 	/* bit 7 controls layer priority */
-	scontra_priority = data & 0x80;
+	state->m_priority = data & 0x80;
 }
 
 static WRITE8_HANDLER( thunderx_videobank_w )
 {
-//logerror("%04x: select video ram bank %02x\n",cpu_get_pc(space->cpu),data);
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	//logerror("%04x: select video ram bank %02x\n",cpu_get_pc(&space->device()),data);
 	/* 0x01 = work RAM at 4000-5fff */
 	/* 0x00 = palette at 5800-5fff */
 	/* 0x10 = unknown RAM at 5800-5fff */
-	rambank = data;
+	state->m_rambank = data;
 
 	/* bits 1/2 coin counters */
-	coin_counter_w(0,data & 0x02);
-	coin_counter_w(1,data & 0x04);
+	coin_counter_w(space->machine(), 0, data & 0x02);
+	coin_counter_w(space->machine(), 1, data & 0x04);
 
 	/* bit 3 controls layer priority (seems to be always 1) */
-	scontra_priority = data & 0x08;
+	state->m_priority = data & 0x08;
 }
 
 static WRITE8_HANDLER( thunderx_sh_irqtrigger_w )
 {
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_DEVICE_HANDLER( scontra_snd_bankswitch_w )
@@ -366,12 +372,41 @@ static WRITE8_DEVICE_HANDLER( scontra_snd_bankswitch_w )
 
 	int bank_A = (data & 0x03);
 	int bank_B = ((data >> 2) & 0x03);
-	k007232_set_bank( device, bank_A, bank_B );
+	k007232_set_bank(device, bank_A, bank_B);
+}
+
+static READ8_HANDLER( k052109_051960_r )
+{
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	if (k052109_get_rmrd_line(state->m_k052109) == CLEAR_LINE)
+	{
+		if (offset >= 0x3800 && offset < 0x3808)
+			return k051937_r(state->m_k051960, offset - 0x3800);
+		else if (offset < 0x3c00)
+			return k052109_r(state->m_k052109, offset);
+		else
+			return k051960_r(state->m_k051960, offset - 0x3c00);
+	}
+	else
+		return k052109_r(state->m_k052109, offset);
+}
+
+static WRITE8_HANDLER( k052109_051960_w )
+{
+	thunderx_state *state = space->machine().driver_data<thunderx_state>();
+
+	if (offset >= 0x3800 && offset < 0x3808)
+		k051937_w(state->m_k051960, offset - 0x3800, data);
+	else if (offset < 0x3c00)
+		k052109_w(state->m_k052109, offset, data);
+	else
+		k051960_w(state->m_k051960, offset - 0x3c00, data);
 }
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( scontra_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( scontra_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1f80, 0x1f80) AM_WRITE(scontra_bankswitch_w)	/* bankswitch control + coin counters */
 	AM_RANGE(0x1f84, 0x1f84) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1f88, 0x1f88) AM_WRITE(thunderx_sh_irqtrigger_w)		/* cause interrupt on audio CPU */
@@ -383,15 +418,15 @@ static ADDRESS_MAP_START( scontra_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f94, 0x1f94) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1f95, 0x1f95) AM_READ_PORT("DSW2")
 	AM_RANGE(0x1f98, 0x1f98) AM_WRITE(thunderx_1f98_w)
-	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(K052109_051960_r, K052109_051960_w)		/* video RAM + sprite RAM */
+	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)		/* video RAM + sprite RAM */
 
 	AM_RANGE(0x4000, 0x57ff) AM_RAM
-	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(scontra_bankedram_r, scontra_bankedram_w) AM_BASE(&ram)			/* palette + work RAM */
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(scontra_bankedram_r, scontra_bankedram_w) AM_BASE_MEMBER(thunderx_state, m_ram)			/* palette + work RAM */
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( thunderx_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( thunderx_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1f80, 0x1f80) AM_WRITE(thunderx_videobank_w)
 	AM_RANGE(0x1f84, 0x1f84) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1f88, 0x1f88) AM_WRITE(thunderx_sh_irqtrigger_w)		/* cause interrupt on audio CPU */
@@ -403,28 +438,28 @@ static ADDRESS_MAP_START( thunderx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f94, 0x1f94) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1f95, 0x1f95) AM_READ_PORT("DSW2")
 	AM_RANGE(0x1f98, 0x1f98) AM_READWRITE(thunderx_1f98_r, thunderx_1f98_w) /* registers */
-	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(K052109_051960_r, K052109_051960_w)
+	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 
 	AM_RANGE(0x4000, 0x57ff) AM_RAM
-	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(thunderx_bankedram_r, thunderx_bankedram_w) AM_BASE(&ram)			/* palette + work RAM + unknown RAM */
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(thunderx_bankedram_r, thunderx_bankedram_w) AM_BASE_MEMBER(thunderx_state, m_ram)			/* palette + work RAM + unknown RAM */
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scontra_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( scontra_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM					/* ROM */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM					/* RAM */
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)			/* soundlatch_r */
-	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("konami", k007232_r, k007232_w)		/* 007232 registers */
-	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)		/* YM2151 */
-	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("konami", scontra_snd_bankswitch_w)	/* 007232 bank select */
+	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("k007232", k007232_r, k007232_w)		/* 007232 registers */
+	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)		/* YM2151 */
+	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("k007232", scontra_snd_bankswitch_w)	/* 007232 bank select */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( thunderx_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( thunderx_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
-	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -444,40 +479,39 @@ static INPUT_PORTS_START( scontra )
 	KONAMI8_B12_UNK(2)
 
 	PORT_START("DSW1")
-	KONAMI_COINAGE(DEF_STR( Free_Play ), "No Coin B")
+	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), "No Coin B", SW1)
 	/* "No Coin B" = coins produce sound, but no effect on coin counter */
 
 	PORT_START("DSW2")
 	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(	0x03, "2" )
-	PORT_DIPSETTING(	0x02, "3" ) // factory default
+	PORT_DIPSETTING(	0x02, "3" )
 	PORT_DIPSETTING(	0x01, "5" )
 	PORT_DIPSETTING(	0x00, "7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x00, "SW2:3" )  // test mode calls it cabinet type, but this is a 2 players game
-	                                               // US manual default = "ON : Upright" / Japanese manual default = "OFF : Table" , but not work?
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x00, "SW2:3" ) // test mode calls it cabinet type, but this is a 2 players game
 	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:4,5")
-	PORT_DIPSETTING(	0x18, "30000 200000" ) // factory default. Japanese manual has typo "30000 300000"
-	PORT_DIPSETTING(	0x10, "50000 300000" ) //                                           "50000 200000"
+	PORT_DIPSETTING(	0x18, "30000 200000" )
+	PORT_DIPSETTING(	0x10, "50000 300000" )
 	PORT_DIPSETTING(	0x08, "30000" )
 	PORT_DIPSETTING(	0x00, "50000" )
 	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:6,7")
 	PORT_DIPSETTING(	0x60, DEF_STR( Easy ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( Normal ) ) // factory default
+	PORT_DIPSETTING(	0x40, DEF_STR( Normal ) )
 	PORT_DIPSETTING(	0x20, DEF_STR( Difficult ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Very_Difficult ) )
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) ) // factory default
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 
 	PORT_START("DSW3")
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW3:1")
-	PORT_DIPSETTING(	0x01, DEF_STR( Off ) ) // factory default
+	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW3:2" )
-	PORT_SERVICE_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW3:3" )  // TYPO on US manual "OFF : Game mode / ON : Game mode"
+	PORT_SERVICE_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW3:3" )
 	PORT_DIPNAME( 0x08, 0x00, "Continue Limit (1Player/2Players)" )	PORT_DIPLOCATION("SW3:4")
 	PORT_DIPSETTING(    0x08, "3times / Twice altogether" )
-	PORT_DIPSETTING(    0x00, "5times / 4times altogether" ) // factory default
+	PORT_DIPSETTING(    0x00, "5times / 4times altogether" )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
@@ -495,17 +529,17 @@ static INPUT_PORTS_START( thunderx )
 	KONAMI8_B12_UNK(2)
 
 	PORT_START("DSW1")
-	KONAMI_COINAGE(DEF_STR( Free_Play ), "No Coin B")
+	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), "No Coin B", SW1)
 	/* "No Coin B" = coins produce sound, but no effect on coin counter */
 
- 	PORT_START("DSW2")
+	PORT_START("DSW2")
 	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, "2" )
-	PORT_DIPSETTING(    0x02, "3" ) // factory default
+	PORT_DIPSETTING(    0x02, "3" )
 	PORT_DIPSETTING(    0x01, "5" )
 	PORT_DIPSETTING(    0x00, "7" )
 	PORT_DIPNAME( 0x04, 0x00, "Award Bonus Life" )		PORT_DIPLOCATION("SW2:3")
-	PORT_DIPSETTING(    0x04, DEF_STR( No ) ) // factory default
+	PORT_DIPSETTING(    0x04, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
 	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(    0x18, "30000 200000" ) // Japanese default
@@ -514,20 +548,20 @@ static INPUT_PORTS_START( thunderx )
 	PORT_DIPSETTING(    0x00, "50000" )
 	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:6,7")
 	PORT_DIPSETTING(    0x60, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) ) // factory default
+	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Difficult ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Very_Difficult ) )
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) ) // factory default
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("DSW3")
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW3:1")
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) ) // factory default
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW3:2" )
-	PORT_SERVICE_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW3:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW3:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SW3:2" )
+	PORT_SERVICE_DIPLOC(   0x04, IP_ACTIVE_LOW, "SW3:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SW3:4" )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
@@ -535,24 +569,13 @@ static INPUT_PORTS_START( thnderxj )
 	PORT_INCLUDE( thunderx )
 
 	PORT_MODIFY("DSW2")
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW2:3" )  // manual says "OFF=Table On=Upright", but not work?
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW2:3" ) // manual says "OFF=Table On=Upright", but not work?
 	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:4,5")
-	PORT_DIPSETTING(    0x18, "30000 200000" )  // Japanese MS
-	PORT_DIPSETTING(    0x10, "50000 300000" )  // US MS
+	PORT_DIPSETTING(    0x18, "30000 200000" ) // Japanese default
+	PORT_DIPSETTING(    0x10, "50000 300000" ) // US default
 	PORT_DIPSETTING(    0x08, "30000" )
 	PORT_DIPSETTING(    0x00, "50000" )
 INPUT_PORTS_END
-
-/*
-static INPUT_PORTS_START( thndrxja ) // for Japanese later revision (not dumped yet)
-    PORT_INCLUDE( thnderxj )
-
-    PORT_MODIFY("DSW3")
-    PORT_DIPNAME( 0x08, 0x08, "All Stage Clear Loop" )  PORT_DIPLOCATION("SW3:4")
-    PORT_DIPSETTING(    0x08, "Game ends after 3 loops" )  // factory default
-    PORT_DIPSETTING(    0x00, "Endless" )
-INPUT_PORTS_END
-*/
 
 
 /***************************************************************************
@@ -561,10 +584,10 @@ INPUT_PORTS_END
 
 ***************************************************************************/
 
-static void volume_callback(const device_config *device, int v)
+static void volume_callback(device_t *device, int v)
 {
-	k007232_set_volume(device,0,(v >> 4) * 0x11,0);
-	k007232_set_volume(device,1,0,(v & 0x0f) * 0x11);
+	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
+	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
 }
 
 static const k007232_interface k007232_config =
@@ -574,81 +597,157 @@ static const k007232_interface k007232_config =
 
 
 
-static MACHINE_DRIVER_START( scontra )
+static const k052109_interface thunderx_k052109_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	thunderx_tile_callback
+};
+
+static const k051960_interface thunderx_k051960_intf =
+{
+	"gfx2", 1,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	thunderx_sprite_callback
+};
+
+static MACHINE_START( scontra )
+{
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+
+	machine.generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x800);
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_k007232 = machine.device("k007232");
+	state->m_k052109 = machine.device("k052109");
+	state->m_k051960 = machine.device("k051960");
+
+	state->save_item(NAME(state->m_priority));
+	state->save_item(NAME(state->m_1f98_data));
+	state->save_item(NAME(state->m_palette_selected));
+	state->save_item(NAME(state->m_rambank));
+	state->save_item(NAME(state->m_pmcbank));
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x800);
+}
+
+static MACHINE_START( thunderx )
+{
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 12, &ROM[0x10000], 0x2000);
+	memory_configure_bank(machine, "bank1", 12, 4, &ROM[0x08000], 0x2000);
+	memory_set_bank(machine, "bank1", 0);
+
+	memset(state->m_pmcram, 0, sizeof(state->m_pmcram));
+
+	MACHINE_START_CALL(scontra);
+
+	state->save_item(NAME(state->m_pmcram));
+}
+
+static MACHINE_RESET( scontra )
+{
+	thunderx_state *state = machine.driver_data<thunderx_state>();
+
+	state->m_priority = 0;
+	state->m_1f98_data = 0;
+	state->m_palette_selected = 0;
+	state->m_rambank = 0;
+	state->m_pmcbank = 0;
+}
+
+static MACHINE_RESET( thunderx )
+{
+	konami_configure_set_lines(machine.device("maincpu"), thunderx_banking);
+
+	MACHINE_RESET_CALL(scontra);
+}
+
+static MACHINE_CONFIG_START( scontra, thunderx_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", KONAMI, 3000000)	/* 052001 */
-	MDRV_CPU_PROGRAM_MAP(scontra_map)
-	MDRV_CPU_VBLANK_INT("screen", scontra_interrupt)
+	MCFG_CPU_ADD("maincpu", KONAMI, XTAL_24MHz/8)		/* Verified on pcb, CPU is 052001 */
+	MCFG_CPU_PROGRAM_MAP(scontra_map)
+	MCFG_CPU_VBLANK_INT("screen", scontra_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545)		/* ? */
-	MDRV_CPU_PROGRAM_MAP(scontra_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(scontra_sound_map)
 
-	MDRV_MACHINE_RESET(scontra)
+	MCFG_MACHINE_START(scontra)
+	MCFG_MACHINE_RESET(scontra)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(59.17)				/* verified on pcb */
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE_STATIC(scontra)
 
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(scontra)
-	MDRV_VIDEO_UPDATE(scontra)
+	MCFG_VIDEO_START(scontra)
+
+	MCFG_K052109_ADD("k052109", thunderx_k052109_intf)
+	MCFG_K051960_ADD("k051960", thunderx_k051960_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
-	MDRV_SOUND_ROUTE(0, "mono", 1.0)
-	MDRV_SOUND_ROUTE(1, "mono", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz)	/* verified on pcb */
+	MCFG_SOUND_ROUTE(0, "mono", 1.0)
+	MCFG_SOUND_ROUTE(1, "mono", 1.0)
 
-	MDRV_SOUND_ADD("konami", K007232, 3579545)
-	MDRV_SOUND_CONFIG(k007232_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.20)
-	MDRV_SOUND_ROUTE(1, "mono", 0.20)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("k007232", K007232, XTAL_3_579545MHz)	/* verified on pcb */
+	MCFG_SOUND_CONFIG(k007232_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.20)
+	MCFG_SOUND_ROUTE(1, "mono", 0.20)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( thunderx )
+static MACHINE_CONFIG_START( thunderx, thunderx_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", KONAMI, 3000000)		/* ? */
-	MDRV_CPU_PROGRAM_MAP(thunderx_map)
-	MDRV_CPU_VBLANK_INT("screen", scontra_interrupt)
+	MCFG_CPU_ADD("maincpu", KONAMI, 3000000)		/* ? */
+	MCFG_CPU_PROGRAM_MAP(thunderx_map)
+	MCFG_CPU_VBLANK_INT("screen", scontra_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545)		/* ? */
-	MDRV_CPU_PROGRAM_MAP(thunderx_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, 3579545)		/* ? */
+	MCFG_CPU_PROGRAM_MAP(thunderx_sound_map)
 
-	MDRV_MACHINE_RESET(thunderx)
+	MCFG_MACHINE_START(thunderx)
+	MCFG_MACHINE_RESET(thunderx)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE_STATIC(scontra)
 
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(scontra)
-	MDRV_VIDEO_UPDATE(scontra)
+	MCFG_VIDEO_START(scontra)
+
+	MCFG_K052109_ADD("k052109", thunderx_k052109_intf)
+	MCFG_K051960_ADD("k051960", thunderx_k051960_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
-	MDRV_SOUND_ROUTE(0, "mono", 1.0)
-	MDRV_SOUND_ROUTE(1, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
+	MCFG_SOUND_ROUTE(0, "mono", 1.0)
+	MCFG_SOUND_ROUTE(1, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -658,7 +757,7 @@ MACHINE_DRIVER_END
 ***************************************************************************/
 
 ROM_START( scontra )
-	ROM_REGION( 0x30800, "maincpu", 0 )	/* ROMs + banked RAM */
+	ROM_REGION( 0x30000, "maincpu", 0 )	/* ROMs + banked RAM */
 	ROM_LOAD( "775-e02.k11",     0x10000, 0x08000, CRC(a61c0ead) SHA1(9a0aadc8d3538fc1d88b761753fffcac8923a218) )	/* banked ROM */
 	ROM_CONTINUE(            0x08000, 0x08000 )				/* fixed ROM */
 	ROM_LOAD( "775-e03.k13",     0x20000, 0x10000, CRC(00b02622) SHA1(caf1da53815e437e3fb952d29e71f2c314684cd9) )	/* banked ROM */
@@ -698,7 +797,7 @@ ROM_START( scontra )
 	ROM_LOAD16_BYTE( "775-f06d.bin", 0xe0000, 0x10000, CRC(c8b764fa) SHA1(62f7f59ed36dca7346ec9eb019a4e435e8476dc6) )
 	ROM_LOAD16_BYTE( "775-f06h.bin", 0xe0001, 0x10000, CRC(d6595f59) SHA1(777ea6da2026c90e7fbbc598275c8f95f2eb99c2) )
 
-	ROM_REGION( 0x80000, "konami", 0 )	/* k007232 data */
+	ROM_REGION( 0x80000, "k007232", 0 )	/* k007232 data */
 	ROM_LOAD( "775-a04a.bin", 0x00000, 0x10000, CRC(7efb2e0f) SHA1(fb350a056b547fe4f981bc211e2f9518ae5a3499) )
 	ROM_LOAD( "775-a04b.bin", 0x10000, 0x10000, CRC(f41a2b33) SHA1(dffa06360b6032f7370fe72698aacad4d8779472) )
 	ROM_LOAD( "775-a04c.bin", 0x20000, 0x10000, CRC(e4e58f14) SHA1(23dcb4dfa9a44115d1b730d9efcc314801b811c7) )
@@ -713,7 +812,7 @@ ROM_START( scontra )
 ROM_END
 
 ROM_START( scontraj )
-	ROM_REGION( 0x30800, "maincpu", 0 )	/* ROMs + banked RAM */
+	ROM_REGION( 0x30000, "maincpu", 0 )	/* ROMs + banked RAM */
 	ROM_LOAD( "775-f02.bin", 0x10000, 0x08000, CRC(8d5933a7) SHA1(e13ec62a4209b790b609429d98620ec0d07bd0ee) )	/* banked ROM */
 	ROM_CONTINUE(            0x08000, 0x08000 )				/* fixed ROM */
 	ROM_LOAD( "775-f03.bin", 0x20000, 0x10000, CRC(1ef63d80) SHA1(8fa41038ec2928f9572d0d4511a4bb3a3d8de06d) )	/* banked ROM */
@@ -753,7 +852,7 @@ ROM_START( scontraj )
 	ROM_LOAD16_BYTE( "775-f06d.bin", 0xe0000, 0x10000, CRC(c8b764fa) SHA1(62f7f59ed36dca7346ec9eb019a4e435e8476dc6) )
 	ROM_LOAD16_BYTE( "775-f06h.bin", 0xe0001, 0x10000, CRC(d6595f59) SHA1(777ea6da2026c90e7fbbc598275c8f95f2eb99c2) )
 
-	ROM_REGION( 0x80000, "konami", 0 )	/* k007232 data */
+	ROM_REGION( 0x80000, "k007232", 0 )	/* k007232 data */
 	ROM_LOAD( "775-a04a.bin", 0x00000, 0x10000, CRC(7efb2e0f) SHA1(fb350a056b547fe4f981bc211e2f9518ae5a3499) )
 	ROM_LOAD( "775-a04b.bin", 0x10000, 0x10000, CRC(f41a2b33) SHA1(dffa06360b6032f7370fe72698aacad4d8779472) )
 	ROM_LOAD( "775-a04c.bin", 0x20000, 0x10000, CRC(e4e58f14) SHA1(23dcb4dfa9a44115d1b730d9efcc314801b811c7) )
@@ -768,7 +867,7 @@ ROM_START( scontraj )
 ROM_END
 
 ROM_START( thunderx )
-	ROM_REGION( 0x29000, "maincpu", 0 )	/* ROMs + banked RAM */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* ROMs + banked RAM */
 	ROM_LOAD( "873-s03.k15", 0x10000, 0x10000, CRC(2aec2699) SHA1(8f52703a6a1ba6417c484925192ce697af9c73f1) )
 	ROM_LOAD( "873-s02.k13", 0x20000, 0x08000, CRC(6619333a) SHA1(1961658d528b0870c57f1cb78e016fb881f50392) )
 	ROM_CONTINUE(            0x08000, 0x08000 )
@@ -801,7 +900,7 @@ ROM_START( thunderx )
 ROM_END
 
 ROM_START( thunderxa ) /* Alternate Starting stage then the other 2 sets, Perhaps a US set? */
-	ROM_REGION( 0x29000, "maincpu", 0 )	/* ROMs + banked RAM */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* ROMs + banked RAM */
 	ROM_LOAD( "873-k03.k15", 0x10000, 0x10000, CRC(276817ad) SHA1(34b1beecf2a4c54dd7cd150c5d83b44f67be288a) )
 	ROM_LOAD( "873-k02.k13", 0x20000, 0x08000, CRC(80cc1c45) SHA1(881bc6eea94671e8c3fdb7a10b0e742b18cb7212) )
 	ROM_CONTINUE(           0x08000, 0x08000 )
@@ -834,7 +933,7 @@ ROM_START( thunderxa ) /* Alternate Starting stage then the other 2 sets, Perhap
 ROM_END
 
 ROM_START( thunderxb ) /* Set had no labels, same starting stage as parent set */
-	ROM_REGION( 0x29000, "maincpu", 0 )	/* ROMs + banked RAM */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* ROMs + banked RAM */
 	ROM_LOAD( "873-03.k15", 0x10000, 0x10000, CRC(36680a4e) SHA1(9b3b6bf75a9c04e764448cd958277bd081cc4a53) )
 	ROM_LOAD( "873-02.k13", 0x20000, 0x08000, CRC(c58b2c34) SHA1(4050d2edc579ffedba3d40782a08e43ac89b1b86) )
 	ROM_CONTINUE(           0x08000, 0x08000 )
@@ -867,7 +966,7 @@ ROM_START( thunderxb ) /* Set had no labels, same starting stage as parent set *
 ROM_END
 
 ROM_START( thunderxj )
-	ROM_REGION( 0x29000, "maincpu", 0 )	/* ROMs + banked RAM */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* ROMs + banked RAM */
 	ROM_LOAD( "873-n03.k15", 0x10000, 0x10000, CRC(a01e2e3e) SHA1(eba0d95dc0c5eed18743a96e4bbda5e60d5d9c97) )
 	ROM_LOAD( "873-n02.k13", 0x20000, 0x08000, CRC(55afa2cc) SHA1(5fb9df0c7c7c0c2029dbe0f3c1e0340234a03e8a) )
 	ROM_CONTINUE(            0x08000, 0x08000 )
@@ -903,46 +1002,14 @@ ROM_END
 
 static KONAMI_SETLINES_CALLBACK( thunderx_banking )
 {
-	UINT8 *RAM = memory_region(device->machine, "maincpu");
-	int offs;
-
-//  logerror("thunderx %04x: bank select %02x\n", cpu_get_pc(device->cpu), lines );
-
-	offs = 0x10000 + (((lines & 0x0f) ^ 0x08) * 0x2000);
-	if (offs >= 0x28000) offs -= 0x20000;
-	memory_set_bankptr(device->machine,  1, &RAM[offs] );
+	//logerror("thunderx %04x: bank select %02x\n", cpu_get_pc(device->cpu), lines);
+	memory_set_bank(device->machine(),  "bank1", ((lines & 0x0f) ^ 0x08));
 }
 
-static MACHINE_RESET( scontra )
-{
-	UINT8 *RAM = memory_region(machine, "maincpu");
-
-	paletteram = &RAM[0x30000];
-}
-
-static MACHINE_RESET( thunderx )
-{
-	UINT8 *RAM = memory_region(machine, "maincpu");
-
-	konami_configure_set_lines(cputag_get_cpu(machine, "maincpu"), thunderx_banking);
-	memory_set_bankptr(machine, 1, &RAM[0x10000] ); /* init the default bank */
-
-	paletteram = &RAM[0x28000];
-	pmcram = &RAM[0x28800];
-}
-
-static DRIVER_INIT( scontra )
-{
-	konami_rom_deinterleave_2(machine, "gfx1");
-	konami_rom_deinterleave_2(machine, "gfx2");
-}
-
-
-
-GAME( 1988, scontra,  0,        scontra,  scontra,  scontra, ROT90, "Konami", "Super Contra", 0 )
-GAME( 1988, scontraj, scontra,  scontra,  scontra,  scontra, ROT90, "Konami", "Super Contra (Japan)", 0 )
-GAME( 1988, thunderx, 0,        thunderx, thunderx, scontra, ROT0,  "Konami", "Thunder Cross (set 1)", 0 )
-GAME( 1988, thunderxa,thunderx, thunderx, thunderx, scontra, ROT0,  "Konami", "Thunder Cross (set 2)", 0 )
-GAME( 1988, thunderxb,thunderx, thunderx, thunderx, scontra, ROT0,  "Konami", "Thunder Cross (set 3)", 0 )
-GAME( 1988, thunderxj,thunderx, thunderx, thnderxj, scontra, ROT0,  "Konami", "Thunder Cross (Japan)", 0 )
-//GAME( 1988, thndrxja, thunderx, thunderx, thndrxja, scontra, ROT0,  "Konami", "Thunder Cross (Japan, newer revision)", 0 )
+GAME( 1988, scontra,   0,        scontra,  scontra,  0, ROT90, "Konami", "Super Contra", GAME_SUPPORTS_SAVE )
+GAME( 1988, scontraj,  scontra,  scontra,  scontra,  0, ROT90, "Konami", "Super Contra (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1988, thunderx,  0,        thunderx, thunderx, 0, ROT0,  "Konami", "Thunder Cross (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1988, thunderxa, thunderx, thunderx, thunderx, 0, ROT0,  "Konami", "Thunder Cross (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1988, thunderxb, thunderx, thunderx, thunderx, 0, ROT0,  "Konami", "Thunder Cross (set 3)", GAME_SUPPORTS_SAVE )
+GAME( 1988, thunderxj, thunderx, thunderx, thnderxj, 0, ROT0,  "Konami", "Thunder Cross (Japan)", GAME_SUPPORTS_SAVE )
+//GAME( 1988, thndrxja, thunderx, thunderx, thndrxja, 0, ROT0,  "Konami", "Thunder Cross (Japan, newer revision)", GAME_SUPPORTS_SAVE )

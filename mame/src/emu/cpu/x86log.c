@@ -10,10 +10,8 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "x86log.h"
-#include "mame.h"
-
-#include <stddef.h>
 
 
 
@@ -54,7 +52,7 @@ struct _data_range_t
 /* the code logging context */
 struct _x86log_context
 {
-	astring *		filename;						/* name of the file */
+	astring			filename;						/* name of the file */
 	FILE *			file;							/* file we are logging to */
 
 	data_range_t	data_range[MAX_DATA_RANGES];	/* list of data ranges */
@@ -63,7 +61,7 @@ struct _x86log_context
 	log_comment 	comment_list[MAX_COMMENTS];		/* list of comments */
 	int				comment_count;					/* number of live comments */
 
-	char 			comment_pool[COMMENT_POOL_SIZE];/* string pool to hold comments */
+	char			comment_pool[COMMENT_POOL_SIZE];/* string pool to hold comments */
 	char *			comment_pool_next;				/* pointer to next string pool location */
 };
 
@@ -74,7 +72,7 @@ struct _x86log_context
 ***************************************************************************/
 
 static void reset_log(x86log_context *log);
-extern int i386_dasm_one(char *buffer, UINT64 eip, const UINT8 *oprom, int mode);
+extern int i386_dasm_one_ex(char *buffer, UINT64 eip, const UINT8 *oprom, int mode);
 
 
 
@@ -91,10 +89,10 @@ x86log_context *x86log_create_context(const char *filename)
 	x86log_context *log;
 
 	/* allocate the log */
-	log = alloc_clear_or_die(x86log_context);
+	log = global_alloc_clear(x86log_context);
 
 	/* allocate the filename */
-	log->filename = astring_dupc(filename);
+	log->filename.cpy(filename);
 
 	/* reset things */
 	reset_log(log);
@@ -113,8 +111,7 @@ void x86log_free_context(x86log_context *log)
 		fclose(log->file);
 
 	/* free the structure */
-	astring_free(log->filename);
-	free(log);
+	global_free(log);
 }
 
 
@@ -219,10 +216,10 @@ void x86log_disasm_code_range(x86log_context *log, const char *label, x86code *s
 			switch (curdata->size)
 			{
 				default:
-				case 1:		sprintf(buffer, "db      %02X", *cur); 				break;
-				case 2:		sprintf(buffer, "dw      %04X", *(UINT16 *)cur); 	break;
-				case 4:		sprintf(buffer, "dd      %08X", *(UINT32 *)cur); 	break;
-				case 8:		sprintf(buffer, "dq      %08X%08X", ((UINT32 *)cur)[1], ((UINT32 *)cur)[0]); 	break;
+				case 1:		sprintf(buffer, "db      %02X", *cur);				break;
+				case 2:		sprintf(buffer, "dw      %04X", *(UINT16 *)cur);	break;
+				case 4:		sprintf(buffer, "dd      %08X", *(UINT32 *)cur);	break;
+				case 8:		sprintf(buffer, "dq      %08X%08X", ((UINT32 *)cur)[1], ((UINT32 *)cur)[0]);	break;
 			}
 		}
 
@@ -237,9 +234,9 @@ void x86log_disasm_code_range(x86log_context *log, const char *label, x86code *s
 		else
 		{
 #ifdef PTR64
-			bytes = i386_dasm_one(buffer, (FPTR)cur, cur, 64) & DASMFLAG_LENGTHMASK;
+			bytes = i386_dasm_one_ex(buffer, (FPTR)cur, cur, 64) & DASMFLAG_LENGTHMASK;
 #else
-			bytes = i386_dasm_one(buffer, (FPTR)cur, cur, 32) & DASMFLAG_LENGTHMASK;
+			bytes = i386_dasm_one_ex(buffer, (FPTR)cur, cur, 32) & DASMFLAG_LENGTHMASK;
 #endif
 		}
 
@@ -276,7 +273,7 @@ void x86log_printf(x86log_context *log, const char *format, ...)
 
 	/* open the file, creating it if necessary */
 	if (log->file == NULL)
-		log->file = fopen(astring_c(log->filename), "w");
+		log->file = fopen(log->filename, "w");
 	if (log->file == NULL)
 		return;
 

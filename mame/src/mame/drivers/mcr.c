@@ -282,15 +282,15 @@
 ***************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "machine/z80ctc.h"
 #include "machine/z80pio.h"
 #include "machine/z80sio.h"
 #include "audio/mcr.h"
 #include "sound/samples.h"
-#include "mcr.h"
+#include "machine/nvram.h"
+#include "includes/mcr.h"
 
 
 static UINT8 input_mux;
@@ -320,9 +320,9 @@ static READ8_HANDLER( solarfox_ip0_r )
 	/* game in cocktail mode, they don't work at all. So we fake-mux   */
 	/* the controls through player 1's ports */
 	if (mcr_cocktail_flip)
-		return input_port_read(space->machine, "SSIO.IP0") | 0x08;
+		return input_port_read(space->machine(), "SSIO.IP0") | 0x08;
 	else
-		return ((input_port_read(space->machine, "SSIO.IP0") & ~0x14) | 0x08) | ((input_port_read(space->machine, "SSIO.IP0") & 0x08) >> 1) | ((input_port_read(space->machine, "SSIO.IP2") & 0x01) << 4);
+		return ((input_port_read(space->machine(), "SSIO.IP0") & ~0x14) | 0x08) | ((input_port_read(space->machine(), "SSIO.IP0") & 0x08) >> 1) | ((input_port_read(space->machine(), "SSIO.IP2") & 0x01) << 4);
 }
 
 
@@ -330,9 +330,9 @@ static READ8_HANDLER( solarfox_ip1_r )
 {
 	/*  same deal as above */
 	if (mcr_cocktail_flip)
-		return input_port_read(space->machine, "SSIO.IP1") | 0xf0;
+		return input_port_read(space->machine(), "SSIO.IP1") | 0xf0;
 	else
-		return (input_port_read(space->machine, "SSIO.IP1") >> 4) | 0xf0;
+		return (input_port_read(space->machine(), "SSIO.IP1") >> 4) | 0xf0;
 }
 
 
@@ -345,7 +345,7 @@ static READ8_HANDLER( solarfox_ip1_r )
 
 static READ8_HANDLER( kick_ip1_r )
 {
-	return (input_port_read(space->machine, "DIAL2") << 4) & 0xf0;
+	return (input_port_read(space->machine(), "DIAL2") << 4) & 0xf0;
 }
 
 
@@ -365,18 +365,18 @@ static WRITE8_HANDLER( wacko_op4_w )
 static READ8_HANDLER( wacko_ip1_r )
 {
 	if (!input_mux)
-		return input_port_read(space->machine, "SSIO.IP1");
+		return input_port_read(space->machine(), "SSIO.IP1");
 	else
-		return input_port_read(space->machine, "SSIO.IP1.ALT");
+		return input_port_read(space->machine(), "SSIO.IP1.ALT");
 }
 
 
 static READ8_HANDLER( wacko_ip2_r )
 {
 	if (!input_mux)
-		return input_port_read(space->machine, "SSIO.IP2");
+		return input_port_read(space->machine(), "SSIO.IP2");
 	else
-		return input_port_read(space->machine, "SSIO.IP2.ALT");
+		return input_port_read(space->machine(), "SSIO.IP2.ALT");
 }
 
 
@@ -389,7 +389,7 @@ static READ8_HANDLER( wacko_ip2_r )
 
 static READ8_HANDLER( kroozr_ip1_r )
 {
-	int dial = input_port_read(space->machine, "DIAL");
+	int dial = input_port_read(space->machine(), "DIAL");
 	return ((dial & 0x80) >> 1) | ((dial & 0x70) >> 4);
 }
 
@@ -413,7 +413,7 @@ static WRITE8_HANDLER( kroozr_op4_w )
 
 static WRITE8_HANDLER( journey_op4_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	device_t *samples = space->machine().device("samples");
 
 	/* if we're not playing the sample yet, start it */
 	if (!sample_playing(samples, 0))
@@ -421,6 +421,32 @@ static WRITE8_HANDLER( journey_op4_w )
 
 	/* bit 0 turns cassette on/off */
 	sample_set_pause(samples, 0, ~data & 1);
+}
+
+
+
+/*************************************
+ *
+ *  Two Tigers I/O ports
+ *
+ *************************************/
+
+static WRITE8_HANDLER( twotiger_op4_w )
+{
+	device_t *samples = space->machine().device("samples");
+
+	for (int i = 0; i < 2; i++)
+	{
+		/* play tape, and loop it */
+		if (!sample_playing(samples, i))
+			sample_start(samples, i, i, 1);
+
+		/* bit 1 turns cassette on/off */
+		sample_set_pause(samples, i, ~data & 2);
+	}
+
+	// bit 2: lamp control?
+	// if (data & 0xfc) printf("%x ",data);
 }
 
 
@@ -526,18 +552,18 @@ static READ8_HANDLER( nflfoot_ip2_r )
 			nflfoot_serial_in_active = FALSE;
 	}
 
-	if (cpu_get_pc(space->cpu) != 0x107)
-		logerror("%04X:ip2_r = %02X\n", cpu_get_pc(space->cpu), val);
+	if (cpu_get_pc(&space->device()) != 0x107)
+		logerror("%04X:ip2_r = %02X\n", cpu_get_pc(&space->device()), val);
 	return val;
 }
 
 
 static WRITE8_HANDLER( nflfoot_op4_w )
 {
-	const device_config *sio = devtag_get_device(space->machine, "ipu_sio");
+	device_t *sio = space->machine().device("ipu_sio");
 
 	/* bit 7 = J3-7 on IPU board = /RXDA on SIO */
-	logerror("%04X:op4_w(%d%d%d)\n", cpu_get_pc(space->cpu), (data >> 7) & 1, (data >> 6) & 1, (data >> 5) & 1);
+	logerror("%04X:op4_w(%d%d%d)\n", cpu_get_pc(&space->device()), (data >> 7) & 1, (data >> 6) & 1, (data >> 5) & 1);
 
 	/* look for a non-zero start bit to go active */
 	if (!nflfoot_serial_out_active && (data & 0x80))
@@ -586,15 +612,15 @@ static WRITE8_HANDLER( nflfoot_op4_w )
 
 static READ8_HANDLER( demoderb_ip1_r )
 {
-	return input_port_read(space->machine, "SSIO.IP1") |
-		(input_port_read(space->machine, input_mux ? "SSIO.IP1.ALT2" : "SSIO.IP1.ALT1") << 2);
+	return input_port_read(space->machine(), "SSIO.IP1") |
+		(input_port_read(space->machine(), input_mux ? "SSIO.IP1.ALT2" : "SSIO.IP1.ALT1") << 2);
 }
 
 
 static READ8_HANDLER( demoderb_ip2_r )
 {
-	return input_port_read(space->machine, "SSIO.IP2") |
-		(input_port_read(space->machine, input_mux ? "SSIO.IP2.ALT2" : "SSIO.IP2.ALT1") << 2);
+	return input_port_read(space->machine(), "SSIO.IP2") |
+		(input_port_read(space->machine(), input_mux ? "SSIO.IP2.ALT2" : "SSIO.IP2.ALT1") << 2);
 }
 
 
@@ -614,18 +640,18 @@ static WRITE8_HANDLER( demoderb_op4_w )
  *************************************/
 
 /* address map verified from schematics */
-static ADDRESS_MAP_START( cpu_90009_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu_90009_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
-	AM_RANGE(0x7000, 0x77ff) AM_MIRROR(0x0800) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xf000, 0xf1ff) AM_MIRROR(0x0200) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xf400, 0xf41f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf800, 0xf81f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split2_w) AM_BASE(&paletteram_2)
-	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(mcr_90009_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x7000, 0x77ff) AM_MIRROR(0x0800) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xf000, 0xf1ff) AM_MIRROR(0x0200) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf400, 0xf41f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf800, 0xf81f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split2_w) AM_BASE_GENERIC(paletteram2)
+	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(mcr_90009_videoram_w) AM_BASE_MEMBER(mcr_state, m_videoram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports are verified from schematics */
-static ADDRESS_MAP_START( cpu_90009_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu_90009_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	SSIO_INPUT_PORTS
@@ -643,16 +669,16 @@ ADDRESS_MAP_END
  *************************************/
 
 /* address map verified from schematics */
-static ADDRESS_MAP_START( cpu_90010_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu_90010_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xe000, 0xe1ff) AM_MIRROR(0x1600) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe800, 0xefff) AM_MIRROR(0x1000) AM_RAM_WRITE(mcr_90010_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xe000, 0xe1ff) AM_MIRROR(0x1600) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe800, 0xefff) AM_MIRROR(0x1000) AM_RAM_WRITE(mcr_90010_videoram_w) AM_BASE_MEMBER(mcr_state, m_videoram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports are verified from schematics */
-static ADDRESS_MAP_START( cpu_90010_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu_90010_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	SSIO_INPUT_PORTS
@@ -670,17 +696,17 @@ ADDRESS_MAP_END
  *************************************/
 
 /* address map verified from schematics */
-static ADDRESS_MAP_START( cpu_91490_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu_91490_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xe800, 0xe9ff) AM_MIRROR(0x0200) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mcr_91490_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xf800, 0xf87f) AM_MIRROR(0x0780) AM_WRITE(mcr_91490_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xe800, 0xe9ff) AM_MIRROR(0x0200) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mcr_91490_videoram_w) AM_BASE_MEMBER(mcr_state, m_videoram)
+	AM_RANGE(0xf800, 0xf87f) AM_MIRROR(0x0780) AM_WRITE(mcr_91490_paletteram_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports are verified from schematics */
-static ADDRESS_MAP_START( cpu_91490_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cpu_91490_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	SSIO_INPUT_PORTS
@@ -698,20 +724,20 @@ ADDRESS_MAP_END
  *************************************/
 
 /* address map verified from schematics */
-static ADDRESS_MAP_START( ipu_91695_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ipu_91695_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 /* I/O verified from schematics */
-static ADDRESS_MAP_START( ipu_91695_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( ipu_91695_portmap, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_pio0", z80pio_r, z80pio_w)
-	AM_RANGE(0x04, 0x07) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_sio", mcr_ipu_sio_r, mcr_ipu_sio_w)
+	AM_RANGE(0x00, 0x03) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_pio0", z80pio_cd_ba_r, z80pio_cd_ba_w)
+	AM_RANGE(0x04, 0x07) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_sio", z80sio_cd_ba_r, z80sio_cd_ba_w)
 	AM_RANGE(0x08, 0x0b) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_ctc", z80ctc_r, z80ctc_w)
-	AM_RANGE(0x0c, 0x0f) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_pio1", z80pio_r, z80pio_w)
+	AM_RANGE(0x0c, 0x0f) AM_MIRROR(0xe0) AM_DEVREADWRITE("ipu_pio1", z80pio_cd_ba_r, z80pio_cd_ba_w)
 	AM_RANGE(0x10, 0x13) AM_MIRROR(0xe0) AM_WRITE(mcr_ipu_laserdisk_w)
 	AM_RANGE(0x1c, 0x1f) AM_MIRROR(0xe0) AM_READWRITE(mcr_ipu_watchdog_r, mcr_ipu_watchdog_w)
 ADDRESS_MAP_END
@@ -918,20 +944,21 @@ static INPUT_PORTS_START( tron )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
 
 	PORT_START("SSIO.IP3")	/* DIPSW @ B3 */
-	PORT_DIPNAME( 0x01, 0x00, "Coin Meters" )				PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x01, 0x00, "Coin Meters" )  PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x01, "1" )
 	PORT_DIPSETTING(    0x00, "2" )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )  PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Allow_Continue ) )  PORT_DIPLOCATION("SW1:3")
 	PORT_DIPSETTING(    0x04, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
 	PORT_DIPUNUSED_DIPLOC( 0x08, 0x00, "SW1:4" )
 	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "SW1:5" )
 	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "SW1:6" )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "SW1:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "SW1:8" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
+
 	// According to the manual, SW1 is a bank of *10* switches (9 is unused and 10 is freeze)
 	// Where are the values for the other two bits read?
 
@@ -939,10 +966,62 @@ static INPUT_PORTS_START( tron )
 	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_REVERSE PORT_COCKTAIL
 
 	PORT_START("SSIO.DIP")
-	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
-	PORT_BIT( 0xe0, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
 INPUT_PORTS_END
+
+static INPUT_PORTS_START( tron3 )
+	PORT_START("SSIO.IP0")	/* J4 1-8 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_TILT )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
+
+	PORT_START("SSIO.IP1")	/* J4 10-13,15-18 */
+	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_CODE_DEC(KEYCODE_Z) PORT_CODE_INC(KEYCODE_X) PORT_REVERSE
+
+	PORT_START("SSIO.IP2")	/* J5 1-8 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
+//  PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
+//  PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
+//  PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
+//  PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
+
+	PORT_START("SSIO.IP3")	/* DIPSW @ B3 */
+	PORT_DIPNAME( 0x01, 0x00, "Coin Meters" )  PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )  PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Allow_Continue ) )  PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x00, "SW1:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "SW1:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "SW1:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "SW1:7" )
+//  PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
+
+	// According to the manual, SW1 is a bank of *10* switches (9 is unused and 10 is freeze)
+	// Where are the values for the other two bits read?
+
+	PORT_START("SSIO.IP4")	/* J6 1-8 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+//  PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_REVERSE PORT_COCKTAIL
+
+	PORT_START("SSIO.DIP")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+INPUT_PORTS_END
+
 
 
 /* verified from wiring diagram, plus DIP switches from manual */
@@ -1494,7 +1573,7 @@ GFXDECODE_END
 static const char *const journey_sample_names[] =
 {
 	"*journey",
-	"sepways.wav",
+	"sepways",
 	0
 };
 
@@ -1502,6 +1581,21 @@ static const samples_interface journey_samples_interface =
 {
 	1,
 	journey_sample_names
+};
+
+
+static const char *const twotiger_sample_names[] =
+{
+	"*twotiger",
+	"left",
+	"right",
+	0
+};
+
+static const samples_interface twotiger_samples_interface =
+{
+	2,
+	twotiger_sample_names
 };
 
 
@@ -1513,123 +1607,128 @@ static const samples_interface journey_samples_interface =
  *************************************/
 
 /* 90009 CPU board plus 90908/90913/91483 sound board */
-static MACHINE_DRIVER_START( mcr_90009 )
+static MACHINE_CONFIG_START( mcr_90009, mcr_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MAIN_OSC_MCR_I/8)
-	MDRV_CPU_CONFIG(mcr_daisy_chain)
-	MDRV_CPU_PROGRAM_MAP(cpu_90009_map)
-	MDRV_CPU_IO_MAP(cpu_90009_portmap)
-	MDRV_CPU_VBLANK_INT_HACK(mcr_interrupt,2)
+	MCFG_CPU_ADD("maincpu", Z80, MAIN_OSC_MCR_I/8)
+	MCFG_CPU_CONFIG(mcr_daisy_chain)
+	MCFG_CPU_PROGRAM_MAP(cpu_90009_map)
+	MCFG_CPU_IO_MAP(cpu_90009_portmap)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", mcr_interrupt, "screen", 0, 1)
 
-	MDRV_Z80CTC_ADD("ctc", MAIN_OSC_MCR_I/8 /* same as "maincpu" */, mcr_ctc_intf)
+	MCFG_Z80CTC_ADD("ctc", MAIN_OSC_MCR_I/8 /* same as "maincpu" */, mcr_ctc_intf)
 
-	MDRV_WATCHDOG_VBLANK_INIT(16)
-	MDRV_MACHINE_START(mcr)
-	MDRV_MACHINE_RESET(mcr)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MCFG_WATCHDOG_VBLANK_INIT(16)
+	MCFG_MACHINE_START(mcr)
+	MCFG_MACHINE_RESET(mcr)
+	MCFG_NVRAM_ADD_1FILL("nvram")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(30)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*16, 30*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 0*16, 30*16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(30)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*16, 30*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*16, 32*16-1, 0*16, 30*16-1)
+	MCFG_SCREEN_UPDATE_STATIC(mcr)
 
-	MDRV_GFXDECODE(mcr)
-	MDRV_PALETTE_LENGTH(32)
+	MCFG_GFXDECODE(mcr)
+	MCFG_PALETTE_LENGTH(32)
 
-	MDRV_VIDEO_START(mcr)
-	MDRV_VIDEO_UPDATE(mcr)
+	MCFG_VIDEO_START(mcr)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(mcr_ssio)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(mcr_ssio)
+MACHINE_CONFIG_END
 
 
 /* 90010 CPU board plus 90908/90913/91483 sound board */
-static MACHINE_DRIVER_START( mcr_90010 )
-	MDRV_IMPORT_FROM(mcr_90009)
+static MACHINE_CONFIG_DERIVED( mcr_90010, mcr_90009 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(cpu_90010_map)
-	MDRV_CPU_IO_MAP(cpu_90010_portmap)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(cpu_90010_map)
+	MCFG_CPU_IO_MAP(cpu_90010_portmap)
 
 	/* video hardware */
-	MDRV_PALETTE_LENGTH(64)
-MACHINE_DRIVER_END
+	MCFG_PALETTE_LENGTH(64)
+MACHINE_CONFIG_END
+
+
+/* as above, plus 8-track tape */
+static MACHINE_CONFIG_DERIVED( mcr_90010_tt, mcr_90010 )
+
+	/* sound hardware */
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(twotiger_samples_interface)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.25)
+MACHINE_CONFIG_END
 
 
 /* 91475 CPU board plus 90908/90913/91483 sound board plus cassette interface */
-static MACHINE_DRIVER_START( mcr_91475 )
-	MDRV_IMPORT_FROM(mcr_90010)
+static MACHINE_CONFIG_DERIVED( mcr_91475, mcr_90010 )
 
 	/* video hardware */
-	MDRV_PALETTE_LENGTH(128)
+	MCFG_PALETTE_LENGTH(128)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(journey_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(journey_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
+MACHINE_CONFIG_END
 
 
 /* 91490 CPU board plus 90908/90913/91483 sound board */
-static MACHINE_DRIVER_START( mcr_91490 )
-	MDRV_IMPORT_FROM(mcr_90010)
+static MACHINE_CONFIG_DERIVED( mcr_91490, mcr_90010 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CLOCK(5000000)
-	MDRV_CPU_PROGRAM_MAP(cpu_91490_map)
-	MDRV_CPU_IO_MAP(cpu_91490_portmap)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(5000000)
+	MCFG_CPU_PROGRAM_MAP(cpu_91490_map)
+	MCFG_CPU_IO_MAP(cpu_91490_portmap)
 
-	MDRV_DEVICE_MODIFY("ctc")
-	MDRV_DEVICE_CLOCK(5000000 /* same as "maincpu" */)
-MACHINE_DRIVER_END
+	MCFG_DEVICE_MODIFY("ctc")
+	MCFG_DEVICE_CLOCK(5000000 /* same as "maincpu" */)
+MACHINE_CONFIG_END
 
 
 /* 91490 CPU board plus 90908/90913/91483 sound board plus Squawk n' Talk sound board */
-static MACHINE_DRIVER_START( mcr_91490_snt )
+static MACHINE_CONFIG_DERIVED( mcr_91490_snt, mcr_91490 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mcr_91490)
-	MDRV_IMPORT_FROM(squawk_n_talk)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(squawk_n_talk)
+MACHINE_CONFIG_END
 
 
 /* 91490 CPU board plus 90908/90913/91483 sound board plus Squawk n' Talk sound board plus IPU */
-static MACHINE_DRIVER_START( mcr_91490_ipu )
+static MACHINE_CONFIG_DERIVED( mcr_91490_ipu, mcr_91490_snt )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mcr_91490_snt)
-	MDRV_MACHINE_START(nflfoot)
+	MCFG_MACHINE_START(nflfoot)
 
-	MDRV_CPU_ADD("ipu", Z80, 7372800/2)
-	MDRV_CPU_CONFIG(mcr_ipu_daisy_chain)
-	MDRV_CPU_PROGRAM_MAP(ipu_91695_map)
-	MDRV_CPU_IO_MAP(ipu_91695_portmap)
-	MDRV_CPU_VBLANK_INT_HACK(mcr_ipu_interrupt,2)
+	MCFG_CPU_ADD("ipu", Z80, 7372800/2)
+	MCFG_CPU_CONFIG(mcr_ipu_daisy_chain)
+	MCFG_CPU_PROGRAM_MAP(ipu_91695_map)
+	MCFG_CPU_IO_MAP(ipu_91695_portmap)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_CALLBACK(mcr_ipu_interrupt)
 
-	MDRV_Z80CTC_ADD("ipu_ctc", 7372800/2 /* same as "ipu" */, nflfoot_ctc_intf)
-	MDRV_Z80PIO_ADD("ipu_pio0", nflfoot_pio_intf)
-	MDRV_Z80PIO_ADD("ipu_pio1", nflfoot_pio_intf)
-	MDRV_Z80SIO_ADD("ipu_sio", 7372800/2 /* same as "ipu" */, nflfoot_sio_intf)
-MACHINE_DRIVER_END
+	MCFG_Z80CTC_ADD("ipu_ctc", 7372800/2 /* same as "ipu" */, nflfoot_ctc_intf)
+	MCFG_Z80PIO_ADD("ipu_pio0", 7372800/2, nflfoot_pio_intf)
+	MCFG_Z80PIO_ADD("ipu_pio1", 7372800/2, nflfoot_pio_intf)
+	MCFG_Z80SIO_ADD("ipu_sio", 7372800/2 /* same as "ipu" */, nflfoot_sio_intf)
+MACHINE_CONFIG_END
 
 
 /* 91490 CPU board plus 90908/90913/91483 sound board plus Turbo Chip Squeak sound board */
-static MACHINE_DRIVER_START( mcr_91490_tcs )
+static MACHINE_CONFIG_DERIVED( mcr_91490_tcs, mcr_91490 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mcr_91490)
-	MDRV_IMPORT_FROM(turbo_chip_squeak)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(turbo_chip_squeak)
+MACHINE_CONFIG_END
 
 
 
@@ -1844,7 +1943,7 @@ ROM_START( tron )
 	ROM_REGION( 0x0020, "proms", 0 ) /* PROM's located on the Super Sound I/O Board (90913) */
 	ROM_LOAD( "9860-07axn-axhd.d12",     0x0000, 0x0020, CRC(e1281ee9) SHA1(9ac9b01d24affc0ee9227a4364c4fd8f8290343a) ) /* N82S123 */
 
-    ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
+	ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
 	ROM_LOAD( "0066-313bx-xxqx.a12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-315bx-xxqx.b12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-322bx-xx0x.e3.bin",  0x0000, 0x0001, NO_DUMP)
@@ -1883,7 +1982,7 @@ ROM_START( tron2 )
 	ROM_REGION( 0x0020, "proms", 0 ) /* PROM's located on the Super Sound I/O Board (90913) */
 	ROM_LOAD( "9860-07axn-axhd.d12",     0x0000, 0x0020, CRC(e1281ee9) SHA1(9ac9b01d24affc0ee9227a4364c4fd8f8290343a) ) /* N82S123 */
 
-    ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
+	ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
 	ROM_LOAD( "0066-313bx-xxqx.a12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-315bx-xxqx.b12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-322bx-xx0x.e3.bin",  0x0000, 0x0001, NO_DUMP)
@@ -1922,7 +2021,7 @@ ROM_START( tron3 )
 	ROM_REGION( 0x0020, "proms", 0 ) /* PROM's located on the Super Sound I/O Board (90913) */
 	ROM_LOAD( "9860-07axn-axhd.d12",     0x0000, 0x0020, CRC(e1281ee9) SHA1(9ac9b01d24affc0ee9227a4364c4fd8f8290343a) ) /* N82S123 */
 
-    ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
+	ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
 	ROM_LOAD( "0066-313bx-xxqx.a12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-315bx-xxqx.b12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-322bx-xx0x.e3.bin",  0x0000, 0x0001, NO_DUMP)
@@ -1961,7 +2060,7 @@ ROM_START( tron4 )
 	ROM_REGION( 0x0020, "proms", 0 ) /* PROM's located on the Super Sound I/O Board (90913) */
 	ROM_LOAD( "9860-07axn-axhd.d12",     0x0000, 0x0020, CRC(e1281ee9) SHA1(9ac9b01d24affc0ee9227a4364c4fd8f8290343a) ) /* N82S123 */
 
-    ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
+	ROM_REGION( 0x0005, "scpu_pals", 0) /* PAL's located on the Super CPU Board (90010) */
 	ROM_LOAD( "0066-313bx-xxqx.a12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-315bx-xxqx.b12.bin", 0x0000, 0x0001, NO_DUMP)
 	ROM_LOAD( "0066-322bx-xx0x.e3.bin",  0x0000, 0x0001, NO_DUMP)
@@ -2473,7 +2572,7 @@ ROM_END
  *
  *************************************/
 
-static void mcr_init(running_machine *machine, int cpuboard, int vidboard, int ssioboard)
+static void mcr_init(running_machine &machine, int cpuboard, int vidboard, int ssioboard)
 {
 	mcr_cpu_board = cpuboard;
 	mcr_sprite_board = vidboard;
@@ -2532,7 +2631,9 @@ static DRIVER_INIT( twotiger )
 	mcr_init(machine, 90010, 91399, 90913);
 	mcr_sound_init(machine, MCR_SSIO);
 
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe800, 0xefff, 0, 0x1000, twotiger_videoram_r, twotiger_videoram_w);
+	ssio_set_custom_output(4, 0xff, twotiger_op4_w);
+
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0xe800, 0xefff, 0, 0x1000, FUNC(twotiger_videoram_r), FUNC(twotiger_videoram_w));
 }
 
 
@@ -2601,7 +2702,7 @@ static DRIVER_INIT( demoderb )
 	ssio_set_custom_output(4, 0xff, demoderb_op4_w);
 
 	/* the SSIO Z80 doesn't have any program to execute */
-	cputag_suspend(machine, "tcscpu", SUSPEND_REASON_DISABLE, 1);
+	machine.device<cpu_device>("tcscpu")->suspend(SUSPEND_REASON_DISABLE, 1);
 }
 
 
@@ -2623,14 +2724,14 @@ GAME( 1981, shollow,  0,        mcr_90010,     shollow,  mcr_90010, ROT90, "Ball
 GAME( 1981, shollow2, shollow,  mcr_90010,     shollow,  mcr_90010, ROT90, "Bally Midway", "Satan's Hollow (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1982, tron,     0,        mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (8/9)", GAME_SUPPORTS_SAVE )
 GAME( 1982, tron2,    tron,     mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (6/25)", GAME_SUPPORTS_SAVE )
-GAME( 1982, tron3,    tron,     mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (6/17)", GAME_SUPPORTS_SAVE )
-GAME( 1982, tron4,    tron,     mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (6/15)", GAME_SUPPORTS_SAVE )
+GAME( 1982, tron3,    tron,     mcr_90010,     tron3,    mcr_90010, ROT90, "Bally Midway", "Tron (6/17)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1982, tron4,    tron,     mcr_90010,     tron3,    mcr_90010, ROT90, "Bally Midway", "Tron (6/15)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
 GAME( 1982, domino,   0,        mcr_90010,     domino,   mcr_90010, ROT0,  "Bally Midway", "Domino Man", GAME_SUPPORTS_SAVE )
 GAME( 1982, wacko,    0,        mcr_90010,     wacko,    wacko,     ROT0,  "Bally Midway", "Wacko", GAME_SUPPORTS_SAVE )
 GAME( 1984, twotigerc,twotiger, mcr_90010,     twotigrc, mcr_90010, ROT0,  "Bally Midway", "Two Tigers (Tron conversion)", GAME_SUPPORTS_SAVE )
 
 /* hacked 90010 CPU board + 91399 video gen + 90913 sound I/O + 8-track interface */
-GAME( 1984, twotiger, 0,        mcr_90010,     twotiger, twotiger,  ROT0,  "Bally Midway", "Two Tigers (dedicated)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1984, twotiger, 0,        mcr_90010_tt,  twotiger, twotiger,  ROT0,  "Bally Midway", "Two Tigers (dedicated)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 
 /* 90010 CPU board + 91399 video gen + 91483 sound I/O */
 GAME( 1982, kroozr,   0,        mcr_90010,     kroozr,   kroozr,    ROT0,  "Bally Midway", "Kozmik Kroozr", GAME_SUPPORTS_SAVE )
@@ -2639,8 +2740,8 @@ GAME( 1982, kroozr,   0,        mcr_90010,     kroozr,   kroozr,    ROT0,  "Ball
 GAME( 1983, journey,  0,        mcr_91475,     journey,  journey,   ROT90, "Bally Midway", "Journey", GAME_SUPPORTS_SAVE )
 
 /* 91490 CPU board + 91464 video gen + 90913 sound I/O */
-GAME( 1983, tapper,   0,        mcr_91490,     tapper,   mcr_91490, ROT0,  "Bally Midway", "Tapper (Budweiser)", GAME_SUPPORTS_SAVE )
-GAME( 1983, tappera,  tapper,   mcr_91490,     tapper,   mcr_91490, ROT0,  "Bally Midway", "Tapper (alternate)", GAME_SUPPORTS_SAVE )
+GAME( 1983, tapper,   0,        mcr_91490,     tapper,   mcr_91490, ROT0,  "Bally Midway", "Tapper (Budweiser, set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, tappera,  tapper,   mcr_91490,     tapper,   mcr_91490, ROT0,  "Bally Midway", "Tapper (Budweiser, set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1983, sutapper, tapper,   mcr_91490,     tapper,   mcr_91490, ROT0,  "Bally Midway", "Tapper (Suntory)", GAME_SUPPORTS_SAVE )
 GAME( 1984, rbtapper, tapper,   mcr_91490,     tapper,   mcr_91490, ROT0,  "Bally Midway", "Tapper (Root Beer)", GAME_SUPPORTS_SAVE )
 GAME( 1984, timber,   0,        mcr_91490,     timber,   mcr_91490, ROT0,  "Bally Midway", "Timber", GAME_SUPPORTS_SAVE )

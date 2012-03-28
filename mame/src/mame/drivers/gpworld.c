@@ -39,29 +39,41 @@ Dumping Notes:
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "machine/laserdsc.h"
+#include "machine/ldv1000.h"
+
+
+class gpworld_state : public driver_device
+{
+public:
+	gpworld_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		  m_laserdisc(*this, "laserdisc") { }
+
+	UINT8 m_nmi_enable;
+	UINT8 m_start_lamp;
+	UINT8 m_ldp_read_latch;
+	UINT8 m_ldp_write_latch;
+	UINT8 m_brake_gas;
+	UINT8* m_tile_RAM;
+	UINT8* m_sprite_RAM;
+	UINT8* m_palette_RAM;
+	required_device<pioneer_ldv1000_device> m_laserdisc;
+};
+
 
 /* Assumed to be the same as segald hardware */
 #define GUESSED_CLOCK (5000000)
 
-static UINT8 nmi_enable;
-static UINT8 start_lamp;
-static UINT8 ldp_read_latch;
-static UINT8 ldp_write_latch;
-static UINT8 brake_gas;
 
-static UINT8* tile_RAM;
-static UINT8* sprite_RAM;
-static UINT8* palette_RAM;
 
-static const device_config *laserdisc;
 
 
 /* VIDEO GOODS */
-static void gpworld_draw_tiles(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void gpworld_draw_tiles(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect)
 {
+	gpworld_state *state = machine.driver_data<gpworld_state>();
 	UINT8 characterX, characterY;
 
 	/* Temporarily set to 64 wide to accommodate two screens */
@@ -71,31 +83,27 @@ static void gpworld_draw_tiles(running_machine *machine, bitmap_t *bitmap,const 
 		{
 			int current_screen_character = (characterY*64) + characterX;
 
-			drawgfx_transpen(bitmap, cliprect, machine->gfx[0], tile_RAM[current_screen_character],
+			drawgfx_transpen(bitmap, cliprect, machine.gfx[0], state->m_tile_RAM[current_screen_character],
 					characterY, 0, 0, characterX*8, characterY*8, 0);
 		}
 	}
 }
 
-INLINE void draw_pixel(bitmap_t *bitmap,const rectangle *cliprect,int x,int y,int color,int flip)
+INLINE void draw_pixel(bitmap_ind16 &bitmap,const rectangle &cliprect,int x,int y,int color,int flip)
 {
 	if (flip)
 	{
-		x = bitmap->width - x - 1;
-		y = bitmap->height - y - 1;
+		x = bitmap.width() - x - 1;
+		y = bitmap.height() - y - 1;
 	}
 
-	if (x < cliprect->min_x ||
-		x > cliprect->max_x ||
-		y < cliprect->min_y ||
-		y > cliprect->max_y)
-		return;
-
-	*BITMAP_ADDR32(bitmap, y, x) = color;
+	if (cliprect.contains(x, y))
+		bitmap.pix16(y, x) = color;
 }
 
-static void gpworld_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void gpworld_draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
+	gpworld_state *state = machine.driver_data<gpworld_state>();
 	const int SPR_Y_TOP     = 0;
 	const int SPR_Y_BOTTOM  = 1;
 	const int SPR_X_LO      = 2;
@@ -108,12 +116,12 @@ static void gpworld_draw_sprites(running_machine *machine, bitmap_t *bitmap, con
 
 	int i;
 
-	UINT8 *GFX = memory_region(machine, "gfx2");
+	UINT8 *GFX = machine.region("gfx2")->base();
 
 	/* Heisted from Daphne which heisted it from MAME */
 	for (i = 0; i < 0x800; i += 8)
 	{
-		UINT8 *spr_reg = sprite_RAM + i;
+		UINT8 *spr_reg = state->m_sprite_RAM + i;
 
 		if (spr_reg[SPR_Y_BOTTOM] && spr_reg[SPR_X_LO] != 0xff)
 		{
@@ -204,12 +212,12 @@ static void gpworld_draw_sprites(running_machine *machine, bitmap_t *bitmap, con
 }
 
 
-static VIDEO_UPDATE( gpworld )
+static SCREEN_UPDATE_IND16( gpworld )
 {
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
-	gpworld_draw_tiles(screen->machine, bitmap, cliprect);
-	gpworld_draw_sprites(screen->machine, bitmap, cliprect);
+	gpworld_draw_tiles(screen.machine(), bitmap, cliprect);
+	gpworld_draw_sprites(screen.machine(), bitmap, cliprect);
 
 	return 0;
 }
@@ -217,7 +225,6 @@ static VIDEO_UPDATE( gpworld )
 
 static MACHINE_START( gpworld )
 {
-	laserdisc = devtag_get_device(machine, "laserdisc");
 }
 
 
@@ -225,64 +232,70 @@ static MACHINE_START( gpworld )
 /* READS */
 static READ8_HANDLER( ldp_read )
 {
-	return ldp_read_latch;
+	gpworld_state *state = space->machine().driver_data<gpworld_state>();
+	return state->m_ldp_read_latch;
 }
 
 static READ8_HANDLER( pedal_in )
 {
-	if (brake_gas)
-		return 	input_port_read(space->machine, "INACCEL");
+	gpworld_state *state = space->machine().driver_data<gpworld_state>();
+	if (state->m_brake_gas)
+		return	input_port_read(space->machine(), "INACCEL");
 
-	return 	input_port_read(space->machine, "INBRAKE");
+	return	input_port_read(space->machine(), "INBRAKE");
 
 }
 
 /* WRITES */
 static WRITE8_HANDLER( ldp_write )
 {
-	ldp_write_latch = data;
+	gpworld_state *state = space->machine().driver_data<gpworld_state>();
+	state->m_ldp_write_latch = data;
 }
 
 static WRITE8_HANDLER( misc_io_write )
 {
-	start_lamp = (data & 0x04) >> 1;
-	nmi_enable = (data & 0x40) >> 6;
+	gpworld_state *state = space->machine().driver_data<gpworld_state>();
+	state->m_start_lamp = (data & 0x04) >> 1;
+	state->m_nmi_enable = (data & 0x40) >> 6;
 	/*  dunno      = (data & 0x80) >> 7; */ //coin counter???
 
-	logerror("NMI : %x (0x%x)\n", nmi_enable, data);
+	logerror("NMI : %x (0x%x)\n", state->m_nmi_enable, data);
 }
 
 static WRITE8_HANDLER( brake_gas_write )
 {
-	brake_gas = data & 0x01;
+	gpworld_state *state = space->machine().driver_data<gpworld_state>();
+	state->m_brake_gas = data & 0x01;
 }
 
 static WRITE8_HANDLER( palette_write )
 {
+	gpworld_state *state = space->machine().driver_data<gpworld_state>();
 	/* This is all just a (bad) guess */
 	int pal_index, r, g, b, a;
 
-	palette_RAM[offset] = data;
+	state->m_palette_RAM[offset] = data;
 
 	/* "Round down" to the nearest palette entry */
 	pal_index = offset & 0xffe;
 
-	g = (palette_RAM[pal_index]   & 0xf0) << 0;
-	b = (palette_RAM[pal_index]   & 0x0f) << 4;
-	r = (palette_RAM[pal_index+1] & 0x0f) << 4;
-	a = (palette_RAM[pal_index+1] & 0x80) ? 0 : 255;	/* guess */
+	g = (state->m_palette_RAM[pal_index]   & 0xf0) << 0;
+	b = (state->m_palette_RAM[pal_index]   & 0x0f) << 4;
+	r = (state->m_palette_RAM[pal_index+1] & 0x0f) << 4;
+	a = (state->m_palette_RAM[pal_index+1] & 0x80) ? 0 : 255;	/* guess */
 
 	/* logerror("PAL WRITE index : %x  rgb : %d %d %d (real %x) at %x\n", pal_index, r,g,b, data, offset); */
 
-	palette_set_color(space->machine, (pal_index & 0xffe) >> 1, MAKE_ARGB(a, r, g, b));
+	palette_set_color(space->machine(), (pal_index & 0xffe) >> 1, MAKE_ARGB(a, r, g, b));
 }
 
 /* PROGRAM MAP */
-static ADDRESS_MAP_START( mainmem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mainmem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0xbfff) AM_ROM
-	AM_RANGE(0xc000,0xc7ff) AM_RAM AM_BASE(&sprite_RAM)
-	AM_RANGE(0xc800,0xcfff) AM_WRITE(palette_write) AM_BASE(&palette_RAM)	/* The memory test reads at 0xc800 */
-	AM_RANGE(0xd000,0xd7ff) AM_RAM AM_BASE(&tile_RAM)
+	AM_RANGE(0xc000,0xc7ff) AM_RAM AM_BASE_MEMBER(gpworld_state, m_sprite_RAM)
+	AM_RANGE(0xc800,0xcfff) AM_WRITE(palette_write) AM_BASE_MEMBER(gpworld_state, m_palette_RAM)	/* The memory test reads at 0xc800 */
+	AM_RANGE(0xd000,0xd7ff) AM_RAM AM_BASE_MEMBER(gpworld_state, m_tile_RAM)
 	AM_RANGE(0xd800,0xd800) AM_READWRITE(ldp_read,ldp_write)
 /*  AM_RANGE(0xd801,0xd801) AM_READ(???) */
 	AM_RANGE(0xda00,0xda00) AM_READ_PORT("INWHEEL")	//8255 here....
@@ -295,7 +308,7 @@ ADDRESS_MAP_END
 
 
 /* I/O MAP */
-static ADDRESS_MAP_START( mainport, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mainport, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x01,0x01) AM_WRITE(misc_io_write)
 	AM_RANGE(0x80,0x80) AM_READ_PORT("IN0")
@@ -412,17 +425,18 @@ static TIMER_CALLBACK( irq_stop )
 
 static INTERRUPT_GEN( vblank_callback_gpworld )
 {
+	gpworld_state *state = device->machine().driver_data<gpworld_state>();
 	/* Do an NMI if the enabled bit is set */
-	if (nmi_enable)
+	if (state->m_nmi_enable)
 	{
-		laserdisc_data_w(laserdisc,ldp_write_latch);
-		ldp_read_latch  = laserdisc_data_r(laserdisc);
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		state->m_laserdisc->data_w(state->m_ldp_write_latch);
+		state->m_ldp_read_latch = state->m_laserdisc->status_r();
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 
 	/* The time the IRQ line stays high is set just long enough to happen after the NMI - hacky? */
-	cpu_set_input_line(device, 0, ASSERT_LINE);
-	timer_set(device->machine, ATTOTIME_IN_USEC(100), NULL, 0, irq_stop);
+	device_set_input_line(device, 0, ASSERT_LINE);
+	device->machine().scheduler().timer_set(attotime::from_usec(100), FUNC(irq_stop));
 }
 
 static const gfx_layout gpworld_tile_layout =
@@ -441,32 +455,32 @@ static GFXDECODE_START( gpworld )
 GFXDECODE_END
 
 /* DRIVER */
-static MACHINE_DRIVER_START( gpworld )
+static MACHINE_CONFIG_START( gpworld, gpworld_state )
 
 	/* main cpu */
-	MDRV_CPU_ADD("maincpu", Z80, GUESSED_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(mainmem)
-	MDRV_CPU_IO_MAP(mainport)
-	MDRV_CPU_VBLANK_INT("screen", vblank_callback_gpworld)
+	MCFG_CPU_ADD("maincpu", Z80, GUESSED_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(mainmem)
+	MCFG_CPU_IO_MAP(mainport)
+	MCFG_CPU_VBLANK_INT("screen", vblank_callback_gpworld)
 
-	MDRV_MACHINE_START(gpworld)
+	MCFG_MACHINE_START(gpworld)
 
-	MDRV_LASERDISC_ADD("laserdisc", PIONEER_LDV1000, "screen", "ldsound")
-	MDRV_LASERDISC_OVERLAY(gpworld, 512, 256, BITMAP_FORMAT_INDEXED16)
+	MCFG_LASERDISC_LDV1000_ADD("laserdisc")
+	MCFG_LASERDISC_OVERLAY_STATIC(512, 256, gpworld)
 
 	/* video hardware */
-	MDRV_LASERDISC_SCREEN_ADD_NTSC("screen", BITMAP_FORMAT_INDEXED16)
+	MCFG_LASERDISC_SCREEN_ADD_NTSC("screen", "laserdisc")
 
-	MDRV_GFXDECODE(gpworld)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(gpworld)
+	MCFG_PALETTE_LENGTH(1024)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ldsound", LASERDISC, 0)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_MODIFY("laserdisc")
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( gpworld )
@@ -507,12 +521,13 @@ ROM_END
 
 static DRIVER_INIT( gpworld )
 {
-	nmi_enable = 0;
-	start_lamp = 0;
-	brake_gas = 0;
-	ldp_write_latch = ldp_read_latch = 0;
+	gpworld_state *state = machine.driver_data<gpworld_state>();
+	state->m_nmi_enable = 0;
+	state->m_start_lamp = 0;
+	state->m_brake_gas = 0;
+	state->m_ldp_write_latch = state->m_ldp_read_latch = 0;
 }
 
 
 /*    YEAR  NAME      PARENT   MACHINE  INPUT    INIT     MONITOR  COMPANY  FULLNAME    FLAGS) */
-GAME( 1984, gpworld,  0,       gpworld, gpworld, gpworld, ROT0,    "SEGA",  "GP World",	GAME_NOT_WORKING|GAME_NO_SOUND)
+GAME( 1984, gpworld,  0,       gpworld, gpworld, gpworld, ROT0,    "Sega",  "GP World",	GAME_NOT_WORKING|GAME_NO_SOUND)

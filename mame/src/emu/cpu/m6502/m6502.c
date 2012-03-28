@@ -24,6 +24,7 @@
 /* 10.March   2000 PeT added 6502 set overflow input line */
 /* 13.September 2000 PeT N2A03 jmp indirect */
 
+#include "emu.h"
 #include "debugger.h"
 #include "m6502.h"
 #include "ops02.h"
@@ -67,10 +68,11 @@ struct _m6502_Regs
 	UINT8	irq_state;
 	UINT8   so_state;
 
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *space;
-	const address_space *io;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *space;
+	direct_read_data *direct;
+	address_space *io;
 	int		int_occured;
 	int		icount;
 
@@ -79,29 +81,29 @@ struct _m6502_Regs
 
 	UINT8    ddr;
 	UINT8    port;
-	m6510_port_read_func port_read;
-	m6510_port_write_func port_write;
+
+	devcb_resolved_read8	in_port_func;
+	devcb_resolved_write8	out_port_func;
 };
 
-INLINE m6502_Regs *get_safe_token(const device_config *device)
+INLINE m6502_Regs *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_M6502 ||
-		   cpu_get_type(device) == CPU_M6510 ||
-		   cpu_get_type(device) == CPU_M6510T ||
-		   cpu_get_type(device) == CPU_M7501 ||
-		   cpu_get_type(device) == CPU_M8502 ||
-		   cpu_get_type(device) == CPU_N2A03 ||
-		   cpu_get_type(device) == CPU_M65C02 ||
-		   cpu_get_type(device) == CPU_M65SC02 ||
-		   cpu_get_type(device) == CPU_DECO16);
-	return (m6502_Regs *)device->token;
+	assert(device->type() == M6502 ||
+		   device->type() == M6504 ||
+		   device->type() == M6510 ||
+		   device->type() == M6510T ||
+		   device->type() == M7501 ||
+		   device->type() == M8502 ||
+		   device->type() == N2A03 ||
+		   device->type() == M65C02 ||
+		   device->type() == M65SC02 ||
+		   device->type() == DECO16);
+	return (m6502_Regs *)downcast<legacy_cpu_device *>(device)->token();
 }
 
-static UINT8 default_rdmem_id(const address_space *space, offs_t offset) { return memory_read_byte_8le(space, offset); }
-static void default_wdmem_id(const address_space *space, offs_t offset, UINT8 data) { memory_write_byte_8le(space, offset, data); }
+static UINT8 default_rdmem_id(address_space *space, offs_t offset) { return space->read_byte(offset); }
+static void default_wdmem_id(address_space *space, offs_t offset, UINT8 data) { space->write_byte(offset, data); }
 
 /***************************************************************
  * include the opcode macros, functions and tables
@@ -128,20 +130,19 @@ static void default_wdmem_id(const address_space *space, offs_t offset, UINT8 da
  *
  *****************************************************************************/
 
-static void m6502_common_init(const device_config *device, cpu_irq_callback irqcallback, UINT8 subtype, void (*const *insn)(m6502_Regs *cpustate), const char *type)
+static void m6502_common_init(legacy_cpu_device *device, device_irq_callback irqcallback, UINT8 subtype, void (*const *insn)(m6502_Regs *cpustate), const char *type)
 {
 	m6502_Regs *cpustate = get_safe_token(device);
-	const m6502_interface *intf = (const m6502_interface *)device->static_config;
+	const m6502_interface *intf = (const m6502_interface *)device->static_config();
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->space = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->space = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->space->direct();
 	cpustate->subtype = subtype;
 	cpustate->insn = insn;
 	cpustate->rdmem_id = default_rdmem_id;
 	cpustate->wrmem_id = default_wdmem_id;
-	cpustate->port_read = NULL;
-	cpustate->port_write = NULL;
 
 	if ( intf )
 	{
@@ -151,29 +152,31 @@ static void m6502_common_init(const device_config *device, cpu_irq_callback irqc
 		if ( intf->write_indexed_func )
 			cpustate->wrmem_id = intf->write_indexed_func;
 
-		if ( intf->port_read_func )
-			cpustate->port_read = intf->port_read_func;
-
-		if ( intf->port_write_func )
-			cpustate->port_write = intf->port_write_func;
+		cpustate->in_port_func.resolve(intf->in_port_func, *device);
+		cpustate->out_port_func.resolve(intf->out_port_func, *device);
+	}
+	else
+	{
+		devcb_write8 nullcb = DEVCB_NULL;
+		cpustate->out_port_func.resolve(nullcb, *device);
 	}
 
-	state_save_register_device_item(device, 0, cpustate->pc.w.l);
-	state_save_register_device_item(device, 0, cpustate->sp.w.l);
-	state_save_register_device_item(device, 0, cpustate->p);
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->x);
-	state_save_register_device_item(device, 0, cpustate->y);
-	state_save_register_device_item(device, 0, cpustate->pending_irq);
-	state_save_register_device_item(device, 0, cpustate->after_cli);
-	state_save_register_device_item(device, 0, cpustate->nmi_state);
-	state_save_register_device_item(device, 0, cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->so_state);
+	device->save_item(NAME(cpustate->pc.w.l));
+	device->save_item(NAME(cpustate->sp.w.l));
+	device->save_item(NAME(cpustate->p));
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->pending_irq));
+	device->save_item(NAME(cpustate->after_cli));
+	device->save_item(NAME(cpustate->nmi_state));
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->so_state));
 
 	if (subtype == SUBTYPE_6510)
 	{
-		state_save_register_device_item(device, 0, cpustate->port);
-		state_save_register_device_item(device, 0, cpustate->ddr);
+		device->save_item(NAME(cpustate->port));
+		device->save_item(NAME(cpustate->ddr));
 	}
 }
 
@@ -215,7 +218,7 @@ INLINE void m6502_take_irq(m6502_Regs *cpustate)
 		P |= F_I;		/* set I flag */
 		PCL = RDMEM(EAD);
 		PCH = RDMEM(EAD+1);
-		LOG(("M6502 '%s' takes IRQ ($%04x)\n", cpustate->device->tag, PCD));
+		LOG(("M6502 '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), PCD));
 		/* call back the cpuintrf to let it clear the line */
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, 0);
 	}
@@ -225,8 +228,6 @@ INLINE void m6502_take_irq(m6502_Regs *cpustate)
 static CPU_EXECUTE( m6502 )
 {
 	m6502_Regs *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	do
 	{
@@ -245,7 +246,7 @@ static CPU_EXECUTE( m6502 )
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( cpustate->after_cli )
 		{
-			LOG(("M6502 '%s' after_cli was >0", cpustate->device->tag));
+			LOG(("M6502 '%s' after_cli was >0", cpustate->device->tag()));
 			cpustate->after_cli = 0;
 			if (cpustate->irq_state != CLEAR_LINE)
 			{
@@ -271,8 +272,6 @@ static CPU_EXECUTE( m6502 )
 		}
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 static void m6502_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
@@ -283,7 +282,7 @@ static void m6502_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		cpustate->nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6502 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6502 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
 			EAD = M6502_NMI_VEC;
 			cpustate->icount -= 2;
 			PUSH(PCH);
@@ -292,7 +291,7 @@ static void m6502_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 			P |= F_I;		/* set I flag */
 			PCL = RDMEM(EAD);
 			PCH = RDMEM(EAD+1);
-			LOG(("M6502 '%s' takes NMI ($%04x)\n", cpustate->device->tag, PCD));
+			LOG(("M6502 '%s' takes NMI ($%04x)\n", cpustate->device->tag(), PCD));
 		}
 	}
 	else
@@ -301,7 +300,7 @@ static void m6502_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		{
 			if( cpustate->so_state && !state )
 			{
-				LOG(( "M6502 '%s' set overflow\n", cpustate->device->tag));
+				LOG(( "M6502 '%s' set overflow\n", cpustate->device->tag()));
 				P|=F_V;
 			}
 			cpustate->so_state=state;
@@ -310,7 +309,7 @@ static void m6502_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		cpustate->irq_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6502 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6502 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag()));
 			cpustate->pending_irq = 1;
 //          cpustate->pending_irq = 2;
 			cpustate->int_occured = cpustate->icount;
@@ -333,7 +332,7 @@ static CPU_INIT( n2a03 )
    Bit 7 of address $4011 (the PSG's DPCM control register), when set,
    causes an IRQ to be generated.  This function allows the IRQ to be called
    from the PSG core when such an occasion arises. */
-void n2a03_irq(const device_config *device)
+void n2a03_irq(device_t *device)
 {
 	m6502_Regs *cpustate = get_safe_token(device);
 
@@ -359,14 +358,15 @@ static CPU_RESET( m6510 )
 	cpustate->ddr = 0x00;
 }
 
-static UINT8 m6510_get_port(m6502_Regs *cpustate)
+UINT8 m6510_get_port(legacy_cpu_device *device)
 {
+	m6502_Regs *cpustate = get_safe_token(device);
 	return (cpustate->port & cpustate->ddr) | (cpustate->ddr ^ 0xff);
 }
 
 static READ8_HANDLER( m6510_read_0000 )
 {
-	m6502_Regs *cpustate = get_safe_token(space->cpu);
+	m6502_Regs *cpustate = get_safe_token(&space->device());
 	UINT8 result = 0x00;
 
 	switch(offset)
@@ -375,8 +375,7 @@ static READ8_HANDLER( m6510_read_0000 )
 			result = cpustate->ddr;
 			break;
 		case 0x0001:	/* Data Port */
-			if (cpustate->port_read)
-				result = cpustate->port_read( cpustate->device, cpustate->ddr );
+			result = cpustate->in_port_func(cpustate->ddr);
 			result = (cpustate->ddr & cpustate->port) | (~cpustate->ddr & result);
 			break;
 	}
@@ -385,7 +384,7 @@ static READ8_HANDLER( m6510_read_0000 )
 
 static WRITE8_HANDLER( m6510_write_0000 )
 {
-	m6502_Regs *cpustate = get_safe_token(space->cpu);
+	m6502_Regs *cpustate = get_safe_token(&space->device());
 
 	switch(offset)
 	{
@@ -397,11 +396,10 @@ static WRITE8_HANDLER( m6510_write_0000 )
 			break;
 	}
 
-	if (cpustate->port_write)
-		cpustate->port_write( cpustate->device, cpustate->ddr, cpustate->port & cpustate->ddr );
+	cpustate->out_port_func(cpustate->ddr, cpustate->port & cpustate->ddr);
 }
 
-static ADDRESS_MAP_START(m6510_mem, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(m6510_mem, AS_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x0001) AM_READWRITE(m6510_read_0000, m6510_write_0000)
 ADDRESS_MAP_END
 
@@ -436,7 +434,7 @@ INLINE void m65c02_take_irq(m6502_Regs *cpustate)
 		P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 		PCL = RDMEM(EAD);
 		PCH = RDMEM(EAD+1);
-		LOG(("M65c02 '%s' takes IRQ ($%04x)\n", cpustate->device->tag, PCD));
+		LOG(("M65c02 '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), PCD));
 		/* call back the cpuintrf to let it clear the line */
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, 0);
 	}
@@ -446,8 +444,6 @@ INLINE void m65c02_take_irq(m6502_Regs *cpustate)
 static CPU_EXECUTE( m65c02 )
 {
 	m6502_Regs *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	do
 	{
@@ -467,7 +463,7 @@ static CPU_EXECUTE( m65c02 )
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( cpustate->after_cli )
 		{
-			LOG(("M6502 '%s' after_cli was >0", cpustate->device->tag));
+			LOG(("M6502 '%s' after_cli was >0", cpustate->device->tag()));
 			cpustate->after_cli = 0;
 			if (cpustate->irq_state != CLEAR_LINE)
 			{
@@ -484,8 +480,6 @@ static CPU_EXECUTE( m65c02 )
 			m65c02_take_irq(cpustate);
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 static void m65c02_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
@@ -496,7 +490,7 @@ static void m65c02_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		cpustate->nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6502 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6502 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
 			EAD = M6502_NMI_VEC;
 			cpustate->icount -= 2;
 			PUSH(PCH);
@@ -505,7 +499,7 @@ static void m65c02_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 			P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 			PCL = RDMEM(EAD);
 			PCH = RDMEM(EAD+1);
-			LOG(("M6502 '%s' takes NMI ($%04x)\n", cpustate->device->tag, PCD));
+			LOG(("M6502 '%s' takes NMI ($%04x)\n", cpustate->device->tag(), PCD));
 		}
 	}
 	else
@@ -528,7 +522,7 @@ static CPU_INIT( deco16 )
 {
 	m6502_Regs *cpustate = get_safe_token(device);
 	m6502_common_init(device, irqcallback, SUBTYPE_DECO16, insndeco16, "deco16");
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->io = device->space(AS_IO);
 }
 
 
@@ -561,7 +555,7 @@ INLINE void deco16_take_irq(m6502_Regs *cpustate)
 		P |= F_I;		/* set I flag */
 		PCL = RDMEM(EAD+1);
 		PCH = RDMEM(EAD);
-		LOG(("M6502 '%s' takes IRQ ($%04x)\n", cpustate->device->tag, PCD));
+		LOG(("M6502 '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), PCD));
 		/* call back the cpuintrf to let it clear the line */
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, 0);
 	}
@@ -576,7 +570,7 @@ static void deco16_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		cpustate->nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6502 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6502 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
 			EAD = DECO16_NMI_VEC;
 			cpustate->icount -= 7;
 			PUSH(PCH);
@@ -585,7 +579,7 @@ static void deco16_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 			P |= F_I;		/* set I flag */
 			PCL = RDMEM(EAD+1);
 			PCH = RDMEM(EAD);
-			LOG(("M6502 '%s' takes NMI ($%04x)\n", cpustate->device->tag, PCD));
+			LOG(("M6502 '%s' takes NMI ($%04x)\n", cpustate->device->tag(), PCD));
 		}
 	}
 	else
@@ -594,7 +588,7 @@ static void deco16_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		{
 			if( cpustate->so_state && !state )
 			{
-				LOG(( "M6502 '%s' set overflow\n", cpustate->device->tag));
+				LOG(( "M6502 '%s' set overflow\n", cpustate->device->tag()));
 				P|=F_V;
 			}
 			cpustate->so_state=state;
@@ -603,7 +597,7 @@ static void deco16_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 		cpustate->irq_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6502 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6502 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag()));
 			cpustate->pending_irq = 1;
 		}
 	}
@@ -612,8 +606,6 @@ static void deco16_set_irq_line(m6502_Regs *cpustate, int irqline, int state)
 static CPU_EXECUTE( deco16 )
 {
 	m6502_Regs *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	do
 	{
@@ -633,7 +625,7 @@ static CPU_EXECUTE( deco16 )
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( cpustate->after_cli )
 		{
-			LOG(("M6502 %s after_cli was >0", cpustate->device->tag));
+			LOG(("M6502 %s after_cli was >0", cpustate->device->tag()));
 			cpustate->after_cli = 0;
 			if (cpustate->irq_state != CLEAR_LINE)
 			{
@@ -650,8 +642,6 @@ static CPU_EXECUTE( deco16 )
 			deco16_take_irq(cpustate);
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -670,7 +660,7 @@ static CPU_SET_INFO( m6502 )
 		case CPUINFO_INT_INPUT_STATE + M6502_SET_OVERFLOW:	m6502_set_irq_line(cpustate, M6502_SET_OVERFLOW, info->i); break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:		m6502_set_irq_line(cpustate, INPUT_LINE_NMI, info->i); break;
 
-		case CPUINFO_INT_PC:							PCW = info->i; 							break;
+		case CPUINFO_INT_PC:							PCW = info->i;							break;
 		case CPUINFO_INT_REGISTER + M6502_PC:			cpustate->pc.w.l = info->i;					break;
 		case CPUINFO_INT_SP:							S = info->i;							break;
 		case CPUINFO_INT_REGISTER + M6502_S:			cpustate->sp.b.l = info->i;					break;
@@ -691,7 +681,7 @@ static CPU_SET_INFO( m6502 )
 
 CPU_GET_INFO( m6502 )
 {
-	m6502_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	m6502_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -707,15 +697,15 @@ CPU_GET_INFO( m6502 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6502_IRQ_LINE:		info->i = cpustate->irq_state;			break;
 		case CPUINFO_INT_INPUT_STATE + M6502_SET_OVERFLOW:	info->i = cpustate->so_state;			break;
@@ -775,6 +765,21 @@ CPU_GET_INFO( m6502 )
 	}
 }
 
+/**************************************************************************
+ * CPU-specific set_info
+ **************************************************************************/
+
+CPU_GET_INFO( m6504 )
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "M6504");				break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 13;					break;
+
+		default:										CPU_GET_INFO_CALL(m6502);			break;
+	}
+}
 
 /**************************************************************************
  * CPU-specific set_info
@@ -809,8 +814,6 @@ static CPU_SET_INFO( m6510 )
 
 CPU_GET_INFO( m6510 )
 {
-	m6502_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
-
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers to data or functions --- */
@@ -818,13 +821,10 @@ CPU_GET_INFO( m6510 )
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(m6510);				break;
 		case CPUINFO_FCT_RESET:							info->reset = CPU_RESET_NAME(m6510);				break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m6510);			break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m6510_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m6510_mem); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "M6510");				break;
-
-		/* --- the following bits of info are set as 64-bit signed integers --- */
-		case CPUINFO_INT_M6510_PORT:					info->i = m6510_get_port(cpustate);				break;
 
 		default:										CPU_GET_INFO_CALL(m6502);			break;
 	}
@@ -963,8 +963,8 @@ CPU_GET_INFO( deco16 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 8;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 8;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(deco16);		break;
@@ -983,3 +983,14 @@ CPU_GET_INFO( deco16 )
 		default:										CPU_GET_INFO_CALL(m6502);			break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(M6502, m6502);
+DEFINE_LEGACY_CPU_DEVICE(M6504, m6504);
+DEFINE_LEGACY_CPU_DEVICE(M6510, m6510);
+DEFINE_LEGACY_CPU_DEVICE(M6510T, m6510t);
+DEFINE_LEGACY_CPU_DEVICE(M7501, m7501);
+DEFINE_LEGACY_CPU_DEVICE(M8502, m8502);
+DEFINE_LEGACY_CPU_DEVICE(N2A03, n2a03);
+DEFINE_LEGACY_CPU_DEVICE(M65C02, m65c02);
+DEFINE_LEGACY_CPU_DEVICE(M65SC02, m65sc02);
+DEFINE_LEGACY_CPU_DEVICE(DECO16, deco16);

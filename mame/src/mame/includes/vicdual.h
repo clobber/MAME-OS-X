@@ -22,28 +22,39 @@
 #define VICDUAL_VSEND						(0x0f0)
 
 
+class vicdual_state : public driver_device
+{
+public:
+	vicdual_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT32 m_coin_status;
+	UINT8 *m_videoram;
+	UINT8 *m_characterram;
+	UINT8 m_samurai_protection_data;
+	UINT8 m_palette_bank;
+};
+
+
 /*----------- defined in drivers/vicdual.c -----------*/
 
-UINT8 vicdual_videoram_r(offs_t offset);
-UINT8 vicdual_characterram_r(offs_t offset);
-
-int vicdual_is_cabinet_color(running_machine *machine);
+int vicdual_is_cabinet_color(running_machine &machine);
 
 
 /*----------- defined in video/vicdual.c -----------*/
 
 WRITE8_HANDLER( vicdual_palette_bank_w );
 
-VIDEO_UPDATE( vicdual_bw );
-VIDEO_UPDATE( vicdual_color );
-VIDEO_UPDATE( vicdual_bw_or_color );
+SCREEN_UPDATE_RGB32( vicdual_bw );
+SCREEN_UPDATE_RGB32( vicdual_color );
+SCREEN_UPDATE_RGB32( vicdual_bw_or_color );
 
 
 /*----------- defined in audio/vicdual.c -----------*/
 
 MACHINE_START( frogs_audio );
-MACHINE_DRIVER_EXTERN( frogs_audio );
-MACHINE_DRIVER_EXTERN( headon_audio );
+MACHINE_CONFIG_EXTERN( frogs_audio );
+MACHINE_CONFIG_EXTERN( headon_audio );
 WRITE8_HANDLER( frogs_audio_w );
 WRITE8_HANDLER( headon_audio_w );
 WRITE8_HANDLER( invho2_audio_w );
@@ -51,25 +62,25 @@ WRITE8_HANDLER( invho2_audio_w );
 
 /*----------- defined in audio/depthch.c -----------*/
 
-MACHINE_DRIVER_EXTERN( depthch_audio );
+MACHINE_CONFIG_EXTERN( depthch_audio );
 WRITE8_HANDLER( depthch_audio_w );
 
 
 /*----------- defined in audio/carnival.c -----------*/
 
-MACHINE_DRIVER_EXTERN( carnival_audio );
+MACHINE_CONFIG_EXTERN( carnival_audio );
 WRITE8_HANDLER( carnival_audio_1_w );
 WRITE8_HANDLER( carnival_audio_2_w );
 
 
 /*----------- defined in audio/invinco.c -----------*/
 
-MACHINE_DRIVER_EXTERN( invinco_audio );
+MACHINE_CONFIG_EXTERN( invinco_audio );
 WRITE8_HANDLER( invinco_audio_w );
 
 
 /*----------- defined in audio/pulsar.c -----------*/
 
-MACHINE_DRIVER_EXTERN( pulsar_audio );
+MACHINE_CONFIG_EXTERN( pulsar_audio );
 WRITE8_HANDLER( pulsar_audio_1_w );
 WRITE8_HANDLER( pulsar_audio_2_w );

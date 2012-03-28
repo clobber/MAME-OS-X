@@ -40,6 +40,7 @@
 
 ****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 
 #define PC(n)		(((n)->sregs[CS]<<4)+(n)->ip)
@@ -52,8 +53,6 @@ typedef UINT32 DWORD;
 #include "v30mz.h"
 #include "nec.h"
 
-extern int necv_dasm_one(char *buffer, UINT32 eip, const UINT8 *oprom);
-
 /* NEC registers */
 typedef union
 {                   /* eight general registers */
@@ -61,16 +60,22 @@ typedef union
     UINT8  b[16];   /* or as 8 bit registers */
 } necbasicregs;
 
+/* default configuration */
+static const nec_config default_config =
+{
+	NULL		 // no internal decryption table
+};
+
 typedef struct _v30mz_state v30mz_state;
 struct _v30mz_state
 {
 	necbasicregs regs;
- 	UINT16	sregs[4];
+	UINT16	sregs[4];
 
 	UINT16	ip;
 
 	INT32	SignVal;
-    UINT32  AuxVal, OverVal, ZeroVal, CarryVal, ParityVal; /* 0 or non-0 valued flags */
+	UINT32  AuxVal, OverVal, ZeroVal, CarryVal, ParityVal; /* 0 or non-0 valued flags */
 	UINT8	TF, IF, DF, MF; 	/* 0 or 1 valued flags */	/* OB[19.07.99] added Mode Flag V30 */
 	UINT32	int_vector;
 	UINT32	pending_irq;
@@ -78,10 +83,11 @@ struct _v30mz_state
 	UINT32	irq_state;
 	UINT8	no_interrupt;
 
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
-	const address_space *io;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	int icount;
 
 	UINT32 prefix_base;	/* base address of the latest prefix segment */
@@ -90,15 +96,17 @@ struct _v30mz_state
 	UINT32 ea;
 	UINT16 eo;
 	UINT16 e16;
+
+	const nec_config *config;
 };
 
-INLINE v30mz_state *get_safe_token(const device_config *device)
+extern int necv_dasm_one(char *buffer, UINT32 eip, const UINT8 *oprom, const nec_config *config);
+
+INLINE v30mz_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_V30MZ);
-	return (v30mz_state *)device->token;
+	assert(device->type() == V30MZ);
+	return (v30mz_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /***************************************************************************/
@@ -125,14 +133,15 @@ static CPU_RESET( nec )
 	v30mz_state *cpustate = get_safe_token(device);
     unsigned int i,j,c;
     static const BREGS reg_name[8]={ AL, CL, DL, BL, AH, CH, DH, BH };
-	cpu_irq_callback save_irqcallback;
+	device_irq_callback save_irqcallback;
 
 	save_irqcallback = cpustate->irq_callback;
 	memset( cpustate, 0, sizeof(*cpustate) );
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->sregs[CS] = 0xffff;
 
@@ -206,7 +215,7 @@ static void external_int(v30mz_state *cpustate)
 	{
 		/* the actual vector is retrieved after pushing flags */
 		/* and clearing the IF */
-		nec_interrupt(cpustate,-1,0);
+		nec_interrupt(cpustate,(UINT32)-1,0);
 	}
 }
 
@@ -216,7 +225,7 @@ static void external_int(v30mz_state *cpustate)
 
 #define OP(num,func_name) static void func_name(v30mz_state *cpustate)
 
-OP( 0x00, i_add_br8  ) { DEF_br8;	ADDB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);	 	}
+OP( 0x00, i_add_br8  ) { DEF_br8;	ADDB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);		}
 OP( 0x01, i_add_wr16 ) { DEF_wr16;	ADDW;	PutbackRMWord(ModRM,dst);	CLKM(1,3);}
 OP( 0x02, i_add_r8b  ) { DEF_r8b;	ADDB;	RegByte(ModRM)=dst;			CLKM(1,2);		}
 OP( 0x03, i_add_r16w ) { DEF_r16w;	ADDW;	RegWord(ModRM)=dst;			CLKM(1,2);	}
@@ -267,25 +276,25 @@ OP( 0x0f, i_pre_nec  ) { UINT32 ModRM, tmp, tmp2;
 	}
 }
 
-OP( 0x10, i_adc_br8  ) { DEF_br8;	src+=CF;	ADDB;	PutbackRMByte(ModRM,dst);	CLKM(1,3); 		}
+OP( 0x10, i_adc_br8  ) { DEF_br8;	src+=CF;	ADDB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);		}
 OP( 0x11, i_adc_wr16 ) { DEF_wr16;	src+=CF;	ADDW;	PutbackRMWord(ModRM,dst);	CLKM(1,3);}
-OP( 0x12, i_adc_r8b  ) { DEF_r8b;	src+=CF;	ADDB;	RegByte(ModRM)=dst;			CLKM(1,2); 		}
+OP( 0x12, i_adc_r8b  ) { DEF_r8b;	src+=CF;	ADDB;	RegByte(ModRM)=dst;			CLKM(1,2);		}
 OP( 0x13, i_adc_r16w ) { DEF_r16w;	src+=CF;	ADDW;	RegWord(ModRM)=dst;			CLKM(1,2);	}
 OP( 0x14, i_adc_ald8 ) { DEF_ald8;	src+=CF;	ADDB;	cpustate->regs.b[AL]=dst;			CLK(1);				}
 OP( 0x15, i_adc_axd16) { DEF_axd16;	src+=CF;	ADDW;	cpustate->regs.w[AW]=dst;			CLK(1);				}
 OP( 0x16, i_push_ss  ) { PUSH(cpustate->sregs[SS]);		CLK(2);	}
 OP( 0x17, i_pop_ss   ) { POP(cpustate->sregs[SS]);		CLK(3);	cpustate->no_interrupt=1; }
 
-OP( 0x18, i_sbb_br8  ) { DEF_br8;	src+=CF;	SUBB;	PutbackRMByte(ModRM,dst);	CLKM(1,3); 		}
+OP( 0x18, i_sbb_br8  ) { DEF_br8;	src+=CF;	SUBB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);		}
 OP( 0x19, i_sbb_wr16 ) { DEF_wr16;	src+=CF;	SUBW;	PutbackRMWord(ModRM,dst);	CLKM(1,3);}
-OP( 0x1a, i_sbb_r8b  ) { DEF_r8b;	src+=CF;	SUBB;	RegByte(ModRM)=dst;			CLKM(1,2); 		}
+OP( 0x1a, i_sbb_r8b  ) { DEF_r8b;	src+=CF;	SUBB;	RegByte(ModRM)=dst;			CLKM(1,2);		}
 OP( 0x1b, i_sbb_r16w ) { DEF_r16w;	src+=CF;	SUBW;	RegWord(ModRM)=dst;			CLKM(1,2);	}
 OP( 0x1c, i_sbb_ald8 ) { DEF_ald8;	src+=CF;	SUBB;	cpustate->regs.b[AL]=dst;			CLK(1); 				}
 OP( 0x1d, i_sbb_axd16) { DEF_axd16;	src+=CF;	SUBW;	cpustate->regs.w[AW]=dst;			CLK(1);	}
 OP( 0x1e, i_push_ds  ) { PUSH(cpustate->sregs[DS]);		CLK(2);	}
 OP( 0x1f, i_pop_ds   ) { POP(cpustate->sregs[DS]);		CLK(3);	}
 
-OP( 0x20, i_and_br8  ) { DEF_br8;	ANDB;	PutbackRMByte(ModRM,dst);	CLKM(1,3); 		}
+OP( 0x20, i_and_br8  ) { DEF_br8;	ANDB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);		}
 OP( 0x21, i_and_wr16 ) { DEF_wr16;	ANDW;	PutbackRMWord(ModRM,dst);	CLKM(1,3);}
 OP( 0x22, i_and_r8b  ) { DEF_r8b;	ANDB;	RegByte(ModRM)=dst;			CLKM(1,2);		}
 OP( 0x23, i_and_r16w ) { DEF_r16w;	ANDW;	RegWord(ModRM)=dst;			CLKM(1,2);	}
@@ -294,9 +303,9 @@ OP( 0x25, i_and_axd16) { DEF_axd16;	ANDW;	cpustate->regs.w[AW]=dst;			CLK(1);	}
 OP( 0x26, i_es       ) { cpustate->seg_prefix=TRUE;	cpustate->prefix_base=cpustate->sregs[ES]<<4;	CLK(1);		nec_instruction[FETCHOP](cpustate);	cpustate->seg_prefix=FALSE; }
 OP( 0x27, i_daa      ) { ADJ4(6,0x60);									CLK(10);	}
 
-OP( 0x28, i_sub_br8  ) { DEF_br8;	SUBB;	PutbackRMByte(ModRM,dst);	CLKM(1,3); 		}
+OP( 0x28, i_sub_br8  ) { DEF_br8;	SUBB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);		}
 OP( 0x29, i_sub_wr16 ) { DEF_wr16;	SUBW;	PutbackRMWord(ModRM,dst);	CLKM(1,3);}
-OP( 0x2a, i_sub_r8b  ) { DEF_r8b;	SUBB;	RegByte(ModRM)=dst;			CLKM(1,2); 		}
+OP( 0x2a, i_sub_r8b  ) { DEF_r8b;	SUBB;	RegByte(ModRM)=dst;			CLKM(1,2);		}
 OP( 0x2b, i_sub_r16w ) { DEF_r16w;	SUBW;	RegWord(ModRM)=dst;			CLKM(1,2);	}
 OP( 0x2c, i_sub_ald8 ) { DEF_ald8;	SUBB;	cpustate->regs.b[AL]=dst;			CLK(1); 				}
 OP( 0x2d, i_sub_axd16) { DEF_axd16;	SUBW;	cpustate->regs.w[AW]=dst;			CLK(1);	}
@@ -305,7 +314,7 @@ OP( 0x2f, i_das      ) { ADJ4(-6,-0x60);								CLK(10);	}
 
 OP( 0x30, i_xor_br8  ) { DEF_br8;	XORB;	PutbackRMByte(ModRM,dst);	CLKM(1,3);		}
 OP( 0x31, i_xor_wr16 ) { DEF_wr16;	XORW;	PutbackRMWord(ModRM,dst);	CLKM(1,3);}
-OP( 0x32, i_xor_r8b  ) { DEF_r8b;	XORB;	RegByte(ModRM)=dst;			CLKM(1,2); 		}
+OP( 0x32, i_xor_r8b  ) { DEF_r8b;	XORB;	RegByte(ModRM)=dst;			CLKM(1,2);		}
 OP( 0x33, i_xor_r16w ) { DEF_r16w;	XORW;	RegWord(ModRM)=dst;			CLKM(1,2);	}
 OP( 0x34, i_xor_ald8 ) { DEF_ald8;	XORB;	cpustate->regs.b[AL]=dst;			CLK(1); 				}
 OP( 0x35, i_xor_axd16) { DEF_axd16;	XORW;	cpustate->regs.w[AW]=dst;			CLK(1);	}
@@ -369,12 +378,12 @@ OP( 0x60, i_pusha  ) {
 	PUSH(cpustate->regs.w[IY]);
 	CLK(9);
 }
+static unsigned nec_v30mz_popa_tmp;
 OP( 0x61, i_popa  ) {
-    unsigned tmp;
 	POP(cpustate->regs.w[IY]);
 	POP(cpustate->regs.w[IX]);
 	POP(cpustate->regs.w[BP]);
-    POP(tmp);
+    POP(nec_v30mz_popa_tmp);
 	POP(cpustate->regs.w[BW]);
 	POP(cpustate->regs.w[DW]);
 	POP(cpustate->regs.w[CW]);
@@ -395,7 +404,7 @@ OP( 0x62, i_chkind  ) {
 	}
 	logerror("%06x: bound %04x high %04x low %04x tmp\n",PC(cpustate),high,low,tmp);
 }
-OP( 0x64, i_repnc  ) { 	UINT32 next = FETCHOP;	UINT16 c = cpustate->regs.w[CW];
+OP( 0x64, i_repnc  ) {	UINT32 next = FETCHOP;	UINT16 c = cpustate->regs.w[CW];
     switch(next) { /* Segments */
 	    case 0x26:	cpustate->seg_prefix=TRUE;	cpustate->prefix_base=cpustate->sregs[ES]<<4;	next = FETCHOP;	CLK(2); break;
 	    case 0x2e:	cpustate->seg_prefix=TRUE;	cpustate->prefix_base=cpustate->sregs[CS]<<4;	next = FETCHOP;	CLK(2); break;
@@ -423,7 +432,7 @@ OP( 0x64, i_repnc  ) { 	UINT32 next = FETCHOP;	UINT16 c = cpustate->regs.w[CW];
 	cpustate->seg_prefix=FALSE;
 }
 
-OP( 0x65, i_repc  ) { 	UINT32 next = FETCHOP;	UINT16 c = cpustate->regs.w[CW];
+OP( 0x65, i_repc  ) {	UINT32 next = FETCHOP;	UINT16 c = cpustate->regs.w[CW];
     switch(next) { /* Segments */
 	    case 0x26:	cpustate->seg_prefix=TRUE;	cpustate->prefix_base=cpustate->sregs[ES]<<4;	next = FETCHOP;	CLK(2); break;
 	    case 0x2e:	cpustate->seg_prefix=TRUE;	cpustate->prefix_base=cpustate->sregs[CS]<<4;	next = FETCHOP;	CLK(2); break;
@@ -452,7 +461,7 @@ OP( 0x65, i_repc  ) { 	UINT32 next = FETCHOP;	UINT16 c = cpustate->regs.w[CW];
 }
 
 OP( 0x68, i_push_d16 ) { UINT32 tmp;	FETCHWORD(tmp); PUSH(tmp);	CLK(1);	}
-OP( 0x69, i_imul_d16 ) { UINT32 tmp;	DEF_r16w; 	FETCHWORD(tmp); dst = (INT32)((INT16)src)*(INT32)((INT16)tmp); cpustate->CarryVal = cpustate->OverVal = (((INT32)dst) >> 15 != 0) && (((INT32)dst) >> 15 != -1);     RegWord(ModRM)=(WORD)dst;     if (ModRM >= 0xc0) CLK(3) else CLK(4) }
+OP( 0x69, i_imul_d16 ) { UINT32 tmp;	DEF_r16w;	FETCHWORD(tmp); dst = (INT32)((INT16)src)*(INT32)((INT16)tmp); cpustate->CarryVal = cpustate->OverVal = (((INT32)dst) >> 15 != 0) && (((INT32)dst) >> 15 != -1);     RegWord(ModRM)=(WORD)dst;     if (ModRM >= 0xc0) CLK(3) else CLK(4) }
 OP( 0x6a, i_push_d8  ) { UINT32 tmp = (WORD)((INT16)((INT8)FETCH)); 	PUSH(tmp);	CLK(1);	}
 OP( 0x6b, i_imul_d8  ) { UINT32 src2; DEF_r16w; src2= (WORD)((INT16)((INT8)FETCH)); dst = (INT32)((INT16)src)*(INT32)((INT16)src2); cpustate->CarryVal = cpustate->OverVal = (((INT32)dst) >> 15 != 0) && (((INT32)dst) >> 15 != -1); RegWord(ModRM)=(WORD)dst; if (ModRM >= 0xc0) CLK(3) else CLK(4) }
 OP( 0x6c, i_insb     ) { PutMemB(ES,cpustate->regs.w[IY],read_port(cpustate->regs.w[DW])); cpustate->regs.w[IY]+= -2 * cpustate->DF + 1; CLK(6); }
@@ -538,12 +547,12 @@ OP( 0x85, i_test_wr16 ) { DEF_wr16;	ANDW;	CLKM(1,2);	}
 OP( 0x86, i_xchg_br8  ) { DEF_br8;	RegByte(ModRM)=dst; PutbackRMByte(ModRM,src); CLKM(3,5); }
 OP( 0x87, i_xchg_wr16 ) { DEF_wr16;	RegWord(ModRM)=dst; PutbackRMWord(ModRM,src); CLKM(3,5); }
 
-OP( 0x88, i_mov_br8   ) { UINT8  src; GetModRM; src = RegByte(ModRM); 	PutRMByte(ModRM,src); 	CLK(1); 			}
-OP( 0x89, i_mov_wr16  ) { UINT16 src; GetModRM; src = RegWord(ModRM); 	PutRMWord(ModRM,src);	CLK(1); 	}
+OP( 0x88, i_mov_br8   ) { UINT8  src; GetModRM; src = RegByte(ModRM);	PutRMByte(ModRM,src);	CLK(1); 			}
+OP( 0x89, i_mov_wr16  ) { UINT16 src; GetModRM; src = RegWord(ModRM);	PutRMWord(ModRM,src);	CLK(1); 	}
 OP( 0x8a, i_mov_r8b   ) { UINT8  src; GetModRM; src = GetRMByte(ModRM);	RegByte(ModRM)=src;		CLK(1); 		}
 OP( 0x8b, i_mov_r16w  ) { UINT16 src; GetModRM; src = GetRMWord(ModRM);	RegWord(ModRM)=src; 	CLK(1); 	}
 OP( 0x8c, i_mov_wsreg ) { GetModRM; PutRMWord(ModRM,cpustate->sregs[(ModRM & 0x38) >> 3]);				CLKM(1,3); }
-OP( 0x8d, i_lea       ) { UINT16 ModRM = FETCH; (void)(*GetEA[ModRM])(cpustate); RegWord(ModRM)=cpustate->eo; 	CLK(1); }
+OP( 0x8d, i_lea       ) { UINT16 ModRM = FETCH; (void)(*GetEA[ModRM])(cpustate); RegWord(ModRM)=cpustate->eo;	CLK(1); }
 OP( 0x8e, i_mov_sregw ) { UINT16 src; GetModRM; src = GetRMWord(ModRM); CLKM(2,3);
     switch (ModRM & 0x38) {
 	    case 0x00: cpustate->sregs[ES] = src; break; /* mov es,ew */
@@ -588,12 +597,12 @@ OP( 0xa7, i_cmpsw      ) { UINT32 src = GetMemW(ES, cpustate->regs.w[IY]); UINT3
 
 OP( 0xa8, i_test_ald8  ) { DEF_ald8;  ANDB; CLK(1); }
 OP( 0xa9, i_test_axd16 ) { DEF_axd16; ANDW; CLK(1); }
-OP( 0xaa, i_stosb      ) { PutMemB(ES,cpustate->regs.w[IY],cpustate->regs.b[AL]); 	cpustate->regs.w[IY] += -2 * cpustate->DF + 1; CLK(3);  }
-OP( 0xab, i_stosw      ) { PutMemW(ES,cpustate->regs.w[IY],cpustate->regs.w[AW]); 	cpustate->regs.w[IY] += -4 * cpustate->DF + 2; CLK(3); }
+OP( 0xaa, i_stosb      ) { PutMemB(ES,cpustate->regs.w[IY],cpustate->regs.b[AL]);	cpustate->regs.w[IY] += -2 * cpustate->DF + 1; CLK(3);  }
+OP( 0xab, i_stosw      ) { PutMemW(ES,cpustate->regs.w[IY],cpustate->regs.w[AW]);	cpustate->regs.w[IY] += -4 * cpustate->DF + 2; CLK(3); }
 OP( 0xac, i_lodsb      ) { cpustate->regs.b[AL] = GetMemB(DS,cpustate->regs.w[IX]); cpustate->regs.w[IX] += -2 * cpustate->DF + 1; CLK(3);  }
 OP( 0xad, i_lodsw      ) { cpustate->regs.w[AW] = GetMemW(DS,cpustate->regs.w[IX]); cpustate->regs.w[IX] += -4 * cpustate->DF + 2; CLK(3); }
-OP( 0xae, i_scasb      ) { UINT32 src = GetMemB(ES, cpustate->regs.w[IY]); 	UINT32 dst = cpustate->regs.b[AL]; SUBB; cpustate->regs.w[IY] += -2 * cpustate->DF + 1; CLK(4);  }
-OP( 0xaf, i_scasw      ) { UINT32 src = GetMemW(ES, cpustate->regs.w[IY]); 	UINT32 dst = cpustate->regs.w[AW]; SUBW; cpustate->regs.w[IY] += -4 * cpustate->DF + 2; CLK(4); }
+OP( 0xae, i_scasb      ) { UINT32 src = GetMemB(ES, cpustate->regs.w[IY]);	UINT32 dst = cpustate->regs.b[AL]; SUBB; cpustate->regs.w[IY] += -2 * cpustate->DF + 1; CLK(4);  }
+OP( 0xaf, i_scasw      ) { UINT32 src = GetMemW(ES, cpustate->regs.w[IY]);	UINT32 dst = cpustate->regs.w[AW]; SUBW; cpustate->regs.w[IY] += -4 * cpustate->DF + 2; CLK(4); }
 
 OP( 0xb0, i_mov_ald8  ) { cpustate->regs.b[AL] = FETCH;	CLK(1); }
 OP( 0xb1, i_mov_cld8  ) { cpustate->regs.b[CL] = FETCH; CLK(1); }
@@ -744,8 +753,8 @@ OP( 0xd3, i_rotshft_wcl ) {
 	}
 }
 
-OP( 0xd4, i_aam    ) { UINT32 mult=FETCH; mult=0; cpustate->regs.b[AH] = cpustate->regs.b[AL] / 10; cpustate->regs.b[AL] %= 10; SetSZPF_Word(cpustate->regs.w[AW]); CLK(17); }
-OP( 0xd5, i_aad    ) { UINT32 mult=FETCH; mult=0; cpustate->regs.b[AL] = cpustate->regs.b[AH] * 10 + cpustate->regs.b[AL]; cpustate->regs.b[AH] = 0; SetSZPF_Byte(cpustate->regs.b[AL]); CLK(5); }
+OP( 0xd4, i_aam    ) { FETCH; cpustate->regs.b[AH] = cpustate->regs.b[AL] / 10; cpustate->regs.b[AL] %= 10; SetSZPF_Word(cpustate->regs.w[AW]); CLK(17); }
+OP( 0xd5, i_aad    ) { FETCH; cpustate->regs.b[AL] = cpustate->regs.b[AH] * 10 + cpustate->regs.b[AL]; cpustate->regs.b[AH] = 0; SetSZPF_Byte(cpustate->regs.b[AL]); CLK(5); }
 OP( 0xd6, i_setalc ) { cpustate->regs.b[AL] = (CF)?0xff:0x00; CLK(3); logerror("%06x: Undefined opcode (SETALC)\n",PC(cpustate)); }
 OP( 0xd7, i_trans  ) { UINT32 dest = (cpustate->regs.w[BW]+cpustate->regs.b[AL])&0xffff; cpustate->regs.b[AL] = GetMemB(DS, dest); CLK(5); }
 OP( 0xd8, i_fpo    ) { GetModRM; CLK(1);	logerror("%06x: Unimplemented floating point control %04x\n",PC(cpustate),ModRM); }
@@ -761,7 +770,7 @@ OP( 0xe7, i_outax  ) { UINT8 port = FETCH; write_port(port, cpustate->regs.b[AL]
 
 OP( 0xe8, i_call_d16 ) { UINT32 tmp; FETCHWORD(tmp); PUSH(cpustate->ip); cpustate->ip = (WORD)(cpustate->ip+(INT16)tmp); CLK(5); }
 OP( 0xe9, i_jmp_d16  ) { UINT32 tmp; FETCHWORD(tmp); cpustate->ip = (WORD)(cpustate->ip+(INT16)tmp); CLK(4); }
-OP( 0xea, i_jmp_far  ) { UINT32 tmp,tmp1; FETCHWORD(tmp); FETCHWORD(tmp1); cpustate->sregs[CS] = (WORD)tmp1; 	cpustate->ip = (WORD)tmp; CLK(7);  }
+OP( 0xea, i_jmp_far  ) { UINT32 tmp,tmp1; FETCHWORD(tmp); FETCHWORD(tmp1); cpustate->sregs[CS] = (WORD)tmp1;	cpustate->ip = (WORD)tmp; CLK(7);  }
 OP( 0xeb, i_jmp_d8   ) { int tmp = (int)((INT8)FETCH); CLK(4);
 	if (tmp==-2 && cpustate->no_interrupt==0 && (cpustate->pending_irq==0) && cpustate->icount>0) cpustate->icount%=12; /* cycle skip */
 	cpustate->ip = (WORD)(cpustate->ip+tmp);
@@ -833,13 +842,13 @@ OP( 0xf6, i_f6pre ) { UINT32 tmp; UINT32 uresult,uresult2; INT32 result,result2;
     switch (ModRM & 0x38) {
 		case 0x00: tmp &= FETCH; cpustate->CarryVal = cpustate->OverVal = 0; SetSZPF_Byte(tmp); CLKM(1,2); break; /* TEST */
 		case 0x08: logerror("%06x: Undefined opcode 0xf6 0x08\n",PC(cpustate)); break;
- 		case 0x10: PutbackRMByte(ModRM,~tmp); CLKM(1,3); break; /* NOT */
+		case 0x10: PutbackRMByte(ModRM,~tmp); CLKM(1,3); break; /* NOT */
 		case 0x18: cpustate->CarryVal=(tmp!=0); tmp=(~tmp)+1; SetSZPF_Byte(tmp); PutbackRMByte(ModRM,tmp&0xff); CLKM(1,3); break; /* NEG */
 		case 0x20: uresult = cpustate->regs.b[AL]*tmp; cpustate->regs.w[AW]=(WORD)uresult; cpustate->CarryVal=cpustate->OverVal=(cpustate->regs.b[AH]!=0); CLKM(3,4); break; /* MULU */
 		case 0x28: result = (INT16)((INT8)cpustate->regs.b[AL])*(INT16)((INT8)tmp); cpustate->regs.w[AW]=(WORD)result; cpustate->CarryVal=cpustate->OverVal=(cpustate->regs.b[AH]!=0); CLKM(3,4); break; /* MUL */
 		case 0x30: if (tmp) { DIVUB; } else nec_interrupt(cpustate,0,0); CLKM(15,16); break;
 		case 0x38: if (tmp) { DIVB;  } else nec_interrupt(cpustate,0,0); CLKM(17,18); break;
-   }
+	}
 }
 
 OP( 0xf7, i_f7pre   ) { UINT32 tmp,tmp2; UINT32 uresult,uresult2; INT32 result,result2;
@@ -847,13 +856,13 @@ OP( 0xf7, i_f7pre   ) { UINT32 tmp,tmp2; UINT32 uresult,uresult2; INT32 result,r
     switch (ModRM & 0x38) {
 		case 0x00: FETCHWORD(tmp2); tmp &= tmp2; cpustate->CarryVal = cpustate->OverVal = 0; SetSZPF_Word(tmp); CLKM(1,2); break; /* TEST */
 		case 0x08: logerror("%06x: Undefined opcode 0xf7 0x08\n",PC(cpustate)); break;
- 		case 0x10: PutbackRMWord(ModRM,~tmp); CLKM(1,3); break; /* NOT */
+		case 0x10: PutbackRMWord(ModRM,~tmp); CLKM(1,3); break; /* NOT */
 		case 0x18: cpustate->CarryVal=(tmp!=0); tmp=(~tmp)+1; SetSZPF_Word(tmp); PutbackRMWord(ModRM,tmp&0xffff); CLKM(1,3); break; /* NEG */
 		case 0x20: uresult = cpustate->regs.w[AW]*tmp; cpustate->regs.w[AW]=uresult&0xffff; cpustate->regs.w[DW]=((UINT32)uresult)>>16; cpustate->CarryVal=cpustate->OverVal=(cpustate->regs.w[DW]!=0); CLKM(3,4); break; /* MULU */
 		case 0x28: result = (INT32)((INT16)cpustate->regs.w[AW])*(INT32)((INT16)tmp); cpustate->regs.w[AW]=result&0xffff; cpustate->regs.w[DW]=result>>16; cpustate->CarryVal=cpustate->OverVal=(cpustate->regs.w[DW]!=0); CLKM(3,4); break; /* MUL */
 		case 0x30: if (tmp) { DIVUW; } else nec_interrupt(cpustate,0,0); CLKM(23,24); break;
 		case 0x38: if (tmp) { DIVW;  } else nec_interrupt(cpustate,0,0); CLKM(24,25); break;
- 	}
+	}
 }
 
 OP( 0xf8, i_clc   ) { cpustate->CarryVal = 0;	CLK(4);	}
@@ -919,44 +928,47 @@ static void set_irq_line(v30mz_state *cpustate, int irqline, int state)
 
 static CPU_DISASSEMBLE( nec )
 {
-	return necv_dasm_one(buffer, pc, oprom);
+	v30mz_state *cpustate = get_safe_token(device);
+
+	return necv_dasm_one(buffer, pc, oprom, cpustate->config);
 }
 
-static void nec_init(const device_config *device, cpu_irq_callback irqcallback, int type)
+static void nec_init(legacy_cpu_device *device, device_irq_callback irqcallback, int type)
 {
 	v30mz_state *cpustate = get_safe_token(device);
 
-	state_save_register_device_item_array(device, 0, cpustate->regs.w);
-	state_save_register_device_item_array(device, 0, cpustate->sregs);
+	const nec_config *config = &default_config;
 
-	state_save_register_device_item(device, 0, cpustate->ip);
-	state_save_register_device_item(device, 0, cpustate->TF);
-	state_save_register_device_item(device, 0, cpustate->IF);
-	state_save_register_device_item(device, 0, cpustate->DF);
-	state_save_register_device_item(device, 0, cpustate->MF);
-	state_save_register_device_item(device, 0, cpustate->SignVal);
-	state_save_register_device_item(device, 0, cpustate->int_vector);
-	state_save_register_device_item(device, 0, cpustate->pending_irq);
-	state_save_register_device_item(device, 0, cpustate->nmi_state);
-	state_save_register_device_item(device, 0, cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->AuxVal);
-	state_save_register_device_item(device, 0, cpustate->OverVal);
-	state_save_register_device_item(device, 0, cpustate->ZeroVal);
-	state_save_register_device_item(device, 0, cpustate->CarryVal);
-	state_save_register_device_item(device, 0, cpustate->ParityVal);
+	device->save_item(NAME(cpustate->regs.w));
+	device->save_item(NAME(cpustate->sregs));
 
+	device->save_item(NAME(cpustate->ip));
+	device->save_item(NAME(cpustate->TF));
+	device->save_item(NAME(cpustate->IF));
+	device->save_item(NAME(cpustate->DF));
+	device->save_item(NAME(cpustate->MF));
+	device->save_item(NAME(cpustate->SignVal));
+	device->save_item(NAME(cpustate->int_vector));
+	device->save_item(NAME(cpustate->pending_irq));
+	device->save_item(NAME(cpustate->nmi_state));
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->AuxVal));
+	device->save_item(NAME(cpustate->OverVal));
+	device->save_item(NAME(cpustate->ZeroVal));
+	device->save_item(NAME(cpustate->CarryVal));
+	device->save_item(NAME(cpustate->ParityVal));
+
+	cpustate->config = config;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 }
 
 static CPU_INIT( v30mz ) { nec_init(device, irqcallback, 3); }
 static CPU_EXECUTE( v30mz )
 {
 	v30mz_state *cpustate = get_safe_token(device);
-
-	cpustate->icount=cycles;
 
 	while(cpustate->icount>0) {
 		/* Dispatch IRQ */
@@ -975,8 +987,6 @@ static CPU_EXECUTE( v30mz )
 		debugger_instruction_hook(device, (cpustate->sregs[CS]<<4) + cpustate->ip);
 		nec_instruction[FETCHOP](cpustate);
 	}
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -1042,7 +1052,7 @@ static CPU_SET_INFO( nec )
 
 CPU_GET_INFO( v30mz )
 {
-	v30mz_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	v30mz_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	int flags;
 
 	switch (state)
@@ -1055,19 +1065,19 @@ CPU_GET_INFO( v30mz )
 		case CPUINFO_INT_CLOCK_MULTIPLIER:				info->i = 1;							break;
 		case CPUINFO_INT_CLOCK_DIVIDER:					info->i = 1;							break;
 		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:			info->i = 1;							break;
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 5;							break;
+		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 6;							break;
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 80;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 20;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = (cpustate->pending_irq & INT_IRQ) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = cpustate->nmi_state;					break;
@@ -1158,3 +1168,4 @@ CPU_GET_INFO( v30mz )
 	}
 }
 
+DEFINE_LEGACY_CPU_DEVICE(V30MZ, v30mz);

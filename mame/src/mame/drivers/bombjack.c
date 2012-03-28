@@ -4,7 +4,7 @@ Bomb Jack
 
 driver by Mirko Buffoni
 
-bombjac2 has YOU ARE LUCY instead of LUCKY, so it's probably an older version
+bombjack2 has YOU ARE LUCY instead of LUCKY, so it's probably an older version
 
 
 MAIN BOARD:
@@ -85,71 +85,69 @@ Stephh's notes (based on the game Z80 code and some tests) :
   - Ingame bug : if game is reset when screen is flipped, the screen remains
     flipped for the start-up tests and we'll be OK when scores are displayed.
 
-  - The only difference between 'bombjack' and 'bombjac2' is that 'bombjack'
+  - The only difference between 'bombjack' and 'bombjack2' is that 'bombjack'
     fixes the message when you get a 'S' for extra credit (text at 0xd24a) :
       * 'bombjack' : "YOU ARE LUCKY"
-      * 'bombjac2' : "YOU ARE LUCY"
+      * 'bombjack2' : "YOU ARE LUCY"
 
 2008-07
 Dip Locations and factory settings verified with manual
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-
-
-extern WRITE8_HANDLER( bombjack_videoram_w );
-extern WRITE8_HANDLER( bombjack_colorram_w );
-extern WRITE8_HANDLER( bombjack_background_w );
-extern WRITE8_HANDLER( bombjack_flipscreen_w );
-
-extern VIDEO_START( bombjack );
-extern VIDEO_UPDATE( bombjack );
-
-
-static UINT8 latch;
-
-static MACHINE_START( bombjack )
-{
-	state_save_register_global(machine, latch);
-}
+#include "includes/bombjack.h"
 
 
 static TIMER_CALLBACK( soundlatch_callback )
 {
-	latch = param;
+	bombjack_state *state = machine.driver_data<bombjack_state>();
+	state->m_latch = param;
 }
 
 static WRITE8_HANDLER( bombjack_soundlatch_w )
 {
 	/* make all the CPUs synchronize, and only AFTER that write the new command to the latch */
-	timer_call_after_resynch(space->machine, NULL, data,soundlatch_callback);
+	space->machine().scheduler().synchronize(FUNC(soundlatch_callback), data);
 }
 
 static READ8_HANDLER( bombjack_soundlatch_r )
 {
+	bombjack_state *state = space->machine().driver_data<bombjack_state>();
 	int res;
 
-
-	res = latch;
-	latch = 0;
+	res = state->m_latch;
+	state->m_latch = 0;
 	return res;
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+/*************************************
+ *
+ *  Address maps
+ *
+ *************************************/
+
+static WRITE8_HANDLER( irq_mask_w )
+{
+	bombjack_state *state = space->machine().driver_data<bombjack_state>();
+
+	state->m_nmi_mask = data & 1;
+}
+
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bombjack_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(bombjack_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x9820, 0x987f) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bombjack_videoram_w) AM_BASE_MEMBER(bombjack_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(bombjack_colorram_w) AM_BASE_MEMBER(bombjack_state, m_colorram)
+	AM_RANGE(0x9820, 0x987f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bombjack_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x9a00, 0x9a00) AM_WRITENOP
-	AM_RANGE(0x9c00, 0x9cff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0x9c00, 0x9cff) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x9e00, 0x9e00) AM_WRITE(bombjack_background_w)
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("P1")
-	AM_RANGE(0xb000, 0xb000) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xb000, 0xb000) AM_WRITE(irq_mask_w)
 	AM_RANGE(0xb001, 0xb001) AM_READ_PORT("P2")
 	AM_RANGE(0xb002, 0xb002) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xb003, 0xb003) AM_READNOP	/* watchdog reset? */
@@ -160,19 +158,25 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(bombjack_soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( audio_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ay2", ay8910_address_data_w)
 	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ay3", ay8910_address_data_w)
 ADDRESS_MAP_END
 
+
+/*************************************
+ *
+ *  Input ports
+ *
+ *************************************/
 
 static INPUT_PORTS_START( bombjack )
 	PORT_START("P1")
@@ -253,6 +257,12 @@ INPUT_PORTS_END
 
 
 
+/*************************************
+ *
+ *  Graphics definitions
+ *
+ *************************************/
+
 static const gfx_layout charlayout1 =
 {
 	8,8,	/* 8*8 characters */
@@ -317,54 +327,86 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( bombjack )
+/*************************************
+ *
+ *  Machine driver
+ *
+ *************************************/
+
+static MACHINE_START( bombjack )
+{
+	bombjack_state *state = machine.driver_data<bombjack_state>();
+
+	state->save_item(NAME(state->m_latch));
+	state->save_item(NAME(state->m_background_image));
+}
+
+
+static MACHINE_RESET( bombjack )
+{
+	bombjack_state *state = machine.driver_data<bombjack_state>();
+
+	state->m_latch = 0;
+	state->m_background_image = 0;
+}
+
+
+static INTERRUPT_GEN( vblank_irq )
+{
+	bombjack_state *state = device->machine().driver_data<bombjack_state>();
+
+	if(state->m_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static MACHINE_CONFIG_START( bombjack, bombjack_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_4MHz)		/* Confirmed from PCB */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 3072000)	/* 3.072 MHz????? */
-	MDRV_CPU_PROGRAM_MAP(audio_map)
-	MDRV_CPU_IO_MAP(audio_io_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_12MHz/4)	/* Confirmed from PCB */
+	MCFG_CPU_PROGRAM_MAP(audio_map)
+	MCFG_CPU_IO_MAP(audio_io_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_MACHINE_START(bombjack)
+	MCFG_MACHINE_START(bombjack)
+	MCFG_MACHINE_RESET(bombjack)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(bombjack)
 
-	MDRV_GFXDECODE(bombjack)
-	MDRV_PALETTE_LENGTH(128)
+	MCFG_GFXDECODE(bombjack)
+	MCFG_PALETTE_LENGTH(128)
 
-	MDRV_VIDEO_START(bombjack)
-	MDRV_VIDEO_UPDATE(bombjack)
+	MCFG_VIDEO_START(bombjack)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.13)
+	MCFG_SOUND_ADD("ay1", AY8910, XTAL_12MHz/8)	/* Confirmed from PCB */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.13)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.13)
+	MCFG_SOUND_ADD("ay2", AY8910, XTAL_12MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.13)
 
-	MDRV_SOUND_ADD("ay3", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.13)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay3", AY8910, XTAL_12MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.13)
+MACHINE_CONFIG_END
 
 
 
-/***************************************************************************
-
-  Game driver(s)
-
-***************************************************************************/
+/*************************************
+ *
+ *  ROM definition(s)
+ *
+ *************************************/
 
 ROM_START( bombjack )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -427,5 +469,11 @@ ROM_START( bombjack2 )
 ROM_END
 
 
-GAME( 1984, bombjack, 0,        bombjack, bombjack, 0, ROT90, "Tehkan", "Bomb Jack (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1984, bombjack2,bombjack, bombjack, bombjack, 0, ROT90, "Tehkan", "Bomb Jack (set 2)", GAME_SUPPORTS_SAVE )
+/*************************************
+ *
+ *  Game driver(s)
+ *
+ *************************************/
+
+GAME( 1984, bombjack,  0,        bombjack, bombjack, 0, ROT90, "Tehkan", "Bomb Jack (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1984, bombjack2, bombjack, bombjack, bombjack, 0, ROT90, "Tehkan", "Bomb Jack (set 2)", GAME_SUPPORTS_SAVE )

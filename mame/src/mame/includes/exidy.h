@@ -19,42 +19,39 @@
 #define EXIDY_VSSTART					(0x100)
 
 
-/*----------- defined in audio/exidy.c -----------*/
+class exidy_state : public driver_device
+{
+public:
+	exidy_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-DEVICE_GET_INFO( exidy_sound );
-#define SOUND_EXIDY DEVICE_GET_INFO_NAME( exidy_sound )
-
-WRITE8_HANDLER( exidy_sh6840_w );
-WRITE8_HANDLER( exidy_sfxctrl_w );
-
-MACHINE_DRIVER_EXTERN( venture_audio );
-
-MACHINE_DRIVER_EXTERN( mtrap_cvsd_audio );
-
-MACHINE_DRIVER_EXTERN( victory_audio );
-READ8_HANDLER( victory_sound_response_r );
-READ8_HANDLER( victory_sound_status_r );
-WRITE8_HANDLER( victory_sound_command_w );
-
+	UINT8 m_last_dial;
+	UINT8 *m_videoram;
+	UINT8 *m_characterram;
+	UINT8 *m_color_latch;
+	UINT8 *m_sprite1_xpos;
+	UINT8 *m_sprite1_ypos;
+	UINT8 *m_sprite2_xpos;
+	UINT8 *m_sprite2_ypos;
+	UINT8 *m_spriteno;
+	UINT8 *m_sprite_enable;
+	UINT8 m_collision_mask;
+	UINT8 m_collision_invert;
+	int m_is_2bpp;
+	UINT8 m_int_condition;
+	bitmap_ind16 m_background_bitmap;
+	bitmap_ind16 m_motion_object_1_vid;
+	bitmap_ind16 m_motion_object_2_vid;
+	bitmap_ind16 m_motion_object_2_clip;
+};
 
 
 /*----------- defined in video/exidy.c -----------*/
 
-extern UINT8 *exidy_videoram;
-extern UINT8 *exidy_characterram;
-extern UINT8 *exidy_color_latch;
-extern UINT8 *exidy_sprite1_xpos;
-extern UINT8 *exidy_sprite1_ypos;
-extern UINT8 *exidy_sprite2_xpos;
-extern UINT8 *exidy_sprite2_ypos;
-extern UINT8 *exidy_spriteno;
-extern UINT8 *exidy_sprite_enable;
-
-void exidy_video_config(UINT8 _collision_mask, UINT8 _collision_invert, int _is_2bpp);
+void exidy_video_config(running_machine &machine, UINT8 _collision_mask, UINT8 _collision_invert, int _is_2bpp);
 VIDEO_START( exidy );
-VIDEO_UPDATE( exidy );
+SCREEN_UPDATE_IND16( exidy );
 
 INTERRUPT_GEN( exidy_vblank_interrupt );
-INTERRUPT_GEN( teetert_vblank_interrupt );
 
 READ8_HANDLER( exidy_interrupt_r );

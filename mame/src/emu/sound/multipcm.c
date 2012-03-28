@@ -31,13 +31,11 @@
  *
  */
 
-#include <math.h>
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "multipcm.h"
 
 //????
-#define MULTIPCM_CLOCKDIV    	(180.0)
+#define MULTIPCM_CLOCKDIV   	(180.0)
 
 struct _Sample
 {
@@ -51,6 +49,7 @@ struct _Sample
 };
 
 typedef enum {ATTACK,DECAY1,DECAY2,RELEASE} _STATE;
+ALLOW_SAVE_TYPE(_STATE); // allow save_item on a non-fundamental type
 struct _EG
 {
 	int volume;	//
@@ -127,13 +126,11 @@ static const int val2chan[] =
 #define MULTIPCM_RATE	44100.0
 
 
-INLINE MultiPCM *get_safe_token(const device_config *device)
+INLINE MultiPCM *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_MULTIPCM);
-	return (MultiPCM *)device->token;
+	assert(device->type() == MULTIPCM);
+	return (MultiPCM *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -227,13 +224,13 @@ static void EG_Calc(MultiPCM *ptChip,struct _SLOT *slot)
         LFO  SECTION
 *****************************/
 
-#define LFO_SHIFT 	8
+#define LFO_SHIFT	8
 
 
 #define LFIX(v)	((unsigned int) ((float) (1<<LFO_SHIFT)*(v)))
 
 //Convert DB to multiply amplitude
-#define DB(v) 	LFIX(pow(10.0,v/20.0))
+#define DB(v)	LFIX(pow(10.0,v/20.0))
 
 //Convert cents to step increment
 #define CENTS(v) LFIX(pow(2.0,v/1200.0))
@@ -503,10 +500,10 @@ static DEVICE_START( multipcm )
 	MultiPCM *ptChip = get_safe_token(device);
 	int i;
 
-	ptChip->ROM=(INT8 *)device->region;
-	ptChip->Rate=(float) device->clock / MULTIPCM_CLOCKDIV;
+	ptChip->ROM=*device->region();
+	ptChip->Rate=(float) device->clock() / MULTIPCM_CLOCKDIV;
 
-	ptChip->stream = stream_create(device, 0, 2, ptChip->Rate, ptChip, MultiPCM_update);
+	ptChip->stream = device->machine().sound().stream_alloc(*device, 0, 2, ptChip->Rate, ptChip, MultiPCM_update);
 
 	//Volume+pan table
 	for(i=0;i<0x800;++i)
@@ -609,39 +606,39 @@ static DEVICE_START( multipcm )
 		ptChip->Samples[i].AM=ptSample[11];
 	}
 
-	state_save_register_device_item(device, 0, ptChip->CurSlot);
-	state_save_register_device_item(device, 0, ptChip->Address);
-	state_save_register_device_item(device, 0, ptChip->BankL);
-	state_save_register_device_item(device, 0, ptChip->BankR);
+	device->save_item(NAME(ptChip->CurSlot));
+	device->save_item(NAME(ptChip->Address));
+	device->save_item(NAME(ptChip->BankL));
+	device->save_item(NAME(ptChip->BankR));
 
 	for(i=0;i<28;++i)
 	{
 		ptChip->Slots[i].Num=i;
 		ptChip->Slots[i].Playing=0;
 
-		state_save_register_device_item(device, i, ptChip->Slots[i].Num);
-		state_save_register_device_item_array(device, i, ptChip->Slots[i].Regs);
-		state_save_register_device_item(device, i, ptChip->Slots[i].Playing);
-		state_save_register_device_item(device, i, ptChip->Slots[i].Base);
-		state_save_register_device_item(device, i, ptChip->Slots[i].offset);
-		state_save_register_device_item(device, i, ptChip->Slots[i].step);
-		state_save_register_device_item(device, i, ptChip->Slots[i].Pan);
-		state_save_register_device_item(device, i, ptChip->Slots[i].TL);
-		state_save_register_device_item(device, i, ptChip->Slots[i].DstTL);
-		state_save_register_device_item(device, i, ptChip->Slots[i].TLStep);
-		state_save_register_device_item(device, i, ptChip->Slots[i].Prev);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.volume);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.state);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.step);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.AR);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.D1R);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.D2R);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.RR);
-		state_save_register_device_item(device, i, ptChip->Slots[i].EG.DL);
-		state_save_register_device_item(device, i, ptChip->Slots[i].PLFO.phase);
-		state_save_register_device_item(device, i, ptChip->Slots[i].PLFO.phase_step);
-		state_save_register_device_item(device, i, ptChip->Slots[i].ALFO.phase);
-		state_save_register_device_item(device, i, ptChip->Slots[i].ALFO.phase_step);
+		device->save_item(NAME(ptChip->Slots[i].Num), i);
+		device->save_item(NAME(ptChip->Slots[i].Regs), i);
+		device->save_item(NAME(ptChip->Slots[i].Playing), i);
+		device->save_item(NAME(ptChip->Slots[i].Base), i);
+		device->save_item(NAME(ptChip->Slots[i].offset), i);
+		device->save_item(NAME(ptChip->Slots[i].step), i);
+		device->save_item(NAME(ptChip->Slots[i].Pan), i);
+		device->save_item(NAME(ptChip->Slots[i].TL), i);
+		device->save_item(NAME(ptChip->Slots[i].DstTL), i);
+		device->save_item(NAME(ptChip->Slots[i].TLStep), i);
+		device->save_item(NAME(ptChip->Slots[i].Prev), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.volume), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.state), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.step), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.AR), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.D1R), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.D2R), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.RR), i);
+		device->save_item(NAME(ptChip->Slots[i].EG.DL), i);
+		device->save_item(NAME(ptChip->Slots[i].PLFO.phase), i);
+		device->save_item(NAME(ptChip->Slots[i].PLFO.phase_step), i);
+		device->save_item(NAME(ptChip->Slots[i].ALFO.phase), i);
+		device->save_item(NAME(ptChip->Slots[i].ALFO.phase_step), i);
 	}
 
 	LFO_Init();
@@ -668,7 +665,7 @@ WRITE8_DEVICE_HANDLER( multipcm_w )
 
 /* MAME/M1 access functions */
 
-void multipcm_set_bank(const device_config *device, UINT32 leftoffs, UINT32 rightoffs)
+void multipcm_set_bank(device_t *device, UINT32 leftoffs, UINT32 rightoffs)
 {
 	MultiPCM *ptChip = get_safe_token(device);
 	ptChip->BankL = leftoffs;
@@ -703,3 +700,4 @@ DEVICE_GET_INFO( multipcm )
 }
 
 
+DEFINE_LEGACY_SOUND_DEVICE(MULTIPCM, multipcm);

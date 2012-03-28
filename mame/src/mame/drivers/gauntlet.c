@@ -118,24 +118,14 @@
 ****************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/m6502/m6502.h"
-#include "machine/atarigen.h"
 #include "sound/tms5220.h"
 #include "sound/2151intf.h"
 #include "sound/pokey.h"
-#include "gauntlet.h"
-
-
-
-/*************************************
- *
- *  Statics
- *
- *************************************/
-
-static UINT16 sound_reset_val;
+#include "video/atarimo.h"
+#include "includes/gauntlet.h"
 
 
 
@@ -145,34 +135,46 @@ static UINT16 sound_reset_val;
  *
  *************************************/
 
-static void update_interrupts(running_machine *machine)
+static void update_interrupts(running_machine &machine)
 {
-	cputag_set_input_line(machine, "maincpu", 4, atarigen_video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 6, atarigen_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	gauntlet_state *state = machine.driver_data<gauntlet_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->m_video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 6, state->m_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
-static void scanline_update(const device_config *screen, int scanline)
+static void scanline_update(screen_device &screen, int scanline)
 {
-	const address_space *space = cputag_get_address_space(screen->machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = screen.machine().device("audiocpu")->memory().space(AS_PROGRAM);
 
 	/* sound IRQ is on 32V */
 	if (scanline & 32)
-		atarigen_6502_irq_gen(cputag_get_cpu(screen->machine, "audiocpu"));
+		atarigen_6502_irq_gen(screen.machine().device("audiocpu"));
 	else
 		atarigen_6502_irq_ack_r(space, 0);
 }
 
 
+static MACHINE_START( gauntlet )
+{
+	gauntlet_state *state = machine.driver_data<gauntlet_state>();
+	atarigen_init(machine);
+
+	state->save_item(NAME(state->m_sound_reset_val));
+}
+
+
 static MACHINE_RESET( gauntlet )
 {
-	sound_reset_val = 1;
+	gauntlet_state *state = machine.driver_data<gauntlet_state>();
 
-	atarigen_eeprom_reset();
-	atarigen_slapstic_reset();
-	atarigen_interrupt_reset(update_interrupts);
-	atarigen_scanline_timer_reset(machine->primary_screen, scanline_update, 32);
-	atarigen_sound_io_reset(cputag_get_cpu(machine, "audiocpu"));
+	state->m_sound_reset_val = 1;
+
+	atarigen_eeprom_reset(state);
+	atarigen_slapstic_reset(state);
+	atarigen_interrupt_reset(state, update_interrupts);
+	atarigen_scanline_timer_reset(*machine.primary_screen, scanline_update, 32);
+	atarigen_sound_io_reset(machine.device("audiocpu"));
 }
 
 
@@ -185,9 +187,10 @@ static MACHINE_RESET( gauntlet )
 
 static READ16_HANDLER( port4_r )
 {
-	int temp = input_port_read(space->machine, "803008");
-	if (atarigen_cpu_to_sound_ready) temp ^= 0x0020;
-	if (atarigen_sound_to_cpu_ready) temp ^= 0x0010;
+	gauntlet_state *state = space->machine().driver_data<gauntlet_state>();
+	int temp = input_port_read(space->machine(), "803008");
+	if (state->m_cpu_to_sound_ready) temp ^= 0x0020;
+	if (state->m_sound_to_cpu_ready) temp ^= 0x0010;
 	return temp;
 }
 
@@ -201,15 +204,25 @@ static READ16_HANDLER( port4_r )
 
 static WRITE16_HANDLER( sound_reset_w )
 {
+	gauntlet_state *state = space->machine().driver_data<gauntlet_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		int oldword = sound_reset_val;
-		COMBINE_DATA(&sound_reset_val);
+		int oldword = state->m_sound_reset_val;
+		COMBINE_DATA(&state->m_sound_reset_val);
 
-		if ((oldword ^ sound_reset_val) & 1)
+		if ((oldword ^ state->m_sound_reset_val) & 1)
 		{
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, (sound_reset_val & 1) ? CLEAR_LINE : ASSERT_LINE);
-			atarigen_sound_reset(space->machine);
+			cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, (state->m_sound_reset_val & 1) ? CLEAR_LINE : ASSERT_LINE);
+			atarigen_sound_reset(space->machine());
+			if (state->m_sound_reset_val & 1)
+			{
+				devtag_reset(space->machine(), "ymsnd");
+				devtag_reset(space->machine(), "tms");
+				tms5220_set_frequency(space->machine().device("tms"), ATARI_CLOCK_14MHz/2 / 11);
+				atarigen_set_ym2151_vol(space->machine(), 0);
+				atarigen_set_pokey_vol(space->machine(), 0);
+				atarigen_set_tms5220_vol(space->machine(), 0);
+			}
 		}
 	}
 }
@@ -224,12 +237,13 @@ static WRITE16_HANDLER( sound_reset_w )
 
 static READ8_HANDLER( switch_6502_r )
 {
+	gauntlet_state *state = space->machine().driver_data<gauntlet_state>();
 	int temp = 0x30;
 
-	if (atarigen_cpu_to_sound_ready) temp ^= 0x80;
-	if (atarigen_sound_to_cpu_ready) temp ^= 0x40;
-	if (!tms5220_readyq_r(devtag_get_device(space->machine, "tms"))) temp ^= 0x20;
-	if (!(input_port_read(space->machine, "803008") & 0x0008)) temp ^= 0x10;
+	if (state->m_cpu_to_sound_ready) temp ^= 0x80;
+	if (state->m_sound_to_cpu_ready) temp ^= 0x40;
+	if (!tms5220_readyq_r(space->machine().device("tms"))) temp ^= 0x20;
+	if (!(input_port_read(space->machine(), "803008") & 0x0008)) temp ^= 0x10;
 
 	return temp;
 }
@@ -243,10 +257,11 @@ static READ8_HANDLER( switch_6502_r )
 
 static WRITE8_HANDLER( sound_ctl_w )
 {
-	const device_config *tms = devtag_get_device(space->machine, "tms");
+	device_t *tms = space->machine().device("tms");
 	switch (offset & 7)
 	{
 		case 0:	/* music reset, bit D7, low reset */
+			if (((data>>7)&1) == 0) devtag_reset(space->machine(), "ymsnd");
 			break;
 
 		case 1:	/* speech write, bit D7, active low */
@@ -274,9 +289,9 @@ static WRITE8_HANDLER( sound_ctl_w )
 
 static WRITE8_HANDLER( mixer_w )
 {
-	atarigen_set_ym2151_vol(space->machine, (data & 7) * 100 / 7);
-	atarigen_set_pokey_vol(space->machine, ((data >> 3) & 3) * 100 / 3);
-	atarigen_set_tms5220_vol(space->machine, ((data >> 5) & 7) * 100 / 7);
+	atarigen_set_ym2151_vol(space->machine(), (data & 7) * 100 / 7);
+	atarigen_set_pokey_vol(space->machine(), ((data >> 3) & 3) * 100 / 3);
+	atarigen_set_tms5220_vol(space->machine(), ((data >> 5) & 7) * 100 / 7);
 }
 
 
@@ -288,7 +303,7 @@ static WRITE8_HANDLER( mixer_w )
  *************************************/
 
 /* full map verified from schematics */
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x037fff) AM_MIRROR(0x280000) AM_ROM
 	AM_RANGE(0x038000, 0x03ffff) AM_MIRROR(0x280000) AM_ROM	/* slapstic maps here */
@@ -296,7 +311,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	/* MBUS */
 	AM_RANGE(0x800000, 0x801fff) AM_MIRROR(0x2fc000) AM_RAM
-	AM_RANGE(0x802000, 0x802fff) AM_MIRROR(0x2fc000) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
+	AM_RANGE(0x802000, 0x802fff) AM_MIRROR(0x2fc000) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0x803000, 0x803001) AM_MIRROR(0x2fcef0) AM_READ_PORT("803000")
 	AM_RANGE(0x803002, 0x803003) AM_MIRROR(0x2fcef0) AM_READ_PORT("803002")
 	AM_RANGE(0x803004, 0x803005) AM_MIRROR(0x2fcef0) AM_READ_PORT("803004")
@@ -310,14 +325,14 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x803170, 0x803171) AM_MIRROR(0x2fce8e) AM_WRITE(atarigen_sound_w)
 
 	/* VBUS */
-	AM_RANGE(0x900000, 0x901fff) AM_MIRROR(0x2c8000) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE(&atarigen_playfield)
-	AM_RANGE(0x902000, 0x903fff) AM_MIRROR(0x2c8000) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
+	AM_RANGE(0x900000, 0x901fff) AM_MIRROR(0x2c8000) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(gauntlet_state, m_playfield)
+	AM_RANGE(0x902000, 0x903fff) AM_MIRROR(0x2c8000) AM_READWRITE(atarimo_0_spriteram_r, atarimo_0_spriteram_w)
 	AM_RANGE(0x904000, 0x904fff) AM_MIRROR(0x2c8000) AM_RAM
-	AM_RANGE(0x905f6e, 0x905f6f) AM_MIRROR(0x2c8000) AM_RAM_WRITE(gauntlet_yscroll_w) AM_BASE(&atarigen_yscroll)
-	AM_RANGE(0x905000, 0x905f7f) AM_MIRROR(0x2c8000) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE(&atarigen_alpha)
-	AM_RANGE(0x905f80, 0x905fff) AM_MIRROR(0x2c8000) AM_RAM_WRITE(atarimo_0_slipram_w) AM_BASE(&atarimo_0_slipram)
-	AM_RANGE(0x910000, 0x9107ff) AM_MIRROR(0x2cf800) AM_RAM_WRITE(paletteram16_IIIIRRRRGGGGBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x930000, 0x930001) AM_MIRROR(0x2cfffe) AM_WRITE(gauntlet_xscroll_w) AM_BASE(&atarigen_xscroll)
+	AM_RANGE(0x905f6e, 0x905f6f) AM_MIRROR(0x2c8000) AM_RAM_WRITE(gauntlet_yscroll_w) AM_BASE_MEMBER(gauntlet_state, m_yscroll)
+	AM_RANGE(0x905000, 0x905f7f) AM_MIRROR(0x2c8000) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(gauntlet_state, m_alpha)
+	AM_RANGE(0x905f80, 0x905fff) AM_MIRROR(0x2c8000) AM_READWRITE(atarimo_0_slipram_r, atarimo_0_slipram_w)
+	AM_RANGE(0x910000, 0x9107ff) AM_MIRROR(0x2cf800) AM_RAM_WRITE(paletteram16_IIIIRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x930000, 0x930001) AM_MIRROR(0x2cfffe) AM_WRITE(gauntlet_xscroll_w) AM_BASE_MEMBER(gauntlet_state, m_xscroll)
 ADDRESS_MAP_END
 
 
@@ -329,7 +344,7 @@ ADDRESS_MAP_END
  *************************************/
 
 /* full map verified from schematics */
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x0fff) AM_MIRROR(0x2000) AM_RAM
 	AM_RANGE(0x1000, 0x100f) AM_MIRROR(0x27c0) AM_WRITE(atarigen_6502_sound_w)
@@ -337,7 +352,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1020, 0x102f) AM_MIRROR(0x27c0) AM_READ_PORT("COIN") AM_WRITE(mixer_w)
 	AM_RANGE(0x1030, 0x103f) AM_MIRROR(0x27c0) AM_READWRITE(switch_6502_r, sound_ctl_w)
 	AM_RANGE(0x1800, 0x180f) AM_MIRROR(0x27c0) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
-	AM_RANGE(0x1810, 0x1811) AM_MIRROR(0x27ce) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x1810, 0x1811) AM_MIRROR(0x27ce) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x1820, 0x182f) AM_MIRROR(0x27c0) AM_DEVWRITE("tms", tms5220_data_w)
 	AM_RANGE(0x1830, 0x183f) AM_MIRROR(0x27c0) AM_READWRITE(atarigen_6502_irq_ack_r, atarigen_6502_irq_ack_w)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
@@ -499,48 +514,48 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( gauntlet )
+static MACHINE_CONFIG_START( gauntlet, gauntlet_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68010, ATARI_CLOCK_14MHz/2)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
+	MCFG_CPU_ADD("maincpu", M68010, ATARI_CLOCK_14MHz/2)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
 
-	MDRV_CPU_ADD("audiocpu", M6502, ATARI_CLOCK_14MHz/8)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", M6502, ATARI_CLOCK_14MHz/8)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MDRV_MACHINE_RESET(gauntlet)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MCFG_MACHINE_START(gauntlet)
+	MCFG_MACHINE_RESET(gauntlet)
+	MCFG_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
-	MDRV_GFXDECODE(gauntlet)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_GFXDECODE(gauntlet)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
 	/* note: these parameters are from published specs, not derived */
 	/* the board uses a SYNGEN chip to generate video signals */
-	MDRV_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_RAW_PARAMS(ATARI_CLOCK_14MHz/2, 456, 0, 336, 262, 0, 240)
+	MCFG_SCREEN_UPDATE_STATIC(gauntlet)
 
-	MDRV_VIDEO_START(gauntlet)
-	MDRV_VIDEO_UPDATE(gauntlet)
+	MCFG_VIDEO_START(gauntlet)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, ATARI_CLOCK_14MHz/4)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.48)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.48)
+	MCFG_SOUND_ADD("ymsnd", YM2151, ATARI_CLOCK_14MHz/4)
+	MCFG_SOUND_ROUTE(1, "lspeaker", 0.48)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 0.48)
 
-	MDRV_SOUND_ADD("pokey", POKEY, ATARI_CLOCK_14MHz/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.32)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.32)
+	MCFG_SOUND_ADD("pokey", POKEY, ATARI_CLOCK_14MHz/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.32)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.32)
 
-	MDRV_SOUND_ADD("tms", TMS5220C, ATARI_CLOCK_14MHz/2/11)	/* potentially ATARI_CLOCK_14MHz/2/9 as well */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("tms", TMS5220C, ATARI_CLOCK_14MHz/2/11)	/* potentially ATARI_CLOCK_14MHz/2/9 as well */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+MACHINE_CONFIG_END
 
 
 
@@ -1606,11 +1621,12 @@ ROM_END
  *
  *************************************/
 
-static void gauntlet_common_init(running_machine *machine, int slapstic, int vindctr2)
+static void gauntlet_common_init(running_machine &machine, int slapstic, int vindctr2)
 {
-	UINT8 *rom = memory_region(machine, "maincpu");
-	atarigen_eeprom_default = NULL;
-	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x038000, 0, slapstic);
+	gauntlet_state *state = machine.driver_data<gauntlet_state>();
+	UINT8 *rom = machine.region("maincpu")->base();
+	state->m_eeprom_default = NULL;
+	atarigen_slapstic_init(machine.device("maincpu"), 0x038000, 0, slapstic);
 
 	/* swap the top and bottom halves of the main CPU ROM images */
 	atarigen_swap_mem(rom + 0x000000, rom + 0x008000, 0x8000);
@@ -1620,7 +1636,7 @@ static void gauntlet_common_init(running_machine *machine, int slapstic, int vin
 	atarigen_swap_mem(rom + 0x070000, rom + 0x078000, 0x8000);
 
 	/* indicate whether or not we are vindicators 2 */
-	vindctr2_screen_refresh = vindctr2;
+	state->m_vindctr2_screen_refresh = vindctr2;
 }
 
 
@@ -1644,8 +1660,8 @@ static DRIVER_INIT( gauntlet2 )
 
 static DRIVER_INIT( vindctr2 )
 {
-	UINT8 *gfx2_base = memory_region(machine, "gfx2");
-	UINT8 *data = alloc_array_or_die(UINT8, 0x8000);
+	UINT8 *gfx2_base = machine.region("gfx2")->base();
+	UINT8 *data = auto_alloc_array(machine, UINT8, 0x8000);
 	int i;
 
 	gauntlet_common_init(machine, 118, 1);
@@ -1653,13 +1669,13 @@ static DRIVER_INIT( vindctr2 )
 	/* highly strange -- the address bits on the chip at 2J (and only that
        chip) are scrambled -- this is verified on the schematics! */
 
-		memcpy(data, &gfx2_base[0x88000], 0x8000);
-		for (i = 0; i < 0x8000; i++)
-		{
-			int srcoffs = (i & 0x4000) | ((i << 11) & 0x3800) | ((i >> 3) & 0x07ff);
-			gfx2_base[0x88000 + i] = data[srcoffs];
-		}
-		free(data);
+	memcpy(data, &gfx2_base[0x88000], 0x8000);
+	for (i = 0; i < 0x8000; i++)
+	{
+		int srcoffs = (i & 0x4000) | ((i << 11) & 0x3800) | ((i >> 3) & 0x07ff);
+		gfx2_base[0x88000 + i] = data[srcoffs];
+	}
+	auto_free(machine, data);
 }
 
 

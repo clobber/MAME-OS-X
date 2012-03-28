@@ -14,32 +14,10 @@
 
 *******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
-
-PALETTE_INIT( liberate );
-VIDEO_UPDATE( prosoccr );
-VIDEO_UPDATE( prosport );
-VIDEO_UPDATE( liberate );
-VIDEO_UPDATE( boomrang );
-VIDEO_START( prosoccr );
-VIDEO_START( prosport );
-VIDEO_START( boomrang );
-VIDEO_START( liberate );
-
-static int deco16_bank;
-static UINT8 *scratchram;
-UINT8 *prosoccr_charram;
-UINT8 *prosport_bg_vram;
-
-WRITE8_HANDLER( deco16_io_w );
-WRITE8_HANDLER( prosoccr_io_w );
-WRITE8_HANDLER( prosport_io_w );
-WRITE8_HANDLER( prosport_paletteram_w );
-WRITE8_HANDLER( prosport_bg_vram_w );
-WRITE8_HANDLER( liberate_videoram_w );
-WRITE8_HANDLER( liberate_colorram_w );
+#include "includes/liberate.h"
 
 /*************************************
  *
@@ -49,158 +27,181 @@ WRITE8_HANDLER( liberate_colorram_w );
 
 static READ8_HANDLER( deco16_bank_r )
 {
-	const UINT8 *ROM = memory_region(space->machine, "user1");
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	const UINT8 *ROM = space->machine().region("user1")->base();
 
 	/* The tilemap bank can be swapped into main memory */
-	if (deco16_bank)
+	if (state->m_bank)
 		return ROM[offset];
 
 	/* Else the handler falls through to read the usual address */
-	if (offset<0x400) return colorram[offset];
-	if (offset<0x800) return videoram[offset-0x400];
-	if (offset<0x1000) return spriteram[offset-0x800];
-	if (offset<0x2200) { logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset); return 0; }
-	if (offset<0x2800) return scratchram[offset-0x2200];
+	if (offset < 0x400)
+		return state->m_colorram[offset];
+	if (offset < 0x800)
+		return state->m_videoram[offset - 0x400];
+	if (offset < 0x1000)
+		return state->m_spriteram[offset - 0x800];
+	if (offset < 0x2200)
+	{
+		logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(&space->device()), offset);
+		return 0;
+	}
+	if (offset < 0x2800)
+		return state->m_scratchram[offset - 0x2200];
 
-	logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset);
+	logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(&space->device()), offset);
 	return 0;
 }
 
 static READ8_HANDLER( deco16_io_r )
 {
-	if (offset==0) return input_port_read(space->machine, "IN1"); /* Player 1 controls */
-	if (offset==1) return input_port_read(space->machine, "IN2"); /* Player 2 controls */
-	if (offset==2) return input_port_read(space->machine, "IN3"); /* Vblank, coins */
-	if (offset==3) return input_port_read(space->machine, "DSW1"); /* Dip 1 */
-	if (offset==4) return input_port_read(space->machine, "DSW2"); /* Dip 2 */
+	if (offset == 0) return input_port_read(space->machine(), "IN1"); /* Player 1 controls */
+	if (offset == 1) return input_port_read(space->machine(), "IN2"); /* Player 2 controls */
+	if (offset == 2) return input_port_read(space->machine(), "IN3"); /* Vblank, coins */
+	if (offset == 3) return input_port_read(space->machine(), "DSW1"); /* Dip 1 */
+	if (offset == 4) return input_port_read(space->machine(), "DSW2"); /* Dip 2 */
 
-	logerror("%04x:  Read input %d\n",cpu_get_pc(space->cpu),offset);
+	logerror("%04x:  Read input %d\n", cpu_get_pc(&space->device()), offset);
 	return 0xff;
 }
 
 static WRITE8_HANDLER( deco16_bank_w )
 {
-	deco16_bank = data;
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	state->m_bank = data;
 
-	if (deco16_bank)
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
+	if (state->m_bank)
+		state->m_maincpu->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x8000, 0x800f, FUNC(deco16_io_r));
 	else
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, (read8_space_func)SMH_BANK(1));
+		state->m_maincpu->memory().space(AS_PROGRAM)->install_read_bank(0x8000, 0x800f, "bank1");
 }
-
-static UINT8 gfx_rom_readback;
 
 static READ8_HANDLER( prosoccr_bank_r )
 {
-	const UINT8 *ROM = memory_region(space->machine, "user1");
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	const UINT8 *ROM = space->machine().region("user1")->base();
 
 	/* The tilemap bank can be swapped into main memory */
-	if (deco16_bank)
+	if (state->m_bank)
 		return ROM[offset];
 
 	/* Else the handler falls through to read the usual address */
-	if (offset<0x400) return colorram[offset];
-	if (offset<0x800) return videoram[offset-0x400];
-	if (offset<0xc00) return colorram[offset-0x800];
-	if (offset<0x1000) return spriteram[offset-0xc00];
-	if (offset<0x2200) { logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset); return 0; }
-	if (offset<0x2800) return scratchram[offset-0x2200];
+	if (offset < 0x400)
+		return state->m_colorram[offset];
+	if (offset < 0x800)
+		return state->m_videoram[offset - 0x400];
+	if (offset < 0xc00)
+		return state->m_colorram[offset - 0x800];
+	if (offset < 0x1000)
+		return state->m_spriteram[offset - 0xc00];
+	if (offset < 0x2200)
+	{
+		logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(&space->device()), offset);
+		return 0;
+	}
+	if (offset < 0x2800)
+		return state->m_scratchram[offset - 0x2200];
 
-	logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset);
+	logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(&space->device()), offset);
 	return 0;
 }
 
 static READ8_HANDLER( prosoccr_charram_r )
 {
-	UINT8 *SRC_GFX = memory_region(space->machine, "shared_gfx");
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	UINT8 *SRC_GFX = space->machine().region("shared_gfx")->base();
 
-	if(gfx_rom_readback)
+	if (state->m_gfx_rom_readback)
 	{
-		switch(offset & 0x1800)
+		switch (offset & 0x1800)
 		{
 			case 0x0000:
-				return SRC_GFX[(offset & 0x7ff)+(0x0000)+0x0000];
+				return SRC_GFX[(offset & 0x7ff) + (0x0000) + 0x0000];
 			case 0x0800:
-				return SRC_GFX[(offset & 0x7ff)+(0x0000)+0x2000];
+				return SRC_GFX[(offset & 0x7ff) + (0x0000) + 0x2000];
 			case 0x1000:
-				return SRC_GFX[(offset & 0x7ff)+(0x0000)+0x4000];
+				return SRC_GFX[(offset & 0x7ff) + (0x0000) + 0x4000];
 		}
 	}
 
 	/* note: gfx_rom_readback == 1 never happens. */
-	return prosoccr_charram[offset+gfx_rom_readback*0x1800];
+	return state->m_charram[offset + state->m_gfx_rom_readback * 0x1800];
 }
 
 static WRITE8_HANDLER( prosoccr_charram_w )
 {
-	UINT8 *FG_GFX = memory_region(space->machine, "fg_gfx");
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	UINT8 *FG_GFX = space->machine().region("fg_gfx")->base();
 
-	if(deco16_bank)
+	if (state->m_bank)
 	{
-		prosoccr_io_w(space,offset & 0xf,data);
+		prosoccr_io_w(space, offset & 0x0f, data);
 	}
 	else
 	{
 		/* note: gfx_rom_readback == 1 never happens. */
-		prosoccr_charram[offset+gfx_rom_readback*0x1800] = data;
+		state->m_charram[offset + state->m_gfx_rom_readback * 0x1800] = data;
 
-		switch(offset & 0x1800)
+		switch (offset & 0x1800)
 		{
 			case 0x0000:
-				FG_GFX[(offset & 0x7ff)+(0x0000)+0x0000] = data;
-				//FG_GFX[(offset & 0x7ff)+(0x1800)+0x0000] = data;
+				FG_GFX[(offset & 0x7ff) + (0x0000) + 0x0000] = data;
+				//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x0000] = data;
 				break;
 			case 0x0800:
-				FG_GFX[(offset & 0x7ff)+(0x0000)+0x2000] = data;
-				//FG_GFX[(offset & 0x7ff)+(0x1800)+0x2000] = data;
+				FG_GFX[(offset & 0x7ff) + (0x0000) + 0x2000] = data;
+				//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x2000] = data;
 				break;
 			case 0x1000:
-				FG_GFX[(offset & 0x7ff)+(0x0000)+0x4000] = data;
-				//FG_GFX[(offset & 0x7ff)+(0x1800)+0x4000] = data;
+				FG_GFX[(offset & 0x7ff) + (0x0000) + 0x4000] = data;
+				//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x4000] = data;
 				break;
 		}
 	}
 
-	offset&=0x7ff;
+	offset &= 0x7ff;
 
 	/* dirty char */
-    gfx_element_mark_dirty(space->machine->gfx[0], offset >> 3);
-//  gfx_element_mark_dirty(space->machine->gfx[0], (offset|0x1800) >> 3);
+	gfx_element_mark_dirty(space->machine().gfx[0], offset >> 3);
+//  gfx_element_mark_dirty(space->machine().gfx[0], (offset | 0x1800) >> 3);
 }
 
 static WRITE8_HANDLER( prosoccr_char_bank_w )
 {
-	gfx_rom_readback = data & 1; //enable GFX rom read-back
-	if(data & 0xfe)
-		printf("%02x\n",data);
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	state->m_gfx_rom_readback = data & 1; //enable GFX rom read-back
+
+	if (data & 0xfe)
+		printf("%02x\n", data);
 }
 
 static WRITE8_HANDLER( prosoccr_io_bank_w )
 {
-	deco16_bank = data & 1;
+	liberate_state *state = space->machine().driver_data<liberate_state>();
+	state->m_bank = data & 1;
 
-	if (deco16_bank)
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
+	if (state->m_bank)
+		state->m_maincpu->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x8000, 0x800f, FUNC(deco16_io_r));
 	else
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, prosoccr_charram_r);
+		state->m_maincpu->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x8000, 0x800f, FUNC(prosoccr_charram_r));
 
 }
 
 static READ8_HANDLER( prosport_charram_r )
 {
-	UINT8 *FG_GFX = memory_region(space->machine, "progolf_fg_gfx");
+	UINT8 *FG_GFX = space->machine().region("progolf_fg_gfx")->base();
 
-	switch(offset & 0x1800)
+	switch (offset & 0x1800)
 	{
 		case 0x0000:
-			return FG_GFX[(offset & 0x7ff)+(0x0800)+0x0000];
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x0000] = data;
+			return FG_GFX[(offset & 0x7ff) + (0x0800) + 0x0000];
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x0000] = data;
 		case 0x0800:
-			return FG_GFX[(offset & 0x7ff)+(0x0800)+0x2000];
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x2000] = data;
+			return FG_GFX[(offset & 0x7ff) + (0x0800) + 0x2000];
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x2000] = data;
 		case 0x1000:
-			return FG_GFX[(offset & 0x7ff)+(0x0800)+0x4000];
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x4000] = data;
+			return FG_GFX[(offset & 0x7ff) + (0x0800) + 0x4000];
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x4000] = data;
 	}
 
 	return 0;
@@ -208,29 +209,29 @@ static READ8_HANDLER( prosport_charram_r )
 
 static WRITE8_HANDLER( prosport_charram_w )
 {
-	UINT8 *FG_GFX = memory_region(space->machine, "progolf_fg_gfx");
+	UINT8 *FG_GFX = space->machine().region("progolf_fg_gfx")->base();
 
-	switch(offset & 0x1800)
+	switch (offset & 0x1800)
 	{
 		case 0x0000:
-			FG_GFX[(offset & 0x7ff)+(0x0800)+0x0000] = data;
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x0000] = data;
+			FG_GFX[(offset & 0x7ff) + (0x0800) + 0x0000] = data;
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x0000] = data;
 			break;
 		case 0x0800:
-			FG_GFX[(offset & 0x7ff)+(0x0800)+0x2000] = data;
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x2000] = data;
+			FG_GFX[(offset & 0x7ff) + (0x0800) + 0x2000] = data;
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x2000] = data;
 			break;
 		case 0x1000:
-			FG_GFX[(offset & 0x7ff)+(0x0800)+0x4000] = data;
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x4000] = data;
+			FG_GFX[(offset & 0x7ff) + (0x0800) + 0x4000] = data;
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x4000] = data;
 			break;
 	}
 
-	offset&=0x7ff;
+	offset &= 0x7ff;
 
 	/* dirty char */
-    gfx_element_mark_dirty(space->machine->gfx[3], (offset+0x800) >> 3);
-    gfx_element_mark_dirty(space->machine->gfx[3+4], (offset+0x800) >> 5);
+	gfx_element_mark_dirty(space->machine().gfx[3], (offset + 0x800) >> 3);
+	gfx_element_mark_dirty(space->machine().gfx[3 + 4], (offset + 0x800) >> 5);
 }
 
 
@@ -240,65 +241,65 @@ static WRITE8_HANDLER( prosport_charram_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( prosport_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0200, 0x021f) AM_RAM_WRITE(prosport_paletteram_w) AM_BASE(&paletteram)
+static ADDRESS_MAP_START( prosport_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0200, 0x021f) AM_RAM_WRITE(prosport_paletteram_w) AM_BASE_MEMBER(liberate_state, m_paletteram)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x2000) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(prosport_bg_vram_w) AM_BASE(&prosport_bg_vram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(prosport_bg_vram_w) AM_BASE_MEMBER(liberate_state, m_bg_vram)
 	AM_RANGE(0x0800, 0x1fff) AM_READWRITE(prosport_charram_r,prosport_charram_w) //0x1e00-0x1fff isn't charram!
- 	AM_RANGE(0x2400, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x2400, 0x2fff) AM_RAM
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, m_colorram)
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, m_videoram)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE_MEMBER(liberate_state, m_spriteram)
 	AM_RANGE(0x8000, 0x800f) AM_WRITE(prosport_io_w)
-	AM_RANGE(0x8000, 0x800f) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x800f) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( liberate_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( liberate_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(deco16_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE(&spriteram)
-	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE(&scratchram)
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, m_colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, m_videoram)
+	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, m_spriteram)
+	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE_MEMBER(liberate_state, m_scratchram)
 	AM_RANGE(0x8000, 0x800f) AM_WRITE(deco16_io_w)
-	AM_RANGE(0x8000, 0x800f) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x800f) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( prosoccr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( prosoccr_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(prosoccr_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x800) AM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4c00, 0x4fff) AM_WRITEONLY AM_BASE(&spriteram)
-	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE(&scratchram)
-	AM_RANGE(0x8000, 0x97ff) AM_READWRITE(prosoccr_charram_r,prosoccr_charram_w)
+	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x800) AM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, m_colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, m_videoram)
+	AM_RANGE(0x4c00, 0x4fff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, m_spriteram)
+	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE_MEMBER(liberate_state, m_scratchram)
+	AM_RANGE(0x8000, 0x97ff) AM_READWRITE(prosoccr_charram_r, prosoccr_charram_w)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(prosoccr_char_bank_w)
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( deco16_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( deco16_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(deco16_bank_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("TILT")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( prosoccr_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( prosoccr_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(prosoccr_io_bank_w)
 	//AM_RANGE(0x01, 0x01) AM_READ_PORT("TILT")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( liberatb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( liberatb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00fe, 0x00fe) AM_READ_PORT("IN0")
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(deco16_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE(&spriteram)
-	AM_RANGE(0x6200, 0x67ff) AM_WRITEONLY AM_BASE(&scratchram)
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, m_colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, m_videoram)
+	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, m_spriteram)
+	AM_RANGE(0x6200, 0x67ff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, m_scratchram)
 	AM_RANGE(0xf000, 0xf00f) AM_WRITE(deco16_io_w)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("IN1")
 	AM_RANGE(0xf001, 0xf001) AM_READ_PORT("IN2")
@@ -314,7 +315,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( prosoccr_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( prosoccr_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("ay1", ay8910_data_w)
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("ay1", ay8910_address_w)
@@ -325,7 +326,7 @@ static ADDRESS_MAP_START( prosoccr_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( liberate_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( liberate_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
 	AM_RANGE(0x1000, 0x1000) AM_WRITENOP
 	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("ay1", ay8910_data_w)
@@ -658,7 +659,7 @@ static const gfx_layout charlayout =
 	8,8,
 	RGN_FRAC(1,3),
 	3,
- 	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
+	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
 	{ 0,1,2,3,4,5,6,7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
 	8*8
@@ -669,7 +670,7 @@ static const gfx_layout sprites =
 	16,16,
 	RGN_FRAC(1,3),
 	3,
- 	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
+	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
 	{ 16*8, 1+(16*8), 2+(16*8), 3+(16*8), 4+(16*8), 5+(16*8), 6+(16*8), 7+(16*8),
 		0,1,2,3,4,5,6,7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 ,8*8,9*8,10*8,11*8,12*8,13*8,14*8,15*8 },
@@ -725,7 +726,7 @@ static const gfx_layout pro_tiles =
 	16,16,
 	RGN_FRAC(1,2),
 	3,
- 	{ 4,0, RGN_FRAC(1,2)+4 },
+	{ 4,0, RGN_FRAC(1,2)+4 },
 	{ 384+0, 384+1, 384+2, 384+3,
 	  256+0, 256+1, 256+2, 256+3,
 	  128+0, 128+1, 128+2, 128+3,
@@ -768,17 +769,17 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( deco16_interrupt )
 {
-	static int latch = 0;
-	int p = ~input_port_read(device->machine, "IN3");
-	if ((p & 0x43) && !latch)
+	liberate_state *state = device->machine().driver_data<liberate_state>();
+	int p = ~input_port_read(device->machine(), "IN3");
+	if ((p & 0x43) && !state->m_latch)
 	{
-		cpu_set_input_line(device, DECO16_IRQ_LINE, ASSERT_LINE);
-		latch = 1;
+		device_set_input_line(device, DECO16_IRQ_LINE, ASSERT_LINE);
+		state->m_latch = 1;
 	}
 	else
 	{
 		if (!(p & 0x43))
-			latch=0;
+			state->m_latch = 0;
 	}
 }
 
@@ -786,7 +787,7 @@ static INTERRUPT_GEN( deco16_interrupt )
 static INTERRUPT_GEN( prosport_interrupt )
 {
 	/* ??? */
-	cpu_set_input_line(device, DECO16_IRQ_LINE, ASSERT_LINE);
+	device_set_input_line(device, DECO16_IRQ_LINE, ASSERT_LINE);
 }
 #endif
 
@@ -796,125 +797,153 @@ static INTERRUPT_GEN( prosport_interrupt )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( liberate )
+static MACHINE_START( liberate )
+{
+	liberate_state *state = machine.driver_data<liberate_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_background_disable));
+	state->save_item(NAME(state->m_background_color));
+	state->save_item(NAME(state->m_gfx_rom_readback));
+	state->save_item(NAME(state->m_latch));
+	state->save_item(NAME(state->m_bank));
+
+	state->save_item(NAME(state->m_io_ram));
+}
+
+static MACHINE_RESET( liberate )
+{
+	liberate_state *state = machine.driver_data<liberate_state>();
+
+	memset(state->m_io_ram, 0, ARRAY_LENGTH(state->m_io_ram));
+
+	state->m_background_disable = 0;
+	state->m_background_color = 0;
+	state->m_gfx_rom_readback = 0;
+	state->m_latch = 0;
+	state->m_bank = 0;
+}
+
+static MACHINE_CONFIG_START( liberate, liberate_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",DECO16, 2000000)
-	MDRV_CPU_PROGRAM_MAP(liberate_map)
-	MDRV_CPU_IO_MAP(deco16_io_map)
-	MDRV_CPU_VBLANK_INT("screen", deco16_interrupt)
+	MCFG_CPU_ADD("maincpu",DECO16, 2000000)
+	MCFG_CPU_PROGRAM_MAP(liberate_map)
+	MCFG_CPU_IO_MAP(deco16_io_map)
+	MCFG_CPU_VBLANK_INT("screen", deco16_interrupt)
 
-	MDRV_CPU_ADD("audiocpu",M6502, 1500000)
-	MDRV_CPU_PROGRAM_MAP(liberate_sound_map)
-	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,16*60) /* ??? */
+	MCFG_CPU_ADD("audiocpu",M6502, 1500000)
+	MCFG_CPU_PROGRAM_MAP(liberate_sound_map)
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,16*60) /* ??? */
 
-	MDRV_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
+
+	MCFG_MACHINE_START(liberate)
+	MCFG_MACHINE_RESET(liberate)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529) /* 529ms Vblank duration?? */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529) /* 529ms Vblank duration?? */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(liberate)
 
-	MDRV_GFXDECODE(liberate)
-	MDRV_PALETTE_LENGTH(33)
-	MDRV_PALETTE_INIT(liberate)
+	MCFG_GFXDECODE(liberate)
+	MCFG_PALETTE_LENGTH(33)
+	MCFG_PALETTE_INIT(liberate)
 
-	MDRV_VIDEO_START(liberate)
-	MDRV_VIDEO_UPDATE(liberate)
+	MCFG_VIDEO_START(liberate)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( liberatb )
-	MDRV_IMPORT_FROM(liberate)
-
-	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_TYPE(M6502)
-	MDRV_CPU_PROGRAM_MAP(liberatb_map)
-	MDRV_CPU_IO_MAP(0)
-	MDRV_CPU_VBLANK_INT("screen", deco16_interrupt)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( boomrang )
-	MDRV_IMPORT_FROM(liberate)
-
-	MDRV_VIDEO_START(boomrang)
-	MDRV_VIDEO_UPDATE(boomrang)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( prosoccr )
-
-	MDRV_IMPORT_FROM(liberate)
+static MACHINE_CONFIG_DERIVED( liberatb, liberate )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CLOCK(10000000/8) //xtal is unknown?
-	MDRV_CPU_PROGRAM_MAP(prosoccr_map)
-	MDRV_CPU_IO_MAP(prosoccr_io_map)
+	MCFG_CPU_REPLACE("maincpu", M6502, 2000000)
+	MCFG_CPU_PROGRAM_MAP(liberatb_map)
+	MCFG_CPU_VBLANK_INT("screen", deco16_interrupt)
+MACHINE_CONFIG_END
 
-	MDRV_CPU_MODIFY("audiocpu")
-	MDRV_CPU_CLOCK(10000000/8) //xtal is 12 Mhz, divider is unknown
-	MDRV_CPU_PROGRAM_MAP(prosoccr_sound_map)
+static MACHINE_CONFIG_DERIVED( boomrang, liberate )
 
-	MDRV_QUANTUM_TIME(HZ(12000))
+	MCFG_VIDEO_START(boomrang)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(boomrang)
+MACHINE_CONFIG_END
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
-
-	MDRV_GFXDECODE(prosoccr)
-
-	MDRV_VIDEO_START(prosoccr)
-	MDRV_VIDEO_UPDATE(prosoccr)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( prosport )
+static MACHINE_CONFIG_DERIVED( prosoccr, liberate )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", DECO16, 2000000)
-	MDRV_CPU_PROGRAM_MAP(prosport_map)
-	MDRV_CPU_IO_MAP(deco16_io_map)
-	MDRV_CPU_VBLANK_INT("screen", deco16_interrupt)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(10000000/8) //xtal is unknown?
+	MCFG_CPU_PROGRAM_MAP(prosoccr_map)
+	MCFG_CPU_IO_MAP(prosoccr_io_map)
 
-	MDRV_CPU_ADD("audiocpu", M6502, 1500000/2)
-	MDRV_CPU_PROGRAM_MAP(liberate_sound_map)
-	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,16*60) /* ??? */
+	MCFG_CPU_MODIFY("audiocpu")
+	MCFG_CPU_CLOCK(10000000/8) //xtal is 12 Mhz, divider is unknown
+	MCFG_CPU_PROGRAM_MAP(prosoccr_sound_map)
 
-//  MDRV_QUANTUM_TIME(HZ(12000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
+
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(prosoccr)
+
+	MCFG_GFXDECODE(prosoccr)
+
+	MCFG_VIDEO_START(prosoccr)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_START( prosport, liberate_state )
+
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", DECO16, 2000000)
+	MCFG_CPU_PROGRAM_MAP(prosport_map)
+	MCFG_CPU_IO_MAP(deco16_io_map)
+	MCFG_CPU_VBLANK_INT("screen", deco16_interrupt)
+
+	MCFG_CPU_ADD("audiocpu", M6502, 1500000/2)
+	MCFG_CPU_PROGRAM_MAP(liberate_sound_map)
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,16*60) /* ??? */
+
+//  MCFG_QUANTUM_TIME(attotime::from_hz(12000))
+
+	MCFG_MACHINE_START(liberate)
+	MCFG_MACHINE_RESET(liberate)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1529) /* 529ms Vblank duration?? */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1529) /* 529ms Vblank duration?? */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(prosport)
 
-	MDRV_GFXDECODE(prosport)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(prosport)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_VIDEO_START(prosport)
-	MDRV_VIDEO_UPDATE(prosport)
+	MCFG_VIDEO_START(prosport)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -1230,9 +1259,9 @@ ROM_END
 
 ROM_START( liberate )
 	ROM_REGION( 0x10000, "maincpu", 0 )
- 	ROM_LOAD( "bt12-2.bin", 0x8000, 0x4000, CRC(a0079ffd) SHA1(340398352500a33f01dca07dd9c86ad3a78f227e) )
+	ROM_LOAD( "bt12-2.bin", 0x8000, 0x4000, CRC(a0079ffd) SHA1(340398352500a33f01dca07dd9c86ad3a78f227e) )
 	ROM_RELOAD(             0x0000, 0x4000 )
- 	ROM_LOAD( "bt13-2.bin", 0xc000, 0x4000, CRC(19f8485c) SHA1(1e2a68e4cf6b96c53832f7d020f14a45de19967d) )
+	ROM_LOAD( "bt13-2.bin", 0xc000, 0x4000, CRC(19f8485c) SHA1(1e2a68e4cf6b96c53832f7d020f14a45de19967d) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "bt11.bin",  0xe000, 0x2000,  CRC(b549ccaa) SHA1(e4c8350fea61ed85d21037cbd4c3c50f9a9de09f) )
@@ -1246,8 +1275,8 @@ ROM_START( liberate )
 	ROM_LOAD( "bt07.bin", 0x10000, 0x2000, CRC(f919e8e2) SHA1(e9eafa10f024aa522947f6098480bddf1fbe960f) )
 
 	ROM_REGION( 0x8000, "gfx2", 0 )
- 	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
- 	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
+	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
+	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
 	/* On early revision bt02 is split as BT01-A (0x2000) BT02-A (0x2000) */
 
 	ROM_REGION(0x4000, "user1", 0 )
@@ -1267,7 +1296,7 @@ ROM_START( dualaslt )
 	ROM_LOAD( "bt11.bin",  0xe000, 0x2000,  CRC(b549ccaa) SHA1(e4c8350fea61ed85d21037cbd4c3c50f9a9de09f) )
 
 	ROM_REGION( 0x12000, "gfx1", 0 )
-	ROM_LOAD( "bt04-5",   0x00000, 0x4000, CRC(159a3e85) SHA1(e916ee7e96c7c64d9ef05ff410d0cbba4d1b8ad0) ) 	/* Chars/Sprites */
+	ROM_LOAD( "bt04-5",   0x00000, 0x4000, CRC(159a3e85) SHA1(e916ee7e96c7c64d9ef05ff410d0cbba4d1b8ad0) )	/* Chars/Sprites */
 	ROM_LOAD( "bt03.bin", 0x04000, 0x2000, CRC(29ad1b59) SHA1(4d5a385ccad4cdebe87300ef08e1220bc9303673) )
 	ROM_LOAD( "bt06-5",   0x06000, 0x4000, CRC(3b5a80c8) SHA1(8b55b18ab46a64381fc135e84ab82fc451ee722d) )
 	ROM_LOAD( "bt05.bin", 0x0a000, 0x2000, CRC(a8896c20) SHA1(c21412c8a6b10719d324ce7ecb01ec4e9d803932) )
@@ -1277,7 +1306,7 @@ ROM_START( dualaslt )
 	ROM_REGION( 0x8000, "gfx2", 0 )
 	ROM_LOAD( "bt01",     0x0000, 0x2000, CRC(c0ddbeb5) SHA1(043c3ef2aa62a0e8b650d4daddb944e694078e01) )
 	ROM_LOAD( "bt02a",    0x2000, 0x2000, CRC(846d9d24) SHA1(d0c395876601cf666dcf40a0f95e461095a98df4) )
- 	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
+	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
 
 	ROM_REGION(0x4000, "user1", 0 )
 	ROM_LOAD( "bt09",  0x0000, 0x2000, CRC(2ea31472) SHA1(2e3125b53755260a036dfc2940970eeb4c5c058b) )
@@ -1294,7 +1323,7 @@ ROM_START( liberateb )
 	ROM_LOAD( "liber4.c18", 0xa000, 0x2000, CRC(0e8db1ce) SHA1(bb7b77c31b3bb2c0d523f5cad4ef46d42a9dc857) )
 	ROM_RELOAD(             0x2000, 0x2000)
 	ROM_LOAD( "liber3.c20", 0xc000, 0x2000, CRC(16c423f3) SHA1(0cf3c46c9fc13eb0f61a3945d3db6ca2f9ab76fe) )
- 	ROM_LOAD( "liber5.c19", 0xe000, 0x2000, CRC(7738c194) SHA1(54fb094150481640f40d8a2066e43dc647980cda) )
+	ROM_LOAD( "liber5.c19", 0xe000, 0x2000, CRC(7738c194) SHA1(54fb094150481640f40d8a2066e43dc647980cda) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "bt11.bin",  0xe000, 0x2000,  CRC(b549ccaa) SHA1(e4c8350fea61ed85d21037cbd4c3c50f9a9de09f) )
@@ -1308,8 +1337,8 @@ ROM_START( liberateb )
 	ROM_LOAD( "bt07.bin", 0x10000, 0x2000, CRC(f919e8e2) SHA1(e9eafa10f024aa522947f6098480bddf1fbe960f) )
 
 	ROM_REGION( 0x8000, "gfx2", 0 )
- 	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
- 	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
+	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
+	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
 
 	ROM_REGION(0x4000, "user1", 0 )
 	ROM_LOAD( "bt10.bin",  0x0000, 0x4000,  CRC(ee335397) SHA1(2d54f93d330357033b8ebc4bc052383c25156311) )
@@ -1324,28 +1353,28 @@ ROM_END
  *
  *************************************/
 
-static void sound_cpu_decrypt(running_machine *machine)
+static void sound_cpu_decrypt(running_machine &machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("audiocpu")->memory().space(AS_PROGRAM);
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x4000);
-	UINT8 *rom = memory_region(machine, "audiocpu");
+	UINT8 *rom = machine.region("audiocpu")->base();
 	int i;
 
 	/* Bit swapping on sound cpu - Opcodes only */
-	for (i=0xc000; i<0x10000; i++)
-		decrypted[i-0xc000]=((rom[i] & 0x20) << 1) | ((rom[i] & 0x40) >> 1) | (rom[i] & 0x9f);
+	for (i = 0xc000; i < 0x10000; i++)
+		decrypted[i - 0xc000] = ((rom[i] & 0x20) << 1) | ((rom[i] & 0x40) >> 1) | (rom[i] & 0x9f);
 
-	memory_set_decrypted_region(space, 0xc000, 0xffff, decrypted);
+	space->set_decrypted_region(0xc000, 0xffff, decrypted);
 }
 
 static DRIVER_INIT( prosport )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT8 *RAM = machine.region("maincpu")->base();
 	int i;
 
 	/* Main cpu has the nibbles swapped */
-	for (i=0; i<0x10000; i++)
-		RAM[i]=((RAM[i] & 0x0f) << 4) | ((RAM[i] & 0xf0) >> 4);
+	for (i = 0; i < 0x10000; i++)
+		RAM[i] = ((RAM[i] & 0x0f) << 4) | ((RAM[i] & 0xf0) >> 4);
 
 	sound_cpu_decrypt(machine);
 }
@@ -1354,26 +1383,26 @@ static DRIVER_INIT( yellowcb )
 {
 	DRIVER_INIT_CALL(prosport);
 
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa000, 0xa000, 0, 0, "IN0");
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_read_port(0xa000, 0xa000, "IN0");
 }
 
 static DRIVER_INIT( liberate )
 {
 	int A;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x10000);
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine.region("maincpu")->base();
 
-	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypted);
+	space->set_decrypted_region(0x0000, 0xffff, decrypted);
 
 	/* Swap bits for opcodes only, not data */
-	for (A = 0;A < 0x10000;A++) {
+	for (A = 0; A < 0x10000; A++) {
 		decrypted[A] = (ROM[A] & 0xd7) | ((ROM[A] & 0x08) << 2) | ((ROM[A] & 0x20) >> 2);
 		decrypted[A] = (decrypted[A] & 0xbb) | ((decrypted[A] & 0x04) << 4) | ((decrypted[A] & 0x40) >> 4);
 		decrypted[A] = (decrypted[A] & 0x7d) | ((decrypted[A] & 0x02) << 6) | ((decrypted[A] & 0x80) >> 6);
 	}
 
-	memory_configure_bank_decrypted(machine, 1, 0, 1, decrypted + 0x8000, 0x10);
+	memory_configure_bank_decrypted(machine, "bank1", 0, 1, decrypted + 0x8000, 0x10);
 
 	sound_cpu_decrypt(machine);
 }
@@ -1384,14 +1413,14 @@ static DRIVER_INIT( liberate )
  *
  *************************************/
 
-GAME( 1983, prosoccr,  0,        prosoccr,  prosoccr, prosport, ROT270, "Data East Corporation", "Pro Soccer", 0 )
-GAME( 1983, prosport,  0,        prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1983, prosporta, prosport, prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports (alternate)", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1983, boomrang,  0,        boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 1)", 0 )
-GAME( 1983, boomranga, boomrang, boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 2)", 0 )
-GAME( 1984, kamikcab,  0,        boomrang,  kamikcab, prosport, ROT270, "Data East Corporation", "Kamikaze Cabbie", 0 )
-GAME( 1984, yellowcbj, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "Data East Corporation", "Yellow Cab (Japan)", 0 )
-GAME( 1984, yellowcbb, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "bootleg",               "Yellow Cab (bootleg)", 0 )
-GAME( 1984, liberate,  0,        liberate,  liberate, liberate, ROT270, "Data East Corporation", "Liberation", 0 )
-GAME( 1984, dualaslt,  liberate, liberate,  dualaslt, liberate, ROT270, "Data East USA",         "Dual Assault", 0 )
-GAME( 1984, liberateb, liberate, liberatb,  liberatb, prosport, ROT270, "bootleg",               "Liberation (bootleg)", 0 )
+GAME( 1983, prosoccr,  0,        prosoccr,  prosoccr, prosport, ROT270, "Data East Corporation", "Pro Soccer", GAME_SUPPORTS_SAVE )
+GAME( 1983, prosport,  0,        prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro Sports - Bowling, Tennis, and Golf", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, prosporta, prosport, prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro Sports - Bowling, Tennis, and Golf (alternate)", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, boomrang,  0,        boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, boomranga, boomrang, boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1984, kamikcab,  0,        boomrang,  kamikcab, prosport, ROT270, "Data East Corporation", "Kamikaze Cabbie", GAME_SUPPORTS_SAVE )
+GAME( 1984, yellowcbj, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "Data East Corporation", "Yellow Cab (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1984, yellowcbb, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "bootleg",               "Yellow Cab (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1984, liberate,  0,        liberate,  liberate, liberate, ROT270, "Data East Corporation", "Liberation", GAME_SUPPORTS_SAVE )
+GAME( 1984, dualaslt,  liberate, liberate,  dualaslt, liberate, ROT270, "Data East USA",         "Dual Assault", GAME_SUPPORTS_SAVE )
+GAME( 1984, liberateb, liberate, liberatb,  liberatb, prosport, ROT270, "bootleg",               "Liberation (bootleg)", GAME_SUPPORTS_SAVE )

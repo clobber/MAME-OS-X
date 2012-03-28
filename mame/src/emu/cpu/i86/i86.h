@@ -4,9 +4,26 @@
 #ifndef __I86INTF_H__
 #define __I86INTF_H__
 
-#include "cpuintrf.h"
 
-#define INPUT_LINE_TEST 20    /* PJB 03/05 */
+#define INPUT_LINE_INT0			INPUT_LINE_IRQ0
+#define INPUT_LINE_INT1			INPUT_LINE_IRQ1
+#define INPUT_LINE_INT2			INPUT_LINE_IRQ2
+#define INPUT_LINE_INT3			INPUT_LINE_IRQ3
+#define INPUT_LINE_TEST			20    /* PJB 03/05 */
+#define INPUT_LINE_DRQ0			21
+#define INPUT_LINE_DRQ1			22
+#define INPUT_LINE_TMRIN0		23
+#define INPUT_LINE_TMRIN1		24
+
+
+typedef struct _i80186_interface i80186_interface;
+struct _i80186_interface
+{
+	devcb_write_line		out_tmrout0_func;
+	devcb_write_line		out_tmrout1_func;
+};
+#define I80186_INTERFACE(name) const i80186_interface (name) =
+
 
 enum
 {
@@ -34,22 +51,15 @@ enum
 	I8086_DS,
 	I8086_VECTOR,
 
-	I8086_GENPC = REG_GENPC,
-	I8086_GENSP = REG_GENSP,
-	I8086_GENPCBASE = REG_GENPCBASE
+	I8086_GENPC = STATE_GENPC,
+	I8086_GENSP = STATE_GENSP,
+	I8086_GENPCBASE = STATE_GENPCBASE
 };
 
 /* Public functions */
-CPU_GET_INFO( i8086 );
-#define CPU_I8086 CPU_GET_INFO_NAME( i8086 )
-
-CPU_GET_INFO( i8088 );
-#define CPU_I8088 CPU_GET_INFO_NAME( i8088 )
-
-CPU_GET_INFO( i80186 );
-#define CPU_I80186 CPU_GET_INFO_NAME( i80186 )
-
-CPU_GET_INFO( i80188 );
-#define CPU_I80188 CPU_GET_INFO_NAME( i80188 )
+DECLARE_LEGACY_CPU_DEVICE(I8086, i8086);
+DECLARE_LEGACY_CPU_DEVICE(I8088, i8088);
+DECLARE_LEGACY_CPU_DEVICE(I80186, i80186);
+DECLARE_LEGACY_CPU_DEVICE(I80188, i80188);
 
 #endif /* __I86INTF_H__ */

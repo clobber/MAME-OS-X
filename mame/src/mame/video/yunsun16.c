@@ -20,13 +20,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-
-/* Variables that driver has access to: */
-
-UINT16 *yunsun16_vram_0,   *yunsun16_vram_1;
-UINT16 *yunsun16_scroll_0, *yunsun16_scroll_1;
-UINT16 *yunsun16_priority;
+#include "emu.h"
+#include "includes/yunsun16.h"
 
 
 /***************************************************************************
@@ -36,8 +31,6 @@ UINT16 *yunsun16_priority;
 
 
 ***************************************************************************/
-
-static tilemap *tilemap_0, *tilemap_1;
 
 #define TMAP_GFX			(0)
 #define TILES_PER_PAGE_X	(0x10)
@@ -56,8 +49,9 @@ static TILEMAP_MAPPER( yunsun16_tilemap_scan_pages )
 
 static TILE_GET_INFO( get_tile_info_0 )
 {
-	UINT16 code = yunsun16_vram_0[ 2 * tile_index + 0 ];
-	UINT16 attr = yunsun16_vram_0[ 2 * tile_index + 1 ];
+	yunsun16_state *state = machine.driver_data<yunsun16_state>();
+	UINT16 code = state->m_vram_0[2 * tile_index + 0];
+	UINT16 attr = state->m_vram_0[2 * tile_index + 1];
 	SET_TILE_INFO(
 			TMAP_GFX,
 			code,
@@ -67,8 +61,9 @@ static TILE_GET_INFO( get_tile_info_0 )
 
 static TILE_GET_INFO( get_tile_info_1 )
 {
-	UINT16 code = yunsun16_vram_1[ 2 * tile_index + 0 ];
-	UINT16 attr = yunsun16_vram_1[ 2 * tile_index + 1 ];
+	yunsun16_state *state = machine.driver_data<yunsun16_state>();
+	UINT16 code = state->m_vram_1[2 * tile_index + 0];
+	UINT16 attr = state->m_vram_1[2 * tile_index + 1];
 	SET_TILE_INFO(
 			TMAP_GFX,
 			code,
@@ -78,14 +73,18 @@ static TILE_GET_INFO( get_tile_info_1 )
 
 WRITE16_HANDLER( yunsun16_vram_0_w )
 {
-	COMBINE_DATA(&yunsun16_vram_0[offset]);
-	tilemap_mark_tile_dirty(tilemap_0,offset/2);
+	yunsun16_state *state = space->machine().driver_data<yunsun16_state>();
+
+	COMBINE_DATA(&state->m_vram_0[offset]);
+	state->m_tilemap_0->mark_tile_dirty(offset / 2);
 }
 
 WRITE16_HANDLER( yunsun16_vram_1_w )
 {
-	COMBINE_DATA(&yunsun16_vram_1[offset]);
-	tilemap_mark_tile_dirty(tilemap_1,offset/2);
+	yunsun16_state *state = space->machine().driver_data<yunsun16_state>();
+
+	COMBINE_DATA(&state->m_vram_1[offset]);
+	state->m_tilemap_1->mark_tile_dirty(offset / 2);
 }
 
 
@@ -97,30 +96,23 @@ WRITE16_HANDLER( yunsun16_vram_1_w )
 
 ***************************************************************************/
 
-static int sprites_scrolldx, sprites_scrolldy;
-
 VIDEO_START( yunsun16 )
 {
-	tilemap_0 = tilemap_create(	machine, get_tile_info_0,yunsun16_tilemap_scan_pages,
+	yunsun16_state *state = machine.driver_data<yunsun16_state>();
 
-								16,16,
-								TILES_PER_PAGE_X*PAGES_PER_TMAP_X,TILES_PER_PAGE_Y*PAGES_PER_TMAP_Y);
+	state->m_tilemap_0 = tilemap_create(machine, get_tile_info_0,yunsun16_tilemap_scan_pages,
+								16,16, TILES_PER_PAGE_X*PAGES_PER_TMAP_X,TILES_PER_PAGE_Y*PAGES_PER_TMAP_Y);
+	state->m_tilemap_1 = tilemap_create(machine, get_tile_info_1,yunsun16_tilemap_scan_pages,
+								16,16, TILES_PER_PAGE_X*PAGES_PER_TMAP_X,TILES_PER_PAGE_Y*PAGES_PER_TMAP_Y);
 
-	tilemap_1 = tilemap_create(	machine, get_tile_info_1,yunsun16_tilemap_scan_pages,
+	state->m_tilemap_0->set_scrolldx(-0x34, 0);
+	state->m_tilemap_1->set_scrolldx(-0x38, 0);
 
-								16,16,
-								TILES_PER_PAGE_X*PAGES_PER_TMAP_X,TILES_PER_PAGE_Y*PAGES_PER_TMAP_Y);
+	state->m_tilemap_0->set_scrolldy(-0x10, 0);
+	state->m_tilemap_1->set_scrolldy(-0x10, 0);
 
-	sprites_scrolldx = -0x40;
-	sprites_scrolldy = -0x0f;
-	tilemap_set_scrolldx(tilemap_0,-0x34,0);
-	tilemap_set_scrolldx(tilemap_1,-0x38,0);
-
-	tilemap_set_scrolldy(tilemap_0,-0x10,0);
-	tilemap_set_scrolldy(tilemap_1,-0x10,0);
-
-	tilemap_set_transparent_pen(tilemap_0,0xff);
-	tilemap_set_transparent_pen(tilemap_1,0xff);
+	state->m_tilemap_0->set_transparent_pen(0xff);
+	state->m_tilemap_1->set_transparent_pen(0xff);
 }
 
 
@@ -144,37 +136,43 @@ VIDEO_START( yunsun16 )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	yunsun16_state *state = machine.driver_data<yunsun16_state>();
 	int offs;
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine.primary_screen->visible_area();
 
-	int max_x		=	visarea->max_x+1;
-	int max_y		=	visarea->max_y+1;
+	int max_x = visarea.max_x + 1;
+	int max_y = visarea.max_y + 1;
 
-	int pri			=	*yunsun16_priority & 3;
+	int pri = *state->m_priorityram & 3;
 	int pri_mask;
 
-	switch( pri )
+	switch (pri)
 	{
-		case 1:		pri_mask = (1<<1)|(1<<2)|(1<<3);	break;
-		case 2:		pri_mask = (1<<2)|(1<<3);			break;
+		case 1:
+			pri_mask = (1 << 1) | (1 << 2) | (1 << 3);
+			break;
+		case 2:
+			pri_mask = (1 << 2) | (1 << 3);
+			break;
 		case 3:
-		default:	pri_mask = 0;
+		default:
+			pri_mask = 0;
+			break;
 	}
 
-	for ( offs = (spriteram_size-8)/2 ; offs >= 0; offs -= 8/2 )
+	for (offs = (state->m_spriteram_size - 8) / 2 ; offs >= 0; offs -= 8 / 2)
 	{
-		int x		=	spriteram16[offs + 0];
-		int y		=	spriteram16[offs + 1];
-		int code	=	spriteram16[offs + 2];
-		int attr	=	spriteram16[offs + 3];
-		int flipx	=	attr & 0x20;
-		int flipy	=	attr & 0x40;
+		int x = state->m_spriteram[offs + 0];
+		int y = state->m_spriteram[offs + 1];
+		int code = state->m_spriteram[offs + 2];
+		int attr = state->m_spriteram[offs + 3];
+		int flipx = attr & 0x20;
+		int flipy = attr & 0x40;
 
-
-		x	+=	sprites_scrolldx;
-		y	+=	sprites_scrolldy;
+		x += state->m_sprites_scrolldx;
+		y += state->m_sprites_scrolldy;
 
 		if (flip_screen_get(machine))	// not used?
 		{
@@ -182,13 +180,13 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 			flipy = !flipy;		y = max_y - y - 16;
 		}
 
-		pdrawgfx_transpen(	bitmap,cliprect,machine->gfx[1],
+		pdrawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					code,
 					attr & 0x1f,
 					flipx, flipy,
 					x,y,
-					machine->priority_bitmap,
-					pri_mask,15	);
+					machine.priority_bitmap,
+					pri_mask,15);
 	}
 }
 
@@ -202,33 +200,35 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 ***************************************************************************/
 
 
-VIDEO_UPDATE( yunsun16 )
+SCREEN_UPDATE_IND16( yunsun16 )
 {
-	tilemap_set_scrollx(tilemap_0, 0, yunsun16_scroll_0[ 0 ]);
-	tilemap_set_scrolly(tilemap_0, 0, yunsun16_scroll_0[ 1 ]);
+	yunsun16_state *state = screen.machine().driver_data<yunsun16_state>();
 
-	tilemap_set_scrollx(tilemap_1, 0, yunsun16_scroll_1[ 0 ]);
-	tilemap_set_scrolly(tilemap_1, 0, yunsun16_scroll_1[ 1 ]);
+	state->m_tilemap_0->set_scrollx(0, state->m_scrollram_0[0]);
+	state->m_tilemap_0->set_scrolly(0, state->m_scrollram_0[1]);
 
-//  popmessage("%04X", *yunsun16_priority);
+	state->m_tilemap_1->set_scrollx(0, state->m_scrollram_1[0]);
+	state->m_tilemap_1->set_scrolly(0, state->m_scrollram_1[1]);
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	//popmessage("%04X", *state->m_priorityram);
 
-	if((*yunsun16_priority & 0x0c) == 4)
+	screen.machine().priority_bitmap.fill(0, cliprect);
+
+	if ((*state->m_priorityram & 0x0c) == 4)
 	{
 		/* The color of the this layer's transparent pen goes below everything */
-		tilemap_draw(bitmap,cliprect,tilemap_0, TILEMAP_DRAW_OPAQUE, 0);
-		tilemap_draw(bitmap,cliprect,tilemap_0, 0, 1);
-		tilemap_draw(bitmap,cliprect,tilemap_1, 0, 2);
+		state->m_tilemap_0->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		state->m_tilemap_0->draw(bitmap, cliprect, 0, 1);
+		state->m_tilemap_1->draw(bitmap, cliprect, 0, 2);
 	}
-	else if((*yunsun16_priority & 0x0c) == 8)
+	else if ((*state->m_priorityram & 0x0c) == 8)
 	{
 		/* The color of the this layer's transparent pen goes below everything */
-		tilemap_draw(bitmap,cliprect,tilemap_1, TILEMAP_DRAW_OPAQUE, 0);
-		tilemap_draw(bitmap,cliprect,tilemap_1, 0, 1);
-		tilemap_draw(bitmap,cliprect,tilemap_0, 0, 2);
+		state->m_tilemap_1->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		state->m_tilemap_1->draw(bitmap, cliprect, 0, 1);
+		state->m_tilemap_0->draw(bitmap, cliprect, 0, 2);
 	}
 
-	draw_sprites(screen->machine, bitmap,cliprect);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }

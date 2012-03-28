@@ -41,31 +41,30 @@ To Do:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "machine/tmp68301.h"
-#include "realbrk.h"
+#include "includes/realbrk.h"
 #include "sound/2413intf.h"
 #include "sound/ymz280b.h"
 
-static UINT16 *realbrk_dsw_select;
 
 /* Read 4 ten bit dip switches */
 static READ16_HANDLER( realbrk_dsw_r )
 {
-	UINT16 sel = ~realbrk_dsw_select[0];
-	if (sel & 0x01)	return	(input_port_read(space->machine, "SW1") & 0x00ff) << 8;		// DSW1 low bits
-	if (sel & 0x02)	return	(input_port_read(space->machine, "SW2") & 0x00ff) << 8;		// DSW2 low bits
-	if (sel & 0x04)	return	(input_port_read(space->machine, "SW3") & 0x00ff) << 8;		// DSW3 low bits
-	if (sel & 0x08)	return	(input_port_read(space->machine, "SW4") & 0x00ff) << 8;		// DSW4 low bits
+	realbrk_state *state = space->machine().driver_data<realbrk_state>();
+	UINT16 sel = ~state->m_dsw_select[0];
+	if (sel & 0x01)	return	(input_port_read(space->machine(), "SW1") & 0x00ff) << 8;		// DSW1 low bits
+	if (sel & 0x02)	return	(input_port_read(space->machine(), "SW2") & 0x00ff) << 8;		// DSW2 low bits
+	if (sel & 0x04)	return	(input_port_read(space->machine(), "SW3") & 0x00ff) << 8;		// DSW3 low bits
+	if (sel & 0x08)	return	(input_port_read(space->machine(), "SW4") & 0x00ff) << 8;		// DSW4 low bits
 
-	if (sel & 0x10)	return	((input_port_read(space->machine, "SW1") & 0x0300) << 0) |	// DSWs high 2 bits
-							((input_port_read(space->machine, "SW2") & 0x0300) << 2) |
-							((input_port_read(space->machine, "SW3") & 0x0300) << 4) |
-							((input_port_read(space->machine, "SW4") & 0x0300) << 6) ;
+	if (sel & 0x10)	return	((input_port_read(space->machine(), "SW1") & 0x0300) << 0) |	// DSWs high 2 bits
+							((input_port_read(space->machine(), "SW2") & 0x0300) << 2) |
+							((input_port_read(space->machine(), "SW3") & 0x0300) << 4) |
+							((input_port_read(space->machine(), "SW4") & 0x0300) << 6) ;
 
-	logerror("CPU #0 PC %06X: read with unknown dsw_select = %02x\n",cpu_get_pc(space->cpu),realbrk_dsw_select[0]);
+	logerror("CPU #0 PC %06X: read with unknown dsw_select = %02x\n",cpu_get_pc(&space->device()),state->m_dsw_select[0]);
 	return 0xffff;
 }
 
@@ -75,41 +74,42 @@ static READ16_HANDLER( pkgnsh_input_r )
 	{
 		case 0x00/2: return 0xffff;
 		case 0x02/2: return 0xffff;
-		case 0x04/2: return input_port_read(space->machine, "IN0");		/*Service buttons*/
-		case 0x06/2: return input_port_read(space->machine, "SW1");		/*DIP 2*/
-		case 0x08/2: return input_port_read(space->machine, "SW2");		/*DIP 1*/
-		case 0x0a/2: return input_port_read(space->machine, "SW3");		/*DIP 1+2 Hi-Bits*/
-		case 0x0c/2: return input_port_read(space->machine, "PADDLE1");	/*Handle 1p*/
-		case 0x0e/2: return input_port_read(space->machine, "P1");			/*Buttons 1p*/
-		case 0x10/2: return input_port_read(space->machine, "PADDLE2");	/*Handle 2p*/
-		case 0x12/2: return input_port_read(space->machine, "P2");			/*Buttons 2p*/
+		case 0x04/2: return input_port_read(space->machine(), "IN0");		/*Service buttons*/
+		case 0x06/2: return input_port_read(space->machine(), "SW1");		/*DIP 2*/
+		case 0x08/2: return input_port_read(space->machine(), "SW2");		/*DIP 1*/
+		case 0x0a/2: return input_port_read(space->machine(), "SW3");		/*DIP 1+2 Hi-Bits*/
+		case 0x0c/2: return input_port_read(space->machine(), "PADDLE1");	/*Handle 1p*/
+		case 0x0e/2: return input_port_read(space->machine(), "P1");			/*Buttons 1p*/
+		case 0x10/2: return input_port_read(space->machine(), "PADDLE2");	/*Handle 2p*/
+		case 0x12/2: return input_port_read(space->machine(), "P2");			/*Buttons 2p*/
 	}
 	return 0xffff;
 }
 
 static READ16_HANDLER( pkgnshdx_input_r )
 {
-	UINT16 sel = ~realbrk_dsw_select[0];
+	realbrk_state *state = space->machine().driver_data<realbrk_state>();
+	UINT16 sel = ~state->m_dsw_select[0];
 
 	switch(offset)
 	{
 		case 0x00/2: return 0xffff;
-		case 0x02/2: return input_port_read(space->machine, "IN0");	/*Service buttons*/
+		case 0x02/2: return input_port_read(space->machine(), "IN0");	/*Service buttons*/
 		/*DSW,same handling as realbrk*/
 		case 0x04/2:
-			if (sel & 0x01)	return	(input_port_read(space->machine, "SW1") & 0x00ff) << 8;		// DSW1 low bits
-			if (sel & 0x02)	return	(input_port_read(space->machine, "SW2") & 0x00ff) << 8;		// DSW2 low bits
-			if (sel & 0x04)	return	(input_port_read(space->machine, "SW3") & 0x00ff) << 8;		// DSW3 low bits
-			if (sel & 0x08)	return	(input_port_read(space->machine, "SW4") & 0x00ff) << 8;		// DSW4 low bits
+			if (sel & 0x01)	return	(input_port_read(space->machine(), "SW1") & 0x00ff) << 8;		// DSW1 low bits
+			if (sel & 0x02)	return	(input_port_read(space->machine(), "SW2") & 0x00ff) << 8;		// DSW2 low bits
+			if (sel & 0x04)	return	(input_port_read(space->machine(), "SW3") & 0x00ff) << 8;		// DSW3 low bits
+			if (sel & 0x08)	return	(input_port_read(space->machine(), "SW4") & 0x00ff) << 8;		// DSW4 low bits
 
-			if (sel & 0x10)	return	((input_port_read(space->machine, "SW1") & 0x0300) << 0) |	// DSWs high 2 bits
-									((input_port_read(space->machine, "SW2") & 0x0300) << 2) |
-									((input_port_read(space->machine, "SW3") & 0x0300) << 4) |
-									((input_port_read(space->machine, "SW4") & 0x0300) << 6) ;
+			if (sel & 0x10)	return	((input_port_read(space->machine(), "SW1") & 0x0300) << 0) |	// DSWs high 2 bits
+									((input_port_read(space->machine(), "SW2") & 0x0300) << 2) |
+									((input_port_read(space->machine(), "SW3") & 0x0300) << 4) |
+									((input_port_read(space->machine(), "SW4") & 0x0300) << 6) ;
 
 			return 0xffff;
-		case 0x06/2: return input_port_read(space->machine, "P2");/*Buttons+Handle 2p*/
-		case 0x08/2: return input_port_read(space->machine, "P1");/*Buttons+Handle 1p*/
+		case 0x06/2: return input_port_read(space->machine(), "P2");/*Buttons+Handle 2p*/
+		case 0x08/2: return input_port_read(space->machine(), "P1");/*Buttons+Handle 1p*/
 		case 0x0a/2: return 0xffff;
 		case 0x0c/2: return 0xffff;
 		case 0x0e/2: return 0xffff;
@@ -120,32 +120,34 @@ static READ16_HANDLER( pkgnshdx_input_r )
 	return 0xffff;
 }
 
-static UINT16 *backup_ram;
 
 static READ16_HANDLER( backup_ram_r )
 {
+	realbrk_state *state = space->machine().driver_data<realbrk_state>();
 	/*TODO: understand the format & cmds of the backup-ram,maybe it's an
             unemulated tmp68301 feature?*/
-	if(cpu_get_previouspc(space->cpu) == 0x02c08e)
+	if(cpu_get_previouspc(&space->device()) == 0x02c08e)
 		return 0xffff;
 	else
-		return backup_ram[offset];
+		return state->m_backup_ram[offset];
 }
 
 
 static READ16_HANDLER( backup_ram_dx_r )
 {
+	realbrk_state *state = space->machine().driver_data<realbrk_state>();
 	/*TODO: understand the format & cmds of the backup-ram,maybe it's an
             unemulated tmp68301 feature?*/
-	if(cpu_get_previouspc(space->cpu) == 0x02f046)
+	if(cpu_get_previouspc(&space->device()) == 0x02f046)
 		return 0xffff;
 	else
-		return backup_ram[offset];
+		return state->m_backup_ram[offset];
 }
 
 static WRITE16_HANDLER( backup_ram_w )
 {
-	COMBINE_DATA(&backup_ram[offset]);
+	realbrk_state *state = space->machine().driver_data<realbrk_state>();
+	COMBINE_DATA(&state->m_backup_ram[offset]);
 }
 
 /***************************************************************************
@@ -155,56 +157,56 @@ static WRITE16_HANDLER( backup_ram_w )
 ***************************************************************************/
 
 /*Basic memory map for this HW*/
-static ADDRESS_MAP_START( base_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( base_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM							    			// ROM
-	AM_RANGE(0x200000, 0x203fff) AM_RAM                   AM_BASE(&spriteram16)	// Sprites
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(SMH_RAM,paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16	)	// Palette
-	AM_RANGE(0x600000, 0x601fff) AM_READWRITE(SMH_RAM,realbrk_vram_0_w) AM_BASE(&realbrk_vram_0	)	// Background   (0)
-	AM_RANGE(0x602000, 0x603fff) AM_READWRITE(SMH_RAM,realbrk_vram_1_w) AM_BASE(&realbrk_vram_1	)	// Background   (1)
-	AM_RANGE(0x604000, 0x604fff) AM_READWRITE(SMH_RAM,realbrk_vram_2_w) AM_BASE(&realbrk_vram_2	)	// Text         (2)
-	AM_RANGE(0x606000, 0x60600f) AM_READWRITE(SMH_RAM,realbrk_vregs_w) AM_BASE(&realbrk_vregs 	)	// Scroll + Video Regs
-	AM_RANGE(0x605000, 0x61ffff) AM_RAM							               	//
+	AM_RANGE(0x200000, 0x203fff) AM_RAM                   AM_BASE_MEMBER(realbrk_state, m_spriteram)	// Sprites
+	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram	)	// Palette
+	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(realbrk_vram_0_w) AM_BASE_MEMBER(realbrk_state, m_vram_0	)	// Background   (0)
+	AM_RANGE(0x602000, 0x603fff) AM_RAM_WRITE(realbrk_vram_1_w) AM_BASE_MEMBER(realbrk_state, m_vram_1	)	// Background   (1)
+	AM_RANGE(0x604000, 0x604fff) AM_RAM_WRITE(realbrk_vram_2_w) AM_BASE_MEMBER(realbrk_state, m_vram_2	)	// Text         (2)
+	AM_RANGE(0x606000, 0x60600f) AM_RAM_WRITE(realbrk_vregs_w) AM_BASE_MEMBER(realbrk_state, m_vregs	)	// Scroll + Video Regs
+	AM_RANGE(0x605000, 0x61ffff) AM_RAM							            	//
 	AM_RANGE(0x800000, 0x800003) AM_DEVREADWRITE8("ymz", ymz280b_r, ymz280b_w, 0xff00)	// YMZ280
-	AM_RANGE(0xfe0000, 0xfeffff) AM_RAM						                 	// RAM
-	AM_RANGE(0xfffc00, 0xffffff) AM_READWRITE(SMH_RAM,tmp68301_regs_w) AM_BASE(&tmp68301_regs	)	// TMP68301 Registers
+	AM_RANGE(0xfe0000, 0xfeffff) AM_RAM						                	// RAM
+	AM_RANGE(0xfffc00, 0xffffff) AM_READWRITE(tmp68301_regs_r, tmp68301_regs_w)	// TMP68301 Registers
 ADDRESS_MAP_END
 
 /*realbrk specific memory map*/
-static ADDRESS_MAP_START( realbrk_mem, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( realbrk_mem, AS_PROGRAM, 16 )
 	AM_IMPORT_FROM(base_mem)
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0x00ff)	//
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)	//
 	AM_RANGE(0xc00000, 0xc00001) AM_READ_PORT("IN0")							// P1 & P2 (Inputs)
 	AM_RANGE(0xc00002, 0xc00003) AM_READ_PORT("IN1")							// Coins
-	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(realbrk_dsw_r,SMH_RAM) AM_BASE(&realbrk_dsw_select)	// DSW select
+	AM_RANGE(0xc00004, 0xc00005) AM_RAM_READ(realbrk_dsw_r) AM_BASE_MEMBER(realbrk_state, m_dsw_select)	// DSW select
 	AM_RANGE(0xff0000, 0xfffbff) AM_RAM											// RAM
 	AM_RANGE(0xfffd0a, 0xfffd0b) AM_WRITE(realbrk_flipscreen_w				)	// Hack! Parallel port data register
 ADDRESS_MAP_END
 
 /*pkgnsh specific memory map*/
-static ADDRESS_MAP_START( pkgnsh_mem, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0xff00	)	// YM2413
+static ADDRESS_MAP_START( pkgnsh_mem, AS_PROGRAM, 16 )
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0xff00	)	// YM2413
 	AM_RANGE(0xc00000, 0xc00013) AM_READ(pkgnsh_input_r		        )	// P1 & P2 (Inputs)
-	AM_RANGE(0xff0000, 0xfffbff) AM_READWRITE(backup_ram_r,backup_ram_w) AM_BASE(&backup_ram)	// RAM
+	AM_RANGE(0xff0000, 0xfffbff) AM_READWRITE(backup_ram_r,backup_ram_w) AM_BASE_MEMBER(realbrk_state, m_backup_ram)	// RAM
 	AM_IMPORT_FROM(base_mem)
 ADDRESS_MAP_END
 
 /*pkgnshdx specific memory map*/
-static ADDRESS_MAP_START( pkgnshdx_mem, ADDRESS_SPACE_PROGRAM, 16)
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0x00ff)	//
+static ADDRESS_MAP_START( pkgnshdx_mem, AS_PROGRAM, 16)
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)	//
 	AM_RANGE(0xc00000, 0xc00013) AM_READ(pkgnshdx_input_r		        )	// P1 & P2 (Inputs)
-	AM_RANGE(0xc00004, 0xc00005) AM_WRITE(SMH_RAM) AM_BASE(&realbrk_dsw_select) // DSW select
-	AM_RANGE(0xff0000, 0xfffbff) AM_READWRITE(backup_ram_dx_r,backup_ram_w) AM_BASE(&backup_ram)	// RAM
+	AM_RANGE(0xc00004, 0xc00005) AM_WRITEONLY AM_BASE_MEMBER(realbrk_state, m_dsw_select) // DSW select
+	AM_RANGE(0xff0000, 0xfffbff) AM_READWRITE(backup_ram_dx_r,backup_ram_w) AM_BASE_MEMBER(realbrk_state, m_backup_ram)	// RAM
 	AM_IMPORT_FROM(base_mem)
 ADDRESS_MAP_END
 
 /*dai2kaku specific memory map*/
-static ADDRESS_MAP_START( dai2kaku_mem, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x605000, 0x6053ff) AM_READWRITE(SMH_RAM,SMH_RAM) AM_BASE(&realbrk_vram_0ras)	// rasterinfo   (0)
-	AM_RANGE(0x605400, 0x6057ff) AM_READWRITE(SMH_RAM,SMH_RAM) AM_BASE(&realbrk_vram_1ras)	// rasterinfo   (1)
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0x00ff)	//
+static ADDRESS_MAP_START( dai2kaku_mem, AS_PROGRAM, 16 )
+	AM_RANGE(0x605000, 0x6053ff) AM_RAM AM_BASE_MEMBER(realbrk_state, m_vram_0ras)	// rasterinfo   (0)
+	AM_RANGE(0x605400, 0x6057ff) AM_RAM AM_BASE_MEMBER(realbrk_state, m_vram_1ras)	// rasterinfo   (1)
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)	//
 	AM_RANGE(0xc00000, 0xc00001) AM_READ_PORT("IN0")							// P1 & P2 (Inputs)
 	AM_RANGE(0xc00002, 0xc00003) AM_READ_PORT("IN1")							// Coins
-	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(realbrk_dsw_r,SMH_RAM) AM_BASE(&realbrk_dsw_select)	// DSW select
+	AM_RANGE(0xc00004, 0xc00005) AM_RAM_READ(realbrk_dsw_r) AM_BASE_MEMBER(realbrk_state, m_dsw_select)	// DSW select
 	AM_RANGE(0xff0000, 0xfffbff) AM_RAM											// RAM
 	AM_RANGE(0xfffd0a, 0xfffd0b) AM_WRITE(dai2kaku_flipscreen_w				)	// Hack! Parallel port data register
 	AM_IMPORT_FROM(base_mem)
@@ -664,70 +666,63 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( realbrk_interrupt )
 {
-	switch ( cpu_getiloops(device) )
-	{
-		case 0:
-			/* VBlank is connected to INT1 (external interrupts pin 1) */
-			tmp68301_external_interrupt_1(device->machine);
-			break;
-	}
+	/* VBlank is connected to INT1 (external interrupts pin 1) */
+	tmp68301_external_interrupt_1(device->machine());
 }
 
-static MACHINE_DRIVER_START( realbrk )
+static MACHINE_CONFIG_START( realbrk, realbrk_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",M68000, XTAL_32MHz / 2)			/* !! TMP68301 !! */
-	MDRV_CPU_PROGRAM_MAP(realbrk_mem)
-	MDRV_CPU_VBLANK_INT("screen", realbrk_interrupt)
+	MCFG_CPU_ADD("maincpu",M68000, XTAL_32MHz / 2)			/* !! TMP68301 !! */
+	MCFG_CPU_PROGRAM_MAP(realbrk_mem)
+	MCFG_CPU_VBLANK_INT("screen", realbrk_interrupt)
 
-	MDRV_MACHINE_RESET( tmp68301 )
+	MCFG_MACHINE_START( tmp68301 )
+	MCFG_MACHINE_RESET( tmp68301 )
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x140, 0xe0)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x140-1, 0, 0xe0-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x140, 0xe0)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x140-1, 0, 0xe0-1)
+	MCFG_SCREEN_UPDATE_STATIC(realbrk)
 
-	MDRV_GFXDECODE(realbrk)
-	MDRV_PALETTE_LENGTH(0x8000)
+	MCFG_GFXDECODE(realbrk)
+	MCFG_PALETTE_LENGTH(0x8000)
 
-	MDRV_VIDEO_START(realbrk)
-	MDRV_VIDEO_UPDATE(realbrk)
+	MCFG_VIDEO_START(realbrk)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ymz", YMZ280B, XTAL_33_8688MHz / 2)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
+	MCFG_SOUND_ADD("ymz", YMZ280B, XTAL_33_8688MHz / 2)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_3_579545MHz)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2413, XTAL_3_579545MHz)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pkgnsh )
-	MDRV_IMPORT_FROM( realbrk )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(pkgnsh_mem)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( pkgnsh, realbrk )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(pkgnsh_mem)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pkgnshdx )
-	MDRV_IMPORT_FROM( realbrk )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(pkgnshdx_mem)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( pkgnshdx, realbrk )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(pkgnshdx_mem)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( dai2kaku )
-	MDRV_IMPORT_FROM( realbrk )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(dai2kaku_mem)
+static MACHINE_CONFIG_DERIVED( dai2kaku, realbrk )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(dai2kaku_mem)
 
-	MDRV_GFXDECODE(dai2kaku)
-	MDRV_VIDEO_UPDATE(dai2kaku)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(dai2kaku)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(dai2kaku)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

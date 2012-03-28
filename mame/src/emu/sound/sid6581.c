@@ -6,38 +6,38 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "sid6581.h"
 #include "sid.h"
 
 
 
-static SID6581 *get_sid(const device_config *device)
+static _SID6581 *get_sid(device_t *device)
 {
 	assert(device != NULL);
-	assert((sound_get_type(device) == SOUND_SID6581) || (sound_get_type(device) == SOUND_SID8580));
-	return (SID6581 *) device->token;
+	assert((device->type() == SID6581) || (device->type() == SID8580));
+	return (_SID6581 *) downcast<legacy_device_base *>(device)->token();
 }
 
 
 
 static STREAM_UPDATE( sid_update )
 {
-	SID6581 *sid = (SID6581 *) param;
+	_SID6581 *sid = (_SID6581 *) param;
 	sidEmuFillBuffer(sid, outputs[0], samples);
 }
 
 
 
-static void sid_start(const device_config *device, SIDTYPE sidtype)
+static void sid_start(device_t *device, SIDTYPE sidtype)
 {
-	SID6581 *sid = get_sid(device);
-	const sid6581_interface *iface = (const sid6581_interface*) device->static_config;
+	_SID6581 *sid = get_sid(device);
+	const sid6581_interface *iface = (const sid6581_interface*) device->static_config();
 
 	sid->device = device;
-	sid->mixer_channel = stream_create (device, 0, 1,  device->machine->sample_rate, (void *) sid, sid_update);
-	sid->PCMfreq = device->machine->sample_rate;
-	sid->clock = device->clock;
+	sid->mixer_channel = device->machine().sound().stream_alloc(*device, 0, 1,  device->machine().sample_rate(), (void *) sid, sid_update);
+	sid->PCMfreq = device->machine().sample_rate();
+	sid->clock = device->clock();
 	sid->ad_read = iface ? iface->ad_read : NULL;
 	sid->type = sidtype;
 
@@ -49,7 +49,7 @@ static void sid_start(const device_config *device, SIDTYPE sidtype)
 
 static DEVICE_RESET( sid )
 {
-	SID6581 *sid = get_sid(device);
+	_SID6581 *sid = get_sid(device);
 	sidEmuReset(sid);
 }
 
@@ -71,7 +71,7 @@ static DEVICE_START( sid8580 )
 
 READ8_DEVICE_HANDLER  ( sid6581_r )
 {
-	return sid6581_port_r(device->machine, get_sid(device), offset);
+	return sid6581_port_r(device->machine(), get_sid(device), offset);
 }
 
 
@@ -91,7 +91,7 @@ DEVICE_GET_INFO( sid6581 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(SID6581);						break;
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(_SID6581);						break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( sid6581 );		break;
@@ -121,3 +121,6 @@ DEVICE_GET_INFO( sid8580 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(SID6581, sid6581);
+DEFINE_LEGACY_SOUND_DEVICE(SID8580, sid8580);

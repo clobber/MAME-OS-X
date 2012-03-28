@@ -12,9 +12,7 @@
     You may read the LGPL at http://www.gnu.org/licenses/lgpl.html
 */
 
-#include <math.h>
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "ymf271.h"
 
 #define VERBOSE		(1)
@@ -33,7 +31,7 @@
 #define ALFO_MAX		(+65536)
 #define ALFO_MIN		(0)
 
-#define log2(n) (log((float) n)/log((float) 2))
+//#define log2(n) (log((float) n)/log((float) 2))
 
 typedef struct
 {
@@ -109,11 +107,11 @@ typedef struct
 	const UINT8 *rom;
 	devcb_resolved_read8 ext_mem_read;
 	devcb_resolved_write8 ext_mem_write;
-	void (*irq_callback)(const device_config *, int);
+	void (*irq_callback)(device_t *, int);
 
 	UINT32 clock;
 	sound_stream * stream;
-	const device_config *device;
+	device_t *device;
 } YMF271Chip;
 
 // slot mapping assists
@@ -123,7 +121,6 @@ static const int pcm_tab[] = { 0, 4, 8, -1, 12, 16, 20, -1, 24, 28, 32, -1, 36, 
 static INT16 *wavetable[8];
 static double plfo_table[4][8][LFO_LENGTH];
 static int alfo_table[4][LFO_LENGTH];
-static INT32 *mix;
 
 #define ENV_ATTACK		0
 #define ENV_DECAY1		1
@@ -158,28 +155,33 @@ static const double DCTime[] =
 	11.41,		9.12,		7.60,		6.51,		5.69,		5.69,		5.69,		5.69
 };
 
-/* Notes about the LFO Frequency Table below;
+/* Notes about the LFO Frequency Table below:
 
-    There appears to be at least 2 errors in the table from the original manual.
+    There are 2 known errors in the LFO table listed in the original manual.
 
-    Both 201 & 202 where listed as 3.74490.  202 has be changed to 3.91513 which was computed based on formulas by OG & Nicola
-    232 was listed as 13.35547.  We use 14.35547 as this is the correct value based on the formula listed below:
+    Both 201 & 202 are listed as 3.74490.  202 has been computed/corrected to 3.91513
+    232 was listed as 13.35547 but has been replaced with the correct value of 14.35547.
+
+  Corrections are computed values based on formulas by Olivier Galibert & Nicola Salmoria listed below:
 
 LFO period seems easy to compute:
 
-int lfo_period(int entry)
-{
-  int ma, ex;
-  entry = 256-entry;
-  ma = entry & 15;
-  ex = entry >> 4;
-  if(ex)
-    return (ma | 16) << (ex+6);
-  else
-    return ma << 7;
-}
+Olivier Galibert's version                       Nicola Salmoria's version
 
-lfo_freq = 44100 / lfo_period
+int lfo_period(int entry)             or         int calc_lfo_period(int entry)
+{                                                {
+  int ma, ex;                                      entry = 256 - entry;
+  entry = 256-entry;
+  ma = entry & 15;                                 if (entry < 16)
+                                                   {
+  ex = entry >> 4;                                    return (entry & 0x0f) << 7;
+  if(ex)                                           }
+    return (ma | 16) << (ex+6);                    else
+  else                                             {
+    return ma << 7;                                   int shift = 6 + (entry >> 4);
+}                                                     return (0x10 + (entry & 0x0f)) << shift;
+                                                   }
+lfo_freq = 44100 / lfo_period                    }
 
 */
 
@@ -269,13 +271,11 @@ static int channel_attenuation[16];
 static int total_level[128];
 static int env_volume_table[256];
 
-INLINE YMF271Chip *get_safe_token(const device_config *device)
+INLINE YMF271Chip *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_YMF271);
-	return (YMF271Chip *)device->token;
+	assert(device->type() == YMF271);
+	return (YMF271Chip *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -524,7 +524,7 @@ static void update_pcm(YMF271Chip *chip, int slotnum, INT32 *mixp, int length)
 	int i;
 	int final_volume;
 	INT16 sample;
-	INT64 ch0_vol, ch1_vol, ch2_vol, ch3_vol;
+	INT64 ch0_vol, ch1_vol; //, ch2_vol, ch3_vol;
 	const UINT8 *rombase;
 
 	YMF271Slot *slot = &chip->slots[slotnum];
@@ -544,11 +544,13 @@ static void update_pcm(YMF271Chip *chip, int slotnum, INT32 *mixp, int length)
 	{
 		if (slot->bits == 8)
 		{
+			// 8bit
 			sample = rombase[slot->startaddr + (slot->stepptr>>16)]<<8;
 		}
 		else
 		{
-			if (slot->stepptr & 1)
+			// 12bit
+			if (slot->stepptr & 0x10000)
 				sample = rombase[slot->startaddr + (slot->stepptr>>17)*3 + 2]<<8 | ((rombase[slot->startaddr + (slot->stepptr>>17)*3 + 1] << 4) & 0xf0);
 			else
 				sample = rombase[slot->startaddr + (slot->stepptr>>17)*3]<<8 | (rombase[slot->startaddr + (slot->stepptr>>17)*3 + 1] & 0xf0);
@@ -561,8 +563,8 @@ static void update_pcm(YMF271Chip *chip, int slotnum, INT32 *mixp, int length)
 
 		ch0_vol = ((UINT64)final_volume * (UINT64)channel_attenuation[slot->ch0_level]) >> 16;
 		ch1_vol = ((UINT64)final_volume * (UINT64)channel_attenuation[slot->ch1_level]) >> 16;
-		ch2_vol = ((UINT64)final_volume * (UINT64)channel_attenuation[slot->ch2_level]) >> 16;
-		ch3_vol = ((UINT64)final_volume * (UINT64)channel_attenuation[slot->ch3_level]) >> 16;
+//      ch2_vol = ((UINT64)final_volume * (UINT64)channel_attenuation[slot->ch2_level]) >> 16;
+//      ch3_vol = ((UINT64)final_volume * (UINT64)channel_attenuation[slot->ch3_level]) >> 16;
 
 		if (ch0_vol > 65536) ch0_vol = 65536;
 		if (ch1_vol > 65536) ch1_vol = 65536;
@@ -707,6 +709,7 @@ static STREAM_UPDATE( ymf271_update )
 	int i, j;
 	int op;
 	INT32 *mixp;
+	INT32 mix[48000*2];
 	YMF271Chip *chip = (YMF271Chip *)param;
 
 	memset(mix, 0, sizeof(mix[0])*samples*2);
@@ -1221,11 +1224,11 @@ static void ymf271_write_fm(YMF271Chip *chip, int grp, int adr, int data)
 	int slotnum;
 	int slot_group;
 	int sync_mode, sync_reg;
-	YMF271Slot *slot;
+	//YMF271Slot *slot;
 
 	slotnum = 12*grp;
 	slotnum += fm_tab[adr & 0xf];
-	slot = &chip->slots[slotnum];
+	//slot = &chip->slots[slotnum];
 	slot_group = fm_tab[adr & 0xf];
 
 	reg = (adr >> 4) & 0xf;
@@ -1401,9 +1404,12 @@ static TIMER_CALLBACK( ymf271_timer_b_tick )
 
 static UINT8 ymf271_read_ext_memory(YMF271Chip *chip, UINT32 address)
 {
-	if( chip->ext_mem_read.read ) {
-		return devcb_call_read8(&chip->ext_mem_read, address);
-	} else {
+	if( !chip->ext_mem_read.isnull() )
+	{
+		return chip->ext_mem_read(address);
+	}
+	else
+	{
 		if( address < 0x800000)
 			return chip->rom[address];
 	}
@@ -1412,7 +1418,7 @@ static UINT8 ymf271_read_ext_memory(YMF271Chip *chip, UINT32 address)
 
 static void ymf271_write_ext_memory(YMF271Chip *chip, UINT32 address, UINT8 data)
 {
-	devcb_call_write8(&chip->ext_mem_write, address, data);
+	chip->ext_mem_write(address, data);
 }
 
 static void ymf271_write_timer(YMF271Chip *chip, int data)
@@ -1480,9 +1486,9 @@ static void ymf271_write_timer(YMF271Chip *chip, int data)
 					if (chip->irq_callback) chip->irq_callback(chip->device, 0);
 
 					//period = (double)(256.0 - chip->timerAVal ) * ( 384.0 * 4.0 / (double)CLOCK);
-					period = attotime_mul(ATTOTIME_IN_HZ(chip->clock), 384 * (1024 - chip->timerAVal));
+					period = attotime::from_hz(chip->clock) * (384 * (1024 - chip->timerAVal));
 
-					timer_adjust_periodic(chip->timA, period, 0, period);
+					chip->timA->adjust(period, 0, period);
 				}
 				if (data & 0x20)
 				{	// timer B reset
@@ -1491,9 +1497,9 @@ static void ymf271_write_timer(YMF271Chip *chip, int data)
 
 					if (chip->irq_callback) chip->irq_callback(chip->device, 0);
 
-					period = attotime_mul(ATTOTIME_IN_HZ(chip->clock), 384 * 16 * (256 - chip->timerBVal));
+					period = attotime::from_hz(chip->clock) * (384 * 16 * (256 - chip->timerBVal));
 
-					timer_adjust_periodic(chip->timB, period, 0, period);
+					chip->timB->adjust(period, 0, period);
 				}
 
 				break;
@@ -1585,7 +1591,7 @@ READ8_DEVICE_HANDLER( ymf271_r )
 	return 0;
 }
 
-static void init_tables(running_machine *machine)
+static void init_tables(running_machine &machine)
 {
 	int i,j;
 
@@ -1669,97 +1675,95 @@ static void init_tables(running_machine *machine)
 		tri_wave = ((i % (LFO_LENGTH/2)) * ALFO_MAX) / (LFO_LENGTH/2);
 		alfo_table[3][i] = (i < (LFO_LENGTH/2)) ? ALFO_MAX-tri_wave : tri_wave;
 	}
-
-	mix = auto_alloc_array(machine, INT32, 48000*2);
 }
 
-static void init_state(YMF271Chip *chip, const device_config *device)
+static void init_state(YMF271Chip *chip, device_t *device)
 {
 	int i;
 
 	for (i = 0; i < ARRAY_LENGTH(chip->slots); i++)
 	{
-		state_save_register_device_item(device, i, chip->slots[i].extout);
-		state_save_register_device_item(device, i, chip->slots[i].lfoFreq);
-		state_save_register_device_item(device, i, chip->slots[i].pms);
-		state_save_register_device_item(device, i, chip->slots[i].ams);
-		state_save_register_device_item(device, i, chip->slots[i].detune);
-		state_save_register_device_item(device, i, chip->slots[i].multiple);
-		state_save_register_device_item(device, i, chip->slots[i].tl);
-		state_save_register_device_item(device, i, chip->slots[i].keyscale);
-		state_save_register_device_item(device, i, chip->slots[i].ar);
-		state_save_register_device_item(device, i, chip->slots[i].decay1rate);
-		state_save_register_device_item(device, i, chip->slots[i].decay2rate);
-		state_save_register_device_item(device, i, chip->slots[i].decay1lvl);
-		state_save_register_device_item(device, i, chip->slots[i].relrate);
-		state_save_register_device_item(device, i, chip->slots[i].fns);
-		state_save_register_device_item(device, i, chip->slots[i].block);
-		state_save_register_device_item(device, i, chip->slots[i].feedback);
-		state_save_register_device_item(device, i, chip->slots[i].waveform);
-		state_save_register_device_item(device, i, chip->slots[i].accon);
-		state_save_register_device_item(device, i, chip->slots[i].algorithm);
-		state_save_register_device_item(device, i, chip->slots[i].ch0_level);
-		state_save_register_device_item(device, i, chip->slots[i].ch1_level);
-		state_save_register_device_item(device, i, chip->slots[i].ch2_level);
-		state_save_register_device_item(device, i, chip->slots[i].ch3_level);
-		state_save_register_device_item(device, i, chip->slots[i].startaddr);
-		state_save_register_device_item(device, i, chip->slots[i].loopaddr);
-		state_save_register_device_item(device, i, chip->slots[i].endaddr);
-		state_save_register_device_item(device, i, chip->slots[i].fs);
-		state_save_register_device_item(device, i, chip->slots[i].srcnote);
-		state_save_register_device_item(device, i, chip->slots[i].srcb);
-		state_save_register_device_item(device, i, chip->slots[i].step);
-		state_save_register_device_item(device, i, chip->slots[i].stepptr);
-		state_save_register_device_item(device, i, chip->slots[i].active);
-		state_save_register_device_item(device, i, chip->slots[i].bits);
-		state_save_register_device_item(device, i, chip->slots[i].volume);
-		state_save_register_device_item(device, i, chip->slots[i].env_state);
-		state_save_register_device_item(device, i, chip->slots[i].env_attack_step);
-		state_save_register_device_item(device, i, chip->slots[i].env_decay1_step);
-		state_save_register_device_item(device, i, chip->slots[i].env_decay2_step);
-		state_save_register_device_item(device, i, chip->slots[i].env_release_step);
-		state_save_register_device_item(device, i, chip->slots[i].feedback_modulation0);
-		state_save_register_device_item(device, i, chip->slots[i].feedback_modulation1);
-		state_save_register_device_item(device, i, chip->slots[i].lfo_phase);
-		state_save_register_device_item(device, i, chip->slots[i].lfo_step);
-		state_save_register_device_item(device, i, chip->slots[i].lfo_amplitude);
+		device->save_item(NAME(chip->slots[i].extout), i);
+		device->save_item(NAME(chip->slots[i].lfoFreq), i);
+		device->save_item(NAME(chip->slots[i].pms), i);
+		device->save_item(NAME(chip->slots[i].ams), i);
+		device->save_item(NAME(chip->slots[i].detune), i);
+		device->save_item(NAME(chip->slots[i].multiple), i);
+		device->save_item(NAME(chip->slots[i].tl), i);
+		device->save_item(NAME(chip->slots[i].keyscale), i);
+		device->save_item(NAME(chip->slots[i].ar), i);
+		device->save_item(NAME(chip->slots[i].decay1rate), i);
+		device->save_item(NAME(chip->slots[i].decay2rate), i);
+		device->save_item(NAME(chip->slots[i].decay1lvl), i);
+		device->save_item(NAME(chip->slots[i].relrate), i);
+		device->save_item(NAME(chip->slots[i].fns), i);
+		device->save_item(NAME(chip->slots[i].block), i);
+		device->save_item(NAME(chip->slots[i].feedback), i);
+		device->save_item(NAME(chip->slots[i].waveform), i);
+		device->save_item(NAME(chip->slots[i].accon), i);
+		device->save_item(NAME(chip->slots[i].algorithm), i);
+		device->save_item(NAME(chip->slots[i].ch0_level), i);
+		device->save_item(NAME(chip->slots[i].ch1_level), i);
+		device->save_item(NAME(chip->slots[i].ch2_level), i);
+		device->save_item(NAME(chip->slots[i].ch3_level), i);
+		device->save_item(NAME(chip->slots[i].startaddr), i);
+		device->save_item(NAME(chip->slots[i].loopaddr), i);
+		device->save_item(NAME(chip->slots[i].endaddr), i);
+		device->save_item(NAME(chip->slots[i].fs), i);
+		device->save_item(NAME(chip->slots[i].srcnote), i);
+		device->save_item(NAME(chip->slots[i].srcb), i);
+		device->save_item(NAME(chip->slots[i].step), i);
+		device->save_item(NAME(chip->slots[i].stepptr), i);
+		device->save_item(NAME(chip->slots[i].active), i);
+		device->save_item(NAME(chip->slots[i].bits), i);
+		device->save_item(NAME(chip->slots[i].volume), i);
+		device->save_item(NAME(chip->slots[i].env_state), i);
+		device->save_item(NAME(chip->slots[i].env_attack_step), i);
+		device->save_item(NAME(chip->slots[i].env_decay1_step), i);
+		device->save_item(NAME(chip->slots[i].env_decay2_step), i);
+		device->save_item(NAME(chip->slots[i].env_release_step), i);
+		device->save_item(NAME(chip->slots[i].feedback_modulation0), i);
+		device->save_item(NAME(chip->slots[i].feedback_modulation1), i);
+		device->save_item(NAME(chip->slots[i].lfo_phase), i);
+		device->save_item(NAME(chip->slots[i].lfo_step), i);
+		device->save_item(NAME(chip->slots[i].lfo_amplitude), i);
 	}
 
 	for (i = 0; i < sizeof(chip->groups) / sizeof(chip->groups[0]); i++)
 	{
-		state_save_register_device_item(device, i, chip->groups[i].sync);
-		state_save_register_device_item(device, i, chip->groups[i].pfm);
+		device->save_item(NAME(chip->groups[i].sync), i);
+		device->save_item(NAME(chip->groups[i].pfm), i);
 	}
 
-	state_save_register_device_item(device, 0, chip->timerA);
-	state_save_register_device_item(device, 0, chip->timerB);
-	state_save_register_device_item(device, 0, chip->timerAVal);
-	state_save_register_device_item(device, 0, chip->timerBVal);
-	state_save_register_device_item(device, 0, chip->irqstate);
-	state_save_register_device_item(device, 0, chip->status);
-	state_save_register_device_item(device, 0, chip->enable);
-	state_save_register_device_item(device, 0, chip->reg0);
-	state_save_register_device_item(device, 0, chip->reg1);
-	state_save_register_device_item(device, 0, chip->reg2);
-	state_save_register_device_item(device, 0, chip->reg3);
-	state_save_register_device_item(device, 0, chip->pcmreg);
-	state_save_register_device_item(device, 0, chip->timerreg);
-	state_save_register_device_item(device, 0, chip->ext_address);
-	state_save_register_device_item(device, 0, chip->ext_read);
+	device->save_item(NAME(chip->timerA));
+	device->save_item(NAME(chip->timerB));
+	device->save_item(NAME(chip->timerAVal));
+	device->save_item(NAME(chip->timerBVal));
+	device->save_item(NAME(chip->irqstate));
+	device->save_item(NAME(chip->status));
+	device->save_item(NAME(chip->enable));
+	device->save_item(NAME(chip->reg0));
+	device->save_item(NAME(chip->reg1));
+	device->save_item(NAME(chip->reg2));
+	device->save_item(NAME(chip->reg3));
+	device->save_item(NAME(chip->pcmreg));
+	device->save_item(NAME(chip->timerreg));
+	device->save_item(NAME(chip->ext_address));
+	device->save_item(NAME(chip->ext_read));
 }
 
-static void ymf271_init(const device_config *device, YMF271Chip *chip, UINT8 *rom, void (*cb)(const device_config *,int), const devcb_read8 *ext_read, const devcb_write8 *ext_write)
+static void ymf271_init(device_t *device, YMF271Chip *chip, UINT8 *rom, void (*cb)(device_t *,int), const devcb_read8 *ext_read, const devcb_write8 *ext_write)
 {
-	chip->timA = timer_alloc(device->machine, ymf271_timer_a_tick, chip);
-	chip->timB = timer_alloc(device->machine, ymf271_timer_b_tick, chip);
+	chip->timA = device->machine().scheduler().timer_alloc(FUNC(ymf271_timer_a_tick), chip);
+	chip->timB = device->machine().scheduler().timer_alloc(FUNC(ymf271_timer_b_tick), chip);
 
 	chip->rom = rom;
 	chip->irq_callback = cb;
 
-	devcb_resolve_read8(&chip->ext_mem_read, ext_read, device);
-	devcb_resolve_write8(&chip->ext_mem_write, ext_write, device);
+	chip->ext_mem_read.resolve(*ext_read, *device);
+	chip->ext_mem_write.resolve(*ext_write, *device);
 
-	init_tables(device->machine);
+	init_tables(device->machine());
 	init_state(chip, device);
 }
 
@@ -1771,12 +1775,12 @@ static DEVICE_START( ymf271 )
 	YMF271Chip *chip = get_safe_token(device);
 
 	chip->device = device;
-	chip->clock = device->clock;
+	chip->clock = device->clock();
 
-	intf = (device->static_config != NULL) ? (const ymf271_interface *)device->static_config : &defintrf;
+	intf = (device->static_config() != NULL) ? (const ymf271_interface *)device->static_config() : &defintrf;
 
-	ymf271_init(device, chip, device->region, intf->irq_callback, &intf->ext_read, &intf->ext_write);
-	chip->stream = stream_create(device, 0, 2, device->clock/384, chip, ymf271_update);
+	ymf271_init(device, chip, *device->region(), intf->irq_callback, &intf->ext_read, &intf->ext_write);
+	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock()/384, chip, ymf271_update);
 
 	for (i = 0; i < 256; i++)
 	{
@@ -1815,7 +1819,7 @@ DEVICE_GET_INFO( ymf271 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(YMF271Chip); 					break;
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(YMF271Chip);					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( ymf271 );			break;
@@ -1830,3 +1834,6 @@ DEVICE_GET_INFO( ymf271 )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
+
+
+DEFINE_LEGACY_SOUND_DEVICE(YMF271, ymf271);

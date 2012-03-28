@@ -1,36 +1,20 @@
-#include "driver.h"
+#include "emu.h"
 #include "video/taitoic.h"
+#include "includes/undrfire.h"
 
-#define TC0100SCN_GFX_NUM 2
-#define TC0480SCP_GFX_NUM 1
-
-UINT16 undrfire_rotate_ctrl[8];
-
-struct tempsprite
-{
-	int gfx;
-	int code,color;
-	int flipx,flipy;
-	int x,y;
-	int zoomx,zoomy;
-	int primask;
-};
-static struct tempsprite *spritelist;
 
 
 /******************************************************************/
 
 VIDEO_START( undrfire )
 {
+	undrfire_state *state = machine.driver_data<undrfire_state>();
 	int i;
 
-	spritelist = auto_alloc_array(machine, struct tempsprite, 0x4000);
+	state->m_spritelist = auto_alloc_array(machine, struct tempsprite, 0x4000);
 
-	TC0100SCN_vh_start(machine,1,TC0100SCN_GFX_NUM,50,8,0,0,0,0,0);
-	TC0480SCP_vh_start(machine,TC0480SCP_GFX_NUM,0,0x24,0,-1,0,0,0,0);
-
-	for (i=0; i<16384; i++) /* Fix later - some weird colours in places */
-		palette_set_color(machine,i,MAKE_RGB(0,0,0));
+	for (i = 0; i < 16384; i++) /* Fix later - some weird colours in places */
+		palette_set_color(machine, i, MAKE_RGB(0,0,0));
 }
 
 /***************************************************************
@@ -80,9 +64,11 @@ Heavy use is made of sprite zooming.
 
 ***************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,const int *primasks,int x_offs,int y_offs)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,const int *primasks,int x_offs,int y_offs)
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	undrfire_state *state = machine.driver_data<undrfire_state>();
+	UINT32 *spriteram32 = state->m_spriteram;
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, dblsize, curx, cury;
 	int sprites_flipscreen = 0;
@@ -92,9 +78,9 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 	/* pdrawgfx() needs us to draw sprites front to back, so we have to build a list
        while processing sprite ram and then draw them all at the end */
-	struct tempsprite *sprite_ptr = spritelist;
+	struct tempsprite *sprite_ptr = state->m_spritelist;
 
-	for (offs = (spriteram_size/4-4);offs >= 0;offs -= 4)
+	for (offs = (state->m_spriteram_size/4-4);offs >= 0;offs -= 4)
 	{
 		data = spriteram32[offs+0];
 		flipx =    (data & 0x00800000) >> 23;
@@ -192,7 +178,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				}
 				else
 				{
-					drawgfxzoom_transpen(bitmap,cliprect,machine->gfx[sprite_ptr->gfx],
+					drawgfxzoom_transpen(bitmap,cliprect,machine.gfx[sprite_ptr->gfx],
 							sprite_ptr->code,
 							sprite_ptr->color,
 							sprite_ptr->flipx,sprite_ptr->flipy,
@@ -207,25 +193,27 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 	}
 
 	/* this happens only if primsks != NULL */
-	while (sprite_ptr != spritelist)
+	while (sprite_ptr != state->m_spritelist)
 	{
 		sprite_ptr--;
 
-		pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[sprite_ptr->gfx],
+		pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[sprite_ptr->gfx],
 				sprite_ptr->code,
 				sprite_ptr->color,
 				sprite_ptr->flipx,sprite_ptr->flipy,
 				sprite_ptr->x,sprite_ptr->y,
 				sprite_ptr->zoomx,sprite_ptr->zoomy,
-				machine->priority_bitmap,sprite_ptr->primask,0);
+				machine.priority_bitmap,sprite_ptr->primask,0);
 	}
 }
 
 
-static void draw_sprites_cbombers(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,const int *primasks,int x_offs,int y_offs)
+static void draw_sprites_cbombers(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,const int *primasks,int x_offs,int y_offs)
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
-	UINT8 *spritemapHibit = (UINT8 *)memory_region(machine, "user2");
+	undrfire_state *state = machine.driver_data<undrfire_state>();
+	UINT32 *spriteram32 = state->m_spriteram;
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
+	UINT8 *spritemapHibit = (UINT8 *)machine.region("user2")->base();
 
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, dblsize, curx, cury;
@@ -236,9 +224,9 @@ static void draw_sprites_cbombers(running_machine *machine, bitmap_t *bitmap,con
 
 	/* pdrawgfx() needs us to draw sprites front to back, so we have to build a list
        while processing sprite ram and then draw them all at the end */
-	struct tempsprite *sprite_ptr = spritelist;
+	struct tempsprite *sprite_ptr = state->m_spritelist;
 
-	for (offs = (spriteram_size/4-4);offs >= 0;offs -= 4)
+	for (offs = (state->m_spriteram_size/4-4);offs >= 0;offs -= 4)
 	{
 		data = spriteram32[offs+0];
 		flipx =    (data & 0x00800000) >> 23;
@@ -329,7 +317,7 @@ static void draw_sprites_cbombers(running_machine *machine, bitmap_t *bitmap,con
 			}
 			else
 			{
-				drawgfxzoom_transpen(bitmap,cliprect,machine->gfx[sprite_ptr->gfx],
+				drawgfxzoom_transpen(bitmap,cliprect,machine.gfx[sprite_ptr->gfx],
 						sprite_ptr->code,
 						sprite_ptr->color,
 						sprite_ptr->flipx,sprite_ptr->flipy,
@@ -340,17 +328,17 @@ static void draw_sprites_cbombers(running_machine *machine, bitmap_t *bitmap,con
 	}
 
 	/* this happens only if primsks != NULL */
-	while (sprite_ptr != spritelist)
+	while (sprite_ptr != state->m_spritelist)
 	{
 		sprite_ptr--;
 
-		pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[sprite_ptr->gfx],
+		pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[sprite_ptr->gfx],
 				sprite_ptr->code,
 				sprite_ptr->color,
 				sprite_ptr->flipx,sprite_ptr->flipy,
 				sprite_ptr->x,sprite_ptr->y,
 				sprite_ptr->zoomx,sprite_ptr->zoomy,
-				machine->priority_bitmap,sprite_ptr->primask,0);
+				machine.priority_bitmap,sprite_ptr->primask,0);
 	}
 }
 
@@ -359,70 +347,69 @@ static void draw_sprites_cbombers(running_machine *machine, bitmap_t *bitmap,con
                 SCREEN REFRESH
 **************************************************************/
 
-VIDEO_UPDATE( undrfire )
+SCREEN_UPDATE_IND16( undrfire )
 {
+	device_t *tc0100scn = screen.machine().device("tc0100scn");
+	device_t *tc0480scp = screen.machine().device("tc0480scp");
 	UINT8 layer[5];
 	UINT8 pivlayer[3];
 	UINT16 priority;
 
 #ifdef MAME_DEBUG
-	static UINT8 dislayer[6];	/* Layer toggles to help get layers correct */
-#endif
-
-#ifdef MAME_DEBUG
-	if (input_code_pressed_once (screen->machine, KEYCODE_X))
+	undrfire_state *state = screen.machine().driver_data<undrfire_state>();
+	if (screen.machine().input().code_pressed_once (KEYCODE_X))
 	{
-		dislayer[5] ^= 1;
-		popmessage("piv text: %01x",dislayer[5]);
+		state->m_dislayer[5] ^= 1;
+		popmessage("piv text: %01x",state->m_dislayer[5]);
 	}
-	if (input_code_pressed_once (screen->machine, KEYCODE_C))
+	if (screen.machine().input().code_pressed_once (KEYCODE_C))
 	{
-		dislayer[0] ^= 1;
-		popmessage("bg0: %01x",dislayer[0]);
+		state->m_dislayer[0] ^= 1;
+		popmessage("bg0: %01x",state->m_dislayer[0]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_V))
+	if (screen.machine().input().code_pressed_once (KEYCODE_V))
 	{
-		dislayer[1] ^= 1;
-		popmessage("bg1: %01x",dislayer[1]);
+		state->m_dislayer[1] ^= 1;
+		popmessage("bg1: %01x",state->m_dislayer[1]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_B))
+	if (screen.machine().input().code_pressed_once (KEYCODE_B))
 	{
-		dislayer[2] ^= 1;
-		popmessage("bg2: %01x",dislayer[2]);
+		state->m_dislayer[2] ^= 1;
+		popmessage("bg2: %01x",state->m_dislayer[2]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_N))
+	if (screen.machine().input().code_pressed_once (KEYCODE_N))
 	{
-		dislayer[3] ^= 1;
-		popmessage("bg3: %01x",dislayer[3]);
+		state->m_dislayer[3] ^= 1;
+		popmessage("bg3: %01x",state->m_dislayer[3]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_M))
+	if (screen.machine().input().code_pressed_once (KEYCODE_M))
 	{
-		dislayer[4] ^= 1;
-		popmessage("sprites: %01x",dislayer[4]);
+		state->m_dislayer[4] ^= 1;
+		popmessage("sprites: %01x",state->m_dislayer[4]);
 	}
 #endif
 
-	TC0100SCN_tilemap_update(screen->machine);
-	TC0480SCP_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
+	tc0480scp_tilemap_update(tc0480scp);
 
-	priority = TC0480SCP_get_bg_priority();
+	priority = tc0480scp_get_bg_priority(tc0480scp);
 
-	layer[0] = (priority &0xf000) >> 12;	/* tells us which bg layer is bottom */
-	layer[1] = (priority &0x0f00) >>  8;
-	layer[2] = (priority &0x00f0) >>  4;
-	layer[3] = (priority &0x000f) >>  0;	/* tells us which is top */
+	layer[0] = (priority & 0xf000) >> 12;	/* tells us which bg layer is bottom */
+	layer[1] = (priority & 0x0f00) >>  8;
+	layer[2] = (priority & 0x00f0) >>  4;
+	layer[3] = (priority & 0x000f) >>  0;	/* tells us which is top */
 	layer[4] = 4;   /* text layer always over bg layers */
 
-	pivlayer[0] = TC0100SCN_bottomlayer(0);
-	pivlayer[1] = pivlayer[0]^1;
+	pivlayer[0] = tc0100scn_bottomlayer(tc0100scn);
+	pivlayer[1] = pivlayer[0] ^ 1;
 	pivlayer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
-	bitmap_fill(bitmap,cliprect,0);	/* wrong color? */
+	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap.fill(0, cliprect);	/* wrong color? */
 
 
 /* The "PIV" chip seems to be a renamed TC0100SCN. It has a
@@ -431,57 +418,57 @@ VIDEO_UPDATE( undrfire )
    pointless - it's always hidden by other layers. Does it
    serve some blending pupose ? */
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,pivlayer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,pivlayer[1],0,0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[1], 0, 0);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[0]]==0)
+	if (state->m_dislayer[layer[0]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[0],0,1);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[0], 0, 1);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[1]]==0)
+	if (state->m_dislayer[layer[1]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[1],0,2);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[1], 0, 2);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[2]]==0)
+	if (state->m_dislayer[layer[2]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[2],0,4);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[2], 0, 4);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[3]]==0)
+	if (state->m_dislayer[layer[3]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[3],0,8);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[3], 0, 8);
 
 #ifdef MAME_DEBUG
-	if (dislayer[4]==0)
+	if (state->m_dislayer[4]==0)
 #endif
 	/* Sprites have variable priority (we kludge this on road levels) */
 	{
-		if ((TC0480SCP_pri_reg &0x3) == 3)	/* on road levels kludge sprites up 1 priority */
+		if ((tc0480scp_pri_reg_r(tc0480scp, 0) & 0x3) == 3)	/* on road levels kludge sprites up 1 priority */
 		{
 			static const int primasks[4] = {0xfff0, 0xff00, 0x0, 0x0};
-			draw_sprites(screen->machine, bitmap,cliprect,primasks,44,-574);
+			draw_sprites(screen.machine(), bitmap, cliprect, primasks, 44, -574);
 		}
 		else
 		{
 			static const int primasks[4] = {0xfffc, 0xfff0, 0xff00, 0x0};
-			draw_sprites(screen->machine, bitmap,cliprect,primasks,44,-574);
+			draw_sprites(screen.machine(), bitmap, cliprect, primasks, 44, -574);
 		}
 	}
 
 #ifdef MAME_DEBUG
-	if (dislayer[5]==0)
+	if (state->m_dislayer[5]==0)
 #endif
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,pivlayer[2],0,0);	/* piv text layer */
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[2], 0, 0);	/* piv text layer */
 
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[4],0,0);	/* TC0480SCP text layer */
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* TC0480SCP text layer */
 
 	/* See if we should draw artificial gun targets */
 	/* (not yet implemented...) */
 
-	if (input_port_read(screen->machine, "FAKE") & 0x1)	/* Fake DSW */
+	if (input_port_read(screen.machine(), "FAKE") & 0x1)	/* Fake DSW */
 	{
 		popmessage("Gunsights on");
 	}
@@ -494,7 +481,7 @@ VIDEO_UPDATE( undrfire )
 
 		for (i = 0; i < 8; i += 1)
 		{
-			sprintf (buf, "%02x: %04x", i, undrfire_rotate_ctrl[i]);
+			sprintf (buf, "%02x: %04x", i, state->m_rotate_ctrl[i]);
 			ui_draw_text (buf, 0, i*8);
 		}
 	}
@@ -503,70 +490,69 @@ VIDEO_UPDATE( undrfire )
 }
 
 
-VIDEO_UPDATE( cbombers )
+SCREEN_UPDATE_IND16( cbombers )
 {
+	device_t *tc0100scn = screen.machine().device("tc0100scn");
+	device_t *tc0480scp = screen.machine().device("tc0480scp");
 	UINT8 layer[5];
 	UINT8 pivlayer[3];
 	UINT16 priority;
 
 #ifdef MAME_DEBUG
-	static UINT8 dislayer[6];	/* Layer toggles to help get layers correct */
-#endif
-
-#ifdef MAME_DEBUG
-	if (input_code_pressed_once (screen->machine, KEYCODE_X))
+	undrfire_state *state = screen.machine().driver_data<undrfire_state>();
+	if (screen.machine().input().code_pressed_once (KEYCODE_X))
 	{
-		dislayer[5] ^= 1;
-		popmessage("piv text: %01x",dislayer[5]);
+		state->m_dislayer[5] ^= 1;
+		popmessage("piv text: %01x",state->m_dislayer[5]);
 	}
-	if (input_code_pressed_once (screen->machine, KEYCODE_C))
+	if (screen.machine().input().code_pressed_once (KEYCODE_C))
 	{
-		dislayer[0] ^= 1;
-		popmessage("bg0: %01x",dislayer[0]);
+		state->m_dislayer[0] ^= 1;
+		popmessage("bg0: %01x",state->m_dislayer[0]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_V))
+	if (screen.machine().input().code_pressed_once (KEYCODE_V))
 	{
-		dislayer[1] ^= 1;
-		popmessage("bg1: %01x",dislayer[1]);
+		state->m_dislayer[1] ^= 1;
+		popmessage("bg1: %01x",state->m_dislayer[1]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_B))
+	if (screen.machine().input().code_pressed_once (KEYCODE_B))
 	{
-		dislayer[2] ^= 1;
-		popmessage("bg2: %01x",dislayer[2]);
+		state->m_dislayer[2] ^= 1;
+		popmessage("bg2: %01x",state->m_dislayer[2]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_N))
+	if (screen.machine().input().code_pressed_once (KEYCODE_N))
 	{
-		dislayer[3] ^= 1;
-		popmessage("bg3: %01x",dislayer[3]);
+		state->m_dislayer[3] ^= 1;
+		popmessage("bg3: %01x",state->m_dislayer[3]);
 	}
 
-	if (input_code_pressed_once (screen->machine, KEYCODE_M))
+	if (screen.machine().input().code_pressed_once (KEYCODE_M))
 	{
-		dislayer[4] ^= 1;
-		popmessage("sprites: %01x",dislayer[4]);
+		state->m_dislayer[4] ^= 1;
+		popmessage("sprites: %01x",state->m_dislayer[4]);
 	}
 #endif
 
-	TC0100SCN_tilemap_update(screen->machine);
-	TC0480SCP_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
+	tc0480scp_tilemap_update(tc0480scp);
 
-	priority = TC0480SCP_get_bg_priority();
+	priority = tc0480scp_get_bg_priority(tc0480scp);
 
-	layer[0] = (priority &0xf000) >> 12;	/* tells us which bg layer is bottom */
-	layer[1] = (priority &0x0f00) >>  8;
-	layer[2] = (priority &0x00f0) >>  4;
-	layer[3] = (priority &0x000f) >>  0;	/* tells us which is top */
+	layer[0] = (priority & 0xf000) >> 12;	/* tells us which bg layer is bottom */
+	layer[1] = (priority & 0x0f00) >>  8;
+	layer[2] = (priority & 0x00f0) >>  4;
+	layer[3] = (priority & 0x000f) >>  0;	/* tells us which is top */
 	layer[4] = 4;   /* text layer always over bg layers */
 
-	pivlayer[0] = TC0100SCN_bottomlayer(0);
-	pivlayer[1] = pivlayer[0]^1;
+	pivlayer[0] = tc0100scn_bottomlayer(tc0100scn);
+	pivlayer[1] = pivlayer[0] ^ 1;
 	pivlayer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
-	bitmap_fill(bitmap,cliprect,0);	/* wrong color? */
+	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap.fill(0, cliprect);	/* wrong color? */
 
 
 /* The "PIV" chip seems to be a renamed TC0100SCN. It has a
@@ -575,52 +561,52 @@ VIDEO_UPDATE( cbombers )
    pointless - it's always hidden by other layers. Does it
    serve some blending pupose ? */
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,pivlayer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,pivlayer[1],0,0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[1], 0, 0);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[0]]==0)
+	if (state->m_dislayer[layer[0]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[0],0,1);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[0], 0, 1);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[1]]==0)
+	if (state->m_dislayer[layer[1]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[1],0,2);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[1], 0, 2);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[2]]==0)
+	if (state->m_dislayer[layer[2]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[2],0,4);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[2], 0, 4);
 
 #ifdef MAME_DEBUG
-	if (dislayer[layer[3]]==0)
+	if (state->m_dislayer[layer[3]]==0)
 #endif
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[3],0,8);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[3], 0, 8);
 
 #ifdef MAME_DEBUG
-	if (dislayer[4]==0)
+	if (state->m_dislayer[4]==0)
 #endif
 	/* Sprites have variable priority (we kludge this on road levels) */
 	{
-		if ((TC0480SCP_pri_reg &0x3) == 3)	/* on road levels kludge sprites up 1 priority */
+		if ((tc0480scp_pri_reg_r(tc0480scp, 0) & 0x3) == 3)	/* on road levels kludge sprites up 1 priority */
 		{
 			static const int primasks[4] = {0xfff0, 0xff00, 0x0, 0x0};
-			draw_sprites_cbombers(screen->machine, bitmap,cliprect,primasks,80,-208);
+			draw_sprites_cbombers(screen.machine(), bitmap, cliprect, primasks, 80, -208);
 		}
 		else
 		{
 			static const int primasks[4] = {0xfffc, 0xfff0, 0xff00, 0x0};
-			draw_sprites_cbombers(screen->machine, bitmap,cliprect,primasks,80,-208);
+			draw_sprites_cbombers(screen.machine(), bitmap, cliprect, primasks, 80, -208);
 		}
 	}
 
 #ifdef MAME_DEBUG
-	if (dislayer[5]==0)
+	if (state->m_dislayer[5]==0)
 #endif
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,pivlayer[2],0,0);	/* piv text layer */
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, pivlayer[2], 0, 0);	/* piv text layer */
 
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[4],0,0);	/* TC0480SCP text layer */
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* TC0480SCP text layer */
 
 /* Enable this to see rotation (?) control words */
 #if 0
@@ -630,7 +616,7 @@ VIDEO_UPDATE( cbombers )
 
 		for (i = 0; i < 8; i += 1)
 		{
-			sprintf (buf, "%02x: %04x", i, undrfire_rotate_ctrl[i]);
+			sprintf (buf, "%02x: %04x", i, state->m_rotate_ctrl[i]);
 			ui_draw_text (buf, 0, i*8);
 		}
 	}

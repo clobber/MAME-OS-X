@@ -108,8 +108,6 @@ Known issues :
  - Half transparent color (50% alpha blending) is not emulated.
  - Sprite priority switch of Butasan is shown in test mode. What will be
    happened when set it ? JFF is not implemented this mistery switch too.
- - In Butasan, text layer will corrupt completely when you take a special
-   item.
  - Data proms of Butasan does exist. But I don't know what is used for.
  - Though clock speed of Argus is actually 4 MHz, major sprite problems
    are broken out in the middle of slowdown. So, it is set 5 MHz now.
@@ -119,9 +117,8 @@ Known issues :
 ****************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/2203intf.h"
 #include "includes/argus.h"
 
@@ -132,18 +129,32 @@ Known issues :
 
 ***************************************************************************/
 
-static INTERRUPT_GEN( argus_interrupt )
+static TIMER_DEVICE_CALLBACK( argus_scanline )
 {
-	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h */
-	else
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xd7); /* RST 10h */
+
+	if(scanline == 16) // vblank-in irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xcf); /* RST 08h */
+}
+
+static TIMER_DEVICE_CALLBACK( butasan_scanline )
+{
+	int scanline = param;
+
+	if(scanline == 248) // vblank-out irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xd7); /* RST 10h */
+
+	if(scanline == 8) // vblank-in irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xcf); /* RST 08h */
 }
 
 /* Handler called by the YM2203 emulator when the internal timers cause an IRQ */
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -165,11 +176,11 @@ static const ym2203_interface ym2203_config =
 
 static WRITE8_HANDLER( argus_bankselect_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	UINT8 *RAM = space->machine().region("maincpu")->base();
 	int bankaddress;
 
 	bankaddress = 0x10000 + ((data & 7) * 0x4000);
-	memory_set_bankptr(space->machine, 1, &RAM[bankaddress]);	 /* Select 8 banks of 16k */
+	memory_set_bankptr(space->machine(), "bank1", &RAM[bankaddress]);	 /* Select 8 banks of 16k */
 }
 
 
@@ -179,9 +190,9 @@ static WRITE8_HANDLER( argus_bankselect_w )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( argus_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( argus_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -190,22 +201,22 @@ static ADDRESS_MAP_START( argus_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc200, 0xc200) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc201, 0xc201) AM_WRITE(argus_flipscreen_w)
 	AM_RANGE(0xc202, 0xc202) AM_WRITE(argus_bankselect_w)
-	AM_RANGE(0xc300, 0xc301) AM_WRITE(argus_bg0_scrollx_w) AM_BASE(&argus_bg0_scrollx)
-	AM_RANGE(0xc302, 0xc303) AM_WRITE(argus_bg0_scrolly_w) AM_BASE(&argus_bg0_scrolly)
-	AM_RANGE(0xc308, 0xc309) AM_WRITE(argus_bg1_scrollx_w) AM_BASE(&argus_bg1_scrollx)
-	AM_RANGE(0xc30a, 0xc30b) AM_WRITE(argus_bg1_scrolly_w) AM_BASE(&argus_bg1_scrolly)
+	AM_RANGE(0xc300, 0xc301) AM_RAM AM_BASE_MEMBER(argus_state, m_bg0_scrollx)
+	AM_RANGE(0xc302, 0xc303) AM_RAM AM_BASE_MEMBER(argus_state, m_bg0_scrolly)
+	AM_RANGE(0xc308, 0xc309) AM_RAM AM_BASE_MEMBER(argus_state, m_bg1_scrollx)
+	AM_RANGE(0xc30a, 0xc30b) AM_RAM AM_BASE_MEMBER(argus_state, m_bg1_scrolly)
 	AM_RANGE(0xc30c, 0xc30c) AM_WRITE(argus_bg_status_w)
-	AM_RANGE(0xc400, 0xcfff) AM_READWRITE(argus_paletteram_r, argus_paletteram_w) AM_BASE(&argus_paletteram)
-	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(argus_txram_r, argus_txram_w) AM_BASE(&argus_txram)
-	AM_RANGE(0xd800, 0xdfff) AM_READWRITE(argus_bg1ram_r, argus_bg1ram_w) AM_BASE(&argus_bg1ram)
+	AM_RANGE(0xc400, 0xcfff) AM_READWRITE(argus_paletteram_r, argus_paletteram_w) AM_BASE_MEMBER(argus_state, m_paletteram)
+	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(argus_txram_r, argus_txram_w) AM_BASE_MEMBER(argus_state, m_txram)
+	AM_RANGE(0xd800, 0xdfff) AM_READWRITE(argus_bg1ram_r, argus_bg1ram_w) AM_BASE_MEMBER(argus_state, m_bg1ram)
 	AM_RANGE(0xe000, 0xf1ff) AM_RAM
-	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE_SIZE_MEMBER(argus_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( valtric_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( valtric_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -215,21 +226,21 @@ static ADDRESS_MAP_START( valtric_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc201, 0xc201) AM_WRITE(argus_flipscreen_w)
 	AM_RANGE(0xc202, 0xc202) AM_WRITE(argus_bankselect_w)
 	AM_RANGE(0xc300, 0xc300) AM_WRITE(valtric_unknown_w)
-	AM_RANGE(0xc308, 0xc309) AM_WRITE(argus_bg1_scrollx_w) AM_BASE(&argus_bg1_scrollx)
-	AM_RANGE(0xc30a, 0xc30b) AM_WRITE(argus_bg1_scrolly_w) AM_BASE(&argus_bg1_scrolly)
+	AM_RANGE(0xc308, 0xc309) AM_RAM AM_BASE_MEMBER(argus_state, m_bg1_scrollx)
+	AM_RANGE(0xc30a, 0xc30b) AM_RAM AM_BASE_MEMBER(argus_state, m_bg1_scrolly)
 	AM_RANGE(0xc30c, 0xc30c) AM_WRITE(valtric_bg_status_w)
 	AM_RANGE(0xc30d, 0xc30d) AM_WRITE(valtric_mosaic_w)
-	AM_RANGE(0xc400, 0xcfff) AM_READWRITE(argus_paletteram_r, valtric_paletteram_w) AM_BASE(&argus_paletteram)
-	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(argus_txram_r, argus_txram_w) AM_BASE(&argus_txram)
-	AM_RANGE(0xd800, 0xdfff) AM_READWRITE(argus_bg1ram_r, argus_bg1ram_w) AM_BASE(&argus_bg1ram)
+	AM_RANGE(0xc400, 0xcfff) AM_READWRITE(argus_paletteram_r, valtric_paletteram_w) AM_BASE_MEMBER(argus_state, m_paletteram)
+	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(argus_txram_r, argus_txram_w) AM_BASE_MEMBER(argus_state, m_txram)
+	AM_RANGE(0xd800, 0xdfff) AM_READWRITE(argus_bg1ram_r, argus_bg1ram_w) AM_BASE_MEMBER(argus_state, m_bg1ram)
 	AM_RANGE(0xe000, 0xf1ff) AM_RAM
-	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE_SIZE_MEMBER(argus_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( butasan_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( butasan_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -240,40 +251,40 @@ static ADDRESS_MAP_START( butasan_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc201, 0xc201) AM_WRITE(argus_flipscreen_w)
 	AM_RANGE(0xc202, 0xc202) AM_WRITE(argus_bankselect_w)
 	AM_RANGE(0xc203, 0xc203) AM_WRITE(butasan_pageselect_w)
-	AM_RANGE(0xc300, 0xc301) AM_WRITE(argus_bg0_scrollx_w) AM_BASE(&argus_bg0_scrollx)
-	AM_RANGE(0xc302, 0xc303) AM_WRITE(argus_bg0_scrolly_w) AM_BASE(&argus_bg0_scrolly)
+	AM_RANGE(0xc300, 0xc301) AM_RAM AM_BASE_MEMBER(argus_state, m_bg0_scrollx)
+	AM_RANGE(0xc302, 0xc303) AM_RAM AM_BASE_MEMBER(argus_state, m_bg0_scrolly)
 	AM_RANGE(0xc304, 0xc304) AM_WRITE(butasan_bg0_status_w)
-	AM_RANGE(0xc308, 0xc309) AM_WRITE(argus_bg1_scrollx_w) AM_BASE(&argus_bg1_scrollx)
-	AM_RANGE(0xc30a, 0xc30b) AM_WRITE(argus_bg1_scrolly_w) AM_BASE(&argus_bg1_scrolly)
+	AM_RANGE(0xc308, 0xc309) AM_RAM AM_BASE_MEMBER(argus_state, m_bg1_scrollx)
+	AM_RANGE(0xc30a, 0xc30b) AM_RAM AM_BASE_MEMBER(argus_state, m_bg1_scrolly)
 	AM_RANGE(0xc30c, 0xc30c) AM_WRITE(butasan_bg1_status_w)
-	AM_RANGE(0xc400, 0xc7ff) AM_READWRITE(butasan_bg1ram_r, butasan_bg1ram_w) AM_BASE(&butasan_bg1ram)
-	AM_RANGE(0xc800, 0xcfff) AM_READWRITE(argus_paletteram_r, butasan_paletteram_w) AM_BASE(&argus_paletteram)
+	AM_RANGE(0xc400, 0xc7ff) AM_READWRITE(butasan_bg1ram_r, butasan_bg1ram_w) AM_BASE_MEMBER(argus_state, m_butasan_bg1ram)
+	AM_RANGE(0xc800, 0xcfff) AM_READWRITE(argus_paletteram_r, butasan_paletteram_w) AM_BASE_MEMBER(argus_state, m_paletteram)
 	AM_RANGE(0xd000, 0xdfff) AM_READWRITE(butasan_pagedram_r, butasan_pagedram_w)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xf67f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xf67f) AM_RAM AM_BASE_SIZE_MEMBER(argus_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf680, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map_a, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_a, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc000, 0xc000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map_b, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_b, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
 #if 0
-static ADDRESS_MAP_START( sound_portmap_1, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_1, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 #endif
 
-static ADDRESS_MAP_START( sound_portmap_2, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x80, 0x81) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
@@ -529,153 +540,137 @@ static GFXDECODE_START( butasan )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( argus )
+static MACHINE_CONFIG_START( argus, argus_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)			/* 4 MHz */
-	MDRV_CPU_PROGRAM_MAP(argus_map)
-	MDRV_CPU_VBLANK_INT_HACK(argus_interrupt,2)
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)			/* 4 MHz */
+	MCFG_CPU_PROGRAM_MAP(argus_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", argus_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 5000000)
-	MDRV_CPU_PROGRAM_MAP(sound_map_a)
-#if 0
-	MDRV_CPU_IO_MAP(sound_portmap_1)
-#else
-	MDRV_CPU_IO_MAP(sound_portmap_2)
-#endif
+	MCFG_CPU_ADD("audiocpu", Z80, 5000000)
+	MCFG_CPU_PROGRAM_MAP(sound_map_a)
+	MCFG_CPU_IO_MAP(sound_portmap_2)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(54)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* This value is refered to psychic5 driver */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(32*16, 32*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(54)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* This value is referred to psychic5 driver */)
+	MCFG_SCREEN_SIZE(32*16, 32*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(argus)
 
-	MDRV_GFXDECODE(argus)
-	MDRV_PALETTE_LENGTH(896)
+	MCFG_GFXDECODE(argus)
+	MCFG_PALETTE_LENGTH(896)
 
-	MDRV_VIDEO_START(argus)
-	MDRV_VIDEO_RESET(argus)
-	MDRV_VIDEO_UPDATE(argus)
+	MCFG_VIDEO_START(argus)
+	MCFG_VIDEO_RESET(argus)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-#if 0
-	MDRV_SOUND_ADD("ym1", YM2203, 6000000 / 4)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-	MDRV_SOUND_ROUTE(2, "mono", 0.15)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
-#else
-	MDRV_SOUND_ADD("ym1", YM2203, 6000000 / 4)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-	MDRV_SOUND_ROUTE(2, "mono", 0.15)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
+	MCFG_SOUND_ADD("ym1", YM2203, 6000000 / 4)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.15)
+	MCFG_SOUND_ROUTE(1, "mono", 0.15)
+	MCFG_SOUND_ROUTE(2, "mono", 0.15)
+	MCFG_SOUND_ROUTE(3, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ym2", YM2203, 6000000 / 4)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-	MDRV_SOUND_ROUTE(2, "mono", 0.15)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
-#endif
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ym2", YM2203, 6000000 / 4)
+	MCFG_SOUND_ROUTE(0, "mono", 0.15)
+	MCFG_SOUND_ROUTE(1, "mono", 0.15)
+	MCFG_SOUND_ROUTE(2, "mono", 0.15)
+	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( valtric )
+static MACHINE_CONFIG_START( valtric, argus_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)			/* 5 MHz */
-	MDRV_CPU_PROGRAM_MAP(valtric_map)
-	MDRV_CPU_VBLANK_INT_HACK(argus_interrupt,2)
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)			/* 5 MHz */
+	MCFG_CPU_PROGRAM_MAP(valtric_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", argus_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 5000000)
-	MDRV_CPU_PROGRAM_MAP(sound_map_a)
-	MDRV_CPU_IO_MAP(sound_portmap_2)
+	MCFG_CPU_ADD("audiocpu", Z80, 5000000)
+	MCFG_CPU_PROGRAM_MAP(sound_map_a)
+	MCFG_CPU_IO_MAP(sound_portmap_2)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(54)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* This value is refered to psychic5 driver */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(32*16, 32*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(54)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* This value is referred to psychic5 driver */)
+	MCFG_SCREEN_SIZE(32*16, 32*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(valtric)
 
-	MDRV_GFXDECODE(valtric)
-	MDRV_PALETTE_LENGTH(768)
+	MCFG_GFXDECODE(valtric)
+	MCFG_PALETTE_LENGTH(768)
 
-	MDRV_VIDEO_START(valtric)
-	MDRV_VIDEO_RESET(valtric)
-	MDRV_VIDEO_UPDATE(valtric)
+	MCFG_VIDEO_START(valtric)
+	MCFG_VIDEO_RESET(valtric)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym1", YM2203, 6000000 / 4)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-	MDRV_SOUND_ROUTE(2, "mono", 0.15)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
+	MCFG_SOUND_ADD("ym1", YM2203, 6000000 / 4)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.15)
+	MCFG_SOUND_ROUTE(1, "mono", 0.15)
+	MCFG_SOUND_ROUTE(2, "mono", 0.15)
+	MCFG_SOUND_ROUTE(3, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ym2", YM2203, 6000000 / 4)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-	MDRV_SOUND_ROUTE(2, "mono", 0.15)
-	MDRV_SOUND_ROUTE(3, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ym2", YM2203, 6000000 / 4)
+	MCFG_SOUND_ROUTE(0, "mono", 0.15)
+	MCFG_SOUND_ROUTE(1, "mono", 0.15)
+	MCFG_SOUND_ROUTE(2, "mono", 0.15)
+	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( butasan )
+static MACHINE_CONFIG_START( butasan, argus_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)			/* 5 MHz */
-	MDRV_CPU_PROGRAM_MAP(butasan_map)
-	MDRV_CPU_VBLANK_INT_HACK(argus_interrupt,2)
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)			/* 5 MHz */
+	MCFG_CPU_PROGRAM_MAP(butasan_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", butasan_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 5000000)
-	MDRV_CPU_PROGRAM_MAP(sound_map_b)
-	MDRV_CPU_IO_MAP(sound_portmap_2)
+	MCFG_CPU_ADD("audiocpu", Z80, 5000000)
+	MCFG_CPU_PROGRAM_MAP(sound_map_b)
+	MCFG_CPU_IO_MAP(sound_portmap_2)
 
-	MDRV_QUANTUM_TIME(HZ(600))
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(54)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* This value is taken from psychic5 driver */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(32*16, 32*16)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(54)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* This value is taken from psychic5 driver */)
+	MCFG_SCREEN_SIZE(32*16, 32*16)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(butasan)
 
-	MDRV_GFXDECODE(butasan)
-	MDRV_PALETTE_LENGTH(768)
+	MCFG_GFXDECODE(butasan)
+	MCFG_PALETTE_LENGTH(768)
 
-	MDRV_VIDEO_START(butasan)
-	MDRV_VIDEO_RESET(butasan)
-	MDRV_VIDEO_UPDATE(butasan)
+	MCFG_VIDEO_START(butasan)
+	MCFG_VIDEO_RESET(butasan)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym1", YM2203, 6000000 / 4)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.30)
-	MDRV_SOUND_ROUTE(1, "mono", 0.30)
-	MDRV_SOUND_ROUTE(2, "mono", 0.30)
-	MDRV_SOUND_ROUTE(3, "mono", 1.0)
+	MCFG_SOUND_ADD("ym1", YM2203, 6000000 / 4)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.30)
+	MCFG_SOUND_ROUTE(1, "mono", 0.30)
+	MCFG_SOUND_ROUTE(2, "mono", 0.30)
+	MCFG_SOUND_ROUTE(3, "mono", 1.0)
 
-	MDRV_SOUND_ADD("ym2", YM2203, 6000000 / 4)
-	MDRV_SOUND_ROUTE(0, "mono", 0.30)
-	MDRV_SOUND_ROUTE(1, "mono", 0.30)
-	MDRV_SOUND_ROUTE(2, "mono", 0.30)
-	MDRV_SOUND_ROUTE(3, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ym2", YM2203, 6000000 / 4)
+	MCFG_SOUND_ROUTE(0, "mono", 0.30)
+	MCFG_SOUND_ROUTE(1, "mono", 0.30)
+	MCFG_SOUND_ROUTE(2, "mono", 0.30)
+	MCFG_SOUND_ROUTE(3, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -742,34 +737,68 @@ ROM_START( valtric )
 	ROM_LOAD( "vt_07.bin",    0x00000, 0x08000, CRC(d5f9bfb9) SHA1(6b3f11f9b8f76c0144a109f1506d8cbb01876237) )
 ROM_END
 
-ROM_START( butasan )
+ROM_START( butasan ) /* English "subtitle" of Butasan for Japanese region.  Original Jaleco PCB */
+	ROM_REGION( 0x30000, "maincpu", 0 ) 					/* Main CPU */
+	ROM_LOAD( "4.t2",    0x00000, 0x10000, CRC(937dabed) SHA1(23058b07cc2973b3b7a4b0bcdab43c3db605a54e) ) /* overdump?  1+2 half identical */
+	ROM_LOAD( "3.s2",    0x10000, 0x10000, CRC(a6b3ccc2) SHA1(fcc9db1cd68fd9477d86e63e6906d194d5ee477a) )
+	ROM_LOAD( "2.p2",    0x20000, 0x10000, CRC(96517fa9) SHA1(03ee1f118f109c85b046098c457a90b40e163f3c) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )					/* Sound CPU */
+	ROM_LOAD( "1.b2",    0x00000, 0x10000, CRC(c9d23e2d) SHA1(cee289d5bf7626fc35808a09f9f1f4628fa16974) )
+
+	ROM_REGION( 0x80000, "gfx1", 0 )	/* Sprite */
+	ROM_LOAD( "16.k16",  0x00000, 0x10000, CRC(e0ce51b6) SHA1(458c7c422a7b6ce42f397a8868610f6386fd815c) )
+	ROM_LOAD( "15.k15",  0x10000, 0x10000, CRC(2105f6e1) SHA1(54c13073f0dc8b5d3fb5578aa5958a5dd01396a6) )
+	ROM_LOAD( "14.k14",  0x20000, 0x10000, CRC(8ec891c1) SHA1(e16f18a0eed300752af8f07fd3cef5cd825a2a05) )
+	ROM_LOAD( "13.k13",  0x30000, 0x10000, CRC(5023e74d) SHA1(edf43e6c89f0e537cebf1c21a671dba4cd7d91ea) )
+	ROM_LOAD( "12.k12",  0x40000, 0x10000, CRC(44f59905) SHA1(bf364f7f907fee551e9228db7c27c106bcfecf6c) )
+	ROM_LOAD( "11.k11",  0x50000, 0x10000, CRC(b8929f1d) SHA1(18a72f30284bed0c6723105f87eb10d64d3f461d) )
+	ROM_LOAD( "10.k10",  0x60000, 0x10000, CRC(fd4d3baf) SHA1(fa8e3970a8aac83efcb669fe5d4683adade9aa4f) )
+	ROM_LOAD( "9.k9",    0x70000, 0x10000, CRC(7da4c0fd) SHA1(fb2b148ccfee530313da886eddf7711ee83b4aeb) )
+
+	ROM_REGION( 0x20000, "gfx2", 0 )	/* BG0 */
+	ROM_LOAD( "5.l7",    0x00000, 0x10000, CRC(b8e026b0) SHA1(eb6ff9042b21b7190000c571ccba7d81f11ce9f1) )
+	ROM_LOAD( "6.n7",    0x10000, 0x10000, CRC(8bbacb81) SHA1(015be76e44ed2389eff912d8f61a757667d7670b) )
+
+	ROM_REGION( 0x10000, "gfx3", 0 )	/* BG1 */
+	ROM_LOAD( "7.a8",    0x00000, 0x10000, CRC(3a48d531) SHA1(0ff6256bb7ea909d95b2bfb994ebc5432ea6d055) )
+
+	ROM_REGION( 0x08000, "gfx4", 0 )	/* Text */
+	ROM_LOAD( "8.a7",    0x00000, 0x08000, CRC(85153252) SHA1(20af223f9dc2e29e506e257c36e96d10dc150467) )
+
+	ROM_REGION( 0x00200, "proms", 0 )					/* Data proms ??? */
+	ROM_LOAD( "buta-01.prm",  0x00000, 0x00100, CRC(45baedd0) SHA1(afdafb67d55007e6fb99518657e27ce61d2cb7e6) )
+	ROM_LOAD( "buta-02.prm",  0x00100, 0x00100, CRC(0dcb18fc) SHA1(0b097b873c9484981f87a5e3d1af767f901ae05f) )
+ROM_END
+
+ROM_START( butasanj )
 	ROM_REGION( 0x30000, "maincpu", 0 ) 					/* Main CPU */
 	ROM_LOAD( "buta-04.bin",  0x00000, 0x08000, CRC(47ff4ca9) SHA1(d89a41f6987c91d20b010f0cbda332cf54b21f8c) )
 	ROM_LOAD( "buta-03.bin",  0x10000, 0x10000, CRC(69fd88c7) SHA1(fd827d7926a2de5ffe2982b3a59ea43de00ee46b) )
 	ROM_LOAD( "buta-02.bin",  0x20000, 0x10000, CRC(519dc412) SHA1(48bbb01b217bd19c48ef7ab12c60805aaa02527c) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )					/* Sound CPU */
-	ROM_LOAD( "buta-01.bin",  0x00000, 0x10000, CRC(c9d23e2d) SHA1(cee289d5bf7626fc35808a09f9f1f4628fa16974) )
+	ROM_LOAD( "1.b2",    0x00000, 0x10000, CRC(c9d23e2d) SHA1(cee289d5bf7626fc35808a09f9f1f4628fa16974) ) // buta-01.bin
 
 	ROM_REGION( 0x80000, "gfx1", 0 )	/* Sprite */
-	ROM_LOAD( "buta-16.bin",  0x00000, 0x10000, CRC(e0ce51b6) SHA1(458c7c422a7b6ce42f397a8868610f6386fd815c) )
+	ROM_LOAD( "16.k16",  0x00000, 0x10000, CRC(e0ce51b6) SHA1(458c7c422a7b6ce42f397a8868610f6386fd815c) ) // buta-16.bin
 	ROM_LOAD( "buta-15.bin",  0x10000, 0x10000, CRC(3ed19daa) SHA1(b8090c3baa2b31681bed15c682a97c024e229df7) )
-	ROM_LOAD( "buta-14.bin",  0x20000, 0x10000, CRC(8ec891c1) SHA1(e16f18a0eed300752af8f07fd3cef5cd825a2a05) )
-	ROM_LOAD( "buta-13.bin",  0x30000, 0x10000, CRC(5023e74d) SHA1(edf43e6c89f0e537cebf1c21a671dba4cd7d91ea) )
-	ROM_LOAD( "buta-12.bin",  0x40000, 0x10000, CRC(44f59905) SHA1(bf364f7f907fee551e9228db7c27c106bcfecf6c) )
-	ROM_LOAD( "buta-11.bin",  0x50000, 0x10000, CRC(b8929f1d) SHA1(18a72f30284bed0c6723105f87eb10d64d3f461d) )
-	ROM_LOAD( "buta-10.bin",  0x60000, 0x10000, CRC(fd4d3baf) SHA1(fa8e3970a8aac83efcb669fe5d4683adade9aa4f) )
-	ROM_LOAD( "buta-09.bin",  0x70000, 0x10000, CRC(7da4c0fd) SHA1(fb2b148ccfee530313da886eddf7711ee83b4aeb) )
+	ROM_LOAD( "14.k14",  0x20000, 0x10000, CRC(8ec891c1) SHA1(e16f18a0eed300752af8f07fd3cef5cd825a2a05) ) // buta-14.bin
+	ROM_LOAD( "13.k13",  0x30000, 0x10000, CRC(5023e74d) SHA1(edf43e6c89f0e537cebf1c21a671dba4cd7d91ea) ) // buta-13.bin
+	ROM_LOAD( "12.k12",  0x40000, 0x10000, CRC(44f59905) SHA1(bf364f7f907fee551e9228db7c27c106bcfecf6c) ) // buta-12.bin
+	ROM_LOAD( "11.k11",  0x50000, 0x10000, CRC(b8929f1d) SHA1(18a72f30284bed0c6723105f87eb10d64d3f461d) ) // buta-11.bin
+	ROM_LOAD( "10.k10",  0x60000, 0x10000, CRC(fd4d3baf) SHA1(fa8e3970a8aac83efcb669fe5d4683adade9aa4f) ) // buta-10.bin
+	ROM_LOAD( "9.k9",    0x70000, 0x10000, CRC(7da4c0fd) SHA1(fb2b148ccfee530313da886eddf7711ee83b4aeb) ) // buta-09.bin
 
 	ROM_REGION( 0x20000, "gfx2", 0 )	/* BG0 */
-	ROM_LOAD( "buta-05.bin",  0x00000, 0x10000, CRC(b8e026b0) SHA1(eb6ff9042b21b7190000c571ccba7d81f11ce9f1) )
-	ROM_LOAD( "buta-06.bin",  0x10000, 0x10000, CRC(8bbacb81) SHA1(015be76e44ed2389eff912d8f61a757667d7670b) )
+	ROM_LOAD( "5.l7",    0x00000, 0x10000, CRC(b8e026b0) SHA1(eb6ff9042b21b7190000c571ccba7d81f11ce9f1) ) // buta-05.bin
+	ROM_LOAD( "6.n7",    0x10000, 0x10000, CRC(8bbacb81) SHA1(015be76e44ed2389eff912d8f61a757667d7670b) ) // buta-06.bin
 
 	ROM_REGION( 0x10000, "gfx3", 0 )	/* BG1 */
-	ROM_LOAD( "buta-07.bin",  0x00000, 0x10000, CRC(3a48d531) SHA1(0ff6256bb7ea909d95b2bfb994ebc5432ea6d055) )
+	ROM_LOAD( "7.a8",    0x00000, 0x10000, CRC(3a48d531) SHA1(0ff6256bb7ea909d95b2bfb994ebc5432ea6d055) ) // buta-07.bin
 
 	ROM_REGION( 0x08000, "gfx4", 0 )	/* Text */
-	ROM_LOAD( "buta-08.bin",  0x00000, 0x08000, CRC(5d45ce9c) SHA1(113c3e7ce20634ee4bb740705485572583298694) )
+	ROM_LOAD( "buta-08.bin",    0x00000, 0x08000, CRC(5d45ce9c) SHA1(113c3e7ce20634ee4bb740705485572583298694) )
 
 	ROM_REGION( 0x00200, "proms", 0 )					/* Data proms ??? */
 	ROM_LOAD( "buta-01.prm",  0x00000, 0x00100, CRC(45baedd0) SHA1(afdafb67d55007e6fb99518657e27ce61d2cb7e6) )
@@ -777,7 +806,8 @@ ROM_START( butasan )
 ROM_END
 
 
-/*  ( YEAR   NAME     PARENT  MACHINE   INPUT     INIT  MONITOR  COMPANY                   FULLNAME ) */
-GAME( 1986, argus,    0,      argus,    argus,    0,    ROT270,  "[NMK] (Jaleco license)", "Argus"          , GAME_IMPERFECT_GRAPHICS )
-GAME( 1986, valtric,  0,      valtric,  valtric,  0,    ROT270,  "[NMK] (Jaleco license)", "Valtric"        , GAME_IMPERFECT_GRAPHICS )
-GAME( 1987, butasan,  0,      butasan,  butasan,  0,    ROT0,    "[NMK] (Jaleco license)", "Butasan (Japan)", GAME_IMPERFECT_GRAPHICS )
+/*  ( YEAR   NAME     PARENT  MACHINE   INPUT     INIT  MONITOR  COMPANY                  FULLNAME ) */
+GAME( 1986, argus,    0,      argus,    argus,    0,    ROT270,  "NMK (Jaleco license)", "Argus",                                       GAME_IMPERFECT_GRAPHICS )
+GAME( 1986, valtric,  0,      valtric,  valtric,  0,    ROT270,  "NMK (Jaleco license)", "Valtric",                                     GAME_IMPERFECT_GRAPHICS )
+GAME( 1987, butasan,  0,      butasan,  butasan,  0,    ROT0,    "NMK (Jaleco license)", "Butasan - Pig's & Bomber's (Japan, English)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1987, butasanj, butasan,butasan,  butasan,  0,    ROT0,    "NMK (Jaleco license)", "Butasan (Japan, Japanese)",                   GAME_IMPERFECT_GRAPHICS )

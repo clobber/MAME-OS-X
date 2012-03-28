@@ -48,19 +48,10 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
-#include "deprecat.h"
 #include "sound/pokey.h"
-
-
-UINT8 *tunhunt_ram;
-
-extern WRITE8_HANDLER( tunhunt_videoram_w );
-
-extern PALETTE_INIT( tunhunt );
-extern VIDEO_START( tunhunt );
-extern VIDEO_UPDATE( tunhunt );
+#include "includes/tunhunt.h"
 
 
 /*************************************
@@ -68,8 +59,6 @@ extern VIDEO_UPDATE( tunhunt );
  *  Output ports
  *
  *************************************/
-
-UINT8 tunhunt_control;
 
 static WRITE8_HANDLER( tunhunt_control_w )
 {
@@ -82,10 +71,12 @@ static WRITE8_HANDLER( tunhunt_control_w )
         0x40    start LED
         0x80    in-game
     */
-	tunhunt_control = data;
-	coin_counter_w( 0,data&0x01 );
-	coin_counter_w( 1,data&0x02 );
-	set_led_status( 0, data&0x40 ); /* start */
+	tunhunt_state *state = space->machine().driver_data<tunhunt_state>();
+
+	state->m_control = data;
+	coin_counter_w( space->machine(), 0,data&0x01 );
+	coin_counter_w( space->machine(), 1,data&0x02 );
+	set_led_status( space->machine(), 0, data&0x40 ); /* start */
 }
 
 
@@ -98,38 +89,38 @@ static WRITE8_HANDLER( tunhunt_control_w )
 
 static READ8_HANDLER( tunhunt_button_r )
 {
-	int data = input_port_read(space->machine, "IN0");
+	int data = input_port_read(space->machine(), "IN0");
 	return ((data>>offset)&1)?0x00:0x80;
 }
 
 
 static READ8_DEVICE_HANDLER( dsw2_0r )
 {
-	return (input_port_read(device->machine, "DSW")&0x0100)?0x80:0x00;
+	return (input_port_read(device->machine(), "DSW")&0x0100)?0x80:0x00;
 }
 
 
 static READ8_DEVICE_HANDLER( dsw2_1r )
 {
-	return (input_port_read(device->machine, "DSW")&0x0200)?0x80:0x00;
+	return (input_port_read(device->machine(), "DSW")&0x0200)?0x80:0x00;
 }
 
 
 static READ8_DEVICE_HANDLER( dsw2_2r )
 {
-	return (input_port_read(device->machine, "DSW")&0x0400)?0x80:0x00;
+	return (input_port_read(device->machine(), "DSW")&0x0400)?0x80:0x00;
 }
 
 
 static READ8_DEVICE_HANDLER( dsw2_3r )
 {
-	return (input_port_read(device->machine, "DSW")&0x0800)?0x80:0x00;
+	return (input_port_read(device->machine(), "DSW")&0x0800)?0x80:0x00;
 }
 
 
 static READ8_DEVICE_HANDLER( dsw2_4r )
 {
-	return (input_port_read(device->machine, "DSW")&0x1000)?0x80:0x00;
+	return (input_port_read(device->machine(), "DSW")&0x1000)?0x80:0x00;
 }
 
 
@@ -140,26 +131,25 @@ static READ8_DEVICE_HANDLER( dsw2_4r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE(&tunhunt_ram) /* Work RAM */
-	AM_RANGE(0x1080, 0x10ff) AM_WRITE(SMH_RAM)
-	AM_RANGE(0x1200, 0x12ff) AM_WRITE(SMH_RAM)
-	AM_RANGE(0x1400, 0x14ff) AM_WRITE(SMH_RAM)
-	AM_RANGE(0x1600, 0x160f) AM_WRITE(SMH_RAM) AM_BASE(&paletteram)	/* COLRAM (D7-D4 SHADE; D3-D0 COLOR) */
-	AM_RANGE(0x1800, 0x1800) AM_WRITE(SMH_RAM)	/* SHEL0H */
-	AM_RANGE(0x1a00, 0x1a00) AM_WRITE(SMH_RAM)	/* SHEL1H */
-	AM_RANGE(0x1c00, 0x1c00) AM_WRITE(SMH_RAM)	/* MOBJV */
-	AM_RANGE(0x1e00, 0x1eff) AM_WRITE(tunhunt_videoram_w) AM_BASE(&videoram)	/* ALPHA */
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_BASE_MEMBER(tunhunt_state,m_workram) /* Work RAM */
+	AM_RANGE(0x1080, 0x10ff) AM_WRITEONLY
+	AM_RANGE(0x1200, 0x12ff) AM_WRITEONLY
+	AM_RANGE(0x1400, 0x14ff) AM_WRITEONLY
+	AM_RANGE(0x1600, 0x160f) AM_WRITEONLY AM_BASE_GENERIC(paletteram)	/* COLRAM (D7-D4 SHADE; D3-D0 COLOR) */
+	AM_RANGE(0x1800, 0x1800) AM_WRITEONLY	/* SHEL0H */
+	AM_RANGE(0x1a00, 0x1a00) AM_WRITEONLY	/* SHEL1H */
+	AM_RANGE(0x1c00, 0x1c00) AM_WRITEONLY	/* MOBJV */
+	AM_RANGE(0x1e00, 0x1eff) AM_WRITE(tunhunt_videoram_w) AM_BASE_MEMBER(tunhunt_state,m_videoram)	/* ALPHA */
 	AM_RANGE(0x2000, 0x2000) AM_WRITENOP	/* watchdog */
 	AM_RANGE(0x2000, 0x2007) AM_READ(tunhunt_button_r)
 	AM_RANGE(0x2400, 0x2400) AM_WRITENOP	/* INT ACK */
 	AM_RANGE(0x2800, 0x2800) AM_WRITE(tunhunt_control_w)
-	AM_RANGE(0x2c00, 0x2fff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram)
+	AM_RANGE(0x2c00, 0x2fff) AM_WRITEONLY AM_BASE_MEMBER(tunhunt_state,m_spriteram)
 	AM_RANGE(0x3000, 0x300f) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x4000, 0x400f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x5000, 0x7fff) AM_READ(SMH_ROM)
-	AM_RANGE(0xfffa, 0xffff) AM_READ(SMH_ROM)
-	AM_RANGE(0x5000, 0xffff) AM_WRITE(SMH_ROM)
+	AM_RANGE(0x5000, 0x7fff) AM_ROM
+	AM_RANGE(0xfffa, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
@@ -310,39 +300,38 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( tunhunt )
+static MACHINE_CONFIG_START( tunhunt, tunhunt_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502,2000000)		/* ??? */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,2)	/* ? probably wrong */
+	MCFG_CPU_ADD("maincpu", M6502,2000000)		/* ??? */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)	/* ? probably wrong */
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256-16)
-	MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 255-16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(256, 256-16)
+	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 255-16)
+	MCFG_SCREEN_UPDATE_STATIC(tunhunt)
 
-	MDRV_GFXDECODE(tunhunt)
-	MDRV_PALETTE_LENGTH(0x1a)
+	MCFG_GFXDECODE(tunhunt)
+	MCFG_PALETTE_LENGTH(0x1a)
 
-	MDRV_PALETTE_INIT(tunhunt)
-	MDRV_VIDEO_START(tunhunt)
-	MDRV_VIDEO_UPDATE(tunhunt)
+	MCFG_PALETTE_INIT(tunhunt)
+	MCFG_VIDEO_START(tunhunt)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey1", POKEY, 1209600)
-	MDRV_SOUND_CONFIG(pokey_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("pokey1", POKEY, 1209600)
+	MCFG_SOUND_CONFIG(pokey_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("pokey2", POKEY, 1209600)
-	MDRV_SOUND_CONFIG(pokey_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("pokey2", POKEY, 1209600)
+	MCFG_SOUND_CONFIG(pokey_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 
@@ -381,7 +370,7 @@ ROM_START( tunhunt )
 	ROM_LOAD( "004.fh1",	0x6800, 0x800, CRC(4d6c920e) SHA1(2ef274356f4b8a0170a267cd6a3758b2bda693b5) )
 	ROM_LOAD( "005.ef1",	0x7000, 0x800, CRC(e17badf0) SHA1(6afbf517486340fe54b01fa26258877b2a8fc510) )
 	ROM_LOAD( "006.d1",		0x7800, 0x800, CRC(c3ae8519) SHA1(2b2e49065bc38429894ef29a29ffc60f96e64840) )
-	ROM_RELOAD( 		  	0xf800, 0x800 ) /* 6502 vectors  */
+	ROM_RELOAD( 			0xf800, 0x800 ) /* 6502 vectors  */
 
 	ROM_REGION( 0x400, "gfx1", 0 ) /* alphanumeric characters */
 	ROM_LOAD( "019.c10",	0x000, 0x400, CRC(d6fd45a9) SHA1(c86ea3790c29c554199af8ad6f3d563dcb7723c7) )
@@ -406,7 +395,7 @@ ROM_START( tunhuntc )
 	ROM_LOAD( "004.fh1",	0x6800, 0x800, CRC(4d6c920e) SHA1(2ef274356f4b8a0170a267cd6a3758b2bda693b5) )
 	ROM_LOAD( "005.ef1",	0x7000, 0x800, CRC(e17badf0) SHA1(6afbf517486340fe54b01fa26258877b2a8fc510) )
 	ROM_LOAD( "006.d1",		0x7800, 0x800, CRC(c3ae8519) SHA1(2b2e49065bc38429894ef29a29ffc60f96e64840) )
-	ROM_RELOAD( 		  	0xf800, 0x800 ) /* 6502 vectors  */
+	ROM_RELOAD( 			0xf800, 0x800 ) /* 6502 vectors  */
 
 	ROM_REGION( 0x400, "gfx1", 0 ) /* alphanumeric characters */
 	ROM_LOAD( "019.c10",	0x000, 0x400, CRC(d6fd45a9) SHA1(c86ea3790c29c554199af8ad6f3d563dcb7723c7) )

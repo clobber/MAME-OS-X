@@ -34,15 +34,28 @@ Tomasz Slanina 20050225
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
+
+
+class vroulet_state : public driver_device
+{
+public:
+	vroulet_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_ball;
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	tilemap_t *m_bg_tilemap;
+};
+
 
 /* video */
 
-static UINT8 *vroulet_ball;
-static tilemap *bg_tilemap;
 
 static WRITE8_HANDLER(vroulet_paletteram_w)
 {
@@ -52,34 +65,37 @@ static WRITE8_HANDLER(vroulet_paletteram_w)
     */
 
 	int i,j,a,b;
-	paletteram[offset]=data;
+	space->machine().generic.paletteram.u8[offset]=data;
 	for(i=0;i<32;i++)
 	{
 		for(j=0;j<16;j++)
 		{
-			a=paletteram[((i*8+j)*2)&0xff ];
-			b=paletteram[((i*8+j)*2+1)&0xff ];
-			palette_set_color_rgb(space->machine,i*16+j,pal4bit(b),pal4bit(b>>4),pal4bit(a));
+			a=space->machine().generic.paletteram.u8[((i*8+j)*2)&0xff ];
+			b=space->machine().generic.paletteram.u8[((i*8+j)*2+1)&0xff ];
+			palette_set_color_rgb(space->machine(),i*16+j,pal4bit(b),pal4bit(b>>4),pal4bit(a));
 		}
 	}
 }
 
 static WRITE8_HANDLER( vroulet_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	vroulet_state *state = space->machine().driver_data<vroulet_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static WRITE8_HANDLER( vroulet_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	vroulet_state *state = space->machine().driver_data<vroulet_state>();
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] + ((attr & 0xc0) << 2);
+	vroulet_state *state = machine.driver_data<vroulet_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + ((attr & 0xc0) << 2);
 	int color = attr & 0x1f;
 
 	SET_TILE_INFO(0, code, color, 0);
@@ -87,35 +103,37 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START(vroulet)
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	vroulet_state *state = machine.driver_data<vroulet_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
 		8, 8, 32, 32);
 }
 
-static VIDEO_UPDATE(vroulet)
+static SCREEN_UPDATE_IND16(vroulet)
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0], 0x320, 1, 0, 0,
-		vroulet_ball[1], vroulet_ball[0] - 12, 0);
+	vroulet_state *state = screen.machine().driver_data<vroulet_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[0], 0x320, 1, 0, 0,
+		state->m_ball[1], state->m_ball[0] - 12, 0);
 	return 0;
 }
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( vroulet_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( vroulet_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8000, 0x8000) AM_NOP
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(vroulet_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(vroulet_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xa000, 0xa001) AM_RAM AM_BASE(&vroulet_ball)
-	AM_RANGE(0xb000, 0xb0ff) AM_WRITE(vroulet_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(vroulet_videoram_w) AM_BASE_MEMBER(vroulet_state, m_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(vroulet_colorram_w) AM_BASE_MEMBER(vroulet_state, m_colorram)
+	AM_RANGE(0xa000, 0xa001) AM_RAM AM_BASE_MEMBER(vroulet_state, m_ball)
+	AM_RANGE(0xb000, 0xb0ff) AM_WRITE(vroulet_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc000, 0xc000) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vroulet_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( vroulet_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x10, 0x13) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 ADDRESS_MAP_END
@@ -257,41 +275,40 @@ static const ppi8255_interface ppi8255_intf[2] =
 
 /* Machine Driver */
 
-static MACHINE_DRIVER_START( vroulet )
+static MACHINE_CONFIG_START( vroulet, vroulet_state )
 	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", Z80, 4000000)	//???
-	MDRV_CPU_PROGRAM_MAP(vroulet_map)
-	MDRV_CPU_IO_MAP(vroulet_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, 4000000)	//???
+	MCFG_CPU_PROGRAM_MAP(vroulet_map)
+	MCFG_CPU_IO_MAP(vroulet_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MCFG_NVRAM_ADD_1FILL("nvram")
 
-	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
 
 	// video hardware
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(vroulet)
 
-	MDRV_GFXDECODE(vroulet)
-	MDRV_PALETTE_LENGTH(128*4)
+	MCFG_GFXDECODE(vroulet)
+	MCFG_PALETTE_LENGTH(128*4)
 
-	MDRV_VIDEO_START(vroulet)
-	MDRV_VIDEO_UPDATE(vroulet)
+	MCFG_VIDEO_START(vroulet)
 
 	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("aysnd", AY8910, 2000000)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* ROMs */
 

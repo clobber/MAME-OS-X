@@ -50,12 +50,12 @@
 int core_stricmp(const char *s1, const char *s2)
 {
 	for (;;)
- 	{
+	{
 		int c1 = tolower((UINT8)*s1++);
 		int c2 = tolower((UINT8)*s2++);
 		if (c1 == 0 || c1 != c2)
 			return c1 - c2;
- 	}
+	}
 }
 
 
@@ -67,12 +67,12 @@ int core_strnicmp(const char *s1, const char *s2, size_t n)
 {
 	size_t i;
 	for (i = 0; i < n; i++)
- 	{
+	{
 		int c1 = tolower((UINT8)*s1++);
 		int c2 = tolower((UINT8)*s2++);
 		if (c1 == 0 || c1 != c2)
 			return c1 - c2;
- 	}
+	}
 
 	return 0;
 }
@@ -133,7 +133,7 @@ int core_strwildcmp(const char *sp1, const char *sp2)
 
 
 /*-------------------------------------------------
-    core_strdup - string duplication via malloc
+    core_strdup - string duplication via osd_malloc
 -------------------------------------------------*/
 
 char *core_strdup(const char *str)
@@ -141,7 +141,7 @@ char *core_strdup(const char *str)
 	char *cpy = NULL;
 	if (str != NULL)
 	{
-		cpy = (char *)malloc(strlen(str) + 1);
+		cpy = (char *)osd_malloc_array(strlen(str) + 1);
 		if (cpy != NULL)
 			strcpy(cpy, str);
 	}
@@ -150,7 +150,7 @@ char *core_strdup(const char *str)
 
 
 /*-------------------------------------------------
-    core_i64_format - i64 format printf helper
+    core_i64_hex_format - i64 format printf helper
 -------------------------------------------------*/
 
 char *core_i64_hex_format(UINT64 value, UINT8 mindigits)
@@ -175,4 +175,41 @@ char *core_i64_hex_format(UINT64 value, UINT8 mindigits)
 	*bufptr = 0;
 
 	return bufbase;
+}
+
+/*-------------------------------------------------
+    core_i64_oct_format - i64 format printf helper
+-------------------------------------------------*/
+
+char *core_i64_oct_format(UINT64 value, UINT8 mindigits)
+{
+	static char buffer[22][64];
+	static int index;
+	char *bufbase = &buffer[index++ % 22][0];
+	char *bufptr = bufbase;
+	INT8 curdigit;
+
+	for (curdigit = 21; curdigit >= 0; curdigit--)
+	{
+		int octdigit = (value >> (curdigit * 3)) & 0x7;
+		if (octdigit != 0 || curdigit < mindigits)
+		{
+			mindigits = curdigit;
+			*bufptr++ = "01234567"[octdigit];
+		}
+	}
+	if (bufptr == bufbase)
+		*bufptr++ = '0';
+	*bufptr = 0;
+
+	return bufbase;
+}
+
+/*-------------------------------------------------
+    core_i64_format - i64 format printf helper
+-------------------------------------------------*/
+
+char *core_i64_format(UINT64 value, UINT8 mindigits, bool is_octal)
+{
+	return is_octal ? core_i64_oct_format(value,mindigits) : core_i64_hex_format(value,mindigits);
 }

@@ -6,9 +6,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-
-static tilemap *bg_tilemap;
+#include "emu.h"
+#include "includes/sonson.h"
 
 /***************************************************************************
 
@@ -39,12 +38,13 @@ static tilemap *bg_tilemap;
   bit 0 -- 2.2kohm resistor  -- RED
 
 ***************************************************************************/
+
 PALETTE_INIT( sonson )
 {
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x20);
+	machine.colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -73,7 +73,7 @@ PALETTE_INIT( sonson )
 		bit3 = (color_prom[i + 0x00] >> 3) & 0x01;
 		b = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -83,46 +83,50 @@ PALETTE_INIT( sonson )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 
 	/* sprites use colors 0x10-0x1f */
 	for (i = 0x100; i < 0x200; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( sonson_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	sonson_state *state = space->machine().driver_data<sonson_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( sonson_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	sonson_state *state = space->machine().driver_data<sonson_state>();
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( sonson_scrollx_w )
 {
+	sonson_state *state = space->machine().driver_data<sonson_state>();
 	int row;
 
 	for (row = 5; row < 32; row++)
-		tilemap_set_scrollx(bg_tilemap, row, data);
+		state->m_bg_tilemap->set_scrollx(row, data);
 }
 
 WRITE8_HANDLER( sonson_flipscreen_w )
 {
-	flip_screen_set(space->machine, ~data & 0x01);
+	flip_screen_set(space->machine(), ~data & 0x01);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] + 256 * (attr & 0x03);
+	sonson_state *state = machine.driver_data<sonson_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + 256 * (attr & 0x03);
 	int color = attr >> 2;
 
 	SET_TILE_INFO(0, code, color, 0);
@@ -130,16 +134,19 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( sonson )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
+	sonson_state *state = machine.driver_data<sonson_state>();
 
-	tilemap_set_scroll_rows(bg_tilemap, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_bg_tilemap->set_scroll_rows(32);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	sonson_state *state = machine.driver_data<sonson_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = spriteram_size - 4; offs >= 0; offs -= 4)
+	for (offs = state->m_spriteram_size - 4; offs >= 0; offs -= 4)
 	{
 		int code = spriteram[offs + 2] + ((spriteram[offs + 1] & 0x20) << 3);
 		int color = spriteram[offs + 1] & 0x1f;
@@ -157,20 +164,21 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		}
 
 		drawgfx_transpen(bitmap, cliprect,
-			machine->gfx[1],
+			machine.gfx[1],
 			code, color,
 			flipx, flipy,
 			sx, sy, 0);
 
 		/* wrap-around */
-		drawgfx_transpen(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy, sx - 256, sy, 0);
-		drawgfx_transpen(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy, sx, sy - 256, 0);
+		drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, sx - 256, sy, 0);
+		drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, sx, sy - 256, 0);
 	}
 }
 
-VIDEO_UPDATE( sonson )
+SCREEN_UPDATE_IND16( sonson )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	sonson_state *state = screen.machine().driver_data<sonson_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }

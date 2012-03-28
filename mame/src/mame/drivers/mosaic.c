@@ -1,34 +1,25 @@
 /***************************************************************************
 
-Mosaic (c) 1990 Space
+    Mosaic (c) 1990 Space
 
-Notes:
-- the ROM OK / RAM OK message in service mode is fake: ROM and RAM are not tested.
+    Notes:
+    - the ROM OK / RAM OK message in service mode is fake: ROM and RAM are not tested.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z180/z180.h"
 #include "sound/2203intf.h"
-
-
-extern UINT8 *mosaic_fgvideoram;
-extern UINT8 *mosaic_bgvideoram;
-WRITE8_HANDLER( mosaic_fgvideoram_w );
-WRITE8_HANDLER( mosaic_bgvideoram_w );
-VIDEO_START( mosaic );
-VIDEO_UPDATE( mosaic );
-
-
-
-static int prot_val;
+#include "includes/mosaic.h"
 
 static WRITE8_HANDLER( protection_w )
 {
-	if ((data & 0x80) == 0)
+	mosaic_state *state = space->machine().driver_data<mosaic_state>();
+
+	if (!BIT(data, 7))
 	{
 		/* simply increment given value */
-		prot_val = (data + 1) << 8;
+		state->m_prot_val = (data + 1) << 8;
 	}
 	else
 	{
@@ -43,24 +34,27 @@ static WRITE8_HANDLER( protection_w )
 			0x411f, 0x473f
 		};
 
-		prot_val = jumptable[data & 0x7f];
+		state->m_prot_val = jumptable[data & 0x7f];
 	}
 }
 
 static READ8_HANDLER( protection_r )
 {
-	int res = (prot_val >> 8) & 0xff;
+	mosaic_state *state = space->machine().driver_data<mosaic_state>();
+	int res = (state->m_prot_val >> 8) & 0xff;
 
-	logerror("%06x: protection_r %02x\n",cpu_get_pc(space->cpu),res);
+	logerror("%06x: protection_r %02x\n", cpu_get_pc(&space->device()), res);
 
-	prot_val <<= 8;
+	state->m_prot_val <<= 8;
 
 	return res;
 }
 
 static WRITE8_HANDLER( gfire2_protection_w )
 {
-	logerror("%06x: protection_w %02x\n",cpu_get_pc(space->cpu),data);
+	mosaic_state *state = space->machine().driver_data<mosaic_state>();
+
+	logerror("%06x: protection_w %02x\n", cpu_get_pc(&space->device()), data);
 
 	switch(data)
 	{
@@ -68,65 +62,66 @@ static WRITE8_HANDLER( gfire2_protection_w )
 			/* written repeatedly; no effect?? */
 			break;
 		case 0x02:
-			prot_val = 0x0a10;
+			state->m_prot_val = 0x0a10;
 			break;
 		case 0x04:
-			prot_val = 0x0a15;
+			state->m_prot_val = 0x0a15;
 			break;
 		case 0x06:
-			prot_val = 0x80e3;
+			state->m_prot_val = 0x80e3;
 			break;
 		case 0x08:
-			prot_val = 0x0965;
+			state->m_prot_val = 0x0965;
 			break;
 		case 0x0a:
-			prot_val = 0x04b4;
+			state->m_prot_val = 0x04b4;
 			break;
 	}
 }
 
 static READ8_HANDLER( gfire2_protection_r )
 {
-	int res = prot_val & 0xff;
+	mosaic_state *state = space->machine().driver_data<mosaic_state>();
+	int res = state->m_prot_val & 0xff;
 
-	prot_val >>= 8;
+	state->m_prot_val >>= 8;
 
 	return res;
 }
 
 
 
-static ADDRESS_MAP_START( mosaic_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mosaic_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x0ffff) AM_ROM
 	AM_RANGE(0x20000, 0x21fff) AM_RAM
-	AM_RANGE(0x22000, 0x22fff) AM_RAM_WRITE(mosaic_bgvideoram_w) AM_BASE(&mosaic_bgvideoram)
-	AM_RANGE(0x23000, 0x23fff) AM_RAM_WRITE(mosaic_fgvideoram_w) AM_BASE(&mosaic_fgvideoram)
-	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0x22000, 0x22fff) AM_RAM_WRITE(mosaic_bgvideoram_w) AM_BASE_MEMBER(mosaic_state, m_bgvideoram)
+	AM_RANGE(0x23000, 0x23fff) AM_RAM_WRITE(mosaic_fgvideoram_w) AM_BASE_MEMBER(mosaic_state, m_fgvideoram)
+	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gfire2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gfire2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x0ffff) AM_ROM
 	AM_RANGE(0x10000, 0x17fff) AM_RAM
-	AM_RANGE(0x22000, 0x22fff) AM_RAM_WRITE(mosaic_bgvideoram_w) AM_BASE(&mosaic_bgvideoram)
-	AM_RANGE(0x23000, 0x23fff) AM_RAM_WRITE(mosaic_fgvideoram_w) AM_BASE(&mosaic_fgvideoram)
-	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0x22000, 0x22fff) AM_RAM_WRITE(mosaic_bgvideoram_w) AM_BASE_MEMBER(mosaic_state, m_bgvideoram)
+	AM_RANGE(0x23000, 0x23fff) AM_RAM_WRITE(mosaic_fgvideoram_w) AM_BASE_MEMBER(mosaic_state, m_fgvideoram)
+	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mosaic_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mosaic_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x3f) AM_WRITENOP	/* Z180 internal registers */
 	AM_RANGE(0x30, 0x30) AM_READNOP	/* Z180 internal registers */
-	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x72, 0x72) AM_READWRITE(protection_r, protection_w)
 	AM_RANGE(0x74, 0x74) AM_READ_PORT("P1")
 	AM_RANGE(0x76, 0x76) AM_READ_PORT("P2")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( gfire2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( gfire2_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x3f) AM_WRITENOP	/* Z180 internal registers */
 	AM_RANGE(0x30, 0x30) AM_READNOP	/* Z180 internal registers */
-	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x72, 0x72) AM_READWRITE(gfire2_protection_r, gfire2_protection_w)
 	AM_RANGE(0x74, 0x74) AM_READ_PORT("P1")
 	AM_RANGE(0x76, 0x76) AM_READ_PORT("P2")
@@ -202,7 +197,7 @@ static INPUT_PORTS_START( gfire2 )
 	PORT_START("DSW")
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Language ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
-	PORT_DIPSETTING(    0x80, "Korean" )
+	PORT_DIPSETTING(    0x80, DEF_STR( Korean ) )
 	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
@@ -258,40 +253,57 @@ static const ym2203_interface ym2203_config =
 
 
 
-static MACHINE_DRIVER_START( mosaic )
-	MDRV_CPU_ADD("maincpu", Z180, 7000000)	/* ??? */
-	MDRV_CPU_PROGRAM_MAP(mosaic_map)
-	MDRV_CPU_IO_MAP(mosaic_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_START( mosaic )
+{
+	mosaic_state *state = machine.driver_data<mosaic_state>();
+
+	state->save_item(NAME(state->m_prot_val));
+}
+
+static MACHINE_RESET( mosaic )
+{
+	mosaic_state *state = machine.driver_data<mosaic_state>();
+
+	state->m_prot_val = 0;
+}
+
+static MACHINE_CONFIG_START( mosaic, mosaic_state )
+
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", Z180, 7000000)	/* ??? */
+	MCFG_CPU_PROGRAM_MAP(mosaic_map)
+	MCFG_CPU_IO_MAP(mosaic_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_MACHINE_START(mosaic)
+	MCFG_MACHINE_RESET(mosaic)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(8*8, 48*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(8*8, 48*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(mosaic)
 
-	MDRV_GFXDECODE(mosaic)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(mosaic)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_VIDEO_START(mosaic)
-	MDRV_VIDEO_UPDATE(mosaic)
+	MCFG_VIDEO_START(mosaic)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2203, 3000000)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gfire2 )
-	MDRV_IMPORT_FROM(mosaic)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(gfire2_map)
-	MDRV_CPU_IO_MAP(gfire2_io_map)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( gfire2, mosaic )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(gfire2_map)
+	MCFG_CPU_IO_MAP(gfire2_io_map)
+MACHINE_CONFIG_END
 
 
 

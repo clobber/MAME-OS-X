@@ -1,15 +1,13 @@
-#include "driver.h"
+#include "emu.h"
 #include "sound/samples.h"
-#include "circus.h"
-
-int circus_game;
+#include "includes/circus.h"
 
 static const char *const circus_sample_names[] =
 {
 	"*circus",
-	"pop.wav",
-	"miss.wav",
-	"bounce.wav",
+	"pop",
+	"miss",
+	"bounce",
 	0
 };
 
@@ -22,7 +20,7 @@ const samples_interface circus_samples_interface =
 static const char *const crash_sample_names[] =
 {
 	"*crash",
-	"crash.wav",
+	"crash",
 	0
 };
 
@@ -35,10 +33,10 @@ const samples_interface crash_samples_interface =
 static const char *const ripcord_sample_names[] =
 {
 	"*ripcord",
-	"splash.wav",
-	"scream.wav",
-	"chute.wav",
-	"whistle.wav",
+	"splash",
+	"scream",
+	"chute",
+	"whistle",
 	0
 };
 
@@ -51,11 +49,11 @@ const samples_interface ripcord_samples_interface =
 static const char *const robotbwl_sample_names[] =
 {
 	"*robotbwl",
-	"hit.wav",
-	"roll.wav",
-	"balldrop.wav",
-	"demerit.wav",
-	"reward.wav",
+	"hit",
+	"roll",
+	"balldrop",
+	"demerit",
+	"reward",
 	0
 };
 
@@ -124,8 +122,8 @@ DISCRETE_SOUND_START(crash)
 	DISCRETE_INPUT_LOGIC(CRASH_MUSIC_BIT)
 	DISCRETE_INPUT_PULSE(CRASH_BEEPER_EN, 1)
 
-	DISCRETE_ADJUSTMENT_TAG(CRASH_R63, 0, 5.0*RES_K(100)/(RES_K(47+100))-0.5, DISC_LINADJ, "R63")
-	DISCRETE_ADJUSTMENT_TAG(CRASH_R39, 0, 1, DISC_LINADJ, "R39")
+	DISCRETE_ADJUSTMENT(CRASH_R63, 0, 5.0*RES_K(100)/(RES_K(47+100))-0.5, DISC_LINADJ, "R63")
+	DISCRETE_ADJUSTMENT(CRASH_R39, 0, 1, DISC_LINADJ, "R39")
 
 	/************************************************/
 	/* Music is just a 1 bit DAC                    */
@@ -174,69 +172,68 @@ DISCRETE_SOUND_END
 
 WRITE8_HANDLER( circus_clown_z_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
-	const device_config *discrete = devtag_get_device(space->machine, "discrete");
+	circus_state *state = space->machine().driver_data<circus_state>();
 
-	clown_z = (data & 0x0f);
-	*(memory_region(space->machine, "maincpu")+0x8000)=data; logerror("Z:%02x\n",data); //DEBUG
+	state->m_clown_z = (data & 0x0f);
+	*(space->machine().region("maincpu")->base() + 0x8000) = data; logerror("Z:%02x\n",data); //DEBUG
+
 	/* Bits 4-6 enable/disable trigger different events */
-
-	switch (circus_game)
+	switch (state->m_game_id)
 	{
 		case 1:	/* circus */
 		case 4:	/* ripcord */
 			switch ((data & 0x70) >> 4)
 			{
 				case 0 : /* All Off */
-					discrete_sound_w(discrete, CIRCUS_MUSIC_BIT, 0);
+					discrete_sound_w(state->m_discrete, CIRCUS_MUSIC_BIT, 0);
 					break;
 
 				case 1 : /* Music */
-					discrete_sound_w(discrete, CIRCUS_MUSIC_BIT, 1);
+					discrete_sound_w(state->m_discrete, CIRCUS_MUSIC_BIT, 1);
 					break;
 
 				case 2 : /* Circus = Pop; Rip Cord = Splash */
-					sample_start (samples, 0, 0, 0);
+					sample_start(state->m_samples, 0, 0, 0);
 					break;
 
 				case 3 : /* Normal Video */
 					break;
 
 				case 4 : /* Circus = Miss; Rip Cord = Scream */
-					sample_start (samples, 1, 1, 0);
+					sample_start(state->m_samples, 1, 1, 0);
 					break;
 
 				case 5 : /* Invert Video */
 					break;
 
 				case 6 : /* Circus = Bounce; Rip Cord = Chute Open */
-					sample_start (samples, 2, 2, 0);
+					sample_start(state->m_samples, 2, 2, 0);
 					break;
 
 				case 7 : /* Circus = not used; Rip Cord = Whistle */
-					if GAME_IS_RIPCORD
-						sample_start (samples, 3, 3, 0);
+					if (state->m_game_id == 4)
+						sample_start(state->m_samples, 3, 3, 0);
 					break;
 			}
 			break;
 
 		case 2:	/* robotbwl */
-			discrete_sound_w(discrete, ROBOTBWL_MUSIC_BIT, data & 0x08);	/* Footsteps */
+			discrete_sound_w(state->m_discrete, ROBOTBWL_MUSIC_BIT, data & 0x08);	/* Footsteps */
 
 			if (data & 0x40)	/* Hit */
-				sample_start (samples, 0, 0, 0);
+				sample_start(state->m_samples, 0, 0, 0);
 
 			if (data & 0x20)	/* Roll */
-				sample_start (samples, 1, 1, 0);
+				sample_start(state->m_samples, 1, 1, 0);
 
 			if (data & 0x10)	/* Ball Drop */
-				sample_start (samples, 2, 2, 0);
+				sample_start(state->m_samples, 2, 2, 0);
 
 			if (data & 0x02)	/* Demerit */
-				sample_start (samples, 3, 3, 0);
+				sample_start(state->m_samples, 3, 3, 0);
 
 			if (data & 0x01)	/* Reward */
-				sample_start (samples, 4, 4, 0);
+				sample_start(state->m_samples, 4, 4, 0);
 
 			// if (data & 0x04) /* Invert */
 			break;
@@ -246,26 +243,26 @@ WRITE8_HANDLER( circus_clown_z_w )
 			switch ((data & 0x70) >> 4)
 			{
 				case 0 : /* All Off */
-					discrete_sound_w(discrete, CRASH_MUSIC_BIT, 0);
+					discrete_sound_w(state->m_discrete, CRASH_MUSIC_BIT, 0);
 					break;
 
 				case 1 : /* Music */
-					discrete_sound_w(discrete, CRASH_MUSIC_BIT, 1);
+					discrete_sound_w(state->m_discrete, CRASH_MUSIC_BIT, 1);
 					break;
 
 				case 2 : /* Crash */
-					sample_start (samples, 0, 0, 0);
+					sample_start(state->m_samples, 0, 0, 0);
 					break;
 
 				case 3 : /* Normal Video and Beep */
-					discrete_sound_w(discrete, CRASH_BEEPER_EN, 0);
+					discrete_sound_w(state->m_discrete, CRASH_BEEPER_EN, 0);
 					break;
 
 				case 4 : /* Skid */
 					break;
 
 				case 5 : /* Invert Video and Beep */
-					discrete_sound_w(discrete, CRASH_BEEPER_EN, 0);
+					discrete_sound_w(state->m_discrete, CRASH_BEEPER_EN, 0);
 					break;
 
 				case 6 : /* Hi Motor */
@@ -278,5 +275,5 @@ WRITE8_HANDLER( circus_clown_z_w )
 	}
 
 	/* Bit 7 enables amplifier (0 = on) */
-	sound_global_enable(space->machine, ~data & 0x80);
+	space->machine().sound().system_mute(data & 0x80);
 }

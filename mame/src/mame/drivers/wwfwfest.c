@@ -18,7 +18,7 @@
 
  Sound Chips : YM2151, M6295
 
- 4 Layers from now on if mentioned will be refered to as
+ 4 Layers from now on if mentioned will be referred to as
 
  BG0 - Background Layer 0
  BG1 - Background Layer 1
@@ -37,10 +37,10 @@
 
 *******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
-#include "wwfwfest.h"
+#include "includes/wwfwfest.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 
@@ -66,12 +66,12 @@ static WRITE16_HANDLER ( wwfwfest_irq_ack_w );
  still some unknown writes however, sound cpu memory map is the same as dd3
 *******************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x0c0000, 0x0c1fff) AM_RAM_WRITE(wwfwfest_fg0_videoram_w) AM_BASE(&wwfwfest_fg0_videoram)	/* FG0 Ram - 4 bytes per tile */
-	AM_RANGE(0x0c2000, 0x0c3fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)						/* SPR Ram */
-	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(wwfwfest_bg0_videoram_w) AM_BASE(&wwfwfest_bg0_videoram)	/* BG0 Ram - 4 bytes per tile */
-	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(wwfwfest_bg1_videoram_w) AM_BASE(&wwfwfest_bg1_videoram)	/* BG1 Ram - 2 bytes per tile */
+	AM_RANGE(0x0c0000, 0x0c1fff) AM_RAM_WRITE(wwfwfest_fg0_videoram_w) AM_BASE_MEMBER(wwfwfest_state, m_fg0_videoram)	/* FG0 Ram - 4 bytes per tile */
+	AM_RANGE(0x0c2000, 0x0c3fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)						/* SPR Ram */
+	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(wwfwfest_bg0_videoram_w) AM_BASE_MEMBER(wwfwfest_state, m_bg0_videoram)	/* BG0 Ram - 4 bytes per tile */
+	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(wwfwfest_bg1_videoram_w) AM_BASE_MEMBER(wwfwfest_state, m_bg1_videoram)	/* BG1 Ram - 2 bytes per tile */
 	AM_RANGE(0x100000, 0x100007) AM_WRITE(wwfwfest_scroll_write)
 	AM_RANGE(0x10000a, 0x10000b) AM_WRITE(wwfwfest_flipscreen_w)
 	AM_RANGE(0x140000, 0x140003) AM_WRITE(wwfwfest_irq_ack_w)
@@ -81,15 +81,15 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x140022, 0x140023) AM_READ_PORT("P2")
 	AM_RANGE(0x140024, 0x140025) AM_READ_PORT("P3")
 	AM_RANGE(0x140026, 0x140027) AM_READ_PORT("P4")
-	AM_RANGE(0x180000, 0x18ffff) AM_READWRITE(wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_r,wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x180000, 0x18ffff) AM_READWRITE(wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_r,wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM /* Work Ram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xc801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
-	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xc800, 0xc801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 	AM_RANGE(0xe800, 0xe800) AM_DEVWRITE("oki", oki_bankswitch_w)
 ADDRESS_MAP_END
@@ -103,15 +103,15 @@ ADDRESS_MAP_END
 static WRITE16_HANDLER( wwfwfest_irq_ack_w )
 {
 	if (offset == 0)
-		cputag_set_input_line(space->machine, "maincpu", 3, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", 3, CLEAR_LINE);
 
 	else
-		cputag_set_input_line(space->machine, "maincpu", 2, CLEAR_LINE);
+		cputag_set_input_line(space->machine(), "maincpu", 2, CLEAR_LINE);
 }
 
 static WRITE16_HANDLER( wwfwfest_flipscreen_w )
 {
-	flip_screen_set(space->machine, data&1);
+	flip_screen_set(space->machine(), data&1);
 }
 
 /*- Palette Reads/Writes -*/
@@ -119,7 +119,7 @@ static WRITE16_HANDLER( wwfwfest_flipscreen_w )
 static READ16_HANDLER( wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_r )
 {
 	offset = (offset & 0x000f) | (offset & 0x7fc0) >> 2;
-	return paletteram16[offset];
+	return space->machine().generic.paletteram.u16[offset];
 }
 
 static WRITE16_HANDLER( wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_w )
@@ -133,25 +133,27 @@ static WRITE16_HANDLER( wwfwfest_paletteram16_xxxxBBBBGGGGRRRR_word_w )
 
 static WRITE16_HANDLER( wwfwfest_1410_write )
 {
-	wwfwfest_pri = data;
+	wwfwfest_state *state = space->machine().driver_data<wwfwfest_state>();
+	state->m_pri = data;
 }
 
 /*- Scroll Control -*/
 
 static WRITE16_HANDLER( wwfwfest_scroll_write )
 {
+	wwfwfest_state *state = space->machine().driver_data<wwfwfest_state>();
 	switch (offset) {
 		case 0x00:
-			wwfwfest_bg0_scrollx = data;
+			state->m_bg0_scrollx = data;
 			break;
 		case 0x01:
-			wwfwfest_bg0_scrolly = data;
+			state->m_bg0_scrolly = data;
 			break;
 		case 0x02:
-			wwfwfest_bg1_scrollx = data;
+			state->m_bg1_scrollx = data;
 			break;
 		case 0x03:
-			wwfwfest_bg1_scrolly = data;
+			state->m_bg1_scrolly = data;
 			break;
 	}
 }
@@ -160,13 +162,13 @@ static WRITE16_HANDLER( wwfwfest_scroll_write )
 
 static WRITE8_DEVICE_HANDLER( oki_bankswitch_w )
 {
-	okim6295_set_bank_base(device, (data & 1) * 0x40000);
+	downcast<okim6295_device *>(device)->set_bank_base((data & 1) * 0x40000);
 }
 
 static WRITE16_HANDLER ( wwfwfest_soundwrite )
 {
 	soundlatch_w(space,1,data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
 }
 
 /*******************************************************************************
@@ -175,17 +177,17 @@ static WRITE16_HANDLER ( wwfwfest_soundwrite )
  There are 4 players, 2 sets of dipswitches and 2 misc
 *******************************************************************************/
 
-/* DIPs are spread accross the other input ports */
+/* DIPs are spread across the other input ports */
 static CUSTOM_INPUT( dsw_3f_r )
 {
 	const char *tag = (const char *)param;
-	return input_port_read(field->port->machine, tag) & 0x3f;
+	return input_port_read(field.machine(), tag) & 0x3f;
 }
 
 static CUSTOM_INPUT( dsw_c0_r )
 {
 	const char *tag = (const char *)param;
-	return (input_port_read(field->port->machine, tag) & 0xc0) >> 6;
+	return (input_port_read(field.machine(), tag) & 0xc0) >> 6;
 }
 
 
@@ -351,15 +353,15 @@ static TIMER_DEVICE_CALLBACK( wwfwfest_scanline )
 	if (scanline % 16 == 0)
 	{
 		if (scanline > 0)
-			video_screen_update_partial(timer->machine->primary_screen, scanline - 1);
-		cputag_set_input_line(timer->machine, "maincpu", 2, ASSERT_LINE);
+			timer.machine().primary_screen->update_partial(scanline - 1);
+		cputag_set_input_line(timer.machine(), "maincpu", 2, ASSERT_LINE);
 	}
 
 	/* Vblank is raised on scanline 248 */
 	if (scanline == 248)
 	{
-		video_screen_update_partial(timer->machine->primary_screen, scanline - 1);
-		cputag_set_input_line(timer->machine, "maincpu", 3, ASSERT_LINE);
+		timer.machine().primary_screen->update_partial(scanline - 1);
+		cputag_set_input_line(timer.machine(), "maincpu", 3, ASSERT_LINE);
 	}
 }
 
@@ -369,9 +371,9 @@ static TIMER_DEVICE_CALLBACK( wwfwfest_scanline )
  Straight from Ddragon 3 with some adjusted volumes
 *******************************************************************************/
 
-static void dd3_ymirq_handler(const device_config *device, int irq)
+static void dd3_ymirq_handler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE );
+	cputag_set_input_line(device->machine(), "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
 static const ym2151_interface ym2151_config =
@@ -379,58 +381,59 @@ static const ym2151_interface ym2151_config =
 	dd3_ymirq_handler
 };
 
-static VIDEO_EOF( wwfwfest )
+static SCREEN_VBLANK( wwfwfest )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	// rising edge
+	if (vblank_on)
+	{
+		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
 
-	buffer_spriteram16_w(space,0,0,0xffff);
+		buffer_spriteram16_w(space,0,0,0xffff);
+	}
 }
 
 /*******************************************************************************
  Machine Driver(s)
 *******************************************************************************/
 
-static MACHINE_DRIVER_START( wwfwfest )
+static MACHINE_CONFIG_START( wwfwfest, wwfwfest_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)	/* 24 crystal, 12 rated chip */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_TIMER_ADD_SCANLINE("scantimer", wwfwfest_scanline, "screen", 0, 1)
+	MCFG_CPU_ADD("maincpu", M68000, CPU_CLOCK)	/* 24 crystal, 12 rated chip */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", wwfwfest_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 320, 272, 8, 248)	/* HTOTAL and VTOTAL are guessed */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 320, 272, 8, 248)	/* HTOTAL and VTOTAL are guessed */
+	MCFG_SCREEN_UPDATE_STATIC(wwfwfest)
+	MCFG_SCREEN_VBLANK_STATIC(wwfwfest)
 
-	MDRV_GFXDECODE(wwfwfest)
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_GFXDECODE(wwfwfest)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(wwfwfest)
-	MDRV_VIDEO_EOF(wwfwfest)
-	MDRV_VIDEO_UPDATE(wwfwfest)
+	MCFG_VIDEO_START(wwfwfest)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.45)
-	MDRV_SOUND_ROUTE(1, "mono", 0.45)
+	MCFG_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz)
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.45)
+	MCFG_SOUND_ROUTE(1, "mono", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1024188)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* Verified - Pin 7 tied to +5VDC */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1024188, OKIM6295_PIN7_HIGH) /* Verified - Pin 7 tied to +5VDC */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( wwfwfstb )
-	MDRV_IMPORT_FROM(wwfwfest)
-	MDRV_VIDEO_START(wwfwfstb)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( wwfwfstb, wwfwfest )
+	MCFG_VIDEO_START(wwfwfstb)
+MACHINE_CONFIG_END
 
 /*******************************************************************************
  Rom Loaders / Game Drivers
@@ -485,13 +488,13 @@ ROM_START( wwfwfest )
 	ROM_LOAD16_BYTE( "31a13-2.ic19", 0x00001, 0x40000, CRC(7175bca7) SHA1(992b47a787b5bc2a5a381ec78b8dfaf7d42c614b) )
 	ROM_LOAD16_BYTE( "31a14-2.ic18", 0x00000, 0x40000, CRC(5d06bfd1) SHA1(39a93da662158aa5a9953dcabfcb47c2fc196dc7) )
 
- 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Sound CPU (Z80)  */
+	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Sound CPU (Z80)  */
 	ROM_LOAD( "31a11-2.ic42", 0x00000, 0x10000, CRC(5ddebfea) SHA1(30073963e965250d94f0dc3bd261a054850adf95) )
 
- 	ROM_REGION( 0x80000, "oki", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "oki", 0 )	/* ADPCM samples */
 	ROM_LOAD( "31j10.ic73",   0x00000, 0x80000, CRC(6c522edb) SHA1(8005d59c94160638ba2ea7caf4e991fff03003d5) )
 
- 	ROM_REGION( 0x20000, "gfx1", 0 ) /* FG0 Tiles (8x8) */
+	ROM_REGION( 0x20000, "gfx1", 0 ) /* FG0 Tiles (8x8) */
 	ROM_LOAD( "31a12-0.ic33", 0x00000, 0x20000, CRC(d0803e20) SHA1(b68758e9a5522396f831a3972571f8aed54c64de) )
 
 	ROM_REGION( 0x800000, "gfx2", 0 ) /* SPR Tiles (16x16), 27080 Mask ROM's */
@@ -514,13 +517,13 @@ ROM_START( wwfwfesta )
 	ROM_LOAD16_BYTE( "wf_18.rom", 0x00000, 0x40000, CRC(933ea1a0) SHA1(61da142cfa7abd3b77ab21979c061a078c0d0c63) )
 	ROM_LOAD16_BYTE( "wf_19.rom", 0x00001, 0x40000, CRC(bd02e3c4) SHA1(7ae63e48caf9919ce7b63b4c5aa9474ba8c336da) )
 
- 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Sound CPU (Z80)  */
+	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Sound CPU (Z80)  */
 	ROM_LOAD( "31a11-2.ic42", 0x00000, 0x10000, CRC(5ddebfea) SHA1(30073963e965250d94f0dc3bd261a054850adf95) )
 
- 	ROM_REGION( 0x80000, "oki", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "oki", 0 )	/* ADPCM samples */
 	ROM_LOAD( "31j10.ic73",   0x00000, 0x80000, CRC(6c522edb) SHA1(8005d59c94160638ba2ea7caf4e991fff03003d5) )
 
- 	ROM_REGION( 0x20000, "gfx1", 0 ) /* FG0 Tiles (8x8) */
+	ROM_REGION( 0x20000, "gfx1", 0 ) /* FG0 Tiles (8x8) */
 	ROM_LOAD( "wf_33.rom",    0x00000, 0x20000, CRC(06f22615) SHA1(2e9418e372da85ea597977d912d8b35753655f4e) )
 
 	ROM_REGION( 0x800000, "gfx2", 0 ) /* SPR Tiles (16x16), 27080 Mask ROM's */
@@ -574,13 +577,13 @@ ROM_START( wwfwfestj )
 	ROM_LOAD16_BYTE( "31j13-0.ic19", 0x00001, 0x40000, CRC(2147780d) SHA1(9a7a5db06117f3780e084d3f0c7b642ff8a9db55) )
 	ROM_LOAD16_BYTE( "31j14-0.ic18", 0x00000, 0x40000, CRC(d76fc747) SHA1(5f6819bc61756d1df4ac0776ac420a59c438cf8a) )
 
- 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Sound CPU (Z80)  */
+	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Sound CPU (Z80)  */
 	ROM_LOAD( "31a11-2.ic42", 0x00000, 0x10000, CRC(5ddebfea) SHA1(30073963e965250d94f0dc3bd261a054850adf95) )
 
- 	ROM_REGION( 0x80000, "oki", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "oki", 0 )	/* ADPCM samples */
 	ROM_LOAD( "31j10.ic73",   0x00000, 0x80000, CRC(6c522edb) SHA1(8005d59c94160638ba2ea7caf4e991fff03003d5) )
 
- 	ROM_REGION( 0x20000, "gfx1", 0 ) /* FG0 Tiles (8x8) */
+	ROM_REGION( 0x20000, "gfx1", 0 ) /* FG0 Tiles (8x8) */
 	ROM_LOAD( "31j12-0.ic33", 0x00000, 0x20000, CRC(f4821fe0) SHA1(e5faa9860e9d4e75393b64ca85a8bfc4852fd4fd) )
 
 	ROM_REGION( 0x800000, "gfx2", 0 ) /* SPR Tiles (16x16), 27080 Mask ROM's */

@@ -25,9 +25,8 @@ Revisions:
 - Cleaned up faux x86 assembly.
 
 *********************************************************/
-#include <math.h>
-#include "sndintrf.h"
-#include "streams.h"
+
+#include "emu.h"
 #include "iremga20.h"
 
 #define MAX_VOL 256
@@ -57,13 +56,11 @@ struct _ga20_state
 };
 
 
-INLINE ga20_state *get_safe_token(const device_config *device)
+INLINE ga20_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_IREMGA20);
-	return (ga20_state *)device->token;
+	assert(device->type() == IREMGA20);
+	return (ga20_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -150,7 +147,7 @@ WRITE8_DEVICE_HANDLER( irem_ga20_w )
 
 	//logerror("GA20:  Offset %02x, data %04x\n",offset,data);
 
-	stream_update(chip->stream);
+	chip->stream->update();
 
 	channel = offset >> 3;
 
@@ -195,7 +192,7 @@ READ8_DEVICE_HANDLER( irem_ga20_r )
 	ga20_state *chip = get_safe_token(device);
 	int channel;
 
-	stream_update(chip->stream);
+	chip->stream->update();
 
 	channel = offset >> 3;
 
@@ -242,28 +239,28 @@ static DEVICE_START( iremga20 )
 	int i;
 
 	/* Initialize our chip structure */
-	chip->rom = device->region;
-	chip->rom_size = device->regionbytes;
+	chip->rom = *device->region();
+	chip->rom_size = device->region()->bytes();
 
 	iremga20_reset(chip);
 
 	for ( i = 0; i < 0x40; i++ )
 		chip->regs[i] = 0;
 
-	chip->stream = stream_create( device, 0, 2, device->clock/4, chip, IremGA20_update );
+	chip->stream = device->machine().sound().stream_alloc( *device, 0, 2, device->clock()/4, chip, IremGA20_update );
 
-	state_save_register_device_item_array(device, 0, chip->regs);
+	device->save_item(NAME(chip->regs));
 	for (i = 0; i < 4; i++)
 	{
-		state_save_register_device_item(device, i, chip->channel[i].rate);
-		state_save_register_device_item(device, i, chip->channel[i].size);
-		state_save_register_device_item(device, i, chip->channel[i].start);
-		state_save_register_device_item(device, i, chip->channel[i].pos);
-		state_save_register_device_item(device, i, chip->channel[i].end);
-		state_save_register_device_item(device, i, chip->channel[i].volume);
-		state_save_register_device_item(device, i, chip->channel[i].pan);
-		state_save_register_device_item(device, i, chip->channel[i].effect);
-		state_save_register_device_item(device, i, chip->channel[i].play);
+		device->save_item(NAME(chip->channel[i].rate), i);
+		device->save_item(NAME(chip->channel[i].size), i);
+		device->save_item(NAME(chip->channel[i].start), i);
+		device->save_item(NAME(chip->channel[i].pos), i);
+		device->save_item(NAME(chip->channel[i].end), i);
+		device->save_item(NAME(chip->channel[i].volume), i);
+		device->save_item(NAME(chip->channel[i].pan), i);
+		device->save_item(NAME(chip->channel[i].effect), i);
+		device->save_item(NAME(chip->channel[i].play), i);
 	}
 }
 
@@ -295,3 +292,5 @@ DEVICE_GET_INFO( iremga20 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(IREMGA20, iremga20);

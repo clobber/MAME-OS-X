@@ -10,39 +10,36 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
-#include "videopin.h"
+#include "includes/videopin.h"
 #include "videopin.lh"
 #include "sound/discrete.h"
 
-static attotime time_pushed;
-static attotime time_released;
 
-static UINT8 prev = 0;
-static UINT8 mask = 0;
 
 static WRITE8_DEVICE_HANDLER(videopin_out1_w);
 static WRITE8_DEVICE_HANDLER(videopin_out2_w);
 
 
-static void update_plunger(running_machine *machine)
+static void update_plunger(running_machine &machine)
 {
+	videopin_state *state = machine.driver_data<videopin_state>();
 	UINT8 val = input_port_read(machine, "IN2");
 
-	if (prev != val)
+	if (state->m_prev != val)
 	{
 		if (val == 0)
 		{
-			time_released = timer_get_time(machine);
+			state->m_time_released = machine.time();
 
-			if (!mask)
+			if (!state->m_mask)
 				cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
 		}
 		else
-			time_pushed = timer_get_time(machine);
+			state->m_time_pushed = machine.time();
 
-		prev = val;
+		state->m_prev = val;
 	}
 }
 
@@ -60,15 +57,15 @@ static TIMER_CALLBACK( interrupt_callback )
 	if (scanline >= 263)
 		scanline = 32;
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), NULL, scanline, interrupt_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(scanline), FUNC(interrupt_callback), scanline);
 }
 
 
 static MACHINE_RESET( videopin )
 {
-	const device_config *discrete = devtag_get_device(machine, "discrete");
+	device_t *discrete = machine.device("discrete");
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 32, 0), NULL, 32, interrupt_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(32), FUNC(interrupt_callback), 32);
 
 	/* both output latches are cleared on reset */
 
@@ -77,15 +74,16 @@ static MACHINE_RESET( videopin )
 }
 
 
-static double calc_plunger_pos(running_machine *machine)
+static double calc_plunger_pos(running_machine &machine)
 {
-	return (attotime_to_double(timer_get_time(machine)) - attotime_to_double(time_released)) * (attotime_to_double(time_released) - attotime_to_double(time_pushed) + 0.2);
+	videopin_state *state = machine.driver_data<videopin_state>();
+	return (machine.time().as_double() - state->m_time_released.as_double()) * (state->m_time_released.as_double() - state->m_time_pushed.as_double() + 0.2);
 }
 
 
 static READ8_HANDLER( videopin_misc_r )
 {
-	double plunger = calc_plunger_pos(space->machine);
+	double plunger = calc_plunger_pos(space->machine());
 
 	// The plunger of the ball shooter has a black piece of
 	// plastic (flag) attached to it. When the plunger flag passes
@@ -96,7 +94,7 @@ static READ8_HANDLER( videopin_misc_r )
 	// signals received. This results in the MPU displaying the
 	// ball being shot onto the playfield at a certain speed.
 
-	UINT8 val = input_port_read(space->machine, "IN1");
+	UINT8 val = input_port_read(space->machine(), "IN1");
 
 	if (plunger >= 0.000 && plunger <= 0.001)
 	{
@@ -113,7 +111,7 @@ static READ8_HANDLER( videopin_misc_r )
 
 static WRITE8_HANDLER( videopin_led_w )
 {
-	int i = (video_screen_get_vpos(space->machine->primary_screen) >> 5) & 7;
+	int i = (space->machine().primary_screen->vpos() >> 5) & 7;
 	static const char *const matrix[8][4] =
 	{
 		{ "LED26", "LED18", "LED11", "LED13" },
@@ -132,14 +130,15 @@ static WRITE8_HANDLER( videopin_led_w )
 	output_set_value(matrix[i][3], (data >> 3) & 1);
 
 	if (i == 7)
-		set_led_status(0, data & 8);   /* start button */
+		set_led_status(space->machine(), 0, data & 8);   /* start button */
 
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
 static WRITE8_DEVICE_HANDLER( videopin_out1_w )
 {
+	videopin_state *state = device->machine().driver_data<videopin_state>();
 	/* D0 => OCTAVE0  */
 	/* D1 => OCTACE1  */
 	/* D2 => OCTAVE2  */
@@ -149,12 +148,12 @@ static WRITE8_DEVICE_HANDLER( videopin_out1_w )
 	/* D6 => NOT USED */
 	/* D7 => NOT USED */
 
-	mask = ~data & 0x10;
+	state->m_mask = ~data & 0x10;
 
-	if (mask)
-		cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+	if (state->m_mask)
+		cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
 
-	coin_lockout_global_w(~data & 0x08);
+	coin_lockout_global_w(device->machine(), ~data & 0x08);
 
 	/* Convert octave data to divide value and write to sound */
 	discrete_sound_w(device, VIDEOPIN_OCTAVE_DATA, (0x01 << (~data & 0x07)) & 0xfe);
@@ -172,7 +171,7 @@ static WRITE8_DEVICE_HANDLER( videopin_out2_w )
 	/* D6 => BELL      */
 	/* D7 => ATTRACT   */
 
-	coin_counter_w(0, data & 0x10);
+	coin_counter_w(device->machine(), 0, data & 0x10);
 
 	discrete_sound_w(device, VIDEOPIN_BELL_EN, data & 0x40);	// Bell
 	discrete_sound_w(device, VIDEOPIN_BONG_EN, data & 0x20);	// Bong
@@ -194,9 +193,9 @@ static WRITE8_DEVICE_HANDLER( videopin_note_dvsr_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0200, 0x07ff) AM_RAM_WRITE(videopin_video_ram_w) AM_BASE(&videopin_video_ram)
+	AM_RANGE(0x0200, 0x07ff) AM_RAM_WRITE(videopin_video_ram_w) AM_BASE_MEMBER(videopin_state, m_video_ram)
 	AM_RANGE(0x0800, 0x0800) AM_READ(videopin_misc_r) AM_DEVWRITE("discrete", videopin_note_dvsr_w)
 	AM_RANGE(0x0801, 0x0801) AM_WRITE(videopin_led_w)
 	AM_RANGE(0x0802, 0x0802) AM_WRITE(watchdog_reset_w)
@@ -206,7 +205,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("IN0")
 	AM_RANGE(0x1800, 0x1800) AM_READ_PORT("DSW")
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
-	AM_RANGE(0xe000, 0xffff) AM_READ(SMH_ROM)   /* mirror for 6502 vectors */
+	AM_RANGE(0xe000, 0xffff) AM_ROM   /* mirror for 6502 vectors */
 ADDRESS_MAP_END
 
 
@@ -321,35 +320,34 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( videopin )
+static MACHINE_CONFIG_START( videopin, videopin_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 12096000 / 16)
-	MDRV_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_ADD("maincpu", M6502, 12096000 / 16)
+	MCFG_CPU_PROGRAM_MAP(main_map)
 
-	MDRV_MACHINE_RESET(videopin)
+	MCFG_MACHINE_RESET(videopin)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(304, 263)
-	MDRV_SCREEN_VISIBLE_AREA(0, 303, 0, 255)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(304, 263)
+	MCFG_SCREEN_VISIBLE_AREA(0, 303, 0, 255)
+	MCFG_SCREEN_UPDATE_STATIC(videopin)
 
-	MDRV_GFXDECODE(videopin)
-	MDRV_PALETTE_LENGTH(2)
+	MCFG_GFXDECODE(videopin)
+	MCFG_PALETTE_LENGTH(2)
 
-	MDRV_PALETTE_INIT(black_and_white)
-	MDRV_VIDEO_START(videopin)
-	MDRV_VIDEO_UPDATE(videopin)
+	MCFG_PALETTE_INIT(black_and_white)
+	MCFG_VIDEO_START(videopin)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(videopin)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(videopin)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 

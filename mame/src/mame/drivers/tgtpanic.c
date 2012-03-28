@@ -9,11 +9,19 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 
-static UINT8 *ram;
-static UINT8 color;
+
+class tgtpanic_state : public driver_device
+{
+public:
+	tgtpanic_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_ram;
+	UINT8 m_color;
+};
 
 
 /*************************************
@@ -22,36 +30,37 @@ static UINT8 color;
  *
  *************************************/
 
-static VIDEO_UPDATE( tgtpanic )
+static SCREEN_UPDATE_RGB32( tgtpanic )
 {
+	tgtpanic_state *state = screen.machine().driver_data<tgtpanic_state>();
 	UINT32 colors[4];
 	UINT32 offs;
 	UINT32 x, y;
 
 	colors[0] = 0;
 	colors[1] = 0xffffffff;
-	colors[2] = MAKE_RGB(pal1bit(color >> 2), pal1bit(color >> 1), pal1bit(color >> 0));
-	colors[3] = MAKE_RGB(pal1bit(color >> 6), pal1bit(color >> 5), pal1bit(color >> 4));
+	colors[2] = MAKE_RGB(pal1bit(state->m_color >> 2), pal1bit(state->m_color >> 1), pal1bit(state->m_color >> 0));
+	colors[3] = MAKE_RGB(pal1bit(state->m_color >> 6), pal1bit(state->m_color >> 5), pal1bit(state->m_color >> 4));
 
 	for (offs = 0; offs < 0x2000; ++offs)
 	{
-		UINT8 val = ram[offs];
+		UINT8 val = state->m_ram[offs];
 
 		y = (offs & 0x7f) << 1;
 		x = (offs >> 7) << 2;
 
 		/* I'm guessing the hardware doubles lines */
-		*BITMAP_ADDR32(bitmap, y + 0, x + 0) = colors[val & 3];
-		*BITMAP_ADDR32(bitmap, y + 1, x + 0) = colors[val & 3];
+		bitmap.pix32(y + 0, x + 0) = colors[val & 3];
+		bitmap.pix32(y + 1, x + 0) = colors[val & 3];
 		val >>= 2;
-		*BITMAP_ADDR32(bitmap, y + 0, x + 1) = colors[val & 3];
-		*BITMAP_ADDR32(bitmap, y + 1, x + 1) = colors[val & 3];
+		bitmap.pix32(y + 0, x + 1) = colors[val & 3];
+		bitmap.pix32(y + 1, x + 1) = colors[val & 3];
 		val >>= 2;
-		*BITMAP_ADDR32(bitmap, y + 0, x + 2) = colors[val & 3];
-		*BITMAP_ADDR32(bitmap, y + 1, x + 2) = colors[val & 3];
+		bitmap.pix32(y + 0, x + 2) = colors[val & 3];
+		bitmap.pix32(y + 1, x + 2) = colors[val & 3];
 		val >>= 2;
-		*BITMAP_ADDR32(bitmap, y + 0, x + 3) = colors[val & 3];
-		*BITMAP_ADDR32(bitmap, y + 1, x + 3) = colors[val & 3];
+		bitmap.pix32(y + 0, x + 3) = colors[val & 3];
+		bitmap.pix32(y + 1, x + 3) = colors[val & 3];
 	}
 
 	return 0;
@@ -59,8 +68,9 @@ static VIDEO_UPDATE( tgtpanic )
 
 static WRITE8_HANDLER( color_w )
 {
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
-	color = data;
+	tgtpanic_state *state = space->machine().driver_data<tgtpanic_state>();
+	space->machine().primary_screen->update_partial(space->machine().primary_screen->vpos());
+	state->m_color = data;
 }
 
 
@@ -70,12 +80,12 @@ static WRITE8_HANDLER( color_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( prg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( prg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&ram)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(tgtpanic_state, m_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(color_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
@@ -117,24 +127,22 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( tgtpanic )
+static MACHINE_CONFIG_START( tgtpanic, tgtpanic_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("cpu", Z80, XTAL_4MHz)
-	MDRV_CPU_PROGRAM_MAP(prg_map)
-	MDRV_CPU_IO_MAP(io_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold, 20) /* Unverified */
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_4MHz)
+	MCFG_CPU_PROGRAM_MAP(prg_map)
+	MCFG_CPU_IO_MAP(io_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 20) /* Unverified */
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(tgtpanic)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60) /* Unverified */
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* Unverified */
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 192 - 1, 0, 192 - 1)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60) /* Unverified */
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* Unverified */
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 192 - 1, 0, 192 - 1)
+	MCFG_SCREEN_UPDATE_STATIC(tgtpanic)
+MACHINE_CONFIG_END
 
 
  /*************************************
@@ -144,7 +152,7 @@ MACHINE_DRIVER_END
  *************************************/
 
 ROM_START( tgtpanic )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "601_ja_a01.13e", 0x0000, 0x8000, CRC(ece71952) SHA1(0f9cbd8adac2b1950bc608d51f0f122399c8f00f) )
 ROM_END
 
@@ -155,4 +163,4 @@ ROM_END
  *
  *************************************/
 
-GAME( 1996, tgtpanic, 0, tgtpanic, tgtpanic, 0, ROT0, "Konami", "Target Panic", GAME_NO_SOUND )
+GAME( 1996, tgtpanic, 0, tgtpanic, tgtpanic, 0, ROT0, "Konami", "Target Panic", GAME_NO_SOUND_HW )

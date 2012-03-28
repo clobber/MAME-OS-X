@@ -7,38 +7,13 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/resnet.h"
-#include "redalert.h"
+#include "includes/redalert.h"
 
 
 #define NUM_CHARMAP_PENS	0x200
 #define NUM_BITMAP_PENS		8
-
-
-
-/*************************************
- *
- *  Global variables
- *
- *************************************/
-
-UINT8 *redalert_bitmap_videoram;
-UINT8 *redalert_bitmap_color;
-UINT8 *redalert_charmap_videoram;
-
-UINT8 *redalert_video_control;
-
-
-
-/*************************************
- *
- *  Local variable
- *
- *************************************/
-
-static UINT8 *redalert_bitmap_colorram;
-static UINT8  redalert_control_xor;
 
 
 /*************************************
@@ -49,8 +24,9 @@ static UINT8  redalert_control_xor;
 
 WRITE8_HANDLER( redalert_bitmap_videoram_w )
 {
-	redalert_bitmap_videoram[offset     ] = data;
-	redalert_bitmap_colorram[offset >> 3] = *redalert_bitmap_color & 0x07;
+	redalert_state *state = space->machine().driver_data<redalert_state>();
+	state->m_bitmap_videoram[offset     ] = data;
+	state->m_bitmap_colorram[offset >> 3] = *state->m_bitmap_color & 0x07;
 }
 
 
@@ -61,7 +37,7 @@ WRITE8_HANDLER( redalert_bitmap_videoram_w )
  *
  *************************************/
 
-static void get_pens(running_machine *machine, pen_t *pens)
+static void get_pens(running_machine &machine, pen_t *pens)
 {
 	static const int resistances_bitmap[]     = { 100 };
 	static const int resistances_charmap_rg[] = { 390, 220, 180 };
@@ -71,12 +47,12 @@ static void get_pens(running_machine *machine, pen_t *pens)
 
 	offs_t offs;
 	double scaler;
-	double bitmap_weight[1];
+	double bitmap_weight[2];
 	double charmap_rg_weights[3];
 	double charmap_b_weights[2];
 	double back_r_weight[1];
 	double back_gb_weight[1];
-	const UINT8 *prom = memory_region(machine, "proms");
+	const UINT8 *prom = machine.region("proms")->base();
 
 	scaler = compute_resistor_weights(0, 0xff, -1,
 									  1, resistances_bitmap,     bitmap_weight,      470, 0,
@@ -113,13 +89,9 @@ static void get_pens(running_machine *machine, pen_t *pens)
 	/* the bitmap layer colors are directly mapped */
 	for (offs = 0; offs < NUM_BITMAP_PENS; offs++)
 	{
-		UINT8 r_bit = (offs >> 2) & 0x01;
-		UINT8 g_bit = (offs >> 1) & 0x01;
-		UINT8 b_bit = (offs >> 0) & 0x01;
-
-		UINT8 r = bitmap_weight[r_bit];
-		UINT8 g = bitmap_weight[g_bit];
-		UINT8 b = bitmap_weight[b_bit];
+		UINT8 r = bitmap_weight[(offs >> 2) & 0x01];
+		UINT8 g = bitmap_weight[(offs >> 1) & 0x01];
+		UINT8 b = bitmap_weight[(offs >> 0) & 0x01];
 
 		pens[NUM_CHARMAP_PENS + offs] = MAKE_RGB(r, g, b);
 	}
@@ -130,7 +102,7 @@ static void get_pens(running_machine *machine, pen_t *pens)
 
 /* this uses the same color hook-up between bitmap and chars. */
 /* TODO: clean me up */
-static void get_panther_pens(running_machine *machine, pen_t *pens)
+static void get_panther_pens(running_machine &machine, pen_t *pens)
 {
 	static const int resistances_bitmap[]     = { 100 };
 	static const int resistances_charmap_rg[] = { 390, 220, 180 };
@@ -140,12 +112,12 @@ static void get_panther_pens(running_machine *machine, pen_t *pens)
 
 	offs_t offs;
 	double scaler;
-	double bitmap_weight[1];
+	double bitmap_weight[2];
 	double charmap_rg_weights[3];
 	double charmap_b_weights[2];
 	double back_r_weight[1];
 	double back_gb_weight[1];
-	const UINT8 *prom = memory_region(machine, "proms");
+	const UINT8 *prom = machine.region("proms")->base();
 
 	scaler = compute_resistor_weights(0, 0xff, -1,
 									  1, resistances_bitmap,     bitmap_weight,      470, 0,
@@ -162,13 +134,9 @@ static void get_panther_pens(running_machine *machine, pen_t *pens)
 	{
 		UINT8 data = prom[offs];
 
-		UINT8 r_bit = (~data >> 2) & 0x01;
-		UINT8 g_bit = (~data >> 1) & 0x01;
-		UINT8 b_bit = (~data >> 0) & 0x01;
-
-		UINT8 r = bitmap_weight[r_bit];
-		UINT8 g = bitmap_weight[g_bit];
-		UINT8 b = bitmap_weight[b_bit];
+		UINT8 r = bitmap_weight[(~data >> 2) & 0x01];
+		UINT8 g = bitmap_weight[(~data >> 1) & 0x01];
+		UINT8 b = bitmap_weight[(~data >> 0) & 0x01];
 
 		pens[offs] = MAKE_RGB(r, g, b);
 	}
@@ -176,13 +144,9 @@ static void get_panther_pens(running_machine *machine, pen_t *pens)
 	/* the bitmap layer colors are directly mapped */
 	for (offs = 0; offs < NUM_BITMAP_PENS; offs++)
 	{
-		UINT8 r_bit = (offs >> 2) & 0x01;
-		UINT8 g_bit = (offs >> 1) & 0x01;
-		UINT8 b_bit = (offs >> 0) & 0x01;
-
-		UINT8 r = bitmap_weight[r_bit];
-		UINT8 g = bitmap_weight[g_bit];
-		UINT8 b = bitmap_weight[b_bit];
+		UINT8 r = bitmap_weight[(offs >> 2) & 0x01];
+		UINT8 g = bitmap_weight[(offs >> 1) & 0x01];
+		UINT8 b = bitmap_weight[(offs >> 0) & 0x01];
 
 		pens[NUM_CHARMAP_PENS + offs] = MAKE_RGB(r, g, b);
 	}
@@ -199,18 +163,20 @@ static void get_panther_pens(running_machine *machine, pen_t *pens)
 
 static VIDEO_START( redalert )
 {
-	redalert_bitmap_colorram = auto_alloc_array(machine, UINT8, 0x0400);
+	redalert_state *state = machine.driver_data<redalert_state>();
+	state->m_bitmap_colorram = auto_alloc_array(machine, UINT8, 0x0400);
 
-	state_save_register_global_pointer(machine, redalert_bitmap_colorram, 0x0400);
+	state->save_pointer(NAME(state->m_bitmap_colorram), 0x0400);
 
-	redalert_control_xor = 0x00;
+	state->m_control_xor = 0x00;
 }
 
 static VIDEO_START( ww3 )
 {
+	redalert_state *state = machine.driver_data<redalert_state>();
 	VIDEO_START_CALL( redalert );
 
-	redalert_control_xor = 0x04;
+	state->m_control_xor = 0x04;
 }
 
 
@@ -220,12 +186,13 @@ static VIDEO_START( ww3 )
  *
  *************************************/
 
-static VIDEO_UPDATE( redalert )
+static SCREEN_UPDATE_RGB32( redalert )
 {
+	redalert_state *state = screen.machine().driver_data<redalert_state>();
 	pen_t pens[NUM_CHARMAP_PENS + NUM_BITMAP_PENS + 1];
 	offs_t offs;
 
-	get_pens(screen->machine, pens);
+	get_pens(screen.machine(), pens);
 
 	for (offs = 0; offs < 0x2000; offs++)
 	{
@@ -236,22 +203,22 @@ static VIDEO_UPDATE( redalert )
 		UINT8 y = offs & 0xff;
 		UINT8 x = (~offs >> 8) << 3;
 
-		UINT8 bitmap_data = redalert_bitmap_videoram[offs];
-		UINT8 bitmap_color = redalert_bitmap_colorram[offs >> 3];
+		UINT8 bitmap_data = state->m_bitmap_videoram[offs];
+		UINT8 bitmap_color = state->m_bitmap_colorram[offs >> 3];
 
-		UINT8 charmap_code = redalert_charmap_videoram[0x0000 | (offs >> 3)];
+		UINT8 charmap_code = state->m_charmap_videoram[0x0000 | (offs >> 3)];
 		offs_t charmap_data_base = ((charmap_code & 0x7f) << 3) | (offs & 0x07);
 
 		/* D7 of the char code selects the char set to use */
 		if (charmap_code & 0x80)
 		{
-			charmap_data_1 = redalert_charmap_videoram[0x0400 | charmap_data_base];
-			charmap_data_2 = redalert_charmap_videoram[0x0c00 | charmap_data_base];
+			charmap_data_1 = state->m_charmap_videoram[0x0400 | charmap_data_base];
+			charmap_data_2 = state->m_charmap_videoram[0x0c00 | charmap_data_base];
 		}
 		else
 		{
 			charmap_data_1 = 0; /* effectively disables A0 of the color PROM */
-			charmap_data_2 = redalert_charmap_videoram[0x0800 | charmap_data_base];
+			charmap_data_2 = state->m_charmap_videoram[0x0800 | charmap_data_base];
 		}
 
 		for (i = 0; i < 8; i++)
@@ -267,10 +234,10 @@ static VIDEO_UPDATE( redalert )
 			else
 				pen = pens[((charmap_code & 0xfe) << 1) | color_prom_a0_a1];
 
-			if ((*redalert_video_control ^ redalert_control_xor) & 0x04)
-				*BITMAP_ADDR32(bitmap, y, x) = pen;
+			if ((*state->m_video_control ^ state->m_control_xor) & 0x04)
+				bitmap.pix32(y, x) = pen;
 			else
-				*BITMAP_ADDR32(bitmap, y ^ 0xff, x ^ 0xff) = pen;
+				bitmap.pix32(y ^ 0xff, x ^ 0xff) = pen;
 
 			/* next pixel */
 			x = x + 1;
@@ -292,12 +259,13 @@ static VIDEO_UPDATE( redalert )
  *
  *************************************/
 
-static VIDEO_UPDATE( demoneye )
+static SCREEN_UPDATE_RGB32( demoneye )
 {
+	redalert_state *state = screen.machine().driver_data<redalert_state>();
 	pen_t pens[NUM_CHARMAP_PENS + NUM_BITMAP_PENS + 1];
 	offs_t offs;
 
-	get_pens(screen->machine, pens);
+	get_pens(screen.machine(), pens);
 
 	for (offs = 0; offs < 0x2000; offs++)
 	{
@@ -308,27 +276,27 @@ static VIDEO_UPDATE( demoneye )
 		UINT8 y = offs & 0xff;
 		UINT8 x = (~offs >> 8) << 3;
 
-		UINT8 bitmap_data = redalert_bitmap_videoram[offs];
-		UINT8 bitmap_color = redalert_bitmap_colorram[offs >> 3];
+		UINT8 bitmap_data = state->m_bitmap_videoram[offs];
+		UINT8 bitmap_color = state->m_bitmap_colorram[offs >> 3];
 
-		UINT8 charmap_code = redalert_charmap_videoram[0x1000 | (offs >> 3)];
+		UINT8 charmap_code = state->m_charmap_videoram[0x1000 | (offs >> 3)];
 		offs_t charmap_data_base = ((charmap_code & 0x7f) << 3) | (offs & 0x07);
 
 		/* D7 of the char code selects the char set to use */
 		if (charmap_code & 0x80)
 		{
-			charmap_data_1 = redalert_charmap_videoram[0x0400 | charmap_data_base];
-			charmap_data_2 = redalert_charmap_videoram[0x0c00 | charmap_data_base];
+			charmap_data_1 = state->m_charmap_videoram[0x0400 | charmap_data_base];
+			charmap_data_2 = state->m_charmap_videoram[0x0c00 | charmap_data_base];
 		}
 		else
 		{
-			charmap_data_1 = redalert_charmap_videoram[0x0000 | charmap_data_base];
-			charmap_data_2 = redalert_charmap_videoram[0x0800 | charmap_data_base];
+			charmap_data_1 = state->m_charmap_videoram[0x0000 | charmap_data_base];
+			charmap_data_2 = state->m_charmap_videoram[0x0800 | charmap_data_base];
 		}
 
 		/* this is the mapping of the 3rd char set */
-		//charmap_data_1 = redalert_charmap_videoram[0x1400 | charmap_data_base];
-		//charmap_data_2 = redalert_charmap_videoram[0x1c00 | charmap_data_base];
+		//charmap_data_1 = state->m_charmap_videoram[0x1400 | charmap_data_base];
+		//charmap_data_2 = state->m_charmap_videoram[0x1c00 | charmap_data_base];
 
 		for (i = 0; i < 8; i++)
 		{
@@ -343,10 +311,10 @@ static VIDEO_UPDATE( demoneye )
 			else
 				pen = pens[((charmap_code & 0xfe) << 1) | color_prom_a0_a1];
 
-			if (*redalert_video_control & 0x04)
-				*BITMAP_ADDR32(bitmap, y ^ 0xff, x ^ 0xff) = pen;
+			if (*state->m_video_control & 0x04)
+				bitmap.pix32(y ^ 0xff, x ^ 0xff) = pen;
 			else
-				*BITMAP_ADDR32(bitmap, y, x) = pen;
+				bitmap.pix32(y, x) = pen;
 
 			/* next pixel */
 			x = x + 1;
@@ -366,12 +334,13 @@ static VIDEO_UPDATE( demoneye )
  *
  *************************************/
 
-static VIDEO_UPDATE( panther )
+static SCREEN_UPDATE_RGB32( panther )
 {
+	redalert_state *state = screen.machine().driver_data<redalert_state>();
 	pen_t pens[NUM_CHARMAP_PENS + NUM_BITMAP_PENS + 1];
 	offs_t offs;
 
-	get_panther_pens(screen->machine, pens);
+	get_panther_pens(screen.machine(), pens);
 
 	for (offs = 0; offs < 0x2000; offs++)
 	{
@@ -382,22 +351,22 @@ static VIDEO_UPDATE( panther )
 		UINT8 y = offs & 0xff;
 		UINT8 x = (~offs >> 8) << 3;
 
-		UINT8 bitmap_data = redalert_bitmap_videoram[offs];
-		UINT8 bitmap_color = redalert_bitmap_colorram[offs >> 3];
+		UINT8 bitmap_data = state->m_bitmap_videoram[offs];
+		UINT8 bitmap_color = state->m_bitmap_colorram[offs >> 3];
 
-		UINT8 charmap_code = redalert_charmap_videoram[0x0000 | (offs >> 3)];
+		UINT8 charmap_code = state->m_charmap_videoram[0x0000 | (offs >> 3)];
 		offs_t charmap_data_base = ((charmap_code & 0x7f) << 3) | (offs & 0x07);
 
 		/* D7 of the char code selects the char set to use */
 		if (charmap_code & 0x80)
 		{
-			charmap_data_1 = redalert_charmap_videoram[0x0400 | charmap_data_base];
-			charmap_data_2 = redalert_charmap_videoram[0x0c00 | charmap_data_base];
+			charmap_data_1 = state->m_charmap_videoram[0x0400 | charmap_data_base];
+			charmap_data_2 = state->m_charmap_videoram[0x0c00 | charmap_data_base];
 		}
 		else
 		{
 			charmap_data_1 = 0; /* effectively disables A0 of the color PROM */
-			charmap_data_2 = redalert_charmap_videoram[0x0800 | charmap_data_base];
+			charmap_data_2 = state->m_charmap_videoram[0x0800 | charmap_data_base];
 		}
 
 		for (i = 0; i < 8; i++)
@@ -413,10 +382,10 @@ static VIDEO_UPDATE( panther )
 			else
 				pen = pens[((charmap_code & 0xfe) << 1) | color_prom_a0_a1];
 
-			if ((*redalert_video_control ^ redalert_control_xor) & 0x04)
-				*BITMAP_ADDR32(bitmap, y, x) = pen;
+			if ((*state->m_video_control ^ state->m_control_xor) & 0x04)
+				bitmap.pix32(y, x) = pen;
 			else
-				*BITMAP_ADDR32(bitmap, y ^ 0xff, x ^ 0xff) = pen;
+				bitmap.pix32(y ^ 0xff, x ^ 0xff) = pen;
 
 			/* next pixel */
 			x = x + 1;
@@ -437,32 +406,28 @@ static VIDEO_UPDATE( panther )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( redalert_video_common )
+static MACHINE_CONFIG_FRAGMENT( redalert_video_common )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(redalert)
+MACHINE_CONFIG_END
 
-	MDRV_VIDEO_UPDATE(redalert)
+MACHINE_CONFIG_FRAGMENT( redalert_video )
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_VIDEO_START(redalert)
+	MCFG_FRAGMENT_ADD( redalert_video_common )
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-MACHINE_DRIVER_START( redalert_video )
+MACHINE_CONFIG_FRAGMENT( ww3_video )
 
-	MDRV_VIDEO_START(redalert)
-	MDRV_IMPORT_FROM( redalert_video_common )
+	MCFG_VIDEO_START( ww3 )
+	MCFG_FRAGMENT_ADD( redalert_video_common )
 
-MACHINE_DRIVER_END
-
-MACHINE_DRIVER_START( ww3_video )
-
-	MDRV_VIDEO_START( ww3 )
-	MDRV_IMPORT_FROM( redalert_video_common )
-
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -471,32 +436,27 @@ MACHINE_DRIVER_END
  *
  *************************************/
 
-MACHINE_DRIVER_START( demoneye_video )
+MACHINE_CONFIG_FRAGMENT( demoneye_video )
+	MCFG_VIDEO_START(redalert)
 
-	MDRV_VIDEO_START(redalert)
-	MDRV_VIDEO_UPDATE(demoneye)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-MACHINE_DRIVER_END
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(demoneye)
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( panther_video )
+MACHINE_CONFIG_FRAGMENT( panther_video )
 
-	MDRV_VIDEO_START(ww3)
-	MDRV_VIDEO_UPDATE(panther)
+	MCFG_VIDEO_START(ww3)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-
-MACHINE_DRIVER_END
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(panther)
+MACHINE_CONFIG_END
 

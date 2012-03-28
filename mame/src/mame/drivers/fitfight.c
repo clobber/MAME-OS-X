@@ -81,62 +81,52 @@ Stephh's notes :
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/upd7810/upd7810.h"
 #include "sound/okim6295.h"
 #include "includes/fitfight.h"
 
 
-UINT16 *fitfight_spriteram;
-static UINT16 *fof_100000;
-static UINT16 *fof_600000;
-UINT16 *fof_700000;
-static UINT16 *fof_800000;
-UINT16 *fof_900000;
-UINT16 *fof_a00000;
-
-UINT16 *fof_bak_tileram;
-UINT16 *fof_mid_tileram;
-UINT16 *fof_txt_tileram;
-char bbprot_kludge;
-
-static UINT16 fitfight_700000_data = 0;
-
 static READ16_HANDLER(fitfight_700000_r)
 {
-	UINT16 data = fitfight_700000_data;
+	fitfight_state *state = space->machine().driver_data<fitfight_state>();
+	UINT16 data = state->m_fof_700000_data;
 	return (data << 2);
 }
 
 static READ16_HANDLER(histryma_700000_r)
 {
-	UINT16 data = (fitfight_700000_data & 0x00AA);
-	data |= ((fitfight_700000_data & 0x0055) >> 2);
+	fitfight_state *state = space->machine().driver_data<fitfight_state>();
+	UINT16 data = (state->m_fof_700000_data & 0x00AA);
+	data |= ((state->m_fof_700000_data & 0x0055) >> 2);
 	return (data);
 }
 
 static READ16_HANDLER(bbprot_700000_r)
 {
+	fitfight_state *state = space->machine().driver_data<fitfight_state>();
 	UINT16 data = 0;
-	data  =  (fitfight_700000_data & 0x000b);
-	data |= ((fitfight_700000_data & 0x01d0) >> 2);
-	data |= ((fitfight_700000_data & 0x0004) << 6);
-	data |= ((fitfight_700000_data & 0x0020) << 2);
+	data  =  (state->m_fof_700000_data & 0x000b);
+	data |= ((state->m_fof_700000_data & 0x01d0) >> 2);
+	data |= ((state->m_fof_700000_data & 0x0004) << 6);
+	data |= ((state->m_fof_700000_data & 0x0020) << 2);
 	return (data);
 }
 
 static WRITE16_HANDLER(fitfight_700000_w)
 {
-	COMBINE_DATA(&fof_700000[offset]);		// needed for scrolling
+	fitfight_state *state = space->machine().driver_data<fitfight_state>();
+	COMBINE_DATA(&state->m_fof_700000[offset]);		// needed for scrolling
+
 	if (data < 0x0200)				// to avoid considering writes of 0x0200
-		fitfight_700000_data = data;
+		state->m_fof_700000_data = data;
 }
 
-static ADDRESS_MAP_START( fitfight_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( fitfight_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x100001) AM_WRITE(SMH_RAM) AM_BASE(&fof_100000)
+	AM_RANGE(0x100000, 0x100001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_100000)
 	//written at scanline 5, allways 1. Used by histryma/fitfight @0x0000ec2c/@0x0000f076
 
 	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("P1_P2")
@@ -144,7 +134,7 @@ static ADDRESS_MAP_START( fitfight_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("SYSTEM_DSW2")
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("DSW3_DSW1")
 
-	AM_RANGE(0x600000, 0x600001) AM_WRITE(SMH_RAM) AM_BASE(&fof_600000)
+	AM_RANGE(0x600000, 0x600001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_600000)
 	//  Is 0x600000 controlling the slave audio CPU? data is 0x1111000zzzzzzzzz (9 sign. bits)
 	//  Used by histryma/fitfight:
 	//      @0x000031ae/0x00002b3a: 0xF000, once, during POST
@@ -155,63 +145,63 @@ static ADDRESS_MAP_START( fitfight_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	//      @0x000037a6/0x000030e6: 0x??dd byte from 0xe08c05, 0xF101 then 0xF001/0xF157 then 0xF057
 
 //  AM_RANGE(0x700000, 0x700001) AM_READ(xxxx) /* see init */
-	AM_RANGE(0x700000, 0x700001) AM_WRITE(fitfight_700000_w) AM_BASE(&fof_700000)
+	AM_RANGE(0x700000, 0x700001) AM_WRITE(fitfight_700000_w) AM_BASE_MEMBER(fitfight_state, m_fof_700000)
 	//  kept at 0xe07900/0xe04c56
 
-	AM_RANGE(0x800000, 0x800001) AM_WRITE(SMH_RAM) AM_BASE(&fof_800000)
+	AM_RANGE(0x800000, 0x800001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_800000)
 	//written at scanline 1, allways 0. Used by histryma/fitfight @0x00001d76/@0x00000f6a
 
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(SMH_RAM) AM_BASE(&fof_900000) //mid tilemap scroll
+	AM_RANGE(0x900000, 0x900001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_900000) //mid tilemap scroll
 	//  fitfigth: @0x00002b42,@0x00000f76
 	//  histryma: @0x000031b6,@0x00001d82
 
-	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(SMH_RAM) AM_BASE(&fof_a00000) //bak tilemap scroll
+	AM_RANGE(0xa00000, 0xa00001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_a00000) //bak tilemap scroll
 	//  fitfight: @0x00002b4a,@0x00000f82
 	//  histryma: @0x000031be,@0x00001d8e
 
 	AM_RANGE(0xb00000, 0xb03fff) AM_WRITENOP /* unused layer? */
-	AM_RANGE(0xb04000, 0xb07fff) AM_READWRITE(SMH_RAM,fof_bak_tileram_w) AM_BASE(&fof_bak_tileram)
-	AM_RANGE(0xb08000, 0xb0bfff) AM_READWRITE(SMH_RAM,fof_mid_tileram_w) AM_BASE(&fof_mid_tileram)
-	AM_RANGE(0xb0c000, 0xb0ffff) AM_READWRITE(SMH_RAM,fof_txt_tileram_w) AM_BASE(&fof_txt_tileram)
+	AM_RANGE(0xb04000, 0xb07fff) AM_RAM_WRITE(fof_bak_tileram_w) AM_BASE_MEMBER(fitfight_state, m_fof_bak_tileram)
+	AM_RANGE(0xb08000, 0xb0bfff) AM_RAM_WRITE(fof_mid_tileram_w) AM_BASE_MEMBER(fitfight_state, m_fof_mid_tileram)
+	AM_RANGE(0xb0c000, 0xb0ffff) AM_RAM_WRITE(fof_txt_tileram_w) AM_BASE_MEMBER(fitfight_state, m_fof_txt_tileram)
 
 	AM_RANGE(0xb10000, 0xb13fff) AM_WRITENOP //used by histryma @0x0000b25a
 	AM_RANGE(0xb14000, 0xb17fff) AM_WRITENOP //used by histryma @0x0000b25a,b270
 	AM_RANGE(0xb18000, 0xb1bfff) AM_WRITENOP //used by histryma @0x0000b25a,b270,b286
 
-	AM_RANGE(0xc00000, 0xc00fff) AM_READWRITE(SMH_RAM,paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xc00000, 0xc00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&fitfight_spriteram)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(fitfight_state, m_spriteram)
 
 	AM_RANGE(0xe00000, 0xe0ffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bbprot_main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bbprot_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x100001) AM_WRITE(SMH_RAM) AM_BASE(&fof_100000)
+	AM_RANGE(0x100000, 0x100001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_100000)
 
 	AM_RANGE(0x300000, 0x300001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x380000, 0x380001) AM_READ_PORT("EXTRA")
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("SYSTEM_DSW2")
 	AM_RANGE(0x480000, 0x480001) AM_READ_PORT("DSW3_DSW1")
 
-	AM_RANGE(0x600000, 0x600001) AM_WRITE(SMH_RAM) AM_BASE(&fof_600000)
+	AM_RANGE(0x600000, 0x600001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_600000)
 
-	AM_RANGE(0x700000, 0x700001) AM_READWRITE(bbprot_700000_r,fitfight_700000_w) AM_BASE(&fof_700000)
+	AM_RANGE(0x700000, 0x700001) AM_READWRITE(bbprot_700000_r, fitfight_700000_w) AM_BASE_MEMBER(fitfight_state, m_fof_700000)
 
-	AM_RANGE(0x800000, 0x800001) AM_WRITE(SMH_RAM) AM_BASE(&fof_800000)
-	AM_RANGE(0x900000, 0x900001) AM_WRITE(SMH_RAM) AM_BASE(&fof_900000)
-	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(SMH_RAM) AM_BASE(&fof_a00000)
+	AM_RANGE(0x800000, 0x800001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_800000)
+	AM_RANGE(0x900000, 0x900001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_900000)
+	AM_RANGE(0xa00000, 0xa00001) AM_WRITEONLY AM_BASE_MEMBER(fitfight_state, m_fof_a00000)
 
 	AM_RANGE(0xb00000, 0xb03fff) AM_WRITENOP /* unused layer? */
-	AM_RANGE(0xb04000, 0xb07fff) AM_READWRITE(SMH_RAM,fof_bak_tileram_w) AM_BASE(&fof_bak_tileram)
-	AM_RANGE(0xb08000, 0xb0bfff) AM_READWRITE(SMH_RAM,fof_mid_tileram_w) AM_BASE(&fof_mid_tileram)
-	AM_RANGE(0xb0c000, 0xb0ffff) AM_READWRITE(SMH_RAM,fof_txt_tileram_w) AM_BASE(&fof_txt_tileram)
+	AM_RANGE(0xb04000, 0xb07fff) AM_RAM_WRITE(fof_bak_tileram_w) AM_BASE_MEMBER(fitfight_state, m_fof_bak_tileram)
+	AM_RANGE(0xb08000, 0xb0bfff) AM_RAM_WRITE(fof_mid_tileram_w) AM_BASE_MEMBER(fitfight_state, m_fof_mid_tileram)
+	AM_RANGE(0xb0c000, 0xb0ffff) AM_RAM_WRITE(fof_txt_tileram_w) AM_BASE_MEMBER(fitfight_state, m_fof_txt_tileram)
 
-	AM_RANGE(0xc00000, 0xc00fff) AM_READ(SMH_RAM)
-	AM_RANGE(0xc00000, 0xc03fff) AM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xc00000, 0xc00fff) AM_READONLY
+	AM_RANGE(0xc00000, 0xc03fff) AM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&fitfight_spriteram)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_MEMBER(fitfight_state, m_spriteram)
 
 	AM_RANGE(0xe00000, 0xe0ffff) AM_RAM
 ADDRESS_MAP_END
@@ -219,47 +209,47 @@ ADDRESS_MAP_END
 
 /* 7810 (?) sound cpu */
 
-static ADDRESS_MAP_START( snd_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( snd_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_READ(SMH_BANK(1))	/* ??? External ROM */
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")	/* ??? External ROM */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xff00, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static READ8_HANDLER(snd_porta_r)
 {
-	//mame_printf_debug("PA R @%x\n",cpu_get_pc(space->cpu));
-	return mame_rand(space->machine);
+	//mame_printf_debug("PA R @%x\n",cpu_get_pc(&space->device()));
+	return space->machine().rand();
 }
 
 static READ8_HANDLER(snd_portb_r)
 {
-	//mame_printf_debug("PB R @%x\n",cpu_get_pc(space->cpu));
-	return mame_rand(space->machine);
+	//mame_printf_debug("PB R @%x\n",cpu_get_pc(&space->device()));
+	return space->machine().rand();
 }
 
 static READ8_HANDLER(snd_portc_r)
 {
-	//mame_printf_debug("PC R @%x\n",cpu_get_pc(space->cpu));
-	return mame_rand(space->machine);
+	//mame_printf_debug("PC R @%x\n",cpu_get_pc(&space->device()));
+	return space->machine().rand();
 }
 
 static WRITE8_HANDLER(snd_porta_w)
 {
-	//mame_printf_debug("PA W %x @%x\n",data,cpu_get_pc(space->cpu));
+	//mame_printf_debug("PA W %x @%x\n",data,cpu_get_pc(&space->device()));
 }
 
 static WRITE8_HANDLER(snd_portb_w)
 {
-	//mame_printf_debug("PB W %x @%x\n",data,cpu_get_pc(space->cpu));
+	//mame_printf_debug("PB W %x @%x\n",data,cpu_get_pc(&space->device()));
 }
 
 static WRITE8_HANDLER(snd_portc_w)
 {
-	//mame_printf_debug("PC W %x @%x\n",data,cpu_get_pc(space->cpu));
+	//mame_printf_debug("PC W %x @%x\n",data,cpu_get_pc(&space->device()));
 }
 
-static ADDRESS_MAP_START( snd_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( snd_io, AS_IO, 8 )
 		AM_RANGE(UPD7810_PORTA, UPD7810_PORTA) AM_READ(snd_porta_r) AM_WRITE(snd_porta_w)
 		AM_RANGE(UPD7810_PORTB, UPD7810_PORTB) AM_READ(snd_portb_r) AM_WRITE(snd_portb_w)
 		AM_RANGE(UPD7810_PORTC, UPD7810_PORTC) AM_READ(snd_portc_r) AM_WRITE(snd_portc_w)
@@ -267,7 +257,7 @@ ADDRESS_MAP_END
 
 static INTERRUPT_GEN( snd_irq )
 {
-	cpu_set_input_line(device,UPD7810_INTF2,HOLD_LINE);
+	device_set_input_line(device, UPD7810_INTF2, HOLD_LINE);
 }
 
 static const UPD7810_CONFIG sound_cpu_config =
@@ -727,65 +717,81 @@ static GFXDECODE_START( prot )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( fitfight )
-	MDRV_CPU_ADD("maincpu",M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(fitfight_main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+static MACHINE_START( fitfight )
+{
+	fitfight_state *state = machine.driver_data<fitfight_state>();
 
-	MDRV_CPU_ADD("audiocpu", UPD7810, 12000000)
-	MDRV_CPU_CONFIG(sound_cpu_config)
-	MDRV_CPU_PROGRAM_MAP(snd_mem)
-	MDRV_CPU_IO_MAP(snd_io)
-	MDRV_CPU_VBLANK_INT("screen", snd_irq)
+	state->save_item(NAME(state->m_fof_700000_data));
+}
 
-	MDRV_GFXDECODE(fitfight)
+static MACHINE_RESET( fitfight )
+{
+	fitfight_state *state = machine.driver_data<fitfight_state>();
 
+	state->m_fof_700000_data = 0;
+}
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(2*8, 39*8-1, 2*8, 30*8-1)
+static MACHINE_CONFIG_START( fitfight, fitfight_state )
 
-	MDRV_PALETTE_LENGTH(0x800)
+	MCFG_CPU_ADD("maincpu",M68000, 12000000)
+	MCFG_CPU_PROGRAM_MAP(fitfight_main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_VIDEO_START(fitfight)
-	MDRV_VIDEO_UPDATE(fitfight)
+	MCFG_CPU_ADD("audiocpu", UPD7810, 12000000)
+	MCFG_CPU_CONFIG(sound_cpu_config)
+	MCFG_CPU_PROGRAM_MAP(snd_mem)
+	MCFG_CPU_IO_MAP(snd_io)
+	MCFG_CPU_VBLANK_INT("screen", snd_irq)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_MACHINE_START(fitfight)
+	MCFG_MACHINE_RESET(fitfight)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1333333) // ~8080Hz ??? TODO: find out the real frequency
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(fitfight)
 
-static MACHINE_DRIVER_START( bbprot )
-	MDRV_CPU_ADD("maincpu",M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(bbprot_main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(2*8, 39*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(fitfight)
 
-	MDRV_GFXDECODE(prot)
+	MCFG_PALETTE_LENGTH(0x800)
 
+	MCFG_VIDEO_START(fitfight)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(2*8, 39*8-1, 2*8, 30*8-1)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_PALETTE_LENGTH(0x2000)
+	MCFG_OKIM6295_ADD("oki", 1333333, OKIM6295_PIN7_LOW) // ~8080Hz ??? TODO: find out the real frequency
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-	MDRV_VIDEO_START(fitfight)
-	MDRV_VIDEO_UPDATE(fitfight)
+static MACHINE_CONFIG_START( bbprot, fitfight_state )
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_CPU_ADD("maincpu",M68000, 12000000)
+	MCFG_CPU_PROGRAM_MAP(bbprot_main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1333333) // ~8080Hz ??? TODO: find out the real frequency
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_MACHINE_START(fitfight)
+	MCFG_MACHINE_RESET(fitfight)
+
+	MCFG_GFXDECODE(prot)
+
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(2*8, 39*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(fitfight)
+
+	MCFG_PALETTE_LENGTH(0x2000)
+
+	MCFG_VIDEO_START(fitfight)
+
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_OKIM6295_ADD("oki", 1333333, OKIM6295_PIN7_LOW) // ~8080Hz ??? TODO: find out the real frequency
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 /***
 
@@ -967,27 +973,30 @@ ROM_END
 
 static DRIVER_INIT( fitfight )
 {
-//  UINT16 *mem16 = (UINT16 *)memory_region(machine, "maincpu");
+//  UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 //  mem16[0x0165B2/2] = 0x4e71; // for now so it boots
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x700000, 0x700001, 0, 0, fitfight_700000_r);
-	bbprot_kludge = 0;
+	fitfight_state *state = machine.driver_data<fitfight_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x700000, 0x700001, FUNC(fitfight_700000_r));
+	state->m_bbprot_kludge = 0;
 }
 
 static DRIVER_INIT( histryma )
 {
-//  UINT16 *mem16 = (UINT16 *)memory_region(machine, "maincpu");
+//  UINT16 *mem16 = (UINT16 *)machine.region("maincpu")->base();
 //  mem16[0x017FDC/2] = 0x4e71; // for now so it boots
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x700000, 0x700001, 0, 0, histryma_700000_r);
-	bbprot_kludge = 0;
+	fitfight_state *state = machine.driver_data<fitfight_state>();
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x700000, 0x700001, FUNC(histryma_700000_r));
+	state->m_bbprot_kludge = 0;
 }
 
 static DRIVER_INIT( bbprot )
 {
-	bbprot_kludge = 1;
+	fitfight_state *state = machine.driver_data<fitfight_state>();
+	state->m_bbprot_kludge = 1;
 }
 
 /* GAME */
 
-GAME( 199?, fitfight, 0, fitfight, fitfight, fitfight, ROT0, "bootleg", "Fit of Fighting", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND )
-GAME( 199?, histryma, 0, fitfight, histryma, histryma, ROT0, "bootleg", "The History of Martial Arts", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND )
-GAME( 199?, bbprot,   0, bbprot,   bbprot,   bbprot,   ROT0, "<unknown>", "Untitled Fighter 'BB' (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND )
+GAME( 199?, fitfight, 0, fitfight, fitfight, fitfight, ROT0, "bootleg", "Fit of Fighting", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 199?, histryma, 0, fitfight, histryma, histryma, ROT0, "bootleg", "The History of Martial Arts", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 199?, bbprot,   0, bbprot,   bbprot,   bbprot,   ROT0, "<unknown>", "unknown fighting game 'BB' (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )

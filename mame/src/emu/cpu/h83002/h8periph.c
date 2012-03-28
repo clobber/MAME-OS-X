@@ -8,8 +8,8 @@
 
 ****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
-#include "cpuexec.h"
 #include "h8.h"
 #include "h8priv.h"
 
@@ -42,7 +42,7 @@ extern void h8_3002_InterruptRequest(h83xx_state *h8, UINT8 source, UINT8 state)
 
 static void h8itu_timer_expire(h83xx_state *h8, int which)
 {
-	timer_adjust_oneshot(h8->timer[which], attotime_never, 0);
+	h8->timer[which]->adjust(attotime::never);
 	h8->h8TCNT[which] = 0;
 	h8->per_regs[tsr[which]] |= 4;
 	// interrupt on overflow ?
@@ -96,14 +96,14 @@ static void h8_itu_refresh_timer(h83xx_state *h8, int tnum)
 	ourTCR = h8->per_regs[tcr[tnum]];
 	ourTVAL = h8->h8TCNT[tnum];
 
-	period = attotime_mul(ATTOTIME_IN_HZ(cpu_get_clock(h8->device)), tscales[ourTCR & 3] * (65536 - ourTVAL));
+	period = attotime::from_hz(h8->device->unscaled_clock()) * tscales[ourTCR & 3] * (65536 - ourTVAL);
 
 	if (ourTCR & 4)
 	{
 		logerror("H8/3002: Timer %d is using an external clock.  Unsupported!\n", tnum);
 	}
 
-	timer_adjust_oneshot(h8->timer[tnum], period, 0);
+	h8->timer[tnum]->adjust(period);
 }
 
 static void h8_itu_sync_timers(h83xx_state *h8, int tnum)
@@ -115,10 +115,10 @@ static void h8_itu_sync_timers(h83xx_state *h8, int tnum)
 	ourTCR = h8->per_regs[tcr[tnum]];
 
 	// get the time per unit
-	cycle_time = attotime_mul(ATTOTIME_IN_HZ(cpu_get_clock(h8->device)), tscales[ourTCR & 3]);
-	cur = timer_timeelapsed(h8->timer[tnum]);
+	cycle_time = attotime::from_hz(h8->device->unscaled_clock()) * tscales[ourTCR & 3];
+	cur = h8->timer[tnum]->elapsed();
 
-	ratio = attotime_to_double(cur) / attotime_to_double(cycle_time);
+	ratio = cur.as_double() / cycle_time.as_double();
 
 	h8->h8TCNT[tnum] = ratio;
 }
@@ -293,7 +293,7 @@ static UINT8 h8_ISR_r(h83xx_state *h8)
 
 	int i;
 	for (i = 0; i < 6; i++)
-		if (h8->h8_IRQrequestL & (1 << (12+i)))	res |= (1 << i);
+		if (h8->irq_req[0] & (1 << (12+i)))	res |= (1 << i);
 
 	return res;
 }
@@ -302,7 +302,7 @@ static void h8_ISR_w(h83xx_state *h8, UINT8 val)
 {
 	int i;
 	for (i = 0; i < 6; i++)
-		if ((~val) & (1 << i))	h8->h8_IRQrequestL &= ~(1 << (12+i));
+		if ((~val) & (1 << i))	h8->irq_req[0] &= ~(1 << (12+i));
 }
 
 
@@ -328,62 +328,62 @@ UINT8 h8_register_read8(h83xx_state *h8, UINT32 address)
 			val |= 0xc4;		// transmit finished, receive ready, no errors
 			break;
 		case 0xb5: // serial port A receive
-			val = memory_read_byte(h8->io, H8_SERIAL_0);
+			val = h8->io->read_byte(H8_SERIAL_0);
 			break;
 		case 0xbc: // serial port B status
 			val = h8->per_regs[reg];
 			val |= 0xc4;		// transmit finished, receive ready, no errors
 			break;
 		case 0xbd: // serial port B receive
-			val = memory_read_byte(h8->io, H8_SERIAL_1);
+			val = h8->io->read_byte(H8_SERIAL_1);
 			break;
 		case 0xe0:
-			val = memory_read_byte(h8->io, H8_ADC_0_H);
+			val = h8->io->read_byte(H8_ADC_0_H);
 			break;
 		case 0xe1:
-			val = memory_read_byte(h8->io, H8_ADC_0_L);
+			val = h8->io->read_byte(H8_ADC_0_L);
 			break;
 		case 0xe2:
-			val = memory_read_byte(h8->io, H8_ADC_1_H);
+			val = h8->io->read_byte(H8_ADC_1_H);
 			break;
 		case 0xe3:
-			val = memory_read_byte(h8->io, H8_ADC_1_L);
+			val = h8->io->read_byte(H8_ADC_1_L);
 			break;
 		case 0xe4:
-			val = memory_read_byte(h8->io, H8_ADC_2_H);
+			val = h8->io->read_byte(H8_ADC_2_H);
 			break;
 		case 0xe5:
-			val = memory_read_byte(h8->io, H8_ADC_2_L);
+			val = h8->io->read_byte(H8_ADC_2_L);
 			break;
 		case 0xe6:
-			val = memory_read_byte(h8->io, H8_ADC_3_H);
+			val = h8->io->read_byte(H8_ADC_3_H);
 			break;
 		case 0xe7:
-			val = memory_read_byte(h8->io, H8_ADC_3_L);
+			val = h8->io->read_byte(H8_ADC_3_L);
 			break;
 		case 0xe8:		// adc status
 			val = 0x80;
 			break;
-		case 0xc7:    		// port 4 data
-			val = memory_read_byte(h8->io, H8_PORT_4);
+		case 0xc7:  		// port 4 data
+			val = h8->io->read_byte(H8_PORT_4);
 			break;
-		case 0xcb:    		// port 6 data
-			val = memory_read_byte(h8->io, H8_PORT_6);
+		case 0xcb:  		// port 6 data
+			val = h8->io->read_byte(H8_PORT_6);
 			break;
 		case 0xce:		// port 7 data
-			val = memory_read_byte(h8->io, H8_PORT_7);
+			val = h8->io->read_byte(H8_PORT_7);
 			break;
 		case 0xcf:		// port 8 data
-			val = memory_read_byte(h8->io, H8_PORT_8);
+			val = h8->io->read_byte(H8_PORT_8);
 			break;
 		case 0xd2:		// port 9 data
-			val = memory_read_byte(h8->io, H8_PORT_9);
+			val = h8->io->read_byte(H8_PORT_9);
 			break;
 		case 0xd3:		// port a data
-			val = memory_read_byte(h8->io, H8_PORT_A);
+			val = h8->io->read_byte(H8_PORT_A);
 			break;
 		case 0xd6:		// port b data
-			val = memory_read_byte(h8->io, H8_PORT_B);
+			val = h8->io->read_byte(H8_PORT_B);
 			break;
 		case 0xf6:
 			val = h8_ISR_r(h8);
@@ -414,35 +414,35 @@ void h8_register_write8(h83xx_state *h8, UINT32 address, UINT8 val)
 	switch (reg)
 	{
 		case 0xb3:	// serial 0 send
-			memory_write_byte(h8->io, H8_SERIAL_0, val);
+			h8->io->write_byte(H8_SERIAL_0, val);
 			h8_3002_InterruptRequest(h8, 54, 1);
 			h8_3002_InterruptRequest(h8, 55, 1);
 			break;
 		case 0xbb:	// serial 1 send
-			memory_write_byte(h8->io, H8_SERIAL_1, val);
+			h8->io->write_byte(H8_SERIAL_1, val);
 			h8_3002_InterruptRequest(h8, 58, 1);
 			h8_3002_InterruptRequest(h8, 59, 1);
 			break;
 		case 0xc7:
-			memory_write_byte(h8->io, H8_PORT_4, val);
+			h8->io->write_byte(H8_PORT_4, val);
 			break;
-		case 0xcb:    		// port 6 data
-			memory_write_byte(h8->io, H8_PORT_6, val);
+		case 0xcb:  		// port 6 data
+			h8->io->write_byte(H8_PORT_6, val);
 			break;
 		case 0xce:		// port 7 data
-			memory_write_byte(h8->io, H8_PORT_7, val);
+			h8->io->write_byte(H8_PORT_7, val);
 			break;
 		case 0xcf:		// port 8 data
-			memory_write_byte(h8->io, H8_PORT_8, val);
+			h8->io->write_byte(H8_PORT_8, val);
 			break;
 		case 0xd2:		// port 9 data
-			memory_write_byte(h8->io, H8_PORT_9, val);
+			h8->io->write_byte(H8_PORT_9, val);
 			break;
 		case 0xd3:		// port a data
-			memory_write_byte(h8->io, H8_PORT_A, val);
+			h8->io->write_byte(H8_PORT_A, val);
 			break;
 		case 0xd6:		// port b data
-			memory_write_byte(h8->io, H8_PORT_B, val);
+			h8->io->write_byte(H8_PORT_B, val);
 			break;
 		case 0xf6:
 			h8_ISR_w(h8, val);
@@ -457,14 +457,14 @@ static void h8_3007_itu_refresh_timer(h83xx_state *h8, int tnum)
 	attotime period;
 	int ourTCR = h8->per_regs[0x68+(tnum*8)];
 
-	period = attotime_mul(ATTOTIME_IN_HZ(cpu_get_clock(h8->device)), tscales[ourTCR & 3]);
+	period = attotime::from_hz(h8->device->unscaled_clock()) * tscales[ourTCR & 3];
 
 	if (ourTCR & 4)
 	{
 		logerror("H8/3007: Timer %d is using an external clock.  Unsupported!\n", tnum);
 	}
 
-	timer_adjust_oneshot(h8->timer[tnum], period, 0);
+	h8->timer[tnum]->adjust(period);
 }
 
 static void h8itu_3007_timer_expire(h83xx_state *h8, int tnum)
@@ -489,7 +489,7 @@ static void h8itu_3007_timer_expire(h83xx_state *h8, int tnum)
 		else
 		{
 			//logerror("h8/3007 timer %d GRA match, stopping\n",tnum);
-			timer_adjust_oneshot(h8->timer[tnum], attotime_never, 0);
+			h8->timer[tnum]->adjust(attotime::never);
 		}
 
 		h8->per_regs[0x64] |= 1<<tnum;
@@ -511,7 +511,7 @@ static void h8itu_3007_timer_expire(h83xx_state *h8, int tnum)
 		else
 		{
 			//logerror("h8/3007 timer %d GRB match, stopping\n",tnum);
-			timer_adjust_oneshot(h8->timer[tnum], attotime_never, 0);
+			h8->timer[tnum]->adjust(attotime::never);
 		}
 
 		h8->per_regs[0x65] |= 1<<tnum;
@@ -624,63 +624,63 @@ UINT8 h8_3007_register_read8(h83xx_state *h8, UINT32 address)
 			val |= 0xc4;		// transmit finished, receive ready, no errors
 			break;
 		case 0xb5: // serial port A receive
-			val = memory_read_byte(h8->io, H8_SERIAL_0);
+			val = h8->io->read_byte(H8_SERIAL_0);
 			break;
 		case 0xbc: // serial port B status
 			val = h8->per_regs[reg];
 			val |= 0xc4;		// transmit finished, receive ready, no errors
 			break;
 		case 0xbd: // serial port B receive
-			val = memory_read_byte(h8->io, H8_SERIAL_1);
+			val = h8->io->read_byte(H8_SERIAL_1);
 			break;
 		case 0xe0:
-			val = memory_read_byte(h8->io, H8_ADC_0_H);
+			val = h8->io->read_byte(H8_ADC_0_H);
 			break;
 		case 0xe1:
-			val = memory_read_byte(h8->io, H8_ADC_0_L);
+			val = h8->io->read_byte(H8_ADC_0_L);
 			break;
 		case 0xe2:
-			val = memory_read_byte(h8->io, H8_ADC_1_H);
+			val = h8->io->read_byte(H8_ADC_1_H);
 			break;
 		case 0xe3:
-			val = memory_read_byte(h8->io, H8_ADC_1_L);
+			val = h8->io->read_byte(H8_ADC_1_L);
 			break;
 		case 0xe4:
-			val = memory_read_byte(h8->io, H8_ADC_2_H);
+			val = h8->io->read_byte(H8_ADC_2_H);
 			break;
 		case 0xe5:
-			val = memory_read_byte(h8->io, H8_ADC_2_L);
+			val = h8->io->read_byte(H8_ADC_2_L);
 			break;
 		case 0xe6:
-			val = memory_read_byte(h8->io, H8_ADC_3_H);
+			val = h8->io->read_byte(H8_ADC_3_H);
 			break;
 		case 0xe7:
-			val = memory_read_byte(h8->io, H8_ADC_3_L);
+			val = h8->io->read_byte(H8_ADC_3_L);
 			break;
 		case 0xe8:		// adc status
 			val = 0x80;
 			break;
 
-		case 0xd3:    		// port 4 data
-			val = memory_read_byte(h8->io, H8_PORT_4);
+		case 0xd3:  		// port 4 data
+			val = h8->io->read_byte(H8_PORT_4);
 			break;
-		case 0xd5:    		// port 6 data
-			val = memory_read_byte(h8->io, H8_PORT_6);
+		case 0xd5:  		// port 6 data
+			val = h8->io->read_byte(H8_PORT_6);
 			break;
 		case 0xd6:		// port 7 data
-			val = memory_read_byte(h8->io, H8_PORT_7);
+			val = h8->io->read_byte(H8_PORT_7);
 			break;
 		case 0xd7:		// port 8 data
-			val = memory_read_byte(h8->io, H8_PORT_8);
+			val = h8->io->read_byte(H8_PORT_8);
 			break;
 		case 0xd8:		// port 9 data
-			val = memory_read_byte(h8->io, H8_PORT_9);
+			val = h8->io->read_byte(H8_PORT_9);
 			break;
 		case 0xd9:		// port a data
-			val = memory_read_byte(h8->io, H8_PORT_A);
+			val = h8->io->read_byte(H8_PORT_A);
 			break;
 		case 0xda:		// port b data
-			val = memory_read_byte(h8->io, H8_PORT_B);
+			val = h8->io->read_byte(H8_PORT_B);
 			break;
 		default:
 			val = h8->per_regs[reg];
@@ -710,31 +710,31 @@ void h8_3007_register_write8(h83xx_state *h8, UINT32 address, UINT8 val)
 		switch (reg)
 		{
 			case 0xb3:
-				memory_write_byte(h8->io, H8_SERIAL_0, val);
+				h8->io->write_byte(H8_SERIAL_0, val);
 				break;
 			case 0xbb:
-				memory_write_byte(h8->io, H8_SERIAL_1, val);
+				h8->io->write_byte(H8_SERIAL_1, val);
 				break;
 			case 0xd3:
-				memory_write_byte(h8->io, H8_PORT_4, val);
+				h8->io->write_byte(H8_PORT_4, val);
 				break;
 			case 0xd5:		// port 6 data
-				memory_write_byte(h8->io, H8_PORT_6, val);
+				h8->io->write_byte(H8_PORT_6, val);
 				break;
 			case 0xd6:		// port 7 data
-				memory_write_byte(h8->io, H8_PORT_7, val);
+				h8->io->write_byte(H8_PORT_7, val);
 				break;
 			case 0xd7:		// port 8 data
-				memory_write_byte(h8->io, H8_PORT_8, val);
+				h8->io->write_byte(H8_PORT_8, val);
 				break;
 			case 0xd8:		// port 9 data
-				memory_write_byte(h8->io, H8_PORT_9, val);
+				h8->io->write_byte(H8_PORT_9, val);
 				break;
 			case 0xd9:		// port a data
-				memory_write_byte(h8->io, H8_PORT_A, val);
+				h8->io->write_byte(H8_PORT_A, val);
 				break;
 			case 0xda:		// port b data
-				memory_write_byte(h8->io, H8_PORT_B, val);
+				h8->io->write_byte(H8_PORT_B, val);
 				break;
 		}
 	}
@@ -745,11 +745,11 @@ UINT8 h8_3007_register1_read8(h83xx_state *h8, UINT32 address)
 	switch (address)
 	{
 		case 0xfee012:	return h8->per_regs[0xF2];	// SYSCR
-		case 0xfee016:	return h8_ISR_r(h8);	  	// ISR
+		case 0xfee016:	return h8_ISR_r(h8);		// ISR
 		case 0xfee018:	return h8->per_regs[0xF8];	// IPRA
 	}
 
-	logerror("cpu '%s' (PC=%08X): unmapped I/O(1) byte read from %08X\n",h8->device->tag,h8->pc,address);
+	logerror("cpu '%s' (PC=%08X): unmapped I/O(1) byte read from %08X\n",h8->device->tag(),h8->pc,address);
 	return 0;
 }
 
@@ -758,28 +758,28 @@ void h8_3007_register1_write8(h83xx_state *h8, UINT32 address, UINT8 val)
 	switch (address)
 	{
 		case 0xfee012:	h8->per_regs[0xF2] = val;	return;	// SYSCR
-		case 0xfee016:	h8_ISR_w(h8, val);	  	return;	// ISR
+		case 0xfee016:	h8_ISR_w(h8, val);		return;	// ISR
 		case 0xfee018:	h8->per_regs[0xF8] = val;	return;	// IPRA
 	}
-	logerror("cpu '%s' (PC=%08X): unmapped I/O(1) byte write to %08X = %02X\n",h8->device->tag,h8->pc,address,val);
+	logerror("cpu '%s' (PC=%08X): unmapped I/O(1) byte write to %08X = %02X\n",h8->device->tag(),h8->pc,address,val);
 }
 
 void h8_3007_itu_init(h83xx_state *h8)
 {
-	h8->timer[0] = timer_alloc(h8->device->machine, h8itu_3007_timer_0_cb, h8);
-	h8->timer[1] = timer_alloc(h8->device->machine, h8itu_3007_timer_1_cb, h8);
-	h8->timer[2] = timer_alloc(h8->device->machine, h8itu_3007_timer_2_cb, h8);
+	h8->timer[0] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_3007_timer_0_cb), h8);
+	h8->timer[1] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_3007_timer_1_cb), h8);
+	h8->timer[2] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_3007_timer_2_cb), h8);
 
 	h8_itu_reset(h8);
 }
 
 void h8_itu_init(h83xx_state *h8)
 {
-	h8->timer[0] = timer_alloc(h8->device->machine, h8itu_timer_0_cb, h8);
-	h8->timer[1] = timer_alloc(h8->device->machine, h8itu_timer_1_cb, h8);
-	h8->timer[2] = timer_alloc(h8->device->machine, h8itu_timer_2_cb, h8);
-	h8->timer[3] = timer_alloc(h8->device->machine, h8itu_timer_3_cb, h8);
-	h8->timer[4] = timer_alloc(h8->device->machine, h8itu_timer_4_cb, h8);
+	h8->timer[0] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_timer_0_cb), h8);
+	h8->timer[1] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_timer_1_cb), h8);
+	h8->timer[2] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_timer_2_cb), h8);
+	h8->timer[3] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_timer_3_cb), h8);
+	h8->timer[4] = h8->device->machine().scheduler().timer_alloc(FUNC(h8itu_timer_4_cb), h8);
 
 	h8_itu_reset(h8);
 }
@@ -790,5 +790,5 @@ void h8_itu_reset(h83xx_state *h8)
 
 	// stop all the timers
 	for (i=0; i<5; i++)
-		timer_adjust_oneshot(h8->timer[i], attotime_never, 0);
+		h8->timer[i]->adjust(attotime::never);
 }

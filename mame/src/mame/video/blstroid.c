@@ -4,19 +4,10 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/atarigen.h"
-#include "blstroid.h"
-
-
-
-/*************************************
- *
- *  Globals we own
- *
- *************************************/
-
-UINT16 *blstroid_priorityram;
+#include "video/atarimo.h"
+#include "includes/blstroid.h"
 
 
 
@@ -28,7 +19,8 @@ UINT16 *blstroid_priorityram;
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	UINT16 data = atarigen_playfield[tile_index];
+	blstroid_state *state = machine.driver_data<blstroid_state>();
+	UINT16 data = state->m_playfield[tile_index];
 	int code = data & 0x1fff;
 	int color = (data >> 13) & 0x07;
 	SET_TILE_INFO(0, code, color, 0);
@@ -80,9 +72,10 @@ VIDEO_START( blstroid )
 		0,					/* resulting value to indicate "special" */
 		0					/* callback routine for special entries */
 	};
+	blstroid_state *state = machine.driver_data<blstroid_state>();
 
 	/* initialize the playfield */
-	atarigen_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_rows,  16,8, 64,64);
+	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_rows,  16,8, 64,64);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
@@ -98,7 +91,7 @@ VIDEO_START( blstroid )
 
 static TIMER_CALLBACK( irq_off )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	/* clear the interrupt */
 	atarigen_scanline_int_ack_w(space, 0, 0, 0xffff);
@@ -108,18 +101,19 @@ static TIMER_CALLBACK( irq_off )
 static TIMER_CALLBACK( irq_on )
 {
 	/* generate the interrupt */
-	atarigen_scanline_int_gen(cputag_get_cpu(machine, "maincpu"));
+	atarigen_scanline_int_gen(machine.device("maincpu"));
 	atarigen_update_interrupts(machine);
 }
 
 
-void blstroid_scanline_update(const device_config *screen, int scanline)
+void blstroid_scanline_update(screen_device &screen, int scanline)
 {
+	blstroid_state *state = screen.machine().driver_data<blstroid_state>();
 	int offset = (scanline / 8) * 64 + 40;
 
 	/* check for interrupts */
 	if (offset < 0x1000)
-		if (atarigen_playfield[offset] & 0x8000)
+		if (state->m_playfield[offset] & 0x8000)
 		{
 			int width, vpos;
 			attotime period_on;
@@ -132,13 +126,13 @@ void blstroid_scanline_update(const device_config *screen, int scanline)
 
 			/* set a timer to turn the interrupt on at HBLANK of the 7th scanline */
 			/* and another to turn it off one scanline later */
-			width = video_screen_get_width(screen);
-			vpos  = video_screen_get_vpos(screen);
-			period_on  = video_screen_get_time_until_pos(screen, vpos + 7, width * 0.9);
-			period_off = video_screen_get_time_until_pos(screen, vpos + 8, width * 0.9);
+			width = screen.width();
+			vpos  = screen.vpos();
+			period_on  = screen.time_until_pos(vpos + 7, width * 0.9);
+			period_off = screen.time_until_pos(vpos + 8, width * 0.9);
 
-			timer_set(screen->machine, period_on, NULL,  0, irq_on);
-			timer_set(screen->machine, period_off, NULL, 0, irq_off);
+			screen.machine().scheduler().timer_set(period_on, FUNC(irq_on));
+			screen.machine().scheduler().timer_set(period_off, FUNC(irq_off));
 		}
 }
 
@@ -150,22 +144,23 @@ void blstroid_scanline_update(const device_config *screen, int scanline)
  *
  *************************************/
 
-VIDEO_UPDATE( blstroid )
+SCREEN_UPDATE_IND16( blstroid )
 {
+	blstroid_state *state = screen.machine().driver_data<blstroid_state>();
 	atarimo_rect_list rectlist;
-	bitmap_t *mobitmap;
+	bitmap_ind16 *mobitmap;
 	int x, y, r;
 
 	/* draw the playfield */
-	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0);
+	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
-			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT16 *mo = &mobitmap->pix16(y);
+			UINT16 *pf = &bitmap.pix16(y);
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -174,7 +169,7 @@ VIDEO_UPDATE( blstroid )
                         priority address = HPPPMMMM
                     */
 					int priaddr = ((pf[x] & 8) << 4) | (pf[x] & 0x70) | ((mo[x] & 0xf0) >> 4);
-					if (blstroid_priorityram[priaddr] & 1)
+					if (state->m_priorityram[priaddr] & 1)
 						pf[x] = mo[x];
 
 					/* erase behind ourselves */

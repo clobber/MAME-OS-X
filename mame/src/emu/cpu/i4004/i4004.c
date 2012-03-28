@@ -7,6 +7,7 @@
  *   Initial version by Miodrag Milanovic
  *
  *****************************************************************************/
+#include "emu.h"
 #include "debugger.h"
 #include "i4004.h"
 
@@ -30,12 +31,13 @@ struct _i4004_state
 	UINT8	C; // Carry flag
 	UINT8	TEST; // Test PIN status
 	PAIR	PC; // It is in fact one of ADDR regs
+	UINT8	flags; // used for I/O only
 
-	const device_config *device;
-	const address_space *program;
-	const address_space *data;
-	const address_space *io;
-	cpu_state_table 	state;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *data;
+	address_space *io;
 	int					icount;
 	int 				pc_pos; // PC possition in ADDR
 	int					addr_mask;
@@ -47,56 +49,19 @@ struct _i4004_state
 #define GET_PC					(cpustate->ADDR[cpustate->pc_pos])
 
 /***************************************************************************
-    CPU STATE DESCRIPTION
-***************************************************************************/
-
-#define I4004_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	CPU_STATE_ENTRY(I4004_##_name, #_name, _format, i4004_state, _member, _datamask, ~0, _flags)
-
-static const cpu_state_entry state_array[] =
-{
-	I4004_STATE_ENTRY(PC,   "%03X", PC.w.l, 0x0fff, 0)
-	I4004_STATE_ENTRY(GENPC,"%03X", PC.w.l, 0x0fff, CPUSTATE_NOSHOW)
-	I4004_STATE_ENTRY(A,   "%01X", A, 0x0f, 0)
-	I4004_STATE_ENTRY(R01, "%02X", R[0], 0xff, 0)
-	I4004_STATE_ENTRY(R23, "%02X", R[1], 0xff, 0)
-	I4004_STATE_ENTRY(R45, "%02X", R[2], 0xff, 0)
-	I4004_STATE_ENTRY(R67, "%02X", R[3], 0xff, 0)
-	I4004_STATE_ENTRY(R89, "%02X", R[4], 0xff, 0)
-	I4004_STATE_ENTRY(RAB, "%02X", R[5], 0xff, 0)
-	I4004_STATE_ENTRY(RCD, "%02X", R[6], 0xff, 0)
-	I4004_STATE_ENTRY(REF, "%02X", R[7], 0xff, 0)
-	I4004_STATE_ENTRY(ADDR1, "%03X", ADDR[0].w.l, 0x0fff, 0)
-	I4004_STATE_ENTRY(ADDR2, "%03X", ADDR[1].w.l, 0x0fff, 0)
-	I4004_STATE_ENTRY(ADDR3, "%03X", ADDR[2].w.l, 0x0fff, 0)
-	I4004_STATE_ENTRY(ADDR4, "%03X", ADDR[3].w.l, 0x0fff, 0)
-	I4004_STATE_ENTRY(RAM, "%03X", RAM.w.l, 0x0fff, 0)
-};
-
-static const cpu_state_table state_table_template =
-{
-	NULL,						/* pointer to the base of state (offsets are relative to this) */
-	0,							/* subtype this table refers to */
-	ARRAY_LENGTH(state_array),	/* number of entries */
-	state_array					/* array of entries */
-};
-
-/***************************************************************************
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE i4004_state *get_safe_token(const device_config *device)
+INLINE i4004_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_I4004);
-	return (i4004_state *)device->token;
+	assert(device->type() == I4004);
+	return (i4004_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 INLINE UINT8 ROP(i4004_state *cpustate)
 {
-	UINT8 retVal = memory_decrypted_read_byte(cpustate->program, GET_PC.w.l);
+	UINT8 retVal = cpustate->direct->read_decrypted_byte(GET_PC.w.l);
 	GET_PC.w.l = (GET_PC.w.l + 1) & 0x0fff;
 	cpustate->PC = GET_PC;
 	return retVal;
@@ -104,19 +69,19 @@ INLINE UINT8 ROP(i4004_state *cpustate)
 
 INLINE UINT8 READ_ROM(i4004_state *cpustate)
 {
-	return memory_decrypted_read_byte(cpustate->program, (GET_PC.w.l & 0x0f00) | cpustate->R[0]);
+	return cpustate->direct->read_decrypted_byte((GET_PC.w.l & 0x0f00) | cpustate->R[0]);
 }
 
 INLINE void WPM(i4004_state *cpustate)
 {
-	UINT8 t =  (memory_read_byte_8le(cpustate->program, cpustate->RAM.d) << 4) | cpustate->A;
-	memory_write_byte_8le(cpustate->program, (GET_PC.w.l & 0x0f00) | cpustate->RAM.d, t);
+	UINT8 t =  (cpustate->program->read_byte(cpustate->RAM.d) << 4) | cpustate->A;
+	cpustate->program->write_byte((GET_PC.w.l & 0x0f00) | cpustate->RAM.d, t);
 }
 
 
 INLINE UINT8 ARG(i4004_state *cpustate)
 {
-	UINT8 retVal = memory_raw_read_byte(cpustate->program, GET_PC.w.l);
+	UINT8 retVal = cpustate->direct->read_raw_byte(GET_PC.w.l);
 	GET_PC.w.l = (GET_PC.w.l + 1) & 0x0fff;
 	cpustate->PC = GET_PC;
 	return retVal;
@@ -124,40 +89,40 @@ INLINE UINT8 ARG(i4004_state *cpustate)
 
 INLINE UINT8 RM(i4004_state *cpustate)
 {
-	return memory_read_byte_8le(cpustate->data, cpustate->RAM.d) & 0x0f;
+	return cpustate->data->read_byte(cpustate->RAM.d) & 0x0f;
 }
 
 INLINE UINT8 RMS(i4004_state *cpustate, UINT32 a)
 {
-	return memory_read_byte_8le(cpustate->data, (cpustate->RAM.d & 0xff0) + a) >> 4;
+	return cpustate->data->read_byte((cpustate->RAM.d & 0xff0) + a) >> 4;
 }
 
 INLINE void WM(i4004_state *cpustate, UINT8 v)
 {
-	UINT8 t =  memory_read_byte_8le(cpustate->data, cpustate->RAM.d);
-	memory_write_byte_8le(cpustate->data, cpustate->RAM.d, (t & 0xf0) | v);
+	UINT8 t =  cpustate->data->read_byte(cpustate->RAM.d);
+	cpustate->data->write_byte(cpustate->RAM.d, (t & 0xf0) | v);
 }
 
 
 INLINE void WMP(i4004_state *cpustate, UINT8 v)
 {
-	memory_write_byte_8le(cpustate->io, (cpustate->RAM.d >> 6) | 0x10, v & 0x0f);
+	cpustate->io->write_byte((cpustate->RAM.d >> 6) | 0x10, v & 0x0f);
 }
 
 INLINE void WMS(i4004_state *cpustate, UINT32 a, UINT8 v)
 {
-	UINT8 t =  memory_read_byte_8le(cpustate->data, (cpustate->RAM.d & 0xff0) + a);
-	memory_write_byte_8le(cpustate->data,(cpustate->RAM.d & 0xff0) + a, (t & 0x0f) | (v<<4));
+	UINT8 t =  cpustate->data->read_byte((cpustate->RAM.d & 0xff0) + a);
+	cpustate->data->write_byte((cpustate->RAM.d & 0xff0) + a, (t & 0x0f) | (v<<4));
 }
 
 INLINE UINT8 RIO(i4004_state *cpustate)
 {
-	return memory_read_byte_8le(cpustate->io, cpustate->RAM.b.l >> 4) & 0x0f;
+	return cpustate->io->read_byte(cpustate->RAM.b.l >> 4) & 0x0f;
 }
 
 INLINE void WIO(i4004_state *cpustate, UINT8 v)
 {
-	memory_write_byte_8le(cpustate->io, cpustate->RAM.b.l >> 4, v & 0x0f);
+	cpustate->io->write_byte(cpustate->RAM.b.l >> 4, v & 0x0f);
 }
 
 INLINE UINT8 GET_REG(i4004_state *cpustate, UINT8 num)
@@ -190,7 +155,7 @@ INLINE void POP_STACK(i4004_state *cpustate)
 	cpustate->pc_pos = (cpustate->pc_pos - 1) & cpustate->addr_mask;
 }
 
-void i4004_set_test(const device_config *device, UINT8 val)
+void i4004_set_test(device_t *device, UINT8 val)
 {
 	i4004_state *cpustate = get_safe_token(device);
 	cpustate->TEST = val;
@@ -201,7 +166,7 @@ static void execute_one(i4004_state *cpustate, int opcode)
 	cpustate->icount -= 8;
 	switch (opcode)
 	{
-		case 0x00: 	/* NOP  */
+		case 0x00:	/* NOP  */
 			/* no op */
 			break;
 		case 0x10: case 0x11: case 0x12: case 0x13:
@@ -395,7 +360,7 @@ static void execute_one(i4004_state *cpustate, int opcode)
 			cpustate->C = 0;
 			break;
 		case 0xf2: /* IAC */
-			cpustate->A = cpustate->A++;
+			cpustate->A += 1;
 			cpustate->C = cpustate->A >> 4;
 			cpustate->A &= 0x0f;
 			break;
@@ -461,17 +426,12 @@ static CPU_EXECUTE( i4004 )
 {
 	i4004_state *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
-
-
 	do
 	{
 		debugger_instruction_hook(device, GET_PC.d);
 		execute_one(cpustate, ROP(cpustate));
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 /***************************************************************************
@@ -483,34 +443,49 @@ static CPU_INIT( i4004 )
 	i4004_state *cpustate = get_safe_token(device);
 
 	/* set up the state table */
-	cpustate->state = state_table_template;
-	cpustate->state.baseptr = cpustate;
-	cpustate->state.subtypemask = 1;
+	{
+		device_state_interface *state;
+		device->interface(state);
+		state->state_add(I4004_PC,    "PC",    cpustate->PC.w.l).mask(0x0fff);
+		state->state_add(STATE_GENPC, "GENPC", cpustate->PC.w.l).mask(0x0fff).noshow();
+		state->state_add(STATE_GENFLAGS, "GENFLAGS", cpustate->flags).mask(0x0f).callimport().callexport().noshow().formatstr("%4s");
+		state->state_add(I4004_A,     "A",     cpustate->A).mask(0x0f);
+
+		astring tempstr;
+		for (int regnum = 0; regnum < 8; regnum++)
+			state->state_add(I4004_R01 + regnum, tempstr.format("R%X%X", regnum*2, regnum*2+1), cpustate->R[regnum]);
+
+		for (int addrnum = 0; addrnum < 4; addrnum++)
+			state->state_add(I4004_ADDR1 + addrnum, tempstr.format("ADDR%d", addrnum + 1), cpustate->ADDR[addrnum].w.l).mask(0xfff);
+
+		state->state_add(I4004_RAM,   "RAM",   cpustate->RAM.w.l).mask(0x0fff);
+	}
 
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
-	state_save_register_device_item(device, 0, cpustate->PC);
-	state_save_register_device_item(device, 0, cpustate->A);
-	state_save_register_device_item(device, 0, cpustate->C);
-	state_save_register_device_item(device, 0, cpustate->TEST);
-	state_save_register_device_item(device, 0, cpustate->pc_pos);
-	state_save_register_device_item(device, 0, cpustate->ADDR[0]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[1]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[2]);
-	state_save_register_device_item(device, 0, cpustate->ADDR[3]);
-	state_save_register_device_item(device, 0, cpustate->R[0]);
-	state_save_register_device_item(device, 0, cpustate->R[1]);
-	state_save_register_device_item(device, 0, cpustate->R[2]);
-	state_save_register_device_item(device, 0, cpustate->R[3]);
-	state_save_register_device_item(device, 0, cpustate->R[4]);
-	state_save_register_device_item(device, 0, cpustate->R[5]);
-	state_save_register_device_item(device, 0, cpustate->R[6]);
-	state_save_register_device_item(device, 0, cpustate->R[7]);
-	state_save_register_device_item(device, 0, cpustate->RAM);
+	device->save_item(NAME(cpustate->PC));
+	device->save_item(NAME(cpustate->A));
+	device->save_item(NAME(cpustate->C));
+	device->save_item(NAME(cpustate->TEST));
+	device->save_item(NAME(cpustate->pc_pos));
+	device->save_item(NAME(cpustate->ADDR[0]));
+	device->save_item(NAME(cpustate->ADDR[1]));
+	device->save_item(NAME(cpustate->ADDR[2]));
+	device->save_item(NAME(cpustate->ADDR[3]));
+	device->save_item(NAME(cpustate->R[0]));
+	device->save_item(NAME(cpustate->R[1]));
+	device->save_item(NAME(cpustate->R[2]));
+	device->save_item(NAME(cpustate->R[3]));
+	device->save_item(NAME(cpustate->R[4]));
+	device->save_item(NAME(cpustate->R[5]));
+	device->save_item(NAME(cpustate->R[6]));
+	device->save_item(NAME(cpustate->R[7]));
+	device->save_item(NAME(cpustate->RAM));
 }
 
 
@@ -542,10 +517,44 @@ static CPU_RESET( i4004 )
 
 static CPU_IMPORT_STATE( i4004 )
 {
+	i4004_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			cpustate->C = (cpustate->flags >> 1) & 1;
+			cpustate->TEST = (cpustate->flags >> 0) & 1;
+			break;
+	}
 }
 
 static CPU_EXPORT_STATE( i4004 )
 {
+	i4004_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			cpustate->flags = ((cpustate->A == 0) ? 0x04 : 0x00) |
+							  (cpustate->C ? 0x02 : 0x00) |
+							  (cpustate->TEST ? 0x01 : 0x00);
+			break;
+	}
+}
+
+static CPU_EXPORT_STRING( i4004 )
+{
+	i4004_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			string.printf(".%c%c%c",
+				(cpustate->A==0) ? 'Z':'.',
+				cpustate->C      ? 'C':'.',
+				cpustate->TEST   ? 'T':'.');
+			break;
+	}
 }
 
 /***************************************************************************
@@ -561,7 +570,7 @@ static CPU_SET_INFO( i4004 )
 
 CPU_GET_INFO( i4004 )
 {
-	i4004_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	i4004_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -576,17 +585,17 @@ CPU_GET_INFO( i4004 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 8;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 16;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 12;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 12;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			info->i = 12;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 12;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_IO:				info->i = 8;							break; // Only lower 4 bits used
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 				info->i = 6;							break; // 4 I/O for each ROM chip and 4 OUT for each RAM
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 				info->i = 0;							break; // There could be 4 chips in 16 banks for RAM
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;							break; // Only lower 4 bits used
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 6;							break; // 4 I/O for each ROM chip and 4 OUT for each RAM
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break; // There could be 4 chips in 16 banks for RAM
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_SET_INFO:		info->setinfo = CPU_SET_INFO_NAME(i4004);				break;
@@ -596,10 +605,10 @@ CPU_GET_INFO( i4004 )
 		case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(i4004);		break;
 		case CPUINFO_FCT_IMPORT_STATE:	info->import_state = CPU_IMPORT_STATE_NAME(i4004);		break;
 		case CPUINFO_FCT_EXPORT_STATE:	info->export_state = CPU_EXPORT_STATE_NAME(i4004);		break;
+		case CPUINFO_FCT_EXPORT_STRING: info->export_string = CPU_EXPORT_STRING_NAME(i4004);	break;
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;		break;
-		case CPUINFO_PTR_STATE_TABLE:					info->state_table = &cpustate->state;	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:						strcpy(info->s, "4004");				break;
@@ -608,11 +617,8 @@ CPU_GET_INFO( i4004 )
 		case DEVINFO_STR_SOURCE_FILE:				strcpy(info->s, __FILE__);				break;
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Miodrag Milanovic"); break;
 
-		case CPUINFO_STR_FLAGS:
-			sprintf(info->s, ".%c%c%c",
-				(cpustate->A==0) ? 'Z':'.',
-				cpustate->C      ? 'C':'.',
-				cpustate->TEST   ? 'T':'.');
-			break;
+		case CPUINFO_IS_OCTAL:						info->i = true;							break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(I4004, i4004);

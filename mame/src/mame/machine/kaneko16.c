@@ -12,7 +12,7 @@ Currently none of the MCUs' internal roms are dumped so simulation is used
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/kaneko16.h"
 
 #include "kanekotb.h"	// TOYBOX MCU trojaning results
@@ -21,9 +21,7 @@ Currently none of the MCUs' internal roms are dumped so simulation is used
 
 #define CALC3_VERBOSE_OUTPUT 0
 
-#define MCU_RESPONSE(d) memcpy(&kaneko16_mcu_ram[mcu_offset], d, sizeof(d))
-
-UINT16 *kaneko16_mcu_ram;
+#define MCU_RESPONSE(d) memcpy(&state->m_mcu_ram[mcu_offset], d, sizeof(d))
 
 /***************************************************************************
                                 Gals Panic (set 2)
@@ -40,17 +38,10 @@ UINT16 *kaneko16_mcu_ram;
 static READ16_HANDLER(shogwarr_calc_r);
 static WRITE16_HANDLER(shogwarr_calc_w);
 
-static struct {
-	UINT16 x1p, y1p, x1s, y1s;
-	UINT16 x2p, y2p, x2s, y2s;
-
-	INT16 x12, y12, x21, y21;
-
-	UINT16 mult_a, mult_b;
-} hit;
-
 READ16_HANDLER(galpanib_calc_r) /* Simulation of the CALC1 MCU */
 {
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc1_hit_t &hit = state->m_hit;
 	UINT16 data = 0;
 
 	switch (offset)
@@ -92,10 +83,10 @@ READ16_HANDLER(galpanib_calc_r) /* Simulation of the CALC1 MCU */
 			return (((UINT32)hit.mult_a * (UINT32)hit.mult_b) & 0xffff);
 
 		case 0x14/2:
-			return (mame_rand(space->machine) & 0xffff);
+			return (space->machine().rand() & 0xffff);
 
 		default:
-			logerror("CPU #0 PC %06x: warning - read unmapped calc address %06x\n",cpu_get_pc(space->cpu),offset<<1);
+			logerror("CPU #0 PC %06x: warning - read unmapped calc address %06x\n",cpu_get_pc(&space->device()),offset<<1);
 	}
 
 	return 0;
@@ -103,6 +94,9 @@ READ16_HANDLER(galpanib_calc_r) /* Simulation of the CALC1 MCU */
 
 WRITE16_HANDLER(galpanib_calc_w)
 {
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc1_hit_t &hit = state->m_hit;
+
 	switch (offset)
 	{
 		// p is position, s is size
@@ -118,14 +112,15 @@ WRITE16_HANDLER(galpanib_calc_w)
 		case 0x12/2: hit.mult_b = data; break;
 
 		default:
-			logerror("CPU #0 PC %06x: warning - write unmapped hit address %06x\n",cpu_get_pc(space->cpu),offset<<1);
+			logerror("CPU #0 PC %06x: warning - write unmapped hit address %06x\n",cpu_get_pc(&space->device()),offset<<1);
 	}
 }
 
 WRITE16_HANDLER(bloodwar_calc_w)
 {
-
-	int isbrap = ( !strcmp(space->machine->gamedrv->name,"brapboysj") || !strcmp(space->machine->gamedrv->name,"brapboys"));
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc1_hit_t &hit = state->m_hit;
+	int isbrap = ( !strcmp(space->machine().system().name,"brapboysj") || !strcmp(space->machine().system().name,"brapboysu") || !strcmp(space->machine().system().name,"brapboys"));
 
 	/* our implementation is incomplete, b.rap boys requires some modifications */
 	if (isbrap)
@@ -152,7 +147,7 @@ WRITE16_HANDLER(bloodwar_calc_w)
 		case 0x38/2: break;
 
 		default:
-			logerror("CPU #0 PC %06x: warning - write unmapped hit address %06x\n",cpu_get_pc(space->cpu),offset<<1);
+			logerror("CPU #0 PC %06x: warning - write unmapped hit address %06x\n",cpu_get_pc(&space->device()),offset<<1);
 	}
 }
 
@@ -164,7 +159,7 @@ WRITE16_HANDLER(bloodwar_calc_w)
   result      <---------->  |     <-------->     |       <---->
 */
 
-static INT16 calc_compute_x(void)
+static INT16 calc_compute_x(calc1_hit_t &hit)
 {
 	INT16 x_coll;
 
@@ -174,12 +169,12 @@ static INT16 calc_compute_x(void)
 	else if ((hit.x1p >= hit.x2p) && (hit.x1p < (hit.x2p + hit.x2s)))	// x1p inside x2
 		x_coll = (hit.x2s - (hit.x1p - hit.x2p));
 	else																// normal/no overlap
-	 	x_coll = ((hit.x1s + hit.x2s)/2) - abs((hit.x1p + hit.x1s/2) - (hit.x2p + hit.x2s/2));
+		x_coll = ((hit.x1s + hit.x2s)/2) - abs((hit.x1p + hit.x1s/2) - (hit.x2p + hit.x2s/2));
 
 	return x_coll;
 }
 
-static INT16 calc_compute_y(void)
+static INT16 calc_compute_y(calc1_hit_t &hit)
 {
 	INT16 y_coll;
 
@@ -196,19 +191,21 @@ static INT16 calc_compute_y(void)
 
 READ16_HANDLER(bloodwar_calc_r)
 {
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc1_hit_t &hit = state->m_hit;
 	UINT16 data = 0;
 	INT16 x_coll, y_coll;
 
 	/* our implementation is incomplete, b.rap boys requires some modifications */
-	int isbrap = ( !strcmp(space->machine->gamedrv->name,"brapboysj") || !strcmp(space->machine->gamedrv->name,"brapboys"));
+	int isbrap = ( !strcmp(space->machine().system().name,"brapboysj") || !strcmp(space->machine().system().name,"brapboysu") || !strcmp(space->machine().system().name,"brapboys"));
 
 	if (isbrap)
 	{
 		return shogwarr_calc_r(space,offset,mem_mask);
 	}
 
-	x_coll = calc_compute_x();
-	y_coll = calc_compute_y();
+	x_coll = calc_compute_x(hit);
+	y_coll = calc_compute_y(hit);
 
 	switch (offset)
 	{
@@ -243,7 +240,7 @@ READ16_HANDLER(bloodwar_calc_r)
 			return data;
 
 		case 0x14/2:
-			return (mame_rand(space->machine) & 0xffff);
+			return (space->machine().rand() & 0xffff);
 
 		case 0x20/2: return hit.x1p;
 		case 0x22/2: return hit.x1s;
@@ -256,7 +253,7 @@ READ16_HANDLER(bloodwar_calc_r)
 		case 0x32/2: return hit.y2s;
 
 		default:
-			logerror("CPU #0 PC %06x: warning - read unmapped calc address %06x\n",cpu_get_pc(space->cpu),offset<<1);
+			logerror("CPU #0 PC %06x: warning - read unmapped calc address %06x\n",cpu_get_pc(&space->device()),offset<<1);
 	}
 
 	return 0;
@@ -267,27 +264,6 @@ READ16_HANDLER(bloodwar_calc_r)
     Shogun Warriors
 
 */
-
-
-static struct {
-	int x1p, y1p, z1p, x1s, y1s, z1s;
-	int x2p, y2p, z2p, x2s, y2s, z2s;
-
-	int x1po, y1po, z1po, x1so, y1so, z1so;
-	int x2po, y2po, z2po, x2so, y2so, z2so;
-
-	int x12, y12, z12, x21, y21, z21;
-
-	int x_coll, y_coll, z_coll;
-
-	int x1tox2, y1toy2, z1toz2;
-
-	UINT16 mult_a, mult_b;
-
-	UINT16 flags;
-	UINT16 mode;
-
-} shogwarr_hit;
 
 
 //calculate simple intersection of two segments
@@ -340,67 +316,63 @@ static void shogwarr_calc_org(int mode, int x0, int s0,  int* x1, int* s1)
 	//x1 is the left most coord, s1 = width
 }
 
-static void shogwarr_recalc_collisions(void)
+static void shogwarr_recalc_collisions(calc3_hit_t &hit3)
 {
 	//calculate positions and sizes
 
-	int mode=shogwarr_hit.mode;
+	int mode=hit3.mode;
 
-	shogwarr_hit.flags=0;
+	hit3.flags=0;
 
-	shogwarr_calc_org(mode&3, shogwarr_hit.x1po, shogwarr_hit.x1so, &shogwarr_hit.x1p, &shogwarr_hit.x1s);
-	mode>>=2;
-	shogwarr_calc_org(mode&3, shogwarr_hit.y1po, shogwarr_hit.y1so, &shogwarr_hit.y1p, &shogwarr_hit.y1s);
-	mode>>=2;
-	shogwarr_calc_org(mode&3, shogwarr_hit.z1po, shogwarr_hit.z1so, &shogwarr_hit.z1p, &shogwarr_hit.z1s);
+	shogwarr_calc_org((mode>>0)&3, hit3.x1po, hit3.x1so, &hit3.x1p, &hit3.x1s);
+	shogwarr_calc_org((mode>>2)&3, hit3.y1po, hit3.y1so, &hit3.y1p, &hit3.y1s);
+	shogwarr_calc_org((mode>>4)&3, hit3.z1po, hit3.z1so, &hit3.z1p, &hit3.z1s);
 
-	mode>>=4;
-
-	shogwarr_calc_org(mode&3, shogwarr_hit.x2po, shogwarr_hit.x2so, &shogwarr_hit.x2p, &shogwarr_hit.x2s);
-	mode>>=2;
-	shogwarr_calc_org(mode&3, shogwarr_hit.y2po, shogwarr_hit.y2so, &shogwarr_hit.y2p, &shogwarr_hit.y2s);
-	mode>>=2;
-	shogwarr_calc_org(mode&3, shogwarr_hit.z2po, shogwarr_hit.z2so, &shogwarr_hit.z2p, &shogwarr_hit.z2s);
+	shogwarr_calc_org((mode>>8)&3, hit3.x2po, hit3.x2so, &hit3.x2p, &hit3.x2s);
+	shogwarr_calc_org((mode>>10)&3, hit3.y2po, hit3.y2so, &hit3.y2p, &hit3.y2s);
+	shogwarr_calc_org((mode>>12)&3, hit3.z2po, hit3.z2so, &hit3.z2p, &hit3.z2s);
 
 
-	shogwarr_hit.x1tox2=abs(shogwarr_hit.x2po-shogwarr_hit.x1po);
-	shogwarr_hit.y1toy2=abs(shogwarr_hit.y2po-shogwarr_hit.y1po);
-	shogwarr_hit.z1toz2=abs(shogwarr_hit.z2po-shogwarr_hit.z1po);
+	hit3.x1tox2=abs(hit3.x2po-hit3.x1po);
+	hit3.y1toy2=abs(hit3.y2po-hit3.y1po);
+	hit3.z1toz2=abs(hit3.z2po-hit3.z1po);
 
 
-	shogwarr_hit.x_coll = shogwarr_calc_compute(shogwarr_hit.x1p, shogwarr_hit.x1s, shogwarr_hit.x2p, shogwarr_hit.x2s);
-	shogwarr_hit.y_coll = shogwarr_calc_compute(shogwarr_hit.y1p, shogwarr_hit.y1s, shogwarr_hit.y2p, shogwarr_hit.y2s);
-	shogwarr_hit.z_coll = shogwarr_calc_compute(shogwarr_hit.z1p, shogwarr_hit.z1s, shogwarr_hit.z2p, shogwarr_hit.z2s);
+	hit3.x_coll = shogwarr_calc_compute(hit3.x1p, hit3.x1s, hit3.x2p, hit3.x2s);
+	hit3.y_coll = shogwarr_calc_compute(hit3.y1p, hit3.y1s, hit3.y2p, hit3.y2s);
+	hit3.z_coll = shogwarr_calc_compute(hit3.z1p, hit3.z1s, hit3.z2p, hit3.z2s);
 
 
 	// 4th nibble: Y Absolute Collision -> possible values = 9,8,4,3,2
-	if      (shogwarr_hit.y1p >  shogwarr_hit.y2p)	shogwarr_hit.flags |= 0x2000;
-	else if (shogwarr_hit.y1p == shogwarr_hit.y2p)	shogwarr_hit.flags |= 0x4000;
-	else if (shogwarr_hit.y1p <  shogwarr_hit.y2p)	shogwarr_hit.flags |= 0x8000;
-	if (shogwarr_hit.y_coll<0) shogwarr_hit.flags |= 0x1000;
+	if      (hit3.y1p >  hit3.y2p)	hit3.flags |= 0x2000;
+	else if (hit3.y1p == hit3.y2p)	hit3.flags |= 0x4000;
+	else if (hit3.y1p <  hit3.y2p)	hit3.flags |= 0x8000;
+	if (hit3.y_coll<0) hit3.flags |= 0x1000;
 
 	// 3rd nibble: X Absolute Collision -> possible values = 9,8,4,3,2
-	if      (shogwarr_hit.x1p >  shogwarr_hit.x2p)	shogwarr_hit.flags |= 0x0200;
-	else if (shogwarr_hit.x1p == shogwarr_hit.x2p)	shogwarr_hit.flags |= 0x0400;
-	else if (shogwarr_hit.x1p <  shogwarr_hit.x2p)	shogwarr_hit.flags |= 0x0800;
-	if (shogwarr_hit.x_coll<0) shogwarr_hit.flags |= 0x0100;
+	if      (hit3.x1p >  hit3.x2p)	hit3.flags |= 0x0200;
+	else if (hit3.x1p == hit3.x2p)	hit3.flags |= 0x0400;
+	else if (hit3.x1p <  hit3.x2p)	hit3.flags |= 0x0800;
+	if (hit3.x_coll<0) hit3.flags |= 0x0100;
 
 	// 2nd nibble: Z Absolute Collision -> possible values = 9,8,4,3,2
-	if      (shogwarr_hit.z1p >  shogwarr_hit.z2p)	shogwarr_hit.flags |= 0x0020;
-	else if (shogwarr_hit.z1p == shogwarr_hit.z2p)	shogwarr_hit.flags |= 0x0040;
-	else if (shogwarr_hit.z1p <  shogwarr_hit.z2p)	shogwarr_hit.flags |= 0x0080;
-	if (shogwarr_hit.z_coll<0) shogwarr_hit.flags |= 0x0010;
+	if      (hit3.z1p >  hit3.z2p)	hit3.flags |= 0x0020;
+	else if (hit3.z1p == hit3.z2p)	hit3.flags |= 0x0040;
+	else if (hit3.z1p <  hit3.z2p)	hit3.flags |= 0x0080;
+	if (hit3.z_coll<0) hit3.flags |= 0x0010;
 
 	// 1st nibble: XYZ Overlap Collision
-	if ((shogwarr_hit.x_coll>=0)&&(shogwarr_hit.y_coll>=0)&&(shogwarr_hit.z_coll>=0)) shogwarr_hit.flags |= 0x0008;
-	if ((shogwarr_hit.x_coll>=0)&&(shogwarr_hit.z_coll>=0)) shogwarr_hit.flags |= 0x0004;
-	if ((shogwarr_hit.y_coll>=0)&&(shogwarr_hit.z_coll>=0)) shogwarr_hit.flags |= 0x0002;
-	if ((shogwarr_hit.x_coll>=0)&&(shogwarr_hit.y_coll>=0)) shogwarr_hit.flags |= 0x0001;
+	if ((hit3.x_coll>=0)&&(hit3.y_coll>=0)&&(hit3.z_coll>=0)) hit3.flags |= 0x0008;
+	if ((hit3.x_coll>=0)&&(hit3.z_coll>=0)) hit3.flags |= 0x0004;
+	if ((hit3.y_coll>=0)&&(hit3.z_coll>=0)) hit3.flags |= 0x0002;
+	if ((hit3.x_coll>=0)&&(hit3.y_coll>=0)) hit3.flags |= 0x0001;
 }
 
 
 static WRITE16_HANDLER(shogwarr_calc_w)
 {
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc3_hit_t &hit3 = state->m_hit3;
 	int idx=offset*4;
 	switch (idx)
 	{
@@ -408,108 +380,109 @@ static WRITE16_HANDLER(shogwarr_calc_w)
 		case 0x00:
 		case 0x28:
 
-					shogwarr_hit.x1po = data; break;
+					hit3.x1po = data; break;
 
 		case 0x04:
 		case 0x2c:
-					shogwarr_hit.x1so = data; break;
+					hit3.x1so = data; break;
 
 		case 0x08:
 		case 0x30:
-					shogwarr_hit.y1po = data; break;
+					hit3.y1po = data; break;
 
 		case 0x0c:
 		case 0x34:
-					shogwarr_hit.y1so = data; break;
+					hit3.y1so = data; break;
 
 		case 0x10:
 		case 0x58:
-					shogwarr_hit.x2po = data; break;
+					hit3.x2po = data; break;
 
 		case 0x14:
 		case 0x5c:
-					shogwarr_hit.x2so = data; break;
+					hit3.x2so = data; break;
 
 		case 0x18:
 		case 0x60:
-					shogwarr_hit.y2po = data; break;
+					hit3.y2po = data; break;
 
 		case 0x1c:
 		case 0x64:
-					shogwarr_hit.y2so = data; break;
+					hit3.y2so = data; break;
 
 		case 0x38:
 		case 0x50:
-					shogwarr_hit.z1po = data; break;
+					hit3.z1po = data; break;
 		case 0x3c:
 		case 0x54:
-					shogwarr_hit.z1so = data; break;
+					hit3.z1so = data; break;
 
 		case 0x20:
 		case 0x68:
-					shogwarr_hit.z2po = data; break;
+					hit3.z2po = data; break;
 
 		case 0x24:
 		case 0x6c:
-					shogwarr_hit.z2so = data; break;
+					hit3.z2so = data; break;
 
 		case 0x70:
-					shogwarr_hit.mode=data;break;
+					hit3.mode=data;break;
 
 		default:
-			logerror("CPU #0 PC %06x: warning - write unmapped hit address %06x [ %06x] = %06x\n",cpu_get_pc(space->cpu),offset<<1, idx, data);
+			logerror("CPU #0 PC %06x: warning - write unmapped hit address %06x [ %06x] = %06x\n",cpu_get_pc(&space->device()),offset<<1, idx, data);
 	}
 
-	shogwarr_recalc_collisions();
+	shogwarr_recalc_collisions(hit3);
 }
 
 
 static READ16_HANDLER(shogwarr_calc_r)
 {
-
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc3_hit_t &hit3 = state->m_hit3;
 	int idx=offset*4;
 
 	switch (idx)
 	{
 		case 0x00: // X distance
 		case 0x10:
-			return shogwarr_hit.x_coll;
+			return hit3.x_coll;
 
 		case 0x04: // Y distance
 		case 0x14:
-			return shogwarr_hit.y_coll;
+			return hit3.y_coll;
 
 		case 0x18: // Z distance
-			return shogwarr_hit.z_coll;
+			return hit3.z_coll;
 
 		case 0x08:
 		case 0x1c:
 
-			return shogwarr_hit.flags;
+			return hit3.flags;
 
 		case 0x28:
-			return (mame_rand(space->machine) & 0xffff);
+			return (space->machine().rand() & 0xffff);
 
-		case 0x40: return shogwarr_hit.x1po;
-		case 0x44: return shogwarr_hit.x1so;
-		case 0x48: return shogwarr_hit.y1po;
-		case 0x4c: return shogwarr_hit.y1so;
-		case 0x50: return shogwarr_hit.z1po;
-		case 0x54: return shogwarr_hit.z1so;
+		case 0x40: return hit3.x1po;
+		case 0x44: return hit3.x1so;
+		case 0x48: return hit3.y1po;
+		case 0x4c: return hit3.y1so;
+		case 0x50: return hit3.z1po;
+		case 0x54: return hit3.z1so;
 
-		case 0x58: return shogwarr_hit.x2po;
-		case 0x5c: return shogwarr_hit.x2so;
-		case 0x60: return shogwarr_hit.y2po;
-		case 0x64: return shogwarr_hit.y2so;
-		case 0x68: return shogwarr_hit.z2po;
-		case 0x6c: return shogwarr_hit.z2so;
+		case 0x58: return hit3.x2po;
+		case 0x5c: return hit3.x2so;
+		case 0x60: return hit3.y2po;
+		case 0x64: return hit3.y2so;
+		case 0x68: return hit3.z2po;
+		case 0x6c: return hit3.z2so;
 
-		case 0x80: return shogwarr_hit.x1tox2;
-		case 0x84: return shogwarr_hit.y1toy2;
-		case 0x88: return shogwarr_hit.z1toz2;
+		case 0x80: return hit3.x1tox2;
+		case 0x84: return hit3.y1toy2;
+		case 0x88: return hit3.z1toz2;
 
 		default:
-			logerror("CPU #0 PC %06x: warning - read unmapped calc address %06x [ %06x]\n",cpu_get_pc(space->cpu),offset<<1, idx);
+			logerror("CPU #0 PC %06x: warning - read unmapped calc address %06x [ %06x]\n",cpu_get_pc(&space->device()),offset<<1, idx);
 	}
 
 	return 0;
@@ -549,32 +522,33 @@ FFFE : probably polled by MCU, needs to be kept alive (cleared by main cpu - IT2
 */
 
 
-static int calc3_mcu_status, calc3_mcu_command_offset;
-
-
-void calc3_mcu_init(void)
+void calc3_mcu_init(running_machine &machine)
 {
-	calc3_mcu_status = 0;
-	calc3_mcu_command_offset = 0;
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	calc3_t &calc3 = state->m_calc3;
+	calc3.mcu_status = 0;
+	calc3.mcu_command_offset = 0;
 }
 
 WRITE16_HANDLER( calc3_mcu_ram_w )
 {
-	COMBINE_DATA(&kaneko16_mcu_ram[offset]);
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	COMBINE_DATA(&state->m_mcu_ram[offset]);
 	//calc3_mcu_run(space->machine);
 }
 
-#define CALC3_MCU_COM_W(_n_)				\
-WRITE16_HANDLER( calc3_mcu_com##_n_##_w )	\
-{											\
-	logerror("calc3w %d %04x %04x\n",_n_, data,mem_mask); \
-	calc3_mcu_status |= (1 << _n_);			\
+INLINE void calc3_mcu_com_w(address_space *space, offs_t offset, UINT16 data, UINT16 mem_mask, int _n_)
+{
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	calc3_t &calc3 = state->m_calc3;
+	logerror("calc3w %d %04x %04x\n", _n_, data, mem_mask);
+	calc3.mcu_status |= (1 << _n_);
 }
 
-CALC3_MCU_COM_W(0)
-CALC3_MCU_COM_W(1)
-CALC3_MCU_COM_W(2)
-CALC3_MCU_COM_W(3)
+WRITE16_HANDLER( calc3_mcu_com0_w) { calc3_mcu_com_w(space, offset, data, mem_mask, 0); }
+WRITE16_HANDLER( calc3_mcu_com1_w) { calc3_mcu_com_w(space, offset, data, mem_mask, 1); }
+WRITE16_HANDLER( calc3_mcu_com2_w) { calc3_mcu_com_w(space, offset, data, mem_mask, 2); }
+WRITE16_HANDLER( calc3_mcu_com3_w) { calc3_mcu_com_w(space, offset, data, mem_mask, 3); }
 
 
 /***************************************************************************
@@ -632,7 +606,6 @@ where games specify the same decryption key the table used is the same, I don't 
 */
 
 
-static UINT16 calc3_mcu_crc;
 
 /* decryption tables */
 
@@ -1670,26 +1643,7 @@ static const INT16 calc3_keydata[0x40*0x100] = {
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
   -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
- };
-
-// global so we can use them in the filename when we save out the data (debug..)
-static UINT8 calc3_decryption_key_byte;
-static UINT8 calc3_alternateswaps;
-static UINT8 calc3_shift;
-static UINT8 calc3_subtracttype;
-static UINT8 calc3_mode;
-static UINT8 calc3_blocksize_offset;
-static UINT16 calc3_dataend;
-static UINT16 calc3_database;
-
-static int data_header[2];
-
-static UINT32 calc3_writeaddress;
-static UINT32 calc3_writeaddress_current;
-static UINT16 calc3_dsw_addr = 0x00;
-static UINT16 calc3_eeprom_addr;
-static UINT16 calc3_poll_addr;
-static UINT16 cakc3_checkumaddress;
+};
 
 static UINT8 shift_bits(UINT8 dat, int bits)
 {
@@ -1708,14 +1662,12 @@ static UINT8 shift_bits(UINT8 dat, int bits)
 }
 
 // endian safe? you're having a laugh
-static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* dstram, int dstoffset)
+static int calc3_decompress_table(running_machine& machine, int tabnum, UINT8* dstram, int dstoffset)
 {
-
-
-
-
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT8* rom = memory_region(machine,"cpu1");
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	calc3_t &calc3 = state->m_calc3;
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8* rom = machine.region("cpu1")->base();
 	UINT8 numregions;
 	UINT16 length;
 	int local_counter=0;
@@ -1745,38 +1697,38 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 	{
 		UINT16 inline_table_base = 0;
 		UINT16 inline_table_size = 0;
-		calc3_database = offset;
-		calc3_blocksize_offset =    rom[offset+0]; // location of the 'block length'
-		calc3_mode =                rom[offset+1];
-		calc3_alternateswaps =             rom[offset+2];
-		calc3_shift = (calc3_alternateswaps &0xf0)>>4;
-		calc3_subtracttype = (calc3_alternateswaps &0x03);
-		calc3_alternateswaps &= 0x0c;
-		calc3_alternateswaps >>=2;
+		calc3.database = offset;
+		calc3.blocksize_offset =    rom[offset+0]; // location of the 'block length'
+		calc3.mode =                rom[offset+1];
+		calc3.alternateswaps =             rom[offset+2];
+		calc3.shift = (calc3.alternateswaps &0xf0)>>4;
+		calc3.subtracttype = (calc3.alternateswaps &0x03);
+		calc3.alternateswaps &= 0x0c;
+		calc3.alternateswaps >>=2;
 
-		calc3_decryption_key_byte = rom[offset+3];
+		calc3.decryption_key_byte = rom[offset+3];
 
 
 		// if blocksize_offset > 3, it appears to specify the encryption table as 'inline' which can be of any size (odd or even) and loops over the bytes to decrypt
 		// the decryption key specified seems to be ignored?
-		if (calc3_blocksize_offset>3)
+		if (calc3.blocksize_offset>3)
 		{
 			inline_table_base = offset+4;
-			inline_table_size = calc3_blocksize_offset-3;
+			inline_table_size = calc3.blocksize_offset-3;
 		}
 
-		offset+= calc3_blocksize_offset+1;
+		offset+= calc3.blocksize_offset+1;
 		length = rom[offset+0] | (rom[offset+1]<<8);
 		offset+=2;
 
 #if CALC3_VERBOSE_OUTPUT
 		if (inline_table_size)
 		{
-			printf("Block %02x Found Base %04x - Inline Encryption (size %02x) - Mode? %02x Shift %01x Subtract Type %01x AltSwaps %01x Key (unused?) %02x Length %04x\n", tabnum, calc3_database, inline_table_size, calc3_shift, calc3_mode, calc3_subtracttype, calc3_alternateswaps, calc3_decryption_key_byte, length);
+			printf("Block %02x Found Base %04x - Inline Encryption (size %02x) - Mode? %02x Shift %01x Subtract Type %01x AltSwaps %01x Key (unused?) %02x Length %04x\n", tabnum, calc3.database, inline_table_size, calc3.shift, calc3.mode, calc3.subtracttype, calc3.alternateswaps, calc3.decryption_key_byte, length);
 		}
 		else
 		{
-			printf("Block %02x Found Base %04x - Mode? %02x Shift %01x Subtract Type %01x AltSwaps %01x Key %02x Length %04x\n", tabnum, calc3_database, calc3_mode, calc3_shift, calc3_subtracttype, calc3_alternateswaps, calc3_decryption_key_byte, length);
+			printf("Block %02x Found Base %04x - Mode? %02x Shift %01x Subtract Type %01x AltSwaps %01x Key %02x Length %04x\n", tabnum, calc3.database, calc3.mode, calc3.shift, calc3.subtracttype, calc3.alternateswaps, calc3.decryption_key_byte, length);
 		}
 #endif
 		// copy + decrypt the table to the specified memory area
@@ -1794,34 +1746,31 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 				// this, or it can remember addresses and restore those
 
 				// hack, set it to a known address instead of trying to restore to anywhere specific..
-				// might break at some point tho, eg if it doesn't write command 06 often enough because it trys to use another one like 07...
+				// might break at some point tho, eg if it doesn't write command 06 often enough because it tries to use another one like 07...
 				// need to understand the meaning of this (test hw?)
 
 				// !dstram is used because we don't want to process these during our initial table scan, only when the game asks!
 
-				if (calc3_mode==0x06)
+				if (calc3.mode==0x06)
 				{
-					calc3_writeaddress_current = 0x202000; // this is reasoanble for brapboys, not sure about shogun, needs emulating properly!
-					//calc3_writeaddress_current = 0x20c000;
+					calc3.writeaddress_current = 0x202000; // this is reasoanble for brapboys, not sure about shogun, needs emulating properly!
+					//calc3.writeaddress_current = 0x20c000;
 				}
-				else if (calc3_mode==0x07)
+				else if (calc3.mode==0x07)
 				{
 					// also calls empty table with Mode? 07
 					// maybe they reset to different points?
 				}
-				else if (calc3_mode==0x08 && !dstram)
+				else if (calc3.mode==0x08 && !dstram)
 				{
 					//printf("save to eeprom\n");
 
 					{
-						UINT32 length, size;
-						UINT8 *dat;
-
-						dat = (UINT8 *)eeprom_get_data_pointer(&length, &size);
+						address_space *eeprom_space = space->machine().device<eeprom_device>("eeprom")->space();
 
 						for (i=0;i<0x80;i++)
 						{
-							dat[i] = memory_read_byte(space, calc3_eeprom_addr+0x200000+i);
+							eeprom_space->write_byte(i, space->read_byte(calc3.eeprom_addr+0x200000+i));
 						}
 
 					}
@@ -1848,7 +1797,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 
 
 					/* special case for Shogun Warriors table 0x40 */
-					if (calc3_subtracttype==3 && calc3_alternateswaps ==0)
+					if (calc3.subtracttype==3 && calc3.alternateswaps ==0)
 					{
 						UINT8 inlinet = rom[inline_table_base + (i%inline_table_size)];
 						dat = rom[offset+i];
@@ -1869,7 +1818,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 								UINT8 inlinet = rom[inline_table_base + (i%inline_table_size)];
 								dat = rom[offset+i];
 								dat -= inlinet;
-								dat = shift_bits(dat, calc3_shift);
+								dat = shift_bits(dat, calc3.shift);
 							}
 							else
 							{
@@ -1877,7 +1826,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 								UINT8 inlinet = rom[inline_table_base + (i%inline_table_size)];
 								dat = rom[offset+i];
 
-								if (calc3_subtracttype!=0x02)
+								if (calc3.subtracttype!=0x02)
 								{
 									dat -= inlinet;
 									dat -= extra[(i%inline_table_size)>>1];
@@ -1888,7 +1837,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 									dat += extra[(i%inline_table_size)>>1];
 								}
 
-								dat = shift_bits(dat, 8-calc3_shift);
+								dat = shift_bits(dat, 8-calc3.shift);
 							}
 						}
 						else
@@ -1898,13 +1847,13 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 								UINT8 inlinet = rom[inline_table_base + (i%inline_table_size)];
 								dat = rom[offset+i];
 								dat -= inlinet;
-								dat = shift_bits(dat, calc3_shift);
+								dat = shift_bits(dat, calc3.shift);
 							}
 							else
 							{
 								dat = rom[offset+i];
 
-								if (calc3_subtracttype!=0x02)
+								if (calc3.subtracttype!=0x02)
 								{
 									dat -= extra2[(i%inline_table_size)>>1];
 								}
@@ -1912,7 +1861,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 								{
 									dat += extra2[(i%inline_table_size)>>1];
 								}
-								dat = shift_bits(dat, 8-calc3_shift);
+								dat = shift_bits(dat, 8-calc3.shift);
 							}
 						}
 					}
@@ -1921,7 +1870,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 					{
 						if (space)
 						{
-							memory_write_byte(space, dstoffset+i, dat);
+							space->write_byte(dstoffset+i, dat);
 						}
 
 						// debug, used to output tables at the start
@@ -1931,14 +1880,14 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 						}
 					}
 					else
-						data_header[local_counter]=dat;
+						calc3.data_header[local_counter]=dat;
 
 					++local_counter;
 				}
 			}
 			else
 			{
-				const INT16* key = calc3_keydata+(calc3_decryption_key_byte*0x40);
+				const INT16* key = calc3_keydata+(calc3.decryption_key_byte*0x40);
 
 				if (key[0] == -1)
 				{
@@ -1951,43 +1900,43 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 					UINT8 keydat = (UINT8)key[i&0x3f];
 
 					{
-						if (calc3_subtracttype==0)
+						if (calc3.subtracttype==0)
 						{
 							//dat = dat;
 						}
-						else if (calc3_subtracttype==1)
+						else if (calc3.subtracttype==1)
 						{
 							if ((i&1)==1) dat += keydat;
 							else dat -= keydat;
 						}
-						else if (calc3_subtracttype==2)
+						else if (calc3.subtracttype==2)
 						{
 							if ((i&1)==0) dat += keydat;
 							else dat -= keydat;
 						}
-						else if (calc3_subtracttype==3)
+						else if (calc3.subtracttype==3)
 						{
 							dat -= keydat;
 						}
 
-						if (calc3_alternateswaps == 0)
+						if (calc3.alternateswaps == 0)
 						{
-							if ((i&1)==0) dat = shift_bits(dat, 8-calc3_shift);
-							else          dat = shift_bits(dat, calc3_shift);
+							if ((i&1)==0) dat = shift_bits(dat, 8-calc3.shift);
+							else          dat = shift_bits(dat, calc3.shift);
 						}
-						else if (calc3_alternateswaps==1)
+						else if (calc3.alternateswaps==1)
 						{
-							dat = shift_bits(dat, 8-calc3_shift);
+							dat = shift_bits(dat, 8-calc3.shift);
 						}
-						else if (calc3_alternateswaps==2)
+						else if (calc3.alternateswaps==2)
 						{
-							dat = shift_bits(dat, calc3_shift);
+							dat = shift_bits(dat, calc3.shift);
 						}
-						else if (calc3_alternateswaps==3)
+						else if (calc3.alternateswaps==3)
 						{
 							// same as 0
-							if ((i&1)==0) dat = shift_bits(dat, 8-calc3_shift);
-							else          dat = shift_bits(dat, calc3_shift);
+							if ((i&1)==0) dat = shift_bits(dat, 8-calc3.shift);
+							else          dat = shift_bits(dat, calc3.shift);
 						}
 					}
 
@@ -1995,7 +1944,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 					{
 						if (space)
 						{
-							memory_write_byte(space, dstoffset+i, dat);
+							space->write_byte(dstoffset+i, dat);
 						}
 
 						// debug, used to output tables at the start
@@ -2005,7 +1954,7 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 						}
 					}
 					else
-						data_header[local_counter]=dat;
+						calc3.data_header[local_counter]=dat;
 
 					++local_counter;
 
@@ -2014,10 +1963,10 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 			}
 		}
 
-		calc3_dataend = offset+length+1;
+		calc3.dataend = offset+length+1;
 	}
 
-	//printf("data base %04x data end %04x\n", calc3_database, calc3_dataend);
+	//printf("data base %04x data end %04x\n", calc3.database, calc3.dataend);
 
 	return length;
 
@@ -2027,44 +1976,49 @@ static int calc3_decompress_table(running_machine* machine, int tabnum, UINT8* d
 
 DRIVER_INIT(calc3_scantables)
 {
-	UINT8* rom = memory_region(machine,"cpu1");
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	calc3_t &calc3 = state->m_calc3;
+	UINT8* rom = machine.region("cpu1")->base();
 	UINT8 numregions;
 
 	int x;
 
-	calc3_mcu_crc = 0;
+	calc3.mcu_crc = 0;
 	for (x=0;x<0x20000;x++)
 	{
-		calc3_mcu_crc+=rom[x];
+		calc3.mcu_crc+=rom[x];
 	}
-	//printf("crc %04x\n",calc3_mcu_crc);
+	//printf("crc %04x\n",calc3.mcu_crc);
 	numregions = rom[0];
 
 	for (x=0;x<numregions;x++)
 	{
-		UINT8* tmpdstram = (UINT8*)malloc(0x2000);
+		UINT8* tmpdstram = auto_alloc_array(machine, UINT8, 0x2000);
+#if CALC3_VERBOSE_OUTPUT
 		int length;
+#endif
+
 		memset(tmpdstram, 0x00,0x2000);
-		length = calc3_decompress_table(machine, x, tmpdstram, 0);
 
 #if CALC3_VERBOSE_OUTPUT
+		length = calc3_decompress_table(machine, x, tmpdstram, 0);
 		// dump to file
 		if (length)
 		{
 			FILE *fp;
 			char filename[256];
 
-			if (calc3_blocksize_offset==3)
+			if (calc3.blocksize_offset==3)
 			{
 				sprintf(filename,"data_%s_table_%04x k%02x m%02x u%02x length %04x",
-						machine->gamedrv->name,
-						x, calc3_decryption_key_byte, calc3_mode, calc3_alternateswaps, length);
+						machine().system().name,
+						x, calc3.decryption_key_byte, calc3.mode, calc3.alternateswaps, length);
 			}
 			else
 			{
 				sprintf(filename,"data_%s_table_%04x k%02x (use indirect size %02x) m%02x u%02x length %04x",
-					machine->gamedrv->name,
-					x, calc3_decryption_key_byte, calc3_blocksize_offset-3, calc3_mode, calc3_alternateswaps, length);
+					machine().system().name,
+					x, calc3.decryption_key_byte, calc3.blocksize_offset-3, calc3.mode, calc3.alternateswaps, length);
 			}
 
 			fp=fopen(filename, "w+b");
@@ -2075,7 +2029,7 @@ DRIVER_INIT(calc3_scantables)
 			}
 		}
 #endif
-		free(tmpdstram);
+		auto_free(machine, tmpdstram);
 	}
 
 	// there is also a 0x1000 block of data at the end.. same on both games, maybe it's related to the decryption tables??
@@ -2089,12 +2043,12 @@ DRIVER_INIT(calc3_scantables)
 		char filename[256];
 
 		sprintf(filename,"data_%s_finalblock",
-		machine->gamedrv->name);
+		machine.system().name);
 
 		fp=fopen(filename, "w+b");
 		if (fp)
 		{
-			fwrite(&rom[calc3_dataend], 0x1000, 1, fp);
+			fwrite(&rom[calc3.dataend], 0x1000, 1, fp);
 			fclose(fp);
 		}
 	}
@@ -2103,25 +2057,27 @@ DRIVER_INIT(calc3_scantables)
 
 
 
-void calc3_mcu_run(running_machine *machine)
+void calc3_mcu_run(running_machine &machine)
 {
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	calc3_t &calc3 = state->m_calc3;
 	UINT16 mcu_command;
 	int i;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
-	if ( calc3_mcu_status != (1|2|4|8) )	return;
+	if ( calc3.mcu_status != (1|2|4|8) )	return;
 
-	if (calc3_dsw_addr) memory_write_byte(space, calc3_dsw_addr+0x200000, ( ~input_port_read(machine, "DSW1"))&0xff); // // DSW // dsw actually updates in realtime - mcu reads+writes it every frame
+	if (calc3.dsw_addr) space->write_byte(calc3.dsw_addr+0x200000, ( ~input_port_read(machine, "DSW1"))&0xff); // // DSW // dsw actually updates in realtime - mcu reads+writes it every frame
 
 
-	//calc3_mcu_status = 0;
+	//calc3.mcu_status = 0;
 
-	mcu_command = kaneko16_mcu_ram[calc3_mcu_command_offset/2 + 0];
+	mcu_command = state->m_mcu_ram[calc3.mcu_command_offset/2 + 0];
 
 	if (mcu_command == 0) return;
 
 	logerror("%s : MCU executed command at %04X: %04X\n",
-	 	cpuexec_describe_context(machine),calc3_mcu_command_offset,mcu_command);
+		machine.describe_context(),calc3.mcu_command_offset,mcu_command);
 
 
 	if (mcu_command>0)
@@ -2131,47 +2087,43 @@ void calc3_mcu_run(running_machine *machine)
 		{
 
 			// clear old command (handshake to main cpu)
-			kaneko16_mcu_ram[(calc3_mcu_command_offset>>1)+0] = 0x0000;
+			state->m_mcu_ram[(calc3.mcu_command_offset>>1)+0] = 0x0000;
 
 
-			calc3_dsw_addr =           kaneko16_mcu_ram[(0>>1) + 1];
-			calc3_eeprom_addr =        kaneko16_mcu_ram[(0>>1) + 2];
-			calc3_mcu_command_offset = kaneko16_mcu_ram[(0>>1) + 3];
-			calc3_poll_addr =          kaneko16_mcu_ram[(0>>1) + 4];
-			cakc3_checkumaddress =     kaneko16_mcu_ram[(0>>1) + 5];
-			calc3_writeaddress =      (kaneko16_mcu_ram[(0>>1) + 6] << 16) |
-			                          (kaneko16_mcu_ram[(0>>1) + 7]);
+			calc3.dsw_addr =           state->m_mcu_ram[(0>>1) + 1];
+			calc3.eeprom_addr =        state->m_mcu_ram[(0>>1) + 2];
+			calc3.mcu_command_offset = state->m_mcu_ram[(0>>1) + 3];
+			calc3.poll_addr =          state->m_mcu_ram[(0>>1) + 4];
+			calc3.checksumaddress =    state->m_mcu_ram[(0>>1) + 5];
+			calc3.writeaddress =      (state->m_mcu_ram[(0>>1) + 6] << 16) |
+			                          (state->m_mcu_ram[(0>>1) + 7]);
 
 			// set our current write / stack pointer to the address specified
-			calc3_writeaddress_current = calc3_writeaddress;
+			calc3.writeaddress_current = calc3.writeaddress;
 #if CALC3_VERBOSE_OUTPUT
-			printf("Calc 3 Init Command - %04x DSW addr\n",  calc3_dsw_addr);
-			printf("Calc 3 Init Command - %04x Eeprom Address\n",  calc3_eeprom_addr);
-			printf("Calc 3 Init Command - %04x Future Commands Base\n",  calc3_mcu_command_offset);
-			printf("Calc 3 Init Command - %04x Poll / Busy Address\n",  calc3_poll_addr);
-			printf("Calc 3 Init Command - %04x ROM Checksum Address\n",  cakc3_checkumaddress);
-			printf("Calc 3 Init Command - %08x Data Write Address\n",  calc3_writeaddress);
+			printf("Calc 3 Init Command - %04x DSW addr\n",  calc3.dsw_addr);
+			printf("Calc 3 Init Command - %04x Eeprom Address\n",  calc3.eeprom_addr);
+			printf("Calc 3 Init Command - %04x Future Commands Base\n",  calc3.mcu_command_offset);
+			printf("Calc 3 Init Command - %04x Poll / Busy Address\n",  calc3.poll_addr);
+			printf("Calc 3 Init Command - %04x ROM Checksum Address\n",  calc3.checksumaddress);
+			printf("Calc 3 Init Command - %08x Data Write Address\n",  calc3.writeaddress);
 #endif
-	//      memory_write_byte(space, calc3_dsw_addr+0x200000, ( ~input_port_read(machine, "DSW1"))&0xff); // // DSW // dsw actually updates in realtime - mcu reads+writes it every frame
+	//      space->write_byte(calc3.dsw_addr+0x200000, ( ~input_port_read(machine, "DSW1"))&0xff); // // DSW // dsw actually updates in realtime - mcu reads+writes it every frame
 
-			kaneko16_mcu_ram[cakc3_checkumaddress / 2] = calc3_mcu_crc;				// MCU Rom Checksum!
+			state->m_mcu_ram[calc3.checksumaddress / 2] = calc3.mcu_crc;				// MCU Rom Checksum!
 
-			/*
-            for (i=0;i<0x40;i++)
-            {
-                kaneko16_mcu_ram[(calc3_eeprom_addr / 2)+i] = kaneko16_eeprom_data[i];//((eepromData[i]&0xff00)>>8) |  ((eepromData[i]&0x00ff)<<8);
-            }
-            */
-
+#if 0
+			for (i=0;i<0x40;i++)
 			{
-				UINT32 length, size;
-				UINT8 *dat;
-
-				dat = (UINT8 *)eeprom_get_data_pointer(&length, &size);
+				state->m_mcu_ram[(calc3.eeprom_addr / 2)+i] = kaneko16_eeprom_data[i];//((eepromData[i]&0xff00)>>8) |  ((eepromData[i]&0x00ff)<<8);
+			}
+#endif
+			{
+				address_space *eeprom_space = space->machine().device<eeprom_device>("eeprom")->space();
 
 				for (i=0;i<0x80;i++)
 				{
-					memory_write_byte(space, calc3_eeprom_addr+0x200000+i, dat[i]);
+					space->write_byte(calc3.eeprom_addr+0x200000+i, eeprom_space->read_byte(i));
 				}
 
 			}
@@ -2184,14 +2136,14 @@ void calc3_mcu_run(running_machine *machine)
 			int i;
 
 			// clear old command (handshake to main cpu)
-			kaneko16_mcu_ram[calc3_mcu_command_offset>>1] = 0x0000;;
+			state->m_mcu_ram[calc3.mcu_command_offset>>1] = 0x0000;;
 
 			logerror("Calc3 transfer request, %d transfers\n", num_transfers);
 
 			for (i=0;i<num_transfers;i++)
 			{
-				int param1 = kaneko16_mcu_ram[(calc3_mcu_command_offset>>1) + 1 + (2*i)];
-				int param2 = kaneko16_mcu_ram[(calc3_mcu_command_offset>>1) + 2 + (2*i)];
+				int param1 = state->m_mcu_ram[(calc3.mcu_command_offset>>1) + 1 + (2*i)];
+				int param2 = state->m_mcu_ram[(calc3.mcu_command_offset>>1) + 2 + (2*i)];
 				UINT8  commandtabl = (param1&0xff00) >> 8;
 				UINT16 commandaddr =param2;// (param1&0x00ff) | (param2&0xff00);
 				UINT8  commandunk =  (param1&0x00ff); // brap boys sets.. seems to cause further writebasck address displacement?? (when tested on hw it looked like a simple +, but that doesn't work for brapboys...)
@@ -2201,23 +2153,23 @@ void calc3_mcu_run(running_machine *machine)
 				{
 					int length;
 
-					length = calc3_decompress_table(machine, commandtabl, 0, calc3_writeaddress_current-2);
+					length = calc3_decompress_table(machine, commandtabl, 0, calc3.writeaddress_current-2);
 
 					if (length)
 					{
 						int write=commandaddr;
 #if CALC3_VERBOSE_OUTPUT
-						printf("writing back address %08x to %08x %08x\n", calc3_writeaddress_current, commandaddr,write);
+						printf("writing back address %08x to %08x %08x\n", calc3.writeaddress_current, commandaddr,write);
 #endif
 
-						memory_write_byte(space,write+0x200000, data_header[0]);
-						memory_write_byte(space,write+0x200001, data_header[1]);
+						space->write_byte(write+0x200000, calc3.data_header[0]);
+						space->write_byte(write+0x200001, calc3.data_header[1]);
 
 						write=commandaddr+(char)commandunk;
-						memory_write_word(space,write+0x200000, (calc3_writeaddress_current>>16)&0xffff);
-						memory_write_word(space,write+0x200002,  (calc3_writeaddress_current&0xffff));
+						space->write_word(write+0x200000, (calc3.writeaddress_current>>16)&0xffff);
+						space->write_word(write+0x200002,  (calc3.writeaddress_current&0xffff));
 
-						calc3_writeaddress_current += ((length+3)&(~1));
+						calc3.writeaddress_current += ((length+3)&(~1));
 					}
 
 				}
@@ -2339,7 +2291,7 @@ static const UINT8 toybox_mcu_decryption_table_alt[0x100] = {
 DRIVER_INIT( decrypt_toybox_rom )
 {
 
-	UINT8 *src = (UINT8 *)memory_region(machine, "mcudata" );
+	UINT8 *src = (UINT8 *)machine.region("mcudata" )->base();
 
 	int i;
 
@@ -2352,7 +2304,7 @@ DRIVER_INIT( decrypt_toybox_rom )
 	{
 		FILE *fp;
 		char filename[256];
-		sprintf(filename,"%s.mcudata", machine->gamedrv->name);
+		sprintf(filename,"%s.mcudata", machine.system().name);
 		fp=fopen(filename, "w+b");
 		if (fp)
 		{
@@ -2366,7 +2318,7 @@ DRIVER_INIT( decrypt_toybox_rom )
 DRIVER_INIT( decrypt_toybox_rom_alt )
 {
 
-	UINT8 *src = (UINT8 *)memory_region(machine, "mcudata" );
+	UINT8 *src = (UINT8 *)machine.region("mcudata" )->base();
 
 	int i;
 
@@ -2376,9 +2328,9 @@ DRIVER_INIT( decrypt_toybox_rom_alt )
 	}
 }
 
-void toxboy_handle_04_subcommand(running_machine* machine,UINT8 mcu_subcmd, UINT16*mcu_ram)
+void toxboy_handle_04_subcommand(running_machine& machine,UINT8 mcu_subcmd, UINT16*mcu_ram)
 {
-	UINT8 *src = (UINT8 *)memory_region(machine, "mcudata")+0x10000;
+	UINT8 *src = (UINT8 *)machine.region("mcudata")->base()+0x10000;
 	UINT8* dst = (UINT8 *)mcu_ram;
 
 	int offs = (mcu_subcmd&0x3f)*8;
@@ -2399,39 +2351,36 @@ void toxboy_handle_04_subcommand(running_machine* machine,UINT8 mcu_subcmd, UINT
 }
 
 
-void (*toybox_mcu_run)(running_machine *machine);
-
-static UINT16 toybox_mcu_com[4];
-
-void toybox_mcu_init(void)
+void toybox_mcu_init(running_machine &machine)
 {
-	memset(toybox_mcu_com, 0, 4 * sizeof( UINT16) );
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	memset(state->m_toybox_mcu_com, 0, 4 * sizeof( UINT16) );
 }
 
-#define TOYBOX_MCU_COM_W(_n_)							\
-WRITE16_HANDLER( toybox_mcu_com##_n_##_w )				\
-{														\
-	COMBINE_DATA(&toybox_mcu_com[_n_]);					\
-	if (toybox_mcu_com[0] != 0xFFFF)	return;			\
-	if (toybox_mcu_com[1] != 0xFFFF)	return;			\
-	if (toybox_mcu_com[2] != 0xFFFF)	return;			\
-	if (toybox_mcu_com[3] != 0xFFFF)	return;			\
-														\
-	memset(toybox_mcu_com, 0, 4 * sizeof( UINT16 ) );	\
-	toybox_mcu_run(space->machine);							\
+INLINE void toybox_mcu_com_w(address_space *space, offs_t offset, UINT16 data, UINT16 mem_mask, int _n_)
+{
+	kaneko16_state *state = space->machine().driver_data<kaneko16_state>();
+	COMBINE_DATA(&state->m_toybox_mcu_com[_n_]);
+	if (state->m_toybox_mcu_com[0] != 0xFFFF)	return;
+	if (state->m_toybox_mcu_com[1] != 0xFFFF)	return;
+	if (state->m_toybox_mcu_com[2] != 0xFFFF)	return;
+	if (state->m_toybox_mcu_com[3] != 0xFFFF)	return;
+
+	memset(state->m_toybox_mcu_com, 0, 4 * sizeof( UINT16 ) );
+	(*state->m_toybox_mcu_run)(space->machine());
 }
 
-TOYBOX_MCU_COM_W(0)
-TOYBOX_MCU_COM_W(1)
-TOYBOX_MCU_COM_W(2)
-TOYBOX_MCU_COM_W(3)
+WRITE16_HANDLER( toybox_mcu_com0_w ) { toybox_mcu_com_w(space, offset, data, mem_mask, 0); }
+WRITE16_HANDLER( toybox_mcu_com1_w ) { toybox_mcu_com_w(space, offset, data, mem_mask, 1); }
+WRITE16_HANDLER( toybox_mcu_com2_w ) { toybox_mcu_com_w(space, offset, data, mem_mask, 2); }
+WRITE16_HANDLER( toybox_mcu_com3_w ) { toybox_mcu_com_w(space, offset, data, mem_mask, 3); }
 
 /*
     bonkadv and bloodwar test bit 0
 */
 READ16_HANDLER( toybox_mcu_status_r )
 {
-	logerror("CPU %s (PC=%06X) : read MCU status\n", space->cpu->tag, cpu_get_previouspc(space->cpu));
+	logerror("CPU %s (PC=%06X) : read MCU status\n", space->device().tag(), cpu_get_previouspc(&space->device()));
 	return 0; // most games test bit 0 for failure
 }
 
@@ -2440,8 +2389,10 @@ READ16_HANDLER( toybox_mcu_status_r )
                                 Blood Warrior
 ***************************************************************************/
 
-void bloodwar_mcu_run(running_machine *machine)
+void bloodwar_mcu_run(running_machine &machine)
 {
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	UINT16 *kaneko16_mcu_ram = state->m_mcu_ram;
 	UINT16 mcu_command	=	kaneko16_mcu_ram[0x0010/2];
 	UINT16 mcu_offset	=	kaneko16_mcu_ram[0x0012/2] / 2;
 	UINT16 mcu_data		=	kaneko16_mcu_ram[0x0014/2];
@@ -2450,38 +2401,28 @@ void bloodwar_mcu_run(running_machine *machine)
 	{
 		case 0x02:	// Read from NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_READ)) != 0)
-			{
-				mame_fread(f,&kaneko16_mcu_ram[mcu_offset], 128);
-				mame_fclose(f);
-			}
-			logerror("%s : MCU executed command: %04X %04X (load NVRAM settings)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			memcpy(&kaneko16_mcu_ram[mcu_offset], state->m_nvram_save, sizeof(state->m_nvram_save));
+			logerror("%s : MCU executed command: %04X %04X (load NVRAM settings)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x42:	// Write to NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS)) != 0)
-			{
-				mame_fwrite(f,&kaneko16_mcu_ram[mcu_offset], 128);
-				mame_fclose(f);
-			}
-			logerror("%s : MCU executed command: %04X %04X (save NVRAM settings)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			memcpy(state->m_nvram_save, &kaneko16_mcu_ram[mcu_offset], sizeof(state->m_nvram_save));
+			logerror("%s : MCU executed command: %04X %04X (save NVRAM settings)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x03:	// DSW
 		{
 			kaneko16_mcu_ram[mcu_offset] = input_port_read(machine, "DSW1");
-			logerror("%s : MCU executed command: %04X %04X (read DSW)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			logerror("%s : MCU executed command: %04X %04X (read DSW)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x04:	// Protection
 		{
-			logerror("%s : MCU executed command: %04X %04X %04X\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2, mcu_data);
+			logerror("%s : MCU executed command: %04X %04X %04X\n", machine.describe_context(), mcu_command, mcu_offset*2, mcu_data);
 
 			toxboy_handle_04_subcommand(machine, mcu_data, kaneko16_mcu_ram);
 
@@ -2489,7 +2430,7 @@ void bloodwar_mcu_run(running_machine *machine)
 		break;
 
 		default:
-			logerror("%s : MCU executed command: %04X %04X %04X (UNKNOWN COMMAND)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2, mcu_data);
+			logerror("%s : MCU executed command: %04X %04X %04X (UNKNOWN COMMAND)\n", machine.describe_context(), mcu_command, mcu_offset*2, mcu_data);
 		break;
 	}
 }
@@ -2498,8 +2439,10 @@ void bloodwar_mcu_run(running_machine *machine)
                                 Bonk's Adventure
 ***************************************************************************/
 
-void bonkadv_mcu_run(running_machine *machine)
+void bonkadv_mcu_run(running_machine &machine)
 {
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	UINT16 *kaneko16_mcu_ram = state->m_mcu_ram;
 	UINT16 mcu_command	=	kaneko16_mcu_ram[0x0010/2];
 	UINT16 mcu_offset	=	kaneko16_mcu_ram[0x0012/2] / 2;
 	UINT16 mcu_data		=	kaneko16_mcu_ram[0x0014/2];
@@ -2509,50 +2452,35 @@ void bonkadv_mcu_run(running_machine *machine)
 
 		case 0x02:	// Read from NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_READ)) != 0)
-			{
-				mame_fread(f,&kaneko16_mcu_ram[mcu_offset], 128);
-				mame_fclose(f);
-			}
-			logerror("%s : MCU executed command: %04X %04X (load NVRAM settings)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			memcpy(&kaneko16_mcu_ram[mcu_offset], state->m_nvram_save, sizeof(state->m_nvram_save));
+			logerror("%s : MCU executed command: %04X %04X (load NVRAM settings)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x42:	// Write to NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS)) != 0)
-			{
-				mame_fwrite(f,&kaneko16_mcu_ram[mcu_offset], 128);
-				mame_fclose(f);
-			}
-			logerror("%s : MCU executed command: %04X %04X (save NVRAM settings)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			memcpy(state->m_nvram_save, &kaneko16_mcu_ram[mcu_offset], sizeof(state->m_nvram_save));
+			logerror("%s : MCU executed command: %04X %04X (save NVRAM settings)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x43:	// Initialize NVRAM - MCU writes Default Data Set directly to NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS)) != 0)
-			{
-				mame_fwrite(f, bonkadv_mcu_43, sizeof(bonkadv_mcu_43));
-				mame_fclose(f);
-			}
-			logerror("%s : MCU executed command: %04X %04X (restore default NVRAM settings)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			memcpy(state->m_nvram_save, bonkadv_mcu_43, sizeof(bonkadv_mcu_43));
+			logerror("%s : MCU executed command: %04X %04X (restore default NVRAM settings)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x03:	// DSW
 		{
 			kaneko16_mcu_ram[mcu_offset] = input_port_read(machine, "DSW1");
-			logerror("%s : MCU executed command: %04X %04X (read DSW)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2);
+			logerror("%s : MCU executed command: %04X %04X (read DSW)\n", machine.describe_context(), mcu_command, mcu_offset*2);
 		}
 		break;
 
 		case 0x04:	// Protection
 		{
-			logerror("%s : MCU executed command: %04X %04X %04X\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2, mcu_data);
+			logerror("%s : MCU executed command: %04X %04X %04X\n", machine.describe_context(), mcu_command, mcu_offset*2, mcu_data);
 
 
 			switch(mcu_data)
@@ -2574,7 +2502,7 @@ void bonkadv_mcu_run(running_machine *machine)
 		break;
 
 		default:
-			logerror("%s : MCU executed command: %04X %04X %04X (UNKNOWN COMMAND)\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2, mcu_data);
+			logerror("%s : MCU executed command: %04X %04X %04X (UNKNOWN COMMAND)\n", machine.describe_context(), mcu_command, mcu_offset*2, mcu_data);
 		break;
 	}
 }
@@ -2591,36 +2519,28 @@ void bonkadv_mcu_run(running_machine *machine)
     - Read the DSWs
 */
 
-void gtmr_mcu_run(running_machine *machine)
+void gtmr_mcu_run(running_machine &machine)
 {
+	kaneko16_state *state = machine.driver_data<kaneko16_state>();
+	UINT16 *kaneko16_mcu_ram = state->m_mcu_ram;
 	UINT16 mcu_command	=	kaneko16_mcu_ram[0x0010/2];
 	UINT16 mcu_offset	=	kaneko16_mcu_ram[0x0012/2] / 2;
 	UINT16 mcu_data		=	kaneko16_mcu_ram[0x0014/2];
 
-	logerror("%s : MCU executed command: %04X %04X %04X\n", cpuexec_describe_context(machine), mcu_command, mcu_offset*2, mcu_data);
+	logerror("%s : MCU executed command: %04X %04X %04X\n", machine.describe_context(), mcu_command, mcu_offset*2, mcu_data);
 
 	switch (mcu_command >> 8)
 	{
 
 		case 0x02:	// Read from NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_READ)) != 0)
-			{
-				mame_fread(f,&kaneko16_mcu_ram[mcu_offset], 128);
-				mame_fclose(f);
-			}
+			memcpy(&kaneko16_mcu_ram[mcu_offset], state->m_nvram_save, sizeof(state->m_nvram_save));
 		}
 		break;
 
 		case 0x42:	// Write to NVRAM
 		{
-			mame_file *f;
-			if ((f = nvram_fopen(machine, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS)) != 0)
-			{
-				mame_fwrite(f,&kaneko16_mcu_ram[mcu_offset], 128);
-				mame_fclose(f);
-			}
+			memcpy(state->m_nvram_save, &kaneko16_mcu_ram[mcu_offset], sizeof(state->m_nvram_save));
 		}
 		break;
 

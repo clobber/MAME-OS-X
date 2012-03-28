@@ -54,14 +54,37 @@ To do:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "machine/eeprom.h"
 #include "sound/okim6295.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 #include "cpu/z80/z80.h"
+
+
+class darkhors_state : public driver_device
+{
+public:
+	darkhors_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		m_maincpu(*this, "maincpu")
+		{ }
+
+	tilemap_t *m_tmap;
+	tilemap_t *m_tmap2;
+	UINT32 *m_tmapram;
+	UINT32 *m_tmapscroll;
+	UINT32 *m_tmapram2;
+	UINT32 *m_tmapscroll2;
+	UINT32 m_input_sel;
+	UINT32* m_jclub2_tileram;
+	int m_jclub2_gfx_index;
+	UINT32 *m_spriteram;
+
+	required_device<cpu_device> m_maincpu;
+};
+
 
 #define DARKHORS_DEBUG	0
 
@@ -74,41 +97,43 @@ To do:
 ***************************************************************************/
 
 static VIDEO_START( darkhors );
-static VIDEO_UPDATE( darkhors );
+static SCREEN_UPDATE_IND16( darkhors );
 
-static tilemap *darkhors_tmap, *darkhors_tmap2;
-static UINT32 *darkhors_tmapram,  *darkhors_tmapscroll;
-static UINT32 *darkhors_tmapram2, *darkhors_tmapscroll2;
 
 static TILE_GET_INFO( get_tile_info_0 )
 {
-	UINT16 tile		=	darkhors_tmapram[tile_index] >> 16;
-	UINT16 color	=	darkhors_tmapram[tile_index] & 0xffff;
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	UINT16 tile		=	state->m_tmapram[tile_index] >> 16;
+	UINT16 color	=	state->m_tmapram[tile_index] & 0xffff;
 	SET_TILE_INFO(0, tile/2, (color & 0x200) ? (color & 0x1ff) : ((color & 0x0ff) * 4) , 0);
 }
 
 static TILE_GET_INFO( get_tile_info_1 )
 {
-	UINT16 tile		=	darkhors_tmapram2[tile_index] >> 16;
-	UINT16 color	=	darkhors_tmapram2[tile_index] & 0xffff;
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	UINT16 tile		=	state->m_tmapram2[tile_index] >> 16;
+	UINT16 color	=	state->m_tmapram2[tile_index] & 0xffff;
 	SET_TILE_INFO(0, tile/2, (color & 0x200) ? (color & 0x1ff) : ((color & 0x0ff) * 4) , 0);
 }
 
 static WRITE32_HANDLER( darkhors_tmapram_w )
 {
-	COMBINE_DATA(&darkhors_tmapram[offset]);
-	tilemap_mark_tile_dirty(darkhors_tmap, offset);
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_tmapram[offset]);
+	state->m_tmap->mark_tile_dirty(offset);
 }
 static WRITE32_HANDLER( darkhors_tmapram2_w )
 {
-	COMBINE_DATA(&darkhors_tmapram2[offset]);
-	tilemap_mark_tile_dirty(darkhors_tmap2, offset);
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_tmapram2[offset]);
+	state->m_tmap2->mark_tile_dirty(offset);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
-	UINT32 *s		=	spriteram32;
-	UINT32 *end		=	spriteram32 + 0x02000/4;
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	UINT32 *s		=	state->m_spriteram;
+	UINT32 *end		=	state->m_spriteram + 0x02000/4;
 
 	for ( ; s < end; s += 8/4 )
 	{
@@ -133,7 +158,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		sy	=	-sy;
 		sy	+=	0xf8;
 
-		drawgfx_transpen(	bitmap,	cliprect, machine->gfx[0],
+		drawgfx_transpen(	bitmap,	cliprect, machine.gfx[0],
 					code/2,	color,
 					flipx,	flipy,	sx,	sy, 0);
 	}
@@ -141,54 +166,56 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 static VIDEO_START( darkhors )
 {
-	darkhors_tmap			=	tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	state->m_tmap			=	tilemap_create(	machine, get_tile_info_0, tilemap_scan_rows,
 												16,16, 0x40,0x40	);
 
-	darkhors_tmap2			=	tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
+	state->m_tmap2			=	tilemap_create(	machine, get_tile_info_1, tilemap_scan_rows,
 												16,16, 0x40,0x40	);
 
-	tilemap_set_transparent_pen(darkhors_tmap, 0);
-	tilemap_set_transparent_pen(darkhors_tmap2, 0);
+	state->m_tmap->set_transparent_pen(0);
+	state->m_tmap2->set_transparent_pen(0);
 
-	machine->gfx[0]->color_granularity = 64; /* 256 colour sprites with palette selectable on 64 colour boundaries */
+	machine.gfx[0]->color_granularity = 64; /* 256 colour sprites with palette selectable on 64 colour boundaries */
 }
 
-static VIDEO_UPDATE( darkhors )
+static SCREEN_UPDATE_IND16( darkhors )
 {
+	darkhors_state *state = screen.machine().driver_data<darkhors_state>();
 	int layers_ctrl = -1;
 
 #if DARKHORS_DEBUG
-	if (input_code_pressed(screen->machine, KEYCODE_Z))
+	if (screen.machine().input().code_pressed(KEYCODE_Z))
 	{
 		int mask = 0;
-		if (input_code_pressed(screen->machine, KEYCODE_Q))	mask |= 1;
-		if (input_code_pressed(screen->machine, KEYCODE_W))	mask |= 2;
-		if (input_code_pressed(screen->machine, KEYCODE_A))	mask |= 4;
+		if (screen.machine().input().code_pressed(KEYCODE_Q))	mask |= 1;
+		if (screen.machine().input().code_pressed(KEYCODE_W))	mask |= 2;
+		if (screen.machine().input().code_pressed(KEYCODE_A))	mask |= 4;
 		if (mask != 0) layers_ctrl &= mask;
 	}
 #endif
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
 
-	tilemap_set_scrollx(darkhors_tmap,0, (darkhors_tmapscroll[0] >> 16) - 5);
-	tilemap_set_scrolly(darkhors_tmap,0, (darkhors_tmapscroll[0] & 0xffff) - 0xff );
-	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, darkhors_tmap, TILEMAP_DRAW_OPAQUE, 0);
+	state->m_tmap->set_scrollx(0, (state->m_tmapscroll[0] >> 16) - 5);
+	state->m_tmap->set_scrolly(0, (state->m_tmapscroll[0] & 0xffff) - 0xff );
+	if (layers_ctrl & 1)	state->m_tmap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
 
-	tilemap_set_scrollx(darkhors_tmap2,0, (darkhors_tmapscroll2[0] >> 16) - 5);
-	tilemap_set_scrolly(darkhors_tmap2,0, (darkhors_tmapscroll2[0] & 0xffff) - 0xff );
-	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, darkhors_tmap2, 0, 0);
+	state->m_tmap2->set_scrollx(0, (state->m_tmapscroll2[0] >> 16) - 5);
+	state->m_tmap2->set_scrolly(0, (state->m_tmapscroll2[0] & 0xffff) - 0xff );
+	if (layers_ctrl & 2)	state->m_tmap2->draw(bitmap, cliprect, 0, 0);
 
-	if (layers_ctrl & 4)	draw_sprites(screen->machine,bitmap,cliprect);
+	if (layers_ctrl & 4)	draw_sprites(screen.machine(),bitmap,cliprect);
 
 #if DARKHORS_DEBUG
 #if 0
 	popmessage("%04X-%04X %04X-%04X %04X-%04X %04X-%04X %04X-%04X %04X-%04X",
-		darkhors_tmapscroll[0] >> 16, darkhors_tmapscroll[0] & 0xffff,
-		darkhors_tmapscroll[1] >> 16, darkhors_tmapscroll[1] & 0xffff,
-		darkhors_tmapscroll[2] >> 16, darkhors_tmapscroll[2] & 0xffff,
-		darkhors_tmapscroll[3] >> 16, darkhors_tmapscroll[3] & 0xffff,
-		darkhors_tmapscroll[4] >> 16, darkhors_tmapscroll[4] & 0xffff,
-		darkhors_tmapscroll[5] >> 16, darkhors_tmapscroll[5] & 0xffff
+		state->m_tmapscroll[0] >> 16, state->m_tmapscroll[0] & 0xffff,
+		state->m_tmapscroll[1] >> 16, state->m_tmapscroll[1] & 0xffff,
+		state->m_tmapscroll[2] >> 16, state->m_tmapscroll[2] & 0xffff,
+		state->m_tmapscroll[3] >> 16, state->m_tmapscroll[3] & 0xffff,
+		state->m_tmapscroll[4] >> 16, state->m_tmapscroll[4] & 0xffff,
+		state->m_tmapscroll[5] >> 16, state->m_tmapscroll[5] & 0xffff
 	);
 #endif
 #endif
@@ -217,52 +244,35 @@ static const eeprom_interface eeprom_intf =
 //  "*10010xxxx"    // erase all    1 00 10xxxx
 };
 
-static NVRAM_HANDLER( darkhors )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file) eeprom_load(file);
-		else
-		{
-			// Set the EEPROM to Factory Defaults
-			eeprom_set_data(memory_region(machine, "user1"),(1<<7));
-		}
-	}
-}
-
-static WRITE32_HANDLER( darkhors_eeprom_w )
+static WRITE32_DEVICE_HANDLER( darkhors_eeprom_w )
 {
 	if (data & ~0xff000000)
-		logerror("CPU #0 PC: %06X - Unknown EEPROM bit written %08X\n",cpu_get_pc(space->cpu),data);
+		logerror("%s: Unknown EEPROM bit written %08X\n",device->machine().describe_context(),data);
 
 	if ( ACCESSING_BITS_24_31 )
 	{
 		// latch the bit
-		eeprom_write_bit(data & 0x04000000);
+		eeprom_device *eeprom = downcast<eeprom_device *>(device);
+		eeprom->write_bit(data & 0x04000000);
 
 		// reset line asserted: reset.
-		eeprom_set_cs_line((data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom->set_cs_line((data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE );
 
 		// clock line asserted: write latch or select next bit to read
-		eeprom_set_clock_line((data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom->set_clock_line((data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
 static WRITE32_HANDLER( paletteram32_xBBBBBGGGGGRRRRR_dword_w )
 {
-	paletteram16 = (UINT16 *)paletteram32;
 	if (ACCESSING_BITS_16_31)	paletteram16_xBBBBBGGGGGRRRRR_word_w(space, offset*2, data >> 16, mem_mask >> 16);
 	if (ACCESSING_BITS_0_15)	paletteram16_xBBBBBGGGGGRRRRR_word_w(space, offset*2+1, data, mem_mask);
 }
 
-static UINT32 input_sel;
 static WRITE32_HANDLER( darkhors_input_sel_w )
 {
-	COMBINE_DATA(&input_sel);
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_input_sel);
 //  if (ACCESSING_BITS_16_31)    popmessage("%04X",data >> 16);
 }
 
@@ -284,13 +294,14 @@ static int mask_to_bit( int mask )
 
 static READ32_HANDLER( darkhors_input_sel_r )
 {
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
 	// from bit mask to bit number
-	int bit_p1 = mask_to_bit((input_sel & 0x00ff0000) >> 16);
-	int bit_p2 = mask_to_bit((input_sel & 0xff000000) >> 24);
+	int bit_p1 = mask_to_bit((state->m_input_sel & 0x00ff0000) >> 16);
+	int bit_p2 = mask_to_bit((state->m_input_sel & 0xff000000) >> 24);
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3", "IN4", "IN5", "IN6", "IN7" };
 
-	return	(input_port_read(space->machine, portnames[bit_p1]) & 0x00ffffff) |
-			(input_port_read(space->machine, portnames[bit_p2]) & 0xff000000) ;
+	return	(input_port_read(space->machine(), portnames[bit_p1]) & 0x00ffffff) |
+			(input_port_read(space->machine(), portnames[bit_p2]) & 0xff000000) ;
 }
 
 static WRITE32_HANDLER( darkhors_unk1_w )
@@ -299,71 +310,70 @@ static WRITE32_HANDLER( darkhors_unk1_w )
 //  if (ACCESSING_BITS_16_31)    popmessage("%04X",data >> 16);
 }
 
-static ADDRESS_MAP_START( darkhors_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( darkhors_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
-	AM_RANGE(0x490040, 0x490043) AM_WRITE(darkhors_eeprom_w)
+	AM_RANGE(0x490040, 0x490043) AM_DEVWRITE("eeprom", darkhors_eeprom_w)
 	AM_RANGE(0x4e0080, 0x4e0083) AM_READ_PORT("4e0080") AM_WRITE(darkhors_unk1_w)
 
 	AM_RANGE(0x580000, 0x580003) AM_READ_PORT("580000")
 	AM_RANGE(0x580004, 0x580007) AM_READ_PORT("580004")
 	AM_RANGE(0x580008, 0x58000b) AM_READ(darkhors_input_sel_r)
 	AM_RANGE(0x58000c, 0x58000f) AM_WRITE(darkhors_input_sel_w)
-	AM_RANGE(0x580084, 0x580087) AM_DEVREADWRITE8( "oki", okim6295_r, okim6295_w, 0xff000000)
-	AM_RANGE(0x580200, 0x580203) AM_READ(SMH_NOP)
+	AM_RANGE(0x580084, 0x580087) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0xff000000)
+	AM_RANGE(0x580200, 0x580203) AM_READNOP
 	AM_RANGE(0x580400, 0x580403) AM_READ_PORT("580400")
 	AM_RANGE(0x580420, 0x580423) AM_READ_PORT("580420")
 
 	AM_RANGE(0x800000, 0x86bfff) AM_RAM
-	AM_RANGE(0x86c000, 0x86ffff) AM_RAM_WRITE(darkhors_tmapram_w) AM_BASE(&darkhors_tmapram)
-	AM_RANGE(0x870000, 0x873fff) AM_RAM_WRITE(darkhors_tmapram2_w) AM_BASE(&darkhors_tmapram2)
+	AM_RANGE(0x86c000, 0x86ffff) AM_RAM_WRITE(darkhors_tmapram_w) AM_BASE_MEMBER(darkhors_state, m_tmapram)
+	AM_RANGE(0x870000, 0x873fff) AM_RAM_WRITE(darkhors_tmapram2_w) AM_BASE_MEMBER(darkhors_state, m_tmapram2)
 	AM_RANGE(0x874000, 0x87dfff) AM_RAM
-	AM_RANGE(0x87e000, 0x87ffff) AM_RAM AM_BASE(&spriteram32)
-	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE(&paletteram32)
-	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITE(SMH_RAM)	// this should still be palette ram!
-	AM_RANGE(0x8c0120, 0x8c012f) AM_WRITE(SMH_RAM) AM_BASE(&darkhors_tmapscroll)
-	AM_RANGE(0x8c0130, 0x8c013f) AM_WRITE(SMH_RAM) AM_BASE(&darkhors_tmapscroll2)
+	AM_RANGE(0x87e000, 0x87ffff) AM_RAM AM_BASE_MEMBER(darkhors_state, m_spriteram)
+	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITEONLY	// this should still be palette ram!
+	AM_RANGE(0x8c0120, 0x8c012f) AM_WRITEONLY AM_BASE_MEMBER(darkhors_state, m_tmapscroll)
+	AM_RANGE(0x8c0130, 0x8c013f) AM_WRITEONLY AM_BASE_MEMBER(darkhors_state, m_tmapscroll2)
 ADDRESS_MAP_END
 
-static UINT32* jclub2_tileram;
-static int jclub2_gfx_index;
 
 static WRITE32_HANDLER( jclub2_tileram_w )
 {
-	COMBINE_DATA(&jclub2_tileram[offset]);
-	gfx_element_mark_dirty(space->machine->gfx[jclub2_gfx_index], offset/(256/4));
+	darkhors_state *state = space->machine().driver_data<darkhors_state>();
+	COMBINE_DATA(&state->m_jclub2_tileram[offset]);
+	gfx_element_mark_dirty(space->machine().gfx[state->m_jclub2_gfx_index], offset/(256/4));
 
 }
 
-static ADDRESS_MAP_START( jclub2_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( jclub2_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
-	AM_RANGE(0x490040, 0x490043) AM_WRITE(darkhors_eeprom_w)
+	AM_RANGE(0x490040, 0x490043) AM_DEVWRITE("eeprom", darkhors_eeprom_w)
 	AM_RANGE(0x4e0080, 0x4e0083) AM_READ_PORT("4e0080") AM_WRITE(darkhors_unk1_w)
 
 	AM_RANGE(0x580000, 0x580003) AM_READ_PORT("580000")
 	AM_RANGE(0x580004, 0x580007) AM_READ_PORT("580004")
 	AM_RANGE(0x580008, 0x58000b) AM_READ(darkhors_input_sel_r)
 	AM_RANGE(0x58000c, 0x58000f) AM_WRITE(darkhors_input_sel_w)
-	AM_RANGE(0x580200, 0x580203) AM_READ(SMH_NOP)
+	AM_RANGE(0x580200, 0x580203) AM_READNOP
 	AM_RANGE(0x580400, 0x580403) AM_READ_PORT("580400")
 	AM_RANGE(0x580420, 0x580423) AM_READ_PORT("580420")
 
-	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE(&spriteram32)
+	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE_MEMBER(darkhors_state, m_spriteram)
 
-	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE(&paletteram32)
-	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITE(SMH_RAM)	// this should still be palette ram!
+	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITEONLY	// this should still be palette ram!
 
 	AM_RANGE(0x8C0000, 0x8C01ff) AM_RAM
 	AM_RANGE(0x8E0000, 0x8E01ff) AM_RAM
 
-	AM_RANGE(0x900000, 0x90ffff) AM_RAM_WRITE(jclub2_tileram_w) AM_BASE(&jclub2_tileram) // tile data gets decompressed here by main cpu?
+	AM_RANGE(0x900000, 0x90ffff) AM_RAM_WRITE(jclub2_tileram_w) AM_BASE_MEMBER(darkhors_state, m_jclub2_tileram) // tile data gets decompressed here by main cpu?
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( jclub2o_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( jclub2o_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
@@ -415,11 +425,11 @@ static INPUT_PORTS_START( darkhors )
 	PORT_BIT( 0x00100000, IP_ACTIVE_LOW,  IPT_SERVICE  ) PORT_NAME(DEF_STR( Test )) PORT_CODE(KEYCODE_F1) // test
 	PORT_BIT( 0x00200000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )	// door 1
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )	// door 2
-	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL  ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL  ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x01000000, IP_ACTIVE_LOW,  IPT_START1   )	// start
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P1 Payout") PORT_CODE(KEYCODE_LCONTROL)	// payout
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P1 Cancel") PORT_CODE(KEYCODE_LALT)		// cancel
-	PORT_BIT( 0x08000000, IP_ACTIVE_LOW,  IPT_START2   ) 	// start p2
+	PORT_BIT( 0x08000000, IP_ACTIVE_LOW,  IPT_START2   )	// start p2
 	PORT_BIT( 0x10000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P2 Payout") PORT_CODE(KEYCODE_RCONTROL)	// payout p2
 	PORT_BIT( 0x20000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P2 Cancel") PORT_CODE(KEYCODE_RALT)		// cancel p2
 	PORT_BIT( 0x40000000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )
@@ -629,98 +639,101 @@ GFXDECODE_END
 
 ***************************************************************************/
 
-static INTERRUPT_GEN( darkhors )
+static TIMER_DEVICE_CALLBACK( darkhors_irq )
 {
-	switch (cpu_getiloops(device))
-	{
-		case 0:	cpu_set_input_line(device, 3, HOLD_LINE);	break;
-		case 1:	cpu_set_input_line(device, 4, HOLD_LINE);	break;
-		case 2:	cpu_set_input_line(device, 5, HOLD_LINE);	break;
-	}
+	darkhors_state *state = timer.machine().driver_data<darkhors_state>();
+	int scanline = param;
+
+	if(scanline == 248)
+		device_set_input_line(state->m_maincpu, 5, HOLD_LINE);
+
+	if(scanline == 0)
+		device_set_input_line(state->m_maincpu, 3, HOLD_LINE);
+
+	if(scanline >= 1 && scanline <= 247)
+		device_set_input_line(state->m_maincpu, 4, HOLD_LINE);
 }
 
-static MACHINE_DRIVER_START( darkhors )
-	MDRV_CPU_ADD("maincpu", M68EC020, 12000000) // 36MHz/3 ??
-	MDRV_CPU_PROGRAM_MAP(darkhors_map)
-	MDRV_CPU_VBLANK_INT_HACK(darkhors,3)
+static MACHINE_CONFIG_START( darkhors, darkhors_state )
+	MCFG_CPU_ADD("maincpu", M68EC020, 12000000) // 36MHz/3 ??
+	MCFG_CPU_PROGRAM_MAP(darkhors_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", darkhors_irq, "screen", 0, 1)
 
-	MDRV_NVRAM_HANDLER(darkhors)
+	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x190, 0x100)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x190, 0x100+16)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_UPDATE_STATIC(darkhors)
 
-	MDRV_GFXDECODE(darkhors)
-	MDRV_PALETTE_LENGTH(0x10000)
+	MCFG_GFXDECODE(darkhors)
+	MCFG_PALETTE_LENGTH(0x10000)
 
-	MDRV_VIDEO_START(darkhors)
-	MDRV_VIDEO_UPDATE(darkhors)
+	MCFG_VIDEO_START(darkhors)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 528000)	// ??
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 528000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
 static VIDEO_START(jclub2)
 {
- 	/* find first empty slot to decode gfx */
-	for (jclub2_gfx_index = 0; jclub2_gfx_index < MAX_GFX_ELEMENTS; jclub2_gfx_index++)
-		if (machine->gfx[jclub2_gfx_index] == 0)
+	darkhors_state *state = machine.driver_data<darkhors_state>();
+	/* find first empty slot to decode gfx */
+	for (state->m_jclub2_gfx_index = 0; state->m_jclub2_gfx_index < MAX_GFX_ELEMENTS; state->m_jclub2_gfx_index++)
+		if (machine.gfx[state->m_jclub2_gfx_index] == 0)
 			break;
 
-	assert(jclub2_gfx_index != MAX_GFX_ELEMENTS);
+	assert(state->m_jclub2_gfx_index != MAX_GFX_ELEMENTS);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[jclub2_gfx_index] = gfx_element_alloc(machine, &layout_16x16x8_jclub2, (UINT8 *)jclub2_tileram, machine->config->total_colors / 16, 0);
+	machine.gfx[state->m_jclub2_gfx_index] = gfx_element_alloc(machine, &layout_16x16x8_jclub2, (UINT8 *)state->m_jclub2_tileram, machine.total_colors() / 16, 0);
 
 
 }
 
-static VIDEO_UPDATE(jclub2)
+static SCREEN_UPDATE_IND16(jclub2)
 {
 	return 0;
 }
 
-static MACHINE_DRIVER_START( jclub2 )
-	MDRV_CPU_ADD("maincpu", M68EC020, 12000000)
-	MDRV_CPU_PROGRAM_MAP(jclub2_map)
-	MDRV_CPU_VBLANK_INT_HACK(darkhors,3)
+static MACHINE_CONFIG_START( jclub2, darkhors_state )
+	MCFG_CPU_ADD("maincpu", M68EC020, 12000000)
+	MCFG_CPU_PROGRAM_MAP(jclub2_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", darkhors_irq, "screen", 0, 1)
 
-	MDRV_NVRAM_HANDLER(darkhors)
+	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x190, 0x100)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x190, 0x100+16)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_UPDATE_STATIC(jclub2)
 
-	MDRV_GFXDECODE(jclub2)
-	MDRV_PALETTE_LENGTH(0x10000)
+	MCFG_GFXDECODE(jclub2)
+	MCFG_PALETTE_LENGTH(0x10000)
 
-	MDRV_VIDEO_START(jclub2)
-	MDRV_VIDEO_UPDATE(jclub2)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(jclub2)
+MACHINE_CONFIG_END
 
-static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( st0016_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( st0016_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( st0016_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w)
 	//AM_RANGE(0xc0, 0xc0) AM_READ(cmd1_r)
@@ -741,44 +754,42 @@ static VIDEO_START(jclub2o)
 
 }
 
-static VIDEO_UPDATE(jclub2o)
+static SCREEN_UPDATE_IND16(jclub2o)
 {
 	return 0;
 }
 
-static MACHINE_DRIVER_START( jclub2o )
-	MDRV_CPU_ADD("st0016",Z80,8000000)
-	MDRV_CPU_PROGRAM_MAP(st0016_mem)
-	MDRV_CPU_IO_MAP(st0016_io)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_CONFIG_START( jclub2o, darkhors_state )
+	MCFG_CPU_ADD("st0016",Z80,8000000)
+	MCFG_CPU_PROGRAM_MAP(st0016_mem)
+	MCFG_CPU_IO_MAP(st0016_io)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("maincpu", M68EC020, 12000000)
-	MDRV_CPU_PROGRAM_MAP(jclub2o_map)
-	//MDRV_CPU_VBLANK_INT_HACK(darkhors,3)
+	MCFG_CPU_ADD("maincpu", M68EC020, 12000000)
+	MCFG_CPU_PROGRAM_MAP(jclub2o_map)
 
-	MDRV_NVRAM_HANDLER(darkhors)
+	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x190, 0x100)
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(0x190, 0x100)
+	MCFG_SCREEN_VISIBLE_AREA(0, 0x190-1, 8, 0x100-8-1)
+	MCFG_SCREEN_UPDATE_STATIC(jclub2o)
 
-	MDRV_GFXDECODE(jclub2)
-	MDRV_PALETTE_LENGTH(0x10000)
+	MCFG_GFXDECODE(jclub2)
+	MCFG_PALETTE_LENGTH(0x10000)
 
-	MDRV_VIDEO_START(jclub2o)
-	MDRV_VIDEO_UPDATE(jclub2o)
+	MCFG_VIDEO_START(jclub2o)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
-	MDRV_SOUND_CONFIG(st0016_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("stsnd", ST0016, 0)
+	MCFG_SOUND_CONFIG(st0016_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -808,8 +819,8 @@ ROM_START( darkhors )
 	ROM_REGION( 0x80000, "oki", 0 )	// Samples
 	ROM_LOAD( "snd", 0x00000, 0x80000, CRC(7aeb12d3) SHA1(3e81725fc206baa7559da87552a0cd73b7616155) )
 
-	ROM_REGION( 0x80000, "user1", ROMREGION_BE )	// EEPROM
-	ROM_LOAD( "eeprom", 0x00000, 0x80000, CRC(45314fdb) SHA1(c4bd5508e5b51a6e0356c049f1ccf2b5d94caee9) )
+	ROM_REGION( 0x80, "eeprom", 0 )	// EEPROM
+	ROM_LOAD( "eeprom", 0x0000, 0x0080, CRC(1f434f66) SHA1(e1bee11d83fb72aed9c312bdc794d8b9a6645534) )
 ROM_END
 
 /*
@@ -877,8 +888,6 @@ ROM_START( jclub2 )
 	// data distribution would indicate this is a sound rom
 	ROM_LOAD( "m88-02.u6", 0x00000, 0x100000, CRC(0dd3436a) SHA1(809d3b7a26d36f71da04036fd8ab5d0c5089392a) )
 
-	ROM_REGION( 0x80000, "user1", ROMREGION_ERASEFF | ROMREGION_BE )	// EEPROM
-
 	ROM_REGION( 0x80000, "misc", ROMREGION_ERASEFF )
 	ROM_LOAD( "gal16v8b-m88-03.bin", 0x000, 0x117, CRC(6d9c882e) SHA1(84cb95ab540290c2f8b740668360e9c643a67dcf) )
 	ROM_LOAD( "gal16v8b-m88-04.bin", 0x000, 0x117, CRC(5e79f292) SHA1(5e44c234e2b15d486a1af71fee986892aa245b4d) )
@@ -929,8 +938,6 @@ ROM_START( jclub2o )
 	ROM_REGION( 0x90000, "st0016", 0 ) // z80 core (used for sound?)
 	ROM_LOAD( "sx006-04.u87", 0x10000, 0x80000, CRC(a87adedd) SHA1(1cd5af2d03738fff2230b46241659179467c828c) )
 	ROM_COPY( "st0016",  0x10000, 0x00000, 0x08000 )
-
-	ROM_REGION( 0x80000, "user1", ROMREGION_ERASEFF | ROMREGION_BE )	// EEPROM
 ROM_END
 
 /***************************************************************************
@@ -943,8 +950,8 @@ ROM_END
 
 static DRIVER_INIT( darkhors )
 {
-	UINT32 *rom    = (UINT32 *) memory_region(machine, "maincpu");
-	UINT8  *eeprom = (UINT8 *)  memory_region(machine, "user1");
+	UINT32 *rom    = (UINT32 *) machine.region("maincpu")->base();
+	UINT8  *eeprom = (UINT8 *)  machine.region("eeprom")->base();
 	int i;
 
 #if 1
@@ -956,10 +963,11 @@ static DRIVER_INIT( darkhors )
 	rom[0x04600/4]	=	0x4e714eb9;
 #endif
 
-	for (i = 0; i < (1<<7); i++)
-		eeprom[i] = eeprom[i*2];
+	if (eeprom != NULL)
+		for (i = 0; i < (1<<7); i++)
+			eeprom[i] = eeprom[i*2];
 }
 
 GAME( 199?, jclub2,   0,      jclub2,  darkhors, 0,        ROT0, "Seta", "Jockey Club II (newer hardware)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 199?, jclub2o,  jclub2, jclub2o, darkhors, 0,        ROT0, "Seta", "Jockey Club II (older hardware)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 2001, darkhors, jclub2, darkhors, darkhors, darkhors, ROT0, "bootleg", "Dark Horse (bootleg of Jockey Club II)", GAME_IMPERFECT_GRAPHICS )
+GAME( 2001, darkhors, jclub2, darkhors,darkhors, darkhors, ROT0, "bootleg", "Dark Horse (bootleg of Jockey Club II)", GAME_IMPERFECT_GRAPHICS )

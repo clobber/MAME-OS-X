@@ -3,12 +3,21 @@
 #ifndef __OKIM6376_H__
 #define __OKIM6376_H__
 
-/* an interface for the OKIM6376 and similar chips */
+#include "devlegcy.h"
+
+/* an interface for the OKIM6376 and similar chips (CPU interface only) */
 
 READ8_DEVICE_HANDLER( okim6376_r );
 WRITE8_DEVICE_HANDLER( okim6376_w );
 
-DEVICE_GET_INFO( okim6376 );
-#define SOUND_OKIM6376 DEVICE_GET_INFO_NAME( okim6376 )
+DECLARE_LEGACY_SOUND_DEVICE(OKIM6376, okim6376);
+
+WRITE_LINE_DEVICE_HANDLER( okim6376_st_w );
+WRITE_LINE_DEVICE_HANDLER( okim6376_ch2_w );
+
+READ_LINE_DEVICE_HANDLER( okim6376_busy_r );
+READ_LINE_DEVICE_HANDLER( okim6376_nar_r );
+
+void okim6376_set_frequency(device_t *device, int frequency);
 
 #endif /* __OKIM6376_H__ */

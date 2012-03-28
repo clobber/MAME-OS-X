@@ -21,7 +21,7 @@
  *
  *****************************************************************************/
 
-#include "cpuexec.h"
+#include "emu.h"
 #include "debugger.h"
 #include "cp1610.h"
 
@@ -37,7 +37,7 @@ struct _cp1610_state
 	UINT8	flags;	/* flags */
 	int 	intr_enabled;
 	//int       (*reset_callback)(cp1610_state *cpustate);
-	cpu_irq_callback irq_callback;
+	device_irq_callback irq_callback;
 	UINT16	intr_vector;
 	int 	reset_state;
 	int		intr_state;
@@ -46,34 +46,32 @@ struct _cp1610_state
 	int		intr_pending;
 	int		intrm_pending;
 	int		mask_interrupts;
-	const device_config *device;
-	const address_space *program;
+	legacy_cpu_device *device;
+	address_space *program;
 	int icount;
 };
 
-INLINE cp1610_state *get_safe_token(const device_config *device)
+INLINE cp1610_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_CP1610);
-	return (cp1610_state *)device->token;
+	assert(device->type() == CP1610);
+	return (cp1610_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
-#define cp1610_readop(A) memory_read_word_16be(cpustate->program, (A)<<1)
-#define cp1610_readmem16(A) memory_read_word_16be(cpustate->program, (A)<<1)
-#define cp1610_writemem16(A,B) memory_write_word_16be(cpustate->program, (A)<<1,B)
+#define cp1610_readop(A) cpustate->program->read_word((A)<<1)
+#define cp1610_readmem16(A) cpustate->program->read_word((A)<<1)
+#define cp1610_writemem16(A,B) cpustate->program->write_word((A)<<1,B)
 
 /* clear all flags */
 #define CLR_SZOC                \
 	cpustate->flags &= ~(S|Z|C|OV)
 
 /* clear sign and zero flags */
-#define CLR_SZ                	\
+#define CLR_SZ              	\
 	cpustate->flags &= ~(S|Z)
 
 /* clear sign,zero, and carry flags */
-#define CLR_SZC                	\
+#define CLR_SZC             	\
 	cpustate->flags &= ~(S|Z|C)
 
 /* set sign and zero flags */
@@ -1563,7 +1561,7 @@ static void cp1610_xori(cp1610_state *cpustate, int d)
 static CPU_RESET( cp1610 )
 {
 	/* This is how we set the reset vector */
-	cpu_set_input_line(device, CP1610_RESET, PULSE_LINE);
+	device_set_input_line(device, CP1610_RESET, PULSE_LINE);
 }
 
 /***************************************************
@@ -2127,7 +2125,7 @@ static void cp1610_do_sdbd(cp1610_state *cpustate)
 	case 0x3e8: /* 1 110 101 xxx */ cp1610_sdbd_xorat_i(cpustate, 5,dest);	break;
 	case 0x3f0: /* 1 110 110 xxx */ cp1610_sdbd_xorat_d(cpustate, 6,dest);	break; /* ??? */
 	case 0x3f8: /* 1 110 111 xxx */ cp1610_sdbd_xori(cpustate, dest);			break;
-	default: 						cp1610_illegal(cpustate); break;
+	default:						cp1610_illegal(cpustate); break;
 	}
 }
 
@@ -2176,8 +2174,6 @@ static CPU_EXECUTE( cp1610 )
 {
 	cp1610_state *cpustate = get_safe_token(device);
 	UINT16 opcode;
-
-	cpustate->icount = cycles;
 
     do
     {
@@ -3382,8 +3378,6 @@ static CPU_EXECUTE( cp1610 )
 		}
 
 	} while( cpustate->icount > 0 );
-
-	return cycles - cpustate->icount;
 }
 
 static CPU_INIT( cp1610 )
@@ -3395,7 +3389,19 @@ static CPU_INIT( cp1610 )
 	cpustate->intrm_pending = 0;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
+
+	device->save_item(NAME(cpustate->r));
+	device->save_item(NAME(cpustate->flags));
+	device->save_item(NAME(cpustate->intr_enabled));
+	device->save_item(NAME(cpustate->intr_vector));
+	device->save_item(NAME(cpustate->reset_state));
+	device->save_item(NAME(cpustate->intr_state));
+	device->save_item(NAME(cpustate->intrm_state));
+	device->save_item(NAME(cpustate->reset_pending));
+	device->save_item(NAME(cpustate->intr_pending));
+	device->save_item(NAME(cpustate->intrm_pending));
+	device->save_item(NAME(cpustate->mask_interrupts));
 }
 
 static void cp1610_set_irq_line(cp1610_state *cpustate, UINT32 irqline, int state)
@@ -3403,8 +3409,7 @@ static void cp1610_set_irq_line(cp1610_state *cpustate, UINT32 irqline, int stat
 	switch(irqline)
 	{
 		case CP1610_INT_INTRM:
-			if (state == ASSERT_LINE)
-				cpustate->intrm_pending = 1;
+			cpustate->intrm_pending = (state == ASSERT_LINE);
 			cpustate->intrm_state = state;
 			break;
 		case CP1610_RESET:
@@ -3432,7 +3437,7 @@ static CPU_SET_INFO( cp1610 )
 	case CPUINFO_INT_INPUT_STATE + CP1610_INT_INTR:
 			cp1610_set_irq_line(cpustate, state-CPUINFO_INT_INPUT_STATE, info->i);		break;
 
-	case CPUINFO_INT_REGISTER + CP1610_R0: cpustate->r[0] = info->i; 			break;
+	case CPUINFO_INT_REGISTER + CP1610_R0: cpustate->r[0] = info->i;			break;
 	case CPUINFO_INT_REGISTER + CP1610_R1: cpustate->r[1] = info->i;			break;
 	case CPUINFO_INT_REGISTER + CP1610_R2: cpustate->r[2] = info->i;			break;
 	case CPUINFO_INT_REGISTER + CP1610_R3: cpustate->r[3] = info->i;			break;
@@ -3448,7 +3453,7 @@ static CPU_SET_INFO( cp1610 )
 
 CPU_GET_INFO( cp1610 )
 {
-	cp1610_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	cp1610_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 	/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -3463,15 +3468,15 @@ CPU_GET_INFO( cp1610 )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 1;			break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 7;			break;
 
-	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = -1;	break;
-	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;	break;
-	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;	break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -1;	break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;	break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;	break;
 
 	case CPUINFO_INT_PREVIOUSPC:		info->i = 0;	/* TODO??? */		break;
 
@@ -3501,7 +3506,7 @@ CPU_GET_INFO( cp1610 )
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
 
 	/* --- the following bits of info are returned as NULL-terminated strings --- */
-	case DEVINFO_STR_NAME: 			strcpy(info->s, "CP1610");		break;
+	case DEVINFO_STR_NAME:			strcpy(info->s, "CP1610");		break;
 	case DEVINFO_STR_FAMILY:	strcpy(info->s, "");				break;
 	case DEVINFO_STR_VERSION:	strcpy(info->s, "1.0");			break;
 	case DEVINFO_STR_SOURCE_FILE:		strcpy(info->s, __FILE__);		break;
@@ -3512,7 +3517,7 @@ CPU_GET_INFO( cp1610 )
 			sprintf(info->s, "%c%c%c%c",
 				cpustate->flags & 0x80 ? 'S':'.',
 				cpustate->flags & 0x40 ? 'Z':'.',
-				cpustate->flags & 0x10 ? 'V':'.',
+				cpustate->flags & 0x20 ? 'V':'.',
 				cpustate->flags & 0x10 ? 'C':'.');
 			break;
 	case CPUINFO_STR_REGISTER+CP1610_R0: sprintf(info->s, "R0:%04X", cpustate->r[0]); break;
@@ -3528,4 +3533,4 @@ CPU_GET_INFO( cp1610 )
 	return;
 }
 
-
+DEFINE_LEGACY_CPU_DEVICE(CP1610, cp1610);

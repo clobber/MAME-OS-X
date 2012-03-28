@@ -271,10 +271,6 @@ OP_HANDLER( lbra )
 {
 	IMMWORD(EAP);
 	PC += EA;
-
-	if ( EA == 0xfffd )  /* EHC 980508 speed up busy loop */
-		if ( m68_state->icount > 0)
-			m68_state->icount = 0;
 }
 
 /* $17 LBSR relative ----- */
@@ -479,16 +475,13 @@ OP_HANDLER( bra )
 	UINT8 t;
 	IMMBYTE(t);
 	PC += SIGNED(t);
-	/* JB 970823 - speed up busy loops */
-	if( t == 0xfe )
-		if( m68_state->icount > 0 ) m68_state->icount = 0;
 }
 
 /* $21 BRN relative ----- */
+static UINT8 brn_temp;	// hack around GCC 4.6 error because we need the side effects of IMMBYTE
 OP_HANDLER( brn )
 {
-	UINT8 t;
-	IMMBYTE(t);
+	IMMBYTE(brn_temp);
 }
 
 /* $1021 LBRN relative ----- */
@@ -945,7 +938,7 @@ OP_HANDLER( tfmpp )
 			case  2: srcValue = RM(Y++); break;
 			case  3: srcValue = RM(U++); break;
 			case  4: srcValue = RM(S++); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		switch(tb&15) {
@@ -954,7 +947,7 @@ OP_HANDLER( tfmpp )
 			case  2: WM(Y++, srcValue); break;
 			case  3: WM(U++, srcValue); break;
 			case  4: WM(S++, srcValue); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		PCD = PCD - 3;
@@ -979,7 +972,7 @@ OP_HANDLER( tfmmm )
 			case  2: srcValue = RM(Y--); break;
 			case  3: srcValue = RM(U--); break;
 			case  4: srcValue = RM(S--); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		switch(tb&15) {
@@ -988,7 +981,7 @@ OP_HANDLER( tfmmm )
 			case  2: WM(Y--, srcValue); break;
 			case  3: WM(U--, srcValue); break;
 			case  4: WM(S--, srcValue); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		PCD = PCD - 3;
@@ -1013,7 +1006,7 @@ OP_HANDLER( tfmpc )
 			case  2: srcValue = RM(Y++); break;
 			case  3: srcValue = RM(U++); break;
 			case  4: srcValue = RM(S++); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		switch(tb&15) {
@@ -1022,7 +1015,7 @@ OP_HANDLER( tfmpc )
 			case  2: WM(Y, srcValue); break;
 			case  3: WM(U, srcValue); break;
 			case  4: WM(S, srcValue); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		PCD = PCD - 3;
@@ -1047,7 +1040,7 @@ OP_HANDLER( tfmcp )
 			case  2: srcValue = RM(Y); break;
 			case  3: srcValue = RM(U); break;
 			case  4: srcValue = RM(S); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		switch(tb&15) {
@@ -1056,7 +1049,7 @@ OP_HANDLER( tfmcp )
 			case  2: WM(Y++, srcValue); break;
 			case  3: WM(U++, srcValue); break;
 			case  4: WM(S++, srcValue); break;
-			default: IIError(m68_state); return;		/* reg PC thru F */
+			default: IIError(m68_state); return;		/* reg PC through F */
 		}
 
 		PCD = PCD - 3;
@@ -5310,10 +5303,10 @@ OP_HANDLER( pref10 )
 		case 0x35: orr(m68_state);			break;
 		case 0x36: eorr(m68_state);			break;
 		case 0x37: cmpr(m68_state);			break;
-		case 0x38: pshsw(m68_state); 		break;
-		case 0x39: pulsw(m68_state); 		break;
-		case 0x3a: pshuw(m68_state); 		break;
-		case 0x3b: puluw(m68_state); 		break;
+		case 0x38: pshsw(m68_state);		break;
+		case 0x39: pulsw(m68_state);		break;
+		case 0x3a: pshuw(m68_state);		break;
+		case 0x3b: puluw(m68_state);		break;
 		case 0x3f: swi2(m68_state);		    break;
 
 		case 0x40: negd(m68_state);			break;
@@ -5437,17 +5430,17 @@ OP_HANDLER( pref11 )
 	switch( ireg2 )
 	{
 		case 0x30: band(m68_state);			break;
-		case 0x31: biand(m68_state); 		break;
+		case 0x31: biand(m68_state);		break;
 		case 0x32: bor(m68_state);			break;
 		case 0x33: bior(m68_state);			break;
 		case 0x34: beor(m68_state);			break;
-		case 0x35: bieor(m68_state); 		break;
+		case 0x35: bieor(m68_state);		break;
 		case 0x36: ldbt(m68_state);			break;
 		case 0x37: stbt(m68_state);			break;
-		case 0x38: tfmpp(m68_state); 		break;	/* Timing for TFM is actually 6+3n.        */
-		case 0x39: tfmmm(m68_state); 		break;	/* To avoid saving the state, I decided    */
-		case 0x3a: tfmpc(m68_state); 		break;	/* to push the initial 6 cycles to the end */
-		case 0x3b: tfmcp(m68_state); 		break;  /* We will soon see how this fairs!        */
+		case 0x38: tfmpp(m68_state);		break;	/* Timing for TFM is actually 6+3n.        */
+		case 0x39: tfmmm(m68_state);		break;	/* To avoid saving the state, I decided    */
+		case 0x3a: tfmpc(m68_state);		break;	/* to push the initial 6 cycles to the end */
+		case 0x3b: tfmcp(m68_state);		break;  /* We will soon see how this fairs!        */
 		case 0x3c: bitmd_im(m68_state);		break;
 		case 0x3d: ldmd_im(m68_state);		break;
 		case 0x3f: swi3(m68_state);			break;

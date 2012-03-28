@@ -1,3 +1,4 @@
+#include "emu.h"
 #include "debugger.h"
 #include "se3208.h"
 
@@ -21,9 +22,10 @@ struct _se3208_state_t
 	UINT32 ER;
 	UINT32 PPC;
 
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
 	UINT8 IRQ;
 	UINT8 NMI;
 
@@ -57,63 +59,61 @@ typedef void (*_OP)(se3208_state_t *se3208_state, UINT16 Opcode);
 #define INST(a) static void a(se3208_state_t *se3208_state, UINT16 Opcode)
 static _OP *OpTable=NULL;
 
-INLINE se3208_state_t *get_safe_token(const device_config *device)
+INLINE se3208_state_t *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_SE3208);
-	return (se3208_state_t *)device->token;
+	assert(device->type() == SE3208);
+	return (se3208_state_t *)downcast<legacy_cpu_device *>(device)->token();
 }
 
-INLINE UINT32 read_dword_unaligned(const address_space *space, UINT32 address)
+INLINE UINT32 read_dword_unaligned(address_space *space, UINT32 address)
 {
 	if (address & 3)
-		return memory_read_byte_32le(space,address) | memory_read_byte_32le(space,address+1)<<8 | memory_read_byte_32le(space,address+2)<<16 | memory_read_byte_32le(space,address+3)<<24;
+		return space->read_byte(address) | space->read_byte(address+1)<<8 | space->read_byte(address+2)<<16 | space->read_byte(address+3)<<24;
 	else
-		return memory_read_dword_32le(space,address);
+		return space->read_dword(address);
 }
 
-INLINE UINT16 read_word_unaligned(const address_space *space, UINT32 address)
+INLINE UINT16 read_word_unaligned(address_space *space, UINT32 address)
 {
 	if (address & 1)
-		return memory_read_byte_32le(space,address) | memory_read_byte_32le(space,address+1)<<8;
+		return space->read_byte(address) | space->read_byte(address+1)<<8;
 	else
-		return memory_read_word_32le(space,address);
+		return space->read_word(address);
 }
 
-INLINE void write_dword_unaligned(const address_space *space, UINT32 address, UINT32 data)
+INLINE void write_dword_unaligned(address_space *space, UINT32 address, UINT32 data)
 {
 	if (address & 3)
 	{
-		memory_write_byte_32le(space, address, data & 0xff);
-		memory_write_byte_32le(space, address+1, (data>>8)&0xff);
-		memory_write_byte_32le(space, address+2, (data>>16)&0xff);
-		memory_write_byte_32le(space, address+3, (data>>24)&0xff);
+		space->write_byte(address, data & 0xff);
+		space->write_byte(address+1, (data>>8)&0xff);
+		space->write_byte(address+2, (data>>16)&0xff);
+		space->write_byte(address+3, (data>>24)&0xff);
 	}
 	else
 	{
-		memory_write_dword_32le(space, address, data);
+		space->write_dword(address, data);
 	}
 }
 
-INLINE void write_word_unaligned(const address_space *space, UINT32 address, UINT16 data)
+INLINE void write_word_unaligned(address_space *space, UINT32 address, UINT16 data)
 {
 	if (address & 1)
 	{
-		memory_write_byte_32le(space, address, data & 0xff);
-		memory_write_byte_32le(space, address+1, (data>>8)&0xff);
+		space->write_byte(address, data & 0xff);
+		space->write_byte(address+1, (data>>8)&0xff);
 	}
 	else
 	{
-		memory_write_word_32le(space, address, data);
+		space->write_word(address, data);
 	}
 }
 
 
 INLINE UINT8 SE3208_Read8(se3208_state_t *se3208_state, UINT32 addr)
 {
-	return memory_read_byte_32le(se3208_state->program,addr);
+	return se3208_state->program->read_byte(addr);
 }
 
 INLINE UINT16 SE3208_Read16(se3208_state_t *se3208_state, UINT32 addr)
@@ -128,7 +128,7 @@ INLINE UINT32 SE3208_Read32(se3208_state_t *se3208_state, UINT32 addr)
 
 INLINE void SE3208_Write8(se3208_state_t *se3208_state, UINT32 addr,UINT8 val)
 {
-	memory_write_byte_32le(se3208_state->program,addr,val);
+	se3208_state->program->write_byte(addr,val);
 }
 
 INLINE void SE3208_Write16(se3208_state_t *se3208_state, UINT32 addr,UINT16 val)
@@ -1705,7 +1705,7 @@ static void BuildTable(void)
 {
 	int i;
 	if(!OpTable)
-		OpTable=alloc_array_or_die(_OP, 0x10000);
+		OpTable=global_alloc_array(_OP, 0x10000);
 	for(i=0;i<0x10000;++i)
 		OpTable[i]=DecodeOp(i);
 }
@@ -1714,11 +1714,12 @@ static CPU_RESET( se3208 )
 {
 	se3208_state_t *se3208_state = get_safe_token(device);
 
-	cpu_irq_callback save_irqcallback = se3208_state->irq_callback;
+	device_irq_callback save_irqcallback = se3208_state->irq_callback;
 	memset(se3208_state,0,sizeof(se3208_state_t));
 	se3208_state->irq_callback = save_irqcallback;
 	se3208_state->device = device;
-	se3208_state->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	se3208_state->program = device->space(AS_PROGRAM);
+	se3208_state->direct = &se3208_state->program->direct();
 	se3208_state->PC=SE3208_Read32(se3208_state, 0);
 	se3208_state->SR=0;
 	se3208_state->IRQ=CLEAR_LINE;
@@ -1757,10 +1758,9 @@ static CPU_EXECUTE( se3208 )
 {
 	se3208_state_t *se3208_state = get_safe_token(device);
 
-	se3208_state->icount=cycles;
 	do
 	{
-		UINT16 Opcode=memory_decrypted_read_word(se3208_state->program, WORD_XOR_LE(se3208_state->PC));
+		UINT16 Opcode=se3208_state->direct->read_decrypted_word(se3208_state->PC, WORD_XOR_LE(0));
 
 		debugger_instruction_hook(device, se3208_state->PC);
 
@@ -1779,8 +1779,6 @@ static CPU_EXECUTE( se3208 )
 		}
 		--(se3208_state->icount);
 	} while(se3208_state->icount>0);
-
-	return cycles-se3208_state->icount;
 }
 
 static CPU_INIT( se3208 )
@@ -1791,13 +1789,16 @@ static CPU_INIT( se3208 )
 
 	se3208_state->irq_callback = irqcallback;
 	se3208_state->device = device;
-	se3208_state->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	se3208_state->program = device->space(AS_PROGRAM);
+	se3208_state->direct = &se3208_state->program->direct();
 }
 
 static CPU_EXIT( se3208 )
 {
-	if(OpTable)
-		free(OpTable);
+	if(OpTable) {
+		global_free(OpTable);
+		OpTable = NULL;
+	}
 }
 
 
@@ -1823,8 +1824,8 @@ static CPU_SET_INFO( se3208 )
 		case CPUINFO_INT_REGISTER + SE3208_PC:
 		case CPUINFO_INT_PC:							se3208_state->PC = info->i;					break;
 		case CPUINFO_INT_REGISTER + SE3208_SP:
-		case CPUINFO_INT_SP:							se3208_state->SP = info->i;    				break;
-		case CPUINFO_INT_REGISTER + SE3208_ER:   		se3208_state->ER = info->i;	   				break;
+		case CPUINFO_INT_SP:							se3208_state->SP = info->i; 				break;
+		case CPUINFO_INT_REGISTER + SE3208_ER:  		se3208_state->ER = info->i;					break;
 		case CPUINFO_INT_REGISTER + SE3208_SR:			se3208_state->SR = info->i;				    break;
 		case CPUINFO_INT_REGISTER + SE3208_R0:			se3208_state->R[ 0] = info->i;				break;
 		case CPUINFO_INT_REGISTER + SE3208_R1:			se3208_state->R[ 1] = info->i;				break;
@@ -1840,7 +1841,7 @@ static CPU_SET_INFO( se3208 )
 
 CPU_GET_INFO( se3208 )
 {
-	se3208_state_t *se3208_state = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	se3208_state_t *se3208_state = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1856,15 +1857,15 @@ CPU_GET_INFO( se3208 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + SE3208_INT:		info->i = se3208_state->IRQ;					break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = se3208_state->NMI;					break;
@@ -1874,7 +1875,7 @@ CPU_GET_INFO( se3208 )
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + SE3208_PC:			info->i = se3208_state->PC;					break;
 		case CPUINFO_INT_REGISTER + SE3208_SP:
-		case CPUINFO_INT_SP:   							info->i = se3208_state->SP;					break;
+		case CPUINFO_INT_SP:							info->i = se3208_state->SP;					break;
 		case CPUINFO_INT_REGISTER + SE3208_SR:			info->i = se3208_state->SR;					break;
 		case CPUINFO_INT_REGISTER + SE3208_ER:			info->i = se3208_state->ER;					break;
 		case CPUINFO_INT_REGISTER + SE3208_R0:			info->i = se3208_state->R[ 0];				break;
@@ -1923,7 +1924,7 @@ CPU_GET_INFO( se3208 )
 		case CPUINFO_STR_REGISTER + SE3208_PC:				sprintf(info->s, "PC  :%08X", se3208_state->PC); break;
 		case CPUINFO_STR_REGISTER + SE3208_SR:				sprintf(info->s, "SR  :%08X", se3208_state->SR); break;
 		case CPUINFO_STR_REGISTER + SE3208_ER:				sprintf(info->s, "ER  :%08X", se3208_state->ER); break;
-		case CPUINFO_STR_REGISTER + SE3208_SP: 				sprintf(info->s, "SP  :%08X", se3208_state->SP); break;
+		case CPUINFO_STR_REGISTER + SE3208_SP:				sprintf(info->s, "SP  :%08X", se3208_state->SP); break;
 		case CPUINFO_STR_REGISTER + SE3208_R0:				sprintf(info->s, "R0  :%08X", se3208_state->R[ 0]); break;
 		case CPUINFO_STR_REGISTER + SE3208_R1:				sprintf(info->s, "R1  :%08X", se3208_state->R[ 1]); break;
 		case CPUINFO_STR_REGISTER + SE3208_R2:				sprintf(info->s, "R2  :%08X", se3208_state->R[ 2]); break;
@@ -1936,3 +1937,5 @@ CPU_GET_INFO( se3208 )
 	}
 }
 
+
+DEFINE_LEGACY_CPU_DEVICE(SE3208, se3208);

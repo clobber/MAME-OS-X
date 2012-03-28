@@ -70,13 +70,9 @@
 
 *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "m6809.h"
-
-/* Enable big switch statement for the main opcodes */
-#ifndef BIG_SWITCH
-#define BIG_SWITCH  1
-#endif
 
 #define VERBOSE 0
 
@@ -97,27 +93,26 @@ struct _m68_state_t
 	UINT8	irq_state[2];
 
 	int 	extra_cycles; /* cycles used up by interrupts */
-	cpu_irq_callback irq_callback;
-	const device_config *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const m6809_config *config;
 	int		icount;
 	PAIR	ea;			/* effective address */
 
 	/* Memory spaces */
-    const address_space *program;
+    address_space *program;
+    direct_read_data *direct;
 
 	UINT8	int_state;	/* SYNC and CWAI flags */
 	UINT8	nmi_state;
 };
 
-INLINE m68_state_t *get_safe_token(const device_config *device)
+INLINE m68_state_t *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_M6809 ||
-		   cpu_get_type(device) == CPU_M6809E);
-	return (m68_state_t *)device->token;
+	assert(device->type() == M6809 ||
+		   device->type() == M6809E);
+	return (m68_state_t *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static void check_irq_lines( m68_state_t *m68_state );
@@ -167,32 +162,32 @@ INLINE void fetch_effective_address( m68_state_t *m68_state );
 
 #define M6809_CWAI		8	/* set when CWAI is waiting for an interrupt */
 #define M6809_SYNC		16	/* set when SYNC is waiting for an interrupt */
-#define M6809_LDS		32	/* set when LDS occured at least once */
+#define M6809_LDS		32	/* set when LDS occurred at least once */
 
 
 /****************************************************************************/
 /* Read a byte from given memory location                                   */
 /****************************************************************************/
-#define RM(Addr) ((unsigned)memory_read_byte_8be(m68_state->program, Addr))
+#define RM(Addr) ((unsigned)m68_state->program->read_byte(Addr))
 
 /****************************************************************************/
 /* Write a byte to given memory location                                    */
 /****************************************************************************/
-#define WM(Addr,Value) (memory_write_byte_8be(m68_state->program, Addr,Value))
+#define WM(Addr,Value) (m68_state->program->write_byte(Addr,Value))
 
 /****************************************************************************/
 /* Z80_RDOP() is identical to Z80_RDMEM() except it is used for reading     */
 /* opcodes. In case of system with memory mapped I/O, this function can be  */
 /* used to greatly speed up emulation                                       */
 /****************************************************************************/
-#define ROP(Addr) ((unsigned)memory_decrypted_read_byte(m68_state->program, Addr))
+#define ROP(Addr) ((unsigned)m68_state->direct->read_decrypted_byte(Addr))
 
 /****************************************************************************/
 /* Z80_RDOP_ARG() is identical to Z80_RDOP() except it is used for reading  */
 /* opcode arguments. This difference can be used to support systems that    */
 /* use different encoding mechanisms for opcodes and opcode arguments       */
 /****************************************************************************/
-#define ROP_ARG(Addr) ((unsigned)memory_raw_read_byte(m68_state->program, Addr))
+#define ROP_ARG(Addr) ((unsigned)m68_state->direct->read_raw_byte(Addr))
 
 /* macros to access memory */
 #define IMMBYTE(b)	b = ROP_ARG(PCD); PC++
@@ -238,7 +233,7 @@ INLINE void fetch_effective_address( m68_state_t *m68_state );
 #define SET_FLAGS8(a,b,r)	{SET_N8(r);SET_Z8(r);SET_V8(a,b,r);SET_C8(r);}
 #define SET_FLAGS16(a,b,r)	{SET_N16(r);SET_Z16(r);SET_V16(a,b,r);SET_C16(r);}
 
-#define NXORV  			((CC&CC_N)^((CC&CC_V)<<2))
+#define NXORV			((CC&CC_N)^((CC&CC_V)<<2))
 
 /* for treating an unsigned byte as a signed word */
 #define SIGNED(b) ((UINT16)(b&0x80?b|0xff00:b))
@@ -376,29 +371,30 @@ static CPU_INIT( m6809 )
 		0
 	};
 
-	const m6809_config *configdata = device->static_config ? (const m6809_config *)device->static_config : &default_config;
+	const m6809_config *configdata = device->static_config() ? (const m6809_config *)device->static_config() : &default_config;
 	m68_state_t *m68_state = get_safe_token(device);
 
 	m68_state->config = configdata;
 	m68_state->irq_callback = irqcallback;
 	m68_state->device = device;
 
-	m68_state->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	m68_state->program = device->space(AS_PROGRAM);
+	m68_state->direct = &m68_state->program->direct();
 
 	/* setup regtable */
 
-	state_save_register_device_item(device, 0, PC);
-	state_save_register_device_item(device, 0, PPC);
-	state_save_register_device_item(device, 0, D);
-	state_save_register_device_item(device, 0, DP);
-	state_save_register_device_item(device, 0, U);
-	state_save_register_device_item(device, 0, S);
-	state_save_register_device_item(device, 0, X);
-	state_save_register_device_item(device, 0, Y);
-	state_save_register_device_item(device, 0, CC);
-	state_save_register_device_item_array(device, 0, m68_state->irq_state);
-	state_save_register_device_item(device, 0, m68_state->int_state);
-	state_save_register_device_item(device, 0, m68_state->nmi_state);
+	device->save_item(NAME(PC));
+	device->save_item(NAME(PPC));
+	device->save_item(NAME(D));
+	device->save_item(NAME(DP));
+	device->save_item(NAME(U));
+	device->save_item(NAME(S));
+	device->save_item(NAME(X));
+	device->save_item(NAME(Y));
+	device->save_item(NAME(CC));
+	device->save_item(NAME(m68_state->irq_state));
+	device->save_item(NAME(m68_state->int_state));
+	device->save_item(NAME(m68_state->nmi_state));
 
 }
 
@@ -437,7 +433,7 @@ static void set_irq_line(m68_state_t *m68_state, int irqline, int state)
 	{
 		if (m68_state->nmi_state == state) return;
 		m68_state->nmi_state = state;
-		LOG(("M6809 '%s' set_irq_line (NMI) %d\n", m68_state->device->tag, state));
+		LOG(("M6809 '%s' set_irq_line (NMI) %d\n", m68_state->device->tag(), state));
 		if( state == CLEAR_LINE ) return;
 
 		/* if the stack was not yet initialized */
@@ -468,7 +464,7 @@ static void set_irq_line(m68_state_t *m68_state, int irqline, int state)
 	}
 	else if (irqline < 2)
 	{
-	    LOG(("M6809 '%s' set_irq_line %d, %d\n", m68_state->device->tag, irqline, state));
+	    LOG(("M6809 '%s' set_irq_line %d, %d\n", m68_state->device->tag(), irqline, state));
 		m68_state->irq_state[irqline] = state;
 		if (state == CLEAR_LINE) return;
 		check_irq_lines(m68_state);
@@ -487,7 +483,7 @@ static CPU_EXECUTE( m6809 )	/* NS 970908 */
 {
 	m68_state_t *m68_state = get_safe_token(device);
 
-    m68_state->icount = cycles - m68_state->extra_cycles;
+    m68_state->icount -= m68_state->extra_cycles;
 	m68_state->extra_cycles = 0;
 
 	check_irq_lines(m68_state);
@@ -507,278 +503,14 @@ static CPU_EXECUTE( m6809 )	/* NS 970908 */
 
 			m68_state->ireg = ROP(PCD);
 			PC++;
-#if BIG_SWITCH
-            switch( m68_state->ireg )
-			{
-			case 0x00: neg_di(m68_state);    break;
-			case 0x01: neg_di(m68_state);    break;	/* undocumented */
-			case 0x02: IIError(m68_state);   break;
-			case 0x03: com_di(m68_state);    break;
-			case 0x04: lsr_di(m68_state);    break;
-			case 0x05: IIError(m68_state);   break;
-			case 0x06: ror_di(m68_state);    break;
-			case 0x07: asr_di(m68_state);    break;
-			case 0x08: asl_di(m68_state);    break;
-			case 0x09: rol_di(m68_state);    break;
-			case 0x0a: dec_di(m68_state);    break;
-			case 0x0b: IIError(m68_state);   break;
-			case 0x0c: inc_di(m68_state);    break;
-			case 0x0d: tst_di(m68_state);    break;
-			case 0x0e: jmp_di(m68_state);    break;
-			case 0x0f: clr_di(m68_state);    break;
-			case 0x10: pref10(m68_state);					 break;
-			case 0x11: pref11(m68_state);					 break;
-			case 0x12: nop(m68_state);	    break;
-			case 0x13: sync(m68_state);	    break;
-			case 0x14: IIError(m68_state);   break;
-			case 0x15: IIError(m68_state);   break;
-			case 0x16: lbra(m68_state);	    break;
-			case 0x17: lbsr(m68_state);	    break;
-			case 0x18: IIError(m68_state);   break;
-			case 0x19: daa(m68_state);	    break;
-			case 0x1a: orcc(m68_state);	    break;
-			case 0x1b: IIError(m68_state);   break;
-			case 0x1c: andcc(m68_state);     break;
-			case 0x1d: sex(m68_state);	    break;
-			case 0x1e: exg(m68_state);	    break;
-			case 0x1f: tfr(m68_state);	    break;
-			case 0x20: bra(m68_state);	    break;
-			case 0x21: brn(m68_state);	    break;
-			case 0x22: bhi(m68_state);	    break;
-			case 0x23: bls(m68_state);	    break;
-			case 0x24: bcc(m68_state);	    break;
-			case 0x25: bcs(m68_state);	    break;
-			case 0x26: bne(m68_state);	    break;
-			case 0x27: beq(m68_state);	    break;
-			case 0x28: bvc(m68_state);	    break;
-			case 0x29: bvs(m68_state);	    break;
-			case 0x2a: bpl(m68_state);	    break;
-			case 0x2b: bmi(m68_state);	    break;
-			case 0x2c: bge(m68_state);	    break;
-			case 0x2d: blt(m68_state);	    break;
-			case 0x2e: bgt(m68_state);	    break;
-			case 0x2f: ble(m68_state);	    break;
-			case 0x30: leax(m68_state);	    break;
-			case 0x31: leay(m68_state);	    break;
-			case 0x32: leas(m68_state);	    break;
-			case 0x33: leau(m68_state);	    break;
-			case 0x34: pshs(m68_state);	    break;
-			case 0x35: puls(m68_state);	    break;
-			case 0x36: pshu(m68_state);	    break;
-			case 0x37: pulu(m68_state);	    break;
-			case 0x38: IIError(m68_state);   break;
-			case 0x39: rts(m68_state);	    break;
-			case 0x3a: abx(m68_state);	    break;
-			case 0x3b: rti(m68_state);	    break;
-			case 0x3c: cwai(m68_state);	    break;
-			case 0x3d: mul(m68_state);	    break;
-			case 0x3e: IIError(m68_state);   break;
-			case 0x3f: swi(m68_state);	    break;
-			case 0x40: nega(m68_state);	    break;
-			case 0x41: IIError(m68_state);   break;
-			case 0x42: IIError(m68_state);   break;
-			case 0x43: coma(m68_state);	    break;
-			case 0x44: lsra(m68_state);	    break;
-			case 0x45: IIError(m68_state);   break;
-			case 0x46: rora(m68_state);	    break;
-			case 0x47: asra(m68_state);	    break;
-			case 0x48: asla(m68_state);	    break;
-			case 0x49: rola(m68_state);	    break;
-			case 0x4a: deca(m68_state);	    break;
-			case 0x4b: IIError(m68_state);   break;
-			case 0x4c: inca(m68_state);	    break;
-			case 0x4d: tsta(m68_state);	    break;
-			case 0x4e: IIError(m68_state);   break;
-			case 0x4f: clra(m68_state);	    break;
-			case 0x50: negb(m68_state);	    break;
-			case 0x51: IIError(m68_state);   break;
-			case 0x52: IIError(m68_state);   break;
-			case 0x53: comb(m68_state);	    break;
-			case 0x54: lsrb(m68_state);	    break;
-			case 0x55: IIError(m68_state);   break;
-			case 0x56: rorb(m68_state);	    break;
-			case 0x57: asrb(m68_state);	    break;
-			case 0x58: aslb(m68_state);	    break;
-			case 0x59: rolb(m68_state);	    break;
-			case 0x5a: decb(m68_state);	    break;
-			case 0x5b: IIError(m68_state);   break;
-			case 0x5c: incb(m68_state);	    break;
-			case 0x5d: tstb(m68_state);	    break;
-			case 0x5e: IIError(m68_state);   break;
-			case 0x5f: clrb(m68_state);	    break;
-			case 0x60: neg_ix(m68_state);    break;
-			case 0x61: IIError(m68_state);   break;
-			case 0x62: IIError(m68_state);   break;
-			case 0x63: com_ix(m68_state);    break;
-			case 0x64: lsr_ix(m68_state);    break;
-			case 0x65: IIError(m68_state);   break;
-			case 0x66: ror_ix(m68_state);    break;
-			case 0x67: asr_ix(m68_state);    break;
-			case 0x68: asl_ix(m68_state);    break;
-			case 0x69: rol_ix(m68_state);    break;
-			case 0x6a: dec_ix(m68_state);    break;
-			case 0x6b: IIError(m68_state);   break;
-			case 0x6c: inc_ix(m68_state);    break;
-			case 0x6d: tst_ix(m68_state);    break;
-			case 0x6e: jmp_ix(m68_state);    break;
-			case 0x6f: clr_ix(m68_state);    break;
-			case 0x70: neg_ex(m68_state);    break;
-			case 0x71: IIError(m68_state);   break;
-			case 0x72: IIError(m68_state);   break;
-			case 0x73: com_ex(m68_state);    break;
-			case 0x74: lsr_ex(m68_state);    break;
-			case 0x75: IIError(m68_state);   break;
-			case 0x76: ror_ex(m68_state);    break;
-			case 0x77: asr_ex(m68_state);    break;
-			case 0x78: asl_ex(m68_state);    break;
-			case 0x79: rol_ex(m68_state);    break;
-			case 0x7a: dec_ex(m68_state);    break;
-			case 0x7b: IIError(m68_state);   break;
-			case 0x7c: inc_ex(m68_state);    break;
-			case 0x7d: tst_ex(m68_state);    break;
-			case 0x7e: jmp_ex(m68_state);    break;
-			case 0x7f: clr_ex(m68_state);    break;
-			case 0x80: suba_im(m68_state);   break;
-			case 0x81: cmpa_im(m68_state);   break;
-			case 0x82: sbca_im(m68_state);   break;
-			case 0x83: subd_im(m68_state);   break;
-			case 0x84: anda_im(m68_state);   break;
-			case 0x85: bita_im(m68_state);   break;
-			case 0x86: lda_im(m68_state);    break;
-			case 0x87: sta_im(m68_state);    break;
-			case 0x88: eora_im(m68_state);   break;
-			case 0x89: adca_im(m68_state);   break;
-			case 0x8a: ora_im(m68_state);    break;
-			case 0x8b: adda_im(m68_state);   break;
-			case 0x8c: cmpx_im(m68_state);   break;
-			case 0x8d: bsr(m68_state);	    break;
-			case 0x8e: ldx_im(m68_state);    break;
-			case 0x8f: stx_im(m68_state);    break;
-			case 0x90: suba_di(m68_state);   break;
-			case 0x91: cmpa_di(m68_state);   break;
-			case 0x92: sbca_di(m68_state);   break;
-			case 0x93: subd_di(m68_state);   break;
-			case 0x94: anda_di(m68_state);   break;
-			case 0x95: bita_di(m68_state);   break;
-			case 0x96: lda_di(m68_state);    break;
-			case 0x97: sta_di(m68_state);    break;
-			case 0x98: eora_di(m68_state);   break;
-			case 0x99: adca_di(m68_state);   break;
-			case 0x9a: ora_di(m68_state);    break;
-			case 0x9b: adda_di(m68_state);   break;
-			case 0x9c: cmpx_di(m68_state);   break;
-			case 0x9d: jsr_di(m68_state);    break;
-			case 0x9e: ldx_di(m68_state);    break;
-			case 0x9f: stx_di(m68_state);    break;
-			case 0xa0: suba_ix(m68_state);   break;
-			case 0xa1: cmpa_ix(m68_state);   break;
-			case 0xa2: sbca_ix(m68_state);   break;
-			case 0xa3: subd_ix(m68_state);   break;
-			case 0xa4: anda_ix(m68_state);   break;
-			case 0xa5: bita_ix(m68_state);   break;
-			case 0xa6: lda_ix(m68_state);    break;
-			case 0xa7: sta_ix(m68_state);    break;
-			case 0xa8: eora_ix(m68_state);   break;
-			case 0xa9: adca_ix(m68_state);   break;
-			case 0xaa: ora_ix(m68_state);    break;
-			case 0xab: adda_ix(m68_state);   break;
-			case 0xac: cmpx_ix(m68_state);   break;
-			case 0xad: jsr_ix(m68_state);    break;
-			case 0xae: ldx_ix(m68_state);    break;
-			case 0xaf: stx_ix(m68_state);    break;
-			case 0xb0: suba_ex(m68_state);   break;
-			case 0xb1: cmpa_ex(m68_state);   break;
-			case 0xb2: sbca_ex(m68_state);   break;
-			case 0xb3: subd_ex(m68_state);   break;
-			case 0xb4: anda_ex(m68_state);   break;
-			case 0xb5: bita_ex(m68_state);   break;
-			case 0xb6: lda_ex(m68_state);    break;
-			case 0xb7: sta_ex(m68_state);    break;
-			case 0xb8: eora_ex(m68_state);   break;
-			case 0xb9: adca_ex(m68_state);   break;
-			case 0xba: ora_ex(m68_state);    break;
-			case 0xbb: adda_ex(m68_state);   break;
-			case 0xbc: cmpx_ex(m68_state);   break;
-			case 0xbd: jsr_ex(m68_state);    break;
-			case 0xbe: ldx_ex(m68_state);    break;
-			case 0xbf: stx_ex(m68_state);    break;
-			case 0xc0: subb_im(m68_state);   break;
-			case 0xc1: cmpb_im(m68_state);   break;
-			case 0xc2: sbcb_im(m68_state);   break;
-			case 0xc3: addd_im(m68_state);   break;
-			case 0xc4: andb_im(m68_state);   break;
-			case 0xc5: bitb_im(m68_state);   break;
-			case 0xc6: ldb_im(m68_state);    break;
-			case 0xc7: stb_im(m68_state);    break;
-			case 0xc8: eorb_im(m68_state);   break;
-			case 0xc9: adcb_im(m68_state);   break;
-			case 0xca: orb_im(m68_state);    break;
-			case 0xcb: addb_im(m68_state);   break;
-			case 0xcc: ldd_im(m68_state);    break;
-			case 0xcd: std_im(m68_state);    break;
-			case 0xce: ldu_im(m68_state);    break;
-			case 0xcf: stu_im(m68_state);    break;
-			case 0xd0: subb_di(m68_state);   break;
-			case 0xd1: cmpb_di(m68_state);   break;
-			case 0xd2: sbcb_di(m68_state);   break;
-			case 0xd3: addd_di(m68_state);   break;
-			case 0xd4: andb_di(m68_state);   break;
-			case 0xd5: bitb_di(m68_state);   break;
-			case 0xd6: ldb_di(m68_state);    break;
-			case 0xd7: stb_di(m68_state);    break;
-			case 0xd8: eorb_di(m68_state);   break;
-			case 0xd9: adcb_di(m68_state);   break;
-			case 0xda: orb_di(m68_state);    break;
-			case 0xdb: addb_di(m68_state);   break;
-			case 0xdc: ldd_di(m68_state);    break;
-			case 0xdd: std_di(m68_state);    break;
-			case 0xde: ldu_di(m68_state);    break;
-			case 0xdf: stu_di(m68_state);    break;
-			case 0xe0: subb_ix(m68_state);   break;
-			case 0xe1: cmpb_ix(m68_state);   break;
-			case 0xe2: sbcb_ix(m68_state);   break;
-			case 0xe3: addd_ix(m68_state);   break;
-			case 0xe4: andb_ix(m68_state);   break;
-			case 0xe5: bitb_ix(m68_state);   break;
-			case 0xe6: ldb_ix(m68_state);    break;
-			case 0xe7: stb_ix(m68_state);    break;
-			case 0xe8: eorb_ix(m68_state);   break;
-			case 0xe9: adcb_ix(m68_state);   break;
-			case 0xea: orb_ix(m68_state);    break;
-			case 0xeb: addb_ix(m68_state);   break;
-			case 0xec: ldd_ix(m68_state);    break;
-			case 0xed: std_ix(m68_state);    break;
-			case 0xee: ldu_ix(m68_state);    break;
-			case 0xef: stu_ix(m68_state);    break;
-			case 0xf0: subb_ex(m68_state);   break;
-			case 0xf1: cmpb_ex(m68_state);   break;
-			case 0xf2: sbcb_ex(m68_state);   break;
-			case 0xf3: addd_ex(m68_state);   break;
-			case 0xf4: andb_ex(m68_state);   break;
-			case 0xf5: bitb_ex(m68_state);   break;
-			case 0xf6: ldb_ex(m68_state);    break;
-			case 0xf7: stb_ex(m68_state);    break;
-			case 0xf8: eorb_ex(m68_state);   break;
-			case 0xf9: adcb_ex(m68_state);   break;
-			case 0xfa: orb_ex(m68_state);    break;
-			case 0xfb: addb_ex(m68_state);   break;
-			case 0xfc: ldd_ex(m68_state);    break;
-			case 0xfd: std_ex(m68_state);    break;
-			case 0xfe: ldu_ex(m68_state);    break;
-			case 0xff: stu_ex(m68_state);    break;
-			}
-#else
-            		(*m6809_main[m68_state->ireg])(m68_state);
-#endif    /* BIG_SWITCH */
-           		m68_state->icount -= cycles1[m68_state->ireg];
+        	(*m6809_main[m68_state->ireg])(m68_state);
+			m68_state->icount -= cycles1[m68_state->ireg];
 
 		} while( m68_state->icount > 0 );
 
         m68_state->icount -= m68_state->extra_cycles;
 		m68_state->extra_cycles = 0;
     }
-
-    return cycles - m68_state->icount;   /* NS 970908 */
 }
 
 INLINE void fetch_effective_address( m68_state_t *m68_state )
@@ -932,14 +664,14 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0x85: EA=X+SIGNED(B);										   break;
 	case 0x86: EA=X+SIGNED(A);										   break;
 	case 0x87: EA=0;												   break; /*   ILLEGAL*/
-	case 0x88: IMMBYTE(EA); 	EA=X+SIGNED(EA);					   break; /* this is a hack to make Vectrex work. It should be m68_state->icount-=1. Dunno where the cycle was lost :( */
-	case 0x89: IMMWORD(EAP); 	EA+=X;								   break;
+	case 0x88: IMMBYTE(EA); 	EA=X+SIGNED(EA);					   break;
+	case 0x89: IMMWORD(EAP);	EA+=X;								   break;
 	case 0x8a: EA=0;												   break; /*   IIError*/
 	case 0x8b: EA=X+D;												   break;
 	case 0x8c: IMMBYTE(EA); 	EA=PC+SIGNED(EA);					   break;
-	case 0x8d: IMMWORD(EAP); 	EA+=PC; 							   break;
+	case 0x8d: IMMWORD(EAP);	EA+=PC; 							   break;
 	case 0x8e: EA=0;												   break; /*   ILLEGAL*/
-	case 0x8f: IMMWORD(EAP); 										   break;
+	case 0x8f: IMMWORD(EAP);										   break;
 
 	case 0x90: EA=X;	X++;						EAD=RM16(m68_state, EAD);	   break; /* Indirect ,R+ not in my specs */
 	case 0x91: EA=X;	X+=2;						EAD=RM16(m68_state, EAD);	   break;
@@ -950,13 +682,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0x96: EA=X+SIGNED(A);						EAD=RM16(m68_state, EAD);	   break;
 	case 0x97: EA=0;												   break; /*   ILLEGAL*/
 	case 0x98: IMMBYTE(EA); 	EA=X+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0x99: IMMWORD(EAP); 	EA+=X;				EAD=RM16(m68_state, EAD);	   break;
+	case 0x99: IMMWORD(EAP);	EA+=X;				EAD=RM16(m68_state, EAD);	   break;
 	case 0x9a: EA=0;												   break; /*   ILLEGAL*/
 	case 0x9b: EA=X+D;								EAD=RM16(m68_state, EAD);	   break;
 	case 0x9c: IMMBYTE(EA); 	EA=PC+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0x9d: IMMWORD(EAP); 	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
+	case 0x9d: IMMWORD(EAP);	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
 	case 0x9e: EA=0;												   break; /*   ILLEGAL*/
-	case 0x9f: IMMWORD(EAP); 						EAD=RM16(m68_state, EAD);	   break;
+	case 0x9f: IMMWORD(EAP);						EAD=RM16(m68_state, EAD);	   break;
 
 	case 0xa0: EA=Y;	Y++;										   break;
 	case 0xa1: EA=Y;	Y+=2;										   break;
@@ -967,13 +699,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0xa6: EA=Y+SIGNED(A);										   break;
 	case 0xa7: EA=0;												   break; /*   ILLEGAL*/
 	case 0xa8: IMMBYTE(EA); 	EA=Y+SIGNED(EA);					   break;
-	case 0xa9: IMMWORD(EAP); 	EA+=Y;								   break;
+	case 0xa9: IMMWORD(EAP);	EA+=Y;								   break;
 	case 0xaa: EA=0;												   break; /*   ILLEGAL*/
 	case 0xab: EA=Y+D;												   break;
 	case 0xac: IMMBYTE(EA); 	EA=PC+SIGNED(EA);					   break;
-	case 0xad: IMMWORD(EAP); 	EA+=PC; 							   break;
+	case 0xad: IMMWORD(EAP);	EA+=PC; 							   break;
 	case 0xae: EA=0;												   break; /*   ILLEGAL*/
-	case 0xaf: IMMWORD(EAP); 										   break;
+	case 0xaf: IMMWORD(EAP);										   break;
 
 	case 0xb0: EA=Y;	Y++;						EAD=RM16(m68_state, EAD);	   break;
 	case 0xb1: EA=Y;	Y+=2;						EAD=RM16(m68_state, EAD);	   break;
@@ -984,13 +716,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0xb6: EA=Y+SIGNED(A);						EAD=RM16(m68_state, EAD);	   break;
 	case 0xb7: EA=0;												   break; /*   ILLEGAL*/
 	case 0xb8: IMMBYTE(EA); 	EA=Y+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0xb9: IMMWORD(EAP); 	EA+=Y;				EAD=RM16(m68_state, EAD);	   break;
+	case 0xb9: IMMWORD(EAP);	EA+=Y;				EAD=RM16(m68_state, EAD);	   break;
 	case 0xba: EA=0;												   break; /*   ILLEGAL*/
 	case 0xbb: EA=Y+D;								EAD=RM16(m68_state, EAD);	   break;
 	case 0xbc: IMMBYTE(EA); 	EA=PC+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0xbd: IMMWORD(EAP); 	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
+	case 0xbd: IMMWORD(EAP);	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
 	case 0xbe: EA=0;												   break; /*   ILLEGAL*/
-	case 0xbf: IMMWORD(EAP); 						EAD=RM16(m68_state, EAD);	   break;
+	case 0xbf: IMMWORD(EAP);						EAD=RM16(m68_state, EAD);	   break;
 
 	case 0xc0: EA=U;			U++;								   break;
 	case 0xc1: EA=U;			U+=2;								   break;
@@ -1001,13 +733,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0xc6: EA=U+SIGNED(A);										   break;
 	case 0xc7: EA=0;												   break; /*ILLEGAL*/
 	case 0xc8: IMMBYTE(EA); 	EA=U+SIGNED(EA);					   break;
-	case 0xc9: IMMWORD(EAP); 	EA+=U;								   break;
+	case 0xc9: IMMWORD(EAP);	EA+=U;								   break;
 	case 0xca: EA=0;												   break; /*ILLEGAL*/
 	case 0xcb: EA=U+D;												   break;
 	case 0xcc: IMMBYTE(EA); 	EA=PC+SIGNED(EA);					   break;
-	case 0xcd: IMMWORD(EAP); 	EA+=PC; 							   break;
+	case 0xcd: IMMWORD(EAP);	EA+=PC; 							   break;
 	case 0xce: EA=0;												   break; /*ILLEGAL*/
-	case 0xcf: IMMWORD(EAP); 										   break;
+	case 0xcf: IMMWORD(EAP);										   break;
 
 	case 0xd0: EA=U;	U++;						EAD=RM16(m68_state, EAD);	   break;
 	case 0xd1: EA=U;	U+=2;						EAD=RM16(m68_state, EAD);	   break;
@@ -1018,13 +750,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0xd6: EA=U+SIGNED(A);						EAD=RM16(m68_state, EAD);	   break;
 	case 0xd7: EA=0;												   break; /*ILLEGAL*/
 	case 0xd8: IMMBYTE(EA); 	EA=U+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0xd9: IMMWORD(EAP); 	EA+=U;				EAD=RM16(m68_state, EAD);	   break;
+	case 0xd9: IMMWORD(EAP);	EA+=U;				EAD=RM16(m68_state, EAD);	   break;
 	case 0xda: EA=0;												   break; /*ILLEGAL*/
 	case 0xdb: EA=U+D;								EAD=RM16(m68_state, EAD);	   break;
 	case 0xdc: IMMBYTE(EA); 	EA=PC+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0xdd: IMMWORD(EAP); 	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
+	case 0xdd: IMMWORD(EAP);	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
 	case 0xde: EA=0;												   break; /*ILLEGAL*/
-	case 0xdf: IMMWORD(EAP); 						EAD=RM16(m68_state, EAD);	   break;
+	case 0xdf: IMMWORD(EAP);						EAD=RM16(m68_state, EAD);	   break;
 
 	case 0xe0: EA=S;	S++;										   break;
 	case 0xe1: EA=S;	S+=2;										   break;
@@ -1035,13 +767,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0xe6: EA=S+SIGNED(A);										   break;
 	case 0xe7: EA=0;												   break; /*ILLEGAL*/
 	case 0xe8: IMMBYTE(EA); 	EA=S+SIGNED(EA);					   break;
-	case 0xe9: IMMWORD(EAP); 	EA+=S;								   break;
+	case 0xe9: IMMWORD(EAP);	EA+=S;								   break;
 	case 0xea: EA=0;												   break; /*ILLEGAL*/
 	case 0xeb: EA=S+D;												   break;
 	case 0xec: IMMBYTE(EA); 	EA=PC+SIGNED(EA);					   break;
-	case 0xed: IMMWORD(EAP); 	EA+=PC; 							   break;
+	case 0xed: IMMWORD(EAP);	EA+=PC; 							   break;
 	case 0xee: EA=0;												   break;  /*ILLEGAL*/
-	case 0xef: IMMWORD(EAP); 										   break;
+	case 0xef: IMMWORD(EAP);										   break;
 
 	case 0xf0: EA=S;	S++;						EAD=RM16(m68_state, EAD);	   break;
 	case 0xf1: EA=S;	S+=2;						EAD=RM16(m68_state, EAD);	   break;
@@ -1052,13 +784,13 @@ INLINE void fetch_effective_address( m68_state_t *m68_state )
 	case 0xf6: EA=S+SIGNED(A);						EAD=RM16(m68_state, EAD);	   break;
 	case 0xf7: EA=0;												   break; /*ILLEGAL*/
 	case 0xf8: IMMBYTE(EA); 	EA=S+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0xf9: IMMWORD(EAP); 	EA+=S;				EAD=RM16(m68_state, EAD);	   break;
+	case 0xf9: IMMWORD(EAP);	EA+=S;				EAD=RM16(m68_state, EAD);	   break;
 	case 0xfa: EA=0;												   break; /*ILLEGAL*/
 	case 0xfb: EA=S+D;								EAD=RM16(m68_state, EAD);	   break;
 	case 0xfc: IMMBYTE(EA); 	EA=PC+SIGNED(EA);	EAD=RM16(m68_state, EAD);	   break;
-	case 0xfd: IMMWORD(EAP); 	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
+	case 0xfd: IMMWORD(EAP);	EA+=PC; 			EAD=RM16(m68_state, EAD);	   break;
 	case 0xfe: EA=0;												   break; /*ILLEGAL*/
-	case 0xff: IMMWORD(EAP); 						EAD=RM16(m68_state, EAD);	   break;
+	case 0xff: IMMWORD(EAP);						EAD=RM16(m68_state, EAD);	   break;
 	}
 	m68_state->icount -= index_cycle_em[postbyte];
 }
@@ -1080,7 +812,7 @@ static CPU_SET_INFO( m6809 )
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	set_irq_line(m68_state, INPUT_LINE_NMI, info->i);	break;
 
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + M6809_PC:			PC = info->i; 							break;
+		case CPUINFO_INT_REGISTER + M6809_PC:			PC = info->i;							break;
 		case CPUINFO_INT_SP:
 		case CPUINFO_INT_REGISTER + M6809_S:			S = info->i;							break;
 		case CPUINFO_INT_REGISTER + M6809_CC:			CC = info->i; check_irq_lines(m68_state);			break;
@@ -1101,7 +833,7 @@ static CPU_SET_INFO( m6809 )
 
 CPU_GET_INFO( m6809 )
 {
-	m68_state_t *m68_state = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	m68_state_t *m68_state = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1117,15 +849,15 @@ CPU_GET_INFO( m6809 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 19;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6809_IRQ_LINE:	info->i = m68_state->irq_state[M6809_IRQ_LINE]; break;
 		case CPUINFO_INT_INPUT_STATE + M6809_FIRQ_LINE:	info->i = m68_state->irq_state[M6809_FIRQ_LINE]; break;
@@ -1205,3 +937,6 @@ CPU_GET_INFO( m6809e )
 		default:										CPU_GET_INFO_CALL(m6809);				break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(M6809, m6809);
+DEFINE_LEGACY_CPU_DEVICE(M6809E, m6809e);

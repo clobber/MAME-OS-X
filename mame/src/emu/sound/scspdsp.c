@@ -1,6 +1,4 @@
-#include <math.h>
-#include "sndintrf.h"
-#include "cpuintrf.h"
+#include "emu.h"
 #include "scsp.h"
 #include "scspdsp.h"
 
@@ -308,7 +306,7 @@ void SCSPDSP_Step(struct _SCSPDSP *DSP)
 			if(MWT && (step&1))
 			{
 				if(NOFL)
-			      		DSP->SCSPRAM[ADDR]=SHIFTED>>8;
+			    		DSP->SCSPRAM[ADDR]=SHIFTED>>8;
 				else
 					DSP->SCSPRAM[ADDR]=PACK(SHIFTED);
 			}

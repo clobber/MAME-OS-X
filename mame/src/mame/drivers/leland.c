@@ -41,11 +41,12 @@
 ***************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i86/i86.h"
 #include "machine/eeprom.h"
+#include "machine/nvram.h"
 #include "cpu/z80/z80.h"
-#include "leland.h"
+#include "includes/leland.h"
 #include "sound/ay8910.h"
 
 
@@ -61,23 +62,22 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( master_map_program, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( master_map_program, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK(1)
-	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK(2)
-	AM_RANGE(0xa000, 0xdfff) AM_WRITE(leland_battery_ram_w)
+	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK("bank1")
+	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank2") AM_WRITE(leland_battery_ram_w) AM_SHARE("battery")
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE(leland_gated_paletteram_r, leland_gated_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE(leland_gated_paletteram_r, leland_gated_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf800, 0xf801) AM_WRITE(leland_master_video_addr_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( master_map_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( master_map_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xf0, 0xf0) AM_WRITE(leland_master_alt_bankswitch_w)
-    AM_RANGE(0xf2, 0xf2) AM_READWRITE(leland_80186_response_r, leland_80186_command_lo_w)
-	AM_RANGE(0xf4, 0xf4) AM_WRITE(leland_80186_command_hi_w)
-    AM_RANGE(0xfd, 0xff) AM_READWRITE(leland_master_analog_key_r, leland_master_analog_key_w)
+	AM_RANGE(0xf2, 0xf2) AM_DEVREADWRITE("custom", leland_80186_response_r, leland_80186_command_lo_w)
+	AM_RANGE(0xf4, 0xf4) AM_DEVWRITE("custom", leland_80186_command_hi_w)
+	AM_RANGE(0xfd, 0xff) AM_READWRITE(leland_master_analog_key_r, leland_master_analog_key_w)
 ADDRESS_MAP_END
 
 
@@ -88,9 +88,9 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( slave_small_map_program, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_small_map_program, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0xdfff) AM_ROMBANK(3)
+	AM_RANGE(0x2000, 0xdfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf800, 0xf801) AM_WRITE(leland_slave_video_addr_w)
 	AM_RANGE(0xf802, 0xf802) AM_READ(leland_raster_r)
@@ -98,9 +98,9 @@ static ADDRESS_MAP_START( slave_small_map_program, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( slave_large_map_program, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_large_map_program, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK(3)
+	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xc000, 0xc000) AM_WRITE(leland_slave_large_banksw_w)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf800, 0xf801) AM_WRITE(leland_slave_video_addr_w)
@@ -108,7 +108,7 @@ static ADDRESS_MAP_START( slave_large_map_program, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( slave_map_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( slave_map_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x1f) AM_READWRITE(leland_svram_port_r, leland_svram_port_w)
 	AM_RANGE(0x40, 0x5f) AM_READWRITE(leland_svram_port_r, leland_svram_port_w)
@@ -123,8 +123,7 @@ ADDRESS_MAP_END
  *************************************/
 
 /* Helps document the input ports. */
-#define IPT_SLAVEHALT 	IPT_SPECIAL
-#define IPT_EEPROM_DATA	IPT_SPECIAL
+#define IPT_SLAVEHALT	IPT_SPECIAL
 
 
 static INPUT_PORTS_START( cerberus )		/* complete, verified from code */
@@ -146,7 +145,7 @@ static INPUT_PORTS_START( cerberus )		/* complete, verified from code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
 
 	PORT_START("IN3")	/* 0x91 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -192,7 +191,7 @@ static INPUT_PORTS_START( mayhem )		/* complete, verified from code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
 
 	PORT_START("IN3")	/* 0xD1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -225,10 +224,10 @@ static INPUT_PORTS_START( wseries )		/* complete, verified from code */
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Aim") PORT_PLAYER(1)
 
 	PORT_START("IN3")	/* 0x91 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("AN0")	/* Analog joystick 1 */
@@ -264,10 +263,10 @@ static INPUT_PORTS_START( alleymas )		/* complete, verified from code */
 //  PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 )        /* redundant inputs */
 
 	PORT_START("IN3")	/* 0xD1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("AN0")	/* Analog joystick 1 */
@@ -300,10 +299,10 @@ static INPUT_PORTS_START( upyoural )		/* complete, verified from code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 )
 
 	PORT_START("IN3")	/* 0xD1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("AN0")	/* Analog joystick 1 */
@@ -335,7 +334,7 @@ static INPUT_PORTS_START( dangerz )		/* complete, verified from code */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN3")	/* 0x91 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -370,10 +369,10 @@ static INPUT_PORTS_START( basebal2 )		/* complete, verified from code */
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Run/Cutoff") PORT_PLAYER(1)
 
 	PORT_START("IN3")	/* 0x51/D1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("AN0")	/* Analog joystick 1 */
@@ -407,7 +406,7 @@ static INPUT_PORTS_START( redline )		/* complete, verified in code */
 	PORT_BIT( 0xe0, 0x00, IPT_PEDAL ) PORT_MINMAX(0x00,0xe0) PORT_SENSITIVITY(100) PORT_KEYDELTA(64) PORT_PLAYER(2)
 
 	PORT_START("IN3")	/* 0xD1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -445,7 +444,7 @@ static INPUT_PORTS_START( quarterb )		/* complete, verified in code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
 
 	PORT_START("IN3")	/* 0x91 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -487,7 +486,7 @@ static INPUT_PORTS_START( teamqb )		/* complete, verified in code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
 
 	PORT_START("IN3")	/* 0x91 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -545,7 +544,7 @@ static INPUT_PORTS_START( aafb2p )		/* complete, verified in code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
 
 	PORT_START("IN3")	/* 0x91 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
@@ -600,7 +599,7 @@ static INPUT_PORTS_START( offroad )		/* complete, verified from code */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN3")	/* 0xD1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE_NO_TOGGLE( 0x08, IP_ACTIVE_LOW )
@@ -621,7 +620,7 @@ static INPUT_PORTS_START( offroad )		/* complete, verified from code */
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( offrdtp2 )
+static INPUT_PORTS_START( offroadt2p )
 	PORT_INCLUDE( offroad )
 
 	PORT_MODIFY("IN0")
@@ -660,7 +659,7 @@ static INPUT_PORTS_START( pigout )		/* complete, verified from code */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
 
 	PORT_START("IN3")	/* 0x51 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_EEPROM_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW )
 	PORT_BIT( 0xf8, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -711,82 +710,98 @@ static const ay8910_interface ay8910_config =
 
 /*************************************
  *
+ *  EEPROM interface
+ *
+ *************************************/
+
+static const eeprom_interface eeprom_intf =
+{
+	6,
+	16,
+	"110",
+	"101",
+	"111"
+};
+
+
+
+/*************************************
+ *
  *  Machine driver
  *
  *************************************/
 
-static MACHINE_DRIVER_START( leland )
+static MACHINE_CONFIG_START( leland, leland_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("master", Z80, MASTER_CLOCK/2)
-	MDRV_CPU_PROGRAM_MAP(master_map_program)
-	MDRV_CPU_IO_MAP(master_map_io)
-	MDRV_CPU_VBLANK_INT("screen", leland_master_interrupt)
+	MCFG_CPU_ADD("master", Z80, MASTER_CLOCK/2)
+	MCFG_CPU_PROGRAM_MAP(master_map_program)
+	MCFG_CPU_IO_MAP(master_map_io)
+	MCFG_CPU_VBLANK_INT("screen", leland_master_interrupt)
 
-	MDRV_CPU_ADD("slave", Z80, MASTER_CLOCK/2)
-	MDRV_CPU_PROGRAM_MAP(slave_small_map_program)
-	MDRV_CPU_IO_MAP(slave_map_io)
+	MCFG_CPU_ADD("slave", Z80, MASTER_CLOCK/2)
+	MCFG_CPU_PROGRAM_MAP(slave_small_map_program)
+	MCFG_CPU_IO_MAP(slave_map_io)
 
-	MDRV_MACHINE_START(leland)
-	MDRV_MACHINE_RESET(leland)
-	MDRV_NVRAM_HANDLER(leland)
+	MCFG_MACHINE_START(leland)
+	MCFG_MACHINE_RESET(leland)
+
+	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
+	MCFG_NVRAM_ADD_0FILL("battery")
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(leland_video)
+	MCFG_FRAGMENT_ADD(leland_video)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay8910.1", AY8910, 10000000/6)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay8910.1", AY8910, 10000000/6)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay8910.2", AY8910, 10000000/6)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay8910.2", AY8910, 10000000/6)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("custom", LELAND, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("custom", LELAND, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( redline )
+static MACHINE_CONFIG_DERIVED( redline, leland )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(leland)
 
-	MDRV_CPU_ADD("audiocpu", I80186, MCU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(leland_80186_map_program)
-	MDRV_CPU_IO_MAP(redline_80186_map_io)
+	MCFG_CPU_ADD("audiocpu", I80186, MCU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(leland_80186_map_program)
+	MCFG_CPU_IO_MAP(redline_80186_map_io)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("custom", REDLINE_80186, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("custom", REDLINE_80186, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( quarterb )
+static MACHINE_CONFIG_DERIVED( quarterb, redline )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(redline)
 
-	MDRV_CPU_MODIFY("audiocpu")
-	MDRV_CPU_IO_MAP(leland_80186_map_io)
+	MCFG_CPU_MODIFY("audiocpu")
+	MCFG_CPU_IO_MAP(leland_80186_map_io)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("custom", LELAND_80186, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("custom", LELAND_80186, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( lelandi )
+static MACHINE_CONFIG_DERIVED( lelandi, quarterb )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(quarterb)
 
-	MDRV_CPU_MODIFY("slave")
-	MDRV_CPU_PROGRAM_MAP(slave_large_map_program)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("slave")
+	MCFG_CPU_PROGRAM_MAP(slave_large_map_program)
+MACHINE_CONFIG_END
 
 
 
@@ -829,6 +844,9 @@ ROM_START( cerberus )
 	ROM_LOAD( "3-23u90",  0x16000, 0x2000, CRC(b7566f8a) SHA1(a0128b3bf4803947050a75df0607e4886f5ed931) )
 	ROM_LOAD( "3-23u67",  0x1a000, 0x2000, CRC(02b079a8) SHA1(2ad76641831a391d9acefe8e42515e16dd056868) )
 	ROM_LOAD( "3-23u89",  0x1e000, 0x2000, CRC(7e5e82bb) SHA1(ccbb583689d420a0b7413c0a221a3f57a5ab0e63) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-cerberus.bin", 0x0000, 0x0080, CRC(a9594f08) SHA1(02a83d60e72793667795aacefb4f04d6155428ad) )
 ROM_END
 
 
@@ -875,6 +893,9 @@ ROM_START( mayhem )
 	/* U90 = Empty */
 	/* U67 = Empty */
 	ROM_LOAD( "13202.89",  0x1c000, 0x4000, CRC(c5eaa4e3) SHA1(007a526543d06b8f39e4e93da6ad19725ec6aa2d) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-mayhem.bin", 0x0000, 0x0080, CRC(52bc0453) SHA1(bfe2fdcbc7a239f7e8c77841755923c4427e7b82) )
 ROM_END
 
 
@@ -919,6 +940,9 @@ ROM_START( powrplay )
 	/* U90 = Empty */
 	/* U67 = Empty */
 	/* U89 = Empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-powrplay.bin", 0x0000, 0x0080, CRC(0a999b1e) SHA1(7dbfed04707edea5af68dc9c16b0bfaef570ab39) )
 ROM_END
 
 
@@ -967,6 +991,9 @@ ROM_START( wseries )
 	ROM_LOAD( "13407-00.u90",  0x14000, 0x4000, CRC(e46ca57f) SHA1(771b43c4a2bcedc6a5bdde14a3c04701032b5713) )
 	ROM_LOAD( "13408-00.u67",  0x18000, 0x4000, CRC(be637305) SHA1(a13cbc1644dc06ec52faa0a18340b679c03dc902) )
 	/* 89 = Empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-wseries.bin", 0x0000, 0x0080, CRC(c9c45105) SHA1(8a27752663c4096174c22146092100fbae23a2f7) )
 ROM_END
 
 
@@ -1015,6 +1042,9 @@ ROM_START( alleymas )
 	ROM_LOAD( "090",  0x14000, 0x2000, CRC(0e1769e3) SHA1(7ca5e3205e790d90e0a39dc88766c582f25147b7) )
 	/* U67 = Empty */
 	/* U89 = Empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-alleymas.bin", 0x0000, 0x0080, CRC(8c622ba1) SHA1(68728af8a19a9716af9b89af3a558c62e50867f5) )
 ROM_END
 
 
@@ -1063,6 +1093,9 @@ ROM_START( upyoural )
 	ROM_LOAD( "uya-u90.bin",  0x14000, 0x2000, CRC(0e1769e3) SHA1(7ca5e3205e790d90e0a39dc88766c582f25147b7) )
 	ROM_LOAD( "uya-u67.bin",  0x18000, 0x4000, CRC(d30a385d) SHA1(a1e83d360acef6087c24235c5a56457d25ccd937) )
 	ROM_LOAD( "uya-u89.bin",  0x1c000, 0x4000, CRC(5c17401e) SHA1(2759b1d336ee43116cc4e34db36bd9c56762cca9) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-upyoural.bin", 0x0000, 0x0080, CRC(8c622ba1) SHA1(68728af8a19a9716af9b89af3a558c62e50867f5) )
 ROM_END
 
 
@@ -1098,6 +1131,9 @@ ROM_START( dangerz )
 	ROM_LOAD( "13808.90",  0x14000, 0x4000, CRC(d5b4985d) SHA1(d9a5e331f6cf9b4abf9f5d739fadf0d6216fe994) )
 	ROM_LOAD( "13822.67",  0x18000, 0x4000, CRC(00ff3033) SHA1(ca183f28cb4732ebfc41b6c1651405fee28a9ec6) )
 	ROM_LOAD( "13810.89",  0x1c000, 0x4000, CRC(4f645973) SHA1(94bf12db53dc08eb917c17f1ba0d5a40922ff22c) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-dangerz.bin", 0x0000, 0x0080, CRC(db2c632b) SHA1(0dda0895145ffab414b5ce6af6636176c19659e3) )
 ROM_END
 
 
@@ -1151,6 +1187,9 @@ ROM_START( basebal2 )
 	ROM_LOAD( "14110-01.u90",  0x14000, 0x4000, CRC(ef01d997) SHA1(693bc42b0aaa436f2734efbe2cfb8c98ad4858c6) )
 	ROM_LOAD( "14107-00.u67",  0x18000, 0x4000, CRC(976334e6) SHA1(5b2534f5ba697bd5bad0aef9cefbb7d1c421c06b) )
 	/* 89 = Empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-basebal2.bin", 0x0000, 0x0080, CRC(c9c45105) SHA1(8a27752663c4096174c22146092100fbae23a2f7) )
 ROM_END
 
 
@@ -1206,6 +1245,9 @@ ROM_START( dblplay )
 	ROM_LOAD( "15012-01.u90",  0x14000, 0x4000, CRC(ef01d997) SHA1(693bc42b0aaa436f2734efbe2cfb8c98ad4858c6) )
 	ROM_LOAD( "15007-01.u67",  0x18000, 0x4000, CRC(976334e6) SHA1(5b2534f5ba697bd5bad0aef9cefbb7d1c421c06b) )
 	/* 89 = Empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-dblplay.bin", 0x0000, 0x0080, CRC(50fe6185) SHA1(19617ed482af782dea903bd88c56b3cbb75ce1c7) )
 ROM_END
 
 
@@ -1261,6 +1303,9 @@ ROM_START( strkzone )
 	ROM_LOAD( "strkzone.u90",  0x14000, 0x4000, CRC(ef01d997) SHA1(693bc42b0aaa436f2734efbe2cfb8c98ad4858c6) )
 	ROM_LOAD( "strkzone.u67",  0x18000, 0x4000, CRC(976334e6) SHA1(5b2534f5ba697bd5bad0aef9cefbb7d1c421c06b) )
 	/* 89 = Empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-strkzone.bin", 0x0000, 0x0080, CRC(0c2fe514) SHA1(79487e50cdc4e28bed2ef654eb7cc1014f4fc94d) )
 ROM_END
 
 
@@ -1306,6 +1351,9 @@ ROM_START( redlin2p )
 	ROM_REGION( 0x0300, "plds", 0 )
 	ROM_LOAD( "pal16l8-2601.25t", 0x0000, 0x0104, NO_DUMP ) /* PAL is read protected */
 	ROM_LOAD( "pl20x10-0501.u21", 0x0200, 0x00cc, CRC(09ef7a46) SHA1(c37b10d268bf730a68748eee085b9d3757ee45b3) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-redlin2p.bin", 0x0000, 0x0080, CRC(e632970c) SHA1(4357b5235e31897afc3652e3ef879e259d344a43) )
 ROM_END
 
 
@@ -1351,6 +1399,9 @@ ROM_START( quarterb )
 	ROM_LOAD( "15212-01.u90",  0x14000, 0x4000, CRC(38b298d6) SHA1(fa22d8d5fa66f1f7f052541f21408a6d755a1317) )
 	ROM_LOAD( "15207-01.u67",  0x18000, 0x4000, CRC(5ff86aad) SHA1(6c2704dc4a934270e7080c610181018c9c5e10c5) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-quarterb.bin", 0x0000, 0x0080, CRC(99d8c2ef) SHA1(36b6ac0b03cac9bd0c1f9c7a30fb85e5a2790fd4) )
 ROM_END
 
 
@@ -1396,6 +1447,9 @@ ROM_START( quarterba )
 	ROM_LOAD( "15212-01.u90",  0x14000, 0x4000, CRC(38b298d6) SHA1(fa22d8d5fa66f1f7f052541f21408a6d755a1317) )
 	ROM_LOAD( "15207-01.u67",  0x18000, 0x4000, CRC(5ff86aad) SHA1(6c2704dc4a934270e7080c610181018c9c5e10c5) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-quarterb.bin", 0x0000, 0x0080, CRC(99d8c2ef) SHA1(36b6ac0b03cac9bd0c1f9c7a30fb85e5a2790fd4) )
 ROM_END
 
 
@@ -1432,6 +1486,9 @@ ROM_START( viper )
 	ROM_LOAD( "15606-01.u90",  0x14000, 0x4000, CRC(3c2e8e76) SHA1(f526240df82e14102854de8e391571f747dfa405) )
 	ROM_LOAD( "15601-01.u67",  0x18000, 0x4000, CRC(dc7006cd) SHA1(d828b9c7a43c1b37aa55d1c5891fe0744ea78595) )
 	ROM_LOAD( "15605-01.u89",  0x1c000, 0x4000, CRC(4aa9c788) SHA1(77095d7ce4949db3c39c19d131d2902e4099b6d4) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-viper.bin", 0x0000, 0x0080, CRC(1c1e7a49) SHA1(3cc0fe501d86cf63de5ac812b8c63e20d9e73372) )
 ROM_END
 
 
@@ -1472,6 +1529,9 @@ ROM_START( teamqb )
 	ROM_LOAD( "15613-01.u90",  0x14000, 0x4000, CRC(4805802e) SHA1(a121aec2b0340773288687baccf85519c0ef3160) )
 	ROM_LOAD( "15608-01.u67",  0x18000, 0x4000, CRC(78f0fd2b) SHA1(e83b1106411bb03c64a985a08c5f20c2eb397140) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-teamqb.bin", 0x0000, 0x0080, CRC(119fb1e7) SHA1(1a3be0e2415c789a517b21c99e6d60d3ac18a092) )
 ROM_END
 
 
@@ -1512,6 +1572,9 @@ ROM_START( teamqb2 )
 	ROM_LOAD( "15613-01.u90",  0x14000, 0x4000, CRC(4805802e) SHA1(a121aec2b0340773288687baccf85519c0ef3160) )
 	ROM_LOAD( "15608-01.u67",  0x18000, 0x4000, CRC(78f0fd2b) SHA1(e83b1106411bb03c64a985a08c5f20c2eb397140) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-teamqb.bin", 0x0000, 0x0080, CRC(119fb1e7) SHA1(1a3be0e2415c789a517b21c99e6d60d3ac18a092) )
 ROM_END
 
 
@@ -1531,15 +1594,15 @@ ROM_START( aafb )
 	ROM_LOAD( "03-28002.u8",   0x70000, 0x10000, CRC(c3e09811) SHA1(9b6e036a53000c9bcb104677d9c71743f02fd841) )
 
 	ROM_REGION( 0x100000, "audiocpu", 0 )
-    ROM_LOAD16_BYTE( "24019-01.u25", 0x040001, 0x10000, CRC(9e344768) SHA1(7f16d29c52f3d7f0046f414185c4d889f6128597) )
-    ROM_LOAD16_BYTE( "24016-01.u13", 0x040000, 0x10000, CRC(6997025f) SHA1(5eda3bcae896933385fe97a4e1396ae2da7576cb) )
-    ROM_LOAD16_BYTE( "24020-01.u26", 0x060001, 0x10000, CRC(0788f2a5) SHA1(75eb1ab00185f8efa71f1d46197b5f6d20d721f2) )
-    ROM_LOAD16_BYTE( "24017-01.u14", 0x060000, 0x10000, CRC(a48bd721) SHA1(e099074165594a7c289a25c522005db7e9554ca1) )
-    ROM_LOAD16_BYTE( "24021-01.u27", 0x0e0001, 0x10000, CRC(94081899) SHA1(289eb2f494d1110d169552e8898296e4a47fcb1d) )
-    ROM_LOAD16_BYTE( "24018-01.u15", 0x0e0000, 0x10000, CRC(76eb6077) SHA1(255731c63f4a846bb01d4203a786eb34a4734e66) )
+	ROM_LOAD16_BYTE( "24019-01.u25", 0x040001, 0x10000, CRC(9e344768) SHA1(7f16d29c52f3d7f0046f414185c4d889f6128597) )
+	ROM_LOAD16_BYTE( "24016-01.u13", 0x040000, 0x10000, CRC(6997025f) SHA1(5eda3bcae896933385fe97a4e1396ae2da7576cb) )
+	ROM_LOAD16_BYTE( "24020-01.u26", 0x060001, 0x10000, CRC(0788f2a5) SHA1(75eb1ab00185f8efa71f1d46197b5f6d20d721f2) )
+	ROM_LOAD16_BYTE( "24017-01.u14", 0x060000, 0x10000, CRC(a48bd721) SHA1(e099074165594a7c289a25c522005db7e9554ca1) )
+	ROM_LOAD16_BYTE( "24021-01.u27", 0x0e0001, 0x10000, CRC(94081899) SHA1(289eb2f494d1110d169552e8898296e4a47fcb1d) )
+	ROM_LOAD16_BYTE( "24018-01.u15", 0x0e0000, 0x10000, CRC(76eb6077) SHA1(255731c63f4a846bb01d4203a786eb34a4734e66) )
 
 	ROM_REGION( 0x0c000, "gfx1", 0 )
-	ROM_LOAD( "03-28008.u93", 0x00000, 0x04000, NO_DUMP )
+	ROM_LOAD( "03-28008.u93", 0x00000, 0x04000, CRC(68f8addc) SHA1(a52c408e2e9022f96fb766065d7266deb0df2e5f) )
 	ROM_LOAD( "03-28009.u94", 0x04000, 0x04000, CRC(669791ac) SHA1(e8b7bdec313ea9d40f89f13499a31f0b125951a8) )
 	ROM_LOAD( "03-28010.u95", 0x08000, 0x04000, CRC(bd62aa8a) SHA1(c8a177a11ec94671bb3bd5883b40692495c049a2) )
 
@@ -1552,13 +1615,16 @@ ROM_START( aafb )
 	ROM_LOAD( "03-28006.u90",  0x14000, 0x4000, CRC(e68c8b6e) SHA1(94f2774d1713fadf0e644641bc0226fd03040bf8) )
 	ROM_LOAD( "03-28003.u67",  0x18000, 0x4000, CRC(c92f6357) SHA1(07fa8f9e07aafbe844e11cd6f9a0cbe65625dc53) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-aafb.bin", 0x0000, 0x0080, CRC(119fb1e7) SHA1(1a3be0e2415c789a517b21c99e6d60d3ac18a092) )
 ROM_END
 
 
 ROM_START( aafbb )
 	ROM_REGION( 0x20000, "master", 0 )
 	ROM_LOAD( "24014-02.u58",   0x00000, 0x10000, CRC(5db4a3d0) SHA1(f759ab16de48562db1640bc5df68be188725aecf) )
-	ROM_LOAD( "24015-02.u59",   0x10000, 0x10000, CRC(f384f716) SHA1(e689ec6b76bfdf58a059409850c397d407740dda) )
+	ROM_LOAD( "24015-02.u59",   0x10000, 0x10000, BAD_DUMP CRC(f384f716) SHA1(e689ec6b76bfdf58a059409850c397d407740dda) )
 
 	ROM_REGION( 0x80000, "slave", 0 )
 	ROM_LOAD( "24000-02.u3",   0x00000, 0x02000, CRC(52df0354) SHA1(a39a2538b733e336eac5a1491c42c89fd4f4d1aa) )
@@ -1592,6 +1658,9 @@ ROM_START( aafbb )
 	ROM_LOAD( "24008-01.u90",  0x14000, 0x4000, CRC(4538bc58) SHA1(a568e392771398f60b2aa0f83425935fc7198f72) )
 	ROM_LOAD( "24004-02.u67",  0x18000, 0x4000, CRC(cd7a3338) SHA1(c91d277578ad9d039f2febdd15d977d7259e5fc8) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-aafb.bin", 0x0000, 0x0080, CRC(119fb1e7) SHA1(1a3be0e2415c789a517b21c99e6d60d3ac18a092) )
 ROM_END
 
 
@@ -1632,6 +1701,9 @@ ROM_START( aafbc )
 	ROM_LOAD( "24008-01.u90",  0x14000, 0x4000, CRC(4538bc58) SHA1(a568e392771398f60b2aa0f83425935fc7198f72) )
 	ROM_LOAD( "24004-02.u67",  0x18000, 0x4000, CRC(cd7a3338) SHA1(c91d277578ad9d039f2febdd15d977d7259e5fc8) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-aafb.bin", 0x0000, 0x0080, CRC(119fb1e7) SHA1(1a3be0e2415c789a517b21c99e6d60d3ac18a092) )
 ROM_END
 
 
@@ -1672,6 +1744,9 @@ ROM_START( aafbd2p )
 	ROM_LOAD( "24008-01.u90",  0x14000, 0x4000, CRC(4538bc58) SHA1(a568e392771398f60b2aa0f83425935fc7198f72) )
 	ROM_LOAD( "24004-02.u67",  0x18000, 0x4000, CRC(cd7a3338) SHA1(c91d277578ad9d039f2febdd15d977d7259e5fc8) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-aafb.bin", 0x0000, 0x0080, CRC(119fb1e7) SHA1(1a3be0e2415c789a517b21c99e6d60d3ac18a092) )
 ROM_END
 
 
@@ -1691,12 +1766,12 @@ ROM_START( offroad )
 	ROM_LOAD( "22112-01.u8",  0x70000, 0x10000, CRC(3eef38d3) SHA1(9131960592a44c8567ab483f72955d2cc8898445) )
 
 	ROM_REGION( 0x100000, "audiocpu", 0 )
-    ROM_LOAD16_BYTE( "22116-03.u25", 0x040001, 0x10000, CRC(95bb31d3) SHA1(e7bc43b63126fd33663865b2e41bacc58e962628) )
-    ROM_LOAD16_BYTE( "22113-03.u13", 0x040000, 0x10000, CRC(71b28df6) SHA1(caf8e4c98a1650dbaedf83f4d38da920d0976f78) )
-    ROM_LOAD16_BYTE( "22117-03.u26", 0x060001, 0x10000, CRC(703d81ce) SHA1(caf5363fb468a461a260e0ec636b0a7a8dc9cd3d) )
-    ROM_LOAD16_BYTE( "22114-03.u14", 0x060000, 0x10000, CRC(f8b31bf8) SHA1(cb8133effe5484c5b4c40b77769f6ec72441c333) )
-    ROM_LOAD16_BYTE( "22118-03.u27", 0x0e0001, 0x10000, CRC(806ccf8b) SHA1(7335a85fc84d5c2f7537548c3856c9cd2f267609) )
-    ROM_LOAD16_BYTE( "22115-03.u15", 0x0e0000, 0x10000, CRC(c8439a7a) SHA1(9a8bb1fca8d3414dcfd4839bc0c4289e4d810943) )
+	ROM_LOAD16_BYTE( "22116-03.u25", 0x040001, 0x10000, CRC(95bb31d3) SHA1(e7bc43b63126fd33663865b2e41bacc58e962628) )
+	ROM_LOAD16_BYTE( "22113-03.u13", 0x040000, 0x10000, CRC(71b28df6) SHA1(caf8e4c98a1650dbaedf83f4d38da920d0976f78) )
+	ROM_LOAD16_BYTE( "22117-03.u26", 0x060001, 0x10000, CRC(703d81ce) SHA1(caf5363fb468a461a260e0ec636b0a7a8dc9cd3d) )
+	ROM_LOAD16_BYTE( "22114-03.u14", 0x060000, 0x10000, CRC(f8b31bf8) SHA1(cb8133effe5484c5b4c40b77769f6ec72441c333) )
+	ROM_LOAD16_BYTE( "22118-03.u27", 0x0e0001, 0x10000, CRC(806ccf8b) SHA1(7335a85fc84d5c2f7537548c3856c9cd2f267609) )
+	ROM_LOAD16_BYTE( "22115-03.u15", 0x0e0000, 0x10000, CRC(c8439a7a) SHA1(9a8bb1fca8d3414dcfd4839bc0c4289e4d810943) )
 
 	ROM_REGION( 0x18000, "gfx1", 0 )
 	ROM_LOAD( "22105-01.u93", 0x00000, 0x08000, CRC(4426e367) SHA1(298203112d724feb9a75a7bfc34b3dbb4d7fffe7) )
@@ -1712,6 +1787,9 @@ ROM_START( offroad )
 	ROM_LOAD( "22103-02.u90",  0x14000, 0x4000, CRC(2266757a) SHA1(22aaf4b14f11198ffd14c9830c7997fd47ee14b6) )
 	ROM_LOAD( "22101-01.u67",  0x18000, 0x4000, CRC(ecab0527) SHA1(6bbf8243d9b2ea775897719592212b51998f1b01) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-offroad.bin", 0x0000, 0x0080, CRC(57955248) SHA1(d8cc09ff57c9de01c1b247a3f1d4555fcb0c2e45) )
 ROM_END
 
 
@@ -1754,10 +1832,13 @@ ROM_START( offroadt )
 	ROM_LOAD( "ortpu90b.bin",  0x14000, 0x4000, CRC(bda2ecb1) SHA1(c7a70ed794cf1655aebdf4538ab25f74be38cda3) )
 	ROM_LOAD( "ortpu67b.bin",  0x18000, 0x4000, CRC(38c9bf29) SHA1(aa681f0a3eb5d31f2b01116939162d296e113428) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-offroad.bin", 0x0000, 0x0080, CRC(57955248) SHA1(d8cc09ff57c9de01c1b247a3f1d4555fcb0c2e45) )
 ROM_END
 
 
-ROM_START( offrdtp2 )
+ROM_START( offroadt2p )
 	ROM_REGION( 0x040000, "master", 0 )
 	ROM_LOAD( "ortp2u58.bin", 0x00000, 0x10000, CRC(8a785b66) SHA1(a9e369d446eec658294c81223399acc99e4198c2) )
 	ROM_LOAD( "ortp2u59.bin", 0x10000, 0x10000, CRC(ff553895) SHA1(8d91b46306fa680ea96ebbb76418d7a82ed19568) )
@@ -1796,6 +1877,9 @@ ROM_START( offrdtp2 )
 	ROM_LOAD( "ortpu90b.bin",  0x14000, 0x4000, CRC(bda2ecb1) SHA1(c7a70ed794cf1655aebdf4538ab25f74be38cda3) )
 	ROM_LOAD( "ortpu67b.bin",  0x18000, 0x4000, CRC(38c9bf29) SHA1(aa681f0a3eb5d31f2b01116939162d296e113428) )
 	/* 89 = empty */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-offroad.bin", 0x0000, 0x0080, CRC(57955248) SHA1(d8cc09ff57c9de01c1b247a3f1d4555fcb0c2e45) )
 ROM_END
 
 
@@ -1837,6 +1921,9 @@ ROM_START( pigout )
 	ROM_LOAD( "poutu90.bin",  0x14000, 0x4000, CRC(9615d710) SHA1(a9b2d2bf4d6edecdc212f5d96eec8095833bee22) )
 	ROM_LOAD( "poutu67.bin",  0x18000, 0x4000, CRC(af85ce79) SHA1(76e421772dfdf4d27e36aa51993a987883e015b0) )
 	ROM_LOAD( "poutu89.bin",  0x1c000, 0x4000, CRC(6c874a05) SHA1(a931ba5ac41facfaf32c5e940eb011e780ab234a) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-pigout.bin", 0x0000, 0x0080, CRC(9646fa72) SHA1(80311bd6ba8988afc4ad1aabf3f452266686917f) )
 ROM_END
 
 
@@ -1878,6 +1965,9 @@ ROM_START( pigouta )
 	ROM_LOAD( "poutu90.bin",  0x14000, 0x4000, CRC(9615d710) SHA1(a9b2d2bf4d6edecdc212f5d96eec8095833bee22) )
 	ROM_LOAD( "poutu67.bin",  0x18000, 0x4000, CRC(af85ce79) SHA1(76e421772dfdf4d27e36aa51993a987883e015b0) )
 	ROM_LOAD( "poutu89.bin",  0x1c000, 0x4000, CRC(6c874a05) SHA1(a931ba5ac41facfaf32c5e940eb011e780ab234a) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-pigout.bin", 0x0000, 0x0080, CRC(9646fa72) SHA1(80311bd6ba8988afc4ad1aabf3f452266686917f) )
 ROM_END
 
 
@@ -1888,88 +1978,40 @@ ROM_END
  *
  *************************************/
 
-static void init_master_ports(running_machine *machine, UINT8 mvram_base, UINT8 io_base)
+static void init_master_ports(running_machine &machine, UINT8 mvram_base, UINT8 io_base)
 {
 	/* set up the master CPU VRAM I/O */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), mvram_base, mvram_base + 0x1f, 0, 0, leland_mvram_port_r, leland_mvram_port_w);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_readwrite_handler(mvram_base, mvram_base + 0x1f, FUNC(leland_mvram_port_r), FUNC(leland_mvram_port_w));
 
 	/* set up the master CPU I/O ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), io_base, io_base + 0x1f, 0, 0, leland_master_input_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), io_base, io_base + 0x0f, 0, 0, leland_master_output_w);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(io_base, io_base + 0x1f, FUNC(leland_master_input_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_write_handler(io_base, io_base + 0x0f, FUNC(leland_master_output_w));
 }
 
 
 static DRIVER_INIT( cerberus )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 cerberus_eeprom_data[] =
-	{
-		0x05,0x0001,
-		0x06,0x0001,
-		0x07,0x0001,
-		0x08,0x0001,
-		0x09,0x0004,
-		0x0a,0x0004,
-		0x0e,0x0001,
-		0x0f,0x0003,
-		0x10,0x0500,
-		0x12,0x0005,
-		0x13,0x0003,
-		0x3f,0x001d,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0x00, cerberus_eeprom_data, 0, SERIAL_TYPE_NONE);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = cerberus_bankswitch;
-	memory_set_bankptr(machine, 1, memory_region(machine, "master") + 0x2000);
-	memory_set_bankptr(machine, 2, memory_region(machine, "master") + 0xa000);
-	memory_set_bankptr(machine, 3, memory_region(machine, "slave") + 0x2000);
+	state->m_update_master_bank = cerberus_bankswitch;
+	memory_set_bankptr(machine, "bank1", machine.region("master")->base() + 0x2000);
+	memory_set_bankptr(machine, "bank2", machine.region("master")->base() + 0xa000);
+	memory_set_bankptr(machine, "bank3", machine.region("slave")->base() + 0x2000);
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x40, 0x80);
 
 	/* set up additional input ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x80, 0x80, 0, 0, cerberus_dial_1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x90, 0x90, 0, 0, cerberus_dial_2_r);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0x80, 0x80, FUNC(cerberus_dial_1_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0x90, 0x90, FUNC(cerberus_dial_2_r));
 }
 
 
 static DRIVER_INIT( mayhem )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 mayhem_eeprom_data[] =
-	{
-		0x05,0x0001,
-		0x06,0x0001,
-		0x07,0x0001,
-		0x08,0x0001,
-		0x09,0x0004,
-		0x0a,0x0004,
-		0x0c,0xff00,
-		0x13,0x28ff,
-		0x14,0x0023,
-		0x15,0x0005,
-		0x1b,0x0060,
-		0x1c,0x4a00,
-		0x1d,0x4520,
-		0x1e,0x4943,
-		0x1f,0x454e,
-		0x20,0x414d,
-		0x21,0x5254,
-		0x22,0x4e4f,
-		0x23,0x4349,
-		0x24,0x2053,
-		0x25,0x2020,
-		0x26,0x2020,
-		0x27,0x2020,
-		0x3f,0x0818,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0x00, mayhem_eeprom_data, 0x28, SERIAL_TYPE_ADD);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = mayhem_bankswitch;
+	state->m_update_master_bank = mayhem_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x00, 0xc0);
@@ -1978,27 +2020,9 @@ static DRIVER_INIT( mayhem )
 
 static DRIVER_INIT( powrplay )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 powrplay_eeprom_data[] =
-	{
-		0x21,0xfffe,
-		0x22,0xfffe,
-		0x23,0xfffe,
-		0x24,0xfffe,
-		0x25,0xfffb,
-		0x26,0xfffb,
-		0x27,0xfefe,
-		0x28,0x0000,
-		0x29,0xd700,
-		0x2a,0xd7dc,
-		0x2b,0xffdc,
-		0x2c,0xfffb,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, powrplay_eeprom_data, 0x2d, SERIAL_TYPE_ADD_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = mayhem_bankswitch;
+	state->m_update_master_bank = mayhem_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x40, 0x80);
@@ -2007,19 +2031,9 @@ static DRIVER_INIT( powrplay )
 
 static DRIVER_INIT( wseries )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 wseries_eeprom_data[] =
-	{
-		0x19,0xfefe,
-		0x1a,0xfefe,
-		0x1b,0xfbfb,
-		0x1d,0x00ff,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, wseries_eeprom_data, 0x12, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = mayhem_bankswitch;
+	state->m_update_master_bank = mayhem_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x40, 0x80);
@@ -2028,21 +2042,9 @@ static DRIVER_INIT( wseries )
 
 static DRIVER_INIT( alleymas )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 alleymas_eeprom_data[] =
-	{
-		0x13,0xfefe,
-		0x14,0xfefe,
-		0x15,0xfbfb,
-		0x17,0x00ff,
-		0x18,0xff00,
-		0x37,0x00ff,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, alleymas_eeprom_data, 0x0c, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = mayhem_bankswitch;
+	state->m_update_master_bank = mayhem_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x00, 0xc0);
@@ -2050,29 +2052,15 @@ static DRIVER_INIT( alleymas )
 	/* kludge warning: the game uses location E0CA to determine if the joysticks are available */
 	/* it gets cleared by the code, but there is no obvious way for the value to be set to a */
 	/* non-zero value. If the value is zero, the joystick is never read. */
-	alleymas_kludge_mem = memory_install_write8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_PROGRAM), 0xe0ca, 0xe0ca, 0, 0, alleymas_joystick_kludge);
+	state->m_alleymas_kludge_mem = machine.device("master")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xe0ca, 0xe0ca, FUNC(alleymas_joystick_kludge));
 }
 
 
 static DRIVER_INIT( upyoural )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 upyoural_eeprom_data[] =
-	{
-		0x0c,0x07bb,
-		0x0d,0xf483,
-		0x13,0xfefe,
-		0x14,0xfefe,
-		0x15,0xfbfb,
-		0x17,0x00ff,
-		0x18,0xff00,
-		0x37,0x00ff,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, upyoural_eeprom_data, 0x0c, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = mayhem_bankswitch;
+	state->m_update_master_bank = mayhem_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x00, 0xc0);
@@ -2081,49 +2069,25 @@ static DRIVER_INIT( upyoural )
 
 static DRIVER_INIT( dangerz )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 dangerz_eeprom_data[] =
-	{
-		0x17,0xfefe,
-		0x18,0xfefe,
-		0x19,0xfbfb,
-		0x1b,0x00ff,
-		0x1c,0xfffa,
-		0x38,0xb6bc,
-		0x39,0xffb1,
-		0x3a,0x8007,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, dangerz_eeprom_data, 0x10, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = dangerz_bankswitch;
+	state->m_update_master_bank = dangerz_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x40, 0x80);
 
 	/* set up additional input ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf4, 0xf4, 0, 0, dangerz_input_upper_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, dangerz_input_y_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xfc, 0xfc, 0, 0, dangerz_input_x_r);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf4, 0xf4, FUNC(dangerz_input_upper_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf8, 0xf8, FUNC(dangerz_input_y_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xfc, 0xfc, FUNC(dangerz_input_x_r));
 }
 
 
 static DRIVER_INIT( basebal2 )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 basebal2_eeprom_data[] =
-	{
-		0x19,0xfefe,
-		0x1a,0xfefe,
-		0x1b,0xfbfb,
-		0x1d,0x00ff,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, basebal2_eeprom_data, 0x12, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = basebal2_bankswitch;
+	state->m_update_master_bank = basebal2_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x00, 0xc0);
@@ -2132,20 +2096,9 @@ static DRIVER_INIT( basebal2 )
 
 static DRIVER_INIT( dblplay )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 dblplay_eeprom_data[] =
-	{
-		0x18,0xfefe,
-		0x19,0xfefe,
-		0x1a,0xfbfb,
-		0x1c,0x00ff,
-		0x3b,0xffe1,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, dblplay_eeprom_data, 0x11, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = basebal2_bankswitch;
+	state->m_update_master_bank = basebal2_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x80, 0x40);
@@ -2154,20 +2107,9 @@ static DRIVER_INIT( dblplay )
 
 static DRIVER_INIT( strkzone )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 strkzone_eeprom_data[] =
-	{
-		0x16,0xfefe,
-		0x17,0xfefe,
-		0x18,0xfbfb,
-		0x1a,0x00ff,
-		0x1b,0xffe1,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, strkzone_eeprom_data, 0x0f, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = basebal2_bankswitch;
+	state->m_update_master_bank = basebal2_bankswitch;
 
 	/* set up the master CPU I/O ports */
 	init_master_ports(machine, 0x00, 0x40);
@@ -2176,19 +2118,9 @@ static DRIVER_INIT( strkzone )
 
 static DRIVER_INIT( redlin2p )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 redlin2p_eeprom_data[] =
-	{
-		0x1f,0xfefe,
-		0x20,0xfffb,
-		0x21,0xfa00,
-		0x22,0xfffe,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, redlin2p_eeprom_data, 0x18, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = redline_bankswitch;
+	state->m_update_master_bank = redline_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 
@@ -2196,30 +2128,18 @@ static DRIVER_INIT( redlin2p )
 	init_master_ports(machine, 0x00, 0xc0);
 
 	/* set up additional input ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xc0, 0xc0, 0, 0, redline_pedal_1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xd0, 0xd0, 0, 0, redline_pedal_2_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, redline_wheel_2_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xfb, 0xfb, 0, 0, redline_wheel_1_r);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xc0, 0xc0, FUNC(redline_pedal_1_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xd0, 0xd0, FUNC(redline_pedal_2_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf8, 0xf8, FUNC(redline_wheel_2_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xfb, 0xfb, FUNC(redline_wheel_1_r));
 }
 
 
 static DRIVER_INIT( quarterb )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 quarterb_eeprom_data[] =
-	{
-		0x34,0xfefe,
-		0x35,0xfefe,
-		0x36,0xfbfb,
-		0x38,0x00ff,
-		0x39,0x53ff,
-		0x3a,0xffd9,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, quarterb_eeprom_data, 0x24, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = viper_bankswitch;
+	state->m_update_master_bank = viper_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 
@@ -2230,21 +2150,9 @@ static DRIVER_INIT( quarterb )
 
 static DRIVER_INIT( viper )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 viper_eeprom_data[] =
-	{
-		0x13,0xfefe,
-		0x14,0xfefe,
-		0x15,0xfbfb,
-		0x17,0x00ff,
-		0x18,0xfcfa,
-		0x1b,0xfffe,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, viper_eeprom_data, 0x0c, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = viper_bankswitch;
+	state->m_update_master_bank = viper_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2254,28 +2162,17 @@ static DRIVER_INIT( viper )
 	init_master_ports(machine, 0x00, 0xc0);
 
 	/* set up additional input ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xa4, 0xa4, 0, 0, dangerz_input_upper_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xb8, 0xb8, 0, 0, dangerz_input_y_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xbc, 0xbc, 0, 0, dangerz_input_x_r);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xa4, 0xa4, FUNC(dangerz_input_upper_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xb8, 0xb8, FUNC(dangerz_input_y_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xbc, 0xbc, FUNC(dangerz_input_x_r));
 }
 
 
 static DRIVER_INIT( teamqb )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 teamqb_eeprom_data[] =
-	{
-		0x36,0xfefe,
-		0x37,0xfefe,
-		0x38,0xfbfb,
-		0x3a,0x5300,
-		0x3b,0xffd9,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, teamqb_eeprom_data, 0x1a, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = viper_bankswitch;
+	state->m_update_master_bank = viper_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2285,27 +2182,16 @@ static DRIVER_INIT( teamqb )
 	init_master_ports(machine, 0x40, 0x80);
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7c, 0x7c, 0, 0, "IN4");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7f, 0x7f, 0, 0, "IN5");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7c, 0x7c, "IN4");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7f, 0x7f, "IN5");
 }
 
 
 static DRIVER_INIT( aafb )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 aafb_eeprom_data[] =
-	{
-		0x36,0xfefe,
-		0x37,0xfefe,
-		0x38,0xfbfb,
-		0x3a,0x5300,
-		0x3b,0xffd9,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, aafb_eeprom_data, 0x1a, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = viper_bankswitch;
+	state->m_update_master_bank = viper_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2315,27 +2201,16 @@ static DRIVER_INIT( aafb )
 	init_master_ports(machine, 0x00, 0xc0);
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7c, 0x7c, 0, 0, "IN4");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7f, 0x7f, 0, 0, "IN5");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7c, 0x7c, "IN4");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7f, 0x7f, "IN5");
 }
 
 
 static DRIVER_INIT( aafbb )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 aafb_eeprom_data[] =
-	{
-		0x36,0xfefe,
-		0x37,0xfefe,
-		0x38,0xfbfb,
-		0x3a,0x5300,
-		0x3b,0xffd9,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, aafb_eeprom_data, 0x1a, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = viper_bankswitch;
+	state->m_update_master_bank = viper_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2345,27 +2220,16 @@ static DRIVER_INIT( aafbb )
 	init_master_ports(machine, 0x80, 0x40);
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7c, 0x7c, 0, 0, "IN4");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7f, 0x7f, 0, 0, "IN5");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7c, 0x7c, "IN4");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7f, 0x7f, "IN5");
 }
 
 
 static DRIVER_INIT( aafbd2p )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 aafb_eeprom_data[] =
-	{
-		0x36,0xfefe,
-		0x37,0xfefe,
-		0x38,0xfbfb,
-		0x3a,0x5300,
-		0x3b,0xffd9,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, aafb_eeprom_data, 0x1a, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = viper_bankswitch;
+	state->m_update_master_bank = viper_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2375,32 +2239,16 @@ static DRIVER_INIT( aafbd2p )
 	init_master_ports(machine, 0x00, 0x40);
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7c, 0x7c, 0, 0, "IN4");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7f, 0x7f, 0, 0, "IN5");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7c, 0x7c, "IN4");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7f, 0x7f, "IN5");
 }
 
 
 static DRIVER_INIT( offroad )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 offroad_eeprom_data[] =
-	{
-		0x09,0xfefe,
-		0x0a,0xfffb,
-		0x0d,0x00ff,
-		0x0e,0xfffb,
-		0x36,0xfeff,
-		0x37,0xfefe,
-		0x38,0xfffe,
-		0x39,0x50ff,
-		0x3a,0x976c,
-		0x3b,0xffad,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, offroad_eeprom_data, 0x00, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = offroad_bankswitch;
+	state->m_update_master_bank = offroad_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2411,33 +2259,17 @@ static DRIVER_INIT( offroad )
 	init_master_ports(machine, 0x40, 0x80);	/* yes, this is intentional */
 
 	/* set up additional input ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, offroad_wheel_3_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf9, 0xf9, 0, 0, offroad_wheel_1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xfb, 0xfb, 0, 0, offroad_wheel_2_r);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf8, 0xf8, FUNC(offroad_wheel_3_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf9, 0xf9, FUNC(offroad_wheel_1_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xfb, 0xfb, FUNC(offroad_wheel_2_r));
 }
 
 
 static DRIVER_INIT( offroadt )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 offroadt_eeprom_data[] =
-	{
-		0x09,0xfefe,
-		0x0a,0xfffb,
-		0x0d,0x00ff,
-		0x0e,0xfffb,
-		0x36,0xfeff,
-		0x37,0xfefe,
-		0x38,0xfffe,
-		0x39,0x50ff,
-		0x3a,0x976c,
-		0x3b,0xffad,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, offroadt_eeprom_data, 0x00, SERIAL_TYPE_ENCRYPT_XOR);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = offroad_bankswitch;
+	state->m_update_master_bank = offroad_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2447,31 +2279,17 @@ static DRIVER_INIT( offroadt )
 	init_master_ports(machine, 0x80, 0x40);
 
 	/* set up additional input ports */
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, offroad_wheel_3_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xf9, 0xf9, 0, 0, offroad_wheel_1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0xfb, 0xfb, 0, 0, offroad_wheel_2_r);
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf8, 0xf8, FUNC(offroad_wheel_3_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xf9, 0xf9, FUNC(offroad_wheel_1_r));
+	machine.device("master")->memory().space(AS_IO)->install_legacy_read_handler(0xfb, 0xfb, FUNC(offroad_wheel_2_r));
 }
 
 
 static DRIVER_INIT( pigout )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 pigout_eeprom_data[] =
-	{
-		0x09,0xfefe,
-		0x0a,0xfefb,
-		0x0b,0xfffe,
-		0x0c,0xfefe,
-		0x0d,0xfffb,
-		0x39,0xfcff,
-		0x3a,0xfb00,
-		0x3b,0xfffc,
-		0xffff
-	};
-	leland_init_eeprom(machine, 0xff, pigout_eeprom_data, 0x00, SERIAL_TYPE_ENCRYPT);
-
+	leland_state *state = machine.driver_data<leland_state>();
 	/* master CPU bankswitching */
-	leland_update_master_bank = offroad_bankswitch;
+	state->m_update_master_bank = offroad_bankswitch;
 
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
@@ -2481,7 +2299,7 @@ static DRIVER_INIT( pigout )
 	init_master_ports(machine, 0x00, 0x40);
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x7f, 0x7f, 0, 0, "IN4");
+	machine.device("master")->memory().space(AS_IO)->install_read_port(0x7f, 0x7f, "IN4");
 }
 
 
@@ -2520,11 +2338,11 @@ GAME( 1988, teamqb2,  teamqb,  lelandi,  teamqb,   teamqb,   ROT270, "Leland Cor
 GAME( 1989, aafb,     0,       lelandi,  teamqb,   aafb,     ROT270, "Leland Corp.", "All American Football (rev E)", 0 )
 GAME( 1989, aafbd2p,  aafb,    lelandi,  aafb2p,   aafbd2p,  ROT270, "Leland Corp.", "All American Football (rev D, 2 Players)", 0 )
 GAME( 1989, aafbc,    aafb,    lelandi,  teamqb,   aafbb,    ROT270, "Leland Corp.", "All American Football (rev C)", 0 )
-GAME( 1989, aafbb,    aafb,    lelandi,  teamqb,   aafbb,    ROT270, "Leland Corp.", "All American Football (rev B)", 0 )
+GAME( 1989, aafbb,    aafb,    lelandi,  teamqb,   aafbb,    ROT270, "Leland Corp.", "All American Football (rev B)", GAME_NOT_WORKING )
 
 /* huge master banks, large slave banks, 80186 sound */
-GAME( 1989, offroad,  0,       lelandi,  offroad,  offroad,  ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road", 0 )
-GAME( 1989, offroadt, 0,       lelandi,  offroad,  offroadt, ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road Track-Pak", 0 )
-GAME( 1989, offrdtp2, offroadt,lelandi,  offrdtp2, offroadt, ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road Track-Pak (2 Players)", 0 )
-GAME( 1990, pigout,   0,       lelandi,  pigout,   pigout,   ROT0,   "Leland Corp.", "Pig Out: Dine Like a Swine! (set 1)", 0 )
-GAME( 1990, pigouta,  pigout,  lelandi,  pigout,   pigout,   ROT0,   "Leland Corp.", "Pig Out: Dine Like a Swine! (set 2)", 0 )
+GAME( 1989, offroad,    0,       lelandi,  offroad,    offroad,  ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road", 0 )
+GAME( 1989, offroadt,   0,       lelandi,  offroad,    offroadt, ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road Track-Pak", 0 )
+GAME( 1989, offroadt2p, offroadt,lelandi,  offroadt2p, offroadt, ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road Track-Pak (2 Players)", 0 )
+GAME( 1990, pigout,     0,       lelandi,  pigout,     pigout,   ROT0,   "Leland Corp.", "Pig Out: Dine Like a Swine! (set 1)", 0 )
+GAME( 1990, pigouta,    pigout,  lelandi,  pigout,     pigout,   ROT0,   "Leland Corp.", "Pig Out: Dine Like a Swine! (set 2)", 0 )

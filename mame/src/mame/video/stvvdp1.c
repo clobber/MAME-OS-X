@@ -2,10 +2,6 @@
 
 STV - VDP1
 
-crude drawing code to support some of the basic vdp1 features
-based on what hanagumi columns needs
--- to be expanded
-
 the vdp1 draws to the FRAMEBUFFER which is mapped in memory
 
 Framebuffer todo:
@@ -13,35 +9,14 @@ Framebuffer todo:
 - add proper framebuffer erase
 - 8 bpp support - now we always draw as 16 bpp, but this is not a problem since
   VDP2 interprets framebuffer as 8 bpp in these cases
+
 */
 
 
-#include "driver.h"
-#include "sound/scsp.h"
+#include "emu.h"
 #include "includes/stv.h"
 
-static int vdp1_sprite_log = 0;
-
-UINT32 *stv_vdp1_vram;
-static UINT32 *stv_vdp1_regs;
-UINT8* stv_vdp1_gfx_decode;
-
-static UINT16	 *stv_framebuffer[2];
-static UINT16	 **stv_framebuffer_draw_lines;
-UINT16	 **stv_framebuffer_display_lines;
-static int		 stv_framebuffer_width;
-static int		 stv_framebuffer_height;
-int		 stv_framebuffer_mode;
-int		 stv_framebuffer_double_interlace;
-static int		 stv_vdp1_fbcr_accessed;
-static int		 stv_vdp1_current_display_framebuffer;
-static int		 stv_vdp1_current_draw_framebuffer;
-static int		 stv_vdp1_clear_framebuffer_on_next_frame;
-static rectangle stv_vdp1_system_cliprect;
-static rectangle stv_vdp1_user_cliprect;
-
-static int stvvdp1_local_x;
-static int stvvdp1_local_y;
+#define VDP1_LOG 0
 
 struct stv_vdp1_poly_scanline
 {
@@ -115,9 +90,6 @@ struct shaded_point
    1 1024x256
    0 512x256
 */
-#define STV_VDP1_TVMR ((stv_vdp1_regs[0x000/4] >> 16)&0x0000ffff)
-#define STV_VDP1_VBE  ((STV_VDP1_TVMR & 0x0008) >> 3)
-#define STV_VDP1_TVM  ((STV_VDP1_TVMR & 0x0007) >> 0)
 
 /*Frame Buffer Change Mode Register*/
 /*
@@ -128,7 +100,7 @@ struct shaded_point
    ---- ---- ---- --x- | Frame Buffer Change Trigger (FCM)
    ---- ---- ---- ---x | Frame Buffer Change Mode (FCT)
 */
-#define STV_VDP1_FBCR ((stv_vdp1_regs[0x000/4] >> 0)&0x0000ffff)
+#define STV_VDP1_FBCR ((state->m_vdp1_regs[0x002/2] >> 0)&0xffff)
 #define STV_VDP1_EOS ((STV_VDP1_FBCR & 0x0010) >> 4)
 #define STV_VDP1_DIE ((STV_VDP1_FBCR & 0x0008) >> 3)
 #define STV_VDP1_DIL ((STV_VDP1_FBCR & 0x0004) >> 2)
@@ -146,9 +118,17 @@ struct shaded_point
    1 VDP1 draw by request
    0 VDP1 Idle (no access)
 */
-#define STV_VDP1_PTMR ((stv_vdp1_regs[0x004/4] >> 16)&0x0000ffff)
+#define STV_VDP1_PTMR ((state->m_vdp1_regs[0x004/2])&0xffff)
 #define STV_VDP1_PTM  ((STV_VDP1_PTMR & 0x0003) >> 0)
-#define SET_PTM_FROM_1_TO_0 if(STV_VDP1_PTM & 1)	 stv_vdp1_regs[0x004/4]^=0x00010000
+#define PTM_0         state->m_vdp1_regs[0x004/2]&=~0x0001
+
+/*
+    Erase/Write Data Register
+    16 bpp = data
+    8 bpp = erase/write data for even/odd X coordinates
+*/
+#define STV_VDP1_EWDR ((state->m_vdp1_regs[0x006/2])&0xffff)
+
 /*Erase/Write Upper-Left register*/
 /*
    x--- ---- ---- ---- | UNUSED
@@ -156,7 +136,7 @@ struct shaded_point
    ---- ---x xxxx xxxx | Y1 register
 
 */
-#define STV_VDP1_EWLR ((stv_vdp1_regs[0x008/4] >> 16)&0x0000ffff)
+#define STV_VDP1_EWLR ((state->m_vdp1_regs[0x008/2])&0xffff)
 #define STV_VDP1_EWLR_X1 ((STV_VDP1_EWLR & 0x7e00) >> 9)
 #define STV_VDP1_EWLR_Y1 ((STV_VDP1_EWLR & 0x01ff) >> 0)
 /*Erase/Write Lower-Right register*/
@@ -165,7 +145,7 @@ struct shaded_point
    ---- ---x xxxx xxxx | Y3 register
 
 */
-#define STV_VDP1_EWRR ((stv_vdp1_regs[0x008/4] >> 0)&0x0000ffff)
+#define STV_VDP1_EWRR ((state->m_vdp1_regs[0x00a/2])&0xffff)
 #define STV_VDP1_EWRR_X3 ((STV_VDP1_EWRR & 0xfe00) >> 9)
 #define STV_VDP1_EWRR_Y3 ((STV_VDP1_EWRR & 0x01ff) >> 0)
 /*Transfer End Status Register*/
@@ -175,183 +155,201 @@ struct shaded_point
    ---- ---- ---- ---x | BEF
 
 */
-#define STV_VDP1_EDSR ((stv_vdp1_regs[0x010/4] >> 16)&0x0000ffff)
+#define STV_VDP1_EDSR ((state->m_vdp1_regs[0x010/2])&0xffff)
 #define STV_VDP1_CEF  (STV_VDP1_EDSR & 2)
 #define STV_VDP1_BEF  (STV_VDP1_EDSR & 1)
-#define SET_CEF_FROM_1_TO_0 	if(STV_VDP1_CEF)	 stv_vdp1_regs[0x010/4]^=0x00020000
-#define SET_CEF_FROM_0_TO_1     if(!(STV_VDP1_CEF))	 stv_vdp1_regs[0x010/4]^=0x00020000
 /**/
 
 
 
-static void stv_vdp1_process_list(running_machine *machine);
+static void stv_vdp1_process_list(running_machine &machine);
 
-READ32_HANDLER( stv_vdp1_regs_r )
+READ16_HANDLER( saturn_vdp1_regs_r )
 {
-//  static int x;
+	saturn_state *state = space->machine().driver_data<saturn_state>();
 
-//  x ^= 0x00020000;
+	//logerror ("cpu %s (PC=%08X) VDP1: Read from Registers, Offset %04x\n", space->device().tag(), cpu_get_pc(&space->device()), offset);
 
-	logerror ("cpu %s (PC=%08X) VDP1: Read from Registers, Offset %04x\n", space->cpu->tag, cpu_get_pc(space->cpu), offset);
-//  if (offset == 0x04) return x;
+	switch(offset)
+	{
+		case 0x02/2:
+			return 0;
+		case 0x10/2:
+			break;
+		case 0x12/2: return state->m_vdp1.lopr;
+		case 0x14/2: return state->m_vdp1.copr;
+		/* MODR register, read register for the other VDP1 regs
+           (Shienryu SS version abuses of this during intro) */
+		case 0x16/2:
+			UINT16 modr;
 
-	return stv_vdp1_regs[offset];
+			modr = 0x1000; //vdp1 VER
+			modr |= (STV_VDP1_PTM >> 1) << 8; // PTM1
+			modr |= STV_VDP1_EOS << 7; // EOS
+			modr |= STV_VDP1_DIE << 6; // DIE
+			modr |= STV_VDP1_DIL << 5; // DIL
+			modr |= STV_VDP1_FCM << 4; //FCM
+			modr |= STV_VDP1_VBE << 3; //VBE
+			modr |= STV_VDP1_TVM & 7; //TVM
+
+			return modr;
+		default:
+			printf ("cpu %s (PC=%08X) VDP1: Read from Registers, Offset %04x\n", space->device().tag(), cpu_get_pc(&space->device()), offset*2);
+			break;
+	}
+
+	return state->m_vdp1_regs[offset]; //TODO: write-only regs should return open bus or zero
 }
 
-static void stv_clear_framebuffer( int which_framebuffer )
+static void stv_clear_framebuffer( running_machine &machine, int which_framebuffer )
 {
-	if ( vdp1_sprite_log ) logerror( "Clearing %d framebuffer\n", stv_vdp1_current_draw_framebuffer );
-	memset( stv_framebuffer[ which_framebuffer ], 0, 1024 * 256 * sizeof(UINT16) * 2 );
+	saturn_state *state = machine.driver_data<saturn_state>();
+
+	if ( VDP1_LOG ) logerror( "Clearing %d framebuffer\n", state->m_vdp1.framebuffer_current_draw );
+	memset( state->m_vdp1.framebuffer[ which_framebuffer ], state->m_vdp1.ewdr, 1024 * 256 * sizeof(UINT16) * 2 );
 }
 
 
-static void stv_prepare_framebuffers( void )
+static void stv_prepare_framebuffers( running_machine &machine )
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	int i,rowsize;
 
-	rowsize = stv_framebuffer_width;
-	if ( stv_vdp1_current_draw_framebuffer == 0 )
+	rowsize = state->m_vdp1.framebuffer_width;
+	if ( state->m_vdp1.framebuffer_current_draw == 0 )
 	{
-		for ( i = 0; i < stv_framebuffer_height; i++ )
+		for ( i = 0; i < state->m_vdp1.framebuffer_height; i++ )
 		{
-			stv_framebuffer_draw_lines[i] = &stv_framebuffer[0][ i * rowsize ];
-			stv_framebuffer_display_lines[i] = &stv_framebuffer[1][ i * rowsize ];
+			state->m_vdp1.framebuffer_draw_lines[i] = &state->m_vdp1.framebuffer[0][ i * rowsize ];
+			state->m_vdp1.framebuffer_display_lines[i] = &state->m_vdp1.framebuffer[1][ i * rowsize ];
 		}
 		for ( ; i < 512; i++ )
 		{
-			stv_framebuffer_draw_lines[i] = &stv_framebuffer[0][0];
-			stv_framebuffer_display_lines[i] = &stv_framebuffer[1][0];
+			state->m_vdp1.framebuffer_draw_lines[i] = &state->m_vdp1.framebuffer[0][0];
+			state->m_vdp1.framebuffer_display_lines[i] = &state->m_vdp1.framebuffer[1][0];
 		}
-
 	}
 	else
 	{
-		for ( i = 0; i < stv_framebuffer_height; i++ )
+		for ( i = 0; i < state->m_vdp1.framebuffer_height; i++ )
 		{
-			stv_framebuffer_draw_lines[i] = &stv_framebuffer[1][ i * rowsize ];
-			stv_framebuffer_display_lines[i] = &stv_framebuffer[0][ i * rowsize ];
+			state->m_vdp1.framebuffer_draw_lines[i] = &state->m_vdp1.framebuffer[1][ i * rowsize ];
+			state->m_vdp1.framebuffer_display_lines[i] = &state->m_vdp1.framebuffer[0][ i * rowsize ];
 		}
 		for ( ; i < 512; i++ )
 		{
-			stv_framebuffer_draw_lines[i] = &stv_framebuffer[1][0];
-			stv_framebuffer_display_lines[i] = &stv_framebuffer[0][0];
+			state->m_vdp1.framebuffer_draw_lines[i] = &state->m_vdp1.framebuffer[1][0];
+			state->m_vdp1.framebuffer_display_lines[i] = &state->m_vdp1.framebuffer[0][0];
 		}
 
 	}
 
 	for ( ; i < 512; i++ )
 	{
-		stv_framebuffer_draw_lines[i] = &stv_framebuffer[0][0];
-		stv_framebuffer_display_lines[i] = &stv_framebuffer[1][0];
+		state->m_vdp1.framebuffer_draw_lines[i] = &state->m_vdp1.framebuffer[0][0];
+		state->m_vdp1.framebuffer_display_lines[i] = &state->m_vdp1.framebuffer[1][0];
 	}
 
 }
 
-static void stv_vdp1_change_framebuffers( void )
+static void stv_vdp1_change_framebuffers( running_machine &machine )
 {
-	stv_vdp1_current_display_framebuffer ^= 1;
-	stv_vdp1_current_draw_framebuffer ^= 1;
-	if ( vdp1_sprite_log ) logerror( "Changing framebuffers: %d - draw, %d - display\n", stv_vdp1_current_draw_framebuffer, stv_vdp1_current_display_framebuffer );
-	stv_prepare_framebuffers();
+	saturn_state *state = machine.driver_data<saturn_state>();
+	state->m_vdp1.framebuffer_current_display ^= 1;
+	state->m_vdp1.framebuffer_current_draw ^= 1;
+	if ( VDP1_LOG ) logerror( "Changing framebuffers: %d - draw, %d - display\n", state->m_vdp1.framebuffer_current_draw, state->m_vdp1.framebuffer_current_display );
+	stv_prepare_framebuffers(machine);
 }
 
-static void stv_set_framebuffer_config( void )
+static void stv_set_framebuffer_config( running_machine &machine )
 {
-	if ( stv_framebuffer_mode == STV_VDP1_TVM &&
-		 stv_framebuffer_double_interlace == STV_VDP1_DIE ) return;
+	saturn_state *state = machine.driver_data<saturn_state>();
+	if ( state->m_vdp1.framebuffer_mode == STV_VDP1_TVM &&
+		 state->m_vdp1.framebuffer_double_interlace == STV_VDP1_DIE ) return;
 
-	if ( vdp1_sprite_log ) logerror( "Setting framebuffer config\n" );
-	stv_framebuffer_mode = STV_VDP1_TVM;
-	stv_framebuffer_double_interlace = STV_VDP1_DIE;
-	switch( stv_framebuffer_mode )
+	if ( VDP1_LOG ) logerror( "Setting framebuffer config\n" );
+	state->m_vdp1.framebuffer_mode = STV_VDP1_TVM;
+	state->m_vdp1.framebuffer_double_interlace = STV_VDP1_DIE;
+	switch( state->m_vdp1.framebuffer_mode )
 	{
-		case 0: stv_framebuffer_width = 512; stv_framebuffer_height = 256; break;
-		case 1: stv_framebuffer_width = 1024; stv_framebuffer_height = 256; break;
-		case 2: stv_framebuffer_width = 512; stv_framebuffer_height = 256; break;
-		case 3: stv_framebuffer_width = 512; stv_framebuffer_height = 512; break;
-		case 4: stv_framebuffer_width = 512; stv_framebuffer_height = 256; break;
-		default: logerror( "Invalid framebuffer config %x\n", STV_VDP1_TVM ); stv_framebuffer_width = 512; stv_framebuffer_height = 256; break;
+		case 0: state->m_vdp1.framebuffer_width = 512; state->m_vdp1.framebuffer_height = 256; break;
+		case 1: state->m_vdp1.framebuffer_width = 1024; state->m_vdp1.framebuffer_height = 256; break;
+		case 2: state->m_vdp1.framebuffer_width = 512; state->m_vdp1.framebuffer_height = 256; break;
+		case 3: state->m_vdp1.framebuffer_width = 512; state->m_vdp1.framebuffer_height = 512; break;
+		case 4: state->m_vdp1.framebuffer_width = 512; state->m_vdp1.framebuffer_height = 256; break;
+		default: logerror( "Invalid framebuffer config %x\n", STV_VDP1_TVM ); state->m_vdp1.framebuffer_width = 512; state->m_vdp1.framebuffer_height = 256; break;
 	}
-	if ( STV_VDP1_DIE ) stv_framebuffer_height *= 2; /* double interlace */
+	if ( STV_VDP1_DIE ) state->m_vdp1.framebuffer_height *= 2; /* double interlace */
 
-	stv_vdp1_current_draw_framebuffer = 0;
-	stv_vdp1_current_display_framebuffer = 1;
-	stv_prepare_framebuffers();
+	state->m_vdp1.framebuffer_current_draw = 0;
+	state->m_vdp1.framebuffer_current_display = 1;
+	stv_prepare_framebuffers(machine);
 }
 
-WRITE32_HANDLER( stv_vdp1_regs_w )
+WRITE16_HANDLER( saturn_vdp1_regs_w )
 {
-	COMBINE_DATA(&stv_vdp1_regs[offset]);
-	if ( offset == 0 )
-	{
-		stv_set_framebuffer_config();
-		if ( ACCESSING_BITS_0_15 )
-		{
-			if ( vdp1_sprite_log ) logerror( "VDP1: Access to register FBCR = %1X\n", STV_VDP1_FBCR );
-			stv_vdp1_fbcr_accessed = 1;
-		}
-		else
-		{
-			if ( vdp1_sprite_log ) logerror( "VDP1: Access to register TVMR = %1X\n", STV_VDP1_TVMR );
-			if ( STV_VDP1_VBE && stv_get_vblank(space->machine) )
-			{
-				stv_vdp1_clear_framebuffer_on_next_frame = 1;
-			}
+	saturn_state *state = space->machine().driver_data<saturn_state>();
+	COMBINE_DATA(&state->m_vdp1_regs[offset]);
 
-			/* needed by pblbeach, it doesn't clear local coordinates in its sprite list...*/
-			//if ( !strcmp(space->machine->gamedrv->name, "pblbeach") )
-			//{
-			//  stvvdp1_local_x = stvvdp1_local_y = 0;
-			//}
-		}
-	}
-	else if ( offset == 1 )
+	switch(offset)
 	{
-		if ( ACCESSING_BITS_16_31 )
-		{
+		case 0x00/2:
+			stv_set_framebuffer_config(space->machine());
+			if ( VDP1_LOG ) logerror( "VDP1: Access to register TVMR = %1X\n", STV_VDP1_TVMR );
+
+			break;
+		case 0x02/2:
+			stv_set_framebuffer_config(space->machine());
+			if ( VDP1_LOG ) logerror( "VDP1: Access to register FBCR = %1X\n", STV_VDP1_FBCR );
+			state->m_vdp1.fbcr_accessed = 1;
+			break;
+		case 0x04/2:
+			if ( VDP1_LOG ) logerror( "VDP1: Access to register PTMR = %1X\n", STV_VDP1_PTM );
 			if ( STV_VDP1_PTMR == 1 )
-			{
-				if ( vdp1_sprite_log ) logerror( "VDP1: Access to register PTMR = %1X\n", STV_VDP1_PTMR );
-				stv_vdp1_process_list( space->machine );
-			}
-		}
-		else if ( ACCESSING_BITS_0_15 )
-		{
-			if ( vdp1_sprite_log ) logerror( "VDP1: Erase data set %08X\n", data );
-		}
-	}
-	else if ( offset == 2 )
-	{
-		if ( ACCESSING_BITS_16_31 )
-		{
-			if ( vdp1_sprite_log ) logerror( "VDP1: Erase upper-left coord set: %08X\n", data );
-		}
-		else if ( ACCESSING_BITS_0_15 )
-		{
-			if ( vdp1_sprite_log ) logerror( "VDP1: Erase lower-right coord set: %08X\n", data );
-		}
+				stv_vdp1_process_list( space->machine() );
+
+			break;
+		case 0x06/2:
+			if ( VDP1_LOG ) logerror( "VDP1: Erase data set %08X\n", data );
+
+			state->m_vdp1.ewdr = STV_VDP1_EWDR;
+			break;
+		case 0x08/2:
+			if ( VDP1_LOG ) logerror( "VDP1: Erase upper-left coord set: %08X\n", data );
+			break;
+		case 0x0a/2:
+			if ( VDP1_LOG ) logerror( "VDP1: Erase lower-right coord set: %08X\n", data );
+			break;
+		case 0x0c/2:
+			if ( VDP1_LOG ) logerror( "VDP1: Draw forced termination register write: %08X\n", data );
+			break;
+		default:
+			printf("Warning: write to unknown VDP1 reg %08x %08x\n",offset*2,data);
+			break;
 	}
 
 }
 
-READ32_HANDLER ( stv_vdp1_vram_r )
+READ32_HANDLER ( saturn_vdp1_vram_r )
 {
-	return stv_vdp1_vram[offset];
+	saturn_state *state = space->machine().driver_data<saturn_state>();
+	return state->m_vdp1_vram[offset];
 }
 
 
-WRITE32_HANDLER ( stv_vdp1_vram_w )
+WRITE32_HANDLER ( saturn_vdp1_vram_w )
 {
-	UINT8 *vdp1 = stv_vdp1_gfx_decode;
+	saturn_state *state = space->machine().driver_data<saturn_state>();
+	UINT8 *vdp1 = state->m_vdp1.gfx_decode;
 
-	COMBINE_DATA (&stv_vdp1_vram[offset]);
+	COMBINE_DATA (&state->m_vdp1_vram[offset]);
 
 //  if (((offset * 4) > 0xdf) && ((offset * 4) < 0x140))
 //  {
-//      logerror("cpu %s (PC=%08X): VRAM dword write to %08X = %08X & %08X\n", space->cpu->tag, cpu_get_pc(space->cpu), offset*4, data, mem_mask);
+//      logerror("cpu %s (PC=%08X): VRAM dword write to %08X = %08X & %08X\n", space->device().tag(), cpu_get_pc(&space->device()), offset*4, data, mem_mask);
 //  }
 
-	data = stv_vdp1_vram[offset];
+	data = state->m_vdp1_vram[offset];
 	/* put in gfx region for easy decoding */
 	vdp1[offset*4+0] = (data & 0xff000000) >> 24;
 	vdp1[offset*4+1] = (data & 0x00ff0000) >> 16;
@@ -359,45 +357,77 @@ WRITE32_HANDLER ( stv_vdp1_vram_w )
 	vdp1[offset*4+3] = (data & 0x000000ff) >> 0;
 }
 
-WRITE32_HANDLER ( stv_vdp1_framebuffer0_w )
+WRITE32_HANDLER ( saturn_vdp1_framebuffer0_w )
 {
+	saturn_state *state = space->machine().driver_data<saturn_state>();
 	//popmessage ("STV VDP1 Framebuffer 0 WRITE offset %08x data %08x",offset, data);
-	if ( STV_VDP1_TVM & 0 )
+	if ( STV_VDP1_TVM & 1 )
 	{
 		/* 8-bit mode */
+		//printf("VDP1 8-bit mode %08x %02x\n",offset,data);
+		if ( ACCESSING_BITS_24_31 )
+		{
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] &= 0x00ff;
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] |= data & 0xff00;
+		}
+		if ( ACCESSING_BITS_16_23 )
+		{
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] &= 0xff00;
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] |= data & 0x00ff;
+		}
+		if ( ACCESSING_BITS_8_15 )
+		{
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] &= 0x00ff;
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] |= data & 0xff00;
+		}
+		if ( ACCESSING_BITS_0_7 )
+		{
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] &= 0xff00;
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] |= data & 0x00ff;
+		}
 	}
 	else
 	{
 		/* 16-bit mode */
 		if ( ACCESSING_BITS_16_31 )
 		{
-			stv_framebuffer[stv_vdp1_current_draw_framebuffer][offset*2] = (data >> 16) & 0xffff;
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] = (data >> 16) & 0xffff;
 		}
 		if ( ACCESSING_BITS_0_15 )
 		{
-			stv_framebuffer[stv_vdp1_current_draw_framebuffer][offset*2+1] = data & 0xffff;
+			state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] = data & 0xffff;
 		}
 	}
 }
 
-READ32_HANDLER ( stv_vdp1_framebuffer0_r )
+READ32_HANDLER ( saturn_vdp1_framebuffer0_r )
 {
+	saturn_state *state = space->machine().driver_data<saturn_state>();
 	UINT32 result = 0;
 	//popmessage ("STV VDP1 Framebuffer 0 READ offset %08x",offset);
-	if ( STV_VDP1_TVM & 0 )
+	if ( STV_VDP1_TVM & 1 )
 	{
 		/* 8-bit mode */
+		//printf("VDP1 8-bit mode %08x\n",offset);
+		if ( ACCESSING_BITS_24_31 )
+			result |= ((state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] & 0xff00) << 16);
+		if ( ACCESSING_BITS_16_23 )
+			result |= ((state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] & 0x00ff) << 16);
+		if ( ACCESSING_BITS_8_15 )
+			result |= ((state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] & 0xff00));
+		if ( ACCESSING_BITS_0_7 )
+			result |= ((state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1] & 0x00ff));
 	}
 	else
 	{
 		/* 16-bit mode */
 		if ( ACCESSING_BITS_16_31 )
 		{
-			result |= (stv_framebuffer[stv_vdp1_current_draw_framebuffer][offset*2] << 16);
+			result |= (state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2] << 16);
 		}
 		if ( ACCESSING_BITS_0_15 )
 		{
-			result |= stv_framebuffer[stv_vdp1_current_draw_framebuffer][offset*2+1];
+			result |= (state->m_vdp1.framebuffer[state->m_vdp1.framebuffer_current_draw][offset*2+1]);
 		}
 
 	}
@@ -406,12 +436,12 @@ READ32_HANDLER ( stv_vdp1_framebuffer0_r )
 }
 
 #ifdef UNUSED_FUNCTION
-WRITE32_HANDLER ( stv_vdp1_framebuffer1_w )
+WRITE32_HANDLER ( saturn_vdp1_framebuffer1_w )
 {
 	//popmessage ("STV VDP1 Framebuffer 1 WRITE offset %08x data %08x",offset, data);
 }
 
-READ32_HANDLER ( stv_vdp1_framebuffer1_r )
+READ32_HANDLER ( saturn_vdp1_framebuffer1_r )
 {
 	//popmessage ("STV VDP1 Framebuffer 1 READ offset %08x",offset);
 	return 0xffff;
@@ -513,17 +543,18 @@ static void stv_clear_gouraud_shading(void)
 	memset( &stv_gouraud_shading, 0, sizeof( stv_gouraud_shading ) );
 }
 
-static UINT8 stv_read_gouraud_table(void)
+static UINT8 stv_read_gouraud_table(running_machine &machine)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	int gaddr;
 
 	if ( (stv2_current_sprite.CMDPMOD & 0x7) == 4 )
 	{
 		gaddr = stv2_current_sprite.CMDGRDA * 8;
-		stv_gouraud_shading.GA = (stv_vdp1_vram[gaddr/4] >> 16) & 0xffff;
-		stv_gouraud_shading.GB = (stv_vdp1_vram[gaddr/4] >> 0) & 0xffff;
-		stv_gouraud_shading.GC = (stv_vdp1_vram[gaddr/4 + 1] >> 16) & 0xffff;
-		stv_gouraud_shading.GD = (stv_vdp1_vram[gaddr/4 + 1] >> 0) & 0xffff;
+		stv_gouraud_shading.GA = (state->m_vdp1_vram[gaddr/4] >> 16) & 0xffff;
+		stv_gouraud_shading.GB = (state->m_vdp1_vram[gaddr/4] >> 0) & 0xffff;
+		stv_gouraud_shading.GC = (state->m_vdp1_vram[gaddr/4 + 1] >> 16) & 0xffff;
+		stv_gouraud_shading.GD = (state->m_vdp1_vram[gaddr/4 + 1] >> 0) & 0xffff;
 		return 1;
 	}
 	else
@@ -674,7 +705,7 @@ static void stv_vdp1_setup_shading_for_slope(
 	*ng2 = g2;
 }
 
-static void stv_vdp1_setup_shading(const struct spoint* q, const rectangle *cliprect)
+static void stv_vdp1_setup_shading(running_machine &machine,const struct spoint* q, const rectangle &cliprect)
 {
 	INT32 x1, x2, delta, cury, limy;
 	INT32 r1, g1, b1, r2, g2, b2;
@@ -684,7 +715,7 @@ static void stv_vdp1_setup_shading(const struct spoint* q, const rectangle *clip
 	struct shaded_point p[8];
 	UINT16 gd[4];
 
-	if ( stv_read_gouraud_table() == 0 ) return;
+	if ( stv_read_gouraud_table(machine) == 0 ) return;
 
 	gd[0] = stv_gouraud_shading.GA;
 	gd[1] = stv_gouraud_shading.GB;
@@ -834,7 +865,7 @@ finish:
 
 	for ( cury = stv_vdp1_shading_data->sy; cury <= stv_vdp1_shading_data->ey; cury++ )
 	{
-		while( (stv_vdp1_shading_data->scanline[cury].x[0] >> 16) < cliprect->min_x )
+		while( (stv_vdp1_shading_data->scanline[cury].x[0] >> 16) < cliprect.min_x )
 		{
 			stv_vdp1_shading_data->scanline[cury].x[0] += (1 << FRAC_SHIFT);
 			stv_vdp1_shading_data->scanline[cury].b[0] += stv_vdp1_shading_data->scanline[cury].db;
@@ -854,45 +885,55 @@ static UINT8* gfxdata;
 static UINT16 sprite_colorbank;
 
 
-static void (*drawpixel)(running_machine *machine, int x, int y, int patterndata, int offsetcnt);
+static void (*drawpixel)(running_machine &machine, int x, int y, int patterndata, int offsetcnt);
 
-static void drawpixel_poly(running_machine *machine, int x, int y, int patterndata, int offsetcnt)
+static void drawpixel_poly(running_machine &machine, int x, int y, int patterndata, int offsetcnt)
 {
-	stv_framebuffer_draw_lines[y][x] = stv2_current_sprite.CMDCOLR;
+	saturn_state *state = machine.driver_data<saturn_state>();
+
+	/* Capcom Collection Dai 4 uses a dummy polygon to clear VDP1 framebuffer that goes over our current max size ... */
+	if(x >= 1024 || y >= 512)
+		return;
+
+	state->m_vdp1.framebuffer_draw_lines[y][x] = stv2_current_sprite.CMDCOLR;
 }
 
-static void drawpixel_8bpp_trans(running_machine *machine, int x, int y, int patterndata, int offsetcnt)
+static void drawpixel_8bpp_trans(running_machine &machine, int x, int y, int patterndata, int offsetcnt)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	UINT16 pix;
 
 	pix = gfxdata[patterndata+offsetcnt];
 	if ( pix & 0xff )
 	{
-		stv_framebuffer_draw_lines[y][x] = pix | sprite_colorbank;
+		state->m_vdp1.framebuffer_draw_lines[y][x] = pix | sprite_colorbank;
 	}
 }
 
-static void drawpixel_4bpp_notrans(running_machine *machine, int x, int y, int patterndata, int offsetcnt)
+static void drawpixel_4bpp_notrans(running_machine &machine, int x, int y, int patterndata, int offsetcnt)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	UINT16 pix;
 
 	pix = gfxdata[patterndata+offsetcnt/2];
 	pix = offsetcnt&1 ? (pix & 0x0f):((pix & 0xf0)>>4) ;
-	stv_framebuffer_draw_lines[y][x] = pix | sprite_colorbank;
+	state->m_vdp1.framebuffer_draw_lines[y][x] = pix | sprite_colorbank;
 }
 
-static void drawpixel_4bpp_trans(running_machine *machine, int x, int y, int patterndata, int offsetcnt)
+static void drawpixel_4bpp_trans(running_machine &machine, int x, int y, int patterndata, int offsetcnt)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	UINT16 pix;
 
 	pix = gfxdata[patterndata+offsetcnt/2];
 	pix = offsetcnt&1 ? (pix & 0x0f):((pix & 0xf0)>>4) ;
 	if ( pix )
-		stv_framebuffer_draw_lines[y][x] = pix | sprite_colorbank;
+		state->m_vdp1.framebuffer_draw_lines[y][x] = pix | sprite_colorbank;
 }
 
-static void drawpixel_generic(running_machine *machine, int x, int y, int patterndata, int offsetcnt)
+static void drawpixel_generic(running_machine &machine, int x, int y, int patterndata, int offsetcnt)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	int pix,mode,transmask, spd = stv2_current_sprite.CMDPMOD & 0x40;
 	int mesh = stv2_current_sprite.CMDPMOD & 0x100;
 	int pix2;
@@ -922,7 +963,7 @@ static void drawpixel_generic(running_machine *machine, int x, int y, int patter
 		{
 			case 0x0000: // mode 0 16 colour bank mode (4bits) (hanagumi blocks)
 				// most of the shienryu sprites use this mode
-				pix = gfxdata[patterndata+offsetcnt/2];
+				pix = gfxdata[(patterndata+offsetcnt/2) & 0xfffff];
 				pix = offsetcnt&1 ? (pix & 0x0f):((pix & 0xf0)>>4) ;
 				pix = pix+((stv2_current_sprite.CMDCOLR&0xfff0));
 				mode = 0;
@@ -930,11 +971,11 @@ static void drawpixel_generic(running_machine *machine, int x, int y, int patter
 				break;
 			case 0x0008: // mode 1 16 colour lookup table mode (4bits)
 				// shienryu explosisons (and some enemies) use this mode
-				pix2 = gfxdata[patterndata+offsetcnt/2];
+				pix2 = gfxdata[(patterndata+offsetcnt/2) & 0xfffff];
 				pix2 = offsetcnt&1 ?  (pix2 & 0x0f):((pix2 & 0xf0)>>4);
 				pix = pix2&1 ?
-				((((stv_vdp1_vram[(((stv2_current_sprite.CMDCOLR&0xffff)*8)>>2)+((pix2&0xfffe)/2)])) & 0x0000ffff) >> 0):
-				((((stv_vdp1_vram[(((stv2_current_sprite.CMDCOLR&0xffff)*8)>>2)+((pix2&0xfffe)/2)])) & 0xffff0000) >> 16);
+				((((state->m_vdp1_vram[(((stv2_current_sprite.CMDCOLR&0xffff)*8)>>2)+((pix2&0xfffe)/2)])) & 0x0000ffff) >> 0):
+				((((state->m_vdp1_vram[(((stv2_current_sprite.CMDCOLR&0xffff)*8)>>2)+((pix2&0xfffe)/2)])) & 0xffff0000) >> 16);
 
 				mode = 5;
 				transmask = 0xffff;
@@ -952,33 +993,33 @@ static void drawpixel_generic(running_machine *machine, int x, int y, int patter
 				}
 				break;
 			case 0x0010: // mode 2 64 colour bank mode (8bits) (character select portraits on hanagumi)
-				pix = gfxdata[patterndata+offsetcnt];
+				pix = gfxdata[(patterndata+offsetcnt) & 0xfffff];
 				mode = 2;
 				pix = pix+(stv2_current_sprite.CMDCOLR&0xffc0);
 				transmask = 0x3f;
 				break;
 			case 0x0018: // mode 3 128 colour bank mode (8bits) (little characters on hanagumi use this mode)
-				pix = gfxdata[patterndata+offsetcnt];
+				pix = gfxdata[(patterndata+offsetcnt) & 0xfffff];
 				pix = pix+(stv2_current_sprite.CMDCOLR&0xff80);
 				transmask = 0x7f;
 				mode = 3;
-			//  pix = mame_rand(machine);
 				break;
 			case 0x0020: // mode 4 256 colour bank mode (8bits) (hanagumi title)
-				pix = gfxdata[patterndata+offsetcnt];
+				pix = gfxdata[(patterndata+offsetcnt) & 0xfffff];
 				pix = pix+(stv2_current_sprite.CMDCOLR&0xff00);
 				transmask = 0xff;
 				mode = 4;
 				break;
 			case 0x0028: // mode 5 32,768 colour RGB mode (16bits)
-				pix = gfxdata[patterndata+offsetcnt*2+1] | (gfxdata[patterndata+offsetcnt*2]<<8) ;
+				pix = gfxdata[(patterndata+offsetcnt*2+1) & 0xfffff] | (gfxdata[(patterndata+offsetcnt*2) & 0xfffff]<<8) ;
 				mode = 5;
-				transmask = 0xffff;
+				transmask = -1; /* TODO: check me */
 				break;
 			default: // other settings illegal
-				pix = mame_rand(machine);
+				pix = machine.rand();
 				mode = 0;
 				transmask = 0xff;
+				popmessage("Illegal Sprite Mode, contact MAMEdev");
 		}
 
 
@@ -996,7 +1037,7 @@ static void drawpixel_generic(running_machine *machine, int x, int y, int patter
 	{
 		if ( (pix & transmask) || spd )
 		{
-			stv_framebuffer_draw_lines[y][x] = pix;
+			state->m_vdp1.framebuffer_draw_lines[y][x] = pix;
 		}
 	}
 	else
@@ -1006,32 +1047,32 @@ static void drawpixel_generic(running_machine *machine, int x, int y, int patter
 			switch( stv2_current_sprite.CMDPMOD & 0x7 )
 			{
 				case 0:	/* replace */
-					stv_framebuffer_draw_lines[y][x] = pix;
+					state->m_vdp1.framebuffer_draw_lines[y][x] = pix;
 					break;
 				case 1: /* shadow */
-					if ( stv_framebuffer_draw_lines[y][x] & 0x8000 )
+					if ( state->m_vdp1.framebuffer_draw_lines[y][x] & 0x8000 )
 					{
-						stv_framebuffer_draw_lines[y][x] = ((stv_framebuffer_draw_lines[y][x] & ~0x8421) >> 1) | 0x8000;
+						state->m_vdp1.framebuffer_draw_lines[y][x] = ((state->m_vdp1.framebuffer_draw_lines[y][x] & ~0x8421) >> 1) | 0x8000;
 					}
 					break;
 				case 2: /* half luminance */
-					stv_framebuffer_draw_lines[y][x] = ((pix & ~0x8421) >> 1) | 0x8000;
+					state->m_vdp1.framebuffer_draw_lines[y][x] = ((pix & ~0x8421) >> 1) | 0x8000;
 					break;
 				case 3: /* half transparent */
-					if ( stv_framebuffer_draw_lines[y][x] & 0x8000 )
+					if ( state->m_vdp1.framebuffer_draw_lines[y][x] & 0x8000 )
 					{
-						stv_framebuffer_draw_lines[y][x] = alpha_blend_r16( stv_framebuffer_draw_lines[y][x], pix, 0x80 ) | 0x8000;
+						state->m_vdp1.framebuffer_draw_lines[y][x] = alpha_blend_r16( state->m_vdp1.framebuffer_draw_lines[y][x], pix, 0x80 ) | 0x8000;
 					}
 					else
 					{
-						stv_framebuffer_draw_lines[y][x] = pix;
+						state->m_vdp1.framebuffer_draw_lines[y][x] = pix;
 					}
 					break;
 				case 4: /* Gouraud shading */
-					stv_framebuffer_draw_lines[y][x] = stv_vdp1_apply_gouraud_shading( x, y, pix );
+					state->m_vdp1.framebuffer_draw_lines[y][x] = stv_vdp1_apply_gouraud_shading( x, y, pix );
 					break;
 				default:
-					stv_framebuffer_draw_lines[y][x] = pix;
+					state->m_vdp1.framebuffer_draw_lines[y][x] = pix;
 					break;
 			}
 		}
@@ -1039,15 +1080,16 @@ static void drawpixel_generic(running_machine *machine, int x, int y, int patter
 }
 
 
-static void stv_vdp1_set_drawpixel(void)
+static void stv_vdp1_set_drawpixel(running_machine &machine)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	int sprite_type = stv2_current_sprite.CMDCTRL & 0x000f;
 	int sprite_mode = stv2_current_sprite.CMDPMOD&0x0038;
 	int spd = stv2_current_sprite.CMDPMOD & 0x40;
 	int mesh = stv2_current_sprite.CMDPMOD & 0x100;
 	int ecd = stv2_current_sprite.CMDPMOD & 0x80;
 
-	gfxdata = stv_vdp1_gfx_decode;
+	gfxdata = state->m_vdp1.gfx_decode;
 
 	if ( mesh || !ecd || ((stv2_current_sprite.CMDPMOD & 0x7) != 0) )
 	{
@@ -1081,16 +1123,16 @@ static void stv_vdp1_set_drawpixel(void)
 }
 
 
-static void vdp1_fill_slope(running_machine *machine, const rectangle *cliprect, int patterndata, int xsize,
+static void vdp1_fill_slope(running_machine &machine, const rectangle &cliprect, int patterndata, int xsize,
 							INT32 x1, INT32 x2, INT32 sl1, INT32 sl2, INT32 *nx1, INT32 *nx2,
 							INT32 u1, INT32 u2, INT32 slu1, INT32 slu2, INT32 *nu1, INT32 *nu2,
 							INT32 v1, INT32 v2, INT32 slv1, INT32 slv2, INT32 *nv1, INT32 *nv2,
 							INT32 _y1, INT32 y2)
 {
-	if(_y1 > cliprect->max_y)
+	if(_y1 > cliprect.max_y)
 		return;
 
-	if(y2 <= cliprect->min_y) {
+	if(y2 <= cliprect.min_y) {
 		int delta = y2-_y1;
 		*nx1 = x1+delta*sl1;
 		*nu1 = u1+delta*slu1;
@@ -1101,18 +1143,18 @@ static void vdp1_fill_slope(running_machine *machine, const rectangle *cliprect,
 		return;
 	}
 
-	if(y2 > cliprect->max_y)
-		y2 = cliprect->max_y+1;
+	if(y2 > cliprect.max_y)
+		y2 = cliprect.max_y+1;
 
-	if(_y1 < cliprect->min_y) {
-		int delta = cliprect->min_y - _y1;
+	if(_y1 < cliprect.min_y) {
+		int delta = cliprect.min_y - _y1;
 		x1 += delta*sl1;
 		u1 += delta*slu1;
 		v1 += delta*slv1;
 		x2 += delta*sl2;
 		u2 += delta*slu2;
 		v2 += delta*slv2;
-		_y1 = cliprect->min_y;
+		_y1 = cliprect.min_y;
 	}
 
 	if(x1 > x2 || (x1==x2 && sl1 > sl2)) {
@@ -1149,7 +1191,7 @@ static void vdp1_fill_slope(running_machine *machine, const rectangle *cliprect,
 	}
 
 	while(_y1 < y2) {
-		if(_y1 >= cliprect->min_y) {
+		if(_y1 >= cliprect.min_y) {
 			INT32 slux = 0, slvx = 0;
 			int xx1 = x1>>FRAC_SHIFT;
 			int xx2 = x2>>FRAC_SHIFT;
@@ -1160,15 +1202,15 @@ static void vdp1_fill_slope(running_machine *machine, const rectangle *cliprect,
 				slux = (u2-u1)/delta;
 				slvx = (v2-v1)/delta;
 			}
-			if(xx1 <= cliprect->max_x || xx2 >= cliprect->min_x) {
-				if(xx1 < cliprect->min_x) {
-					int delta = cliprect->min_x-xx1;
+			if(xx1 <= cliprect.max_x || xx2 >= cliprect.min_x) {
+				if(xx1 < cliprect.min_x) {
+					int delta = cliprect.min_x-xx1;
 					u += slux*delta;
 					v += slvx*delta;
-					xx1 = cliprect->min_x;
+					xx1 = cliprect.min_x;
 				}
-				if(xx2 > cliprect->max_x)
-					xx2 = cliprect->max_x;
+				if(xx2 > cliprect.max_x)
+					xx2 = cliprect.max_x;
 
 				while(xx1 <= xx2) {
 					drawpixel(machine,xx1,_y1,
@@ -1197,16 +1239,16 @@ static void vdp1_fill_slope(running_machine *machine, const rectangle *cliprect,
 	*nv2 = v2;
 }
 
-static void vdp1_fill_line(running_machine *machine, const rectangle *cliprect, int patterndata, int xsize, INT32 y,
+static void vdp1_fill_line(running_machine &machine, const rectangle &cliprect, int patterndata, int xsize, INT32 y,
 						   INT32 x1, INT32 x2, INT32 u1, INT32 u2, INT32 v1, INT32 v2)
 {
 	int xx1 = x1>>FRAC_SHIFT;
 	int xx2 = x2>>FRAC_SHIFT;
 
-	if(y > cliprect->max_y || y < cliprect->min_y)
+	if(y > cliprect.max_y || y < cliprect.min_y)
 		return;
 
-	if(xx1 <= cliprect->max_x || xx2 >= cliprect->min_x) {
+	if(xx1 <= cliprect.max_x || xx2 >= cliprect.min_x) {
 		INT32 slux = 0, slvx = 0;
 		INT32 u = u1;
 		INT32 v = v1;
@@ -1215,14 +1257,14 @@ static void vdp1_fill_line(running_machine *machine, const rectangle *cliprect, 
 			slux = (u2-u1)/delta;
 			slvx = (v2-v1)/delta;
 		}
-		if(xx1 < cliprect->min_x) {
-			int delta = cliprect->min_x-xx1;
+		if(xx1 < cliprect.min_x) {
+			int delta = cliprect.min_x-xx1;
 			u += slux*delta;
 			v += slvx*delta;
-			xx1 = cliprect->min_x;
+			xx1 = cliprect.min_x;
 		}
-		if(xx2 > cliprect->max_x)
-			xx2 = cliprect->max_x;
+		if(xx2 > cliprect.max_x)
+			xx2 = cliprect.max_x;
 
 		while(xx1 <= xx2) {
 			drawpixel(machine,xx1,y,
@@ -1235,7 +1277,7 @@ static void vdp1_fill_line(running_machine *machine, const rectangle *cliprect, 
 	}
 }
 
-static void vdp1_fill_quad(running_machine *machine, const rectangle *cliprect, int patterndata, int xsize, const struct spoint *q)
+static void vdp1_fill_quad(running_machine &machine, const rectangle &cliprect, int patterndata, int xsize, const struct spoint *q)
 {
 	INT32 sl1, sl2, slu1, slu2, slv1, slv2, cury, limy, x1, x2, u1, u2, v1, v2, delta;
 	int pmin, pmax, i, ps1, ps2;
@@ -1279,13 +1321,13 @@ static void vdp1_fill_quad(running_machine *machine, const rectangle *cliprect, 
 		return;
 	}
 
-	if(cury > cliprect->max_y)
+	if(cury > cliprect.max_y)
 		return;
-	if(limy <= cliprect->min_y)
+	if(limy <= cliprect.min_y)
 		return;
 
-	if(limy > cliprect->max_y)
-		limy = cliprect->max_y;
+	if(limy > cliprect.max_y)
+		limy = cliprect.max_y;
 
 	ps1 = pmin+4;
 	ps2 = pmin;
@@ -1372,99 +1414,103 @@ static void vdp1_fill_quad(running_machine *machine, const rectangle *cliprect, 
 		vdp1_fill_line(machine, cliprect, patterndata, xsize, cury, x1, x2, u1, u2, v1, v2);
 }
 
-static int x2s(int v)
+static int x2s(running_machine &machine,int v)
 {
-	return (INT32)(INT16)v + stvvdp1_local_x;
+	saturn_state *state = machine.driver_data<saturn_state>();
+
+	return (INT32)(INT16)v + state->m_vdp1.local_x;
 }
 
-static int y2s(int v)
+static int y2s(running_machine &machine, int v)
 {
-	return (INT32)(INT16)v + stvvdp1_local_y;
+	saturn_state *state = machine.driver_data<saturn_state>();
+
+	return (INT32)(INT16)v + state->m_vdp1.local_y;
 }
 
-static void stv_vdp1_draw_line(running_machine *machine, const rectangle *cliprect)
-{
-	struct spoint q[4];
-
-	q[0].x = x2s(stv2_current_sprite.CMDXA);
-	q[0].y = y2s(stv2_current_sprite.CMDYA);
-	q[1].x = x2s(stv2_current_sprite.CMDXB);
-	q[1].y = y2s(stv2_current_sprite.CMDYB);
-	q[2].x = x2s(stv2_current_sprite.CMDXA);
-	q[2].y = y2s(stv2_current_sprite.CMDYA);
-	q[3].x = x2s(stv2_current_sprite.CMDXB);
-	q[3].y = y2s(stv2_current_sprite.CMDYB);
-
-	q[0].u = q[3].u = q[1].u = q[2].u = 0;
-	q[0].v = q[1].v = q[2].v = q[3].v = 0;
-
-	vdp1_fill_quad(machine, cliprect, 0, 1, q);
-}
-
-static void stv_vdp1_draw_poly_line(running_machine *machine, const rectangle *cliprect)
+static void stv_vdp1_draw_line(running_machine &machine, const rectangle &cliprect)
 {
 	struct spoint q[4];
 
-	q[0].x = x2s(stv2_current_sprite.CMDXA);
-	q[0].y = y2s(stv2_current_sprite.CMDYA);
-	q[1].x = x2s(stv2_current_sprite.CMDXB);
-	q[1].y = y2s(stv2_current_sprite.CMDYB);
-	q[2].x = x2s(stv2_current_sprite.CMDXA);
-	q[2].y = y2s(stv2_current_sprite.CMDYA);
-	q[3].x = x2s(stv2_current_sprite.CMDXB);
-	q[3].y = y2s(stv2_current_sprite.CMDYB);
+	q[0].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[0].y = y2s(machine, stv2_current_sprite.CMDYA);
+	q[1].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[1].y = y2s(machine, stv2_current_sprite.CMDYB);
+	q[2].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[2].y = y2s(machine, stv2_current_sprite.CMDYA);
+	q[3].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[3].y = y2s(machine, stv2_current_sprite.CMDYB);
+
+	q[0].u = q[3].u = q[1].u = q[2].u = 0;
+	q[0].v = q[1].v = q[2].v = q[3].v = 0;
+
+	vdp1_fill_quad(machine, cliprect, 0, 1, q);
+}
+
+static void stv_vdp1_draw_poly_line(running_machine &machine, const rectangle &cliprect)
+{
+	struct spoint q[4];
+
+	q[0].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[0].y = y2s(machine, stv2_current_sprite.CMDYA);
+	q[1].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[1].y = y2s(machine, stv2_current_sprite.CMDYB);
+	q[2].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[2].y = y2s(machine, stv2_current_sprite.CMDYA);
+	q[3].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[3].y = y2s(machine, stv2_current_sprite.CMDYB);
 
 	q[0].u = q[3].u = q[1].u = q[2].u = 0;
 	q[0].v = q[1].v = q[2].v = q[3].v = 0;
 
 	vdp1_fill_quad(machine, cliprect, 0, 1, q);
 
-	q[0].x = x2s(stv2_current_sprite.CMDXB);
-	q[0].y = y2s(stv2_current_sprite.CMDYB);
-	q[1].x = x2s(stv2_current_sprite.CMDXC);
-	q[1].y = y2s(stv2_current_sprite.CMDYC);
-	q[2].x = x2s(stv2_current_sprite.CMDXB);
-	q[2].y = y2s(stv2_current_sprite.CMDYB);
-	q[3].x = x2s(stv2_current_sprite.CMDXC);
-	q[3].y = y2s(stv2_current_sprite.CMDYC);
+	q[0].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[0].y = y2s(machine, stv2_current_sprite.CMDYB);
+	q[1].x = x2s(machine, stv2_current_sprite.CMDXC);
+	q[1].y = y2s(machine, stv2_current_sprite.CMDYC);
+	q[2].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[2].y = y2s(machine, stv2_current_sprite.CMDYB);
+	q[3].x = x2s(machine, stv2_current_sprite.CMDXC);
+	q[3].y = y2s(machine, stv2_current_sprite.CMDYC);
 
 	q[0].u = q[3].u = q[1].u = q[2].u = 0;
 	q[0].v = q[1].v = q[2].v = q[3].v = 0;
 
 	vdp1_fill_quad(machine, cliprect, 0, 1, q);
 
-	q[0].x = x2s(stv2_current_sprite.CMDXC);
-	q[0].y = y2s(stv2_current_sprite.CMDYC);
-	q[1].x = x2s(stv2_current_sprite.CMDXD);
-	q[1].y = y2s(stv2_current_sprite.CMDYD);
-	q[2].x = x2s(stv2_current_sprite.CMDXC);
-	q[2].y = y2s(stv2_current_sprite.CMDYC);
-	q[3].x = x2s(stv2_current_sprite.CMDXD);
-	q[3].y = y2s(stv2_current_sprite.CMDYD);
+	q[0].x = x2s(machine, stv2_current_sprite.CMDXC);
+	q[0].y = y2s(machine, stv2_current_sprite.CMDYC);
+	q[1].x = x2s(machine, stv2_current_sprite.CMDXD);
+	q[1].y = y2s(machine, stv2_current_sprite.CMDYD);
+	q[2].x = x2s(machine, stv2_current_sprite.CMDXC);
+	q[2].y = y2s(machine, stv2_current_sprite.CMDYC);
+	q[3].x = x2s(machine, stv2_current_sprite.CMDXD);
+	q[3].y = y2s(machine, stv2_current_sprite.CMDYD);
 
 	q[0].u = q[3].u = q[1].u = q[2].u = 0;
 	q[0].v = q[1].v = q[2].v = q[3].v = 0;
 
 	vdp1_fill_quad(machine, cliprect, 0, 1, q);
 
-	q[0].x = x2s(stv2_current_sprite.CMDXD);
-	q[0].y = y2s(stv2_current_sprite.CMDYD);
-	q[1].x = x2s(stv2_current_sprite.CMDXA);
-	q[1].y = y2s(stv2_current_sprite.CMDYA);
-	q[2].x = x2s(stv2_current_sprite.CMDXD);
-	q[2].y = y2s(stv2_current_sprite.CMDYD);
-	q[3].x = x2s(stv2_current_sprite.CMDXA);
-	q[3].y = y2s(stv2_current_sprite.CMDYA);
+	q[0].x = x2s(machine, stv2_current_sprite.CMDXD);
+	q[0].y = y2s(machine, stv2_current_sprite.CMDYD);
+	q[1].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[1].y = y2s(machine, stv2_current_sprite.CMDYA);
+	q[2].x = x2s(machine, stv2_current_sprite.CMDXD);
+	q[2].y = y2s(machine, stv2_current_sprite.CMDYD);
+	q[3].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[3].y = y2s(machine, stv2_current_sprite.CMDYA);
 
 	q[0].u = q[3].u = q[1].u = q[2].u = 0;
 	q[0].v = q[1].v = q[2].v = q[3].v = 0;
 
-	stv_vdp1_setup_shading(q, cliprect);
+	stv_vdp1_setup_shading(machine, q, cliprect);
 	vdp1_fill_quad(machine, cliprect, 0, 1, q);
 
 }
 
-static void stv_vpd1_draw_distorted_sprite(running_machine *machine, const rectangle *cliprect)
+static void stv_vpd1_draw_distorted_sprite(running_machine &machine, const rectangle &cliprect)
 {
 	struct spoint q[4];
 
@@ -1494,14 +1540,14 @@ static void stv_vpd1_draw_distorted_sprite(running_machine *machine, const recta
 	}
 
 
-	q[0].x = x2s(stv2_current_sprite.CMDXA);
-	q[0].y = y2s(stv2_current_sprite.CMDYA);
-	q[1].x = x2s(stv2_current_sprite.CMDXB);
-	q[1].y = y2s(stv2_current_sprite.CMDYB);
-	q[2].x = x2s(stv2_current_sprite.CMDXC);
-	q[2].y = y2s(stv2_current_sprite.CMDYC);
-	q[3].x = x2s(stv2_current_sprite.CMDXD);
-	q[3].y = y2s(stv2_current_sprite.CMDYD);
+	q[0].x = x2s(machine, stv2_current_sprite.CMDXA);
+	q[0].y = y2s(machine, stv2_current_sprite.CMDYA);
+	q[1].x = x2s(machine, stv2_current_sprite.CMDXB);
+	q[1].y = y2s(machine, stv2_current_sprite.CMDYB);
+	q[2].x = x2s(machine, stv2_current_sprite.CMDXC);
+	q[2].y = y2s(machine, stv2_current_sprite.CMDYC);
+	q[3].x = x2s(machine, stv2_current_sprite.CMDXD);
+	q[3].y = y2s(machine, stv2_current_sprite.CMDYD);
 
 	if(direction & 1) { // xflip
 		q[0].u = q[3].u = xsize-1;
@@ -1518,11 +1564,11 @@ static void stv_vpd1_draw_distorted_sprite(running_machine *machine, const recta
 		q[2].v = q[3].v = ysize-1;
 	}
 
-	stv_vdp1_setup_shading(q, cliprect);
+	stv_vdp1_setup_shading(machine, q, cliprect);
 	vdp1_fill_quad(machine, cliprect, patterndata, xsize, q);
 }
 
-static void stv_vpd1_draw_scaled_sprite(running_machine *machine, const rectangle *cliprect)
+static void stv_vpd1_draw_scaled_sprite(running_machine &machine, const rectangle &cliprect)
 {
 	struct spoint q[4];
 
@@ -1620,14 +1666,14 @@ static void stv_vpd1_draw_scaled_sprite(running_machine *machine, const rectangl
 
 	if (zoompoint)
 	{
-		q[0].x = x2s(x);
-		q[0].y = y2s(y);
-		q[1].x = x2s(x)+screen_width;
-		q[1].y = y2s(y);
-		q[2].x = x2s(x)+screen_width;
-		q[2].y = y2s(y)+screen_height;
-		q[3].x = x2s(x);
-		q[3].y = y2s(y)+screen_height;
+		q[0].x = x2s(machine, x);
+		q[0].y = y2s(machine, y);
+		q[1].x = x2s(machine, x)+screen_width;
+		q[1].y = y2s(machine, y);
+		q[2].x = x2s(machine, x)+screen_width;
+		q[2].y = y2s(machine, y)+screen_height;
+		q[3].x = x2s(machine, x);
+		q[3].y = y2s(machine, y)+screen_height;
 
 		if ( screen_height_negative )
 		{
@@ -1639,14 +1685,14 @@ static void stv_vpd1_draw_scaled_sprite(running_machine *machine, const rectangl
 	}
 	else
 	{
-		q[0].x = x2s(x);
-		q[0].y = y2s(y);
-		q[1].x = x2s(x2);
-		q[1].y = y2s(y);
-		q[2].x = x2s(x2);
-		q[2].y = y2s(y2);
-		q[3].x = x2s(x);
-		q[3].y = y2s(y2);
+		q[0].x = x2s(machine, x);
+		q[0].y = y2s(machine, y);
+		q[1].x = x2s(machine, x2);
+		q[1].y = y2s(machine, y);
+		q[2].x = x2s(machine, x2);
+		q[2].y = y2s(machine, y2);
+		q[3].x = x2s(machine, x);
+		q[3].y = y2s(machine, y2);
 	}
 
 
@@ -1665,15 +1711,15 @@ static void stv_vpd1_draw_scaled_sprite(running_machine *machine, const rectangl
 		q[2].v = q[3].v = ysize-1;
 	}
 
-	stv_vdp1_setup_shading(q, cliprect);
+	stv_vdp1_setup_shading(machine, q, cliprect);
 	vdp1_fill_quad(machine, cliprect, patterndata, xsize, q);
 }
 
 
-static void stv_vpd1_draw_normal_sprite(running_machine *machine, const rectangle *cliprect, int sprite_type)
+static void stv_vpd1_draw_normal_sprite(running_machine &machine, const rectangle &cliprect, int sprite_type)
 {
-	UINT16 *destline;
-
+	//UINT16 *destline;
+	//saturn_state *state = machine.driver_data<saturn_state>();
 	int y, ysize, drawypos;
 	int x, xsize, drawxpos;
 	int direction;
@@ -1684,10 +1730,10 @@ static void stv_vpd1_draw_normal_sprite(running_machine *machine, const rectangl
 
 
 
-	shading = stv_read_gouraud_table();
+	shading = stv_read_gouraud_table(machine);
 
-	x = x2s(stv2_current_sprite.CMDXA);
-	y = y2s(stv2_current_sprite.CMDYA);
+	x = x2s(machine, stv2_current_sprite.CMDXA);
+	y = y2s(machine, stv2_current_sprite.CMDYA);
 
 	direction = (stv2_current_sprite.CMDCTRL & 0x0030)>>4;
 
@@ -1699,12 +1745,12 @@ static void stv_vpd1_draw_normal_sprite(running_machine *machine, const rectangl
 	patterndata = (stv2_current_sprite.CMDSRCA) & 0xffff;
 	patterndata = patterndata * 0x8;
 
-	if (vdp1_sprite_log) logerror ("Drawing Normal Sprite x %04x y %04x xsize %04x ysize %04x patterndata %06x\n",x,y,xsize,ysize,patterndata);
+	if (VDP1_LOG) logerror ("Drawing Normal Sprite x %04x y %04x xsize %04x ysize %04x patterndata %06x\n",x,y,xsize,ysize,patterndata);
 
-	if ( x > cliprect->max_x ) return;
-	if ( y > cliprect->max_y ) return;
+	if ( x > cliprect.max_x ) return;
+	if ( y > cliprect.max_y ) return;
 
-	shading = stv_read_gouraud_table();
+	shading = stv_read_gouraud_table(machine);
 	if ( shading )
 	{
 		struct spoint q[4];
@@ -1713,7 +1759,7 @@ static void stv_vpd1_draw_normal_sprite(running_machine *machine, const rectangl
 		q[2].x = x + xsize; q[2].y = y + ysize;
 		q[3].x = x; q[3].y = y + ysize;
 
-		stv_vdp1_setup_shading( q, cliprect );
+		stv_vdp1_setup_shading( machine, q, cliprect );
 	}
 
 	u = 0;
@@ -1729,23 +1775,23 @@ static void stv_vpd1_draw_normal_sprite(running_machine *machine, const rectangl
 		duy = -xsize;
 		u += xsize*(ysize-1);
 	}
-	if ( y < cliprect->min_y ) //clip y
+	if ( y < cliprect.min_y ) //clip y
 	{
-		u += xsize*(cliprect->min_y - y);
-		ysize -= (cliprect->min_y - y);
-		y = cliprect->min_y;
+		u += xsize*(cliprect.min_y - y);
+		ysize -= (cliprect.min_y - y);
+		y = cliprect.min_y;
 	}
-	if ( x < cliprect->min_x ) //clip x
+	if ( x < cliprect.min_x ) //clip x
 	{
-		u += dux*(cliprect->min_x - x);
-		xsize -= (cliprect->min_x - x);
-		x = cliprect->min_x;
+		u += dux*(cliprect.min_x - x);
+		xsize -= (cliprect.min_x - x);
+		x = cliprect.min_x;
 	}
-	maxdrawypos = MIN(y+ysize-1,cliprect->max_y);
-	maxdrawxpos = MIN(x+xsize-1,cliprect->max_x);
+	maxdrawypos = MIN(y+ysize-1,cliprect.max_y);
+	maxdrawxpos = MIN(x+xsize-1,cliprect.max_x);
 	for (drawypos = y; drawypos <= maxdrawypos; drawypos++ )
 	{
-		destline = stv_framebuffer_draw_lines[drawypos];
+		//destline = state->m_vdp1.framebuffer_draw_lines[drawypos];
 		su = u;
 		for (drawxpos = x; drawxpos <= maxdrawxpos; drawxpos++ )
 		{
@@ -1756,8 +1802,9 @@ static void stv_vpd1_draw_normal_sprite(running_machine *machine, const rectangl
 	}
 }
 
-static void stv_vdp1_process_list(running_machine *machine)
+static void stv_vdp1_process_list(running_machine &machine)
 {
+	saturn_state *state = machine.driver_data<saturn_state>();
 	int position;
 	int spritecount;
 	int vdp1_nest;
@@ -1766,14 +1813,14 @@ static void stv_vdp1_process_list(running_machine *machine)
 	spritecount = 0;
 	position = 0;
 
-	if (vdp1_sprite_log) logerror ("Sprite List Process START\n");
+	if (VDP1_LOG) logerror ("Sprite List Process START\n");
 
 	vdp1_nest = -1;
 
 	stv_clear_gouraud_shading();
 
 	/*Set CEF bit to 0*/
-	SET_CEF_FROM_1_TO_0;
+	CEF_0;
 
 	while (spritecount<10000) // if its drawn this many sprites something is probably wrong or sega were crazy ;-)
 	{
@@ -1783,68 +1830,68 @@ static void stv_vdp1_process_list(running_machine *machine)
 
 	//  if (position >= ((0x80000/0x20)/4)) // safety check
 	//  {
-	//      if (vdp1_sprite_log) logerror ("Sprite List Position Too High!\n");
+	//      if (VDP1_LOG) logerror ("Sprite List Position Too High!\n");
 	//      position = 0;
 	//  }
 
-		stv2_current_sprite.CMDCTRL = (stv_vdp1_vram[position * (0x20/4)+0] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDCTRL = (state->m_vdp1_vram[position * (0x20/4)+0] & 0xffff0000) >> 16;
 
 		if (stv2_current_sprite.CMDCTRL == 0x8000)
 		{
-			if (vdp1_sprite_log) logerror ("List Terminator (0x8000) Encountered, Sprite List Process END\n");
+			if (VDP1_LOG) logerror ("List Terminator (0x8000) Encountered, Sprite List Process END\n");
 			goto end; // end of list
 		}
 
-		stv2_current_sprite.CMDLINK = (stv_vdp1_vram[position * (0x20/4)+0] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDPMOD = (stv_vdp1_vram[position * (0x20/4)+1] & 0xffff0000) >> 16;
-		stv2_current_sprite.CMDCOLR = (stv_vdp1_vram[position * (0x20/4)+1] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDSRCA = (stv_vdp1_vram[position * (0x20/4)+2] & 0xffff0000) >> 16;
-		stv2_current_sprite.CMDSIZE = (stv_vdp1_vram[position * (0x20/4)+2] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDXA   = (stv_vdp1_vram[position * (0x20/4)+3] & 0xffff0000) >> 16;
-		stv2_current_sprite.CMDYA   = (stv_vdp1_vram[position * (0x20/4)+3] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDXB   = (stv_vdp1_vram[position * (0x20/4)+4] & 0xffff0000) >> 16;
-		stv2_current_sprite.CMDYB   = (stv_vdp1_vram[position * (0x20/4)+4] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDXC   = (stv_vdp1_vram[position * (0x20/4)+5] & 0xffff0000) >> 16;
-		stv2_current_sprite.CMDYC   = (stv_vdp1_vram[position * (0x20/4)+5] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDXD   = (stv_vdp1_vram[position * (0x20/4)+6] & 0xffff0000) >> 16;
-		stv2_current_sprite.CMDYD   = (stv_vdp1_vram[position * (0x20/4)+6] & 0x0000ffff) >> 0;
-		stv2_current_sprite.CMDGRDA = (stv_vdp1_vram[position * (0x20/4)+7] & 0xffff0000) >> 16;
-//      stv2_current_sprite.UNUSED  = (stv_vdp1_vram[position * (0x20/4)+7] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDLINK = (state->m_vdp1_vram[position * (0x20/4)+0] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDPMOD = (state->m_vdp1_vram[position * (0x20/4)+1] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDCOLR = (state->m_vdp1_vram[position * (0x20/4)+1] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDSRCA = (state->m_vdp1_vram[position * (0x20/4)+2] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDSIZE = (state->m_vdp1_vram[position * (0x20/4)+2] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDXA   = (state->m_vdp1_vram[position * (0x20/4)+3] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDYA   = (state->m_vdp1_vram[position * (0x20/4)+3] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDXB   = (state->m_vdp1_vram[position * (0x20/4)+4] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDYB   = (state->m_vdp1_vram[position * (0x20/4)+4] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDXC   = (state->m_vdp1_vram[position * (0x20/4)+5] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDYC   = (state->m_vdp1_vram[position * (0x20/4)+5] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDXD   = (state->m_vdp1_vram[position * (0x20/4)+6] & 0xffff0000) >> 16;
+		stv2_current_sprite.CMDYD   = (state->m_vdp1_vram[position * (0x20/4)+6] & 0x0000ffff) >> 0;
+		stv2_current_sprite.CMDGRDA = (state->m_vdp1_vram[position * (0x20/4)+7] & 0xffff0000) >> 16;
+//      stv2_current_sprite.UNUSED  = (state->m_vdp1_vram[position * (0x20/4)+7] & 0x0000ffff) >> 0;
 
 		/* proecess jump / skip commands, set position for next sprite */
 		switch (stv2_current_sprite.CMDCTRL & 0x7000)
 		{
 			case 0x0000: // jump next
-				if (vdp1_sprite_log) logerror ("Sprite List Process + Next (Normal)\n");
+				if (VDP1_LOG) logerror ("Sprite List Process + Next (Normal)\n");
 				position++;
 				break;
 			case 0x1000: // jump assign
-				if (vdp1_sprite_log) logerror ("Sprite List Process + Jump Old %06x New %06x\n", position, (stv2_current_sprite.CMDLINK>>2));
+				if (VDP1_LOG) logerror ("Sprite List Process + Jump Old %06x New %06x\n", position, (stv2_current_sprite.CMDLINK>>2));
 				position= (stv2_current_sprite.CMDLINK>>2);
 				break;
 			case 0x2000: // jump call
 				if (vdp1_nest == -1)
 				{
-					if (vdp1_sprite_log) logerror ("Sprite List Process + Call Old %06x New %06x\n",position, (stv2_current_sprite.CMDLINK>>2));
+					if (VDP1_LOG) logerror ("Sprite List Process + Call Old %06x New %06x\n",position, (stv2_current_sprite.CMDLINK>>2));
 					vdp1_nest = position+1;
 					position = (stv2_current_sprite.CMDLINK>>2);
 				}
 				else
 				{
-					if (vdp1_sprite_log) logerror ("Sprite List Nested Call, ignoring\n");
+					if (VDP1_LOG) logerror ("Sprite List Nested Call, ignoring\n");
 					position++;
 				}
 				break;
 			case 0x3000:
 				if (vdp1_nest != -1)
 				{
-					if (vdp1_sprite_log) logerror ("Sprite List Process + Return\n");
+					if (VDP1_LOG) logerror ("Sprite List Process + Return\n");
 					position = vdp1_nest;
 					vdp1_nest = -1;
 				}
 				else
 				{
-					if (vdp1_sprite_log) logerror ("Attempted return from no subroutine, aborting\n");
+					if (VDP1_LOG) logerror ("Attempted return from no subroutine, aborting\n");
 					position++;
 					goto end; // end of list
 				}
@@ -1854,7 +1901,7 @@ static void stv_vdp1_process_list(running_machine *machine)
 				position++;
 				break;
 			case 0x5000:
-				if (vdp1_sprite_log) logerror ("Sprite List Skip + Jump Old %06x New %06x\n", position, (stv2_current_sprite.CMDLINK>>2));
+				if (VDP1_LOG) logerror ("Sprite List Skip + Jump Old %06x New %06x\n", position, (stv2_current_sprite.CMDLINK>>2));
 				draw_this_sprite = 0;
 				position= (stv2_current_sprite.CMDLINK>>2);
 
@@ -1863,14 +1910,14 @@ static void stv_vdp1_process_list(running_machine *machine)
 				draw_this_sprite = 0;
 				if (vdp1_nest == -1)
 				{
-					if (vdp1_sprite_log) logerror ("Sprite List Skip + Call To Subroutine Old %06x New %06x\n",position, (stv2_current_sprite.CMDLINK>>2));
+					if (VDP1_LOG) logerror ("Sprite List Skip + Call To Subroutine Old %06x New %06x\n",position, (stv2_current_sprite.CMDLINK>>2));
 
 					vdp1_nest = position+1;
 					position = (stv2_current_sprite.CMDLINK>>2);
 				}
 				else
 				{
-					if (vdp1_sprite_log) logerror ("Sprite List Nested Call, ignoring\n");
+					if (VDP1_LOG) logerror ("Sprite List Nested Call, ignoring\n");
 					position++;
 				}
 				break;
@@ -1878,14 +1925,14 @@ static void stv_vdp1_process_list(running_machine *machine)
 				draw_this_sprite = 0;
 				if (vdp1_nest != -1)
 				{
-					if (vdp1_sprite_log) logerror ("Sprite List Skip + Return from Subroutine\n");
+					if (VDP1_LOG) logerror ("Sprite List Skip + Return from Subroutine\n");
 
 					position = vdp1_nest;
 					vdp1_nest = -1;
 				}
 				else
 				{
-					if (vdp1_sprite_log) logerror ("Attempted return from no subroutine, aborting\n");
+					if (VDP1_LOG) logerror ("Attempted return from no subroutine, aborting\n");
 					position++;
 					goto end; // end of list
 				}
@@ -1897,83 +1944,84 @@ static void stv_vdp1_process_list(running_machine *machine)
 		{
 			if ( stv2_current_sprite.CMDPMOD & 0x0400 )
 			{
-				cliprect = &stv_vdp1_user_cliprect;
+				//if(stv2_current_sprite.CMDPMOD & 0x0200) /* TODO: Bio Hazard inventory screen uses outside cliprect */
+				//  cliprect = &state->m_vdp1.system_cliprect;
+				//else
+					cliprect = &state->m_vdp1.user_cliprect;
 			}
 			else
 			{
-				cliprect = &stv_vdp1_system_cliprect;
+				cliprect = &state->m_vdp1.system_cliprect;
 			}
 
-			stv_vdp1_set_drawpixel();
+			stv_vdp1_set_drawpixel(machine);
 
 			switch (stv2_current_sprite.CMDCTRL & 0x000f)
 			{
 				case 0x0000:
-					if (vdp1_sprite_log) logerror ("Sprite List Normal Sprite\n");
+					if (VDP1_LOG) logerror ("Sprite List Normal Sprite (%d %d)\n",stv2_current_sprite.CMDXA,stv2_current_sprite.CMDYA);
 					stv2_current_sprite.ispoly = 0;
-					stv_vpd1_draw_normal_sprite(machine, cliprect, 0);
+					stv_vpd1_draw_normal_sprite(machine, *cliprect, 0);
 					break;
 
 				case 0x0001:
-					if (vdp1_sprite_log) logerror ("Sprite List Scaled Sprite\n");
+					if (VDP1_LOG) logerror ("Sprite List Scaled Sprite (%d %d)\n",stv2_current_sprite.CMDXA,stv2_current_sprite.CMDYA);
 					stv2_current_sprite.ispoly = 0;
-					stv_vpd1_draw_scaled_sprite(machine, cliprect);
+					stv_vpd1_draw_scaled_sprite(machine, *cliprect);
 					break;
 
 				case 0x0002:
-					if (vdp1_sprite_log) logerror ("Sprite List Distorted Sprite\n");
+					if (VDP1_LOG) logerror ("Sprite List Distorted Sprite\n");
+					if (VDP1_LOG) logerror ("(A: %d %d)\n",stv2_current_sprite.CMDXA,stv2_current_sprite.CMDYA);
+					if (VDP1_LOG) logerror ("(B: %d %d)\n",stv2_current_sprite.CMDXB,stv2_current_sprite.CMDYB);
+					if (VDP1_LOG) logerror ("(C: %d %d)\n",stv2_current_sprite.CMDXC,stv2_current_sprite.CMDYC);
+					if (VDP1_LOG) logerror ("(D: %d %d)\n",stv2_current_sprite.CMDXD,stv2_current_sprite.CMDYD);
+					if (VDP1_LOG) logerror ("CMDPMOD = %04x\n",stv2_current_sprite.CMDPMOD);
+
 					stv2_current_sprite.ispoly = 0;
-					stv_vpd1_draw_distorted_sprite(machine, cliprect);
+					stv_vpd1_draw_distorted_sprite(machine, *cliprect);
 					break;
 
 				case 0x0004:
-					if (vdp1_sprite_log) logerror ("Sprite List Polygon\n");
+					if (VDP1_LOG) logerror ("Sprite List Polygon\n");
 					stv2_current_sprite.ispoly = 1;
-					stv_vpd1_draw_distorted_sprite(machine, cliprect);
+					stv_vpd1_draw_distorted_sprite(machine, *cliprect);
 					break;
 
 				case 0x0005:
-					if (vdp1_sprite_log) logerror ("Sprite List Polyline\n");
+					if (VDP1_LOG) logerror ("Sprite List Polyline\n");
 					stv2_current_sprite.ispoly = 1;
-					stv_vdp1_draw_poly_line(machine, cliprect);
+					stv_vdp1_draw_poly_line(machine, *cliprect);
 					break;
 
 				case 0x0006:
-					if (vdp1_sprite_log) logerror ("Sprite List Line\n");
+					if (VDP1_LOG) logerror ("Sprite List Line\n");
 					stv2_current_sprite.ispoly = 1;
-					stv_vdp1_draw_line(machine, cliprect);
+					stv_vdp1_draw_line(machine, *cliprect);
 					break;
 
 				case 0x0008:
-					if (vdp1_sprite_log) logerror ("Sprite List Set Command for User Clipping (%d,%d),(%d,%d)\n", stv2_current_sprite.CMDXA, stv2_current_sprite.CMDYA, stv2_current_sprite.CMDXC, stv2_current_sprite.CMDYC);
-					stv_vdp1_user_cliprect.min_x = stv2_current_sprite.CMDXA;
-					stv_vdp1_user_cliprect.min_y = stv2_current_sprite.CMDYA;
-					stv_vdp1_user_cliprect.max_x = stv2_current_sprite.CMDXC;
-					stv_vdp1_user_cliprect.max_y = stv2_current_sprite.CMDYC;
+					if (VDP1_LOG) logerror ("Sprite List Set Command for User Clipping (%d,%d),(%d,%d)\n", stv2_current_sprite.CMDXA, stv2_current_sprite.CMDYA, stv2_current_sprite.CMDXC, stv2_current_sprite.CMDYC);
+					state->m_vdp1.user_cliprect.set(stv2_current_sprite.CMDXA, stv2_current_sprite.CMDXC, stv2_current_sprite.CMDYA, stv2_current_sprite.CMDYC);
 					break;
 
 				case 0x0009:
-					if (vdp1_sprite_log) logerror ("Sprite List Set Command for System Clipping (0,0),(%d,%d)\n", stv2_current_sprite.CMDXC, stv2_current_sprite.CMDYC);
-					stv_vdp1_system_cliprect.min_x = 0;
-					stv_vdp1_system_cliprect.min_y = 0;
-					stv_vdp1_system_cliprect.max_x = stv2_current_sprite.CMDXC;
-					stv_vdp1_system_cliprect.max_y = stv2_current_sprite.CMDYC;
+					if (VDP1_LOG) logerror ("Sprite List Set Command for System Clipping (0,0),(%d,%d)\n", stv2_current_sprite.CMDXC, stv2_current_sprite.CMDYC);
+					state->m_vdp1.system_cliprect.set(0, stv2_current_sprite.CMDXC, 0, stv2_current_sprite.CMDYC);
 					break;
 
 				case 0x000a:
-					if (vdp1_sprite_log) logerror ("Sprite List Local Co-Ordinate Set\n");
-					stvvdp1_local_x = (INT16)stv2_current_sprite.CMDXA;
-					stvvdp1_local_y = (INT16)stv2_current_sprite.CMDYA;
+					if (VDP1_LOG) logerror ("Sprite List Local Co-Ordinate Set (%d %d)\n",(INT16)stv2_current_sprite.CMDXA,(INT16)stv2_current_sprite.CMDYA);
+					state->m_vdp1.local_x = (INT16)stv2_current_sprite.CMDXA;
+					state->m_vdp1.local_y = (INT16)stv2_current_sprite.CMDYA;
 					break;
 
 				default:
-					if (vdp1_sprite_log) logerror ("Sprite List Illegal!\n");
-					break;
-
-
+					popmessage ("VDP1: Sprite List Illegal, contact MAMEdev");
+					state->m_vdp1.lopr = (position * 0x20) >> 3;
+					state->m_vdp1.copr = (position * 0x20) >> 3;
+					return;
 			}
-
-
 		}
 
 		spritecount++;
@@ -1982,25 +2030,23 @@ static void stv_vdp1_process_list(running_machine *machine)
 
 
 	end:
-	/*set CEF to 1*/
-	SET_CEF_FROM_0_TO_1;
+	/* set CEF to 1*/
+	CEF_1;
+	state->m_vdp1.copr = (position * 0x20) >> 3;
 
-	/* not here! this is done every frame drawn even if the cpu isn't running eg in the debugger */
-//  if(!(stv_scu[40] & 0x2000)) /*Sprite draw end irq*/
-//      cputag_set_input_line_and_vector(machine, "maincpu", 2, HOLD_LINE , 0x4d);
-
-	if (vdp1_sprite_log) logerror ("End of list processing!\n");
+	if (VDP1_LOG) logerror ("End of list processing!\n");
 }
 
-void video_update_vdp1(running_machine *machine)
+void video_update_vdp1(running_machine &machine)
 {
-	int framebufer_changed = 0;
+	saturn_state *state = machine.driver_data<saturn_state>();
+	int framebuffer_changed = 0;
 
 //  int enable;
-//  if (input_code_pressed (machine, KEYCODE_R)) vdp1_sprite_log = 1;
-//  if (input_code_pressed (machine, KEYCODE_T)) vdp1_sprite_log = 0;
+//  if (machine.input().code_pressed (KEYCODE_R)) VDP1_LOG = 1;
+//  if (machine.input().code_pressed (KEYCODE_T)) VDP1_LOG = 0;
 
-//  if (input_code_pressed (machine, KEYCODE_Y)) vdp1_sprite_log = 0;
+//  if (machine.input().code_pressed (KEYCODE_Y)) VDP1_LOG = 0;
 //  {
 //      FILE *fp;
 //
@@ -2011,49 +2057,54 @@ void video_update_vdp1(running_machine *machine)
 //          fclose(fp);
 //      }
 //  }
-	if (vdp1_sprite_log) logerror("video_update_vdp1 called\n");
-	if (vdp1_sprite_log) logerror( "FBCR = %0x, accessed = %d\n", STV_VDP1_FBCR, stv_vdp1_fbcr_accessed );
+	if (VDP1_LOG) logerror("video_update_vdp1 called\n");
+	if (VDP1_LOG) logerror( "FBCR = %0x, accessed = %d\n", STV_VDP1_FBCR, state->m_vdp1.fbcr_accessed );
 
-	if ( stv_vdp1_clear_framebuffer_on_next_frame )
+	if(STV_VDP1_CEF)
+		BEF_1;
+	else
+		BEF_0;
+
+	if ( state->m_vdp1.framebuffer_clear_on_next_frame )
 	{
 		if ( ((STV_VDP1_FBCR & 0x3) == 3) &&
-			stv_vdp1_fbcr_accessed )
+			state->m_vdp1.fbcr_accessed )
 		{
-			stv_clear_framebuffer(stv_vdp1_current_display_framebuffer);
-			stv_vdp1_clear_framebuffer_on_next_frame = 0;
+			stv_clear_framebuffer(machine, state->m_vdp1.framebuffer_current_display);
+			state->m_vdp1.framebuffer_clear_on_next_frame = 0;
 		}
 	}
 
 	switch( STV_VDP1_FBCR & 0x3 )
 	{
 		case 0: /* Automatic mode */
-			stv_vdp1_change_framebuffers();
-			stv_clear_framebuffer(stv_vdp1_current_draw_framebuffer);
-			framebufer_changed = 1;
+			stv_vdp1_change_framebuffers(machine);
+			stv_clear_framebuffer(machine, state->m_vdp1.framebuffer_current_draw);
+			framebuffer_changed = 1;
 			break;
 		case 1: /* Setting prohibited */
 			break;
 		case 2: /* Manual mode - erase */
-			if ( stv_vdp1_fbcr_accessed )
+			if ( state->m_vdp1.fbcr_accessed )
 			{
-				stv_vdp1_clear_framebuffer_on_next_frame = 1;
+				state->m_vdp1.framebuffer_clear_on_next_frame = 1;
 			}
 			break;
 		case 3: /* Manual mode - change */
-			if ( stv_vdp1_fbcr_accessed )
+			if ( state->m_vdp1.fbcr_accessed )
 			{
-				stv_vdp1_change_framebuffers();
+				stv_vdp1_change_framebuffers(machine);
 				if ( STV_VDP1_VBE )
 				{
-					stv_clear_framebuffer(stv_vdp1_current_draw_framebuffer);
+					stv_clear_framebuffer(machine, state->m_vdp1.framebuffer_current_draw);
 				}
-				framebufer_changed = 1;
+				framebuffer_changed = 1;
 			}
 			break;
 	}
-	stv_vdp1_fbcr_accessed = 0;
+	state->m_vdp1.fbcr_accessed = 0;
 
-	if (vdp1_sprite_log) logerror( "PTM = %0x, TVM = %x\n", STV_VDP1_PTM, STV_VDP1_TVM );
+	if (VDP1_LOG) logerror( "PTM = %0x, TVM = %x\n", STV_VDP1_PTM, STV_VDP1_TVM );
 	switch(STV_VDP1_PTM & 3)
 	{
 		case 0:/*Idle Mode*/
@@ -2061,8 +2112,11 @@ void video_update_vdp1(running_machine *machine)
 		case 1:/*Draw by request*/
 			break;
 		case 2:/*Automatic Draw*/
-			if ( framebufer_changed )
+			if ( framebuffer_changed || VDP1_LOG )
+			{
+				/*set CEF to 1*/
 				stv_vdp1_process_list(machine);
+			}
 			break;
 		case 3:	/*<invalid>*/
 			logerror("Warning: Invalid PTM mode set for VDP1!\n");
@@ -2071,20 +2125,21 @@ void video_update_vdp1(running_machine *machine)
 	//popmessage("%04x %04x",STV_VDP1_EWRR_X3,STV_VDP1_EWRR_Y3);
 }
 
-static STATE_POSTLOAD( stv_vdp1_state_save_postload )
+static void stv_vdp1_state_save_postload(running_machine &machine)
 {
-	UINT8 *vdp1 = stv_vdp1_gfx_decode;
+	saturn_state *state = machine.driver_data<saturn_state>();
+	UINT8 *vdp1 = state->m_vdp1.gfx_decode;
 	int offset;
 	UINT32 data;
 
-	stv_framebuffer_mode = -1;
-	stv_framebuffer_double_interlace = -1;
+	state->m_vdp1.framebuffer_mode = -1;
+	state->m_vdp1.framebuffer_double_interlace = -1;
 
-	stv_set_framebuffer_config();
+	stv_set_framebuffer_config(machine);
 
 	for (offset = 0; offset < 0x80000/4; offset++ )
 	{
-		data = stv_vdp1_vram[offset];
+		data = state->m_vdp1_vram[offset];
 		/* put in gfx region for easy decoding */
 		vdp1[offset*4+0] = (data & 0xff000000) >> 24;
 		vdp1[offset*4+1] = (data & 0x00ff0000) >> 16;
@@ -2093,43 +2148,43 @@ static STATE_POSTLOAD( stv_vdp1_state_save_postload )
 	}
 }
 
-int stv_vdp1_start ( running_machine *machine )
+int stv_vdp1_start ( running_machine &machine )
 {
-	stv_vdp1_regs = auto_alloc_array_clear(machine, UINT32, 0x040000/4 );
-	stv_vdp1_vram = auto_alloc_array_clear(machine, UINT32, 0x100000/4 );
-	stv_vdp1_gfx_decode = auto_alloc_array(machine, UINT8, 0x100000 );
+	saturn_state *state = machine.driver_data<saturn_state>();
+	state->m_vdp1_regs = auto_alloc_array_clear(machine, UINT16, 0x020/2 );
+	state->m_vdp1_vram = auto_alloc_array_clear(machine, UINT32, 0x100000/4 );
+	state->m_vdp1.gfx_decode = auto_alloc_array(machine, UINT8, 0x100000 );
 
 	stv_vdp1_shading_data = auto_alloc(machine, struct stv_vdp1_poly_scanline_data);
 
-	stv_framebuffer[0] = auto_alloc_array(machine, UINT16, 1024 * 256 * 2 ); /* *2 is for double interlace */
-	stv_framebuffer[1] = auto_alloc_array(machine, UINT16, 1024 * 256 * 2 );
+	state->m_vdp1.framebuffer[0] = auto_alloc_array(machine, UINT16, 1024 * 256 * 2 ); /* *2 is for double interlace */
+	state->m_vdp1.framebuffer[1] = auto_alloc_array(machine, UINT16, 1024 * 256 * 2 );
 
-	stv_framebuffer_display_lines = auto_alloc_array(machine, UINT16 *, 512);
-	stv_framebuffer_draw_lines = auto_alloc_array(machine, UINT16 *, 512);
+	state->m_vdp1.framebuffer_display_lines = auto_alloc_array(machine, UINT16 *, 512);
+	state->m_vdp1.framebuffer_draw_lines = auto_alloc_array(machine, UINT16 *, 512);
 
-	stv_framebuffer_width = stv_framebuffer_height = 0;
-	stv_framebuffer_mode = -1;
-	stv_framebuffer_double_interlace = -1;
-	stv_vdp1_fbcr_accessed = 0;
-	stv_vdp1_current_display_framebuffer = 0;
-	stv_vdp1_current_draw_framebuffer = 1;
-	stv_clear_framebuffer(stv_vdp1_current_draw_framebuffer);
-	stv_vdp1_clear_framebuffer_on_next_frame = 0;
+	state->m_vdp1.framebuffer_width = state->m_vdp1.framebuffer_height = 0;
+	state->m_vdp1.framebuffer_mode = -1;
+	state->m_vdp1.framebuffer_double_interlace = -1;
+	state->m_vdp1.fbcr_accessed = 0;
+	state->m_vdp1.framebuffer_current_display = 0;
+	state->m_vdp1.framebuffer_current_draw = 1;
+	stv_clear_framebuffer(machine, state->m_vdp1.framebuffer_current_draw);
+	state->m_vdp1.framebuffer_clear_on_next_frame = 0;
 
-	stv_vdp1_system_cliprect.min_x = stv_vdp1_system_cliprect.max_x = 0;
-	stv_vdp1_system_cliprect.min_y = stv_vdp1_system_cliprect.max_y = 0;
-	stv_vdp1_user_cliprect.min_x = stv_vdp1_user_cliprect.max_x = 0;
-	stv_vdp1_user_cliprect.min_y = stv_vdp1_user_cliprect.max_y = 0;
+	state->m_vdp1.system_cliprect.set(0, 0, 0, 0);
+	/* Kidou Senshi Z Gundam - Zenpen Zeta no Kodou loves to use the user cliprect vars in an undefined state ... */
+	state->m_vdp1.user_cliprect.set(0, 512, 0, 256);
 
 	// save state
-	state_save_register_global_pointer(machine, stv_vdp1_regs, 0x040000/4);
-	state_save_register_global_pointer(machine, stv_vdp1_vram, 0x100000/4);
-	state_save_register_global(machine, stv_vdp1_fbcr_accessed);
-	state_save_register_global(machine, stv_vdp1_current_display_framebuffer);
-	state_save_register_global(machine, stv_vdp1_current_draw_framebuffer);
-	state_save_register_global(machine, stv_vdp1_clear_framebuffer_on_next_frame);
-	state_save_register_global(machine, stvvdp1_local_x);
-	state_save_register_global(machine, stvvdp1_local_y);
-	state_save_register_postload(machine, stv_vdp1_state_save_postload, NULL);
+	state_save_register_global_pointer(machine, state->m_vdp1_regs, 0x020/2);
+	state_save_register_global_pointer(machine, state->m_vdp1_vram, 0x100000/4);
+	state_save_register_global(machine, state->m_vdp1.fbcr_accessed);
+	state_save_register_global(machine, state->m_vdp1.framebuffer_current_display);
+	state_save_register_global(machine, state->m_vdp1.framebuffer_current_draw);
+	state_save_register_global(machine, state->m_vdp1.framebuffer_clear_on_next_frame);
+	state_save_register_global(machine, state->m_vdp1.local_x);
+	state_save_register_global(machine, state->m_vdp1.local_y);
+	machine.save().register_postload(save_prepost_delegate(FUNC(stv_vdp1_state_save_postload), &machine));
 	return 0;
 }

@@ -1,11 +1,5 @@
-#include "driver.h"
-
-
-UINT8 *gberet_scrollram;
-
-static int gberet_spritebank;
-
-static tilemap *bg_tilemap;
+#include "emu.h"
+#include "includes/gberet.h"
 
 
 /***************************************************************************
@@ -32,7 +26,7 @@ PALETTE_INIT( gberet )
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x20);
+	machine.colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -58,7 +52,7 @@ PALETTE_INIT( gberet )
 		bit2 = (color_prom[i] >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -67,7 +61,7 @@ PALETTE_INIT( gberet )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 
 	for (i = 0x100; i < 0x200; i++)
@@ -79,74 +73,81 @@ PALETTE_INIT( gberet )
 		else
 			ctabentry = 0;
 
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( gberet_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	gberet_state *state = space->machine().driver_data<gberet_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( gberet_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	gberet_state *state = space->machine().driver_data<gberet_state>();
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( gberet_scroll_w )
 {
+	gberet_state *state = space->machine().driver_data<gberet_state>();
 	int scroll;
 
-	gberet_scrollram[offset] = data;
+	state->m_scrollram[offset] = data;
 
-	scroll = gberet_scrollram[offset & 0x1f] | (gberet_scrollram[offset | 0x20] << 8);
-	tilemap_set_scrollx(bg_tilemap, offset & 0x1f, scroll);
+	scroll = state->m_scrollram[offset & 0x1f] | (state->m_scrollram[offset | 0x20] << 8);
+	state->m_bg_tilemap->set_scrollx(offset & 0x1f, scroll);
 }
 
 WRITE8_HANDLER( gberet_sprite_bank_w )
 {
-	gberet_spritebank = data;
+	gberet_state *state = space->machine().driver_data<gberet_state>();
+	state->m_spritebank = data;
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] + ((attr & 0x40) << 2);
+	gberet_state *state = machine.driver_data<gberet_state>();
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index] + ((attr & 0x40) << 2);
 	int color = attr & 0x0f;
 	int flags = TILE_FLIPYX((attr & 0x30) >> 4);
 
-	tileinfo->group = color;
-	tileinfo->category = (attr & 0x80) >> 7;
+	tileinfo.group = color;
+	tileinfo.category = (attr & 0x80) >> 7;
 
 	SET_TILE_INFO(0, code, color, flags);
 }
 
 VIDEO_START( gberet )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,  8, 8, 64, 32);
+	gberet_state *state = machine.driver_data<gberet_state>();
 
-	colortable_configure_tilemap_groups(machine->colortable, bg_tilemap, machine->gfx[0], 0x10);
-	tilemap_set_scroll_rows(bg_tilemap, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	colortable_configure_tilemap_groups(machine.colortable, state->m_bg_tilemap, machine.gfx[0], 0x10);
+	state->m_bg_tilemap->set_scroll_rows(32);
 }
 
-static void gberet_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void gberet_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	gberet_state *state = machine.driver_data<gberet_state>();
 	int offs;
 	UINT8 *sr;
 
-	if (gberet_spritebank & 0x08)
-		sr = spriteram_2;
+	if (state->m_spritebank & 0x08)
+		sr = state->m_spriteram2;
 	else
-		sr = spriteram;
+		sr = state->m_spriteram;
 
 	for (offs = 0; offs < 0xc0; offs += 4)
 	{
 		if (sr[offs + 3])
 		{
 			int attr = sr[offs + 1];
-			int code = sr[offs+0] + ((attr & 0x40) << 2);
+			int code = sr[offs + 0] + ((attr & 0x40) << 2);
 			int color = attr & 0x0f;
 			int sx = sr[offs + 2] - 2 * (attr & 0x80);
 			int sy = sr[offs + 3];
@@ -161,17 +162,19 @@ static void gberet_draw_sprites(running_machine *machine, bitmap_t *bitmap, cons
 				flipy = !flipy;
 			}
 
-			drawgfx_transmask(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy, sx, sy,
-				colortable_get_transpen_mask(machine->colortable, machine->gfx[1], color, 0));
+			drawgfx_transmask(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, sx, sy,
+				colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, 0));
 		}
 	}
 }
 
-VIDEO_UPDATE( gberet )
+SCREEN_UPDATE_IND16( gberet )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, TILEMAP_DRAW_OPAQUE | TILEMAP_DRAW_ALL_CATEGORIES, 0);
-	gberet_draw_sprites(screen->machine, bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	gberet_state *state = screen.machine().driver_data<gberet_state>();
+
+	state->m_bg_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE | TILEMAP_DRAW_ALL_CATEGORIES, 0);
+	gberet_draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
@@ -179,20 +182,23 @@ VIDEO_UPDATE( gberet )
 
 WRITE8_HANDLER( gberetb_scroll_w )
 {
-	int scroll;
+	gberet_state *state = space->machine().driver_data<gberet_state>();
+	int scroll = data;
 
-	scroll = data;
-	if (offset) scroll |= 0x100;
+	if (offset)
+		scroll |= 0x100;
 
 	for (offset = 6; offset < 29; offset++)
-		tilemap_set_scrollx(bg_tilemap, offset, scroll + 64-8);
+		state->m_bg_tilemap->set_scrollx(offset, scroll + 64 - 8);
 }
 
-static void gberetb_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
+static void gberetb_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	gberet_state *state = machine.driver_data<gberet_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = spriteram_size - 4; offs >= 0; offs -= 4)
+	for (offs = state->m_spriteram_size - 4; offs >= 0; offs -= 4)
 	{
 		if (spriteram[offs + 1])
 		{
@@ -212,16 +218,17 @@ static void gberetb_draw_sprites(running_machine *machine, bitmap_t *bitmap, con
 				flipy = !flipy;
 			}
 
-			drawgfx_transmask(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy, sx, sy,
-				colortable_get_transpen_mask(machine->colortable, machine->gfx[1], color, 0));
+			drawgfx_transmask(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, sx, sy,
+				colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, 0));
 		}
 	}
 }
 
-VIDEO_UPDATE( gberetb )
+SCREEN_UPDATE_IND16( gberetb )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, TILEMAP_DRAW_OPAQUE | TILEMAP_DRAW_ALL_CATEGORIES, 0);
-	gberetb_draw_sprites(screen->machine, bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	gberet_state *state = screen.machine().driver_data<gberet_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE | TILEMAP_DRAW_ALL_CATEGORIES, 0);
+	gberetb_draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }

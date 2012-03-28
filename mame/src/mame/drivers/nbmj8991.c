@@ -28,13 +28,14 @@ Notes:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "nb1413m3.h"
+#include "includes/nb1413m3.h"
 #include "sound/ay8910.h"
 #include "sound/3812intf.h"
 #include "sound/dac.h"
 #include "includes/nbmj8991.h"
+#include "machine/nvram.h"
 
 
 #define SIGNED_DAC	0		// 0:unsigned DAC, 1:signed DAC
@@ -48,7 +49,7 @@ Notes:
 static WRITE8_HANDLER( nbmj8991_soundbank_w )
 {
 	if (!(data & 0x80)) soundlatch_clear_w(space, 0, 0);
-	memory_set_bank(space->machine, 1, data & 0x03);
+	memory_set_bank(space->machine(), "bank1", data & 0x03);
 }
 
 static WRITE8_HANDLER( nbmj8991_sound_w )
@@ -66,10 +67,11 @@ static READ8_HANDLER( nbmj8991_sound_r )
 
 static MACHINE_RESET( nbmj8991 )
 {
-	if (cputag_get_cpu(machine, "audiocpu") != NULL && cpu_get_type(cputag_get_cpu(machine, "audiocpu")) == CPU_Z80)
+	device_t *audiocpu = machine.device("audiocpu");
+	if (audiocpu != NULL && audiocpu->type() == Z80)
 	{
-		memory_configure_bank(machine, 1, 0, 4, memory_region(machine, "audiocpu") + 0x8000, 0x8000);
-		memory_set_bank(machine, 1, 0);
+		memory_configure_bank(machine, "bank1", 0, 4, machine.region("audiocpu")->base() + 0x8000, 0x8000);
+		memory_set_bank(machine, "bank1", 0);
 	}
 	MACHINE_RESET_CALL(nb1413m3);
 }
@@ -106,7 +108,7 @@ static DRIVER_INIT( vanilla )
 
 static DRIVER_INIT( finalbny )
 {
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine.region("maincpu")->base();
 	int i;
 
 	for (i = 0xf800; i < 0x10000; i++) ROM[i] = 0x00;
@@ -132,7 +134,7 @@ static DRIVER_INIT( hyouban )
 static DRIVER_INIT( galkaika )
 {
 #if 1
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	// Patch to IM2 -> IM1
 	ROM[0x0002] = 0x56;
@@ -143,7 +145,7 @@ static DRIVER_INIT( galkaika )
 static DRIVER_INIT( tokyogal )
 {
 #if 1
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	// Patch to IM2 -> IM1
 	ROM[0x0002] = 0x56;
@@ -154,7 +156,7 @@ static DRIVER_INIT( tokyogal )
 static DRIVER_INIT( tokimbsj )
 {
 #if 1
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine.region("maincpu")->base();
 
 	// Patch to IM2 -> IM1
 	ROM[0x0002] = 0x56;
@@ -188,73 +190,73 @@ static DRIVER_INIT( av2mj2rg )
 }
 
 
-static ADDRESS_MAP_START( pstadium_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pstadium_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
-	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)	// finalbny
+	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")	// finalbny
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( triplew1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( triplew1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf200, 0xf20f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)	// mjgottub
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")	// mjgottub
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( triplew2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( triplew2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf400, 0xf40f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mjlstory_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mjlstory_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf700, 0xf70f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( galkoku_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( galkoku_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
-	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE(nbmj8991_palette_type1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)	// hyouban
+	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE(nbmj8991_palette_type1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")	// hyouban
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( galkaika_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( galkaika_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
-	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE(nbmj8991_palette_type2_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)	// tokimbsj
+	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE(nbmj8991_palette_type2_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")	// tokimbsj
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tokyogal_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tokyogal_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type2_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type2_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf400, 0xf40f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( av2mj1bb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( av2mj1bb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf500, 0xf50f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( av2mj2rg_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( av2mj2rg_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf00f) AM_READWRITE(nbmj8991_clut_r,nbmj8991_clut_w)
-	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE(nbmj8991_palette_type3_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( galkoku_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( galkoku_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READWRITE(nb1413m3_sndrom_r,nbmj8991_blitter_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -265,11 +267,11 @@ static ADDRESS_MAP_START( galkoku_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hyouban_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( hyouban_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READWRITE(nb1413m3_sndrom_r,nbmj8991_blitter_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREAD("fm", ay8910_r)
-	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fm", ay8910_data_address_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREAD("fmsnd", ay8910_r)
+	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fmsnd", ay8910_data_address_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -280,7 +282,7 @@ static ADDRESS_MAP_START( hyouban_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pstadium_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pstadium_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_WRITE(nbmj8991_blitter_w)
 	AM_RANGE(0x80, 0x80) AM_WRITE(nbmj8991_sound_w)
@@ -293,7 +295,7 @@ static ADDRESS_MAP_START( pstadium_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xf8, 0xf8) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( av2mj1bb_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( av2mj1bb_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_WRITE(nbmj8991_blitter_w)
 	AM_RANGE(0x80, 0x80) AM_WRITE(nbmj8991_sound_w)
@@ -308,19 +310,19 @@ static ADDRESS_MAP_START( av2mj1bb_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( nbmj8991_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nbmj8991_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nbmj8991_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( nbmj8991_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(nbmj8991_sound_r) AM_DEVWRITE("dac1", DAC_WRITE)
 	AM_RANGE(0x02, 0x02) AM_DEVWRITE("dac2", DAC_WRITE)
 	AM_RANGE(0x04, 0x04) AM_WRITE(nbmj8991_soundbank_w)
 	AM_RANGE(0x06, 0x06) AM_WRITENOP
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 ADDRESS_MAP_END
 
 
@@ -1473,248 +1475,227 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_DRIVER_START( nbmjdrv1 )	// galkoku
+static MACHINE_CONFIG_START( nbmjdrv1, nbmj8991_state )	// galkoku
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 25000000/5)		/* 5.00 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(galkoku_map)
-	MDRV_CPU_IO_MAP(galkoku_io_map)
-	MDRV_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
+	MCFG_CPU_ADD("maincpu", Z80, 25000000/5)		/* 5.00 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(galkoku_map)
+	MCFG_CPU_IO_MAP(galkoku_io_map)
+	MCFG_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
 
-	MDRV_MACHINE_RESET(nbmj8991)
+	MCFG_MACHINE_RESET(nbmj8991)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(1024, 512)
-	MDRV_SCREEN_VISIBLE_AREA(0, 640-1, 0, 240-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(1024, 512)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE_STATIC(nbmj8991_type1)
 
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_VIDEO_START(nbmj8991)
-	MDRV_VIDEO_UPDATE(nbmj8991_type1)
+	MCFG_VIDEO_START(nbmj8991)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("fm", YM3812, 25000000/10)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("fmsnd", YM3812, 25000000/10)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( nbmjdrv2 )	// pstadium
+static MACHINE_CONFIG_START( nbmjdrv2, nbmj8991_state )	// pstadium
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 6000000/2)	/* 3.00 MHz */
-	MDRV_CPU_PROGRAM_MAP(pstadium_map)
-	MDRV_CPU_IO_MAP(pstadium_io_map)
-	MDRV_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
+	MCFG_CPU_ADD("maincpu", Z80, 6000000/2)	/* 3.00 MHz */
+	MCFG_CPU_PROGRAM_MAP(pstadium_map)
+	MCFG_CPU_IO_MAP(pstadium_io_map)
+	MCFG_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 4000000)					/* 4.00 MHz */
-	MDRV_CPU_PROGRAM_MAP(nbmj8991_sound_map)
-	MDRV_CPU_IO_MAP(nbmj8991_sound_io_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold, 128*60) // ?
+	MCFG_CPU_ADD("audiocpu", Z80, 4000000)					/* 4.00 MHz */
+	MCFG_CPU_PROGRAM_MAP(nbmj8991_sound_map)
+	MCFG_CPU_IO_MAP(nbmj8991_sound_io_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 128*60) // ?
 
-	MDRV_MACHINE_RESET(nbmj8991)
+	MCFG_MACHINE_RESET(nbmj8991)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(1024, 512)
-	MDRV_SCREEN_VISIBLE_AREA(0, 640-1, 0, 240-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(1024, 512)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 240-1)
+	MCFG_SCREEN_UPDATE_STATIC(nbmj8991_type2)
 
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_VIDEO_START(nbmj8991)
-	MDRV_VIDEO_UPDATE(nbmj8991_type2)
+	MCFG_VIDEO_START(nbmj8991)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("fm", YM3812, 25000000/6.25)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+	MCFG_SOUND_ADD("fmsnd", YM3812, 25000000/6.25)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
-	MDRV_SOUND_ADD("dac1", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("dac1", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("dac2", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac2", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( nbmjdrv3 )
+static MACHINE_CONFIG_DERIVED( nbmjdrv3, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("fm", AY8910, 1250000)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
-MACHINE_DRIVER_END
+	MCFG_SOUND_REPLACE("fmsnd", AY8910, 1250000)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
+MACHINE_CONFIG_END
 
 
 // ---------------------------------------------------------------------
 
-static MACHINE_DRIVER_START( galkoku )
+static MACHINE_CONFIG_DERIVED( galkoku, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( galkaika )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(galkaika_map)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( tokyogal )
+static MACHINE_CONFIG_DERIVED( galkaika, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(tokyogal_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(galkaika_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tokimbsj )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(galkaika_map)
-
-	MDRV_NVRAM_HANDLER(nb1413m3)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( mcontest )
+static MACHINE_CONFIG_DERIVED( tokyogal, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(tokyogal_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( uchuuai )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv1)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( hyouban )
+static MACHINE_CONFIG_DERIVED( tokimbsj, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv3)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(hyouban_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(galkaika_map)
 
-	MDRV_NVRAM_HANDLER(nb1413m3)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( pstadium )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-MACHINE_DRIVER_END
+	MCFG_NVRAM_ADD_0FILL("nvram")
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( triplew1 )
+static MACHINE_CONFIG_DERIVED( mcontest, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(triplew1_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( triplew2 )
+static MACHINE_CONFIG_DERIVED( uchuuai, nbmjdrv1 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(triplew2_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ntopstar )
+static MACHINE_CONFIG_DERIVED( hyouban, nbmjdrv3 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(hyouban_io_map)
+
+	MCFG_NVRAM_ADD_0FILL("nvram")
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mjlstory )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(mjlstory_map)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( vanilla )
+static MACHINE_CONFIG_DERIVED( pstadium, nbmjdrv2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( finalbny )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_NVRAM_HANDLER(nb1413m3)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( qmhayaku )
+static MACHINE_CONFIG_DERIVED( triplew1, nbmjdrv2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(triplew1_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mjgottub )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(triplew1_map)
-
-	MDRV_NVRAM_HANDLER(nb1413m3)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( av2mj1bb )
+static MACHINE_CONFIG_DERIVED( triplew2, nbmjdrv2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(av2mj1bb_map)
-	MDRV_CPU_IO_MAP(av2mj1bb_io_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(triplew2_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( av2mj2rg )
+static MACHINE_CONFIG_DERIVED( ntopstar, nbmjdrv2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nbmjdrv2)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(av2mj2rg_map)
-	MDRV_CPU_IO_MAP(av2mj1bb_io_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( mjlstory, nbmjdrv2 )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(mjlstory_map)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( vanilla, nbmjdrv2 )
+
+	/* basic machine hardware */
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( finalbny, nbmjdrv2 )
+
+	/* basic machine hardware */
+	MCFG_NVRAM_ADD_0FILL("nvram")
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( qmhayaku, nbmjdrv2 )
+
+	/* basic machine hardware */
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( mjgottub, nbmjdrv2 )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(triplew1_map)
+
+	MCFG_NVRAM_ADD_0FILL("nvram")
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( av2mj1bb, nbmjdrv2 )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(av2mj1bb_map)
+	MCFG_CPU_IO_MAP(av2mj1bb_io_map)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( av2mj2rg, nbmjdrv2 )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(av2mj2rg_map)
+	MCFG_CPU_IO_MAP(av2mj1bb_io_map)
+MACHINE_CONFIG_END
 
 
 
@@ -2211,9 +2192,9 @@ ROM_START( av2mj2rg )
 ROM_END
 
 
-GAME( 1989, galkoku,  0,        galkoku,  galkoku,  galkoku,  ROT180, "Nichibutsu/T.R.TEC", "Mahjong Gal no Kokuhaku (Japan)", 0 )
-GAME( 1989, hyouban,  galkoku,  hyouban,  hyouban,  hyouban,  ROT180, "Nichibutsu/T.R.TEC", "Mahjong Hyouban Musume [BET] (Japan)", 0 )
-GAME( 1989, galkaika, 0,        galkaika, galkaika, galkaika, ROT180, "Nichibutsu/T.R.TEC", "Mahjong Gal no Kaika (Japan)", 0 )
+GAME( 1989, galkoku,  0,        galkoku,  galkoku,  galkoku,  ROT180, "Nichibutsu / T.R.Tec", "Mahjong Gal no Kokuhaku (Japan)", 0 )
+GAME( 1989, hyouban,  galkoku,  hyouban,  hyouban,  hyouban,  ROT180, "Nichibutsu / T.R.Tec", "Mahjong Hyouban Musume [BET] (Japan)", 0 )
+GAME( 1989, galkaika, 0,        galkaika, galkaika, galkaika, ROT180, "Nichibutsu / T.R.Tec", "Mahjong Gal no Kaika (Japan)", 0 )
 GAME( 1989, tokyogal, 0,        tokyogal, tokyogal, tokyogal, ROT180, "Nichibutsu", "Tokyo Gal Zukan (Japan)", 0 )
 GAME( 1989, tokimbsj, tokyogal, tokimbsj, tokimbsj, tokimbsj, ROT180, "Nichibutsu", "Tokimeki Bishoujo [BET] (Japan)", 0 )
 GAME( 1989, mcontest, 0,        mcontest, mcontest, mcontest, ROT180, "Nichibutsu", "Miss Mahjong Contest (Japan)", 0 )
@@ -2227,5 +2208,5 @@ GAME( 1991, vanilla,  0,        vanilla,  vanilla,  vanilla,  ROT180, "Nichibuts
 GAME( 1991, finalbny, vanilla,  finalbny, finalbny, finalbny, ROT180, "Nichibutsu", "Mahjong Final Bunny [BET] (Japan)", 0 )
 GAME( 1991, qmhayaku, 0,        qmhayaku, qmhayaku, qmhayaku, ROT180, "Nichibutsu", "Quiz-Mahjong Hayaku Yatteyo! (Japan)", 0 )
 GAME( 1991, mjgottub, 0,        mjgottub, mjgottub, mjgottub, ROT180, "Nichibutsu", "Medal Mahjong Gottsu ee-kanji [BET] (Japan)", 0 )
-GAME( 1991, av2mj1bb, 0,        av2mj1bb, av2mj1bb, av2mj1bb, ROT0,   "MIKI SYOUJI/AV JAPAN", "AV2Mahjong No.1 Bay Bridge no Seijo (Japan)", GAME_NOT_WORKING )
-GAME( 1991, av2mj2rg, 0,        av2mj2rg, av2mj2rg, av2mj2rg, ROT0,   "MIKI SYOUJI/AV JAPAN", "AV2Mahjong No.2 Rouge no Kaori (Japan)", GAME_NOT_WORKING )
+GAME( 1991, av2mj1bb, 0,        av2mj1bb, av2mj1bb, av2mj1bb, ROT0,   "Miki Syouji / AV Japan", "AV2Mahjong No.1 Bay Bridge no Seijo (Japan)", GAME_NOT_WORKING )
+GAME( 1991, av2mj2rg, 0,        av2mj2rg, av2mj2rg, av2mj2rg, ROT0,   "Miki Syouji / AV Japan", "AV2Mahjong No.2 Rouge no Kaori (Japan)", GAME_NOT_WORKING )

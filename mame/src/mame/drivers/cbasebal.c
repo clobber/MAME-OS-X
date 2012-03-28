@@ -1,97 +1,101 @@
 /***************************************************************************
 
-  Capcom Baseball
+    Capcom Baseball
 
 
-  Somewhat similar to the "Mitchell hardware", but different enough to
-  deserve its own driver.
+    Somewhat similar to the "Mitchell hardware", but different enough to
+    deserve its own driver.
 
-TODO:
-- understand what bit 6 of input port 0x12 is
-- unknown bit 5 of bankswitch register
+    TODO:
+    - understand what bit 6 of input port 0x12 is
+    - unknown bit 5 of bankswitch register
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "includes/cps1.h"
+#include "includes/cps1.h"	// needed for decoding functions only
+#include "includes/cbasebal.h"
 #include "machine/eeprom.h"
 #include "sound/okim6295.h"
 #include "sound/2413intf.h"
 
 
-VIDEO_START( cbasebal );
-WRITE8_HANDLER( cbasebal_textram_w );
-READ8_HANDLER( cbasebal_textram_r );
-WRITE8_HANDLER( cbasebal_scrollram_w );
-READ8_HANDLER( cbasebal_scrollram_r );
-WRITE8_HANDLER( cbasebal_gfxctrl_w );
-WRITE8_HANDLER( cbasebal_scrollx_w );
-WRITE8_HANDLER( cbasebal_scrolly_w );
-VIDEO_UPDATE( cbasebal );
-
-
-static UINT8 rambank;
+/*************************************
+ *
+ *  Memory handlers
+ *
+ *************************************/
 
 static WRITE8_HANDLER( cbasebal_bankswitch_w )
 {
+	cbasebal_state *state = space->machine().driver_data<cbasebal_state>();
+
 	/* bits 0-4 select ROM bank */
-//logerror("%04x: bankswitch %02x\n",cpu_get_pc(space->cpu),data);
-	memory_set_bank(space->machine, 1, data & 0x1f);
+	//logerror("%04x: bankswitch %02x\n", cpu_get_pc(&space->device()), data);
+	memory_set_bank(space->machine(), "bank1", data & 0x1f);
 
 	/* bit 5 used but unknown */
 
 	/* bits 6-7 select RAM bank */
-	rambank = (data & 0xc0) >> 6;
+	state->m_rambank = (data & 0xc0) >> 6;
 }
 
 
 static READ8_HANDLER( bankedram_r )
 {
-	if (rambank == 2)
-		return cbasebal_textram_r(space,offset);	/* VRAM */
-	else if (rambank == 1)
+	cbasebal_state *state = space->machine().driver_data<cbasebal_state>();
+
+	switch (state->m_rambank)
 	{
+	case 2:
+		return cbasebal_textram_r(space, offset);	/* VRAM */
+	case 1:
 		if (offset < 0x800)
-			return paletteram[offset];
-		else return 0;
-	}
-	else
-	{
-		return cbasebal_scrollram_r(space,offset);	/* SCROLL */
+			return space->machine().generic.paletteram.u8[offset];
+		else
+			return 0;
+		break;
+	default:
+		return cbasebal_scrollram_r(space, offset);	/* SCROLL */
 	}
 }
 
 static WRITE8_HANDLER( bankedram_w )
 {
-	if (rambank == 2)
-		cbasebal_textram_w(space,offset,data);
-	else if (rambank == 1)
+	cbasebal_state *state = space->machine().driver_data<cbasebal_state>();
+
+	switch (state->m_rambank)
 	{
+	case 2:
+		cbasebal_textram_w(space, offset, data);
+		break;
+	case 1:
 		if (offset < 0x800)
-			paletteram_xxxxBBBBRRRRGGGG_le_w(space,offset,data);
+			paletteram_xxxxBBBBRRRRGGGG_le_w(space, offset, data);
+		break;
+	default:
+		cbasebal_scrollram_w(space, offset, data);
+		break;
 	}
-	else
-		cbasebal_scrollram_w(space,offset,data);
 }
 
 static WRITE8_HANDLER( cbasebal_coinctrl_w )
 {
-	coin_lockout_w(0,~data & 0x04);
-	coin_lockout_w(1,~data & 0x08);
-	coin_counter_w(0,data & 0x01);
-	coin_counter_w(1,data & 0x02);
+	coin_lockout_w(space->machine(), 0, ~data & 0x04);
+	coin_lockout_w(space->machine(), 1, ~data & 0x08);
+	coin_counter_w(space->machine(), 0, data & 0x01);
+	coin_counter_w(space->machine(), 1, data & 0x02);
 }
 
 
+/*************************************
+ *
+ *  EEPROM
+ *
+ *************************************/
 
-/***************************************************************************
-
-  EEPROM
-
-***************************************************************************/
-
-static const eeprom_interface eeprom_intf =
+static const eeprom_interface cbasebal_eeprom_intf =
 {
 	6,		/* address bits */
 	16,		/* data bits */
@@ -101,52 +105,28 @@ static const eeprom_interface eeprom_intf =
 };
 
 
-static NVRAM_HANDLER( cbasebal )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
+/*************************************
+ *
+ *  Address maps
+ *
+ *************************************/
 
-		if (file)
-			eeprom_load(file);
-	}
-}
-
-static WRITE8_HANDLER( eeprom_cs_w )
-{
-	eeprom_set_cs_line(data ? CLEAR_LINE : ASSERT_LINE);
-}
-
-static WRITE8_HANDLER( eeprom_clock_w )
-{
-	eeprom_set_clock_line(data ? CLEAR_LINE : ASSERT_LINE);
-}
-
-static WRITE8_HANDLER( eeprom_serial_w )
-{
-	eeprom_write_bit(data);
-}
-
-
-
-static ADDRESS_MAP_START( cbasebal_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( cbasebal_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE(&paletteram)	/* palette + vram + scrollram */
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE_GENERIC(paletteram)	/* palette + vram + scrollram */
 	AM_RANGE(0xe000, 0xfdff) AM_RAM		/* work RAM */
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(cbasebal_state, m_spriteram, m_spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cbasebal_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( cbasebal_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(cbasebal_bankswitch_w)
-	AM_RANGE(0x01, 0x01) AM_WRITE(eeprom_cs_w)
-	AM_RANGE(0x02, 0x02) AM_WRITE(eeprom_clock_w)
-	AM_RANGE(0x03, 0x03) AM_WRITE(eeprom_serial_w)
-	AM_RANGE(0x05, 0x05) AM_DEVWRITE("oki", okim6295_w)
-	AM_RANGE(0x06, 0x07) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x01, 0x01) AM_WRITE_PORT("IO_01")
+	AM_RANGE(0x02, 0x02) AM_WRITE_PORT("IO_02")
+	AM_RANGE(0x03, 0x03) AM_WRITE_PORT("IO_03")
+	AM_RANGE(0x05, 0x05) AM_DEVWRITE_MODERN("oki", okim6295_device, write)
+	AM_RANGE(0x06, 0x07) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x08, 0x09) AM_WRITE(cbasebal_scrollx_w)
 	AM_RANGE(0x0a, 0x0b) AM_WRITE(cbasebal_scrolly_w)
 	AM_RANGE(0x10, 0x10) AM_READ_PORT("P1")
@@ -156,6 +136,12 @@ static ADDRESS_MAP_START( cbasebal_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x14, 0x14) AM_WRITE(cbasebal_coinctrl_w)
 ADDRESS_MAP_END
 
+
+/*************************************
+ *
+ *  Input ports
+ *
+ *************************************/
 
 static INPUT_PORTS_START( cbasebal )
 	PORT_START("P1")
@@ -186,11 +172,25 @@ static INPUT_PORTS_START( cbasebal )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_VBLANK )		/* ? */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
+
+	PORT_START( "IO_01" )
+	PORT_BIT( 0x00000010, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+
+	PORT_START( "IO_02" )
+	PORT_BIT( 0x00000020, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+
+	PORT_START( "IO_03" )
+	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 INPUT_PORTS_END
 
 
 
+/*************************************
+ *
+ *  Graphics definitions
+ *
+ *************************************/
 
 static const gfx_layout cbasebal_textlayout =
 {
@@ -236,45 +236,91 @@ static GFXDECODE_START( cbasebal )
 GFXDECODE_END
 
 
+/*************************************
+ *
+ *  Machine driver
+ *
+ *************************************/
 
-static MACHINE_DRIVER_START( cbasebal )
+static MACHINE_START( cbasebal )
+{
+	cbasebal_state *state = machine.driver_data<cbasebal_state>();
+
+	memory_configure_bank(machine, "bank1", 0, 32, machine.region("maincpu")->base() + 0x10000, 0x4000);
+
+	state->save_item(NAME(state->m_rambank));
+	state->save_item(NAME(state->m_tilebank));
+	state->save_item(NAME(state->m_spritebank));
+	state->save_item(NAME(state->m_text_on));
+	state->save_item(NAME(state->m_bg_on));
+	state->save_item(NAME(state->m_obj_on));
+	state->save_item(NAME(state->m_flipscreen));
+	state->save_item(NAME(state->m_scroll_x));
+	state->save_item(NAME(state->m_scroll_y));
+}
+
+static MACHINE_RESET( cbasebal )
+{
+	cbasebal_state *state = machine.driver_data<cbasebal_state>();
+
+	state->m_rambank = 0;
+	state->m_tilebank = 0;
+	state->m_spritebank = 0;
+	state->m_text_on = 0;
+	state->m_bg_on = 0;
+	state->m_obj_on = 0;
+	state->m_flipscreen = 0;
+	state->m_scroll_x[0] = 0;
+	state->m_scroll_x[1] = 0;
+	state->m_scroll_y[0] = 0;
+	state->m_scroll_y[1] = 0;
+}
+
+static MACHINE_CONFIG_START( cbasebal, cbasebal_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 6000000)	/* ??? */
-	MDRV_CPU_PROGRAM_MAP(cbasebal_map)
-	MDRV_CPU_IO_MAP(cbasebal_portmap)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* ??? */
+	MCFG_CPU_ADD("maincpu", Z80, 6000000)	/* ??? */
+	MCFG_CPU_PROGRAM_MAP(cbasebal_map)
+	MCFG_CPU_IO_MAP(cbasebal_portmap)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)	/* ??? */
 
-	MDRV_NVRAM_HANDLER(cbasebal)
+	MCFG_MACHINE_START(cbasebal)
+	MCFG_MACHINE_RESET(cbasebal)
+
+	MCFG_EEPROM_ADD("eeprom", cbasebal_eeprom_intf)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 2*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE_STATIC(cbasebal)
 
-	MDRV_GFXDECODE(cbasebal)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(cbasebal)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(cbasebal)
-	MDRV_VIDEO_UPDATE(cbasebal)
+	MCFG_VIDEO_START(cbasebal)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2413, 3579545)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
+
+/*************************************
+ *
+ *  ROM definition(s)
+ *
+ *************************************/
 
 ROM_START( cbasebal )
 	ROM_REGION( 0x90000, "maincpu", 0 )
@@ -304,11 +350,22 @@ ROM_START( cbasebal )
 ROM_END
 
 
+/*************************************
+ *
+ *  Driver initialization
+ *
+ *************************************/
+
 static DRIVER_INIT( cbasebal )
 {
-	memory_configure_bank(machine, 1, 0, 32, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 	pang_decode(machine);
 }
 
 
-GAME( 1989, cbasebal, 0, cbasebal, cbasebal, cbasebal, ROT0, "Capcom", "Capcom Baseball (Japan)", 0 )
+/*************************************
+ *
+ *  Game driver(s)
+ *
+ *************************************/
+
+GAME( 1989, cbasebal, 0, cbasebal, cbasebal, cbasebal, ROT0, "Capcom", "Capcom Baseball (Japan)", GAME_SUPPORTS_SAVE )

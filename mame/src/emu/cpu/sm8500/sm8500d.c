@@ -7,7 +7,7 @@ Sharp sm8500 CPU disassembly
 
 *******************************************************************/
 
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "sm8500.h"
 
@@ -41,7 +41,7 @@ static const char *const s_mnemonic[] =
 	"iret", "jmp",  "mov",  "movm", "movw",  "mult", "neg",  "nop",  "or",
 	"orw",  "pop",  "popw", "push", "pushw", "ret",  "rl",   "rlc",
 	"rr",   "rrc",  "sbc",  "sbcw", "setc", "sll",   "sra",  "srl",  "stop",
-	"sub",  "subw", "swap", "xor",  "xorw", "mov PS0,", "invalid", "dm?",
+	"sub",  "subw", "swap", "xor",  "xorw", "mov  PS0,", "invalid", "dm?",
 /* unknowns */
 "unk5A", "unk5B",
 
@@ -188,7 +188,7 @@ CPU_DISASSEMBLE( sm8500 )
 
 	if ( instr->arguments )
 	{
-		if ( instr->arguments != AM_1A || instr->arguments != AM_1B || instr->arguments != AM_4F ) {
+		if ( instr->arguments != AM_1A && instr->arguments != AM_1B && instr->arguments != AM_4F ) {
 			dst += sprintf( dst, "%-4s ", s_mnemonic[ instr->mnemonic ] );
 		}
 		switch( instr->arguments ) {

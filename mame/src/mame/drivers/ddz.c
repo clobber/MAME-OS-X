@@ -8,15 +8,24 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/se3208/se3208.h"
 #include "video/vrender0.h"
 #include "machine/ds1302.h"
+#include "machine/nvram.h"
 #include "sound/vrender0.h"
 
 
+class ddz_state : public driver_device
+{
+public:
+	ddz_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-static ADDRESS_MAP_START( ddz_mem, ADDRESS_SPACE_PROGRAM, 32 )
+};
+
+
+static ADDRESS_MAP_START( ddz_mem, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_ROM AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -25,12 +34,12 @@ static VIDEO_START(ddz)
 }
 
 
-static VIDEO_UPDATE(ddz)
+static SCREEN_UPDATE_RGB32(ddz)
 {
 	return 0;
 }
 
-static VIDEO_EOF(ddz)
+static SCREEN_VBLANK(ddz)
 {
 
 }
@@ -51,35 +60,34 @@ static const vr0_interface vr0_config =
 };
 
 
-static MACHINE_DRIVER_START( ddz )
-	MDRV_CPU_ADD("maincpu", SE3208, 43000000)
-	MDRV_CPU_PROGRAM_MAP(ddz_mem)
- 	MDRV_CPU_VBLANK_INT("screen", ddz_interrupt)
+static MACHINE_CONFIG_START( ddz, ddz_state )
+	MCFG_CPU_ADD("maincpu", SE3208, 43000000)
+	MCFG_CPU_PROGRAM_MAP(ddz_mem)
+	MCFG_CPU_VBLANK_INT("screen", ddz_interrupt)
 
-	//MDRV_MACHINE_RESET(ddz)
+	//MCFG_MACHINE_RESET(ddz)
 
-	//MDRV_NVRAM_HANDLER(generic_0fill)
+	//MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_SIZE(320, 240)
-	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(320, 240)
+	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE_STATIC(ddz)
+	MCFG_SCREEN_VBLANK_STATIC(ddz)
 
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(ddz)
-	MDRV_VIDEO_UPDATE(ddz)
-	MDRV_VIDEO_EOF(ddz)
+	MCFG_VIDEO_START(ddz)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("vrender", VRENDER0, 0)
-	MDRV_SOUND_CONFIG(vr0_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("vrender", VRENDER0, 0)
+	MCFG_SOUND_CONFIG(vr0_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -91,4 +99,4 @@ ROM_START( ddz )
 ROM_END
 
 
-GAME( 200?, ddz,	0,  ddz, ddz, 0, ROT0, "IGS?", "Dou Di Zhu", GAME_NOT_WORKING )
+GAME( 200?, ddz,	0,  ddz, ddz, 0, ROT0, "IGS?", "Dou Di Zhu", GAME_IS_SKELETON )

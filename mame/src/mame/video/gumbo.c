@@ -1,51 +1,51 @@
 /* Gumbo video */
 
-#include "driver.h"
+#include "emu.h"
+#include "includes/gumbo.h"
 
-extern UINT16 *gumbo_bg_videoram;
-extern UINT16 *gumbo_fg_videoram;
-
-static tilemap *gumbo_bg_tilemap;
-static tilemap *gumbo_fg_tilemap;
 
 WRITE16_HANDLER( gumbo_bg_videoram_w )
 {
-	COMBINE_DATA(&gumbo_bg_videoram[offset]);
-	tilemap_mark_tile_dirty(gumbo_bg_tilemap,offset);
+	gumbo_state *state = space->machine().driver_data<gumbo_state>();
+	COMBINE_DATA(&state->m_bg_videoram[offset]);
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_gumbo_bg_tile_info )
 {
-	int tileno;
-	tileno = gumbo_bg_videoram[tile_index];
-	SET_TILE_INFO(0,tileno,0,0);
+	gumbo_state *state = machine.driver_data<gumbo_state>();
+	int tileno = state->m_bg_videoram[tile_index];
+	SET_TILE_INFO(0, tileno, 0, 0);
 }
 
 
 WRITE16_HANDLER( gumbo_fg_videoram_w )
 {
-	COMBINE_DATA(&gumbo_fg_videoram[offset]);
-	tilemap_mark_tile_dirty(gumbo_fg_tilemap,offset);
+	gumbo_state *state = space->machine().driver_data<gumbo_state>();
+	COMBINE_DATA(&state->m_fg_videoram[offset]);
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_gumbo_fg_tile_info )
 {
-	int tileno;
-	tileno = gumbo_fg_videoram[tile_index];
-	SET_TILE_INFO(1,tileno,1,0);
+	gumbo_state *state = machine.driver_data<gumbo_state>();
+	int tileno = state->m_fg_videoram[tile_index];
+	SET_TILE_INFO(1, tileno, 1, 0);
 }
 
 
 VIDEO_START( gumbo )
 {
-	gumbo_bg_tilemap = tilemap_create(machine, get_gumbo_bg_tile_info,tilemap_scan_rows,      8, 8, 64,32);
-	gumbo_fg_tilemap = tilemap_create(machine, get_gumbo_fg_tile_info,tilemap_scan_rows, 4, 4,128,64);
-	tilemap_set_transparent_pen(gumbo_fg_tilemap,0xff);
+	gumbo_state *state = machine.driver_data<gumbo_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_gumbo_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	state->m_fg_tilemap = tilemap_create(machine, get_gumbo_fg_tile_info, tilemap_scan_rows, 4, 4, 128, 64);
+	state->m_fg_tilemap->set_transparent_pen(0xff);
 }
 
-VIDEO_UPDATE( gumbo )
+SCREEN_UPDATE_IND16( gumbo )
 {
-	tilemap_draw(bitmap,cliprect,gumbo_bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,gumbo_fg_tilemap,0,0);
+	gumbo_state *state = screen.machine().driver_data<gumbo_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }

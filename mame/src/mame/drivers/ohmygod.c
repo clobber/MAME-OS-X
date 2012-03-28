@@ -11,61 +11,43 @@ Notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
+#include "includes/ohmygod.h"
 
-
-extern UINT16 *ohmygod_videoram;
-
-WRITE16_HANDLER( ohmygod_videoram_w );
-WRITE16_HANDLER( ohmygod_spritebank_w );
-WRITE16_HANDLER( ohmygod_scrollx_w );
-WRITE16_HANDLER( ohmygod_scrolly_w );
-VIDEO_START( ohmygod );
-VIDEO_UPDATE( ohmygod );
-
-
-static int adpcm_bank_shift;
-static int sndbank;
-
-static MACHINE_RESET( ohmygod )
-{
-	UINT8 *rom = memory_region(machine, "oki");
-
-	sndbank = 0;
-	memcpy(rom + 0x20000,rom + 0x40000 + 0x20000 * sndbank,0x20000);
-}
 
 static WRITE16_HANDLER( ohmygod_ctrl_w )
 {
+	ohmygod_state *state = space->machine().driver_data<ohmygod_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
-		UINT8 *rom = memory_region(space->machine, "oki");
+		UINT8 *rom = space->machine().region("oki")->base();
 
 		/* ADPCM bank switch */
-		if (sndbank != ((data >> adpcm_bank_shift) & 0x0f))
+		if (state->m_sndbank != ((data >> state->m_adpcm_bank_shift) & 0x0f))
 		{
-			sndbank = (data >> adpcm_bank_shift) & 0x0f;
-			memcpy(rom + 0x20000,rom + 0x40000 + 0x20000 * sndbank,0x20000);
+			state->m_sndbank = (data >> state->m_adpcm_bank_shift) & 0x0f;
+			memcpy(rom + 0x20000, rom + 0x40000 + 0x20000 * state->m_sndbank, 0x20000);
 		}
 	}
 	if (ACCESSING_BITS_8_15)
 	{
-		coin_counter_w(0,data & 0x1000);
-		coin_counter_w(1,data & 0x2000);
+		coin_counter_w(space->machine(), 0, data & 0x1000);
+		coin_counter_w(space->machine(), 1, data & 0x2000);
 	}
 }
 
-static ADDRESS_MAP_START( ohmygod_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( ohmygod_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x300000, 0x303fff) AM_RAM
-	AM_RANGE(0x304000, 0x307fff) AM_RAM_WRITE(ohmygod_videoram_w) AM_BASE(&ohmygod_videoram)
+	AM_RANGE(0x304000, 0x307fff) AM_RAM_WRITE(ohmygod_videoram_w) AM_BASE_MEMBER(ohmygod_state, m_videoram)
 	AM_RANGE(0x308000, 0x30ffff) AM_RAM
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(ohmygod_scrollx_w)
 	AM_RANGE(0x400002, 0x400003) AM_WRITE(ohmygod_scrolly_w)
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x700000, 0x703fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x703fff) AM_RAM AM_BASE_SIZE_MEMBER(ohmygod_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x704000, 0x707fff) AM_RAM
 	AM_RANGE(0x708000, 0x70ffff) AM_RAM 	/* Work RAM */
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("P1")
@@ -73,7 +55,7 @@ static ADDRESS_MAP_START( ohmygod_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(ohmygod_ctrl_w)
 	AM_RANGE(0xa00000, 0xa00001) AM_READ_PORT("DSW1")
 	AM_RANGE(0xa00002, 0xa00003) AM_READ_PORT("DSW2")
-	AM_RANGE(0xb00000, 0xb00001) AM_DEVREADWRITE8("oki", okim6295_r,okim6295_w, 0x00ff)
+	AM_RANGE(0xb00000, 0xb00001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0xc00000, 0xc00001) AM_READ(watchdog_reset16_r)
 	AM_RANGE(0xd00000, 0xd00001) AM_WRITE(ohmygod_spritebank_w)
 ADDRESS_MAP_END
@@ -312,37 +294,60 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( ohmygod )
+static MACHINE_START( ohmygod )
+{
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+
+	state->save_item(NAME(state->m_spritebank));
+	state->save_item(NAME(state->m_scrollx));
+	state->save_item(NAME(state->m_scrolly));
+	state->save_item(NAME(state->m_sndbank));
+}
+
+static MACHINE_RESET( ohmygod )
+{
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+	UINT8 *rom = machine.region("oki")->base();
+
+	state->m_sndbank = 0;
+	memcpy(rom + 0x20000, rom + 0x40000 + 0x20000 * state->m_sndbank, 0x20000);
+
+	state->m_spritebank = 0;
+	state->m_scrollx = 0;
+	state->m_scrolly = 0;
+}
+
+static MACHINE_CONFIG_START( ohmygod, ohmygod_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)
-	MDRV_CPU_PROGRAM_MAP(ohmygod_map)
-	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 12000000)
+	MCFG_CPU_PROGRAM_MAP(ohmygod_map)
+	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MDRV_MACHINE_RESET(ohmygod)
-	MDRV_WATCHDOG_TIME_INIT(SEC(3))	/* a guess, and certainly wrong */
+	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(3))	/* a guess, and certainly wrong */
+
+	MCFG_MACHINE_START(ohmygod)
+	MCFG_MACHINE_RESET(ohmygod)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 0*8, 30*8-1 )
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(12*8, (64-12)*8-1, 0*8, 30*8-1 )
+	MCFG_SCREEN_UPDATE_STATIC(ohmygod)
 
-	MDRV_GFXDECODE(ohmygod)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(ohmygod)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_VIDEO_START(ohmygod)
-	MDRV_VIDEO_UPDATE(ohmygod)
+	MCFG_VIDEO_START(ohmygod)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 14000000/8)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 14000000/8, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -387,14 +392,16 @@ ROM_END
 
 static DRIVER_INIT( ohmygod )
 {
-	adpcm_bank_shift = 4;
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+	state->m_adpcm_bank_shift = 4;
 }
 
 static DRIVER_INIT( naname )
 {
-	adpcm_bank_shift = 0;
+	ohmygod_state *state = machine.driver_data<ohmygod_state>();
+	state->m_adpcm_bank_shift = 0;
 }
 
 
-GAME( 1993, ohmygod, 0, ohmygod, ohmygod, ohmygod, ROT0, "Atlus", "Oh My God! (Japan)", GAME_NO_COCKTAIL )
-GAME( 1994, naname,  0, ohmygod, naname,  naname,  ROT0, "Atlus", "Naname de Magic! (Japan)", GAME_NO_COCKTAIL )
+GAME( 1993, ohmygod, 0, ohmygod, ohmygod, ohmygod, ROT0, "Atlus", "Oh My God! (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1994, naname,  0, ohmygod, naname,  naname,  ROT0, "Atlus", "Naname de Magic! (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )

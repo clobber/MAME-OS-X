@@ -66,8 +66,8 @@ enum {
 	NB1413M3_SCANDAL,
 	NB1413M3_SCANDALM,
 	NB1413M3_MGMEN89,
-	NB1413M3_OHPYEPEE,
-	NB1413M3_TOUGENK,
+	NB1413M3_OHPAIPEE,
+	NB1413M3_TOGENKYO,
 	NB1413M3_MJFOCUS,
 	NB1413M3_MJFOCUSM,
 	NB1413M3_GALKOKU,
@@ -124,7 +124,6 @@ enum {
 MACHINE_RESET( nb1413m3 );
 WRITE8_HANDLER( nb1413m3_nmi_clock_w );
 INTERRUPT_GEN( nb1413m3_interrupt );
-NVRAM_HANDLER( nb1413m3 );
 READ8_HANDLER( nb1413m3_sndrom_r );
 WRITE8_HANDLER( nb1413m3_sndrombank1_w );
 WRITE8_HANDLER( nb1413m3_sndrombank2_w );
@@ -158,5 +157,3 @@ extern int nb1413m3_sndrombank2;
 extern int nb1413m3_busyctr;
 extern int nb1413m3_busyflag;
 extern int nb1413m3_inputport;
-extern UINT8 *nb1413m3_nvram;
-extern size_t nb1413m3_nvram_size;

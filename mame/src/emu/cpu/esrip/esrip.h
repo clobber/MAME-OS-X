@@ -9,8 +9,6 @@
 #ifndef _ESRIP_H
 #define _ESRIP_H
 
-#include "cpuintrf.h"
-
 
 /***************************************************************************
     COMPILE-TIME DEFINITIONS
@@ -87,8 +85,8 @@ struct _esrip_config_
 {
 	read16_device_func	fdt_r;
 	write16_device_func	fdt_w;
-	UINT8 (*status_in)(running_machine *machine);
-	int (*draw)(running_machine *machine, int l, int r, int fig, int attr, int addr, int col, int x_scale, int bank);
+	UINT8 (*status_in)(running_machine &machine);
+	int (*draw)(running_machine &machine, int l, int r, int fig, int attr, int addr, int col, int x_scale, int bank);
 	const char* const lbrm_prom;
 };
 
@@ -96,10 +94,8 @@ struct _esrip_config_
     PUBLIC FUNCTIONS
 ***************************************************************************/
 
-CPU_GET_INFO( esrip );
+DECLARE_LEGACY_CPU_DEVICE(ESRIP, esrip);
 
-#define CPU_ESRIP CPU_GET_INFO_NAME( esrip )
-
-extern UINT8 get_rip_status(const device_config *cpu);
+extern UINT8 get_rip_status(device_t *cpu);
 
 #endif /* _ESRIP_H */

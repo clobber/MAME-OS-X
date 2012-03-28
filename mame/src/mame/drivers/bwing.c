@@ -3,10 +3,7 @@
 B-Wings  (c) 1984 Data East Corporation
 Zaviga   (c) 1984 Data East Corporation
 
-drivers by Acho A. Tang
-
-
-JUL-2003
+driver by Acho A. Tang
 
 Known issues:
 
@@ -19,116 +16,89 @@ Known issues:
 
 - Zaviga's DIPs are incomplete. (manual missing)
 
+- "RGB dip-switch" looks kludgy at best;
+
 *****************************************************************************/
 // Directives
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
+#include "includes/bwing.h"
 
-#define BW_DEBUG 0
-
-#define MAX_SOUNDS 16
-
-//****************************************************************************
-// Imports
-
-extern const gfx_layout bwing_tilelayout;
-
-extern WRITE8_HANDLER( bwing_paletteram_w );
-extern WRITE8_HANDLER( bwing_videoram_w );
-extern WRITE8_HANDLER( bwing_spriteram_w );
-extern WRITE8_HANDLER( bwing_scrollreg_w );
-extern WRITE8_HANDLER( bwing_scrollram_w );
-extern READ8_HANDLER( bwing_scrollram_r );
-extern VIDEO_START( bwing );
-extern VIDEO_UPDATE( bwing );
-
-//****************************************************************************
-// Local Vars
-
-static UINT8 sound_fifo[MAX_SOUNDS];
-static UINT8 *bwp123_membase[3], *bwp3_rombase;
-static UINT8 *bwp1_sharedram1, *bwp2_sharedram1;
-static size_t bwp3_romsize;
-static int bwp3_nmimask, bwp3_u8F_d, ffcount, ffhead, fftail;
 
 //****************************************************************************
 // Interrupt Handlers
 
-static INTERRUPT_GEN ( bwp1_interrupt )
+static INTERRUPT_GEN ( bwp3_interrupt )
 {
-	static int coin = 0;
-	UINT8 latch_data;
+	bwing_state *state = device->machine().driver_data<bwing_state>();
 
-	switch (cpu_getiloops(device))
-	{
-		case 0:
-			if (ffcount)
-			{
-				ffcount--;
-				latch_data = sound_fifo[fftail];
-				fftail = (fftail + 1) & (MAX_SOUNDS - 1);
-				soundlatch_w(cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM), 0, latch_data);
-				cputag_set_input_line(device->machine, "audiocpu", DECO16_IRQ_LINE, HOLD_LINE); // SNDREQ
-			}
-		break;
-
-		case 1:
-			if (~input_port_read(device->machine, "IN2") & 0x03)
-				{ if (!coin) { coin = 1; cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE); } }
-			else
-				coin = 0;
-		break;
-
-		case 2:
-			if (input_port_read(device->machine, "IN3")) cpu_set_input_line(device, M6809_FIRQ_LINE, ASSERT_LINE);
-		break;
-	}
+	if (!state->m_bwp3_nmimask)
+		device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
 }
-
-
-static INTERRUPT_GEN ( bwp3_interrupt ) { if (!bwp3_nmimask) cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE); }
 
 //****************************************************************************
 // Memory and I/O Handlers
 
-static WRITE8_HANDLER( bwp12_sharedram1_w ) { bwp1_sharedram1[offset] = bwp2_sharedram1[offset] = data; }
-static WRITE8_HANDLER( bwp3_u8F_w ) { bwp3_u8F_d = data; } // prepares custom chip for various operations
-static WRITE8_HANDLER( bwp3_nmiack_w ) { cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, CLEAR_LINE); }
-static WRITE8_HANDLER( bwp3_nmimask_w ) { bwp3_nmimask = data & 0x80; }
+static WRITE8_HANDLER( bwp12_sharedram1_w )
+{
+	bwing_state *state = space->machine().driver_data<bwing_state>();
+	state->m_bwp1_sharedram1[offset] = state->m_bwp2_sharedram1[offset] = data;
+}
+
+static WRITE8_HANDLER( bwp3_u8F_w )
+{
+	bwing_state *state = space->machine().driver_data<bwing_state>();
+	state->m_bwp3_u8F_d = data;  // prepares custom chip for various operations
+}
+
+static WRITE8_HANDLER( bwp3_nmimask_w )
+{
+	bwing_state *state = space->machine().driver_data<bwing_state>();
+	state->m_bwp3_nmimask = data & 0x80;
+}
+
+static WRITE8_HANDLER( bwp3_nmiack_w )
+{
+	bwing_state *state = space->machine().driver_data<bwing_state>();
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
+}
 
 
 static READ8_HANDLER( bwp1_io_r )
 {
-	if (offset == 0) return(input_port_read(space->machine, "DSW0"));
-	if (offset == 1) return(input_port_read(space->machine, "DSW1"));
-	if (offset == 2) return(input_port_read(space->machine, "IN0"));
-	if (offset == 3) return(input_port_read(space->machine, "IN1"));
-	if (offset == 4) return(input_port_read(space->machine, "IN2"));
+	bwing_state *state = space->machine().driver_data<bwing_state>();
 
-	return((bwp123_membase[0])[0x1b00 + offset]);
+	if (offset == 0) return(input_port_read(space->machine(), "DSW0"));
+	if (offset == 1) return(input_port_read(space->machine(), "DSW1"));
+	if (offset == 2) return(input_port_read(space->machine(), "IN0"));
+	if (offset == 3) return(input_port_read(space->machine(), "IN1"));
+	if (offset == 4) return(input_port_read(space->machine(), "IN2"));
+
+	return((state->m_bwp123_membase[0])[0x1b00 + offset]);
 }
 
 
 static WRITE8_HANDLER( bwp1_ctrl_w )
 {
+	bwing_state *state = space->machine().driver_data<bwing_state>();
+
 	switch (offset)
 	{
 		// MSSTB
-		case 0: cputag_set_input_line(space->machine, "sub", M6809_IRQ_LINE, ASSERT_LINE); break;
+		case 0: device_set_input_line(state->m_subcpu, M6809_IRQ_LINE, ASSERT_LINE); break;
 
 		// IRQACK
-		case 1: cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE, CLEAR_LINE); break;
+		case 1: device_set_input_line(state->m_maincpu, M6809_IRQ_LINE, CLEAR_LINE); break;
 
 		// FIRQACK
-		case 2: cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE, CLEAR_LINE); break;
+		case 2: device_set_input_line(state->m_maincpu, M6809_FIRQ_LINE, CLEAR_LINE); break;
 
 		// NMIACK
-		case 3: cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE); break;
+		case 3: device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, CLEAR_LINE); break;
 
 		// SWAP(bank-swaps sprite RAM between 1800 & 1900; ignored bc. they're treated as a single chunk.)
 		case 4: break;
@@ -136,13 +106,11 @@ static WRITE8_HANDLER( bwp1_ctrl_w )
 		// SNDREQ
 		case 5:
 			if (data == 0x80) // protection trick to screw CPU1 & 3
-				cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, ASSERT_LINE); // SNMI
+				device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, ASSERT_LINE); // SNMI
 			else
-			if (ffcount < MAX_SOUNDS)
 			{
-				ffcount++;
-				sound_fifo[ffhead] = data;
-				ffhead = (ffhead + 1) & (MAX_SOUNDS - 1);
+				soundlatch_w(space, 0, data);
+				device_set_input_line(state->m_audiocpu, DECO16_IRQ_LINE, HOLD_LINE); // SNDREQ
 			}
 		break;
 
@@ -154,26 +122,29 @@ static WRITE8_HANDLER( bwp1_ctrl_w )
 	}
 
 	#if BW_DEBUG
-		(bwp123_membase[0])[0x1c00 + offset] = data;
+		(state->m_bwp123_membase[0])[0x1c00 + offset] = data;
 	#endif
 }
 
 
 static WRITE8_HANDLER( bwp2_ctrl_w )
 {
+	bwing_state *state = space->machine().driver_data<bwing_state>();
 	switch (offset)
 	{
-		case 0: cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE, ASSERT_LINE); break; // SMSTB
+		case 0: device_set_input_line(state->m_maincpu, M6809_IRQ_LINE, ASSERT_LINE); break; // SMSTB
 
-		case 1: cputag_set_input_line(space->machine, "sub", M6809_FIRQ_LINE, CLEAR_LINE); break;
+		case 1: device_set_input_line(state->m_subcpu, M6809_FIRQ_LINE, CLEAR_LINE); break;
 
-		case 2: cputag_set_input_line(space->machine, "sub", M6809_IRQ_LINE, CLEAR_LINE); break;
+		case 2: device_set_input_line(state->m_subcpu, M6809_IRQ_LINE, CLEAR_LINE); break;
 
-		case 3: cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, CLEAR_LINE); break;
+		case 3: device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, CLEAR_LINE); break;
 	}
 
 	#if BW_DEBUG
-		(bwp123_membase[1])[0x1800 + offset] = data;
+	{
+		(state->m_bwp123_membase[1])[0x1800 + offset] = data;
+	}
 	#endif
 }
 
@@ -181,14 +152,14 @@ static WRITE8_HANDLER( bwp2_ctrl_w )
 // CPU Memory Maps
 
 // Main CPU
-static ADDRESS_MAP_START( bwp1_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bwp1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1b00, 0x1b07) AM_READ(bwp1_io_r)
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(bwp12_sharedram1_w) AM_BASE(&bwp1_sharedram1)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(bwp12_sharedram1_w) AM_BASE_MEMBER(bwing_state, m_bwp1_sharedram1)
 	AM_RANGE(0x0800, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(bwing_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(bwing_videoram_w) AM_BASE_MEMBER(bwing_state, m_videoram)
 	AM_RANGE(0x1400, 0x17ff) AM_RAM
-	AM_RANGE(0x1800, 0x19ff) AM_RAM_WRITE(bwing_spriteram_w) AM_BASE(&buffered_spriteram)
-	AM_RANGE(0x1a00, 0x1aff) AM_RAM_WRITE(bwing_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x1800, 0x19ff) AM_RAM_WRITE(bwing_spriteram_w) AM_BASE_MEMBER(bwing_state, m_spriteram)
+	AM_RANGE(0x1a00, 0x1aff) AM_RAM_WRITE(bwing_paletteram_w) AM_BASE_MEMBER(bwing_state, m_paletteram)
 	AM_RANGE(0x1b00, 0x1b07) AM_RAM_WRITE(bwing_scrollreg_w)
 	AM_RANGE(0x1c00, 0x1c07) AM_RAM_WRITE(bwp1_ctrl_w)
 	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(bwing_scrollram_r, bwing_scrollram_w)
@@ -197,8 +168,8 @@ ADDRESS_MAP_END
 
 
 // Sub CPU
-static ADDRESS_MAP_START( bwp2_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(bwp12_sharedram1_w) AM_BASE(&bwp2_sharedram1)
+static ADDRESS_MAP_START( bwp2_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(bwp12_sharedram1_w) AM_BASE_MEMBER(bwing_state, m_bwp2_sharedram1)
 	AM_RANGE(0x0800, 0x0fff) AM_RAM
 	AM_RANGE(0x1800, 0x1803) AM_WRITE(bwp2_ctrl_w)
 	AM_RANGE(0xa000, 0xffff) AM_ROM
@@ -206,7 +177,7 @@ ADDRESS_MAP_END
 
 
 // Sound CPU
-static ADDRESS_MAP_START( bwp3_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bwp3_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
 	AM_RANGE(0x0200, 0x0200) AM_DEVWRITE("dac", dac_signed_w)
 	AM_RANGE(0x1000, 0x1000) AM_WRITE(bwp3_nmiack_w)
@@ -216,16 +187,26 @@ static ADDRESS_MAP_START( bwp3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("ay2", ay8910_address_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(bwp3_nmimask_w)
-	AM_RANGE(0xe000, 0xffff) AM_ROM AM_BASE(&bwp3_rombase) AM_SIZE(&bwp3_romsize)
+	AM_RANGE(0xe000, 0xffff) AM_ROM AM_BASE_SIZE_MEMBER(bwing_state, m_bwp3_rombase, m_bwp3_romsize)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( bwp3_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( bwp3_io_map, AS_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("VBLANK") AM_WRITE(bwp3_u8F_w)
 ADDRESS_MAP_END
 
 //****************************************************************************
 // I/O Port Maps
+
+static INPUT_CHANGED( coin_inserted )
+{
+	cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+}
+
+static INPUT_CHANGED( tilt_pressed )
+{
+	cputag_set_input_line(field.machine(), "maincpu", M6809_FIRQ_LINE, newval ? ASSERT_LINE : CLEAR_LINE);
+}
 
 static INPUT_PORTS_START( bwing )
 	PORT_START("DSW0")
@@ -298,8 +279,8 @@ static INPUT_PORTS_START( bwing )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_CHANGED(coin_inserted, 0)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_CHANGED(coin_inserted, 0)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -308,7 +289,7 @@ static INPUT_PORTS_START( bwing )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
 
 	PORT_START("IN3")
-	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_TILT )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_TILT ) PORT_CHANGED(tilt_pressed,0)
 
 	PORT_START("VBLANK")
 	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_VBLANK )
@@ -359,62 +340,83 @@ GFXDECODE_END
 //****************************************************************************
 // Hardware Definitions
 
-static MACHINE_RESET( bwing )
+static MACHINE_START( bwing )
 {
-	bwp3_nmimask = 0;
-	fftail = ffhead = ffcount = 0;
+	bwing_state *state = machine.driver_data<bwing_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_subcpu = machine.device("sub");
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_palatch));
+	state->save_item(NAME(state->m_srbank));
+	state->save_item(NAME(state->m_mapmask));
+	state->save_item(NAME(state->m_mapflip));
+	state->save_item(NAME(state->m_bwp3_nmimask));
+	state->save_item(NAME(state->m_bwp3_u8F_d));
+
+	state->save_item(NAME(state->m_sreg));
 }
 
+static MACHINE_RESET( bwing )
+{
+	bwing_state *state = machine.driver_data<bwing_state>();
 
+	state->m_palatch = 0;
+	state->m_srbank = 0;
+	state->m_mapmask = 0;
+	state->m_mapflip = 0;
 
-static MACHINE_DRIVER_START( bwing )
+	state->m_bwp3_nmimask = 0;
+	state->m_bwp3_u8F_d = 0;
+}
+
+static MACHINE_CONFIG_START( bwing, bwing_state )
 
 	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", M6809, 2000000)
-	MDRV_CPU_PROGRAM_MAP(bwp1_map)
-	MDRV_CPU_VBLANK_INT_HACK(bwp1_interrupt, 3)
+	MCFG_CPU_ADD("maincpu", M6809, 2000000)
+	MCFG_CPU_PROGRAM_MAP(bwp1_map)
 
-	MDRV_CPU_ADD("sub", M6809, 2000000)
-	MDRV_CPU_PROGRAM_MAP(bwp2_map)
-//  MDRV_CPU_VBLANK_INT("screen", irq1_line_assert) // vblank triggers FIRQ on CPU2 by design (unused)
+	MCFG_CPU_ADD("sub", M6809, 2000000)
+	MCFG_CPU_PROGRAM_MAP(bwp2_map)
 
-	MDRV_CPU_ADD("audiocpu", DECO16, 2000000)
-	MDRV_CPU_PROGRAM_MAP(bwp3_map)
-	MDRV_CPU_IO_MAP(bwp3_io_map)
-	MDRV_CPU_PERIODIC_INT(bwp3_interrupt, 1000)
+	MCFG_CPU_ADD("audiocpu", DECO16, 2000000)
+	MCFG_CPU_PROGRAM_MAP(bwp3_map)
+	MCFG_CPU_IO_MAP(bwp3_io_map)
+	MCFG_CPU_PERIODIC_INT(bwp3_interrupt, 1000)
 
-	MDRV_QUANTUM_TIME(HZ(18000))		// high enough?
+	MCFG_QUANTUM_TIME(attotime::from_hz(18000))		// high enough?
 
-	MDRV_MACHINE_RESET(bwing)
+	MCFG_MACHINE_START(bwing)
+	MCFG_MACHINE_RESET(bwing)
 
 	// video hardware
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(600))	// must be long enough for polling
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(600))	// must be long enough for polling
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(bwing)
 
-	MDRV_GFXDECODE(bwing)
-	MDRV_PALETTE_LENGTH(64)
+	MCFG_GFXDECODE(bwing)
+	MCFG_PALETTE_LENGTH(64)
 
-	MDRV_VIDEO_START(bwing)
-	MDRV_VIDEO_UPDATE(bwing)
+	MCFG_VIDEO_START(bwing)
 
 	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_CONFIG_END
 
 //****************************************************************************
 // ROM Maps
@@ -445,8 +447,7 @@ ROM_START( bwings )
 	ROM_LOAD( "bw_bv-09.1h",  0x08000, 0x04000, CRC(a14c0b57) SHA1(5033354793d77922f5ef7f268cbe212e551efadf) )
 
 	// GPU Banks
-	ROM_REGION( 0x08000, "gpu", 0 )
-	ROM_FILL(0x00000, 0x08000, 0)
+	ROM_REGION( 0x08000, "gpu", ROMREGION_ERASE00 )
 ROM_END
 
 
@@ -476,8 +477,7 @@ ROM_START( bwingso )
 	ROM_LOAD( "bw_bv-09.1h",  0x08000, 0x04000, CRC(a14c0b57) SHA1(5033354793d77922f5ef7f268cbe212e551efadf) )
 
 	// GPU Banks
-	ROM_REGION( 0x08000, "gpu", 0 )
-	ROM_FILL(0x00000, 0x08000, 0)
+	ROM_REGION( 0x08000, "gpu", ROMREGION_ERASE00 )
 ROM_END
 
 
@@ -508,96 +508,96 @@ ROM_START( bwingsa )
 	ROM_LOAD( "bw_bv-09.1h",  0x08000, 0x04000, CRC(a14c0b57) SHA1(5033354793d77922f5ef7f268cbe212e551efadf) )
 
 	// GPU Banks
-	ROM_REGION( 0x08000, "gpu", 0 )
-	ROM_FILL(0x00000, 0x08000, 0)
+	ROM_REGION( 0x08000, "gpu", ROMREGION_ERASE00 )
 ROM_END
 
 ROM_START( zaviga )
 	// Top Board(DE-0169-0)
 	ROM_REGION( 0x10000, "maincpu", 0 ) // main CPU
-	ROM_LOAD( "as04", 0x04000, 0x04000, CRC(b79f5da2) SHA1(b39748666d3f7fb1ac46d282cce09fe9531df6b1) )
-	ROM_LOAD( "as02", 0x08000, 0x04000, CRC(6addd16a) SHA1(940637c49bf9f38c77176ed2ae212048e9e7fd8f) )
-	ROM_LOAD( "as00", 0x0c000, 0x04000, CRC(c6ae4af0) SHA1(6f6f14385b20f9c9c312f816036c608fe8514b00) )
+	ROM_LOAD( "as04.10a", 0x04000, 0x04000, CRC(b79f5da2) SHA1(b39748666d3f7fb1ac46d282cce09fe9531df6b1) )
+	ROM_LOAD( "as02.7a", 0x08000, 0x04000, CRC(6addd16a) SHA1(940637c49bf9f38c77176ed2ae212048e9e7fd8f) )
+	ROM_LOAD( "as00.4a", 0x0c000, 0x04000, CRC(c6ae4af0) SHA1(6f6f14385b20f9c9c312f816036c608fe8514b00) )
 
 	ROM_REGION( 0x10000, "sub", 0 ) // sub CPU
-	ROM_LOAD( "as08", 0x0a000, 0x02000, CRC(b6187b3a) SHA1(d2d7c5b185f59986f45d8ec3ddf9b95364e57d96) )
-	ROM_LOAD( "as07", 0x0c000, 0x02000, CRC(dc1170e3) SHA1(c8e4d1564fd272d726d0e4ffd4f33f67f1b37cd7) )
-	ROM_LOAD( "as06", 0x0e000, 0x02000, CRC(ba888f84) SHA1(f94de8553cd4704d9b3349ded881a7cc62fa9b57) )
+	ROM_LOAD( "as08.10d", 0x0a000, 0x02000, CRC(b6187b3a) SHA1(d2d7c5b185f59986f45d8ec3ddf9b95364e57d96) )
+	ROM_LOAD( "as07.9d", 0x0c000, 0x02000, CRC(dc1170e3) SHA1(c8e4d1564fd272d726d0e4ffd4f33f67f1b37cd7) )
+	ROM_LOAD( "as06.7d", 0x0e000, 0x02000, CRC(ba888f84) SHA1(f94de8553cd4704d9b3349ded881a7cc62fa9b57) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 ) // sound CPU(encrypted)
-	ROM_LOAD( "as05", 0x0e000, 0x02000, CRC(afe9b0ac) SHA1(3c653cd4fff7f4e00971249900b5a810b6e74dfe) )
+	ROM_LOAD( "as05.13a", 0x0e000, 0x02000, CRC(afe9b0ac) SHA1(3c653cd4fff7f4e00971249900b5a810b6e74dfe) )
 
 	// Bottom Board(DE-0170-0)
 	ROM_REGION( 0x01000, "gfx1", 0 ) // chars
-	ROM_LOAD( "as14", 0x00000, 0x01000, CRC(62132c1d) SHA1(6b101e220a440488da17de8446f4e2c8ec7c7de9) )
+	ROM_LOAD( "as14.5c", 0x00000, 0x01000, CRC(62132c1d) SHA1(6b101e220a440488da17de8446f4e2c8ec7c7de9) )
 
 	// Middle Board(DE-0171-0)
 	ROM_REGION( 0x0c000, "gfx2", 0 ) // sprites
-	ROM_LOAD( "as11", 0x00000, 0x04000, CRC(aa84af24) SHA1(af4ff085dc44b3d1493ec1c8b4a8d18dccecc872) )
-	ROM_LOAD( "as12", 0x04000, 0x04000, CRC(84af9041) SHA1(8fbd5995ca8e708cd7fb9cdfcdb174e12084f526) )
-	ROM_LOAD( "as13", 0x08000, 0x04000, CRC(15d0922b) SHA1(b8d715a9e610531472d516c19f6035adbce93c84) )
+	ROM_LOAD( "as11.1l", 0x00000, 0x04000, CRC(aa84af24) SHA1(af4ff085dc44b3d1493ec1c8b4a8d18dccecc872) )
+	ROM_LOAD( "as12.1k", 0x04000, 0x04000, CRC(84af9041) SHA1(8fbd5995ca8e708cd7fb9cdfcdb174e12084f526) )
+	ROM_LOAD( "as13.1h", 0x08000, 0x04000, CRC(15d0922b) SHA1(b8d715a9e610531472d516c19f6035adbce93c84) )
 
 	// GPU Banks
-	ROM_REGION( 0x08000, "gpu", 0 )
-	ROM_FILL(0x00000, 0x08000, 0)
+	ROM_REGION( 0x08000, "gpu", ROMREGION_ERASE00 )
 ROM_END
 
 
 ROM_START( zavigaj )
 	// Top Board(DE-0169-0)
 	ROM_REGION( 0x10000, "maincpu", 0 ) // main CPU
-	ROM_LOAD( "as04", 0x04000, 0x04000, CRC(b79f5da2) SHA1(b39748666d3f7fb1ac46d282cce09fe9531df6b1) )
-	ROM_LOAD( "as02", 0x08000, 0x04000, CRC(6addd16a) SHA1(940637c49bf9f38c77176ed2ae212048e9e7fd8f) )
-	ROM_LOAD( "as00", 0x0c000, 0x04000, CRC(c6ae4af0) SHA1(6f6f14385b20f9c9c312f816036c608fe8514b00) )
+	ROM_LOAD( "as04.10a", 0x04000, 0x04000, CRC(b79f5da2) SHA1(b39748666d3f7fb1ac46d282cce09fe9531df6b1) )
+	ROM_LOAD( "as02.7a",  0x08000, 0x04000, CRC(6addd16a) SHA1(940637c49bf9f38c77176ed2ae212048e9e7fd8f) )
+	ROM_LOAD( "as00.4a",  0x0c000, 0x04000, CRC(c6ae4af0) SHA1(6f6f14385b20f9c9c312f816036c608fe8514b00) )
 
 	ROM_REGION( 0x10000, "sub", 0 ) // sub CPU
-	ROM_LOAD( "as08",     0x0a000, 0x02000, CRC(b6187b3a) SHA1(d2d7c5b185f59986f45d8ec3ddf9b95364e57d96) )
-	ROM_LOAD( "as07",     0x0c000, 0x02000, CRC(dc1170e3) SHA1(c8e4d1564fd272d726d0e4ffd4f33f67f1b37cd7) )
+	ROM_LOAD( "as08.10d", 0x0a000, 0x02000, CRC(b6187b3a) SHA1(d2d7c5b185f59986f45d8ec3ddf9b95364e57d96) )
+	ROM_LOAD( "as07.9d",  0x0c000, 0x02000, CRC(dc1170e3) SHA1(c8e4d1564fd272d726d0e4ffd4f33f67f1b37cd7) )
 	ROM_LOAD( "as06-.7d", 0x0e000, 0x02000, CRC(b02d270c) SHA1(beea3d44d367543b5b5075c5892580e690691e75) )  // different
 
 	ROM_REGION( 0x10000, "audiocpu", 0 ) // sound CPU(encrypted)
-	ROM_LOAD( "as05", 0x0e000, 0x02000, CRC(afe9b0ac) SHA1(3c653cd4fff7f4e00971249900b5a810b6e74dfe) )
+	ROM_LOAD( "as05.13a", 0x0e000, 0x02000, CRC(afe9b0ac) SHA1(3c653cd4fff7f4e00971249900b5a810b6e74dfe) )
 
 	// Bottom Board(DE-0170-0)
 	ROM_REGION( 0x01000, "gfx1", 0 ) // chars
-	ROM_LOAD( "as14", 0x00000, 0x01000, CRC(62132c1d) SHA1(6b101e220a440488da17de8446f4e2c8ec7c7de9) )
+	ROM_LOAD( "as14.5c", 0x00000, 0x01000, CRC(62132c1d) SHA1(6b101e220a440488da17de8446f4e2c8ec7c7de9) )
 
 	// Middle Board(DE-0171-0)
 	ROM_REGION( 0x0c000, "gfx2", 0 ) // sprites
-	ROM_LOAD( "as11", 0x00000, 0x04000, CRC(aa84af24) SHA1(af4ff085dc44b3d1493ec1c8b4a8d18dccecc872) )
-	ROM_LOAD( "as12", 0x04000, 0x04000, CRC(84af9041) SHA1(8fbd5995ca8e708cd7fb9cdfcdb174e12084f526) )
-	ROM_LOAD( "as13", 0x08000, 0x04000, CRC(15d0922b) SHA1(b8d715a9e610531472d516c19f6035adbce93c84) )
+	ROM_LOAD( "as11.1l", 0x00000, 0x04000, CRC(aa84af24) SHA1(af4ff085dc44b3d1493ec1c8b4a8d18dccecc872) )
+	ROM_LOAD( "as12.1k", 0x04000, 0x04000, CRC(84af9041) SHA1(8fbd5995ca8e708cd7fb9cdfcdb174e12084f526) )
+	ROM_LOAD( "as13.1h", 0x08000, 0x04000, CRC(15d0922b) SHA1(b8d715a9e610531472d516c19f6035adbce93c84) )
 
 	// GPU Banks
-	ROM_REGION( 0x08000, "gpu", 0 )
-	ROM_FILL(0x00000, 0x08000, 0)
+	ROM_REGION( 0x08000, "gpu", ROMREGION_ERASE00 )
 ROM_END
 
 //****************************************************************************
 // Initializations
 
-static void fix_bwp3(void)
+static void fix_bwp3( running_machine &machine )
 {
-	UINT8 *rom = bwp3_rombase;
-	int i, j = bwp3_romsize;
-	UINT8 ah, al;
+	bwing_state *state = machine.driver_data<bwing_state>();
+	UINT8 *rom = state->m_bwp3_rombase;
+	int i, j = state->m_bwp3_romsize;
 
 	// swap nibbles
-	for (i=0; i<j; i++) { ah = al = rom[i]; rom[i] = (ah >> 4) | (al << 4); }
+	for (i = 0; i < j; i++)
+		rom[i] = ((rom[i] & 0xf0) >> 4) | ((rom[i] & 0xf) << 4);
 
 	// relocate vectors
-	rom[j-(0x10-0x4)] = rom[j-(0x10-0xb)] = rom[j-(0x10-0x6)];
-	rom[j-(0x10-0x5)] = rom[j-(0x10-0xa)] = rom[j-(0x10-0x7)];
+	rom[j - (0x10 - 0x4)] = rom[j - (0x10 - 0xb)] = rom[j - (0x10 - 0x6)];
+	rom[j - (0x10 - 0x5)] = rom[j - (0x10 - 0xa)] = rom[j - (0x10 - 0x7)];
 }
 
 
 static DRIVER_INIT( bwing )
 {
-	bwp123_membase[0] = memory_region(machine, "maincpu");
-	bwp123_membase[1] = memory_region(machine, "sub");
-	bwp123_membase[2] = memory_region(machine, "audiocpu");
+	bwing_state *state = machine.driver_data<bwing_state>();
 
-	fix_bwp3();
+	state->m_bwp123_membase[0] = machine.region("maincpu")->base();
+	state->m_bwp123_membase[1] = machine.region("sub")->base();
+	state->m_bwp123_membase[2] = machine.region("audiocpu")->base();
+
+	fix_bwp3(machine);
 }
 
 //****************************************************************************

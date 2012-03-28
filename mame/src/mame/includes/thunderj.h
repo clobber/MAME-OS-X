@@ -4,11 +4,19 @@
 
 *************************************************************************/
 
+#include "machine/atarigen.h"
+
+class thunderj_state : public atarigen_state
+{
+public:
+	thunderj_state(const machine_config &mconfig, device_type type, const char *tag)
+		: atarigen_state(mconfig, type, tag) { }
+
+	UINT8			m_alpha_tile_bank;
+};
+
+
 /*----------- defined in video/thunderj.c -----------*/
 
-extern UINT8 thunderj_alpha_tile_bank;
-
 VIDEO_START( thunderj );
-VIDEO_UPDATE( thunderj );
-
-void thunderj_mark_high_palette(bitmap_t *bitmap, UINT16 *pf, UINT16 *mo, int x, int y);
+SCREEN_UPDATE_IND16( thunderj );

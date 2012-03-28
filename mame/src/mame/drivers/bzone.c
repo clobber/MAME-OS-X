@@ -200,24 +200,18 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "video/vector.h"
 #include "video/avgdvg.h"
 #include "machine/mathbox.h"
 #include "machine/atari_vg.h"
 #include "rendlay.h"
-#include "bzone.h"
+#include "includes/bzone.h"
 
 #include "sound/pokey.h"
 
 #include "bzone.lh"
-
-
-static UINT8 analog_data;
-
-UINT8 rb_input_select;
-
 
 
 /*************************************
@@ -228,14 +222,16 @@ UINT8 rb_input_select;
 
 static MACHINE_START( bzone )
 {
-	state_save_register_global(machine, analog_data);
+	bzone_state *state = machine.driver_data<bzone_state>();
+	state_save_register_global(machine, state->m_analog_data);
 }
 
 
 static MACHINE_START( redbaron )
 {
-	state_save_register_global(machine, analog_data);
-	state_save_register_global(machine, rb_input_select);
+	bzone_state *state = machine.driver_data<bzone_state>();
+	state_save_register_global(machine, state->m_analog_data);
+	state_save_register_global(machine, state->m_rb_input_select);
 }
 
 
@@ -248,8 +244,8 @@ static MACHINE_START( redbaron )
 
 static INTERRUPT_GEN( bzone_interrupt )
 {
-	if (input_port_read(device->machine, "IN0") & 0x10)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if (input_port_read(device->machine(), "IN0") & 0x10)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -262,13 +258,13 @@ static INTERRUPT_GEN( bzone_interrupt )
 
 static CUSTOM_INPUT( clock_r )
 {
-	return (cputag_get_total_cycles(field->port->machine, "maincpu") & 0x100) ? 1 : 0;
+	return (field.machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
 }
 
 
 static WRITE8_HANDLER( bzone_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine(), offset,data);
 }
 
 
@@ -281,7 +277,15 @@ static WRITE8_HANDLER( bzone_coin_counter_w )
 
 static READ8_DEVICE_HANDLER( redbaron_joy_r )
 {
-	return input_port_read(device->machine, rb_input_select ? "FAKE1" : "FAKE2");
+	bzone_state *state = device->machine().driver_data<bzone_state>();
+	return input_port_read(device->machine(), state->m_rb_input_select ? "FAKE1" : "FAKE2");
+}
+
+static WRITE8_DEVICE_HANDLER( redbaron_joysound_w )
+{
+	bzone_state *state = device->machine().driver_data<bzone_state>();
+	state->m_rb_input_select = data & 1;
+	redbaron_sounds_w(device, offset, data);
 }
 
 
@@ -292,7 +296,7 @@ static READ8_DEVICE_HANDLER( redbaron_joy_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( bzone_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( bzone_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("IN0")
@@ -308,11 +312,11 @@ static ADDRESS_MAP_START( bzone_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1820, 0x182f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x1840, 0x1840) AM_DEVWRITE("discrete", bzone_sounds_w)
 	AM_RANGE(0x1860, 0x187f) AM_DEVWRITE("mathbox", mathbox_go_w)
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x3000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( redbaron_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( redbaron_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("IN0")
@@ -326,13 +330,13 @@ static ADDRESS_MAP_START( redbaron_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1802, 0x1802) AM_READ_PORT("IN4")
 	AM_RANGE(0x1804, 0x1804) AM_DEVREAD("mathbox", mathbox_lo_r)
 	AM_RANGE(0x1806, 0x1806) AM_DEVREAD("mathbox", mathbox_hi_r)
-	AM_RANGE(0x1808, 0x1808) AM_WRITE(redbaron_sounds_w)	/* and select joystick pot also */
+	AM_RANGE(0x1808, 0x1808) AM_DEVWRITE("custom", redbaron_joysound_w)	/* and select joystick pot also */
 	AM_RANGE(0x180a, 0x180a) AM_WRITENOP				/* sound reset, yet todo */
-	AM_RANGE(0x180c, 0x180c) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x180c, 0x180c) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
 	AM_RANGE(0x1810, 0x181f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
-	AM_RANGE(0x1820, 0x185f) AM_DEVREADWRITE("earom", atari_vg_earom_r, atari_vg_earom_w)
+	AM_RANGE(0x1820, 0x185f) AM_DEVREADWRITE_MODERN("earom", atari_vg_earom_device, read, write)
 	AM_RANGE(0x1860, 0x187f) AM_DEVWRITE("mathbox", mathbox_go_w)
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x3000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -351,7 +355,7 @@ ADDRESS_MAP_END
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )\
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )\
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Diagnostic Step") PORT_CODE(KEYCODE_F1)\
- 	/* bit 6 is the VG HALT bit. We set it to "low" */\
+	/* bit 6 is the VG HALT bit. We set it to "low" */\
 	/* per default (busy vector processor). */\
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)\
 	/* bit 7 is tied to a 3kHz clock */\
@@ -379,7 +383,7 @@ ADDRESS_MAP_END
 	PORT_DIPSETTING(	0x00, DEF_STR( English ))\
 	PORT_DIPSETTING(	0x40, DEF_STR( German ))\
 	PORT_DIPSETTING(	0x80, DEF_STR( French ))\
-  	PORT_DIPSETTING(	0xc0, DEF_STR( Spanish ))
+	PORT_DIPSETTING(	0xc0, DEF_STR( Spanish ))
 
 #define BZONEDSW1\
 	PORT_START("DSW1")\
@@ -401,7 +405,7 @@ ADDRESS_MAP_END
 	PORT_DIPSETTING(	0x20, "3 credits/2 coins" )\
 	PORT_DIPSETTING(	0x40, "5 credits/4 coins" )\
 	PORT_DIPSETTING(	0x60, "6 credits/4 coins" )\
-  	PORT_DIPSETTING(	0x80, "6 credits/5 coins" )
+	PORT_DIPSETTING(	0x80, "6 credits/5 coins" )
 
 #define BZONEADJ \
 	PORT_START("R11") \
@@ -413,9 +417,9 @@ static INPUT_PORTS_START( bzone )
 	BZONEDSW1
 
 	PORT_START("IN3")
-  	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_DOWN ) PORT_2WAY
-  	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_UP ) PORT_2WAY
-  	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICKLEFT_DOWN ) PORT_2WAY
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_DOWN ) PORT_2WAY
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_UP ) PORT_2WAY
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICKLEFT_DOWN ) PORT_2WAY
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICKLEFT_UP ) PORT_2WAY
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_START1 )
@@ -528,12 +532,6 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const pokey_interface bzone_pokey_interface =
-{
-	{ DEVCB_NULL },
-	DEVCB_INPUT_PORT("IN3")
-};
-
 
 static const pokey_interface redbaron_pokey_interface =
 {
@@ -549,70 +547,67 @@ static const pokey_interface redbaron_pokey_interface =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( bzone_base )
+static MACHINE_CONFIG_START( bzone_base, bzone_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, BZONE_MASTER_CLOCK / 8)
-	MDRV_CPU_PROGRAM_MAP(bzone_map)
-	MDRV_CPU_PERIODIC_INT(bzone_interrupt, (double)BZONE_MASTER_CLOCK / 4096 / 12)
+	MCFG_CPU_ADD("maincpu", M6502, BZONE_MASTER_CLOCK / 8)
+	MCFG_CPU_PROGRAM_MAP(bzone_map)
+	MCFG_CPU_PERIODIC_INT(bzone_interrupt, (double)BZONE_MASTER_CLOCK / 4096 / 12)
 
-	MDRV_MACHINE_START(bzone)
+	MCFG_MACHINE_START(bzone)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(40)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(0, 580, 0, 400)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(40)
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(0, 580, 0, 400)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(avg_bzone)
-	MDRV_VIDEO_UPDATE(vector)
+	MCFG_VIDEO_START(avg_bzone)
 
 	/* Drivers */
-	MDRV_MATHBOX_ADD("mathbox")
+	MCFG_MATHBOX_ADD("mathbox")
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bzone )
-
-	MDRV_IMPORT_FROM(bzone_base)
+static MACHINE_CONFIG_DERIVED( bzone, bzone_base )
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(bzone_audio)
+	MCFG_FRAGMENT_ADD(bzone_audio)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
-static MACHINE_DRIVER_START( redbaron )
+static MACHINE_CONFIG_DERIVED( redbaron, bzone_base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(bzone_base)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(redbaron_map)
-	MDRV_CPU_PERIODIC_INT(bzone_interrupt, (double)BZONE_MASTER_CLOCK / 4096 / 12)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(redbaron_map)
+	MCFG_CPU_PERIODIC_INT(bzone_interrupt, (double)BZONE_MASTER_CLOCK / 4096 / 12)
 
-	MDRV_MACHINE_START(redbaron)
+	MCFG_MACHINE_START(redbaron)
 
-	MDRV_ATARIVGEAROM_ADD("earom")
+	MCFG_ATARIVGEAROM_ADD("earom")
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VISIBLE_AREA(0, 520, 0, 400)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VISIBLE_AREA(0, 520, 0, 400)
 
-	MDRV_VIDEO_START(avg_bzone)
+	MCFG_VIDEO_START(avg_bzone)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey", POKEY, 1500000)
-	MDRV_SOUND_CONFIG(redbaron_pokey_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("pokey", POKEY, 1500000)
+	MCFG_SOUND_CONFIG(redbaron_pokey_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("custom", REDBARON, 0)
+	MCFG_SOUND_ADD("custom", REDBARON, 0)
 
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 
@@ -785,28 +780,29 @@ ROM_END
 
 static READ8_HANDLER( analog_data_r )
 {
-	return analog_data;
+	bzone_state *state = space->machine().driver_data<bzone_state>();
+	return state->m_analog_data;
 }
 
 
 static WRITE8_HANDLER( analog_select_w )
 {
+	bzone_state *state = space->machine().driver_data<bzone_state>();
 	static const char *const analog_port[] = { "AN0", "AN1", "AN2" };
 
 	if (offset <= 2)
-		analog_data = input_port_read(space->machine, analog_port[offset]);
+		state->m_analog_data = input_port_read(space->machine(), analog_port[offset]);
 }
 
 
 static DRIVER_INIT( bradley )
 {
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x400, 0x7ff, 0, 0, (read8_space_func)SMH_BANK(1), (write8_space_func)SMH_BANK(1));
-	memory_set_bankptr(machine, 1, auto_alloc_array(machine, UINT8, 0x400));
-
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1808, 0x1808, 0, 0, "1808");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1809, 0x1809, 0, 0, "1809");
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x180a, 0x180a, 0, 0, analog_data_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1848, 0x1850, 0, 0, analog_select_w);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	space->install_ram(0x400, 0x7ff);
+	space->install_read_port(0x1808, 0x1808, "1808");
+	space->install_read_port(0x1809, 0x1809, "1809");
+	space->install_legacy_read_handler(0x180a, 0x180a, FUNC(analog_data_r));
+	space->install_legacy_write_handler(0x1848, 0x1850, FUNC(analog_select_w));
 }
 
 

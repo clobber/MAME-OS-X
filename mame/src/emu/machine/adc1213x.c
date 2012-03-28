@@ -12,7 +12,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "adc1213x.h"
 
 
@@ -54,19 +54,18 @@ struct _adc12138_state
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE adc12138_state *get_safe_token(const device_config *device)
+INLINE adc12138_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert((device->type == ADC12130) || (device->type == ADC12132) || (device->type == ADC12138));
-	return (adc12138_state *)device->token;
+	assert((device->type() == ADC12130) || (device->type() == ADC12132) || (device->type() == ADC12138));
+	return (adc12138_state *)downcast<legacy_device_base *>(device)->token();
 }
 
-INLINE const adc12138_interface *get_interface(const device_config *device)
+INLINE const adc12138_interface *get_interface(device_t *device)
 {
 	assert(device != NULL);
-	assert((device->type == ADC12130) || (device->type == ADC12132) || (device->type == ADC12138));
-	return (const adc12138_interface *) device->static_config;
+	assert((device->type() == ADC12130) || (device->type() == ADC12132) || (device->type() == ADC12138));
+	return (const adc12138_interface *) device->static_config();
 }
 
 
@@ -88,7 +87,7 @@ WRITE8_DEVICE_HANDLER( adc1213x_di_w )
     adc1213x_convert
 -------------------------------------------------*/
 
-static void adc1213x_convert(const device_config *device, int channel, int bits16, int lsbfirst)
+static void adc1213x_convert(device_t *device, int channel, int bits16, int lsbfirst)
 {
 	adc12138_state *adc1213x = get_safe_token(device);
 	int i;
@@ -320,18 +319,18 @@ static DEVICE_START( adc12138 )
 	adc1213x->input_callback_r = intf->input_callback_r;
 
 	/* register for state saving */
-	state_save_register_device_item(device, 0, adc1213x->cycle);
-	state_save_register_device_item(device, 0, adc1213x->data_out);
-	state_save_register_device_item(device, 0, adc1213x->data_in);
-	state_save_register_device_item(device, 0, adc1213x->conv_mode);
-	state_save_register_device_item(device, 0, adc1213x->auto_cal);
-	state_save_register_device_item(device, 0, adc1213x->auto_zero);
-	state_save_register_device_item(device, 0, adc1213x->acq_time);
-	state_save_register_device_item(device, 0, adc1213x->data_out_sign);
-	state_save_register_device_item(device, 0, adc1213x->mode);
-	state_save_register_device_item(device, 0, adc1213x->input_shift_reg);
-	state_save_register_device_item(device, 0, adc1213x->output_shift_reg);
-	state_save_register_device_item(device, 0, adc1213x->end_conv);
+	device->save_item(NAME(adc1213x->cycle));
+	device->save_item(NAME(adc1213x->data_out));
+	device->save_item(NAME(adc1213x->data_in));
+	device->save_item(NAME(adc1213x->conv_mode));
+	device->save_item(NAME(adc1213x->auto_cal));
+	device->save_item(NAME(adc1213x->auto_zero));
+	device->save_item(NAME(adc1213x->acq_time));
+	device->save_item(NAME(adc1213x->data_out_sign));
+	device->save_item(NAME(adc1213x->mode));
+	device->save_item(NAME(adc1213x->input_shift_reg));
+	device->save_item(NAME(adc1213x->output_shift_reg));
+	device->save_item(NAME(adc1213x->end_conv));
 }
 
 
@@ -360,7 +359,6 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
 #define DEVTEMPLATE_NAME		"A/D Converter 12138"
 #define DEVTEMPLATE_FAMILY		"National Semiconductor A/D Converters 1213x"
-#define DEVTEMPLATE_CLASS		DEVICE_CLASS_PERIPHERAL
 #include "devtempl.h"
 
 #define DEVTEMPLATE_DERIVED_ID(p,s)		p##adc12130##s
@@ -372,3 +370,8 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_DERIVED_FEATURES	0
 #define DEVTEMPLATE_DERIVED_NAME		"A/D Converter 12132"
 #include "devtempl.h"
+
+
+DEFINE_LEGACY_DEVICE(ADC12130, adc12130);
+DEFINE_LEGACY_DEVICE(ADC12132, adc12132);
+DEFINE_LEGACY_DEVICE(ADC12138, adc12138);

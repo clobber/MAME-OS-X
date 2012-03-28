@@ -4,8 +4,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "dribling.h"
+#include "emu.h"
+#include "includes/dribling.h"
 
 
 /*************************************
@@ -17,7 +17,7 @@
 
 PALETTE_INIT( dribling )
 {
-	const UINT8 *prom = memory_region(machine, "proms") + 0x400;
+	const UINT8 *prom = machine.region("proms")->base() + 0x400;
 	int i;
 
 	for (i = 0; i < 256; i++)
@@ -30,7 +30,7 @@ PALETTE_INIT( dribling )
 		g *= 0x55;
 		b *= 0xff;
 
-		palette_set_color(machine,i,MAKE_RGB(r,g,b));
+		palette_set_color(machine, i, MAKE_RGB(r,g,b));
 	}
 }
 
@@ -44,8 +44,10 @@ PALETTE_INIT( dribling )
 
 WRITE8_HANDLER( dribling_colorram_w )
 {
+	dribling_state *state = space->machine().driver_data<dribling_state>();
+
 	/* it is very important that we mask off the two bits here */
-	colorram[offset & 0x1f9f] = data;
+	state->m_colorram[offset & 0x1f9f] = data;
 }
 
 
@@ -56,26 +58,27 @@ WRITE8_HANDLER( dribling_colorram_w )
  *
  *************************************/
 
-VIDEO_UPDATE( dribling )
+SCREEN_UPDATE_IND16( dribling )
 {
-	UINT8 *prombase = memory_region(screen->machine, "proms");
-	UINT8 *gfxbase = memory_region(screen->machine, "gfx1");
+	dribling_state *state = screen.machine().driver_data<dribling_state>();
+	UINT8 *prombase = screen.machine().region("proms")->base();
+	UINT8 *gfxbase = screen.machine().region("gfx1")->base();
 	int x, y;
 
 	/* loop over rows */
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
 	{
-		UINT16 *dst = BITMAP_ADDR16(bitmap, y, 0);
+		UINT16 *dst = &bitmap.pix16(y);
 
 		/* loop over columns */
-		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
+		for (x = cliprect.min_x; x <= cliprect.max_x; x++)
 		{
 			int b7 = prombase[(x >> 3) | ((y >> 3) << 5)] & 1;
-			int b6 = dribling_abca;
+			int b6 = state->m_abca;
 			int b5 = (x >> 3) & 1;
 			int b4 = (gfxbase[(x >> 3) | (y << 5)] >> (x & 7)) & 1;
-			int b3 = (videoram[(x >> 3) | (y << 5)] >> (x & 7)) & 1;
-			int b2_0 = colorram[(x >> 3) | ((y >> 2) << 7)] & 7;
+			int b3 = (state->m_videoram[(x >> 3) | (y << 5)] >> (x & 7)) & 1;
+			int b2_0 = state->m_colorram[(x >> 3) | ((y >> 2) << 7)] & 7;
 
 			/* assemble the various bits into a palette PROM index */
 			dst[x] = (b7 << 7) | (b6 << 6) | (b5 << 5) | (b4 << 4) | (b3 << 3) | b2_0;

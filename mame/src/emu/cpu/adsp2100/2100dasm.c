@@ -1,3 +1,4 @@
+#include "emu.h"
 #include "adsp2100.h"
 
 static const char *const flag_change[] = { "", "TOGGLE %s ", "RESET %s ", "SET %s " };
@@ -9,7 +10,7 @@ static const char *const alu_dst[] = { "AR", "AF", "NONE" };
 
 static const char *const mac_xop[] = { "MX0", "MX1", "AR", "MR0", "MR1", "MR2", "SR0", "SR1" };
 static const char *const mac_yop[] = { "MY0", "MY1", "MF", "0" };
-static const char *const mac_dst[] = { "MR", "MF" };
+static const char *const mac_dst[] = { "MR", "MF", "NONE" };
 
 static const char *const shift_xop[] = { "SI", "??", "AR", "MR0", "MR1", "MR2", "SR0", "SR1" };
 

@@ -24,11 +24,19 @@ English versions exist, but are not dumped
 --
 Notes so far:
 
-- Dips, need DIP sheet.
+- Dips are correct for game play. Asura Buster's service mode does show the effects of
+  dipswitches and dipswitch state. For the "Round" listing, the 2 and 3 are shown in
+  reverse of actual game play. Any reference below to "Service Mode" means Asura
+  Buster's service mode.
 
 - Raster Effects are imperfect, bad frames when lots of new sprites.
 
 - The scroll values are generally wrong when flip screen is on and rasters are often incorrect
+
+- PCM channels of music in asurabus is sometimes off-tune, check Chen-Mao's stage for example
+  note: srom.u7 (z80 prg) is a good dump
+
+- YMF278B and YMF262 are hooked up in an awkward way (real chip has YMF262 integrated)
 
 Asura Blade
 Fuuki Co. Ltd., 1998
@@ -148,66 +156,39 @@ FG-3J ROM-J 507KA0301P04       Rev:1.3
 
 ***************************************************************************/
 
-/* Define clocks based on actual OSC on the PCB */
-
-#define CPU_CLOCK		(XTAL_40MHz / 2)		/* clock for 68020 */
-#define SOUND_CPU_CLOCK		(XTAL_12MHz / 2)		/* clock for Z80 sound CPU */
-#define FM_SOUND_CLOCK		(XTAL_33_8688MHz / 2)		/* FM clock */
-
-/* NOTE: YMF278B_STD_CLOCK is defined in /src/emu/sound/ymf278b.h */
-
-
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/ymf278b.h"
+#include "sound/262intf.h"
+#include "includes/fuukifg3.h"
 
-static emu_timer *raster_interrupt_timer;
-static UINT8 fuuki32_shared_ram[16];
-
-// Described in src/video/fuuki32.c
-extern UINT32 *fuuki32_vram_0, *fuuki32_vram_1;
-extern UINT32 *fuuki32_vram_2, *fuuki32_vram_3;
-extern UINT32 *fuuki32_vregs, *fuuki32_priority, *fuuki32_tilebank;
-
-
-/* Functions defined in video: */
-
-WRITE32_HANDLER( fuuki32_vram_0_w );
-WRITE32_HANDLER( fuuki32_vram_1_w );
-WRITE32_HANDLER( fuuki32_vram_2_w );
-WRITE32_HANDLER( fuuki32_vram_3_w );
-
-VIDEO_START( fuuki32 );
-VIDEO_UPDATE( fuuki32 );
-VIDEO_EOF( fuuki32 );
-
-//UINT32 *fuuki32_shared_ram;
 
 static WRITE32_HANDLER( paletteram32_xRRRRRGGGGGBBBBB_dword_w )
 {
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
 	if(ACCESSING_BITS_16_31)
 	{
 		int r,g,b;
-		COMBINE_DATA(&paletteram32[offset]);
+		COMBINE_DATA(&state->m_paletteram[offset]);
 
-		r = (paletteram32[offset] & 0x7c000000) >> (10+16);
-		g = (paletteram32[offset] & 0x03e00000) >> (5+16);
-		b = (paletteram32[offset] & 0x001f0000) >> (0+16);
+		r = (state->m_paletteram[offset] & 0x7c000000) >> (10 + 16);
+		g = (state->m_paletteram[offset] & 0x03e00000) >> (5 + 16);
+		b = (state->m_paletteram[offset] & 0x001f0000) >> (0 + 16);
 
-		palette_set_color_rgb(space->machine,offset*2,pal5bit(r),pal5bit(g),pal5bit(b));
+		palette_set_color_rgb(space->machine(), offset * 2, pal5bit(r), pal5bit(g), pal5bit(b));
 	}
 
 	if(ACCESSING_BITS_0_15)
 	{
 		int r,g,b;
-		COMBINE_DATA(&paletteram32[offset]);
+		COMBINE_DATA(&state->m_paletteram[offset]);
 
-		r = (paletteram32[offset] & 0x00007c00) >> (10);
-		g = (paletteram32[offset] & 0x000003e0) >> (5);
-		b = (paletteram32[offset] & 0x0000001f) >> (0);
+		r = (state->m_paletteram[offset] & 0x00007c00) >> (10);
+		g = (state->m_paletteram[offset] & 0x000003e0) >> (5);
+		b = (state->m_paletteram[offset] & 0x0000001f) >> (0);
 
-		palette_set_color_rgb(space->machine,offset*2+1,pal5bit(r),pal5bit(g),pal5bit(b));
+		palette_set_color_rgb(space->machine(), offset * 2 + 1, pal5bit(r), pal5bit(g), pal5bit(b));
 	}
 }
 
@@ -222,69 +203,63 @@ static WRITE32_HANDLER( paletteram32_xRRRRRGGGGGBBBBB_dword_w )
 /* Sound comms */
 static READ32_HANDLER( snd_020_r )
 {
-	UINT32 retdata = fuuki32_shared_ram[offset*2]<<16 | fuuki32_shared_ram[(offset*2)+1];
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	space->machine().scheduler().synchronize();
+	UINT32 retdata = state->m_shared_ram[offset * 2] << 16 | state->m_shared_ram[(offset * 2) + 1];
 	return retdata;
 }
 
 static WRITE32_HANDLER( snd_020_w )
 {
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	space->machine().scheduler().synchronize();
+
 	if (ACCESSING_BITS_16_23)
-	{
-		fuuki32_shared_ram[offset*2] = data>>16;
-	}
+		state->m_shared_ram[offset * 2] = data >> 16;
 
 	if (ACCESSING_BITS_0_7)
-	{
-		fuuki32_shared_ram[(offset*2)+1] = data & 0xff;
-	}
+		state->m_shared_ram[(offset * 2) + 1] = data & 0xff;
 }
 
 static WRITE32_HANDLER( fuuki32_vregs_w )
 {
-	if (fuuki32_vregs[offset] != data)
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+
+	if (state->m_vregs[offset] != data)
 	{
-		COMBINE_DATA(&fuuki32_vregs[offset]);
-		if (offset == 0x1c/4)
+		COMBINE_DATA(&state->m_vregs[offset]);
+		if (offset == 0x1c / 4)
 		{
-			const rectangle *visarea = video_screen_get_visible_area(space->machine->primary_screen);
-			attotime period = video_screen_get_frame_period(space->machine->primary_screen);
-			timer_adjust_periodic(raster_interrupt_timer, video_screen_get_time_until_pos(space->machine->primary_screen, fuuki32_vregs[0x1c/4]>>16, visarea->max_x + 1), 0, period);
+			const rectangle &visarea = space->machine().primary_screen->visible_area();
+			attotime period = space->machine().primary_screen->frame_period();
+			state->m_raster_interrupt_timer->adjust(space->machine().primary_screen->time_until_pos(state->m_vregs[0x1c / 4] >> 16, visarea.max_x + 1), 0, period);
 		}
 	}
 }
 
-// Lines with empty comment are for debug only
-
-static ADDRESS_MAP_START( fuuki32_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( fuuki32_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM																		// ROM
-
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM																		// Work RAM
 	AM_RANGE(0x410000, 0x41ffff) AM_RAM																		// Work RAM (used by asurabus)
 
-	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(fuuki32_vram_0_w) AM_BASE(&fuuki32_vram_0)					// Tilemap 1
-	AM_RANGE(0x502000, 0x503fff) AM_RAM_WRITE(fuuki32_vram_1_w) AM_BASE(&fuuki32_vram_1)					// Tilemap 2
-	AM_RANGE(0x504000, 0x505fff) AM_RAM_WRITE(fuuki32_vram_2_w) AM_BASE(&fuuki32_vram_2)					// Tilemap bg
-	AM_RANGE(0x506000, 0x507fff) AM_RAM_WRITE(fuuki32_vram_3_w) AM_BASE(&fuuki32_vram_3)					// Tilemap bg2
+	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(fuuki32_vram_0_w) AM_BASE_MEMBER(fuuki32_state, m_vram[0])	// Tilemap 1
+	AM_RANGE(0x502000, 0x503fff) AM_RAM_WRITE(fuuki32_vram_1_w) AM_BASE_MEMBER(fuuki32_state, m_vram[1])	// Tilemap 2
+	AM_RANGE(0x504000, 0x505fff) AM_RAM_WRITE(fuuki32_vram_2_w) AM_BASE_MEMBER(fuuki32_state, m_vram[2])	// Tilemap bg
+	AM_RANGE(0x506000, 0x507fff) AM_RAM_WRITE(fuuki32_vram_3_w) AM_BASE_MEMBER(fuuki32_state, m_vram[3])	// Tilemap bg2
 	AM_RANGE(0x508000, 0x517fff) AM_RAM																		// More tilemap, or linescroll? Seems to be empty all of the time
-
-	AM_RANGE(0x600000, 0x601fff) AM_RAM AM_BASE(&spriteram32) AM_SIZE(&spriteram_size)						// Sprites
-	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE(&paletteram32)	// Palette
+	AM_RANGE(0x600000, 0x601fff) AM_RAM AM_BASE_SIZE_MEMBER(fuuki32_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE_MEMBER(fuuki32_state, m_paletteram) // Palette
 
 	AM_RANGE(0x800000, 0x800003) AM_READ_PORT("800000") AM_WRITENOP											// Coin
 	AM_RANGE(0x810000, 0x810003) AM_READ_PORT("810000") AM_WRITENOP											// Player Inputs
 	AM_RANGE(0x880000, 0x880003) AM_READ_PORT("880000")														// Service + DIPS
 	AM_RANGE(0x890000, 0x890003) AM_READ_PORT("890000")														// More DIPS
 
-	AM_RANGE(0x8c0000, 0x8c001f) AM_RAM_WRITE(fuuki32_vregs_w) AM_BASE(&fuuki32_vregs)						// Video Registers
-
+	AM_RANGE(0x8c0000, 0x8c001f) AM_RAM_WRITE(fuuki32_vregs_w) AM_BASE_MEMBER(fuuki32_state, m_vregs)		// Video Registers
 	AM_RANGE(0x8d0000, 0x8d0003) AM_RAM 																	// Flipscreen Related
-/**/AM_RANGE(0x8e0000, 0x8e0003) AM_RAM AM_BASE(&fuuki32_priority) 											// Controls layer order
-
+	AM_RANGE(0x8e0000, 0x8e0003) AM_RAM AM_BASE_MEMBER(fuuki32_state, m_priority)							// Controls layer order
 	AM_RANGE(0x903fe0, 0x903fff) AM_READWRITE(snd_020_r, snd_020_w) 										// Shared with Z80
-//  AM_RANGE(0x903fe0, 0x903fe3) AM_READ(fuuki32_sound_command_r)                                           // Shared with Z80
-//  AM_RANGE(0x903fe4, 0x903fff) AM_READ(SMH_RAM)                                                           // ??
-
-	AM_RANGE(0xa00000, 0xa00003) AM_WRITE(SMH_RAM) AM_BASE(&fuuki32_tilebank)
+	AM_RANGE(0xa00000, 0xa00003) AM_WRITEONLY AM_BASE_MEMBER(fuuki32_state, m_tilebank)						// Tilebank
 ADDRESS_MAP_END
 
 
@@ -296,34 +271,43 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER ( fuuki32_sound_bw_w )
 {
-	UINT8 *rom = memory_region(space->machine, "soundcpu");
-
-	memory_set_bankptr(space->machine, 1, rom + 0x10000 + (data * 0x8000));
+	memory_set_bank(space->machine(), "bank1", data);
 }
 
 static READ8_HANDLER( snd_z80_r )
 {
-	UINT8 retdata = fuuki32_shared_ram[offset];
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	UINT8 retdata = state->m_shared_ram[offset];
 	return retdata;
 }
 
 static WRITE8_HANDLER( snd_z80_w )
 {
-	fuuki32_shared_ram[offset] = data;
+	fuuki32_state *state = space->machine().driver_data<fuuki32_state>();
+	state->m_shared_ram[offset] = data;
 }
 
-static ADDRESS_MAP_START( fuuki32_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static WRITE8_HANDLER( snd_ymf278b_w )
+{
+	ymf278b_w(space->machine().device("ymf1"), offset, data);
+
+	// also write to ymf262
+	if (offset < 4)
+		ymf262_w(space->machine().device("ymf2"), offset, data);
+}
+
+static ADDRESS_MAP_START( fuuki32_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM								// ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM								// RAM
 	AM_RANGE(0x7ff0, 0x7fff) AM_READWRITE(snd_z80_r, snd_z80_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)						// ROM
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")				// ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fuuki32_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( fuuki32_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(fuuki32_sound_bw_w)
-	AM_RANGE(0x30, 0x30) AM_WRITENOP
-	AM_RANGE(0x40, 0x45) AM_DEVREADWRITE("ymf", ymf278b_r, ymf278b_w)
+	AM_RANGE(0x30, 0x30) AM_WRITENOP // leftover/unused nmi handler related
+	AM_RANGE(0x40, 0x45) AM_DEVREAD("ymf1", ymf278b_r) AM_WRITE(snd_ymf278b_w)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -382,49 +366,56 @@ static INPUT_PORTS_START( asurabld )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW1")
-	PORT_SERVICE( 0x0001, 0x0001 )
-	PORT_DIPNAME( 0x0002, 0x0002, "Blood Colour" ) // Any other censorship? (Tested in 3 locations)
+	PORT_SERVICE_DIPLOC(  0x0001, IP_ACTIVE_LOW, "SW1:1" )
+	PORT_DIPNAME( 0x0002, 0x0002, "Blood Color" )			PORT_DIPLOCATION("SW1:2") // Any other censorship? (Tested in 3 locations)
 	PORT_DIPSETTING(      0x0002, "Red" )
 	PORT_DIPSETTING(      0x0000, "Green" )
-	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) ) // Tested @ 0917AC
-	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) ) // Tested @ 0917AC
-	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0030, 0x0030, "Timer" )
+	PORT_DIPNAME( 0x000c, 0x000c, "Demo Sounds & Music" )	PORT_DIPLOCATION("SW1:3,4") // Tested @ 0917AC
+	PORT_DIPSETTING(      0x000c, "Both On" )
+	PORT_DIPSETTING(      0x0008, "Music Off" )
+	PORT_DIPSETTING(      0x0004, "Both Off" )
+	PORT_DIPSETTING(      0x0000, "Both Off" )				/* Duplicate setting */
+	PORT_DIPNAME( 0x0030, 0x0030, "Timer" )					PORT_DIPLOCATION("SW1:5,6")
 	PORT_DIPSETTING(      0x0000, "Slow" )
 	PORT_DIPSETTING(      0x0030, DEF_STR( Medium ) )
 	PORT_DIPSETTING(      0x0010, "Fast" )
 	PORT_DIPSETTING(      0x0020, "Very Fast" )
-	PORT_DIPNAME( 0x00c0, 0x0000, "Coinage Mode" )
+	PORT_DIPNAME( 0x00c0, 0x0000, "Coinage Mode" )			PORT_DIPLOCATION("SW1:7,8")
 	PORT_DIPSETTING(      0x00c0, "Split" )
 	PORT_DIPSETTING(      0x0000, "Joint" )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPUNUSED_DIPLOC( 0x0100, 0x0100, "SW2:1" )		/* DSW2 bank, not used for either game */
+	PORT_DIPUNUSED_DIPLOC( 0x0200, 0x0200, "SW2:2" )
+	PORT_DIPUNUSED_DIPLOC( 0x0400, 0x0400, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x0800, 0x0800, "SW2:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x1000, 0x1000, "SW2:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x2000, 0x2000, "SW2:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x4000, 0x4000, "SW2:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x8000, 0x8000, "SW2:8" )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW3:1")
 	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x000e, 0x0000, "Computer Level" ) // See @ 0917CC
-	PORT_DIPSETTING(      0x0000, "0" )
-	PORT_DIPSETTING(      0x0008, "1" )
-	PORT_DIPSETTING(      0x0004, "2" )
-	PORT_DIPSETTING(      0x000c, "3" )
-	PORT_DIPSETTING(      0x000e, "4" )
-	PORT_DIPSETTING(      0x0002, "5" )
-	PORT_DIPSETTING(      0x000a, "6" )
-	PORT_DIPSETTING(      0x0006, "7" )
-	PORT_DIPNAME( 0x0030, 0x0010, "Damage" )
-	PORT_DIPSETTING(      0x0020, "Lowest" )
-	PORT_DIPSETTING(      0x0030, DEF_STR( Low ) )
-	PORT_DIPSETTING(      0x0010, DEF_STR( Medium ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( High ) )
-	PORT_DIPNAME( 0x00c0, 0x0040, "Max Rounds" )
-	PORT_DIPSETTING(      0x0000, "1" )
-	PORT_DIPSETTING(      0x0040, "3" )
-	PORT_DIPSETTING(      0x0080, "5" )
-	PORT_DIPNAME( 0xf000, 0xf000, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x000e, 0x000e, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW3:2,3,4") // AKA Computer Level, see @ 0917CC
+	PORT_DIPSETTING(      0x0000, DEF_STR( Easiest ) )		// Level 1
+	PORT_DIPSETTING(      0x0008, DEF_STR( Very_Easy ) )	// Level 2
+	PORT_DIPSETTING(      0x0004, DEF_STR( Easier ) )		// Level 3
+	PORT_DIPSETTING(      0x000c, DEF_STR( Easy ) )			// Level 4
+	PORT_DIPSETTING(      0x000e, DEF_STR( Normal ) )		// Level 5
+	PORT_DIPSETTING(      0x0002, DEF_STR( Hard ) )			// Level 6
+	PORT_DIPSETTING(      0x000a, DEF_STR( Very_Hard ) )	// Level 7
+	PORT_DIPSETTING(      0x0006, DEF_STR( Hardest ) )		// Level 8
+	PORT_DIPNAME( 0x0030, 0x0030, "Damage" )				PORT_DIPLOCATION("SW3:5,6")
+	PORT_DIPSETTING(      0x0020, "75%" )
+	PORT_DIPSETTING(      0x0030, "100%" )
+	PORT_DIPSETTING(      0x0010, "125%" )
+	PORT_DIPSETTING(      0x0000, "150%" )
+	PORT_DIPNAME( 0x00c0, 0x00c0, "Max Rounds" )			PORT_DIPLOCATION("SW3:7,8") /* Service Mode shows rounds needed to win the match */
+	PORT_DIPSETTING(      0x0000, "1" )						/* Service Mode Shows 1 */
+	PORT_DIPSETTING(      0x00c0, "3" )						/* Service Mode Shows 3, Service Mode has 2 & 3 reversed compared to game play */
+	PORT_DIPSETTING(      0x0080, "5" )						/* Service Mode Shows 2, Service Mode has 2 & 3 reversed compared to game play */
+//  PORT_DIPSETTING(      0x0040, "Error!!" )               /* Service Mode Shows "Error" */
+	PORT_DIPNAME( 0xf000, 0xf000, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW4:1,2,3,4") /* Service Mode Shows Player 2 */
 	PORT_DIPSETTING(      0x8000, DEF_STR( 8C_1C ) )
 	PORT_DIPSETTING(      0x9000, DEF_STR( 7C_1C ) )
 	PORT_DIPSETTING(      0xa000, DEF_STR( 6C_1C ) )
@@ -433,8 +424,16 @@ static INPUT_PORTS_START( asurabld )
 	PORT_DIPSETTING(      0xd000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0xe000, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0xf000, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) ) // Set both for Free Play
-	PORT_DIPNAME( 0x0f00, 0x0f00, DEF_STR( Coin_B ) )
+	PORT_DIPSETTING(      0x6000, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(      0x5000, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(      0x4000, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(      0x3000, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(      0x2000, "2C Start / 1C Continue" )
+//  PORT_DIPSETTING(      0x7000, "Error!!" )               // Causes graphics issues - Service Mode shows "Error"
+//  PORT_DIPSETTING(      0x1000, DEF_STR( 2C_1C ) )        // Duplicate 2C_1C
+	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )		PORT_CONDITION("DSW2",0x0f00,PORTCOND_NOTEQUALS,0x0000)
+	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )		PORT_CONDITION("DSW2",0x0f00,PORTCOND_EQUALS,0x0000)	// Set both for Free Play
+	PORT_DIPNAME( 0x0f00, 0x0f00, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW4:5,6,7,8") /* Service Mode Shows Player 1 */
 	PORT_DIPSETTING(      0x0800, DEF_STR( 8C_1C ) )
 	PORT_DIPSETTING(      0x0900, DEF_STR( 7C_1C ) )
 	PORT_DIPSETTING(      0x0a00, DEF_STR( 6C_1C ) )
@@ -443,7 +442,26 @@ static INPUT_PORTS_START( asurabld )
 	PORT_DIPSETTING(      0x0d00, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0e00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0f00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) ) // Set both for Free Play
+	PORT_DIPSETTING(      0x0600, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(      0x0500, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(      0x0400, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(      0x0300, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(      0x0200, "2C Start / 1C Continue" )
+//  PORT_DIPSETTING(      0x0700, "Error!!" )               // Causes graphics issues - Service Mode shows "Error"
+//  PORT_DIPSETTING(      0x0100, DEF_STR( 2C_1C ) )        // Duplicate 2C_1C
+	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )		PORT_CONDITION("DSW2",0xf000,PORTCOND_NOTEQUALS,0x0000)
+	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )		PORT_CONDITION("DSW2",0xf000,PORTCOND_EQUALS,0x0000)	// Set both for Free Play
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( asurabus )
+	PORT_INCLUDE(asurabld)
+
+	PORT_MODIFY("DSW1")
+	PORT_DIPNAME( 0x000c, 0x000c, "Demo Sounds & Music" )	PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPSETTING(      0x000c, "Both On" )
+	PORT_DIPSETTING(      0x0008, "Sounds Off" )
+	PORT_DIPSETTING(      0x0004, "Music Off" )
+	PORT_DIPSETTING(      0x0000, "Both Off" )
 INPUT_PORTS_END
 
 
@@ -512,45 +530,61 @@ GFXDECODE_END
 
 static TIMER_CALLBACK( level_1_interrupt_callback )
 {
-	cputag_set_input_line(machine, "maincpu", 1, HOLD_LINE);
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 248, 0), NULL, 0, level_1_interrupt_callback);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	device_set_input_line(state->m_maincpu, 1, HOLD_LINE);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(248), FUNC(level_1_interrupt_callback));
 }
 
 
 static TIMER_CALLBACK( vblank_interrupt_callback )
 {
-	cputag_set_input_line(machine, "maincpu", 3, HOLD_LINE);	// VBlank IRQ
-	timer_set(machine, video_screen_get_time_until_vblank_start(machine->primary_screen), NULL, 0, vblank_interrupt_callback);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	device_set_input_line(state->m_maincpu, 3, HOLD_LINE);	// VBlank IRQ
+	machine.scheduler().timer_set(machine.primary_screen->time_until_vblank_start(), FUNC(vblank_interrupt_callback));
 }
 
 
 static TIMER_CALLBACK( raster_interrupt_callback )
 {
-	cputag_set_input_line(machine, "maincpu", 5, HOLD_LINE);	// Raster Line IRQ
-	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
-	timer_adjust_oneshot(raster_interrupt_timer, video_screen_get_frame_period(machine->primary_screen), 0);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	device_set_input_line(state->m_maincpu, 5, HOLD_LINE);	// Raster Line IRQ
+	machine.primary_screen->update_partial(machine.primary_screen->vpos());
+	state->m_raster_interrupt_timer->adjust(machine.primary_screen->frame_period());
 }
 
 
 static MACHINE_START( fuuki32 )
 {
-	raster_interrupt_timer = timer_alloc(machine, raster_interrupt_callback, NULL);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	UINT8 *ROM = machine.region("soundcpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 0x10, &ROM[0x10000], 0x8000);
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("soundcpu");
+
+	state->m_raster_interrupt_timer = machine.scheduler().timer_alloc(FUNC(raster_interrupt_callback));
+
+	state->save_item(NAME(state->m_spr_buffered_tilebank));
+	state->save_item(NAME(state->m_shared_ram));
 }
 
 
 static MACHINE_RESET( fuuki32 )
 {
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	fuuki32_state *state = machine.driver_data<fuuki32_state>();
+	const rectangle &visarea = machine.primary_screen->visible_area();
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 248, 0), NULL, 0, level_1_interrupt_callback);
-	timer_set(machine, video_screen_get_time_until_vblank_start(machine->primary_screen), NULL, 0, vblank_interrupt_callback);
-	timer_adjust_oneshot(raster_interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, visarea->max_x + 1), 0);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(248), FUNC(level_1_interrupt_callback));
+	machine.scheduler().timer_set(machine.primary_screen->time_until_vblank_start(), FUNC(vblank_interrupt_callback));
+	state->m_raster_interrupt_timer->adjust(machine.primary_screen->time_until_pos(0, visarea.max_x + 1));
 }
 
 
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	fuuki32_state *state = device->machine().driver_data<fuuki32_state>();
+	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ymf278b_interface fuuki32_ymf278b_interface =
@@ -558,43 +592,55 @@ static const ymf278b_interface fuuki32_ymf278b_interface =
 	irqhandler		/* irq */
 };
 
-static MACHINE_DRIVER_START( fuuki32 )
+static const ymf262_interface fuuki32_ymf262_interface =
+{
+	NULL			/* irq, already hooked up via ymf278b */
+};
+
+static MACHINE_CONFIG_START( fuuki32, fuuki32_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68EC020, CPU_CLOCK) /* 20MHz verified */
-	MDRV_CPU_PROGRAM_MAP(fuuki32_map)
+	MCFG_CPU_ADD("maincpu", M68EC020, CPU_CLOCK) /* 20MHz verified */
+	MCFG_CPU_PROGRAM_MAP(fuuki32_map)
 
-	MDRV_CPU_ADD("soundcpu", Z80, SOUND_CPU_CLOCK) /* 6MHz verified */
-	MDRV_CPU_PROGRAM_MAP(fuuki32_sound_map)
-	MDRV_CPU_IO_MAP(fuuki32_sound_io_map)
+	MCFG_CPU_ADD("soundcpu", Z80, SOUND_CPU_CLOCK) /* 6MHz verified */
+	MCFG_CPU_PROGRAM_MAP(fuuki32_sound_map)
+	MCFG_CPU_IO_MAP(fuuki32_sound_io_map)
 
-	MDRV_MACHINE_START(fuuki32)
-	MDRV_MACHINE_RESET(fuuki32)
+	MCFG_MACHINE_START(fuuki32)
+	MCFG_MACHINE_RESET(fuuki32)
 
 	/* video hardware */
-	//MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM) // Buffered by 2 frames
+	//MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM) // Buffered by 2 frames
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(fuuki32)
+	MCFG_SCREEN_VBLANK_STATIC(fuuki32)
 
-	MDRV_GFXDECODE(fuuki32)
-	MDRV_PALETTE_LENGTH(0x4000/2)
+	MCFG_GFXDECODE(fuuki32)
+	MCFG_PALETTE_LENGTH(0x4000/2)
 
-	MDRV_VIDEO_START(fuuki32)
-	MDRV_VIDEO_UPDATE(fuuki32)
-	MDRV_VIDEO_EOF(fuuki32)
+	MCFG_VIDEO_START(fuuki32)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ymf", YMF278B, YMF278B_STD_CLOCK) /* YMF278B_STD_CLOCK = OSC 33.8688MHz */
-	MDRV_SOUND_CONFIG(fuuki32_ymf278b_interface)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymf1", YMF278B, YMF278B_STD_CLOCK) // 33.8688MHz
+	MCFG_SOUND_CONFIG(fuuki32_ymf278b_interface)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
+
+	MCFG_SOUND_ADD("ymf2", YMF262, YMF278B_STD_CLOCK / (19/8.0))
+	MCFG_SOUND_CONFIG(fuuki32_ymf262_interface)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.40)
+	MCFG_SOUND_ROUTE(2, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(3, "rspeaker", 0.40)
+
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -643,7 +689,7 @@ ROM_START( asurabld )
 	ROM_REGION( 0x200000, "gfx4", 0 ) // background tiles
 	ROM_LOAD( "map.u5", 0x00000, 0x200000, CRC(e681155e) SHA1(458845b9c86df72685d92d0d4052aacc2fa7d1bd) )
 
-	ROM_REGION( 0x400000, "ymf", 0 ) // OPL4 samples
+	ROM_REGION( 0x400000, "ymf1", 0 ) // OPL4 samples
 	ROM_LOAD( "pcm.u6", 0x00000, 0x400000, CRC(ac72225a) SHA1(8d16399ed34ac5bd69dbf43b2de2b0db9ac1c610) )
 ROM_END
 
@@ -687,7 +733,7 @@ ROM_START( asurabus )
 	ROM_REGION( 0x200000, "gfx4", 0 ) // background tiles
 	ROM_LOAD( "map.u5", 0x00000, 0x200000, CRC(bd179dc5) SHA1(ce3fcac573b14fd5365eb5dcec3257e439d2c129) )
 
-	ROM_REGION( 0x400000, "ymf", 0 ) // OPL4 samples
+	ROM_REGION( 0x400000, "ymf1", 0 ) // OPL4 samples
 	ROM_LOAD( "opm.u6", 0x00000, 0x400000, CRC(31b05be4) SHA1(d0f4f387f84a74591224b0f42b7f5c538a3dc498) )
 ROM_END
 
@@ -701,5 +747,5 @@ ROM_END
 
 ***************************************************************************/
 
-GAME( 1998, asurabld,	0, fuuki32, asurabld, 0, ROT0, "Fuuki", "Asura Blade - Sword of Dynasty (Japan)", GAME_IMPERFECT_GRAPHICS )
-GAME( 2000, asurabus,	0, fuuki32, asurabld, 0, ROT0, "Fuuki", "Asura Buster - Eternal Warriors (Japan)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND ) // sounds loop forever?
+GAME( 1998, asurabld,	0, fuuki32, asurabld, 0, ROT0, "Fuuki", "Asura Blade - Sword of Dynasty (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND)
+GAME( 2000, asurabus,	0, fuuki32, asurabus, 0, ROT0, "Fuuki", "Asura Buster - Eternal Warriors (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND)

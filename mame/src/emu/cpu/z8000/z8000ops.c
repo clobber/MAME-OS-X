@@ -1530,7 +1530,7 @@ static void Z0D_ddN0_1001_imm16(z8000_state *cpustate)
 static void Z0E_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: ext0e  $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: ext0e  $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -1544,7 +1544,7 @@ static void Z0E_imm8(z8000_state *cpustate)
 static void Z0F_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: ext0f  $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: ext0f  $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -1863,6 +1863,17 @@ static void Z20_ssN0_dddd(z8000_state *cpustate)
 	GET_DST(OP0,NIB3);
 	GET_SRC(OP0,NIB2);
 	cpustate->RB(dst) = RDMEM_B(cpustate,  cpustate->RW(src));
+}
+
+static void Z20_ssN0_dddd_seg(z8000_state *cpustate)
+{
+	UINT32 addr;
+	GET_DST(OP0,NIB3);
+	GET_SRC(OP0,NIB2);
+	addr = (cpustate->RW(src) & 0x0007) << 16;
+	addr|= cpustate->RW(src+1) & 0xffff;
+	cpustate->RB(dst) = RDMEM_B(cpustate,  addr);
+	//cycles?
 }
 
 /******************************************
@@ -2272,7 +2283,7 @@ static void Z36_0000_0000(z8000_state *cpustate)
 static void Z36_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvd36 $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvd36 $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -2310,7 +2321,7 @@ static void Z37_ddN0_ssss_imm16(z8000_state *cpustate)
 static void Z38_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvd38 $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvd38 $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -2722,6 +2733,14 @@ static void Z3E_dddd_ssss(z8000_state *cpustate)
 	WRPORT_B(cpustate,  0, RDMEM_W(cpustate,  cpustate->RW(dst)), cpustate->RB(src));
 }
 
+/* FIXME: aforementioned opcode looks bugged. */
+static void Z3E_dddd_ssss_seg(z8000_state *cpustate)
+{
+	GET_DST(OP0,NIB2);
+	GET_SRC(OP0,NIB3);
+	WRPORT_B(cpustate,  0, cpustate->RW(dst), cpustate->RB(src));
+}
+
 /******************************************
  out     @rd,rs
  flags:  ---V--
@@ -3094,6 +3113,29 @@ static void Z4C_0000_1000_addr(z8000_state *cpustate)
 	WRMEM_B(cpustate,  addr, 0);
 }
 
+static void Z4C_0000_1000_addr_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		WRMEM_B(cpustate,  offset, 0);
+		cycles(cpustate, 14);
+	}
+	else
+	{
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		WRMEM_B(cpustate,  offset, 0);
+		cycles(cpustate, 12);
+	}
+}
+
 /******************************************
  comb    addr(rd)
  flags:  -ZSP--
@@ -3233,6 +3275,32 @@ static void Z4D_0000_0101_addr_imm16(z8000_state *cpustate)
 	WRMEM_W(cpustate,  addr, imm16);
 }
 
+static void Z4D_0000_0101_addr_imm16_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+		UINT16 imm16 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		WRMEM_W(cpustate,  offset, imm16);
+		cycles(cpustate, 17);
+	}
+	else
+	{
+		UINT16 imm16 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		WRMEM_W(cpustate,  offset, imm16);
+		cycles(cpustate, 15);
+	}
+}
+
 /******************************************
  tset    addr
  flags:  --S---
@@ -3252,6 +3320,29 @@ static void Z4D_0000_1000_addr(z8000_state *cpustate)
 {
 	GET_ADDR(OP1);
 	WRMEM_W(cpustate,  addr, 0);
+}
+
+static void Z4D_0000_1000_addr_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		WRMEM_W(cpustate,  offset, 0);
+		cycles(cpustate, 15);
+	}
+	else
+	{
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		WRMEM_W(cpustate,  offset, 0);
+		cycles(cpustate, 12);
+	}
 }
 
 /******************************************
@@ -4315,6 +4406,34 @@ static void Z76_0000_dddd_addr(z8000_state *cpustate)
 	cpustate->RW(dst) = addr;
 }
 
+static void Z76_0000_dddd_addr_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1;
+
+	GET_DST(OP0,NIB3);
+	operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		cpustate->RW(dst) = (offset & 0x70000) >> 16;
+		cpustate->RW(dst+1) = offset & 0xffff;
+		cycles(cpustate, 15);
+	}
+	else
+	{
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		cpustate->RW(dst) = (offset & 0x70000) >> 16;
+		cpustate->RW(dst+1) = offset & 0x00ff;
+		cycles(cpustate, 13);
+	}
+}
+
 /******************************************
  lda     prd,addr(rs)
  flags:  ------
@@ -4347,7 +4466,7 @@ static void Z77_ddN0_ssss_0000_xxxx_0000_0000(z8000_state *cpustate)
 static void Z78_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvd78 $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvd78 $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -4404,7 +4523,7 @@ static void Z7B_0000_0000(z8000_state *cpustate)
 	cpustate->pc	= POPW(cpustate, SP);	/* get cpustate->pc   */
     cpustate->irq_srv &= ~tag;    /* remove IRQ serviced flag */
 	CHANGE_FCW(cpustate, fcw);		 /* check for user/system mode change */
-	LOG(("Z8K '%s' IRET tag $%04x, fcw $%04x, pc $%04x\n", cpustate->device->tag, tag, fcw, cpustate->pc));
+	LOG(("Z8K '%s' IRET tag $%04x, fcw $%04x, pc $%04x\n", cpustate->device->tag(), tag, fcw, cpustate->pc));
 }
 
 /******************************************
@@ -4489,7 +4608,7 @@ static void Z7D_dddd_0ccc(z8000_state *cpustate)
 			cpustate->RW(dst) = cpustate->nsp;
 			break;
 		default:
-			LOG(("Z8K '%s' LDCTL R%d,%d\n", cpustate->device->tag, dst, imm3));
+			LOG(("Z8K '%s' LDCTL R%d,%d\n", cpustate->device->tag(), dst, imm3));
     }
 }
 
@@ -4519,7 +4638,7 @@ static void Z7D_ssss_1ccc(z8000_state *cpustate)
 			cpustate->nsp = cpustate->RW(src);
 			break;
 		default:
-			LOG(("Z8K '%s' LDCTL %d,R%d\n", cpustate->device->tag, imm3, src));
+			LOG(("Z8K '%s' LDCTL %d,R%d\n", cpustate->device->tag(), imm3, src));
     }
 }
 
@@ -4530,7 +4649,7 @@ static void Z7D_ssss_1ccc(z8000_state *cpustate)
 static void Z7E_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvd7e $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvd7e $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -4826,7 +4945,7 @@ static void Z8D_imm4_0101(z8000_state *cpustate)
 static void Z8E_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: ext8e  $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: ext8e  $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -4840,7 +4959,7 @@ static void Z8E_imm8(z8000_state *cpustate)
 static void Z8F_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: ext8f  $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: ext8f  $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -4998,7 +5117,7 @@ static void Z9C_dddd_1000(z8000_state *cpustate)
 static void Z9D_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvd9d $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvd9d $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -5039,7 +5158,7 @@ static void Z9E_0000_cccc(z8000_state *cpustate)
 static void Z9F_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvd9f $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvd9f $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -5740,7 +5859,7 @@ static void ZB8_ddN0_1100_0000_rrrr_ssN0_0000(z8000_state *cpustate)
 static void ZB9_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvdb9 $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvdb9 $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;
@@ -6398,7 +6517,7 @@ static void ZBE_aaaa_bbbb(z8000_state *cpustate)
 static void ZBF_imm8(z8000_state *cpustate)
 {
 	GET_IMM8(0);
-	LOG(("Z8K '%s' %04x: rsvdbf $%02x\n", cpustate->device->tag, cpustate->pc, imm8));
+	LOG(("Z8K '%s' %04x: rsvdbf $%02x\n", cpustate->device->tag(), cpustate->pc, imm8));
     if (cpustate->fcw & F_EPU) {
 		/* Z8001 EPU code goes here */
 		(void)imm8;

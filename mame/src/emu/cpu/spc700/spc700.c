@@ -61,6 +61,7 @@ Address  Function Register  R/W  When Reset          Remarks
 /* ======================================================================== */
 
 #include <limits.h>
+#include "emu.h"
 #include "debugger.h"
 #include "spc700.h"
 
@@ -85,9 +86,9 @@ typedef struct
 	uint line_nmi;	/* Status of the NMI line */
 	uint line_rst;	/* Status of the RESET line */
 	uint ir;		/* Instruction Register */
-	cpu_irq_callback int_ack;
-	const device_config *device;
-	const address_space *program;
+	device_irq_callback int_ack;
+	legacy_cpu_device *device;
+	address_space *program;
 	uint stopped;	/* stopped status */
 	int ICount;
 	uint source;
@@ -97,13 +98,11 @@ typedef struct
 	int spc_int32;
 } spc700i_cpu;
 
-INLINE spc700i_cpu *get_safe_token(const device_config *device)
+INLINE spc700i_cpu *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_SPC700);
-	return (spc700i_cpu *)device->token;
+	assert(device->type() == SPC700);
+	return (spc700i_cpu *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /* ======================================================================== */
@@ -152,7 +151,7 @@ INLINE int MAKE_INT_8(int A) {return (A & 0x80) ? A | ~0xff : A & 0xff;}
 #define FLAGPOS_P		BIT_5		/* Direct Page Selector */
 #define FLAGPOS_B		BIT_4		/* Break                */
 #define FLAGPOS_H		BIT_3		/* Half-carry           */
-#define FLAGPOS_I 		BIT_2		/* Interrupt            */
+#define FLAGPOS_I		BIT_2		/* Interrupt            */
 #define FLAGPOS_Z		BIT_1		/* Zero                 */
 #define FLAGPOS_C		BIT_0		/* Carry                */
 
@@ -224,8 +223,8 @@ INLINE int MAKE_INT_8(int A) {return (A & 0x80) ? A | ~0xff : A & 0xff;}
 /* Codition code tests */
 #define COND_CC()	(!(FLAG_C&0x100))	/* Carry Clear */
 #define COND_CS()	(FLAG_C&0x100)		/* Carry Set */
-#define COND_EQ()	(!FLAG_Z)      		/* Equal */
-#define COND_NE()	(FLAG_Z)       		/* Not Equal */
+#define COND_EQ()	(!FLAG_Z)   		/* Equal */
+#define COND_NE()	(FLAG_Z)    		/* Not Equal */
 #define COND_MI()	(FLAG_N&0x80)		/* Minus */
 #define COND_PL()	(!(FLAG_N&0x80))	/* Plus */
 #define COND_VC()	(!(FLAG_V&0x80))	/* Overflow Clear */
@@ -248,15 +247,15 @@ INLINE int MAKE_INT_8(int A) {return (A & 0x80) ? A | ~0xff : A & 0xff;}
 /* ================================= MAME ================================= */
 /* ======================================================================== */
 
-#define spc700_read_8(addr) memory_read_byte_8le(cpustate->program,addr)
-#define spc700_write_8(addr,data) memory_write_byte_8le(cpustate->program,addr,data)
+#define spc700_read_8(addr) cpustate->program->read_byte(addr)
+#define spc700_write_8(addr,data) cpustate->program->write_byte(addr,data)
 
 #define spc700_read_8_direct(A)     spc700_read_8(A)
 #define spc700_write_8_direct(A, V) spc700_write_8(A, V)
 //#define spc700_read_instruction(A)    memory_decrypted_read_byte(cpustate->program,A)
 //#define spc700_read_8_immediate(A)    memory_raw_read_byte(cpustate->program,A)
-#define spc700_read_instruction(A)    memory_read_byte_8le(cpustate->program,A)
-#define spc700_read_8_immediate(A)    memory_read_byte_8le(cpustate->program,A)
+#define spc700_read_instruction(A)    cpustate->program->read_byte(A)
+#define spc700_read_8_immediate(A)    cpustate->program->read_byte(A)
 #define spc700_jumping(A)
 #define spc700_branching(A)
 
@@ -567,7 +566,7 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 	TMP1 = ((A) & 0x0f) + (CFLAG_AS_1());			\
 	FLAG_C  = (cpustate->spc_int16 > 0xff) ? CFLAG_SET : 0;		\
 	FLAG_V =  (~((A) ^ (B))) & (((A) ^ cpustate->spc_int16) & 0x80); \
-	FLAG_H = (((cpustate->spc_int16 & 0x0f) - TMP1) & 0x10) >> 1; 	\
+	FLAG_H = (((cpustate->spc_int16 & 0x0f) - TMP1) & 0x10) >> 1;	\
 	FLAG_NZ = (UINT8)cpustate->spc_int16
 
 
@@ -778,7 +777,7 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 			if (((SRC & 0x0f) > 9) || (FLAG_H & HFLAG_SET))	\
 			{				\
 				REG_A += 6;		\
-				if (REG_A < 6) 		\
+				if (REG_A < 6)		\
 				{			\
 					FLAG_C = CFLAG_SET;	\
 				}			\
@@ -798,7 +797,7 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 			{				\
 				REG_A -= 6;		\
 			}				\
-			if (!(FLAG_C & CFLAG_SET) || (SRC > 0x99)) 	\
+			if (!(FLAG_C & CFLAG_SET) || (SRC > 0x99))	\
 			{				\
 				REG_A -= 0x60;		\
 				FLAG_C = 0;		\
@@ -848,8 +847,8 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 			CLK(BCLK);														\
 			DST     = EA_DP(cpustate);												\
 			FLAG_NZ = MAKE_UINT_16(read_16_DP(DST) - 1);					\
-			write_16_DP(DST, FLAG_NZ);										\
-			FLAG_NZ = NZFLAG_16(FLAG_NZ)
+			write_16_DP(DST, FLAG_Z);										\
+			FLAG_NZ = NZFLAG_16(FLAG_Z)
 
 /* Disable interrupts */
 #define OP_DI(BCLK)															\
@@ -918,8 +917,8 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 			CLK(BCLK);														\
 			DST     = EA_DP(cpustate);												\
 			FLAG_NZ = MAKE_UINT_16(read_16_DP(DST) + 1);					\
-			write_16_DP(DST, FLAG_NZ);										\
-			FLAG_NZ = NZFLAG_16(FLAG_NZ)
+			write_16_DP(DST, FLAG_Z);										\
+			FLAG_NZ = NZFLAG_16(FLAG_Z)
 
 /* Jump */
 /* If we're in a busy loop, eat all clock cycles */
@@ -981,8 +980,8 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 #define OP_MOVWMR(BCLK)														\
 			CLK(BCLK);														\
 			FLAG_NZ = OPER_16_DP(cpustate);											\
-			SET_REG_YA(cpustate, FLAG_NZ);											\
-			FLAG_NZ = NZFLAG_16(FLAG_NZ)
+			SET_REG_YA(cpustate, FLAG_Z);											\
+			FLAG_NZ = NZFLAG_16(FLAG_Z)
 
 /* Move from Stack pointer to X */
 #define OP_MOVSX(BCLK)														\
@@ -1246,13 +1245,48 @@ INLINE void SET_FLAG_I(spc700i_cpu *cpustate, uint value)
 /* ================================= API ================================== */
 /* ======================================================================== */
 
+static void state_register( legacy_cpu_device *device )
+{
+	spc700i_cpu *cpustate = get_safe_token(device);
+
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->s));
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->ppc));
+	device->save_item(NAME(cpustate->flag_n));
+	device->save_item(NAME(cpustate->flag_z));
+	device->save_item(NAME(cpustate->flag_v));
+	device->save_item(NAME(cpustate->flag_p));
+	device->save_item(NAME(cpustate->flag_b));
+	device->save_item(NAME(cpustate->flag_h));
+	device->save_item(NAME(cpustate->flag_i));
+	device->save_item(NAME(cpustate->flag_c));
+	device->save_item(NAME(cpustate->line_irq));
+	device->save_item(NAME(cpustate->line_nmi));
+	device->save_item(NAME(cpustate->line_rst));
+	device->save_item(NAME(cpustate->ir));
+	device->save_item(NAME(cpustate->stopped));
+	device->save_item(NAME(cpustate->ICount));
+	device->save_item(NAME(cpustate->source));
+	device->save_item(NAME(cpustate->destination));
+	device->save_item(NAME(cpustate->temp1));
+	device->save_item(NAME(cpustate->temp2));
+	device->save_item(NAME(cpustate->temp3));
+	device->save_item(NAME(cpustate->spc_int16));
+	device->save_item(NAME(cpustate->spc_int32));
+}
+
 static CPU_INIT( spc700 )
 {
 	spc700i_cpu *cpustate = get_safe_token(device);
 
+	state_register(device);
+
 	INT_ACK = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
 }
 
 
@@ -1318,7 +1352,11 @@ static CPU_EXECUTE( spc700 )
 {
 	spc700i_cpu *cpustate = get_safe_token(device);
 
-	CLOCKS = CPU_STOPPED ? 0 : cycles;
+	if (CPU_STOPPED)
+	{
+		CLOCKS = 0;
+		return;
+	}
 	while(CLOCKS > 0)
 	{
 		REG_PPC = REG_PC;
@@ -1585,7 +1623,6 @@ static CPU_EXECUTE( spc700 )
 			case 0xff: OP_STOP  ( 3               ); break; /* STOP          */
 		}
 	}
-	return cycles - CLOCKS;
 }
 
 
@@ -1622,7 +1659,7 @@ static CPU_SET_INFO( spc700 )
 
 CPU_GET_INFO( spc700 )
 {
-	spc700i_cpu *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	spc700i_cpu *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	uint p = 0;
 
 	if (cpustate != NULL)
@@ -1651,15 +1688,15 @@ CPU_GET_INFO( spc700 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 8;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;				break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;				break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;				break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;				break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;				break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;				break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = (LINE_IRQ == IRQ_SET) ? ASSERT_LINE : CLEAR_LINE; break;
 
@@ -1668,9 +1705,9 @@ CPU_GET_INFO( spc700 )
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + SPC700_PC:				info->i = REG_PC;			break;
 		case CPUINFO_INT_SP:
-		case CPUINFO_INT_REGISTER + SPC700_S:	      			info->i = REG_S + STACK_PAGE;		break;
-		case CPUINFO_INT_REGISTER + SPC700_P:	     			info->i = GET_REG_P();			break;
-		case CPUINFO_INT_REGISTER + SPC700_A:	       			info->i = REG_A;			break;
+		case CPUINFO_INT_REGISTER + SPC700_S:	    			info->i = REG_S + STACK_PAGE;		break;
+		case CPUINFO_INT_REGISTER + SPC700_P:	    			info->i = GET_REG_P();			break;
+		case CPUINFO_INT_REGISTER + SPC700_A:	    			info->i = REG_A;			break;
 		case CPUINFO_INT_REGISTER + SPC700_X:				info->i = REG_X;			break;
 		case CPUINFO_INT_REGISTER + SPC700_Y:				info->i = REG_Y;			break;
 
@@ -1712,6 +1749,7 @@ CPU_GET_INFO( spc700 )
 	}
 }
 
+DEFINE_LEGACY_CPU_DEVICE(SPC700, spc700);
 
 /* ======================================================================== */
 /* ============================== END OF FILE ============================= */

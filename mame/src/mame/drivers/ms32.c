@@ -1,11 +1,12 @@
 /* Jaleco MegaSystem 32 (Preliminary Driver)
 
---- this driver is about to undergo a major update
-     based on actual hardware tests ---
-
+ - hardware tests are needed to establish how the mixing really works (and interrupt source etc.)
 
 Used by Jaleco in the Mid-90's this system, based on the V70 processor consisted
 of a two board set up, the first a standard mainboard and the second a 'cartridge'
+
+The actual Mega System 32 PCB mobo only outputs mono sound.  There is a connector on
+the PCB for a second speaker but it is still only in mono (no stereo effects in the music).
 
 -- Hardware Information (from Guru) --
 
@@ -45,7 +46,7 @@ MS32 Cartridge
 
 Game Roms + Custom Chip
 
-The Custom chip is probably related to the encryption?
+The Custom chip provides the encryption
 
 Desert War     - Custom chip: JALECO SS91022-10 (144 pin PQFP) (located on small plug-in board with) (ID: SE93139 EB91022-30056)
 Game Paradise  - Custom chip: JALECO SS91022-10 9515EV 420201 06441
@@ -75,7 +76,8 @@ ToDo / Notes
 
 Z80 + Sound Bits
 
-Re-Add Priorities
+Priorities (code in tetrisp2.c doesn't use all of the priority ram.. and doesn't work here)
+ - some games require completely reversed list processing!
 
 Dip switches/inputs in t2m32 and f1superb
 some games (hayaosi2) don't seeem to have service mode even if it's listed among the dips
@@ -83,12 +85,11 @@ service mode is still accessible through F1 though
 
 Fix Anything Else (Palette etc.)
 
-Replace CPU divider with Idle skip since we don't know how fast the v70 really is (cpu timing is ignored)...
-
-Mirror Ram addresses?
 
 Not sure about the main "global brightness" control register, I don't think it can make the palette
 completely black because of kirarast attract mode, so I'm making it cut by 50% at most.
+ - brightness control also breaks other games in various places, eg gametngk everything going dark
+   when bomb is used, p47 aces intro?
 
 gametngk seems to need some kind of shadow sprites but the only difference in the sprite attributes is one of the
     priority bits, forcing sprites of that priority to be shadows doesn't work
@@ -98,8 +99,6 @@ The above might be related to the second "global brightness" control register, w
 except gametngk, tetrisp, tp2m32 and gratia.
 
 horizontal position of tx and bg tilemaps is off by 1 pixel in some games
-
-There should be NVRAM somewhere, maybe fc000000-fc007fff
 
 bbbxing: some sprite/roz/bg alignment issues
 
@@ -123,18 +122,17 @@ roz layer wrapping: currently it's always ON, breaking places where it gets very
     repeated on the screen (p47aces, kirarast, bbbxing, gametngk need it OFF).
     gratia and desertwr need it ON.
 
-there are sprite lag issues, but they might be caused by cpu timing so it's better to leave
-    them alone until the CPU clock is correct.
+there are sprite lag issues - sprites should be framebuffered
+
+missing clipping window effect in gametngk intro
 
 
 Not Working Games
 -----------------
 
-tp2m32 - writes invalid SBR, enables interrupts, crashes (fixed patching the bogus SBR).
-f1superb - the road is straight despite the road signs saying otherwise? :-p
-         - there are 4 unknown ROMS which might be related to the above.
-         - the handler for IRQ 11 also seems to be valid, the game might need it.
-
+f1superb - the road is always rendered as straight.
+         - the game has a road layer and extra roms for it
+         - there is an unknown maths DSP for protection
 
 Jaleco Megasystem 32 Game List - thanks to Yasuhiro
 ---------------------------------------------------
@@ -146,62 +144,59 @@ Tetris Plus 2 (tp2m32)
 Best Bout Boxing (bbbxing)
 Wangan Sensou / Desert War (desertwr)
 Second Earth Gratia (92047-01 version) (gratia)
-*Second Earth Gratia  (91022-10 version) (gratiaa)
-*Super Strong Warriors
+*Second Earth Gratia  (91022-10 version) (gratiaa) (redump needed)
 F-1 Super Battle (f1superb)
 
 Idol Janshi Su-Chi-Pi 2 (47pie2)
 Ryuusei Janshi Kirara Star (kirarast)
 Mahjong Angel Kiss
-*Vs. Janshi Brand New Stars
+Vs. Janshi Brand New Stars
 
-Hayaoshi Quiz Ouza Ketteisen (hayaosi2)
-*Hayaoshi Quiz Nettou Namahousou
-*Hayaoshi Quiz Grand Champion Taikai
 
-Maybe some more...
+Hayaoshi Quiz Nettou Namahousou ( hayaosi3 )
+Hayaoshi Quiz Grand Champion Taikai (hayaosi2)
 
-Games marked * need dumping / redumping
+Not Dumped:
+
+Super Strong Warriors
+
+
 
 */
 
 /********** BITS & PIECES **********/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/v60/v60.h"
-#include "deprecat.h"
 #include "sound/ymf271.h"
+#include "machine/jalcrpt.h"
 #include "includes/ms32.h"
 
-static UINT32 *ms32_fc000000;
-
-static UINT32 *ms32_mahjong_input_select;
-
-static UINT32 to_main;
 
 /********** READ INPUTS **********/
 
 static CUSTOM_INPUT( mahjong_ctrl_r )
 {
+	ms32_state *state = field.machine().driver_data<ms32_state>();
 	UINT32 mj_input;
 
-	switch (ms32_mahjong_input_select[0])
+	switch (state->m_mahjong_input_select[0])
 	{
 		case 0x01:
-			mj_input = input_port_read(field->port->machine, "MJ0");
+			mj_input = input_port_read(field.machine(), "MJ0");
 			break;
 		case 0x02:
-			mj_input = input_port_read(field->port->machine, "MJ1");
+			mj_input = input_port_read(field.machine(), "MJ1");
 			break;
 		case 0x04:
-			mj_input = input_port_read(field->port->machine, "MJ2");
+			mj_input = input_port_read(field.machine(), "MJ2");
 			break;
 		case 0x08:
-			mj_input = input_port_read(field->port->machine, "MJ3");
+			mj_input = input_port_read(field.machine(), "MJ3");
 			break;
 		case 0x10:
-			mj_input = input_port_read(field->port->machine, "MJ4");
+			mj_input = input_port_read(field.machine(), "MJ4");
 			break;
 		default:
 			mj_input = 0;
@@ -211,33 +206,36 @@ static CUSTOM_INPUT( mahjong_ctrl_r )
 	return  mj_input & 0xff;
 }
 
+
 static READ32_HANDLER( ms32_read_inputs3 )
 {
 	int a,b,c,d;
-	a = input_port_read(space->machine, "AN2?"); // unused?
-	b = input_port_read(space->machine, "AN2?"); // unused?
-	c = input_port_read(space->machine, "AN1");
-	d = (input_port_read(space->machine, "AN0") - 0xb0) & 0xff;
+	a = input_port_read(space->machine(), "AN2?"); // unused?
+	b = input_port_read(space->machine(), "AN2?"); // unused?
+	c = input_port_read(space->machine(), "AN1");
+	d = (input_port_read(space->machine(), "AN0") - 0xb0) & 0xff;
 	return a << 24 | b << 16 | c << 8 | d << 0;
 }
+
 
 static WRITE32_HANDLER( ms32_sound_w )
 {
 	soundlatch_w(space, 0, data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
 
 	// give the Z80 time to respond
-	cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(40));
+	device_spin_until_time(&space->device(), attotime::from_usec(40));
 }
 
 static READ32_HANDLER( ms32_sound_r )
 {
-	return to_main^0xff;
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_to_main^0xff;
 }
 
 static WRITE32_HANDLER( reset_sub_w )
 {
-	if(data) cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, PULSE_LINE); // 0 too ?
+	if(data) cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, PULSE_LINE); // 0 too ?
 }
 
 
@@ -245,87 +243,317 @@ static WRITE32_HANDLER( reset_sub_w )
 
 /********** MEMORY MAP **********/
 
-/* some games games test more ram than others .. ram areas with closed comments before
-the lines get tested by various games but I'm not sure are really used, maybe they're
-mirror addresses? */
 
-/*
-p47 aces:
-there are bugs in the test routine, so it checks twice the amount of RAM
-actually present, relying on mirror addresses.
-See how ASCII and SCROLL overlap.
-SCRATCH RAM   fee00000-fee1ffff
-ASCII RAM     fec00000-fec0ffff (actually fec00000-fec07fff ?)
-SCROLL RAM    fec08000-fec17fff (actually fec08000-fec0ffff ?)
-ROTATE RAM    fe000000-fe03ffff (actually fe000000-fe01ffff ?)
-OBJECT RAM    fe800000-fe87ffff (actually fe800000-fe83ffff ?)
-COLOR RAM     fd400000-fd40ffff (this one is actually larger than tested)
-PRIORITY RAM  fd180000-fd1bffff (actually fd180000-fd19ffff ?)
-SOUND RAM
+static READ8_HANDLER(   ms32_nvram_r8 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_nvram_8[offset];
+}
 
-This applies to most of the other games.
-Also, gametngk uses mirror addresses for the background during gameplay, without
-support for them bad tiles appear in the bg.
-*/
+static WRITE8_HANDLER(  ms32_nvram_w8 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	state->m_nvram_8[offset] = data;
+}
+
+static READ8_HANDLER(   ms32_priram_r8 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_priram_8[offset];
+}
+
+static WRITE8_HANDLER(  ms32_priram_w8 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	state->m_priram_8[offset] = data;
+}
+
+static READ16_HANDLER(  ms32_palram_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_palram_16[offset];
+}
+
+static WRITE16_HANDLER( ms32_palram_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_palram_16[offset]);
+}
+
+static READ16_HANDLER(  ms32_rozram_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_rozram_16[offset];
+}
+
+static WRITE16_HANDLER( ms32_rozram_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_rozram_16[offset]);
+	state->m_roz_tilemap->mark_tile_dirty(offset/2);
+}
+
+static READ16_HANDLER(  ms32_lineram_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_lineram_16[offset];
+}
+
+static WRITE16_HANDLER( ms32_lineram_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_lineram_16[offset]);
+}
+
+static READ16_HANDLER(  ms32_sprram_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_sprram_16[offset];
+}
+
+static WRITE16_HANDLER( ms32_sprram_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_sprram_16[offset]);
+}
+
+static READ16_HANDLER(  ms32_txram_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_txram_16[offset];
+}
+
+static WRITE16_HANDLER( ms32_txram_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_txram_16[offset]);
+	state->m_tx_tilemap->mark_tile_dirty(offset/2);
+}
+
+static READ16_HANDLER(  ms32_bgram_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_bgram_16[offset];
+}
+
+static WRITE16_HANDLER( ms32_bgram_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_bgram_16[offset]);
+	state->m_bg_tilemap->mark_tile_dirty(offset/2);
+	state->m_bg_tilemap_alt->mark_tile_dirty(offset/2);
+}
 
 static WRITE32_HANDLER( pip_w )
 {
-	if (data)
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	state->m_tilemaplayoutcontrol = data;
+
+	if ((data) && (data != 1))
 		popmessage("fce00a7c = %02x",data);
 }
 
-static ADDRESS_MAP_START( ms32_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x001fffff) AM_ROM
-	AM_RANGE(0xfc000000, 0xfc007fff) AM_RAM AM_BASE(&ms32_fc000000)	// NVRAM?
+
+static ADDRESS_MAP_START( ms32_map, AS_PROGRAM, 32 )
+	/* RAM areas verified by testing on real hw - usually accessed at the 0xfc000000 + mirror */
+	AM_RANGE(0xc0000000, 0xc0007fff) AM_READWRITE8 (ms32_nvram_r8,   ms32_nvram_w8,   0x000000ff) AM_MIRROR(0x3c1fe000)	// nvram is 8-bit wide, 0x2000 in size */
+/*  AM_RANGE(0xc0008000, 0xc01fffff) // mirrors of nvramram, handled above */
+	AM_RANGE(0xc1180000, 0xc1187fff) AM_READWRITE8 (ms32_priram_r8,  ms32_priram_w8,  0x000000ff) AM_MIRROR(0x3c038000) /* priram is 8-bit wide, 0x2000 in size */
+/*  AM_RANGE(0xc1188000, 0xc11bffff) // mirrors of priram, handled above */
+	AM_RANGE(0xc1400000, 0xc143ffff) AM_READWRITE16(ms32_palram_r16, ms32_palram_w16, 0x0000ffff) AM_MIRROR(0x3c1c0000) /* palram is 16-bit wide, 0x20000 in size */
+/*  AM_RANGE(0xc1440000, 0xc145ffff) // mirrors of palram, handled above */
+	AM_RANGE(0xc2000000, 0xc201ffff) AM_READWRITE16(ms32_rozram_r16, ms32_rozram_w16, 0x0000ffff) AM_MIRROR(0x3c1e0000) /* rozram is 16-bit wide, 0x10000 in size */
+/*  AM_RANGE(0xc2020000, 0xc21fffff) // mirrors of rozram, handled above */
+	AM_RANGE(0xc2200000, 0xc2201fff) AM_READWRITE16(ms32_lineram_r16,ms32_lineram_w16,0x0000ffff) AM_MIRROR(0x3c1fe000) /* lineram is 16-bit wide, 0x1000 in size */
+/*  AM_RANGE(0xc2202000, 0xc23fffff) // mirrors of lineram, handled above */
+	AM_RANGE(0xc2800000, 0xc283ffff) AM_READWRITE16(ms32_sprram_r16, ms32_sprram_w16, 0x0000ffff) AM_MIRROR(0x3c1c0000) /* spriteram is 16-bit wide, 0x20000 in size */
+/*  AM_RANGE(0xc2840000, 0xc29fffff) // mirrors of sprram, handled above */
+	AM_RANGE(0xc2c00000, 0xc2c07fff) AM_READWRITE16(ms32_txram_r16,  ms32_txram_w16,  0x0000ffff) AM_MIRROR(0x3c1f0000) /* txram is 16-bit wide, 0x4000 in size */
+	AM_RANGE(0xc2c08000, 0xc2c0ffff) AM_READWRITE16(ms32_bgram_r16,  ms32_bgram_w16,  0x0000ffff) AM_MIRROR(0x3c1f0000) /* bgram is 16-bit wide, 0x4000 in size */
+/*  AM_RANGE(0xc2c10000, 0xc2dfffff) // mirrors of txram / bg, handled above */
+	AM_RANGE(0xc2e00000, 0xc2e1ffff) AM_RAM AM_BASE_MEMBER(ms32_state, m_mainram)                                AM_MIRROR(0x3c0e0000) /* mainram is 32-bit wide, 0x20000 in size */
+	AM_RANGE(0xc3e00000, 0xc3ffffff) AM_ROMBANK("bank1")                                                AM_MIRROR(0x3c000000) // ROM is 32-bit wide, 0x200000 in size */
+
+	/* todo: clean up the mapping of these */
 	AM_RANGE(0xfc800000, 0xfc800003) AM_READNOP	/* sound? */
 	AM_RANGE(0xfc800000, 0xfc800003) AM_WRITE(ms32_sound_w) /* sound? */
-
 	AM_RANGE(0xfcc00004, 0xfcc00007) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xfcc00010, 0xfcc00013) AM_READ_PORT("DSW")
-
 	AM_RANGE(0xfce00034, 0xfce00037) AM_WRITENOP // irq ack?
 	AM_RANGE(0xfce00038, 0xfce0003b) AM_WRITE(reset_sub_w)
 	AM_RANGE(0xfce00050, 0xfce0005f) AM_WRITENOP	// watchdog? I haven't investigated
 //  AM_RANGE(0xfce00000, 0xfce0007f) AM_WRITEONLY AM_BASE(&ms32_fce00000) /* registers not ram? */
 	AM_RANGE(0xfce00000, 0xfce00003) AM_WRITE(ms32_gfxctrl_w)	/* flip screen + other unknown bits */
 	AM_RANGE(0xfce00280, 0xfce0028f) AM_WRITE(ms32_brightness_w)	// global brightness control
-/**/AM_RANGE(0xfce00600, 0xfce0065f) AM_RAM AM_BASE(&ms32_roz_ctrl)		/* roz control registers */
-/**/AM_RANGE(0xfce00a00, 0xfce00a17) AM_RAM AM_BASE(&ms32_tx_scroll)	/* tx layer scroll */
-/**/AM_RANGE(0xfce00a20, 0xfce00a37) AM_RAM AM_BASE(&ms32_bg_scroll)	/* bg layer scroll */
+/**/AM_RANGE(0xfce00600, 0xfce0065f) AM_RAM AM_BASE_MEMBER(ms32_state, m_roz_ctrl)		/* roz control registers */
+/**/AM_RANGE(0xfce00a00, 0xfce00a17) AM_RAM AM_BASE_MEMBER(ms32_state, m_tx_scroll)	/* tx layer scroll */
+/**/AM_RANGE(0xfce00a20, 0xfce00a37) AM_RAM AM_BASE_MEMBER(ms32_state, m_bg_scroll)	/* bg layer scroll */
 	AM_RANGE(0xfce00a7c, 0xfce00a7f) AM_WRITE(pip_w)	// ??? layer related? seems to be always 0
-//  AM_RANGE(0xfce00800, 0xfce0085f) // f1superb, roz #2 control?
 //  AM_RANGE(0xfce00e00, 0xfce00e03)    coin counters + something else
-
 	AM_RANGE(0xfd000000, 0xfd000003) AM_READ(ms32_sound_r)
-	AM_RANGE(0xfd0e0000, 0xfd0e0003) AM_READ(ms32_read_inputs3) /* analog controls in f1superb? */
+	AM_RANGE(0xfd1c0000, 0xfd1c0003) AM_WRITEONLY AM_BASE_MEMBER(ms32_state, m_mahjong_input_select)
+ADDRESS_MAP_END
 
+
+/* F1 Super Battle has an extra linemap for the road, and am unknown maths chip (mcu?) handling perspective calculations for the road / corners etc. */
+/* it should use it's own memory map */
+
+static WRITE16_HANDLER( ms32_extra_w16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	COMBINE_DATA(&state->m_f1superb_extraram_16[offset]);
+	state->m_extra_tilemap->mark_tile_dirty(offset/2);
+}
+static READ16_HANDLER( ms32_extra_r16 )
+{
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	return state->m_f1superb_extraram_16[offset];
+}
+
+static void irq_raise(running_machine &machine, int level);
+
+static WRITE32_HANDLER( ms32_irq2_guess_w )
+{
+	irq_raise(space->machine(), 2);
+}
+
+static WRITE32_HANDLER( ms32_irq5_guess_w )
+{
+	irq_raise(space->machine(), 5);
+}
+
+static ADDRESS_MAP_START( f1superb_map, AS_PROGRAM, 32 )
+	AM_RANGE(0xfd0e0000, 0xfd0e0003) AM_READ(ms32_read_inputs3)
+
+	AM_RANGE(0xfce00004, 0xfce00023) AM_RAM // regs?
+	AM_RANGE(0xfce00200, 0xfce0021f) AM_RAM // regs?
+	AM_RANGE(0xfce00800, 0xfce0085f) AM_RAM // regs?
+
+	/* these two are almost certainly wrong, they just let you see what
+       happens if you generate the FPU ints without breaking other games */
+	AM_RANGE(0xfce00e00, 0xfce00e03) AM_WRITE(ms32_irq5_guess_w)
+	AM_RANGE(0xfd0f0000, 0xfd0f0003) AM_WRITE(ms32_irq2_guess_w)
+
+	AM_RANGE(0xfd100000, 0xfd103fff) AM_RAM // used when you start enabling fpu ints
+	AM_RANGE(0xfd104000, 0xfd105fff) AM_RAM // uploads data here
+
+	AM_RANGE(0xfd140000, 0xfd143fff) AM_RAM // used when you start enabling fpu ints
+	AM_RANGE(0xfd144000, 0xfd145fff) AM_RAM // same data here
+
+	AM_RANGE(0xfdc00000, 0xfdc007ff) AM_READWRITE16(ms32_extra_r16, ms32_extra_w16, 0x0000ffff) // definitely line ram
+	AM_RANGE(0xfde00000, 0xfde01fff) AM_RAM // scroll info for lineram?
+
+	AM_IMPORT_FROM(ms32_map)
+ADDRESS_MAP_END
+
+/* F1 Super Battle speculation from nuapete
+
+Hi David,
+
+I had a first look at f1superb, this is what I found so far.
+
+The sprite RAM is updated in a few places, but taking one of the
+sprite RAM updating routines at 0xFFE47B6F which is used to draw stuff
+that should move around, I see that the information is copied from
+buffers with these bases:
+FEE11000 = x position data
+FEE11100 = y position data
+FEE11200 = priority etc data
+
+You already spotted that loop at FFE19D1C that fills the "y position"
+buffer from an array of static values. The buffers are refilled again
+by the routine at 0xFFE17581. You can see that the data is sourced
+from another buffer at 0xFD100000 (currently not mapped in the driver,
+but I mapped it in for testing...)
+
+If you backtrace that call, it comes from irq 5 and 7. (They have
+identical ISR code) so I tried adding in a trigger for irq 7. Now the
+values are populated, and stuff moves, but everything moves way too
+much, it's all over the place, eventually the car zooms off up into
+the sky. It gets clearer as you map less and less of the RAM at
+0xFD100000. With just 1K or so mapped, you can see the buildings in
+the background veer about in quite a promising manner. (The patch you
+put in loses effect with irq 5 or 7 hooked up, because they repopulate
+the Y coords too.)
+
+I took a closer look at the interrupts. Handily enough they left some
+strings in the ROM with names for each interrupt  :)  They aren't quite
+in the order of the interrupts, but I matched the unreferenced strings
+up to the valid interrupts as well as I could and then tried to
+confirm them by looking at the code. The ROM string is in quotes.
+
+FFE00DE8  ; irq_0  probably "1msec interrupt"
+FFE00DF4  ; irq_1  "sound cpu interrupt"
+FFE00878  ; irq_2  probably "fpu 1-1 interrupt"
+FFE00884  ; irq_3  unused and labelled "fpu 0-1 interrupt"
+FFE00898  ; irq_4  unused and labelled "fpu 1-0 interrupt"
+FFE008AC  ; irq_5  probably "fpu 0-0 interrupt", x coords (and y) populated from here
+FFE008D0  ; irq_6  unused and labelled "option 2 interrupt"
+FFE008E4  ; irq_7  same as 5 - probably "option 1 interrupt"
+FFE01034  ; irq_9  VBL at 60Hz this would be "16msec interrupt"
+FFE01094  ; irq_10 loads of processing in the 0xfc000000 area : must be "32msec interrupt"
+FFE00E14  ; irq_11 "communication interrupt"
+
+irq_0 is sort of confirmed by the "hayaosi2 needs at least 12 IRQ
+0..." comment. irq_1 I see is already known. irq_9 is known, irq_10 I
+tried halving the frequency it runs at, no effect. irq_11 can be
+pretty much confirmed as comms by the code there and the use of
+MOVT/MOVZ to i/o with 16 bit device based at FEE00000, so that leaves
+the ones that do the sprite info loading, this is where it starts to
+look less promising  :(
+
+Between irqs 2,3,4,5,7 the only unused strings in the ROM are the four "fpu
+* interrupt" and the "option 1".
+Irqs 2,5,7 all do "or.w    #6, FD1424C8[PC]" ,so they are all probably
+"fpu * interrupt".
+
+I'm thinking that the stuff is dumped in that RAM at 0xFD100000 that's
+not used by other games and then some FPU operation is carried out on it
+before it's grabbed by the sprite copy code. The "option" stuff, may be
+they tried a few different ways to work out the sprite coords? There's
+one more intersting string at 0xFFE481FC referenced from unused code
+at 0xFFE47FBC. It looks like debugging dump of sprite coordinate and
+angle information.
+
+I had a scout around for photos or anything of the PCB to see if there
+is some sort of DSP or FPU on it, but I can't find anything useful. I
+suspect it's not a generic MegaSystem 32 PCB, going by the extra
+stuff, and also the IRQ 5/7 breaks the other games. I see a vanilla
+one for sale, but I'd guess there's no point me picking it up for a
+closer look because it won't have whatever the extras are.
+
+I'll keep looking a bit more, but I think that 0xFD100000 buffer is
+processed by something external that triggers irq 5 or 7 when it's
+done. I might see something obvious by looking at the values in
+fact... I'd be interested to know what you think, or if there's any
+chance of finding out if there's stuff like dual port RAM or something
+that might qualify as a FPU?
+
+
+Hi David,
+
+On the f1superb stuff, I've traced the sprite elements right back to
+the arrays for each race track in ROM that they are sourced from. The
+only processing they get is in that "fpu" interrupt. I've figured out
+the structure of the "fpu" device, it uses two arrays of static info
+loaded from the ROM at boot, two identical sets of registers, and 4
+banks of volatile data read in every frame or so from the ROM race
+track arrays (although it looks like one was not used in the end).
+There's a sequence of four operations ivolving the "fpu" carried out
+to prepare the info which then gets copied back to RAM and then to
+sprite RAM. I'll capture the relevant info and see if I can figure out
+what the operations might be, my maths isn't up to much though...
+
+*/
+
+//  AM_RANGE(0xfce00800, 0xfce0085f) // f1superb, roz #2 control?
 ///**/AM_RANGE(0xfd104000, 0xfd105fff) AM_RAM /* f1superb */
 ///**/AM_RANGE(0xfd144000, 0xfd145fff) AM_RAM /* f1superb */
-
-	AM_RANGE(0xfd180000, 0xfd19ffff) AM_READWRITE(ms32_priram_r,ms32_priram_w) AM_BASE(&ms32_priram) /* priority ram */
-	AM_RANGE(0xfd1a0000, 0xfd1bffff) AM_READWRITE(ms32_priram_r,ms32_priram_w)	/* mirror only used by memory test in service mode */
-	AM_RANGE(0xfd1c0000, 0xfd1c0003) AM_WRITEONLY AM_BASE(&ms32_mahjong_input_select)
-
-	AM_RANGE(0xfd400000, 0xfd43ffff) AM_RAM_WRITE(ms32_palram_w) AM_BASE(&ms32_palram) /* Palette */
 ///**/AM_RANGE(0xfd440000, 0xfd47ffff) AM_RAM /* f1superb color */
-
 ///**/AM_RANGE(0xfdc00000, 0xfdc006ff) AM_RAM /* f1superb */
 ///**/AM_RANGE(0xfde00000, 0xfde01fff) AM_RAM /* f1superb lineram #2? */
-	AM_RANGE(0xfe000000, 0xfe01ffff) AM_READWRITE(ms32_rozram_r,ms32_rozram_w) AM_BASE(&ms32_rozram)	/* roz layer */
-	AM_RANGE(0xfe020000, 0xfe03ffff) AM_READWRITE(ms32_rozram_r,ms32_rozram_w)	/* mirror only used by memory test in service mode */
-	AM_RANGE(0xfe1ffc88, 0xfe1fffff) AM_WRITENOP	/* gratia writes here before falling into lineram, could be a mirror */
-	AM_RANGE(0xfe200000, 0xfe201fff) AM_READWRITE(ms32_lineram_r,ms32_lineram_w) AM_BASE(&ms32_lineram) /* line ram for roz layer */
 ///**/AM_RANGE(0xfe202000, 0xfe2fffff) AM_RAM /* f1superb vram */
-
-	AM_RANGE(0xfe800000, 0xfe83ffff) AM_READWRITE(ms32_spram_r,ms32_spram_w) AM_BASE(&ms32_spram)	/* sprites */
-	AM_RANGE(0xfe840000, 0xfe87ffff) AM_READWRITE(ms32_spram_r,ms32_spram_w) /* mirror only used by memory test in service mode */
-	AM_RANGE(0xfec00000, 0xfec07fff) AM_READWRITE(ms32_txram_r,ms32_txram_w) AM_BASE(&ms32_txram)	/* tx layer */
-	AM_RANGE(0xfec08000, 0xfec0ffff) AM_READWRITE(ms32_bgram_r,ms32_bgram_w) AM_BASE(&ms32_bgram)	/* bg layer */
-	AM_RANGE(0xfec10000, 0xfec17fff) AM_READWRITE(ms32_txram_r,ms32_txram_w) /* mirror only used by memory test in service mode */
-	AM_RANGE(0xfec18000, 0xfec1ffff) AM_READWRITE(ms32_bgram_r,ms32_bgram_w) /* mirror used by gametngk at the beginning of the game */
-	AM_RANGE(0xfee00000, 0xfee1ffff) AM_RAM AM_BASE(&ms32_mainram)
-	AM_RANGE(0xffe00000, 0xffffffff) AM_ROMBANK(1)
-ADDRESS_MAP_END
+//  AM_RANGE(0xfd0e0000, 0xfd0e0003) AM_READ(ms32_read_inputs3) /* analog controls in f1superb? */
 
 /*************************************
  *
@@ -1037,15 +1265,26 @@ INPUT_PORTS_END
 /********** GFX DECODE **********/
 
 /* sprites are contained in 256x256 "tiles" */
-static GFXLAYOUT_RAW( spritelayout, 8, 256, 256, 256*8, 256*256*8 )
-static GFXLAYOUT_RAW( bglayout, 8, 16, 16, 16*8, 16*16*8 )
-static GFXLAYOUT_RAW( txlayout, 8, 8, 8, 8*8, 8*8*8 )
+static GFXLAYOUT_RAW( spritelayout, 256, 256, 256*8, 256*256*8 )
+static GFXLAYOUT_RAW( bglayout, 16, 16, 16*8, 16*16*8 )
+static GFXLAYOUT_RAW( txlayout, 8, 8, 8*8, 8*8*8 )
+
+static GFXLAYOUT_RAW( f1layout, 2048, 1, 2048*8, 2048*8 )
+
 
 static GFXDECODE_START( ms32 )
 	GFXDECODE_ENTRY( "gfx1", 0, spritelayout, 0x0000, 0x10 )
 	GFXDECODE_ENTRY( "gfx2", 0, bglayout,     0x2000, 0x10 )
 	GFXDECODE_ENTRY( "gfx3", 0, bglayout,     0x1000, 0x10 )
 	GFXDECODE_ENTRY( "gfx4", 0, txlayout,     0x6000, 0x10 )
+GFXDECODE_END
+
+static GFXDECODE_START( f1superb )
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout, 0x0000, 0x10 )
+	GFXDECODE_ENTRY( "gfx2", 0, bglayout,     0x2000, 0x10 )
+	GFXDECODE_ENTRY( "gfx3", 0, bglayout,     0x1000, 0x10 )
+	GFXDECODE_ENTRY( "gfx4", 0, txlayout,     0x6000, 0x10 )
+	GFXDECODE_ENTRY( "gfx5", 0, f1layout,     0x0000, 0x100 ) // not tilemap data?
 GFXDECODE_END
 
 
@@ -1058,36 +1297,40 @@ GFXDECODE_END
    10 - 6d4 - big, vbl?
 */
 
-static UINT16 irqreq;
 
 static IRQ_CALLBACK(irq_callback)
 {
+	ms32_state *state = device->machine().driver_data<ms32_state>();
 	int i;
-	for(i=15; i>=0 && !(irqreq & (1<<i)); i--);
-	irqreq &= ~(1<<i);
-	if(!irqreq)
-		cpu_set_input_line(device, 0, CLEAR_LINE);
+	for(i=15; i>=0 && !(state->m_irqreq & (1<<i)); i--);
+	state->m_irqreq &= ~(1<<i);
+	if(!state->m_irqreq)
+		device_set_input_line(device, 0, CLEAR_LINE);
 	return i;
 }
 
-static void irq_init(running_machine *machine)
+static void irq_init(running_machine &machine)
 {
-	irqreq = 0;
+	ms32_state *state = machine.driver_data<ms32_state>();
+	state->m_irqreq = 0;
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	device_set_irq_callback(machine.device("maincpu"), irq_callback);
 }
 
-static void irq_raise(running_machine *machine, int level)
+static void irq_raise(running_machine &machine, int level)
 {
-	irqreq |= (1<<level);
+	ms32_state *state = machine.driver_data<ms32_state>();
+	state->m_irqreq |= (1<<level);
 	cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 }
 
-static INTERRUPT_GEN(ms32_interrupt)
+/* TODO: fix this arrangement (derived from old deprecat lib) */
+static TIMER_DEVICE_CALLBACK(ms32_interrupt)
 {
-	if( cpu_getiloops(device) == 0 ) irq_raise(device->machine, 10);
-	if( cpu_getiloops(device) == 1 ) irq_raise(device->machine, 9);
-	/* hayaosi2 needs at least 12 IRQ 0 per frame to work (see code at FFE02289)
+	int scanline = param;
+	if( scanline == 0) irq_raise(timer.machine(), 10);
+	if( scanline == 8) irq_raise(timer.machine(), 9);
+	/* hayaosi1 needs at least 12 IRQ 0 per frame to work (see code at FFE02289)
        kirarast needs it too, at least 8 per frame, but waits for a variable amount
        47pi2 needs ?? per frame (otherwise it hangs when you lose)
        in different points. Could this be a raster interrupt?
@@ -1095,8 +1338,9 @@ static INTERRUPT_GEN(ms32_interrupt)
        desertwr
        p47aces
        */
-	if( cpu_getiloops(device) >= 3 && cpu_getiloops(device) <= 32 ) irq_raise(device->machine, 0);
+	if( (scanline % 8) == 0 && scanline <= 224 ) irq_raise(timer.machine(), 0);
 }
+
 
 /********** SOUND **********/
 
@@ -1123,23 +1367,24 @@ static INTERRUPT_GEN(ms32_interrupt)
 
 static READ8_HANDLER( latch_r )
 {
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
 	return soundlatch_r(space,0)^0xff;
 }
 
 static WRITE8_HANDLER( ms32_snd_bank_w )
 {
-	memory_set_bank(space->machine, 4, (data >> 0) & 0x0F);
-	memory_set_bank(space->machine, 5, (data >> 4) & 0x0F);
+	memory_set_bank(space->machine(), "bank4", (data >> 0) & 0x0F);
+	memory_set_bank(space->machine(), "bank5", (data >> 4) & 0x0F);
 }
 
 static WRITE8_HANDLER( to_main_w )
 {
-	to_main=data;
-	irq_raise(space->machine, 1);
+	ms32_state *state = space->machine().driver_data<ms32_state>();
+	state->m_to_main=data;
+	irq_raise(space->machine(), 1);
 }
 
-static ADDRESS_MAP_START( ms32_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ms32_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3eff) AM_ROM
 	AM_RANGE(0x3f00, 0x3f0f) AM_DEVREADWRITE("ymf", ymf271_r,ymf271_w)
 	AM_RANGE(0x3f10, 0x3f10) AM_READWRITE(latch_r,to_main_w)
@@ -1149,8 +1394,8 @@ static ADDRESS_MAP_START( ms32_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3f70, 0x3f70) AM_WRITENOP   // watchdog? banking? very noisy
 	AM_RANGE(0x3f80, 0x3f80) AM_WRITE(ms32_snd_bank_w)
 	AM_RANGE(0x4000, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(4)
-	AM_RANGE(0xc000, 0xffff) AM_ROMBANK(5)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank4")
+	AM_RANGE(0xc000, 0xffff) AM_ROMBANK("bank5")
 ADDRESS_MAP_END
 
 
@@ -1158,61 +1403,71 @@ ADDRESS_MAP_END
 
 static MACHINE_RESET( ms32 )
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu"));
-	memory_set_bank(machine, 4, 0);
-	memory_set_bank(machine, 5, 1);
+	memory_set_bankptr(machine, "bank1", machine.region("maincpu")->base());
+	memory_set_bank(machine, "bank4", 0);
+	memory_set_bank(machine, "bank5", 1);
 	irq_init(machine);
 }
 
 /********** MACHINE DRIVER **********/
 
-static MACHINE_DRIVER_START( ms32 )
+static MACHINE_CONFIG_START( ms32, ms32_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V70, 20000000) // 20MHz
-	MDRV_CPU_PROGRAM_MAP(ms32_map)
-	MDRV_CPU_VBLANK_INT_HACK(ms32_interrupt,32)
+	MCFG_CPU_ADD("maincpu", V70, 20000000) // 20MHz
+	MCFG_CPU_PROGRAM_MAP(ms32_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", ms32_interrupt, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 4000000)
-	MDRV_CPU_PROGRAM_MAP(ms32_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, 4000000)
+	MCFG_CPU_PROGRAM_MAP(ms32_sound_map)
 
-	MDRV_QUANTUM_TIME(HZ(60000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60000))
 
-	MDRV_MACHINE_RESET(ms32)
+	MCFG_MACHINE_RESET(ms32)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 28*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 28*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(ms32)
 
-	MDRV_GFXDECODE(ms32)
-	MDRV_PALETTE_LENGTH(0x8000)
+	MCFG_GFXDECODE(ms32)
+	MCFG_PALETTE_LENGTH(0x10000)
 
-	MDRV_VIDEO_START(ms32)
-	MDRV_VIDEO_UPDATE(ms32)
+	MCFG_VIDEO_START(ms32)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ymf", YMF271, 16934400)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymf", YMF271, 16934400)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( f1superb, ms32 )
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(f1superb_map)
+
+	MCFG_GFXDECODE(f1superb)
+
+	MCFG_VIDEO_START(f1superb)
+MACHINE_CONFIG_END
+
 
 
 /********** ROM LOADING **********/
 
 ROM_START( bbbxing )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "bbbx25.bin", 0x000003, 0x80000, CRC(b526b41e) SHA1(44945931b159646468a954d5acdd2c6c61daf098) )
+	ROM_LOAD32_BYTE( "bbbx25.bin", 0x000003, 0x80000, CRC(b526b41e) SHA1(44945931b159646468a954d5acdd2c6c61daf098) )
 	ROM_LOAD32_BYTE( "bbbx27.bin", 0x000002, 0x80000, CRC(45b27ad8) SHA1(0af415b17400aabecdcb6d1d069f28b64780017f) )
 	ROM_LOAD32_BYTE( "bbbx29.bin", 0x000001, 0x80000, CRC(85bbbe79) SHA1(bc5ebb96491762e6a0d202ddf7faeb57c66211b4) )
 	ROM_LOAD32_BYTE( "bbbx31.bin", 0x000000, 0x80000, CRC(e0c865ed) SHA1(f21e8dc174c50d7afdd3f82c1c66dfcc002bdd07) )
 
-	ROM_REGION( 0x1100000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1100000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "bbbx1.bin",   0x0000002, 0x200000, CRC(c1c10c3b) SHA1(e1f739f38e148c4d7aff6b81b3e42131c5c6c3dd) )
 	ROM_LOAD32_WORD( "bbbx13.bin",  0x0000000, 0x200000, CRC(4b8c1574) SHA1(c389c70b532d54528a175f460ca3f329b34cf67c) )
 	ROM_LOAD32_WORD( "bbbx2.bin",   0x0400002, 0x200000, CRC(03b77c1e) SHA1(f156ae6a4f2a8ae99815eb5a7b28425d273c1c3e) )
@@ -1224,13 +1479,13 @@ ROM_START( bbbxing )
 	ROM_LOAD32_WORD( "bbbx5.bin",   0x1000002, 0x080000, CRC(64989edf) SHA1(033eab0e8a53607b2bb420f6356804b2cfa1544c) )
 	ROM_LOAD32_WORD( "bbbx17.bin",  0x1000000, 0x080000, CRC(1d7ebaf0) SHA1(5aac7cb01013ce3be206318678aced5812bff9a9) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "bbbx9.bin",   0x000000, 0x200000, CRC(a41cb650) SHA1(1c55a4afe55c1250806f2d93c25842dc3fb7f987) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "bbbx11.bin",  0x000000, 0x200000, CRC(85238ca9) SHA1(1ce32d585fe66764d621c11882ef9d2abaea6256) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "bbbx32-2.bin",0x000000, 0x080000, CRC(3ffdae75) SHA1(2b837d28f7ecdd49e8525bd5c249e83021d5fe9f) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1252,7 +1507,7 @@ ROM_START( 47pie2 )
 	ROM_LOAD32_BYTE( "93166-28.v11", 0x000001, 0x80000, CRC(aa49eec2) SHA1(173afc596caa1c464fc3247cb64d36c1d97a1520) )
 	ROM_LOAD32_BYTE( "93166-29.v11", 0x000000, 0x80000, CRC(92763e41) SHA1(eb593bbb586661c4c4e8728d845b146974d0bdf8) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "94019-02.1",  0x000002, 0x200000, CRC(f9d692f2) SHA1(666df55d26e00be39073173fa3616ac9dafbe615) )
 	ROM_LOAD32_WORD( "94019-01.13", 0x000000, 0x200000, CRC(1ddfe825) SHA1(27fbf492fdb4f0b4b8db18330e840c130213e15e) )
 	ROM_LOAD32_WORD( "94019-04.2",  0x400002, 0x200000, CRC(24ca77ec) SHA1(a5c575224ab276cbed5785f40fc0d35dd2748e74) )
@@ -1262,13 +1517,13 @@ ROM_START( 47pie2 )
 	ROM_LOAD32_WORD( "94019-08.4",  0xc00002, 0x200000, CRC(4b07edc9) SHA1(22aaa923a94a7bec997d2adabc8ec2c7696c33a5) )
 	ROM_LOAD32_WORD( "94019-07.16", 0xc00000, 0x200000, CRC(34f471a8) SHA1(4c9c358a9bfdb436a211caa14d085e631609681d) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "94019-09.11", 0x000000, 0x200000, CRC(cde7bb6f) SHA1(47454dac4ce67ce8d7e0c5ef3a732477ac8170a7) )
 
-	ROM_REGION( 0x100000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x100000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "94019-12.10", 0x000000, 0x100000, CRC(15ae05d9) SHA1(ac00d3766c42ccba4585b9acfacc81bcb940ac26) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "93166-30.bin", 0x000000, 0x080000, CRC(0c738883) SHA1(e552c1842d759e5e617eb9c6cc178620a461b4dd) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1290,7 +1545,7 @@ ROM_START( 47pie2o )
 	ROM_LOAD32_BYTE( "93166-28.v10", 0x000001, 0x80000, CRC(b1261d51) SHA1(3f393aeb7a076c4d2d2cc7f22ead05f405186d80) )
 	ROM_LOAD32_BYTE( "93166-29.v10", 0x000000, 0x80000, CRC(9211c82a) SHA1(0aa3f93293b81e0f66b985046eb5e91708693959) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "94019-02.1",  0x000002, 0x200000, CRC(f9d692f2) SHA1(666df55d26e00be39073173fa3616ac9dafbe615) )
 	ROM_LOAD32_WORD( "94019-01.13", 0x000000, 0x200000, CRC(1ddfe825) SHA1(27fbf492fdb4f0b4b8db18330e840c130213e15e) )
 	ROM_LOAD32_WORD( "94019-04.2",  0x400002, 0x200000, CRC(24ca77ec) SHA1(a5c575224ab276cbed5785f40fc0d35dd2748e74) )
@@ -1300,13 +1555,13 @@ ROM_START( 47pie2o )
 	ROM_LOAD32_WORD( "94019-08.4",  0xc00002, 0x200000, CRC(4b07edc9) SHA1(22aaa923a94a7bec997d2adabc8ec2c7696c33a5) )
 	ROM_LOAD32_WORD( "94019-07.16", 0xc00000, 0x200000, CRC(34f471a8) SHA1(4c9c358a9bfdb436a211caa14d085e631609681d) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "94019-09.11", 0x000000, 0x200000, CRC(cde7bb6f) SHA1(47454dac4ce67ce8d7e0c5ef3a732477ac8170a7) )
 
-	ROM_REGION( 0x100000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x100000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "94019-12.10", 0x000000, 0x100000, CRC(15ae05d9) SHA1(ac00d3766c42ccba4585b9acfacc81bcb940ac26) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "93166-30.bin", 0x000000, 0x080000, CRC(0c738883) SHA1(e552c1842d759e5e617eb9c6cc178620a461b4dd) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1323,12 +1578,12 @@ ROM_END
 
 ROM_START( desertwr )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "93166-26.37", 0x000003, 0x80000, CRC(582b9584) SHA1(027a987cde7e9e1b24aef6a3086eba61679ad0b6) )
+	ROM_LOAD32_BYTE( "93166-26.37", 0x000003, 0x80000, CRC(582b9584) SHA1(027a987cde7e9e1b24aef6a3086eba61679ad0b6) )
 	ROM_LOAD32_BYTE( "93166-27.38", 0x000002, 0x80000, CRC(cb60dda3) SHA1(0499b8ab19abdf8db8c18d778b3f9f6e0d277ff0) )
 	ROM_LOAD32_BYTE( "93166-28.39", 0x000001, 0x80000, CRC(0de40efb) SHA1(c49c3b27939e428dec1f642b7fdb9a1ff760289a) )
 	ROM_LOAD32_BYTE( "93166-29.40", 0x000000, 0x80000, CRC(fc25eae2) SHA1(a4d47fcb4d4c3285cf67d77d8a21478f344b98ca) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "94038-01.20", 0x000000, 0x200000, CRC(f11f83e2) SHA1(e3c99e6583003210483163c79182cb14aa334702) )
 	ROM_LOAD32_WORD( "94038-02.3",  0x000002, 0x200000, CRC(3d1fa710) SHA1(5fae3e8c714cca88e22e432dd7275c6898c631a8) )
 	ROM_LOAD32_WORD( "94038-03.21", 0x400000, 0x200000, CRC(84fd5790) SHA1(6187ff32a63f3b4105ea875f52237f0d4314f8b6) )
@@ -1338,15 +1593,15 @@ ROM_START( desertwr )
 	ROM_LOAD32_WORD( "94038-07.23", 0xc00000, 0x200000, CRC(426f4193) SHA1(98a16a70c225d7cd061fcd6e88992d393e6ef9fd) )
 	ROM_LOAD32_WORD( "94038-08.6",  0xc00002, 0x200000, CRC(f4088399) SHA1(9d53880996f85776815840bca1f8c3958de4c275) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "94038-11.13", 0x000000, 0x200000, CRC(bf2ec3a3) SHA1(904cd5ab2e855bdb94bc70efa6db42af672337d7) )
 	ROM_LOAD( "94038-12.14", 0x200000, 0x200000, CRC(d0e113da) SHA1(57f27cbd58421a0afe724fec5628c4a29aad8868) )
 
-	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "94038-09.12", 0x000000, 0x200000, CRC(72ec1ce7) SHA1(88bd9ca3aa7a6410e8fcf6fd70304f12724653bb) )
 	ROM_LOAD( "94038-10.11", 0x200000, 0x200000, CRC(1e17f2a9) SHA1(19e6be1daa157593fbab84149f1f739dd39c9226) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "93166-30.41", 0x000000, 0x080000, CRC(980ab89c) SHA1(8468fc13a5988e25750e8d99ff464f46e86ab412) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1363,7 +1618,7 @@ ROM_END
 
 ROM_START( f1superb )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "f1sb26.bin", 0x000003, 0x80000, CRC(042fccd5) SHA1(4a69de3aef51adad502d54987468170b9e7bb8ac) )
+	ROM_LOAD32_BYTE( "f1sb26.bin", 0x000003, 0x80000, CRC(042fccd5) SHA1(4a69de3aef51adad502d54987468170b9e7bb8ac) )
 	ROM_LOAD32_BYTE( "f1sb27.bin", 0x000002, 0x80000, CRC(5f96cf32) SHA1(c9c64576a8bb81a8e8bbe30b054ed33afd760b93) )
 	ROM_LOAD32_BYTE( "f1sb28.bin", 0x000001, 0x80000, CRC(cfda8003) SHA1(460146556f606bf213d7e2ab29d2eb8827131bd0) )
 	ROM_LOAD32_BYTE( "f1sb29.bin", 0x000000, 0x80000, CRC(f21f1481) SHA1(97a97ff3b9a71b1a024d8f2cfe57a1d02cec5ea4) )
@@ -1386,19 +1641,19 @@ ROM_START( f1superb )
 	ROM_LOAD32_WORD( "f1sb8.bin",  0x1c00002, 0x200000, CRC(ba3f1533) SHA1(3ff1c4cca8358fc8daf0d2c381672569085ac9ae) )
 	ROM_LOAD32_WORD( "f1sb20.bin", 0x1c00000, 0x200000, CRC(fa349897) SHA1(31e08aa2821e409057e3094333b9ecbe04a6a38a) )
 
-	ROM_REGION( 0x800000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x800000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "f1sb9.bin",  0x000000, 0x200000, CRC(66b12e1f) SHA1(4dc3f162a5116403cc0c491af335208672c8e9af) )
 	ROM_LOAD( "f1sb10.bin", 0x200000, 0x200000, CRC(893d7f4b) SHA1(b2734f20f703a0dcf8b1fdaebf2b6198b2fb0f51) )
 	ROM_LOAD( "f1sb11.bin", 0x400000, 0x200000, CRC(0b848bb5) SHA1(e4c0e434add151112352d6068e5de1a7098e6346) )
 	ROM_LOAD( "f1sb12.bin", 0x600000, 0x200000, CRC(edecd5f4) SHA1(9b86802d08e5c8ec1a6dcea75dc8f050d3e96970) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "f1sb31.bin", 0x000000, 0x200000, CRC(1d0d2efd) SHA1(e6446ef9c71be9316c286157f71e0043347c6a5c) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "f1sb32.bin", 0x000000, 0x080000, CRC(1b31fcce) SHA1(354cc6f43cd3bf3ba921ac8c5631ab993bedf563) )
 
-	ROM_REGION( 0x800000, "user1", 0 ) /* extra ROMs, unknown */
+	ROM_REGION( 0x800000, "gfx5", 0 ) /* extra data? doesn't seem to be tiles */
 	ROM_LOAD( "f1sb2b.bin", 0x000000, 0x200000, CRC(18d73b16) SHA1(f06f4d31b15658cc1e1b559ae3b8a90b797546ca) )
 	ROM_LOAD( "f1sb3b.bin", 0x200000, 0x200000, CRC(ce728fe0) SHA1(e0fd7b8f4d3dc9e2b15ddf027c61e67e5c1f22b5) )
 	ROM_LOAD( "f1sb4b.bin", 0x400000, 0x200000, CRC(077180c5) SHA1(ab16739da709ecdbbb1264beba349ef6ecf3f8b1) )
@@ -1418,12 +1673,12 @@ ROM_END
 
 ROM_START( gratia )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "94019.026", 0x000003, 0x80000, CRC(f398cba5) SHA1(11e06abebfdfc8a99b5c56e9f6ed389f645b6c72) )
+	ROM_LOAD32_BYTE( "94019.026", 0x000003, 0x80000, CRC(f398cba5) SHA1(11e06abebfdfc8a99b5c56e9f6ed389f645b6c72) )
 	ROM_LOAD32_BYTE( "94019.027", 0x000002, 0x80000, CRC(ba3318c5) SHA1(9b100988b998c39b586b51fe9fee874dbf711610) )
 	ROM_LOAD32_BYTE( "94019.028", 0x000001, 0x80000, CRC(e0762e89) SHA1(a567c347e7f73f1ef1c753d14ac4f58311380fac) )
 	ROM_LOAD32_BYTE( "94019.029", 0x000000, 0x80000, CRC(8059800b) SHA1(7548d01b6ea15e962353b3585db6515e5819e5ce) )
 
-	ROM_REGION( 0x0c00000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x0c00000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "94019.01", 0x000000, 0x200000, CRC(92d8ae9b) SHA1(02b36e6e14b28a9830e07fd328772dbb20b76889) )
 	ROM_LOAD32_WORD( "94019.02", 0x000002, 0x200000, CRC(f7bd9cc4) SHA1(5658bfb4081439ab06c6ade2531581aa60d1c6be) )
 	ROM_LOAD32_WORD( "94019.03", 0x400000, 0x200000, CRC(62a69590) SHA1(d95cc1e1ec85161ee6cd1ae77b405cf8ef81217a) )
@@ -1431,14 +1686,14 @@ ROM_START( gratia )
 	ROM_LOAD32_WORD( "94019.05", 0x800000, 0x200000, CRC(a16994df) SHA1(9170b1fd9252d7a9601c3b2e6b1ba86686730b86) )
 	ROM_LOAD32_WORD( "94019.06", 0x800002, 0x200000, CRC(01d52ef1) SHA1(1585c7eb3729bab78467f627b7b671d619451a74) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "94019.08", 0x000000, 0x200000, CRC(abd124e0) SHA1(2da1d818c909e4abbb79ed03f3dbf15d744439ce) )
 	ROM_LOAD( "94019.09", 0x200000, 0x200000, CRC(711ab08b) SHA1(185b80b965ac3aba4857b4f83637008c2c1cc6ff) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "94019_2.07", 0x000000, 0x200000, CRC(043f969b) SHA1(ad10339e561c1a65451a2e9a8e79ceda3787674a) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "94019_2.030",0x000000, 0x080000, CRC(f9543fcf) SHA1(8466c7893bc6c43e2a80b8f91a776fd0a345ea6c) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1455,12 +1710,12 @@ ROM_END
 
 ROM_START( gratiaa )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "94019.026", 0x000003, 0x80000, CRC(f398cba5) SHA1(11e06abebfdfc8a99b5c56e9f6ed389f645b6c72) )
+	ROM_LOAD32_BYTE( "94019.026", 0x000003, 0x80000, CRC(f398cba5) SHA1(11e06abebfdfc8a99b5c56e9f6ed389f645b6c72) )
 	ROM_LOAD32_BYTE( "94019.027", 0x000002, 0x80000, CRC(ba3318c5) SHA1(9b100988b998c39b586b51fe9fee874dbf711610) )
 	ROM_LOAD32_BYTE( "94019.028", 0x000001, 0x80000, CRC(e0762e89) SHA1(a567c347e7f73f1ef1c753d14ac4f58311380fac) )
 	ROM_LOAD32_BYTE( "94019.029", 0x000000, 0x80000, CRC(8059800b) SHA1(7548d01b6ea15e962353b3585db6515e5819e5ce) )
 
-	ROM_REGION( 0x0c00000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x0c00000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "94019.01", 0x000000, 0x200000, CRC(92d8ae9b) SHA1(02b36e6e14b28a9830e07fd328772dbb20b76889) )
 	ROM_LOAD32_WORD( "94019.02", 0x000002, 0x200000, CRC(f7bd9cc4) SHA1(5658bfb4081439ab06c6ade2531581aa60d1c6be) )
 	ROM_LOAD32_WORD( "94019.03", 0x400000, 0x200000, CRC(62a69590) SHA1(d95cc1e1ec85161ee6cd1ae77b405cf8ef81217a) )
@@ -1468,14 +1723,14 @@ ROM_START( gratiaa )
 	ROM_LOAD32_WORD( "94019.05", 0x800000, 0x200000, CRC(a16994df) SHA1(9170b1fd9252d7a9601c3b2e6b1ba86686730b86) )
 	ROM_LOAD32_WORD( "94019.06", 0x800002, 0x200000, CRC(01d52ef1) SHA1(1585c7eb3729bab78467f627b7b671d619451a74) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "94019.08", 0x000000, 0x200000, CRC(abd124e0) SHA1(2da1d818c909e4abbb79ed03f3dbf15d744439ce) )
 	ROM_LOAD( "94019.09", 0x200000, 0x200000, CRC(711ab08b) SHA1(185b80b965ac3aba4857b4f83637008c2c1cc6ff) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "94019.07", 0x000000, 0x200000, BAD_DUMP CRC(acb75824) SHA1(3b43e00a2d240761565042c8feead25a83ef0eb1)  )	// FIXED BITS (xxxxxxxx11111111)
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "94019.030",0x000000, 0x080000, CRC(026b5379) SHA1(b9237477f1bf8ae83174e8231492fe667e6d6a13) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1492,12 +1747,12 @@ ROM_END
 
 ROM_START( gametngk )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "mr94041.26", 0x000003, 0x80000, CRC(e622e774) SHA1(203c2a3563a337af4cec92a66e0fa410d901b01f) )
+	ROM_LOAD32_BYTE( "mr94041.26", 0x000003, 0x80000, CRC(e622e774) SHA1(203c2a3563a337af4cec92a66e0fa410d901b01f) )
 	ROM_LOAD32_BYTE( "mr94041.27", 0x000002, 0x80000, CRC(da862b9c) SHA1(17dc6da08d7f5551c8f4bc4d9c416dbfc82d8397) )
 	ROM_LOAD32_BYTE( "mr94041.28", 0x000001, 0x80000, CRC(b3738934) SHA1(cd07572e55e83807e76179cfc6b97e0410067911) )
 	ROM_LOAD32_BYTE( "mr94041.29", 0x000000, 0x80000, CRC(45154a45) SHA1(4c7c2c6738fdfe54ebe41a0ac6222cbfce5d7757) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr94041.01", 0x0000000, 0x200000, CRC(3f99adf7) SHA1(cbb8d2fc253b0c58e7eb9286c66e6b36daf9d4af) )
 	ROM_LOAD32_WORD( "mr94041.02", 0x0000002, 0x200000, CRC(c3c5ae69) SHA1(5ed7f57a7139f87c680c68e44ea4022b917a9381) )
 	ROM_LOAD32_WORD( "mr94041.03", 0x0400000, 0x200000, CRC(d858b6de) SHA1(a06cf529c9508c8c8508894e2e004373edd9debf) )
@@ -1507,15 +1762,15 @@ ROM_START( gametngk )
 	ROM_LOAD32_WORD( "mr94041.07", 0x0c00000, 0x200000, CRC(a6966af5) SHA1(3a65824f3f325af39d8e9932357ce9f8878f0321) )
 	ROM_LOAD32_WORD( "mr94041.08", 0x0c00002, 0x200000, CRC(d7d2f73a) SHA1(0eb28f4cdea73aa8fed0b62cbac6cd7d7694c2ee) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr94041.11", 0x000000, 0x200000, CRC(00dcdbc3) SHA1(f7e34bc9f714ea81fc9855d90db792dd1e99bae8) )
 	ROM_LOAD( "mr94041.12", 0x200000, 0x200000, CRC(0ce48329) SHA1(9c198cef998eb3b9c33123bd8cc02210498f82d9) )
 
-	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr94041.09", 0x000000, 0x200000, CRC(a33e6051) SHA1(d6e34b022eb36dcfa8cfe6d6d1254f994b3b3dca) )
 	ROM_LOAD( "mr94041.10", 0x200000, 0x200000, CRC(b3497147) SHA1(df7d8ea7ec3e3df5e0c6658f14995df5479181bf) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "mr94041.30", 0x000000, 0x080000, CRC(c0f27b7f) SHA1(874fe80aa4b46520f844ef6efa61f28eabccbc4f) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1532,12 +1787,12 @@ ROM_END
 
 ROM_START( hayaosi2 )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "mb93138a.25", 0x000003, 0x80000, CRC(563c6f2f) SHA1(bc2a61fd2e0adf58256feeef8491b67af6d6eacf) )
+	ROM_LOAD32_BYTE( "mb93138a.25", 0x000003, 0x80000, CRC(563c6f2f) SHA1(bc2a61fd2e0adf58256feeef8491b67af6d6eacf) )
 	ROM_LOAD32_BYTE( "mb93138a.27", 0x000002, 0x80000, CRC(fe8e283a) SHA1(fc6c06ae296110b1f5794187d5208b17541614cb) )
 	ROM_LOAD32_BYTE( "mb93138a.29", 0x000001, 0x80000, CRC(e6fe3d0d) SHA1(9a0caab82b160991b4f2ac993e7e4b4c5d3bb15e) )
 	ROM_LOAD32_BYTE( "mb93138a.31", 0x000000, 0x80000, CRC(d944bf8c) SHA1(ce93b5d2ebe886b38dc42b1e554b17dc951a51b4) )
 
-	ROM_REGION( 0x900000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x900000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr93038.04",  0x000000, 0x200000, CRC(ab5edb11) SHA1(b7742aefbce9efc512c3526714b6f20a6c03af60) )
 	ROM_LOAD32_WORD( "mr93038.05",  0x000002, 0x200000, CRC(274522f1) SHA1(717435d6bf1b2a2220a2f0a53b070bb81cc2ed2b) )
 	ROM_LOAD32_WORD( "mr93038.06",  0x400000, 0x200000, CRC(f9961ebf) SHA1(e91b160cb5a76e3f6044cc71681dadf2fbff7e8b) )
@@ -1545,13 +1800,13 @@ ROM_START( hayaosi2 )
 	ROM_LOAD32_WORD( "mb93138a.15", 0x800000, 0x080000, CRC(a5f64d87) SHA1(11bf017f700faba57a5a2edced7a5d81a581bc50) )
 	ROM_LOAD32_WORD( "mb93138a.3",  0x800002, 0x080000, CRC(a2ae2b21) SHA1(65cee4e5e0a9b8dcac578e34210e1af7d7b2e6f7) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr93038.03",  0x000000, 0x200000, CRC(6999dec9) SHA1(eb4c6ba200cd08b41509314c659feb3af12117ee) )
 
-	ROM_REGION( 0x100000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x100000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr93038.08",  0x000000, 0x100000, CRC(21282cb0) SHA1(52ea94a6457f7684674783c362052bcc40086dd0) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "mb93138a.32", 0x000000, 0x080000, CRC(f563a144) SHA1(14d86e4992329811857e1faf282cd9ec530a364c) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1635,12 +1890,12 @@ Lithium battery + LH5168D-10L(SRAM)
 
 ROM_START( hayaosi3 )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "mb93138.25", 0x000003, 0x80000, CRC(ba8cec03) SHA1(edaa52e0b07307bb21168205ee0d5d6ff8168de9) )
+	ROM_LOAD32_BYTE( "mb93138.25", 0x000003, 0x80000, CRC(ba8cec03) SHA1(edaa52e0b07307bb21168205ee0d5d6ff8168de9) )
 	ROM_LOAD32_BYTE( "mb93138.27", 0x000002, 0x80000, CRC(571725df) SHA1(66575ec1a29d6fc1b50ae5a5ce8025bb1043deaf))
 	ROM_LOAD32_BYTE( "mb93138.29", 0x000001, 0x80000, CRC(da891976) SHA1(27e8c395e92ca01b47bffdf766bc95a6c2150815) )
 	ROM_LOAD32_BYTE( "mb93138.31", 0x000000, 0x80000, CRC(2d17bb06) SHA1(623b603c4002734427c882424a1e0dc889cf7e02) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr94027.01",  0x000000, 0x200000, CRC(c72e5c6e) SHA1(b98cd656c48c775953d00b5d8bafd4ffde76d8df) )
 	ROM_LOAD32_WORD( "mr94027.02",  0x000002, 0x200000, CRC(59976568) SHA1(a280c352d612913834c76b8e23d86c937fd21281) )
 	ROM_LOAD32_WORD( "mr94027.03",  0x400000, 0x200000, CRC(3ff68f4f) SHA1(1e367b92560c32c87e27fc0e99be3bdb5eb0510b) )
@@ -1650,13 +1905,13 @@ ROM_START( hayaosi3 )
 	ROM_LOAD32_WORD( "mr94027.07",  0xc00000, 0x200000, CRC(c66099c4) SHA1(5a6edffa39a98f38cc3cffbad9191fb2e794a812) )
 	ROM_LOAD32_WORD( "mr94027.08",  0xc00002, 0x200000, CRC(753b05e0) SHA1(0424e92b32a73c27ecb549e6e9449446ea938e40) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr94027.09",  0x000000, 0x200000, CRC(32ead437) SHA1(b94175cf186b4ebcc180a4c092d2ffcdd9ff3b1d) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr94027.11",  0x000000, 0x200000, CRC(b65d5096) SHA1(2c4e1e3e9f96be8369cb2de142a82f94506f85c0) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "mb93138.32", 0x000000, 0x080000, CRC(df5d00b4) SHA1(2bbbcd546d5b5170d81bf33b37b46b70b417c9c7) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1673,12 +1928,12 @@ ROM_END
 
 ROM_START( kirarast )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "mr95025.26", 0x000003, 0x80000, CRC(eb7faf5f) SHA1(5b79ff3043db5ef2622ae1665145462d949c9bb8) )
+	ROM_LOAD32_BYTE( "mr95025.26", 0x000003, 0x80000, CRC(eb7faf5f) SHA1(5b79ff3043db5ef2622ae1665145462d949c9bb8) )
 	ROM_LOAD32_BYTE( "mr95025.27", 0x000002, 0x80000, CRC(80644d05) SHA1(6da8bf8aeb1477112f9022c0c5f472cbcd27df8e) )
 	ROM_LOAD32_BYTE( "mr95025.28", 0x000001, 0x80000, CRC(6df8c384) SHA1(3ad01d3d51cfc1f48029c16ee1cc74fc59d7603c) )
 	ROM_LOAD32_BYTE( "mr95025.29", 0x000000, 0x80000, CRC(3b6e681b) SHA1(148fa10631db53a4ad1dcdfb60b4f0654e077396) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr95025.01",  0x000000, 0x200000, CRC(02279069) SHA1(fb3ce00701271d0163f72e4f2e56faa9f16d8fd0) )
 	ROM_LOAD32_WORD( "mr95025.02",  0x000002, 0x200000, CRC(885161d4) SHA1(1bc82de0b2759758d437db3ef9f0f7805f759b59) )
 	ROM_LOAD32_WORD( "mr95025.03",  0x400000, 0x200000, CRC(1ae06df9) SHA1(e1493a386fd8c54c88afab43d13d73869ae467ee) )
@@ -1688,14 +1943,14 @@ ROM_START( kirarast )
 	ROM_LOAD32_WORD( "mr95025.07",  0xc00000, 0x200000, CRC(0263a010) SHA1(b9c85647b406c89f0e839eac93eaf5d2e6963f7d) )
 	ROM_LOAD32_WORD( "mr95025.08",  0xc00002, 0x200000, CRC(8efc00d6) SHA1(f750e0e21310ceceeae3ad80eb2fe2920f5a0076) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr95025.10",  0x000000, 0x200000, CRC(ba7ad413) SHA1(b1f1c218dea3217f21d5e2f44db3786055ed879a) )
 	ROM_LOAD( "mr95025.11",  0x200000, 0x200000, CRC(11557299) SHA1(6efa56f897ab026f965376a0d4032f7a0d20cafe) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr95025.09",  0x000000, 0x200000, CRC(ca6cbd17) SHA1(9d16ef187b062590315066218e89bdf33cfd9865) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "mr95025.30",  0x000000, 0x080000, CRC(aee6e0c2) SHA1(dee985f7a9773ba7a4d31a3833a7775d778bbe5a) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1712,12 +1967,12 @@ ROM_END
 
 ROM_START( akiss )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "93166.26", 0x000003, 0x80000, CRC(5bdd01ee) SHA1(21b8e07bb7ef6b437a43719b02deeba970330900) )
+	ROM_LOAD32_BYTE( "93166.26", 0x000003, 0x80000, CRC(5bdd01ee) SHA1(21b8e07bb7ef6b437a43719b02deeba970330900) )
 	ROM_LOAD32_BYTE( "93166.27", 0x000002, 0x80000, CRC(bb11b2c9) SHA1(86ba06d28bc8f560ac3d05515d061e05c90d1628) )
 	ROM_LOAD32_BYTE( "93166.28", 0x000001, 0x80000, CRC(20565478) SHA1(d532ab55be287f45d8d81317bb844c675eb1292c) )
 	ROM_LOAD32_BYTE( "93166.29", 0x000000, 0x80000, CRC(ff454f0d) SHA1(db81aaaf4160eb62badbe08fc01543463470ac97) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "95008-01.13", 0x000000, 0x200000, CRC(1be66420) SHA1(9fc85e6108f230418e012ad05586010235139039))
 	ROM_LOAD32_WORD( "95008-02.1",  0x000002, 0x200000, CRC(1cc4808e) SHA1(70a19d66b4f187320c67760bc453b6afb7d66f9a) )
 	ROM_LOAD32_WORD( "95008-03.14", 0x400000, 0x200000, CRC(4045f0dc) SHA1(5ba9786618ecad9410dbdf3664f9dda848a754f7) )
@@ -1727,13 +1982,13 @@ ROM_START( akiss )
 	ROM_LOAD32_WORD( "95008-07.16", 0xc00000, 0x200000, CRC(bf47747e) SHA1(b97121953f41039182e25ea023802df4524cf9bd) )
 	ROM_LOAD32_WORD( "95008-08.4",  0xc00002, 0x200000, CRC(34829a09) SHA1(7229c56fee53a9d4d29cf0c9dec471b6cc4dc30b) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "95008-10.11",  0x000000, 0x200000, CRC(52da2e9e) SHA1(d7a29bdd1c6801aa8d36bc098e75091c63ba0766) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "95008-09.10",  0x000000, 0x200000,CRC(7236f6a0) SHA1(98dbb55f08d669ef3bf69394bb9739d0e6137fcb) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "93166.30",  0x000000, 0x080000, CRC(1807c1ea) SHA1(94696b8319c4982cb5d33423f56e2348f210cdb5) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1750,12 +2005,12 @@ ROM_END
 
 ROM_START( p47aces )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "p47-26.bin", 0x000003, 0x80000, CRC(e017b819) SHA1(942fb48e8bb3a263534a0351a1a9979d786bc475) )
+	ROM_LOAD32_BYTE( "p47-26.bin", 0x000003, 0x80000, CRC(e017b819) SHA1(942fb48e8bb3a263534a0351a1a9979d786bc475) )
 	ROM_LOAD32_BYTE( "p47-27.bin", 0x000002, 0x80000, CRC(bd1b81e0) SHA1(b15f157fe3a30295f999a4c285da2d6f22d7fba6) )
- 	ROM_LOAD32_BYTE( "p47-28.bin", 0x000001, 0x80000, CRC(4742a5f7) SHA1(cd297aa150082c545647c9a755cf2cdbdc98c988) )
+	ROM_LOAD32_BYTE( "p47-28.bin", 0x000001, 0x80000, CRC(4742a5f7) SHA1(cd297aa150082c545647c9a755cf2cdbdc98c988) )
 	ROM_LOAD32_BYTE( "p47-29.bin", 0x000000, 0x80000, CRC(86e17d8b) SHA1(73004f243c6dfb86ce4cc61475dc7caaf452750e) )
 
-	ROM_REGION( 0xe00000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0xe00000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "p47-01.bin",  0x000002, 0x200000, CRC(28732d3c) SHA1(15b2687bcad31793fc7d6a9dc3eccb7ad9b5f659) )
 	ROM_LOAD32_WORD( "p47-13.bin",  0x000000, 0x200000, CRC(a6ccf999) SHA1(5d32fb6f6987ede6c125bec9581da4695ad64dff) )
 	ROM_LOAD32_WORD( "p47-02.bin",  0x400002, 0x200000, CRC(128db576) SHA1(f6561f54f6b95842a5f14d29682449bf0d837a85) )
@@ -1765,15 +2020,15 @@ ROM_START( p47aces )
 	ROM_LOAD32_WORD( "p47-04.bin",  0xc00002, 0x100000, CRC(4b3372be) SHA1(cdc7d7615b6b5d45ca071b2967980dc6c6294ac0) )
 	ROM_LOAD32_WORD( "p47-16.bin",  0xc00000, 0x100000, CRC(c23c5467) SHA1(5ff51ecb86ccbae2af160599890e13a7cc70072d) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "p47-11.bin",  0x000000, 0x200000, CRC(c1fe16b3) SHA1(8b9d2483ba06ab8072676e73d949c696535b3d26) )
 	ROM_LOAD( "p47-12.bin",  0x200000, 0x200000, CRC(75871325) SHA1(9191263a52ec6ac325cf6130b35be7cdd1ec2f50) )
 
-	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "p47-10.bin",  0x000000, 0x200000, CRC(a44e9e06) SHA1(ff51796e160d996e931b92049e6214982f270caa) )
 	ROM_LOAD( "p47-09.bin",  0x200000, 0x200000, CRC(226014a6) SHA1(090bdc1f6d2b9d33b431dbb49a457a4bb36cd3ad) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "p47-30.bin",  0x000000, 0x080000, CRC(7ba90fad) SHA1(c0a3d4458816f00b8f5eb4b6d4531d1abeaccbe5) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1790,22 +2045,22 @@ ROM_END
 
 ROM_START( tetrisp )
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "mr95024.26", 0x000003, 0x80000, CRC(d318a9ba) SHA1(cae86d86518fdfeb736e7b2040277c76cc3b4017) )
+	ROM_LOAD32_BYTE( "mr95024.26", 0x000003, 0x80000, CRC(d318a9ba) SHA1(cae86d86518fdfeb736e7b2040277c76cc3b4017) )
 	ROM_LOAD32_BYTE( "mr95024.27", 0x000002, 0x80000, CRC(2d69b6d3) SHA1(f0a513f449aa25808672fb27e3691ccabfba48a1) )
 	ROM_LOAD32_BYTE( "mr95024.28", 0x000001, 0x80000, CRC(87522e16) SHA1(4f0d8abec046884d89c559e3a4a5ac9e0e47a0dc) )
 	ROM_LOAD32_BYTE( "mr95024.29", 0x000000, 0x80000, CRC(43a61941) SHA1(a097c88c45d8486eb6ffdd13904b6eb2a3fa45b9) )
 
-	ROM_REGION( 0x400000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr95024.01", 0x000002, 0x200000, CRC(cb0e92b9) SHA1(179cc9e2d819d7f6238e924184e8a383d172aa72) )
 	ROM_LOAD32_WORD( "mr95024.13", 0x000000, 0x200000, CRC(4a825990) SHA1(f99ba9f88f5582259ba0e50480451d4e9d1d03b7) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr95024.11", 0x000000, 0x200000, CRC(c0d5246f) SHA1(413285f6b40001281c4fcec1ce73400c3ae610ed) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr95024.10", 0x000000, 0x200000, CRC(a03e4a8d) SHA1(d52c78d5e9d874dce514ffb035f2424409d8fb7a) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "mr95024.30", 0x000000, 0x080000, CRC(cea7002d) SHA1(5462edaeb9339790b95ed15a4bfaab8fae655b12) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1827,17 +2082,17 @@ ROM_START( tp2m32 )
 	ROM_LOAD32_BYTE( "tp2m3228.28", 0x000001, 0x80000, CRC(041aac23) SHA1(3f7863ffa897978493e98445fe020dccbe521752) )
 	ROM_LOAD32_BYTE( "tp2m3229.29", 0x000000, 0x80000, CRC(4e83b2ca) SHA1(2766793f050a6952f4f53a763686f95bd7544f3f) )
 
-	ROM_REGION( 0x800000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x800000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "96019-01.9", 0x000000, 0x400000, CRC(06f7dc64) SHA1(722c51b707b9854c0293afdff18b27ec7cae6719) )
 	ROM_LOAD32_WORD( "96019-02.8", 0x000002, 0x400000, CRC(3e613bed) SHA1(038b5e43fa3d69654107c8093126eeb2e8fa4ddc) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "tp2m3204.11", 0x000000, 0x200000, CRC(b5a03129) SHA1(a50d8b70615c49216f647534d1658c1a6d58a783) )
 
-	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "tp2m3203.10", 0x000000, 0x400000, CRC(94af8057) SHA1(e3bc6e02fe4c503ae51284770a76abbeff989147) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "tp2m3230.30", 0x000000, 0x080000, CRC(6845e476) SHA1(61c33714db2e2b5ccdcef0e0d3efdc391fe6aba2) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1855,12 +2110,12 @@ ROM_END
 
 ROM_START( bnstars ) /* ver 1.1 */
 	ROM_REGION( 0x200000, "maincpu", 0 ) /* V70 code */
- 	ROM_LOAD32_BYTE( "vsjanshi26.37", 0x000003, 0x80000, CRC(75eeec8f) SHA1(26315381baa0abb470203dc565ad98c52fe17b20) )
+	ROM_LOAD32_BYTE( "vsjanshi26.37", 0x000003, 0x80000, CRC(75eeec8f) SHA1(26315381baa0abb470203dc565ad98c52fe17b20) )
 	ROM_LOAD32_BYTE( "vsjanshi27.38", 0x000002, 0x80000, CRC(69f24ab9) SHA1(e019a444111e4ed7f9a378d6e2d13ddb9324bc49) )
 	ROM_LOAD32_BYTE( "vsjanshi28.39", 0x000001, 0x80000, CRC(d075cfb6) SHA1(f70741e9f536d5c7604126d36c7aa8ed8f25c329) )
 	ROM_LOAD32_BYTE( "vsjanshi29.40", 0x000000, 0x80000, CRC(bc395b50) SHA1(84d7cc492a11a5a9402e929f0bd138ad63e3d079) )
 
-	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x1000000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr96004-01.13", 0x000000, 0x200000, CRC(3366d104) SHA1(2de0cabe2ead777b5b02cade7f2003ef7f90b75b) )
 	ROM_LOAD32_WORD( "mr96004-02.1",  0x000002, 0x200000, CRC(ad556664) SHA1(4b36f8d8d9efa37cf515af41d14433e7eafa27a2) )
 	ROM_LOAD32_WORD( "mr96004-03.14", 0x400000, 0x200000, CRC(b399e2b1) SHA1(9b6a00a219db8d66dcf592160b7b5f7a86b8f0c9) )
@@ -1870,13 +2125,13 @@ ROM_START( bnstars ) /* ver 1.1 */
 	ROM_LOAD32_WORD( "mr96004-07.16", 0xc00000, 0x200000, CRC(177e32fa) SHA1(3ca1f397dc28f1fa3a4136705b92c63e4e438f05) )
 	ROM_LOAD32_WORD( "mr96004-08.4",  0xc00002, 0x200000, CRC(f6df27b2) SHA1(60590976020d86bdccd4eaf57b349ea31bec6830) )
 
-	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr96004-09.11",  0x000000, 0x400000, CRC(7f8ea9f0) SHA1(f1fe682dcb884f1aa4a5536e17ab94157a99f519) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr96004-11.10", 0x000000, 0x200000,  CRC(e6da552c) SHA1(69a5af3015883793c7d1343243ccae23db9ef77c) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "vsjanshi30.41",  0x000000, 0x080000, CRC(fdbbac21) SHA1(c77d852e53126cc8ebfe1e79d1134e42b54d1aab) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1935,7 +2190,7 @@ ROM_START( wpksocv2 )
 	ROM_LOAD32_BYTE( "29", 0x000001, 0x80000, CRC(22acd835) SHA1(0fa96a6dfde737d541842f85dc257776044e15b5) )
 	ROM_LOAD32_BYTE( "31", 0x000000, 0x80000, CRC(f25e50f5) SHA1(b58722f11a8b94ef053caf531ac94a959350288a) )
 
-	ROM_REGION( 0xc00000, "gfx1", 0 ) /* sprites, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0xc00000, "gfx1", 0 ) /* sprites */
 	ROM_LOAD32_WORD( "mr95033-01.13", 0x000000, 0x200000, CRC(1f76ed57) SHA1(af9076b4b4c26b362825d892f46d2c04b4bb9d07) )
 	ROM_LOAD32_WORD( "mr95033-02.1",  0x000002, 0x200000, CRC(5b119910) SHA1(aff44e355227dd159e388ab85a5b6d48644ff421) )
 	ROM_LOAD32_WORD( "mr95033-03.14", 0x400000, 0x200000, CRC(8b6099ed) SHA1(c514cec1491aed00a5714c0b8d17c96e87ba50aa) )
@@ -1943,13 +2198,13 @@ ROM_START( wpksocv2 )
 	ROM_LOAD32_WORD( "mr95033-05.15", 0x800000, 0x200000, CRC(cc5b8d0b) SHA1(70a5b9db600fc168d13ad54653cf1c8d2a45d991) )
 	ROM_LOAD32_WORD( "mr95033-06.3",  0x800002, 0x200000, CRC(2f79942f) SHA1(73417d10f37bcd539b8081312226cf142a5a0d3d) )
 
-	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx2", 0 ) /* roz tiles */
 	ROM_LOAD( "mr95033-07.9", 0x000000, 0x200000, CRC(76cd2e0b) SHA1(41aa18dfb4e06547d1f6d7ce49e5225027d16bbb) )
 
-	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x200000, "gfx3", 0 ) /* bg tiles */
 	ROM_LOAD( "mr95033-09.11", 0x000000, 0x200000, CRC(8a6dae81) SHA1(e235f2865a9a003330bff1e4d0a017e5d10efd2a) )
 
-	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles, don't dispose since we use GFX_RAW */
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* tx tiles */
 	ROM_LOAD( "32", 0x000000, 0x080000, CRC(becc25c2) SHA1(4ae7665cd45ebd9586068e99327145194ba216fc) )
 
 	ROM_REGION( 0x50000, "audiocpu", 0 ) /* z80 program */
@@ -1965,166 +2220,25 @@ ROM_START( wpksocv2 )
 ROM_END
 
 
-/********** DECRYPT **********/
-
-/* 4 known types */
-
-/* SS91022-10: desertwr, gratiaa, tp2m32, gametngk */
-
-/* SS92046_01: bbbxing, f1superb, tetrisp, hayaosi2 */
-
-/* SS92047-01: gratia, kirarast */
-
-/* SS92048-01: p47aces, 47pie2, 47pie2o */
-
-void ms32_rearrange_sprites(running_machine *machine, const char *region)
+static void configure_banks(running_machine &machine)
 {
-	/* sprites are not encrypted, but we need to move the data around to handle them as 256x256 tiles */
-	int i;
-	UINT8 *source_data;
-	int source_size;
-
-	UINT8 *result_data;
-
-	source_data = memory_region       ( machine, region );
-	source_size = memory_region_length( machine, region );
-
-	result_data = alloc_array_or_die(UINT8, source_size);
-
-	for(i=0; i<source_size; i++)
-	{
-		int j = (i & ~0x07f8) | ((i & 0x00f8) << 3) | ((i & 0x0700) >> 5);
-
-		result_data[i] = source_data[j];
-	}
-
-	memcpy (source_data, result_data, source_size);
-	free (result_data);
+	ms32_state *state = machine.driver_data<ms32_state>();
+	state_save_register_global(machine, state->m_to_main);
+	memory_configure_bank(machine, "bank4", 0, 16, machine.region("audiocpu")->base() + 0x14000, 0x4000);
+	memory_configure_bank(machine, "bank5", 0, 16, machine.region("audiocpu")->base() + 0x14000, 0x4000);
 }
 
-
-void decrypt_ms32_tx(running_machine *machine, int addr_xor,int data_xor, const char *region)
+static DRIVER_INIT( ms32_common )
 {
-	int i;
-	UINT8 *source_data;
-	int source_size;
-
-	UINT8 *result_data;
-
-	source_data = memory_region       ( machine, region );
-	source_size = memory_region_length( machine, region );
-
-	result_data = alloc_array_or_die(UINT8, source_size);
-
-	addr_xor ^= 0x1005d;
-
-	for(i=0; i<source_size; i++)
-	{
-		int j;
-
-		/* two groups of cascading XORs for the address */
-		j = 0;
-		i ^= addr_xor;
-
-		if (BIT(i,18)) j ^= 0x40000;	// 18
-		if (BIT(i,17)) j ^= 0x60000;	// 17
-		if (BIT(i, 7)) j ^= 0x70000;	// 16
-		if (BIT(i, 3)) j ^= 0x78000;	// 15
-		if (BIT(i,14)) j ^= 0x7c000;	// 14
-		if (BIT(i,13)) j ^= 0x7e000;	// 13
-		if (BIT(i, 0)) j ^= 0x7f000;	// 12
-		if (BIT(i,11)) j ^= 0x7f800;	// 11
-		if (BIT(i,10)) j ^= 0x7fc00;	// 10
-
-		if (BIT(i, 9)) j ^= 0x00200;	//  9
-		if (BIT(i, 8)) j ^= 0x00300;	//  8
-		if (BIT(i,16)) j ^= 0x00380;	//  7
-		if (BIT(i, 6)) j ^= 0x003c0;	//  6
-		if (BIT(i,12)) j ^= 0x003e0;	//  5
-		if (BIT(i, 4)) j ^= 0x003f0;	//  4
-		if (BIT(i,15)) j ^= 0x003f8;	//  3
-		if (BIT(i, 2)) j ^= 0x003fc;	//  2
-		if (BIT(i, 1)) j ^= 0x003fe;	//  1
-		if (BIT(i, 5)) j ^= 0x003ff;	//  0
-
-		i ^= addr_xor;
-
-		/* simple XOR for the data */
-		result_data[i] = source_data[j] ^ (i & 0xff) ^ data_xor;
-	}
-
-	memcpy (source_data, result_data, source_size);
-	free (result_data);
-}
-
-void decrypt_ms32_bg(running_machine *machine, int addr_xor,int data_xor, const char *region)
-{
-	int i;
-	UINT8 *source_data;
-	int source_size;
-
-	UINT8 *result_data;
-
-	source_data = memory_region       ( machine, region );
-	source_size = memory_region_length( machine, region );
-
-	result_data = alloc_array_or_die(UINT8, source_size);
-
-	addr_xor ^= 0xc1c5b;
-
-	for(i=0; i<source_size; i++)
-	{
-		int j;
-
-		/* two groups of cascading XORs for the address */
-		j = (i & ~0xfffff);	/* top bits are not affected */
-		i ^= addr_xor;
-
-		if (BIT(i,19)) j ^= 0x80000;	// 19
-		if (BIT(i, 8)) j ^= 0xc0000;	// 18
-		if (BIT(i,17)) j ^= 0xe0000;	// 17
-		if (BIT(i, 2)) j ^= 0xf0000;	// 16
-		if (BIT(i,15)) j ^= 0xf8000;	// 15
-		if (BIT(i,14)) j ^= 0xfc000;	// 14
-		if (BIT(i,13)) j ^= 0xfe000;	// 13
-		if (BIT(i,12)) j ^= 0xff000;	// 12
-		if (BIT(i, 1)) j ^= 0xff800;	// 11
-		if (BIT(i,10)) j ^= 0xffc00;	// 10
-
-		if (BIT(i, 9)) j ^= 0x00200;	//  9
-		if (BIT(i, 3)) j ^= 0x00300;	//  8
-		if (BIT(i, 7)) j ^= 0x00380;	//  7
-		if (BIT(i, 6)) j ^= 0x003c0;	//  6
-		if (BIT(i, 5)) j ^= 0x003e0;	//  5
-		if (BIT(i, 4)) j ^= 0x003f0;	//  4
-		if (BIT(i,18)) j ^= 0x003f8;	//  3
-		if (BIT(i,16)) j ^= 0x003fc;	//  2
-		if (BIT(i,11)) j ^= 0x003fe;	//  1
-		if (BIT(i, 0)) j ^= 0x003ff;	//  0
-
-		i ^= addr_xor;
-
-		/* simple XOR for the data */
-		result_data[i] = source_data[j] ^ (i & 0xff) ^ data_xor;
-	}
-
-	memcpy (source_data, result_data, source_size);
-	free (result_data);
-}
-
-
-
-static void configure_banks(running_machine *machine)
-{
-	state_save_register_global(machine, to_main);
-	memory_configure_bank(machine, 4, 0, 16, memory_region(machine, "audiocpu") + 0x14000, 0x4000);
-	memory_configure_bank(machine, 5, 0, 16, memory_region(machine, "audiocpu") + 0x14000, 0x4000);
+	ms32_state *state = machine.driver_data<ms32_state>();
+	state->m_nvram_8 = auto_alloc_array(machine, UINT8, 0x2000);
+	configure_banks(machine);
 }
 
 /* SS91022-10: desertwr, gratiaa, tp2m32, gametngk */
 static DRIVER_INIT (ss91022_10)
 {
-	configure_banks(machine);
+	DRIVER_INIT_CALL(ms32_common);
 	ms32_rearrange_sprites(machine, "gfx1");
 	decrypt_ms32_tx(machine, 0x00000,0x35, "gfx4");
 	decrypt_ms32_bg(machine, 0x00000,0xa3, "gfx3");
@@ -2133,7 +2247,7 @@ static DRIVER_INIT (ss91022_10)
 /* SS92046_01: bbbxing, f1superb, tetrisp, hayaosi2 */
 static DRIVER_INIT (ss92046_01)
 {
-	configure_banks(machine);
+	DRIVER_INIT_CALL(ms32_common);
 	ms32_rearrange_sprites(machine, "gfx1");
 	decrypt_ms32_tx(machine, 0x00020,0x7e, "gfx4");
 	decrypt_ms32_bg(machine, 0x00001,0x9b, "gfx3");
@@ -2142,7 +2256,7 @@ static DRIVER_INIT (ss92046_01)
 /* SS92047-01: gratia, kirarast */
 static DRIVER_INIT (ss92047_01)
 {
-	configure_banks(machine);
+	DRIVER_INIT_CALL(ms32_common);
 	ms32_rearrange_sprites(machine, "gfx1");
 	decrypt_ms32_tx(machine, 0x24000,0x18, "gfx4");
 	decrypt_ms32_bg(machine, 0x24000,0x55, "gfx3");
@@ -2151,7 +2265,7 @@ static DRIVER_INIT (ss92047_01)
 /* SS92048-01: p47aces, 47pie2, 47pie2o */
 static DRIVER_INIT (ss92048_01)
 {
-	configure_banks(machine);
+	DRIVER_INIT_CALL(ms32_common);
 	ms32_rearrange_sprites(machine, "gfx1");
 	decrypt_ms32_tx(machine, 0x20400,0xd6, "gfx4");
 	decrypt_ms32_bg(machine, 0x20400,0xd4, "gfx3");
@@ -2170,7 +2284,7 @@ static DRIVER_INIT (47pie2)
 static DRIVER_INIT (f1superb)
 {
 #if 0 // we shouldn't need this hack, something else is wrong, and the x offsets are never copied either, v70 problems??
-	UINT32 *pROM = (UINT32 *)memory_region(machine, "maincpu");
+	UINT32 *pROM = (UINT32 *)machine.region("maincpu")->base();
 	pROM[0x19d04/4]=0x167a021a; // bne->br  : sprite Y offset table is always copied to RAM
 #endif
 	DRIVER_INIT_CALL(ss92046_01);
@@ -2204,4 +2318,296 @@ GAME( 1996, wpksocv2, 0,        ms32, wpksocv2, ss92046_01, ROT0,   "Jaleco", "W
 
 
 /* these boot and show something */
-GAME( 1994, f1superb, 0,        ms32, f1superb, f1superb, ROT0,   "Jaleco", "F1 Super Battle", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1994, f1superb, 0,        f1superb, f1superb, f1superb, ROT0,   "Jaleco", "F1 Super Battle", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+
+/* Notes from Charles MacDonald
+
+----------------------------------------------------------------------------
+ Z80 communication
+ ----------------------------------------------------------------------------
+
+ The system has two 8-bit registers which store bytes going from the Z80
+ to the V70 and vice-versa.
+
+ V70 side
+
+ $FC800000 : Writes load the Z80 sound latch and trigger a NMI.
+
+             Reads return D31-D16 = open bus, D15-D0 = $FFFF.
+
+ $FD000000 : Reads return D31-D16 = open bus, D15-D8 = $FF, and
+             D7-D0 =  V70 sound latch, inverted.
+
+             Writes halt the system.
+
+ Z80 side
+
+     $3F10 : Reads return the contents of the Z80 sound latch, inverted.
+             Writes load the V70 sound latch.
+
+ To handle the inversion of sound latch data, both CPUs should invert the
+ data read from their respective read addresses.
+
+ *** Does NMI stay low such that further NMIs can't occur until it's ACK'd?
+
+     Well, reading 3F10-3F1F allows further NMIs which are otherwise masked.
+
+     Is /NMI line really physically held low during this time?
+     Or is there just a flip-flop that remains set until read, which
+     gates NMI?
+
+ *** Does $3F10 cause interrupt on V60 side when accessed? Or $3F20?
+     Could 3F20 be a V70-side interrupt request clear register?
+
+ ----------------------------------------------------------------------------
+ Sound reset register
+ ----------------------------------------------------------------------------
+
+ Writing a '1' to bit 0 of $FCE00038 temporarily pulses the Z80 /RESET pin
+ low for approximately one second, at which point it goes high again and the
+ Z80 resumes operation.
+
+ Setting this bit does *not* keep the Z80 reset for the duration that
+ it is set. It's function is that of a trigger for an automatically timed
+ reset pulse.
+
+ *** Measure /RESET pulse width in units of Z80 clocks.
+
+ ----------------------------------------------------------------------------
+ V70 memory map
+ ----------------------------------------------------------------------------
+
+ Overview
+
+ The hardware maps memory and other devices to a 64MB chunk that is
+ repeatedly mirrored throughout the last 1GB of the address space.
+
+ The system is set up so the V70 is halted when it accesses an unused
+ memory address or accesses it in an unintended way (reading write-only
+ locations, writing to read-only locations). Shortly thereafter the
+ watchdog resets the system due to inactivity.
+
+ The V70 data bus is 32-bit but is connected to a mix of 8, 16, and 32-bit
+ hardware. The undriven data bus bits tend to float high, though my
+ board had a lot of extra pull-up resistors someone added in one of
+ the expansion sockets. I'll try to give approximate garbage values read
+ from these locations when possible.
+
+ V70 memory map
+
+ C0000000-FBFFFFFF : Mirror of FC000000-FFFFFFFF
+
+ Range               Acc  Repeat  Size  Width Description
+
+ FC000000-FC1FFFFF : R/W : 32K  : 8K   : 8  : NVRAM
+ FC600000-FC7FFFFF : R/W : ---  : ---  : -- : Unused (return $FFFFFFFF)
+ FC800000-FC9FFFFF : R/W : 4b   :      : 16 : Z80 sound latch (out)
+ FCC00000-FCDFFFFF : R/W : 32b  :      : 32 : I/O area
+ FCE00000-FCFFFFFF : W/O : 8K   : 4K   : 16 : Video registers
+ FD000000-FD03FFFF : R/O : 4b   :      : 16 : Z80 sound latch (in)
+ FD180000-FD1BFFFF : R/W : 32K  : 8K   : 8  : Priority RAM
+ FD400000-FD5FFFFF : R/W : 256K : 128K : 16 : Color RAM
+ FE000000-FE1FFFFF : R/W : 128K : 64K  : 16 : Rotate RAM
+ FE200000-FE3FFFFF : R/W : 8K   : 4K   : 16 : Line RAM
+ FE800000-FE9FFFFF : R/W : 256K : 128K : 16 : Object RAM
+ FEC00000-FEDFFFFF : R/W : 64K  : 32K  : 16 : ASCII RAM / Scroll RAM
+ FEE00000-FEEFFFFF : R/W : 128K : 128K : 32 : Work RAM
+ FF000000-FFFFFFFF : R/O : 2MB  : 2MB  : 32 : Program ROM
+
+ For example, the object RAM is 128Kx16, mapped to D15-D0 of each word.
+ This corresponds to a 256K space (128K x 32-bits, 16 of which are used)
+ that repeats every 256K within FE800000-FE9FFFFF.
+
+ 1.) Data written to the LSB is stored inverted in $3F10 and triggers NMI.
+     Writing to D15-D8 does nothing and value read is $FF.
+     Writing to D31-D16 resets the machine, values read are open bus (opcodes).
+
+ All items listed are repeatedly mirrored throughout the memory ranges
+ they are assigned to.
+
+ This is the memory map for a Desert War boardset. Other games can add
+ additional hardware on the ROM board which take up memory ranges not listed
+ here. Consider it to be the memory map for a stock Mega System 32 mainboard.
+
+ ----------------------------------------------------------------------------
+ I/O ports
+ ----------------------------------------------------------------------------
+
+ The I/O area consists of 16 word locations that are mirrored repeatedly
+ throughout the range they are mapped to:
+
+ FCC00000 : ?
+ FCC00004 : Player 1, 2 and control panel inputs
+ FCC00008 : ?
+ FCC0000C : ?
+ FCC00010 : DIP switch inputs
+ FCC00014 : ?
+ FCC00018 : ?
+ FCC0001C : ?
+
+ Input details
+
+ FCC00004 : ---- ---- ---- ---- ---- ---- 4321 rldu : 1P buttons, joystick
+          : ---- ---- ---- ---- 4321 rldu ---- ---- : 2P buttons, joystick
+          : ---- ---- ---- --21 ---- ---- ---- ---- : 2P coin, 1P coin
+          : ---- ---- ---- ts-- ---- ---- ---- ---- : Test, service
+          : ---- ---- --21 ---- ---- ---- ---- ---- : 2P start, 1P start
+
+ * All inputs are active-high (1= switch released, 0= switch pressed)
+
+ * When the TILT input is asserted, the system is reset. This continues
+   until TILT is released. The state of TILT cannot be read.
+
+ FCC00010 : ---- ---- ---- ---- ---- ---- 1234 5678 : DIP SW2 #1-8
+          : ---- ---- ---- ---- 1234 5678 ---- ---- : DIP SW1 #1-8
+          : ---- ---- 1234 5678 ---- ---- ---- ---- : DIP SW3 #1-8
+
+ * All inputs are active-low (1= switch OFF, 0= switch ON)
+
+
+ ----------------------------------------------------------------------------
+ System and video registers
+ ----------------------------------------------------------------------------
+
+ This area is 8K long and repeats every 8K. All registers are write-only
+ and are mapped to D15-D0 of each word.
+
+ $FCE00000 : Screen mode control
+
+ D0 : Dot clock control (1= 24 KHz?, 0= 15 KHz)
+
+ $FCE00004 : Horizontal timing
+ $FCE00008 : Horizontal timing
+ $FCE0000C : Horizontal timing
+ $FCE00010 : Horizontal viewport start
+ $FCE00014 : Frame height
+ $FCE00018 : Display height
+ $FCE0001C : Horizontal positioning
+ $FCE00020 : Fine positioning adjust
+
+ $FCE00045 : IRQ acknowledge
+ $FCE00038 : Sound CPU reset
+ $FCE00050 : Watchdog reset
+ $FCE006xx : ROZ
+
+ $FCE00A00 : Text layer horizontal scroll #1
+ $FCE00A04 : Text layer vertical scroll #1
+ $FCE00A08 : Text layer horizontal scroll #2
+ $FCE00A0C : Text layer vertical scroll #2
+
+ $FCE00A2x : BG layer
+ $FCE00A7C : Layer related
+ $FCE00Exx : Coin meter + lockout
+
+ ----------------------------------------------------------------------------
+ NVRAM
+ ----------------------------------------------------------------------------
+
+ NVRAM is 8K, occupying D7-D0 of each word. It is mirrored every 8K-words
+ (32K bytes) in memory.
+
+ Remaining data bits return $FFFFF4xx.
+
+ The NVRAM consists of a low-power 8K SRAM connected to a .1F capacitor for
+ short-term data retention and a CR2032 lithium battery for long-term
+ retention. It also has a write inhibit circuit to protect RAM from spurious
+ writes when the voltage drops low enough to trigger a system reset.
+ During normal operation the write protection is transparent to the
+ programmer and the SRAM can be accessed normally.
+
+ ----------------------------------------------------------------------------
+ Priority RAM
+ ----------------------------------------------------------------------------
+
+ Priority RAM is 8K, occupying D7-D0 of each word. It is mirrored
+ every 8K-words (32K bytes) in memory.
+
+ Remaining data bits return $00FFFFxx.
+
+ Note that the priority RAM chip is actually 32K. The upper address lines
+ are tied low or high, so perhaps priority RAM is banked.
+
+ ----------------------------------------------------------------------------
+ Color RAM
+ ----------------------------------------------------------------------------
+
+ Color RAM is implemented with three 32Kx8 SRAMs. Every eight-byte area
+ within color RAM addresses one location in color RAM. The red and green
+ color RAMs are connected in parallel to D15-D0 respectively for even words,
+ and the blue color RAM is connected to D7-D0 for odd words:
+
+        MSB                                  LSB
+ +$00 : ---- ---- ---- ---- rrrr rrrr gggg gggg : Red, green components
+ +$04 : ---- ---- ---- ---- ---- ---- bbbb bbbb : Blue component
+
+ - = Bit isn't used. Usually returns '1'.
+
+ The color RAM area is 256K in size (32K entries x 8 bytes per entry) and
+ is mirrored every 256K bytes in memory.
+
+ ----------------------------------------------------------------------------
+ Rotate RAM
+ ----------------------------------------------------------------------------
+
+ Rotate RAM is 64K, occuping D15-D0 of each word. It is mirrored every
+ 64K-words (128K bytes) in memory.
+
+ Remaining data bits return $00FFxxxx or $0000xxxx randomly.
+
+ ----------------------------------------------------------------------------
+ Object RAM
+ ----------------------------------------------------------------------------
+
+ Object RAM is 128K, occuping D15-D0 of each word. It is mirrored every
+ 128K-words (256K bytes) in memory.
+
+ Remaining data bits return $FFFFxxxx.
+
+ ----------------------------------------------------------------------------
+ ASCII / Scroll RAM
+ ----------------------------------------------------------------------------
+
+ ASCII / Scroll RAM is 32K, occupying D15-D0 of each word. It is mirrored
+ every 64K-words (128K bytes) in memory.
+
+ Remaining data bits return $0000xxxx.
+
+ ----------------------------------------------------------------------------
+ Work RAM
+ ----------------------------------------------------------------------------
+
+ Work RAM is 128K, occupying D31-D0 of each word. It is mirrored every 128K
+ bytes in memory.
+
+ ----------------------------------------------------------------------------
+ Program ROM
+ ----------------------------------------------------------------------------
+
+ Program ROM is 512K, occupying D31-D0 of each word. It is mirrored every
+ 512K bytes in memory.
+
+ ----------------------------------------------------------------------------
+ CPU information
+ ----------------------------------------------------------------------------
+
+ Main CPU:  NEC uPD70632GD-20 (200-pin PQFP, 20 MHz)
+
+ * The value of PIR for this particular chip is $00007007.
+
+ * The instruction MOV.D with a register operand uses the register
+   pair "rn:rn+1" as the source data. R31 is a special case; the second
+   register of the pair is still R31 rather than wrapping to R0.
+
+   mov.d r2, [r0]       ; Write pair R2:R3 to [R0]
+   mov.d r3, [r0]       ; Write pair R3:R4 to [R0]
+   mov.d r31, [r0]      ; Write pair R31:R31 to [R0]
+
+   Using the immediate or quick immediate addressing mode for the source
+   operand causes an Addressing Mode exception, just like the uPD70616.
+
+ Sound CPU: Zilog Z80840008PSC (40-pin DIP, 8 MHz)
+
+ * NMOS type. Undocumented instruction "out (c), 0" functions normally.
+
+
+ */

@@ -7,14 +7,73 @@
 #ifndef __DC_H__
 #define __DC_H__
 
+class dc_state : public driver_device
+{
+	public:
+		dc_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT64 *dc_framebuffer_ram; // '32-bit access area'
+	UINT64 *dc_texture_ram; // '64-bit access area'
+
+	UINT32 *dc_sound_ram;
+
+	/* machine related */
+	UINT32 dc_rtcregister[4];
+	UINT32 dc_sysctrl_regs[0x200/4];
+	UINT32 g1bus_regs[0x100/4]; // DC-only
+	UINT32 g2bus_regs[0x100/4];
+
+	emu_timer *dc_rtc_timer;
+
+	struct {
+		UINT32 aica_addr;
+		UINT32 root_addr;
+		UINT32 size;
+		UINT8 dir;
+		UINT8 flag;
+		UINT8 indirect;
+		UINT8 start;
+		UINT8 sel;
+	}m_wave_dma;
+
+	struct {
+		UINT32 pvr_addr;
+		UINT32 sys_addr;
+		UINT32 size;
+		UINT8 sel;
+		UINT8 dir;
+		UINT8 flag;
+		UINT8 start;
+	}m_pvr_dma;
+
+	/* video related */
+	UINT32 pvrta_regs[0x2000/4];
+	UINT32 pvrctrl_regs[0x100/4];
+	UINT32 debug_dip_status;
+	emu_timer *vbout_timer;
+	emu_timer *vbin_timer;
+	emu_timer *hbin_timer;
+	emu_timer *endofrender_timer_isp;
+	emu_timer *endofrender_timer_tsp;
+	emu_timer *endofrender_timer_video;
+	UINT32 tafifo_buff[32];
+	int scanline;
+	int next_y;
+
+	/* Naomi 2 specific (To be moved) */
+	UINT64 *pvr2_texture_ram;
+	UINT64 *pvr2_framebuffer_ram;
+	UINT64 *elan_ram;
+};
+
 /*----------- defined in machine/dc.c -----------*/
+
+READ64_HANDLER( pvr_ctrl_r );
+WRITE64_HANDLER( pvr_ctrl_w );
 
 READ64_HANDLER( dc_sysctrl_r );
 WRITE64_HANDLER( dc_sysctrl_w );
-READ64_HANDLER( dc_maple_r );
-WRITE64_HANDLER( dc_maple_w );
-READ64_HANDLER( naomi_maple_r );
-WRITE64_HANDLER( naomi_maple_w );
 READ64_HANDLER( dc_gdrom_r );
 WRITE64_HANDLER( dc_gdrom_w );
 READ64_HANDLER( dc_g1_ctrl_r );
@@ -34,13 +93,8 @@ WRITE32_DEVICE_HANDLER( dc_arm_aica_w );
 MACHINE_START( dc );
 MACHINE_RESET( dc );
 
-int dc_compute_interrupt_level(running_machine *machine);
-void dc_update_interrupt_status(running_machine *machine);
-INPUT_CHANGED( dc_coin_slots_callback );
-
-extern UINT32 dc_sysctrl_regs[0x200/4];
-extern UINT32 dc_coin_counts[2];
-extern UINT8 maple0x86data1[0x80];
+int dc_compute_interrupt_level(running_machine &machine);
+void dc_update_interrupt_status(running_machine &machine);
 
 /*--------- Ch2-DMA Control Registers ----------*/
 #define SB_C2DSTAT	((0x005f6800-0x005f6800)/4)
@@ -207,16 +261,22 @@ extern UINT32 pvrctrl_regs[0x100/4];
 extern UINT64 *dc_texture_ram;
 extern UINT64 *dc_framebuffer_ram;
 
-void dc_vblank( running_machine *machine );
+extern UINT64 *pvr2_texture_ram;
+extern UINT64 *pvr2_framebuffer_ram;
+extern UINT64 *elan_ram;
 
-READ64_HANDLER( pvr_ctrl_r );
-WRITE64_HANDLER( pvr_ctrl_w );
 READ64_HANDLER( pvr_ta_r );
 WRITE64_HANDLER( pvr_ta_w );
+READ64_HANDLER( pvr2_ta_r );
+WRITE64_HANDLER( pvr2_ta_w );
+READ64_HANDLER( pvrs_ta_r );
+WRITE64_HANDLER( pvrs_ta_w );
+READ32_HANDLER( elan_regs_r );
+WRITE32_HANDLER( elan_regs_w );
 WRITE64_HANDLER( ta_fifo_poly_w );
 WRITE64_HANDLER( ta_fifo_yuv_w );
 VIDEO_START(dc);
-VIDEO_UPDATE(dc);
+SCREEN_UPDATE_RGB32(dc);
 
 /*--------------- CORE registers --------------*/
 #define PVRID				((0x005f8000-0x005f8000)/4)

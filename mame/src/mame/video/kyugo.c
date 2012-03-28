@@ -4,25 +4,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "kyugo.h"
-
-
-UINT8 *kyugo_fgvideoram;
-UINT8 *kyugo_bgvideoram;
-UINT8 *kyugo_bgattribram;
-UINT8 *kyugo_spriteram_1;
-UINT8 *kyugo_spriteram_2;
-
-
-static UINT8 scroll_x_lo;
-static UINT8 scroll_x_hi;
-static UINT8 scroll_y;
-static tilemap *fg_tilemap;
-static tilemap *bg_tilemap;
-static int bgpalbank,fgcolor;
-static int flipscreen;
-static const UINT8 *color_codes;
+#include "emu.h"
+#include "includes/kyugo.h"
 
 
 /***************************************************************************
@@ -33,21 +16,23 @@ static const UINT8 *color_codes;
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int code = kyugo_fgvideoram[tile_index];
+	kyugo_state *state = machine.driver_data<kyugo_state>();
+	int code = state->m_fgvideoram[tile_index];
 	SET_TILE_INFO(0,
 				  code,
-				  2*color_codes[code >> 3] + fgcolor,
+				  2 * state->m_color_codes[code >> 3] + state->m_fgcolor,
 				  0);
 }
 
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = kyugo_bgvideoram[tile_index];
-	int attr = kyugo_bgattribram[tile_index];
+	kyugo_state *state = machine.driver_data<kyugo_state>();
+	int code = state->m_bgvideoram[tile_index];
+	int attr = state->m_bgattribram[tile_index];
 	SET_TILE_INFO(1,
 				  code | ((attr & 0x03) << 8),
-				  (attr >> 4) | (bgpalbank << 4),
+				  (attr >> 4) | (state->m_bgpalbank << 4),
 				  TILE_FLIPYX((attr & 0x0c) >> 2));
 }
 
@@ -60,16 +45,17 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( kyugo )
 {
-	color_codes = memory_region(machine, "proms") + 0x300;
+	kyugo_state *state = machine.driver_data<kyugo_state>();
 
+	state->m_color_codes = machine.region("proms")->base() + 0x300;
 
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,       8,8, 64,32);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 
-	tilemap_set_transparent_pen(fg_tilemap,0);
+	state->m_fg_tilemap->set_transparent_pen(0);
 
-	tilemap_set_scrolldx(fg_tilemap,   0, 224);
-	tilemap_set_scrolldx(bg_tilemap, -32, 32);
+	state->m_fg_tilemap->set_scrolldx(0, 224);
+	state->m_bg_tilemap->set_scrolldx(-32, 32);
 }
 
 
@@ -81,57 +67,67 @@ VIDEO_START( kyugo )
 
 WRITE8_HANDLER( kyugo_fgvideoram_w )
 {
-	kyugo_fgvideoram[offset] = data;
-	tilemap_mark_tile_dirty( fg_tilemap, offset );
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+
+	state->m_fgvideoram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 
 WRITE8_HANDLER( kyugo_bgvideoram_w )
 {
-	kyugo_bgvideoram[offset] = data;
-	tilemap_mark_tile_dirty( bg_tilemap, offset );
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+
+	state->m_bgvideoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 
 WRITE8_HANDLER( kyugo_bgattribram_w )
 {
-	kyugo_bgattribram[offset] = data;
-	tilemap_mark_tile_dirty( bg_tilemap, offset );
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+
+	state->m_bgattribram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 
 READ8_HANDLER( kyugo_spriteram_2_r )
 {
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+
 	// only the lower nibble is connected
-	return kyugo_spriteram_2[offset] | 0xf0;
+	return state->m_spriteram_2[offset] | 0xf0;
 }
 
 
 WRITE8_HANDLER( kyugo_scroll_x_lo_w )
 {
-	scroll_x_lo = data;
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+	state->m_scroll_x_lo = data;
 }
 
 
 WRITE8_HANDLER( kyugo_gfxctrl_w )
 {
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+
 	/* bit 0 is scroll MSB */
-	scroll_x_hi = data & 0x01;
+	state->m_scroll_x_hi = data & 0x01;
 
 	/* bit 5 is front layer color (Son of Phoenix only) */
-	if (fgcolor != ((data & 0x20) >> 5))
+	if (state->m_fgcolor != ((data & 0x20) >> 5))
 	{
-		fgcolor = (data & 0x20) >> 5;
+		state->m_fgcolor = (data & 0x20) >> 5;
 
-		tilemap_mark_all_tiles_dirty(fg_tilemap);
+		state->m_fg_tilemap->mark_all_dirty();
 	}
 
 	/* bit 6 is background palette bank */
-	if (bgpalbank != ((data & 0x40) >> 6))
+	if (state->m_bgpalbank != ((data & 0x40) >> 6))
 	{
-		bgpalbank = (data & 0x40) >> 6;
-
-		tilemap_mark_all_tiles_dirty(bg_tilemap);
+		state->m_bgpalbank = (data & 0x40) >> 6;
+		state->m_bg_tilemap->mark_all_dirty();
 	}
 
 	if (data & 0x9e)
@@ -141,17 +137,19 @@ WRITE8_HANDLER( kyugo_gfxctrl_w )
 
 WRITE8_HANDLER( kyugo_scroll_y_w )
 {
-	scroll_y = data;
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
+	state->m_scroll_y = data;
 }
 
 
 WRITE8_HANDLER( kyugo_flipscreen_w )
 {
-	if (flipscreen != (data & 0x01))
-	{
-		flipscreen = (data & 0x01);
+	kyugo_state *state = space->machine().driver_data<kyugo_state>();
 
-		tilemap_set_flip_all(space->machine, (flipscreen ? (TILEMAP_FLIPX | TILEMAP_FLIPY): 0));
+	if (state->m_flipscreen != (data & 0x01))
+	{
+		state->m_flipscreen = (data & 0x01);
+		space->machine().tilemap().set_flip_all((state->m_flipscreen ? (TILEMAP_FLIPX | TILEMAP_FLIPY): 0));
 	}
 }
 
@@ -162,72 +160,79 @@ WRITE8_HANDLER( kyugo_flipscreen_w )
  *
  *************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
+	kyugo_state *state = machine.driver_data<kyugo_state>();
+
 	/* sprite information is scattered through memory */
 	/* and uses a portion of the text layer memory (outside the visible area) */
-	UINT8 *spriteram_area1 = &kyugo_spriteram_1[0x28];
-	UINT8 *spriteram_area2 = &kyugo_spriteram_2[0x28];
-	UINT8 *spriteram_area3 = &kyugo_fgvideoram[0x28];
+	UINT8 *spriteram_area1 = &state->m_spriteram_1[0x28];
+	UINT8 *spriteram_area2 = &state->m_spriteram_2[0x28];
+	UINT8 *spriteram_area3 = &state->m_fgvideoram[0x28];
 
 	int n;
 
-	for( n = 0; n < 12*2; n++ )
+	for (n = 0; n < 12 * 2; n++)
 	{
-		int offs,y,sy,sx,color;
+		int offs, y, sy, sx, color;
 
-		offs = 2*(n % 12) + 64*(n / 12);
+		offs = 2 * (n % 12) + 64 * (n / 12);
 
-		sx = spriteram_area3[offs+1] + 256 * (spriteram_area2[offs+1] & 1);
-		if (sx > 320) sx -= 512;
+		sx = spriteram_area3[offs + 1] + 256 * (spriteram_area2[offs + 1] & 1);
+		if (sx > 320)
+			sx -= 512;
 
 		sy = 255 - spriteram_area1[offs] + 2;
-		if (sy > 0xf0) sy -= 256;
+		if (sy > 0xf0)
+			sy -= 256;
 
-		if (flipscreen) sy = 240 - sy;
+		if (state->m_flipscreen)
+			sy = 240 - sy;
 
-		color = spriteram_area1[offs+1] & 0x1f;
+		color = spriteram_area1[offs + 1] & 0x1f;
 
-		for (y = 0;y < 16;y++)
+		for (y = 0; y < 16; y++)
 		{
-			int code,attr,flipx,flipy;
+			int code, attr, flipx, flipy;
 
-			code = spriteram_area3[offs + 128*y];
-			attr = spriteram_area2[offs + 128*y];
+			code = spriteram_area3[offs + 128 * y];
+			attr = spriteram_area2[offs + 128 * y];
 
 			code = code | ((attr & 0x01) << 9) | ((attr & 0x02) << 7);
 
 			flipx =  attr & 0x08;
 			flipy =  attr & 0x04;
 
-			if (flipscreen)
+			if (state->m_flipscreen)
 			{
 				flipx = !flipx;
 				flipy = !flipy;
 			}
 
 
-			drawgfx_transpen( bitmap, cliprect,machine->gfx[2],
+			drawgfx_transpen( bitmap, cliprect,machine.gfx[2],
 					 code,
 					 color,
 					 flipx,flipy,
-					 sx,flipscreen ? sy - 16*y : sy + 16*y, 0 );
-		 }
+					 sx,state->m_flipscreen ? sy - 16*y : sy + 16*y, 0 );
+		}
 	}
 }
 
 
-VIDEO_UPDATE( kyugo )
+SCREEN_UPDATE_IND16( kyugo )
 {
-	if (flipscreen)
-		tilemap_set_scrollx(bg_tilemap,0,-(scroll_x_lo + (scroll_x_hi*256)));
+	kyugo_state *state = screen.machine().driver_data<kyugo_state>();
+
+	if (state->m_flipscreen)
+		state->m_bg_tilemap->set_scrollx(0, -(state->m_scroll_x_lo + (state->m_scroll_x_hi * 256)));
 	else
-		tilemap_set_scrollx(bg_tilemap,0,  scroll_x_lo + (scroll_x_hi*256));
+		state->m_bg_tilemap->set_scrollx(0,   state->m_scroll_x_lo + (state->m_scroll_x_hi * 256));
 
-	tilemap_set_scrolly(bg_tilemap,0,scroll_y);
+	state->m_bg_tilemap->set_scrolly(0, state->m_scroll_y);
 
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
-	tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }

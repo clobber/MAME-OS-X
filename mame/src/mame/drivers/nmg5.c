@@ -219,68 +219,106 @@ Stephh's notes (based on the games M68000 code and some tests) :
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
+#include "video/decospr.h"
 
-static tilemap *fg_tilemap,*bg_tilemap;
-static UINT16 *nmg5_bitmap;
-static UINT16 *fg_videoram,*bg_videoram,*scroll_ram;
-static UINT8 prot_val, input_data, priority_reg, gfx_bank;
+class nmg5_state : public driver_device
+{
+public:
+	nmg5_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	/* memory pointers */
+	UINT16 *    m_fg_videoram;
+	UINT16 *    m_bg_videoram;
+	UINT16 *    m_scroll_ram;
+	UINT16 *    m_bitmap;
+	UINT16 *    m_spriteram;
+//  UINT16 *  m_paletteram;    // currently this uses generic palette handling
+	size_t      m_spriteram_size;
+
+	/* video-related */
+	tilemap_t  *m_bg_tilemap;
+	tilemap_t  *m_fg_tilemap;
+
+	/* misc */
+	UINT8 m_prot_val;
+	UINT8 m_input_data;
+	UINT8 m_priority_reg;
+	UINT8 m_gfx_bank;
+
+	/* devices */
+	device_t *m_maincpu;
+	device_t *m_soundcpu;
+};
+
+
 
 static WRITE16_HANDLER( fg_videoram_w )
 {
-	COMBINE_DATA(&fg_videoram[offset]);
-	tilemap_mark_tile_dirty(fg_tilemap,offset);
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
+	COMBINE_DATA(&state->m_fg_videoram[offset]);
+	state->m_fg_tilemap->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( bg_videoram_w )
 {
-	COMBINE_DATA(&bg_videoram[offset]);
-	tilemap_mark_tile_dirty(bg_tilemap,offset);
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
+	COMBINE_DATA(&state->m_bg_videoram[offset]);
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static WRITE16_HANDLER( nmg5_soundlatch_w )
 {
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
-		soundlatch_w(space,0,data & 0xff);
-		cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
+		soundlatch_w(space, 0, data & 0xff);
+		device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static READ16_HANDLER( prot_r )
 {
-	return prot_val | input_data;
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
+	return state->m_prot_val | state->m_input_data;
 }
 
 static WRITE16_HANDLER( prot_w )
 {
-	input_data = data & 0xf;
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
+	state->m_input_data = data & 0x0f;
 }
 
 static WRITE16_HANDLER( gfx_bank_w )
 {
-	if( gfx_bank != (data & 3) )
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
+
+	if (state->m_gfx_bank != (data & 3))
 	{
-		gfx_bank = data & 3;
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		state->m_gfx_bank = data & 3;
+		space->machine().tilemap().mark_all_dirty();
 	}
 }
 
 static WRITE16_HANDLER( priority_reg_w )
 {
-	priority_reg = data & 7;
+	nmg5_state *state = space->machine().driver_data<nmg5_state>();
 
-	if(priority_reg == 4 || priority_reg == 5 || priority_reg == 6)
-		popmessage("unknown priority_reg value = %d\n",priority_reg);
+	state->m_priority_reg = data & 7;
+
+	if (state->m_priority_reg == 4 || state->m_priority_reg == 5 || state->m_priority_reg == 6)
+		popmessage("unknown priority_reg value = %d\n", state->m_priority_reg);
 }
 
 static WRITE8_DEVICE_HANDLER( oki_banking_w )
 {
-	okim6295_set_bank_base(device, (data & 1) ? 0x40000 : 0 );
+	downcast<okim6295_device *>(device)->set_bank_base((data & 1) ? 0x40000 : 0);
 }
 
 /*******************************************************************
@@ -289,11 +327,11 @@ static WRITE8_DEVICE_HANDLER( oki_banking_w )
 
 ********************************************************************/
 
-static ADDRESS_MAP_START( nmg5_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( nmg5_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x120000, 0x12ffff) AM_RAM
-	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_MEMBER(nmg5_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x180000, 0x180001) AM_WRITE(nmg5_soundlatch_w)
 	AM_RANGE(0x180002, 0x180003) AM_WRITENOP
 	AM_RANGE(0x180004, 0x180005) AM_READWRITE(prot_r, prot_w)
@@ -302,18 +340,18 @@ static ADDRESS_MAP_START( nmg5_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x18000a, 0x18000b) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x18000c, 0x18000d) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x18000e, 0x18000f) AM_WRITE(priority_reg_w)
-	AM_RANGE(0x300002, 0x300009) AM_WRITE(SMH_RAM) AM_BASE(&scroll_ram)
+	AM_RANGE(0x300002, 0x300009) AM_WRITEONLY AM_BASE_MEMBER(nmg5_state, m_scroll_ram)
 	AM_RANGE(0x30000a, 0x30000f) AM_WRITENOP
-	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(bg_videoram_w) AM_BASE(&bg_videoram)
-	AM_RANGE(0x322000, 0x323fff) AM_RAM_WRITE(fg_videoram_w) AM_BASE(&fg_videoram)
-	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE(&nmg5_bitmap)
+	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(bg_videoram_w) AM_BASE_MEMBER(nmg5_state, m_bg_videoram)
+	AM_RANGE(0x322000, 0x323fff) AM_RAM_WRITE(fg_videoram_w) AM_BASE_MEMBER(nmg5_state, m_fg_videoram)
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(nmg5_state, m_bitmap)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pclubys_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pclubys_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM
-	AM_RANGE(0x440000, 0x4407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x460000, 0x4607ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x440000, 0x4407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x460000, 0x4607ff) AM_RAM AM_BASE_SIZE_MEMBER(nmg5_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0x480000, 0x480001) AM_WRITE(nmg5_soundlatch_w)
 	AM_RANGE(0x480002, 0x480003) AM_WRITENOP
 	AM_RANGE(0x480004, 0x480005) AM_READWRITE(prot_r, prot_w)
@@ -322,10 +360,10 @@ static ADDRESS_MAP_START( pclubys_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x48000a, 0x48000b) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x48000c, 0x48000d) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x48000e, 0x48000f) AM_WRITE(priority_reg_w)
-	AM_RANGE(0x500002, 0x500009) AM_WRITE(SMH_RAM) AM_BASE(&scroll_ram)
-	AM_RANGE(0x520000, 0x521fff) AM_RAM_WRITE(bg_videoram_w) AM_BASE(&bg_videoram)
-	AM_RANGE(0x522000, 0x523fff) AM_RAM_WRITE(fg_videoram_w) AM_BASE(&fg_videoram)
-	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE(&nmg5_bitmap)
+	AM_RANGE(0x500002, 0x500009) AM_WRITEONLY AM_BASE_MEMBER(nmg5_state, m_scroll_ram)
+	AM_RANGE(0x520000, 0x521fff) AM_RAM_WRITE(bg_videoram_w) AM_BASE_MEMBER(nmg5_state, m_bg_videoram)
+	AM_RANGE(0x522000, 0x523fff) AM_RAM_WRITE(fg_videoram_w) AM_BASE_MEMBER(nmg5_state, m_fg_videoram)
+	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE_MEMBER(nmg5_state, m_bitmap)
 ADDRESS_MAP_END
 
 /*******************************************************************
@@ -334,22 +372,22 @@ ADDRESS_MAP_END
 
 ********************************************************************/
 
-static ADDRESS_MAP_START( nmg5_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( nmg5_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pclubys_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pclubys_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("oki", oki_banking_w)
-	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x18, 0x18) AM_READ(soundlatch_r)
-	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( nmg5 )
@@ -458,7 +496,7 @@ static INPUT_PORTS_START( searchey )
 	PORT_DIPUNUSED_DIPLOC( 0x1000, IP_ACTIVE_LOW, "SW2:4" )
 	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Language ) )     PORT_DIPLOCATION("SW2:3")
 	PORT_DIPSETTING(      0x0000, DEF_STR( English ) )
-	PORT_DIPSETTING(      0x2000, "Korean" )
+	PORT_DIPSETTING(      0x2000, DEF_STR( Korean ) )
 	PORT_DIPUNUSED_DIPLOC( 0x4000, IP_ACTIVE_LOW, "SW2:2" )
 	PORT_DIPNAME( 0x8000, 0x8000, "Items to find" )         PORT_DIPLOCATION("SW2:1")     // See notes
 	PORT_DIPSETTING(      0x0000, "Less" )
@@ -516,14 +554,14 @@ static INPUT_PORTS_START( searchp2 )
 	PORT_DIPSETTING(      0x0200, "Table 3" )
 	PORT_DIPSETTING(      0x0000, "Table 4" )
 	PORT_DIPNAME( 0x3800, 0x3000, DEF_STR( Language ) )     PORT_DIPLOCATION("SW2:5,4,3") // See notes
-//  PORT_DIPSETTING(      0x3800, "Korean" )
+//  PORT_DIPSETTING(      0x3800, DEF_STR( Korean ) )
 	PORT_DIPSETTING(      0x3000, DEF_STR( English ) )
 	PORT_DIPSETTING(      0x2800, DEF_STR( Japanese ) )
-	PORT_DIPSETTING(      0x2000, "Chinese" )
+	PORT_DIPSETTING(      0x2000, DEF_STR( Chinese ) )
 	PORT_DIPSETTING(      0x1800, DEF_STR( Italian ) )
-	PORT_DIPSETTING(      0x1000, "Korean" )
-//  PORT_DIPSETTING(      0x0800, "Korean" )
-//  PORT_DIPSETTING(      0x0000, "Korean" )
+	PORT_DIPSETTING(      0x1000, DEF_STR( Korean ) )
+//  PORT_DIPSETTING(      0x0800, DEF_STR( Korean ) )
+//  PORT_DIPSETTING(      0x0000, DEF_STR( Korean ) )
 	PORT_DIPNAME( 0x4000, 0x4000, "Lucky Timer" )           PORT_DIPLOCATION("SW2:2")     // See notes
 	PORT_DIPSETTING(      0x0000, "Less" )
 	PORT_DIPSETTING(      0x4000, "More" )
@@ -789,78 +827,49 @@ static INPUT_PORTS_START( wondstck )
 INPUT_PORTS_END
 
 
-INLINE void get_tile_info(running_machine *machine,tile_data *tileinfo,int tile_index,UINT16 *vram,int color)
+INLINE void get_tile_info( running_machine &machine, tile_data &tileinfo, int tile_index, UINT16 *vram, int color )
 {
-	SET_TILE_INFO(0,vram[tile_index] | (gfx_bank << 16),color,0);
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+	SET_TILE_INFO(0, vram[tile_index] | (state->m_gfx_bank << 16), color, 0);
 }
 
-static TILE_GET_INFO( fg_get_tile_info ) { get_tile_info(machine,tileinfo,tile_index,fg_videoram, 0); }
-static TILE_GET_INFO( bg_get_tile_info ) { get_tile_info(machine,tileinfo,tile_index,bg_videoram, 1); }
+static TILE_GET_INFO( fg_get_tile_info ) { nmg5_state *state = machine.driver_data<nmg5_state>();	get_tile_info(machine, tileinfo, tile_index, state->m_fg_videoram, 0); }
+static TILE_GET_INFO( bg_get_tile_info ) { nmg5_state *state = machine.driver_data<nmg5_state>();	get_tile_info(machine, tileinfo, tile_index, state->m_bg_videoram, 1); }
 
 static VIDEO_START( nmg5 )
 {
-	bg_tilemap = tilemap_create(machine, bg_get_tile_info,tilemap_scan_rows,8,8,64,64);
-	fg_tilemap = tilemap_create(machine, fg_get_tile_info,tilemap_scan_rows,8,8,64,64);
+	nmg5_state *state = machine.driver_data<nmg5_state>();
 
-	tilemap_set_transparent_pen(fg_tilemap,0);
+	state->m_bg_tilemap = tilemap_create(machine, bg_get_tile_info, tilemap_scan_rows, 8, 8, 64, 64);
+	state->m_fg_tilemap = tilemap_create(machine, fg_get_tile_info, tilemap_scan_rows, 8, 8, 64, 64);
+	state->m_fg_tilemap->set_transparent_pen(0);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+
+
+static void draw_bitmap( running_machine &machine, bitmap_ind16 &bitmap )
 {
-	int offs;
-
-	for (offs = 0;offs < spriteram_size/2;offs += 4)
-	{
-		int sx,sy,code,color,flipx,flipy,height,y;
-
-		sx = spriteram16[offs + 2];
-		sy = spriteram16[offs + 0];
-		code = spriteram16[offs + 1];
-		color = (spriteram16[offs + 2] >> 9) & 0xf;
-		height = 1 << ((spriteram16[offs + 0] & 0x0600) >> 9);
-		flipx = spriteram16[offs + 0] & 0x2000;
-		flipy = spriteram16[offs + 0] & 0x4000;
-
-		for (y = 0;y < height;y++)
-		{
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
-					code + (flipy ? height-1 - y : y),
-					color,
-					flipx,flipy,
-					sx & 0x1ff,248 - ((sy + 0x10 * (height - y)) & 0x1ff),0);
-
-			/* wrap around */
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
-					code + (flipy ? height-1 - y : y),
-					color,
-					flipx,flipy,
-					(sx & 0x1ff) - 512,248 - ((sy + 0x10 * (height - y)) & 0x1ff),0);
-		}
-	}
-}
-
-static void draw_bitmap(bitmap_t *bitmap)
-{
-	int yyy=256;
-	int xxx=512/4;
-	UINT16 x,y,count;
-	int xoff=-12;
-	int yoff=-9;
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+	int yyy = 256;
+	int xxx = 512 / 4;
+	UINT16 x, y, count;
+	int xoff = -12;
+	int yoff = -9;
 	int pix;
 
-	count=0;
-	for (y=0;y<yyy;y++)
+	count = 0;
+	for (y = 0; y < yyy; y++)
 	{
-		for(x=0;x<xxx;x++)
+		for (x = 0; x < xxx; x++)
 		{
-			pix = (nmg5_bitmap[count]&0xf000)>>12;
-			if (pix) *BITMAP_ADDR16(bitmap, y+yoff, x*4+0+xoff) = pix + 0x300;
-			pix = (nmg5_bitmap[count]&0x0f00)>>8;
-			if (pix) *BITMAP_ADDR16(bitmap, y+yoff, x*4+1+xoff) = pix + 0x300;
-			pix = (nmg5_bitmap[count]&0x00f0)>>4;
-			if (pix) *BITMAP_ADDR16(bitmap, y+yoff, x*4+2+xoff) = pix + 0x300;
-			pix = (nmg5_bitmap[count]&0x000f)>>0;
-			if (pix) *BITMAP_ADDR16(bitmap, y+yoff, x*4+3+xoff) = pix + 0x300;
+			pix = (state->m_bitmap[count] & 0xf000) >> 12;
+			if (pix) bitmap.pix16(y + yoff, x * 4 + 0 + xoff) = pix + 0x300;
+			pix = (state->m_bitmap[count] & 0x0f00) >> 8;
+			if (pix) bitmap.pix16(y + yoff, x * 4 + 1 + xoff) = pix + 0x300;
+			pix = (state->m_bitmap[count] & 0x00f0) >> 4;
+			if (pix) bitmap.pix16(y + yoff, x * 4 + 2 + xoff) = pix + 0x300;
+			pix = (state->m_bitmap[count] & 0x000f) >> 0;
+			if (pix) bitmap.pix16(y + yoff, x * 4 + 3 + xoff) = pix + 0x300;
 
 			count++;
 		}
@@ -868,44 +877,46 @@ static void draw_bitmap(bitmap_t *bitmap)
 }
 
 
-static VIDEO_UPDATE( nmg5 )
+static SCREEN_UPDATE_IND16( nmg5 )
 {
-	tilemap_set_scrolly(bg_tilemap,0,scroll_ram[3]+9);
-	tilemap_set_scrollx(bg_tilemap,0,scroll_ram[2]+3);
-	tilemap_set_scrolly(fg_tilemap,0,scroll_ram[1]+9);
-	tilemap_set_scrollx(fg_tilemap,0,scroll_ram[0]-1);
+	nmg5_state *state = screen.machine().driver_data<nmg5_state>();
 
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	state->m_bg_tilemap->set_scrolly(0, state->m_scroll_ram[3] + 9);
+	state->m_bg_tilemap->set_scrollx(0, state->m_scroll_ram[2] + 3);
+	state->m_fg_tilemap->set_scrolly(0, state->m_scroll_ram[1] + 9);
+	state->m_fg_tilemap->set_scrollx(0, state->m_scroll_ram[0] - 1);
 
-	if(priority_reg == 0)
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+
+	if (state->m_priority_reg == 0)
 	{
-		draw_sprites(screen->machine,bitmap,cliprect);
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
-		draw_bitmap(bitmap);
+		screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, 0x400);
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+		draw_bitmap(screen.machine(), bitmap);
 	}
-	else if(priority_reg == 1)
+	else if (state->m_priority_reg == 1)
 	{
-		draw_bitmap(bitmap);
-		draw_sprites(screen->machine,bitmap,cliprect);
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+		draw_bitmap(screen.machine(), bitmap);
+		screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, 0x400);
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 	}
-	else if(priority_reg == 2)
+	else if (state->m_priority_reg == 2)
 	{
-		draw_sprites(screen->machine,bitmap,cliprect);
-		draw_bitmap(bitmap);
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+		screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, 0x400);
+		draw_bitmap(screen.machine(), bitmap);
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 	}
-	else if(priority_reg == 3)
+	else if (state->m_priority_reg == 3)
 	{
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
-		draw_sprites(screen->machine,bitmap,cliprect);
-		draw_bitmap(bitmap);
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+		screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, 0x400);
+		draw_bitmap(screen.machine(), bitmap);
 	}
-	else if(priority_reg == 7)
+	else if (state->m_priority_reg == 7)
 	{
-		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
-		draw_bitmap(bitmap);
-		draw_sprites(screen->machine,bitmap,cliprect);
+		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+		draw_bitmap(screen.machine(), bitmap);
+		screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, 0x400);
 	}
 	return 0;
 }
@@ -939,7 +950,7 @@ static const gfx_layout layout_16x16x5 =
 	RGN_FRAC(1,5),
 	5,
 	{ RGN_FRAC(2,5),RGN_FRAC(3,5),RGN_FRAC(1,5),RGN_FRAC(4,5),RGN_FRAC(0,5) },
-	{ 7,6,5,4,3,2,1,0,135,134,133,132,131,130,129,128 },
+	{ 128,129,130,131,132,133,134,135, 0,1,2,3,4,5,6,7, },
 	{ 0*8,1*8,2*8,3*8,4*8,5*8,6*8,7*8,8*8,9*8,10*8,11*8,12*8,13*8,14*8,15*8 },
 	32*8
 };
@@ -955,9 +966,10 @@ static GFXDECODE_START( pclubys )
 GFXDECODE_END
 
 
-static void soundirq(const device_config *device, int state)
+static void soundirq( device_t *device, int state )
 {
-	cputag_set_input_line(device->machine, "soundcpu", 0, state);
+	nmg5_state *driver_state = device->machine().driver_data<nmg5_state>();
+	device_set_input_line(driver_state->m_soundcpu, 0, state);
 }
 
 static const ym3812_interface ym3812_intf =
@@ -967,99 +979,114 @@ static const ym3812_interface ym3812_intf =
 
 static MACHINE_START( nmg5 )
 {
-	state_save_register_global(machine, gfx_bank);
-	state_save_register_global(machine, priority_reg);
-	state_save_register_global(machine, input_data);
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_soundcpu = machine.device("soundcpu");
+
+	state->save_item(NAME(state->m_gfx_bank));
+	state->save_item(NAME(state->m_priority_reg));
+	state->save_item(NAME(state->m_input_data));
 }
 
 static MACHINE_RESET( nmg5 )
 {
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+
 	/* some games don't set the priority register so it should be hard-coded to a normal layout */
-	priority_reg = 7;
+	state->m_priority_reg = 7;
+
+	state->m_gfx_bank = 0;
+	state->m_input_data = 0;
 }
 
-static MACHINE_DRIVER_START( nmg5 )
+static MACHINE_CONFIG_START( nmg5, nmg5_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
-	MDRV_CPU_PROGRAM_MAP(nmg5_map)
-	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz */
+	MCFG_CPU_PROGRAM_MAP(nmg5_map)
+	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
 
-	MDRV_CPU_ADD("soundcpu", Z80, 4000000)		/* 4 MHz */
-	MDRV_CPU_PROGRAM_MAP(nmg5_sound_map)
-	MDRV_CPU_IO_MAP(sound_io_map)
+	MCFG_CPU_ADD("soundcpu", Z80, 4000000)		/* 4 MHz */
+	MCFG_CPU_PROGRAM_MAP(nmg5_sound_map)
+	MCFG_CPU_IO_MAP(sound_io_map)
 
-	MDRV_MACHINE_START(nmg5)
-	MDRV_MACHINE_RESET(nmg5)
+	MCFG_MACHINE_START(nmg5)
+	MCFG_MACHINE_RESET(nmg5)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(320, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(320, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE_STATIC(nmg5)
 
-	MDRV_GFXDECODE(nmg5)
-	MDRV_PALETTE_LENGTH(0x400)
+	MCFG_GFXDECODE(nmg5)
+	MCFG_PALETTE_LENGTH(0x400)
 
-	MDRV_VIDEO_START(nmg5)
-	MDRV_VIDEO_UPDATE(nmg5)
+	MCFG_VIDEO_START(nmg5)
+
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 1);
+	decospr_device::set_is_bootleg(*device, true);
+	decospr_device::set_flipallx(*device, 1);
+	decospr_device::set_offsets(*device, 0,8);
+
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 4000000) /* 4MHz */
-	MDRV_SOUND_CONFIG(ym3812_intf)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000) /* 4MHz */
+	MCFG_SOUND_CONFIG(ym3812_intf)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000 )
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1000000 , OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( garogun )
+static MACHINE_CONFIG_DERIVED( garogun, nmg5 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nmg5)
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(pclubys_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(pclubys_map)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(pclubys_sound_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(pclubys_sound_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( pclubys )
+static MACHINE_CONFIG_DERIVED( pclubys, nmg5 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nmg5)
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(pclubys_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(pclubys_map)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(pclubys_sound_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(pclubys_sound_map)
 
-	MDRV_GFXDECODE(pclubys)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(pclubys)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( searchp2 )
+static MACHINE_CONFIG_DERIVED( searchp2, nmg5 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nmg5)
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_REFRESH_RATE(55) // !
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_REFRESH_RATE(55) // !
 
-	MDRV_GFXDECODE(pclubys)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(pclubys)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( 7ordi )
+static MACHINE_CONFIG_DERIVED( 7ordi, nmg5 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(nmg5)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(pclubys_sound_map)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(pclubys_sound_map)
+MACHINE_CONFIG_END
 
 
 /*
@@ -1472,22 +1499,26 @@ ROM_END
 
 static DRIVER_INIT( prot_val_00 )
 {
-	prot_val = 0x00;
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+	state->m_prot_val = 0x00;
 }
 
 static DRIVER_INIT( prot_val_10 )
 {
-	prot_val = 0x10;
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+	state->m_prot_val = 0x10;
 }
 
 static DRIVER_INIT( prot_val_20 )
 {
-	prot_val = 0x20;
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+	state->m_prot_val = 0x20;
 }
 
 static DRIVER_INIT( prot_val_40 )
 {
-	prot_val = 0x40;
+	nmg5_state *state = machine.driver_data<nmg5_state>();
+	state->m_prot_val = 0x40;
 }
 
 GAME( 1998, nmg5,     0,       nmg5,     nmg5,     prot_val_10, ROT0, "Yun Sung", "Multi 5 / New Multi Game 5", GAME_SUPPORTS_SAVE )

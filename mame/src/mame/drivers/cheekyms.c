@@ -1,49 +1,40 @@
 /*************************************************************************
- Universal Cheeky Mouse Driver
- (c)Lee Taylor May/June 1998, All rights reserved.
+    Universal Cheeky Mouse Driver
+    (c)Lee Taylor May/June 1998, All rights reserved.
 
- For use only in offical MAME releases.
- Not to be distributed as part of any commerical work.
+    For use only in offical MAME releases.
+    Not to be distributed as part of any commerical work.
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/dac.h"
-
-
-extern UINT8 *cheekyms_videoram;
-extern UINT8 *cheekyms_spriteram;
-extern UINT8 *cheekyms_port_80;
-
-PALETTE_INIT( cheekyms );
-VIDEO_START( cheekyms );
-VIDEO_UPDATE( cheekyms );
-WRITE8_HANDLER( cheekyms_port_40_w );
-WRITE8_HANDLER( cheekyms_port_80_w );
-
+#include "includes/cheekyms.h"
 
 
 static INPUT_CHANGED( coin_inserted )
 {
+	cheekyms_state *state = field.machine().driver_data<cheekyms_state>();
+
 	/* this starts a 556 one-shot timer (and triggers a sound effect) */
 	if (newval)
-		cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x3000, 0x33ff) AM_RAM
-	AM_RANGE(0x3800, 0x3bff) AM_RAM AM_BASE(&cheekyms_videoram)
+	AM_RANGE(0x3800, 0x3bff) AM_RAM AM_BASE_MEMBER(cheekyms_state, m_videoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("DSW")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("INPUTS")
-	AM_RANGE(0x20, 0x3f) AM_WRITEONLY AM_BASE(&cheekyms_spriteram)
+	AM_RANGE(0x20, 0x3f) AM_WRITEONLY AM_BASE_MEMBER(cheekyms_state, m_spriteram)
 	AM_RANGE(0x40, 0x40) AM_WRITE(cheekyms_port_40_w)
-	AM_RANGE(0x80, 0x80) AM_WRITE(cheekyms_port_80_w) AM_BASE(&cheekyms_port_80)
+	AM_RANGE(0x80, 0x80) AM_WRITE(cheekyms_port_80_w) AM_BASE_MEMBER(cheekyms_state, m_port_80)
 ADDRESS_MAP_END
 
 
@@ -58,7 +49,7 @@ static INPUT_PORTS_START( cheekyms )
 	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
-  //PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+	//PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
@@ -118,35 +109,53 @@ static GFXDECODE_START( cheekyms )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( cheekyms )
+static MACHINE_START( cheekyms )
+{
+	cheekyms_state *state = machine.driver_data<cheekyms_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_dac = machine.device("dac");
+}
+
+static INTERRUPT_GEN( vblank_irq )
+{
+	cheekyms_state *state = device->machine().driver_data<cheekyms_state>();
+
+	if(state->m_irq_mask)
+		device_set_input_line(device, 0, HOLD_LINE);
+}
+
+
+static MACHINE_CONFIG_START( cheekyms, cheekyms_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80,5000000/2)  /* 2.5 MHz */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80,5000000/2)  /* 2.5 MHz */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(io_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+
+	MCFG_MACHINE_START(cheekyms)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 28*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 28*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(cheekyms)
 
-	MDRV_GFXDECODE(cheekyms)
-	MDRV_PALETTE_LENGTH(0xc0)
+	MCFG_GFXDECODE(cheekyms)
+	MCFG_PALETTE_LENGTH(0xc0)
 
-	MDRV_PALETTE_INIT(cheekyms)
-	MDRV_VIDEO_START(cheekyms)
-	MDRV_VIDEO_UPDATE(cheekyms)
+	MCFG_PALETTE_INIT(cheekyms)
+	MCFG_VIDEO_START(cheekyms)
 
 	/* audio hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 

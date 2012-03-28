@@ -174,58 +174,39 @@ TODO:
 
 *******************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/2151intf.h"
 #include "sound/namco.h"
 #include "sound/n63701x.h"
-
-extern UINT8 *rthunder_videoram1, *rthunder_videoram2, *rthunder_spriteram;
-
-PALETTE_INIT( namcos86 );
-VIDEO_START( namcos86 );
-VIDEO_UPDATE( namcos86 );
-VIDEO_EOF( namcos86 );
-READ8_HANDLER( rthunder_videoram1_r );
-WRITE8_HANDLER( rthunder_videoram1_w );
-READ8_HANDLER( rthunder_videoram2_r );
-WRITE8_HANDLER( rthunder_videoram2_w );
-WRITE8_HANDLER( rthunder_scroll0_w );
-WRITE8_HANDLER( rthunder_scroll1_w );
-WRITE8_HANDLER( rthunder_scroll2_w );
-WRITE8_HANDLER( rthunder_scroll3_w );
-WRITE8_HANDLER( rthunder_backcolor_w );
-WRITE8_HANDLER( rthunder_tilebank_select_w );
-READ8_HANDLER( rthunder_spriteram_r );
-WRITE8_HANDLER( rthunder_spriteram_w );
-
+#include "includes/namcos86.h"
 
 static WRITE8_HANDLER( bankswitch1_w )
 {
-	UINT8 *base = memory_region(space->machine, "cpu1") + 0x10000;
+	UINT8 *base = space->machine().region("cpu1")->base() + 0x10000;
 
 	/* if the ROM expansion module is available, don't do anything. This avoids conflict */
 	/* with bankswitch1_ext_w() in wndrmomo */
-	if (memory_region(space->machine, "user1")) return;
+	if (space->machine().region("user1")->base()) return;
 
-	memory_set_bankptr(space->machine, 1,base + ((data & 0x03) * 0x2000));
+	memory_set_bankptr(space->machine(), "bank1",base + ((data & 0x03) * 0x2000));
 }
 
 static WRITE8_HANDLER( bankswitch1_ext_w )
 {
-	UINT8 *base = memory_region(space->machine, "user1");
+	UINT8 *base = space->machine().region("user1")->base();
 
 	if (base == 0) return;
 
-	memory_set_bankptr(space->machine, 1,base + ((data & 0x1f) * 0x2000));
+	memory_set_bankptr(space->machine(), "bank1",base + ((data & 0x1f) * 0x2000));
 }
 
 static WRITE8_HANDLER( bankswitch2_w )
 {
-	UINT8 *base = memory_region(space->machine, "cpu2") + 0x10000;
+	UINT8 *base = space->machine().region("cpu2")->base() + 0x10000;
 
-	memory_set_bankptr(space->machine, 2,base + ((data & 0x03) * 0x2000));
+	memory_set_bankptr(space->machine(), "bank2",base + ((data & 0x03) * 0x2000));
 }
 
 /* Stubs to pass the correct Dip Switch setup to the MCU */
@@ -233,15 +214,15 @@ static READ8_HANDLER( dsw0_r )
 {
 	int rhi, rlo;
 
-	rhi  = ( input_port_read(space->machine, "DSWA") & 0x01 ) << 4;
-	rhi |= ( input_port_read(space->machine, "DSWA") & 0x04 ) << 3;
-	rhi |= ( input_port_read(space->machine, "DSWA") & 0x10 ) << 2;
-	rhi |= ( input_port_read(space->machine, "DSWA") & 0x40 ) << 1;
+	rhi  = ( input_port_read(space->machine(), "DSWA") & 0x01 ) << 4;
+	rhi |= ( input_port_read(space->machine(), "DSWA") & 0x04 ) << 3;
+	rhi |= ( input_port_read(space->machine(), "DSWA") & 0x10 ) << 2;
+	rhi |= ( input_port_read(space->machine(), "DSWA") & 0x40 ) << 1;
 
-	rlo  = ( input_port_read(space->machine, "DSWB") & 0x01 );
-	rlo |= ( input_port_read(space->machine, "DSWB") & 0x04 ) >> 1;
-	rlo |= ( input_port_read(space->machine, "DSWB") & 0x10 ) >> 2;
-	rlo |= ( input_port_read(space->machine, "DSWB") & 0x40 ) >> 3;
+	rlo  = ( input_port_read(space->machine(), "DSWB") & 0x01 );
+	rlo |= ( input_port_read(space->machine(), "DSWB") & 0x04 ) >> 1;
+	rlo |= ( input_port_read(space->machine(), "DSWB") & 0x10 ) >> 2;
+	rlo |= ( input_port_read(space->machine(), "DSWB") & 0x40 ) >> 3;
 
 	return rhi | rlo;
 }
@@ -250,15 +231,15 @@ static READ8_HANDLER( dsw1_r )
 {
 	int rhi, rlo;
 
-	rhi  = ( input_port_read(space->machine, "DSWA") & 0x02 ) << 3;
-	rhi |= ( input_port_read(space->machine, "DSWA") & 0x08 ) << 2;
-	rhi |= ( input_port_read(space->machine, "DSWA") & 0x20 ) << 1;
-	rhi |= ( input_port_read(space->machine, "DSWA") & 0x80 );
+	rhi  = ( input_port_read(space->machine(), "DSWA") & 0x02 ) << 3;
+	rhi |= ( input_port_read(space->machine(), "DSWA") & 0x08 ) << 2;
+	rhi |= ( input_port_read(space->machine(), "DSWA") & 0x20 ) << 1;
+	rhi |= ( input_port_read(space->machine(), "DSWA") & 0x80 );
 
-	rlo  = ( input_port_read(space->machine, "DSWB") & 0x02 ) >> 1;
-	rlo |= ( input_port_read(space->machine, "DSWB") & 0x08 ) >> 2;
-	rlo |= ( input_port_read(space->machine, "DSWB") & 0x20 ) >> 3;
-	rlo |= ( input_port_read(space->machine, "DSWB") & 0x80 ) >> 4;
+	rlo  = ( input_port_read(space->machine(), "DSWB") & 0x02 ) >> 1;
+	rlo |= ( input_port_read(space->machine(), "DSWB") & 0x08 ) >> 2;
+	rlo |= ( input_port_read(space->machine(), "DSWB") & 0x20 ) >> 3;
+	rlo |= ( input_port_read(space->machine(), "DSWB") & 0x80 ) >> 4;
 
 	return rhi | rlo;
 }
@@ -266,33 +247,33 @@ static READ8_HANDLER( dsw1_r )
 
 static WRITE8_HANDLER( int_ack1_w )
 {
-	cputag_set_input_line(space->machine, "cpu1", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "cpu1", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( int_ack2_w )
 {
-	cputag_set_input_line(space->machine, "cpu2", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "cpu2", 0, CLEAR_LINE);
 }
 
 
-static int wdog;
-
 static WRITE8_HANDLER( watchdog1_w )
 {
-	wdog |= 1;
-	if (wdog == 3)
+	namcos86_state *state = space->machine().driver_data<namcos86_state>();
+	state->m_wdog |= 1;
+	if (state->m_wdog == 3)
 	{
-		wdog = 0;
+		state->m_wdog = 0;
 		watchdog_reset_w(space,0,0);
 	}
 }
 
 static WRITE8_HANDLER( watchdog2_w )
 {
-	wdog |= 2;
-	if (wdog == 3)
+	namcos86_state *state = space->machine().driver_data<namcos86_state>();
+	state->m_wdog |= 2;
+	if (state->m_wdog == 3)
 	{
-		wdog = 0;
+		state->m_wdog = 0;
 		watchdog_reset_w(space,0,0);
 	}
 }
@@ -300,22 +281,22 @@ static WRITE8_HANDLER( watchdog2_w )
 
 static WRITE8_HANDLER( namcos86_coin_w )
 {
-	coin_lockout_global_w(data & 1);
-	coin_counter_w(0,~data & 2);
-	coin_counter_w(1,~data & 4);
+	coin_lockout_global_w(space->machine(), data & 1);
+	coin_counter_w(space->machine(), 0,~data & 2);
+	coin_counter_w(space->machine(), 1,~data & 4);
 }
 
 static WRITE8_HANDLER( namcos86_led_w )
 {
-	set_led_status(0,data & 0x08);
-	set_led_status(1,data & 0x10);
+	set_led_status(space->machine(), 0,data & 0x08);
+	set_led_status(space->machine(), 1,data & 0x10);
 }
 
 
 static WRITE8_HANDLER( cus115_w )
 {
 	/* make sure the expansion board is present */
-	if (!memory_region(space->machine, "user1"))
+	if (!space->machine().region("user1")->base())
 	{
 		popmessage("expansion board not present");
 		return;
@@ -327,7 +308,7 @@ static WRITE8_HANDLER( cus115_w )
 		case 1:
 		case 2:
 		case 3:
-			namco_63701x_w(devtag_get_device(space->machine, "namco2"), (offset & 0x1e00) >> 9,data);
+			namco_63701x_w(space->machine().device("namco2"), (offset & 0x1e00) >> 9,data);
 			break;
 
 		case 4:
@@ -345,22 +326,22 @@ static WRITE8_HANDLER( cus115_w )
 
 static MACHINE_RESET( namco86 )
 {
-	UINT8 *base = memory_region(machine, "cpu1") + 0x10000;
+	UINT8 *base = machine.region("cpu1")->base() + 0x10000;
 
-	memory_set_bankptr(machine, 1,base);
+	memory_set_bankptr(machine, "bank1",base);
 }
 
 
 
-static ADDRESS_MAP_START( cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(rthunder_videoram1_r,rthunder_videoram1_w) AM_BASE(&rthunder_videoram1)
-	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(rthunder_videoram2_r,rthunder_videoram2_w) AM_BASE(&rthunder_videoram2)
+static ADDRESS_MAP_START( cpu1_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(rthunder_videoram1_r,rthunder_videoram1_w) AM_BASE_MEMBER(namcos86_state, m_rthunder_videoram1)
+	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(rthunder_videoram2_r,rthunder_videoram2_w) AM_BASE_MEMBER(namcos86_state, m_rthunder_videoram2)
 
-	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) AM_BASE(&namco_wavedata) /* PSG device, shared RAM */
+	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
 
 	AM_RANGE(0x4000, 0x5fff) AM_READWRITE(rthunder_spriteram_r,rthunder_spriteram_w)
 
-	AM_RANGE(0x6000, 0x7fff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 
 	/* ROM & Voice expansion board - only some games have it */
@@ -383,18 +364,17 @@ ADDRESS_MAP_END
 
 
 #define CPU2_MEMORY(NAME,ADDR_SPRITE,ADDR_VIDEO1,ADDR_VIDEO2,ADDR_ROM,ADDR_BANK,ADDR_WDOG,ADDR_INT)	\
-static ADDRESS_MAP_START( NAME##_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )							\
-	AM_RANGE(ADDR_SPRITE+0x0000, ADDR_SPRITE+0x1fff) AM_READWRITE(rthunder_spriteram_r,rthunder_spriteram_w) AM_BASE(&rthunder_spriteram)	\
+static ADDRESS_MAP_START( NAME##_cpu2_map, AS_PROGRAM, 8 )							\
+	AM_RANGE(ADDR_SPRITE+0x0000, ADDR_SPRITE+0x1fff) AM_READWRITE(rthunder_spriteram_r,rthunder_spriteram_w) AM_BASE_MEMBER(namcos86_state, m_rthunder_spriteram)	\
 	AM_RANGE(ADDR_VIDEO1+0x0000, ADDR_VIDEO1+0x1fff) AM_READWRITE(rthunder_videoram1_r,rthunder_videoram1_w)	\
 	AM_RANGE(ADDR_VIDEO2+0x0000, ADDR_VIDEO2+0x1fff) AM_READWRITE(rthunder_videoram2_r,rthunder_videoram2_w)	\
-	AM_RANGE(ADDR_ROM+0x0000, ADDR_ROM+0x1fff) AM_READ(SMH_BANK(2))								\
+	AM_RANGE(ADDR_ROM+0x0000, ADDR_ROM+0x1fff) AM_ROMBANK("bank2")								\
 	AM_RANGE(0x8000, 0xffff) AM_ROM																\
 /*  { ADDR_BANK+0x00, ADDR_BANK+0x02 } layer 2 scroll registers would be here */				\
 	AM_RANGE(ADDR_BANK+0x03, ADDR_BANK+0x03) AM_WRITE(bankswitch2_w)							\
 /*  { ADDR_BANK+0x04, ADDR_BANK+0x06 } layer 3 scroll registers would be here */				\
 	AM_RANGE(ADDR_WDOG, ADDR_WDOG) AM_WRITE(watchdog2_w)										\
 	AM_RANGE(ADDR_INT, ADDR_INT) AM_WRITE(int_ack2_w)	/* IRQ acknowledge */					\
-	AM_RANGE(0x8000, 0xffff) AM_WRITE(SMH_ROM)													\
 ADDRESS_MAP_END
 
 #define UNUSED 0x4000
@@ -409,12 +389,12 @@ CPU2_MEMORY( wndrmomo, 0x2000, 0x4000, 0x6000, UNUSED, UNUSED, 0xc000, 0xc800 )
 
 
 #define MCU_MEMORY(NAME,ADDR_LOWROM,ADDR_INPUT,ADDR_UNK1,ADDR_UNK2)			\
-static ADDRESS_MAP_START( NAME##_mcu_map, ADDRESS_SPACE_PROGRAM, 8 )					\
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r,hd63701_internal_registers_w)	\
+static ADDRESS_MAP_START( NAME##_mcu_map, AS_PROGRAM, 8 )					\
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r,m6801_io_w)	\
 	AM_RANGE(0x0080, 0x00ff) AM_RAM														\
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) /* PSG device, shared RAM */	\
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */	\
 	AM_RANGE(0x1400, 0x1fff) AM_RAM														\
-	AM_RANGE(ADDR_INPUT+0x00, ADDR_INPUT+0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)	\
+	AM_RANGE(ADDR_INPUT+0x00, ADDR_INPUT+0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)	\
 	AM_RANGE(ADDR_INPUT+0x20, ADDR_INPUT+0x20) AM_READ_PORT("IN0")						\
 	AM_RANGE(ADDR_INPUT+0x21, ADDR_INPUT+0x21) AM_READ_PORT("IN1")						\
 	AM_RANGE(ADDR_INPUT+0x30, ADDR_INPUT+0x30) AM_READ(dsw0_r)							\
@@ -442,17 +422,15 @@ static READ8_HANDLER( readFF )
 	return 0xff;
 }
 
-static ADDRESS_MAP_START( mcu_port_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ_PORT("IN2")
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_WRITE(namcos86_coin_w)
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_WRITE(namcos86_led_w)
+static ADDRESS_MAP_START( mcu_port_map, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ_PORT("IN2")
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_WRITE(namcos86_coin_w)
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_WRITE(namcos86_led_w)
 ADDRESS_MAP_END
 
 
 /*******************************************************************/
-
-// #define PRIORITY_EASINESS_TO_PLAY
 
 static INPUT_PORTS_START( hopmappy )
 	PORT_START("IN0")
@@ -814,9 +792,7 @@ static INPUT_PORTS_START( rthunder )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SWB:7,6")
 	PORT_DIPSETTING(    0x06, "Upright 1 Player" )
-	#ifndef PRIORITY_EASINESS_TO_PLAY
-	  PORT_DIPSETTING(    0x02, "Upright 1 Player" )  // duplicated setting
-	#endif
+	PORT_DIPSETTING(    0x02, "Upright 1 Player" )  // duplicated setting
 	PORT_DIPSETTING(    0x04, "Upright 2 Players" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Continues ) ) PORT_DIPLOCATION("SWB:8")
@@ -883,15 +859,16 @@ static INPUT_PORTS_START( rthundro )
 	PORT_DIPSETTING(    0x40, "2" )
 	PORT_DIPSETTING(    0xc0, "3" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "SWB:3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SWB:4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "SWB:3" )	// bonus life score?
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SWB:4" )	// "
 	PORT_DIPNAME( 0x08, 0x08, "Level Select (Cheat)" ) PORT_DIPLOCATION("SWB:5")
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SWB:6" )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SWB:7")
-	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )
+	PORT_DIPNAME( 0x06, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SWB:7,6")
+	PORT_DIPSETTING(    0x00, "Upright 1 Player" )
+	PORT_DIPSETTING(    0x04, "Upright 2 Players" )
+	PORT_DIPSETTING(    0x06, DEF_STR( Cocktail ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )	// duplicated setting
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Flip_Screen ) ) PORT_DIPLOCATION("SWB:8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
@@ -960,9 +937,7 @@ static INPUT_PORTS_START( wndrmomo )
 	PORT_DIPSETTING(    0x02, "Upright 1 Player" )
 	PORT_DIPSETTING(    0x04, "Upright 2 Players" )
 	PORT_DIPSETTING(    0x06, DEF_STR( Cocktail ) )
-	#ifndef PRIORITY_EASINESS_TO_PLAY
-	  PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )  // duplicated setting
-	#endif
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )  // duplicated setting
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) ) PORT_DIPLOCATION("SWB:8")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -1014,125 +989,119 @@ static const namco_interface namco_config =
 };
 
 
-static MACHINE_DRIVER_START( hopmappy )
+static MACHINE_CONFIG_START( hopmappy, namcos86_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("cpu1", M6809, 49152000/32)
-	MDRV_CPU_PROGRAM_MAP(cpu1_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("cpu1", M6809, 49152000/32)
+	MCFG_CPU_PROGRAM_MAP(cpu1_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_CPU_ADD("cpu2", M6809, 49152000/32)
-	MDRV_CPU_PROGRAM_MAP(hopmappy_cpu2_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("cpu2", M6809, 49152000/32)
+	MCFG_CPU_PROGRAM_MAP(hopmappy_cpu2_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_CPU_ADD("mcu", HD63701, 49152000/8)	/* or compatible 6808 with extra instructions */
-	MDRV_CPU_PROGRAM_MAP(hopmappy_mcu_map)
-	MDRV_CPU_IO_MAP(mcu_port_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* ??? */
+	MCFG_CPU_ADD("mcu", HD63701, 49152000/8)	/* or compatible 6808 with extra instructions */
+	MCFG_CPU_PROGRAM_MAP(hopmappy_mcu_map)
+	MCFG_CPU_IO_MAP(mcu_port_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)	/* ??? */
 
-	MDRV_QUANTUM_TIME(HZ(48000))	/* heavy interleaving needed to avoid hangs in rthunder */
+	MCFG_QUANTUM_TIME(attotime::from_hz(48000))	/* heavy interleaving needed to avoid hangs in rthunder */
 
-	MDRV_MACHINE_RESET(namco86)
+	MCFG_MACHINE_RESET(namco86)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60.606060)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(3 + 8*8, 3 + 44*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60.606060)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(3 + 8*8, 3 + 44*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(namcos86)
+	MCFG_SCREEN_VBLANK_STATIC(namcos86)
 
-	MDRV_GFXDECODE(namcos86)
-	MDRV_PALETTE_LENGTH(4096)
+	MCFG_GFXDECODE(namcos86)
+	MCFG_PALETTE_LENGTH(4096)
 
-	MDRV_PALETTE_INIT(namcos86)
-	MDRV_VIDEO_START(namcos86)
-	MDRV_VIDEO_UPDATE(namcos86)
-	MDRV_VIDEO_EOF(namcos86)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("ym", YM2151, 3579580)
-	MDRV_SOUND_ROUTE(0, "mono", 0.0)
-	MDRV_SOUND_ROUTE(1, "mono", 0.60)	/* only right channel is connected */
-
-	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
-	MDRV_SOUND_CONFIG(namco_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( skykiddx )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
-	MDRV_CPU_MODIFY("cpu2")
-	MDRV_CPU_PROGRAM_MAP(skykiddx_cpu2_map)
-
-	MDRV_CPU_MODIFY("mcu")
-	MDRV_CPU_PROGRAM_MAP(skykiddx_mcu_map)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( roishtar )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
-	MDRV_CPU_MODIFY("cpu2")
-	MDRV_CPU_PROGRAM_MAP(roishtar_cpu2_map)
-
-	MDRV_CPU_MODIFY("mcu")
-	MDRV_CPU_PROGRAM_MAP(roishtar_mcu_map)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( genpeitd )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
-	MDRV_CPU_MODIFY("cpu2")
-	MDRV_CPU_PROGRAM_MAP(genpeitd_cpu2_map)
-
-	MDRV_CPU_MODIFY("mcu")
-	MDRV_CPU_PROGRAM_MAP(genpeitd_mcu_map)
+	MCFG_PALETTE_INIT(namcos86)
+	MCFG_VIDEO_START(namcos86)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ymsnd", YM2151, 3579580)
+	MCFG_SOUND_ROUTE(0, "mono", 0.0)
+	MCFG_SOUND_ROUTE(1, "mono", 0.60)	/* only right channel is connected */
+
+	MCFG_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
+	MCFG_SOUND_CONFIG(namco_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( rthunder )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
-	MDRV_CPU_MODIFY("cpu2")
-	MDRV_CPU_PROGRAM_MAP(rthunder_cpu2_map)
-
-	MDRV_CPU_MODIFY("mcu")
-	MDRV_CPU_PROGRAM_MAP(rthunder_mcu_map)
-
-	/* sound hardware */
-	MDRV_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( wndrmomo )
+static MACHINE_CONFIG_DERIVED( skykiddx, hopmappy )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
-	MDRV_CPU_MODIFY("cpu2")
-	MDRV_CPU_PROGRAM_MAP(wndrmomo_cpu2_map)
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_PROGRAM_MAP(skykiddx_cpu2_map)
 
-	MDRV_CPU_MODIFY("mcu")
-	MDRV_CPU_PROGRAM_MAP(wndrmomo_mcu_map)
+	MCFG_CPU_MODIFY("mcu")
+	MCFG_CPU_PROGRAM_MAP(skykiddx_mcu_map)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( roishtar, hopmappy )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_PROGRAM_MAP(roishtar_cpu2_map)
+
+	MCFG_CPU_MODIFY("mcu")
+	MCFG_CPU_PROGRAM_MAP(roishtar_mcu_map)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( genpeitd, hopmappy )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_PROGRAM_MAP(genpeitd_cpu2_map)
+
+	MCFG_CPU_MODIFY("mcu")
+	MCFG_CPU_PROGRAM_MAP(genpeitd_mcu_map)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( rthunder, hopmappy )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_PROGRAM_MAP(rthunder_cpu2_map)
+
+	MCFG_CPU_MODIFY("mcu")
+	MCFG_CPU_PROGRAM_MAP(rthunder_mcu_map)
+
+	/* sound hardware */
+	MCFG_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( wndrmomo, hopmappy )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("cpu2")
+	MCFG_CPU_PROGRAM_MAP(wndrmomo_cpu2_map)
+
+	MCFG_CPU_MODIFY("mcu")
+	MCFG_CPU_PROGRAM_MAP(wndrmomo_mcu_map)
+
+	/* sound hardware */
+	MCFG_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -1504,9 +1473,9 @@ static DRIVER_INIT( namco86 )
 	UINT8 *buffer;
 
 	/* shuffle tile ROMs so regular gfx unpack routines can be used */
-	gfx = memory_region(machine, "gfx1");
-	size = memory_region_length(machine, "gfx1") * 2 / 3;
-	buffer = alloc_array_or_die(UINT8,  size );
+	gfx = machine.region("gfx1")->base();
+	size = machine.region("gfx1")->bytes() * 2 / 3;
+	buffer = auto_alloc_array(machine, UINT8,  size );
 
 	{
 		UINT8 *dest1 = gfx;
@@ -1526,12 +1495,12 @@ static DRIVER_INIT( namco86 )
 			*mono ^= 0xff; mono++;
 		}
 
-		free( buffer );
+		auto_free( machine, buffer );
 	}
 
-	gfx = memory_region(machine, "gfx2");
-	size = memory_region_length(machine, "gfx2") * 2 / 3;
-	buffer = alloc_array_or_die(UINT8,  size );
+	gfx = machine.region("gfx2")->base();
+	size = machine.region("gfx2")->bytes() * 2 / 3;
+	buffer = auto_alloc_array(machine, UINT8,  size );
 
 	{
 		UINT8 *dest1 = gfx;
@@ -1551,7 +1520,7 @@ static DRIVER_INIT( namco86 )
 			*mono ^= 0xff; mono++;
 		}
 
-		free( buffer );
+		auto_free( machine, buffer );
 	}
 }
 

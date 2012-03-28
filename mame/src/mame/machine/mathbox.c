@@ -5,7 +5,7 @@
  *
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "mathbox.h"
 
 #define REG0 mb->reg [0x00]
@@ -32,7 +32,7 @@
 typedef struct _mathbox_state mathbox_state;
 struct _mathbox_state
 {
-	const device_config *device;
+	device_t *device;
 	/* math box scratch registers */
 	INT16 reg[16];
 
@@ -51,12 +51,11 @@ struct _mathbox_state
     into a mathbox_state
 -------------------------------------------------*/
 
-INLINE mathbox_state *get_safe_token(const device_config *device)
+INLINE mathbox_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == MATHBOX);
-	return (mathbox_state *)device->token;
+	assert(device->type() == MATHBOX);
+	return (mathbox_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -320,15 +319,13 @@ static DEVICE_START( mathbox )
 
 	/* validate arguments */
 	assert(device != NULL);
-	assert(device->tag != NULL);
-	assert(strlen(device->tag) < 20);
 
 	/* set static values */
 	mb->device = device;
 
 	/* register for save states */
-	state_save_register_device_item(device, 0, mb->result);
-	state_save_register_device_item_array(device, 0, mb->reg);
+	device->save_item(NAME(mb->result));
+	device->save_item(NAME(mb->reg));
 }
 
 
@@ -348,7 +345,6 @@ DEVICE_GET_INFO( mathbox )
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(mathbox_state);		break;
 		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;							break;
-		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_PERIPHERAL;		break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(mathbox);break;
@@ -363,3 +359,6 @@ DEVICE_GET_INFO( mathbox )
 		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
+
+
+DEFINE_LEGACY_DEVICE(MATHBOX, mathbox);

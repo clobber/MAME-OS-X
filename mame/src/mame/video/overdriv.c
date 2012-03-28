@@ -1,9 +1,6 @@
-#include "driver.h"
-#include "video/konamiic.h"
-
-
-static int zoom_colorbase[2],road_colorbase[2],sprite_colorbase;
-
+#include "emu.h"
+#include "video/konicdev.h"
+#include "includes/overdriv.h"
 
 /***************************************************************************
 
@@ -11,13 +8,16 @@ static int zoom_colorbase[2],road_colorbase[2],sprite_colorbase;
 
 ***************************************************************************/
 
-static void overdriv_sprite_callback(int *code,int *color,int *priority_mask)
+void overdriv_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask )
 {
+	overdriv_state *state = machine.driver_data<overdriv_state>();
 	int pri = (*color & 0xffe0) >> 5;	/* ??????? */
-	if (pri) *priority_mask = 0x02;
-	else     *priority_mask = 0x00;
+	if (pri)
+		*priority_mask = 0x02;
+	else
+		*priority_mask = 0x00;
 
-	*color = sprite_colorbase + (*color & 0x001f);
+	*color = state->m_sprite_colorbase + (*color & 0x001f);
 }
 
 
@@ -27,40 +27,21 @@ static void overdriv_sprite_callback(int *code,int *color,int *priority_mask)
 
 ***************************************************************************/
 
-static void zoom_callback_0(int *code,int *color,int *flags)
+void overdriv_zoom_callback_0( running_machine &machine, int *code, int *color, int *flags )
 {
+	overdriv_state *state = machine.driver_data<overdriv_state>();
 	*flags = (*color & 0x40) ? TILE_FLIPX : 0;
 	*code |= ((*color & 0x03) << 8);
-	*color = zoom_colorbase[0] + ((*color & 0x3c) >> 2);
+	*color = state->m_zoom_colorbase[0] + ((*color & 0x3c) >> 2);
 }
 
-static void zoom_callback_1(int *code,int *color,int *flags)
+void overdriv_zoom_callback_1( running_machine &machine, int *code, int *color, int *flags )
 {
+	overdriv_state *state = machine.driver_data<overdriv_state>();
 	*flags = (*color & 0x40) ? TILE_FLIPX : 0;
 	*code |= ((*color & 0x03) << 8);
-	*color = zoom_colorbase[1] + ((*color & 0x3c) >> 2);
+	*color = state->m_zoom_colorbase[1] + ((*color & 0x3c) >> 2);
 }
-
-
-
-/***************************************************************************
-
-  Start the video hardware emulation.
-
-***************************************************************************/
-
-VIDEO_START( overdriv )
-{
-	K053251_vh_start(machine);
-	K051316_vh_start_0(machine,"gfx2",4,TRUE,0,zoom_callback_0);
-	K051316_vh_start_1(machine,"gfx3",4,FALSE,0,zoom_callback_1);
-	K053247_vh_start(machine,"gfx1",77,22,NORMAL_PLANE_ORDER,overdriv_sprite_callback);
-
-	K051316_wraparound_enable(0,1);
-	K051316_set_offset(0,14,-1);
-	K051316_set_offset(1,15,0);
-}
-
 
 
 /***************************************************************************
@@ -69,19 +50,21 @@ VIDEO_START( overdriv )
 
 ***************************************************************************/
 
-VIDEO_UPDATE( overdriv )
+SCREEN_UPDATE_IND16( overdriv )
 {
-	sprite_colorbase  = K053251_get_palette_index(K053251_CI0);
-	road_colorbase[1] = K053251_get_palette_index(K053251_CI1);
-	road_colorbase[0] = K053251_get_palette_index(K053251_CI2);
-	zoom_colorbase[1] = K053251_get_palette_index(K053251_CI3);
-	zoom_colorbase[0] = K053251_get_palette_index(K053251_CI4);
+	overdriv_state *state = screen.machine().driver_data<overdriv_state>();
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	state->m_sprite_colorbase  = k053251_get_palette_index(state->m_k053251, K053251_CI0);
+	state->m_road_colorbase[1] = k053251_get_palette_index(state->m_k053251, K053251_CI1);
+	state->m_road_colorbase[0] = k053251_get_palette_index(state->m_k053251, K053251_CI2);
+	state->m_zoom_colorbase[1] = k053251_get_palette_index(state->m_k053251, K053251_CI3);
+	state->m_zoom_colorbase[0] = k053251_get_palette_index(state->m_k053251, K053251_CI4);
 
-	K051316_zoom_draw_0(bitmap,cliprect,0,0);
-	K051316_zoom_draw_1(bitmap,cliprect,0,1);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
-	K053247_sprites_draw(screen->machine, bitmap,cliprect);
+	k051316_zoom_draw(state->m_k051316_1, bitmap, cliprect, 0, 0);
+	k051316_zoom_draw(state->m_k051316_2, bitmap, cliprect, 0, 1);
+
+	k053247_sprites_draw(state->m_k053246, bitmap,cliprect);
 	return 0;
 }

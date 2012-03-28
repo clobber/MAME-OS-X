@@ -58,37 +58,29 @@ Word | Bit(s)           | Use
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "profiler.h"
+#include "includes/shangha3.h"
 
-
-UINT16 *shangha3_ram;
-size_t shangha3_ram_size;
-
-int shangha3_do_shadows;
-
-static UINT16 gfxlist_addr;
-static bitmap_t *rawbitmap;
-
-static UINT8 drawmode_table[16];
 
 
 VIDEO_START( shangha3 )
 {
+	shangha3_state *state = machine.driver_data<shangha3_state>();
 	int i;
 
-	rawbitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	machine.primary_screen->register_screen_bitmap(state->m_rawbitmap);
 
 	for (i = 0;i < 14;i++)
-		drawmode_table[i] = DRAWMODE_SOURCE;
-	drawmode_table[14] = shangha3_do_shadows ? DRAWMODE_SHADOW : DRAWMODE_SOURCE;
-	drawmode_table[15] = DRAWMODE_NONE;
+		state->m_drawmode_table[i] = DRAWMODE_SOURCE;
+	state->m_drawmode_table[14] = state->m_do_shadows ? DRAWMODE_SHADOW : DRAWMODE_SOURCE;
+	state->m_drawmode_table[15] = DRAWMODE_NONE;
 
-	if (shangha3_do_shadows)
+	if (state->m_do_shadows)
 	{
 		/* Prepare the shadow table */
 		for (i = 0;i < 128;i++)
-			machine->shadow_table[i] = i+128;
+			machine.shadow_table[i] = i+128;
 	}
 }
 
@@ -99,7 +91,7 @@ WRITE16_HANDLER( shangha3_flipscreen_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bit 7 flips screen, the rest seems to always be set to 0x7e */
-		flip_screen_set(space->machine, data & 0x80);
+		flip_screen_set(space->machine(), data & 0x80);
 
 		if ((data & 0x7f) != 0x7e) popmessage("flipscreen_w %02x",data);
 	}
@@ -107,18 +99,24 @@ WRITE16_HANDLER( shangha3_flipscreen_w )
 
 WRITE16_HANDLER( shangha3_gfxlist_addr_w )
 {
-	COMBINE_DATA(&gfxlist_addr);
+	shangha3_state *state = space->machine().driver_data<shangha3_state>();
+
+	COMBINE_DATA(&state->m_gfxlist_addr);
 }
 
 
 WRITE16_HANDLER( shangha3_blitter_go_w )
 {
+	shangha3_state *state = space->machine().driver_data<shangha3_state>();
+	UINT16 *shangha3_ram = state->m_ram;
+	bitmap_ind16 &rawbitmap = state->m_rawbitmap;
+	UINT8 *drawmode_table = state->m_drawmode_table;
 	int offs;
 
 
-	profiler_mark_start(PROFILER_VIDEO);
+	g_profiler.start(PROFILER_VIDEO);
 
-	for (offs = gfxlist_addr << 3;offs < shangha3_ram_size/2;offs += 16)
+	for (offs = state->m_gfxlist_addr << 3; offs < state->m_ram_size/2; offs += 16)
 	{
 		int sx,sy,x,y,code,color,flipx,flipy,sizex,sizey,zoomx,zoomy;
 
@@ -136,7 +134,7 @@ WRITE16_HANDLER( shangha3_blitter_go_w )
 		zoomx = shangha3_ram[offs+10];
 		zoomy = shangha3_ram[offs+13];
 
-		if (flip_screen_get(space->machine))
+		if (flip_screen_get(space->machine()))
 		{
 			sx = 383 - sx - sizex;
 			sy = 255 - sy - sizey;
@@ -153,11 +151,8 @@ WRITE16_HANDLER( shangha3_blitter_go_w )
 //if (shangha3_ram[offs+11] || shangha3_ram[offs+12])
 //logerror("offs %04x: sx %04x sy %04x zoom %04x %04x %04x %04x fx %d fy %d\n",offs,sx,sy,zoomx,shangha3_ram[offs+11]),shangha3_ram[offs+12],zoomy,flipx,flipy);
 
-			myclip.min_x = sx;
-			myclip.max_x = sx + sizex;
-			myclip.min_y = sy;
-			myclip.max_y = sy + sizey;
-			sect_rect(&myclip, &rawbitmap->cliprect);
+			myclip.set(sx, sx + sizex, sy, sy + sizey);
+			myclip &= rawbitmap.cliprect();
 
 			if (shangha3_ram[offs+4] & 0x08)	/* tilemap */
 			{
@@ -215,7 +210,7 @@ WRITE16_HANDLER( shangha3_blitter_go_w )
 						if (flipy) dy = sy + sizey-15 - dy;
 						else dy = sy + dy;
 
-						drawgfx_transpen(rawbitmap,&myclip,space->machine->gfx[0],
+						drawgfx_transpen(rawbitmap,myclip,space->machine().gfx[0],
 								(tile & 0x0fff) | (code & 0xf000),
 								(tile >> 12) | (color & 0x70),
 								flipx,flipy,
@@ -228,26 +223,26 @@ WRITE16_HANDLER( shangha3_blitter_go_w )
 				int w;
 
 if (zoomx <= 1 && zoomy <= 1)
-	drawgfxzoom_transtable(rawbitmap,&myclip,space->machine->gfx[0],
+	drawgfxzoom_transtable(rawbitmap,myclip,space->machine().gfx[0],
 			code,
 			color,
 			flipx,flipy,
 			sx,sy,
 			0x1000000,0x1000000,
-			drawmode_table,space->machine->shadow_table);
+			drawmode_table,space->machine().shadow_table);
 else
 {
 				w = (sizex+15)/16;
 
 				for (x = 0;x < w;x++)
 				{
-					drawgfxzoom_transtable(rawbitmap,&myclip,space->machine->gfx[0],
+					drawgfxzoom_transtable(rawbitmap,myclip,space->machine().gfx[0],
 							code,
 							color,
 							flipx,flipy,
 							sx + 16*x,sy,
 							(0x200-zoomx)*0x100,(0x200-zoomy)*0x100,
-							drawmode_table,space->machine->shadow_table);
+							drawmode_table,space->machine().shadow_table);
 
 					if ((code & 0x000f) == 0x0f)
 						code = (code + 0x100) & 0xfff0;
@@ -259,12 +254,14 @@ else
 		}
 	}
 
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 
-VIDEO_UPDATE( shangha3 )
+SCREEN_UPDATE_IND16( shangha3 )
 {
-	copybitmap(bitmap,rawbitmap,0,0,0,0,cliprect);
+	shangha3_state *state = screen.machine().driver_data<shangha3_state>();
+
+	copybitmap(bitmap, state->m_rawbitmap, 0, 0, 0, 0, cliprect);
 	return 0;
 }

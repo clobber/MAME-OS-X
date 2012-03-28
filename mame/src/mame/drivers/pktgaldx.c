@@ -52,47 +52,42 @@ bootleg todo:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "decocrpt.h"
-#include "decoprot.h"
-#include "deco16ic.h"
+#include "includes/decocrpt.h"
+#include "includes/decoprot.h"
+#include "video/deco16ic.h"
 #include "sound/okim6295.h"
-
-VIDEO_START(pktgaldx);
-VIDEO_UPDATE(pktgaldx);
-VIDEO_START(pktgaldb);
-VIDEO_UPDATE(pktgaldb);
-
-extern UINT16* pcktgaldb_fgram;
-extern UINT16* pcktgaldb_sprites;
+#include "includes/pktgaldx.h"
+#include "video/decospr.h"
+#include "video/decocomn.h"
 
 /**********************************************************************************/
 
 static WRITE16_DEVICE_HANDLER(pktgaldx_oki_bank_w)
 {
-	okim6295_set_bank_base(device, (data & 3) * 0x40000);
+	downcast<okim6295_device *>(device)->set_bank_base((data & 3) * 0x40000);
 }
 
 /**********************************************************************************/
 
-static ADDRESS_MAP_START( pktgaldx_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pktgaldx_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
-	AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
-	AM_RANGE(0x110000, 0x1107ff) AM_RAM AM_BASE(&deco16_pf1_rowscroll)
-	AM_RANGE(0x112000, 0x1127ff) AM_RAM AM_BASE(&deco16_pf2_rowscroll)
+	AM_RANGE(0x100000, 0x100fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x102000, 0x102fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x110000, 0x1107ff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pf1_rowscroll)
+	AM_RANGE(0x112000, 0x1127ff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pf2_rowscroll)
 
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x130000, 0x130fff) AM_RAM_WRITE(deco16_nonbuffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_MEMBER(pktgaldx_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x130000, 0x130fff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 
-	AM_RANGE(0x140000, 0x14000f) AM_DEVWRITE8("oki1", okim6295_w, 0x00ff)
-	AM_RANGE(0x140006, 0x140007) AM_DEVREAD8("oki1", okim6295_r, 0x00ff)
-	AM_RANGE(0x150000, 0x15000f) AM_DEVWRITE8("oki2", okim6295_w, 0x00ff)
-	AM_RANGE(0x150006, 0x150007) AM_DEVREAD8("oki2", okim6295_r, 0x00ff)
+	AM_RANGE(0x140000, 0x14000f) AM_DEVWRITE8_MODERN("oki1", okim6295_device, write, 0x00ff)
+	AM_RANGE(0x140006, 0x140007) AM_DEVREAD8_MODERN("oki1", okim6295_device, read, 0x00ff)
+	AM_RANGE(0x150000, 0x15000f) AM_DEVWRITE8_MODERN("oki2", okim6295_device, write, 0x00ff)
+	AM_RANGE(0x150006, 0x150007) AM_DEVREAD8_MODERN("oki2", okim6295_device, read, 0x00ff)
 
-	AM_RANGE(0x161800, 0x16180f) AM_WRITEONLY AM_BASE(&deco16_pf12_control)
+	AM_RANGE(0x161800, 0x16180f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
 	AM_RANGE(0x164800, 0x164801) AM_DEVWRITE("oki2", pktgaldx_oki_bank_w)
 	AM_RANGE(0x167800, 0x167fff) AM_READWRITE(deco16_104_pktgaldx_prot_r,deco16_104_pktgaldx_prot_w) AM_BASE(&deco16_prot_ram)
 	AM_RANGE(0x170000, 0x17ffff) AM_RAM
@@ -108,7 +103,7 @@ static READ16_HANDLER( pckgaldx_unknown_r )
 
 static READ16_HANDLER( pckgaldx_protection_r )
 {
-	logerror("pckgaldx_protection_r address %06x\n",cpu_get_pc(space->cpu));
+	logerror("pckgaldx_protection_r address %06x\n",cpu_get_pc(&space->device()));
 	return -1;
 }
 
@@ -125,18 +120,18 @@ cpu #0 (PC=0000923C): unmapped program memory word read from 00167DB2 & 00FF
 /* do the 300000 addresses somehow interact with the protection addresses on this bootleg? */
 /* or maybe protection writes go to sound ... */
 
-static ADDRESS_MAP_START( pktgaldb_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( pktgaldb_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE(&pcktgaldb_fgram) // fgram on original?
+	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pktgaldb_fgram) // fgram on original?
 	AM_RANGE(0x102000, 0x102fff) AM_RAM // bgram on original?
-	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE(&pcktgaldb_sprites)
+	AM_RANGE(0x120000, 0x123fff) AM_RAM AM_BASE_MEMBER(pktgaldx_state, m_pktgaldb_sprites)
 
 	AM_RANGE(0x130000, 0x130fff) AM_RAM // palette on original?
 
-	AM_RANGE(0x140000, 0x14000f) AM_DEVWRITE8("oki1", okim6295_w, 0x00ff)
-	AM_RANGE(0x140006, 0x140007) AM_DEVREAD8("oki1", okim6295_r, 0x00ff)
-	AM_RANGE(0x150000, 0x15000f) AM_DEVWRITE8("oki2", okim6295_w, 0x00ff)
-	AM_RANGE(0x150006, 0x150007) AM_DEVREAD8("oki2", okim6295_r, 0x00ff)
+	AM_RANGE(0x140000, 0x14000f) AM_DEVWRITE8_MODERN("oki1", okim6295_device, write, 0x00ff)
+	AM_RANGE(0x140006, 0x140007) AM_DEVREAD8_MODERN("oki1", okim6295_device, read, 0x00ff)
+	AM_RANGE(0x150000, 0x15000f) AM_DEVWRITE8_MODERN("oki2", okim6295_device, write, 0x00ff)
+	AM_RANGE(0x150006, 0x150007) AM_DEVREAD8_MODERN("oki2", okim6295_device, read, 0x00ff)
 
 //  AM_RANGE(0x160000, 0x167fff) AM_RAM
 	AM_RANGE(0x164800, 0x164801) AM_DEVWRITE("oki2", pktgaldx_oki_bank_w)
@@ -156,7 +151,7 @@ static ADDRESS_MAP_START( pktgaldb_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE(0x300000, 0x30000f) AM_RAM // ??
 
-	AM_RANGE(0x330000, 0x330bff) AM_RAM_WRITE(paletteram16_xbgr_word_be_w) AM_BASE(&paletteram16) // extra colours?
+	AM_RANGE(0x330000, 0x330bff) AM_RAM_WRITE(paletteram16_xbgr_word_be_w) AM_BASE_GENERIC(paletteram) // extra colours?
 ADDRESS_MAP_END
 
 
@@ -193,7 +188,7 @@ static INPUT_PORTS_START( pktgaldx )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_START2 )
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x0007, 0x0007, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x0007, 0x0007, DEF_STR( Coin_A ) )			PORT_DIPLOCATION("SW1:1,2,3")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0007, DEF_STR( 1C_1C ) )
@@ -202,7 +197,7 @@ static INPUT_PORTS_START( pktgaldx )
 	PORT_DIPSETTING(      0x0004, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0003, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x0038, 0x0038, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x0038, 0x0038, DEF_STR( Coin_B ) )			PORT_DIPLOCATION("SW1:4,5,6")
 	PORT_DIPSETTING(      0x0000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0008, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0038, DEF_STR( 1C_1C ) )
@@ -211,32 +206,28 @@ static INPUT_PORTS_START( pktgaldx )
 	PORT_DIPSETTING(      0x0020, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0018, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x0010, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Flip_Screen ) )			PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, "2 Coins to Start, 1 to Continue" )
+	PORT_DIPNAME( 0x0080, 0x0080, "2 Coins to Start, 1 to Continue" )	PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x0300, 0x0300, DEF_STR( Lives ) )			PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(      0x0000, "2" )
 	PORT_DIPSETTING(      0x0100, "3" )
 	PORT_DIPSETTING(      0x0300, "4" )
 	PORT_DIPSETTING(      0x0200, "5" )
-	PORT_DIPNAME( 0x0c00, 0x0c00, "Time"  ) /* Listed as "Difficulty" */
+	PORT_DIPNAME( 0x0c00, 0x0c00, "Time"  )					PORT_DIPLOCATION("SW2:3,4") /* Listed as "Difficulty" */
 	PORT_DIPSETTING(      0x0000, "60" )
 	PORT_DIPSETTING(      0x0400, "80" )
 	PORT_DIPSETTING(      0x0c00, "100" )
 	PORT_DIPSETTING(      0x0800, "120" )
-	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Free_Play ) )
+	PORT_DIPUNUSED_DIPLOC( 0x1000, 0x1000, "SW2:5" )
+	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Free_Play ) )			PORT_DIPLOCATION("SW2:6")
 	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Demo_Sounds ) )
+	PORT_DIPUNUSED_DIPLOC( 0x4000, 0x4000, "SW2:7" )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Demo_Sounds ) )			PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -298,74 +289,109 @@ static GFXDECODE_START( bootleg )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( pktgaldx )
+static int pktgaldx_bank_callback( const int bank )
+{
+	return ((bank >> 4) & 0x7) * 0x1000;
+}
+
+static const decocomn_interface pktgaldx_decocomn_intf =
+{
+	"screen",
+};
+
+static const deco16ic_interface pktgaldx_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0, 16, /* color base (default values) */
+	0x0f, 0x0f, /* color masks (default values) */
+	NULL,
+	pktgaldx_bank_callback,
+	0,1,
+};
+
+
+
+static MACHINE_START( pktgaldx )
+{
+	pktgaldx_state *state = machine.driver_data<pktgaldx_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_deco_tilegen1 = machine.device("tilegen1");
+}
+
+static MACHINE_CONFIG_START( pktgaldx, pktgaldx_state )
+
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 14000000)
-	MDRV_CPU_PROGRAM_MAP(pktgaldx_map)
-	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 14000000)
+	MCFG_CPU_PROGRAM_MAP(pktgaldx_map)
+	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
+
+	MCFG_MACHINE_START(pktgaldx)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(58)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(58)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(40*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(pktgaldx)
 
-	MDRV_PALETTE_LENGTH(4096)
-	MDRV_GFXDECODE(pktgaldx)
+	MCFG_PALETTE_LENGTH(4096)
+	MCFG_GFXDECODE(pktgaldx)
 
-	MDRV_VIDEO_START(pktgaldx)
-	MDRV_VIDEO_UPDATE(pktgaldx)
+	MCFG_DECOCOMN_ADD("deco_common", pktgaldx_decocomn_intf)
+
+	MCFG_DECO16IC_ADD("tilegen1", pktgaldx_deco16ic_tilegen1_intf)
+
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 2);
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
+	MCFG_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( pktgaldb )
+static MACHINE_CONFIG_START( pktgaldb, pktgaldx_state )
+
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 16000000)
-	MDRV_CPU_PROGRAM_MAP(pktgaldb_map)
-	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 16000000)
+	MCFG_CPU_PROGRAM_MAP(pktgaldb_map)
+	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
+
+	MCFG_MACHINE_START(pktgaldx)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(58)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(58)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(40*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(pktgaldb)
 
-	MDRV_PALETTE_LENGTH(4096)
-	MDRV_GFXDECODE(bootleg)
-
-	MDRV_VIDEO_START(pktgaldb)
-	MDRV_VIDEO_UPDATE(pktgaldb)
+	MCFG_PALETTE_LENGTH(4096)
+	MCFG_GFXDECODE(bootleg)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
+	MCFG_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
+MACHINE_CONFIG_END
 
 
 ROM_START( pktgaldx )
@@ -433,6 +459,6 @@ static DRIVER_INIT( pktgaldx )
 	deco102_decrypt_cpu(machine, "maincpu", 0x42ba, 0x00, 0x00);
 }
 
-GAME( 1992, pktgaldx,  0,        pktgaldx, pktgaldx, pktgaldx,  ROT0, "Data East Corporation", "Pocket Gal Deluxe (Euro v3.00)", 0 )
-GAME( 1993, pktgaldxj, pktgaldx, pktgaldx, pktgaldx, pktgaldx,  ROT0, "Nihon System",          "Pocket Gal Deluxe (Japan v3.00)", 0 )
-GAME( 1992, pktgaldxb, pktgaldx, pktgaldb, pktgaldx, 0,         ROT0, "bootleg",               "Pocket Gal Deluxe (Euro v3.00, bootleg)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, pktgaldx,  0,        pktgaldx, pktgaldx, pktgaldx,  ROT0, "Data East Corporation", "Pocket Gal Deluxe (Euro v3.00)", GAME_SUPPORTS_SAVE )
+GAME( 1993, pktgaldxj, pktgaldx, pktgaldx, pktgaldx, pktgaldx,  ROT0, "Data East Corporation (Nihon System license)", "Pocket Gal Deluxe (Japan v3.00)", GAME_SUPPORTS_SAVE )
+GAME( 1992, pktgaldxb, pktgaldx, pktgaldb, pktgaldx, 0,         ROT0, "bootleg",               "Pocket Gal Deluxe (Euro v3.00, bootleg)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )

@@ -1,14 +1,6 @@
-#include "driver.h"
-#include "video/konamiic.h"
-
-#define SPRITEROM_MEM_REGION "gfx1"
-#define ZOOMROM0_MEM_REGION "gfx2"
-#define ZOOMROM1_MEM_REGION "gfx3"
-#define ZOOMROM2_MEM_REGION "gfx4"
-
-static int sprite_colorbase, zoom_colorbase[3];
-static int bank0,bank1,bank2;
-
+#include "emu.h"
+#include "video/konicdev.h"
+#include "includes/ultraman.h"
 
 /***************************************************************************
 
@@ -16,10 +8,12 @@ static int bank0,bank1,bank2;
 
 ***************************************************************************/
 
-static void sprite_callback(int *code,int *color,int *priority,int *shadow)
+void ultraman_sprite_callback( running_machine &machine, int *code, int *color, int *priority, int *shadow )
 {
+	ultraman_state *state = machine.driver_data<ultraman_state>();
+
 	*priority = (*color & 0x80) >> 7;
-	*color = sprite_colorbase + ((*color & 0x7e) >> 1);
+	*color = state->m_sprite_colorbase + ((*color & 0x7e) >> 1);
 	*shadow = 0;
 }
 
@@ -30,22 +24,25 @@ static void sprite_callback(int *code,int *color,int *priority,int *shadow)
 
 ***************************************************************************/
 
-static void zoom_callback_0(int *code,int *color,int *flags)
+void ultraman_zoom_callback_0(running_machine &machine, int *code, int *color, int *flags )
 {
-	*code |= ((*color & 0x07) << 8) | (bank0 << 11);
-	*color = zoom_colorbase[0] + ((*color & 0xf8) >> 3);
+	ultraman_state *state = machine.driver_data<ultraman_state>();
+	*code |= ((*color & 0x07) << 8) | (state->m_bank0 << 11);
+	*color = state->m_zoom_colorbase[0] + ((*color & 0xf8) >> 3);
 }
 
-static void zoom_callback_1(int *code,int *color,int *flags)
+void ultraman_zoom_callback_1(running_machine &machine, int *code, int *color, int *flags )
 {
-	*code |= ((*color & 0x07) << 8) | (bank1 << 11);
-	*color = zoom_colorbase[1] + ((*color & 0xf8) >> 3);
+	ultraman_state *state = machine.driver_data<ultraman_state>();
+	*code |= ((*color & 0x07) << 8) | (state->m_bank1 << 11);
+	*color = state->m_zoom_colorbase[1] + ((*color & 0xf8) >> 3);
 }
 
-static void zoom_callback_2(int *code,int *color,int *flags)
+void ultraman_zoom_callback_2(running_machine &machine, int *code, int *color, int *flags )
 {
-	*code |= ((*color & 0x07) << 8) | (bank2 << 11);
-	*color = zoom_colorbase[2] + ((*color & 0xf8) >> 3);
+	ultraman_state *state = machine.driver_data<ultraman_state>();
+	*code |= ((*color & 0x07) << 8) | (state->m_bank2 << 11);
+	*color = state->m_zoom_colorbase[2] + ((*color & 0xf8) >> 3);
 }
 
 
@@ -58,19 +55,11 @@ static void zoom_callback_2(int *code,int *color,int *flags)
 
 VIDEO_START( ultraman )
 {
-	sprite_colorbase = 192;
-	zoom_colorbase[0] = 0;
-	zoom_colorbase[1] = 64;
-	zoom_colorbase[2] = 128;
-
-	K051960_vh_start(machine,SPRITEROM_MEM_REGION,NORMAL_PLANE_ORDER,sprite_callback);
-	K051316_vh_start_0(machine,ZOOMROM0_MEM_REGION,4,FALSE,0,zoom_callback_0);
-	K051316_vh_start_1(machine,ZOOMROM1_MEM_REGION,4,FALSE,0,zoom_callback_1);
-	K051316_vh_start_2(machine,ZOOMROM2_MEM_REGION,4,TRUE,0,zoom_callback_2);
-
-	K051316_set_offset(0, 8, 0);
-	K051316_set_offset(1, 8, 0);
-	K051316_set_offset(2, 8, 0);
+	ultraman_state *state = machine.driver_data<ultraman_state>();
+	state->m_sprite_colorbase = 192;
+	state->m_zoom_colorbase[0] = 0;
+	state->m_zoom_colorbase[1] = 64;
+	state->m_zoom_colorbase[2] = 128;
 }
 
 
@@ -83,6 +72,8 @@ VIDEO_START( ultraman )
 
 WRITE16_HANDLER( ultraman_gfxctrl_w )
 {
+	ultraman_state *state = space->machine().driver_data<ultraman_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
 		/*  bit 0: enable wraparound for scr #1
@@ -93,26 +84,33 @@ WRITE16_HANDLER( ultraman_gfxctrl_w )
             bit 5: msb of code for scr #3
             bit 6: coin counter 1
             bit 7: coin counter 2 */
-		K051316_wraparound_enable(0,data & 0x01);
-		if (bank0 != ((data & 0x02) >> 1))
+
+		k051316_wraparound_enable(state->m_k051316_1, data & 0x01);
+
+		if (state->m_bank0 != ((data & 0x02) >> 1))
 		{
-			bank0 = (data & 0x02) >> 1;
-			tilemap_mark_all_tiles_dirty_all(space->machine);	/* should mark only zoom0 */
+			state->m_bank0 = (data & 0x02) >> 1;
+			space->machine().tilemap().mark_all_dirty();	/* should mark only zoom0 */
 		}
-		K051316_wraparound_enable(1,data & 0x04);
-		if (bank1 != ((data & 0x08) >> 3))
+
+		k051316_wraparound_enable(state->m_k051316_2, data & 0x04);
+
+		if (state->m_bank1 != ((data & 0x08) >> 3))
 		{
-			bank1 = (data & 0x08) >> 3;
-			tilemap_mark_all_tiles_dirty_all(space->machine);	/* should mark only zoom1 */
+			state->m_bank1 = (data & 0x08) >> 3;
+			space->machine().tilemap().mark_all_dirty();	/* should mark only zoom1 */
 		}
-		K051316_wraparound_enable(2,data & 0x10);
-		if (bank2 != ((data & 0x20) >> 5))
+
+		k051316_wraparound_enable(state->m_k051316_3, data & 0x10);
+
+		if (state->m_bank2 != ((data & 0x20) >> 5))
 		{
-			bank2 = (data & 0x20) >> 5;
-			tilemap_mark_all_tiles_dirty_all(space->machine);	/* should mark only zoom2 */
+			state->m_bank2 = (data & 0x20) >> 5;
+			space->machine().tilemap().mark_all_dirty();	/* should mark only zoom2 */
 		}
-		coin_counter_w(0, data & 0x40);
-		coin_counter_w(1, data & 0x80);
+
+		coin_counter_w(space->machine(), 0, data & 0x40);
+		coin_counter_w(space->machine(), 1, data & 0x80);
 	}
 }
 
@@ -124,12 +122,14 @@ WRITE16_HANDLER( ultraman_gfxctrl_w )
 
 ***************************************************************************/
 
-VIDEO_UPDATE( ultraman )
+SCREEN_UPDATE_IND16( ultraman )
 {
-	K051316_zoom_draw_2(bitmap,cliprect,0,0);
-	K051316_zoom_draw_1(bitmap,cliprect,0,0);
-	K051960_sprites_draw(screen->machine,bitmap,cliprect,0,0);
-	K051316_zoom_draw_0(bitmap,cliprect,0,0);
-	K051960_sprites_draw(screen->machine,bitmap,cliprect,1,1);
+	ultraman_state *state = screen.machine().driver_data<ultraman_state>();
+
+	k051316_zoom_draw(state->m_k051316_3, bitmap, cliprect, 0, 0);
+	k051316_zoom_draw(state->m_k051316_2, bitmap, cliprect, 0, 0);
+	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 0, 0);
+	k051316_zoom_draw(state->m_k051316_1, bitmap, cliprect, 0, 0);
+	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 1, 1);
 	return 0;
 }

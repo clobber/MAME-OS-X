@@ -8,8 +8,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "streams.h"
+#include "emu.h"
 #include "includes/amiga.h"
 #include "cpu/m68000/m68000.h"
 
@@ -63,16 +62,13 @@ struct _amiga_audio
 };
 
 
+INLINE amiga_audio *get_safe_token( device_t *device )
+{
+        assert(device != NULL);
+        assert(device->type() == AMIGA);
 
-/*************************************
- *
- *  Globals
- *
- *************************************/
-
-static amiga_audio *audio_state;
-
-
+        return (amiga_audio *)downcast<legacy_device_base *>(device)->token();
+}
 
 /*************************************
  *
@@ -82,15 +78,15 @@ static amiga_audio *audio_state;
 
 static TIMER_CALLBACK( signal_irq )
 {
-	amiga_custom_w(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), REG_INTREQ, 0x8000 | (0x80 << param), 0xffff);
+	amiga_custom_w(machine.device("maincpu")->memory().space(AS_PROGRAM), REG_INTREQ, 0x8000 | (0x80 << param), 0xffff);
 }
 
 
-static void dma_reload(audio_channel *chan)
+static void dma_reload(amiga_state *state, audio_channel *chan)
 {
 	chan->curlocation = CUSTOM_REG_LONG(REG_AUD0LCH + chan->index * 8);
 	chan->curlength = CUSTOM_REG(REG_AUD0LEN + chan->index * 8);
-	timer_adjust_oneshot(chan->irq_timer, ATTOTIME_IN_HZ(15750), chan->index);
+	chan->irq_timer->adjust(attotime::from_hz(15750), chan->index);
 	LOG(("dma_reload(%d): offs=%05X len=%04X\n", chan->index, chan->curlocation, chan->curlength));
 }
 
@@ -102,8 +98,10 @@ static void dma_reload(audio_channel *chan)
  *
  *************************************/
 
-void amiga_audio_data_w(int which, UINT16 data)
+void amiga_audio_data_w(device_t *device, int which, UINT16 data)
 {
+	amiga_audio *audio_state = get_safe_token(device);
+
 	audio_state->channel[which].manualmode = TRUE;
 }
 
@@ -115,15 +113,18 @@ void amiga_audio_data_w(int which, UINT16 data)
  *
  *************************************/
 
-void amiga_audio_update(void)
+void amiga_audio_update(device_t *device)
 {
-	stream_update(audio_state->stream);
+	amiga_audio *audio_state = get_safe_token(device);
+
+	audio_state->stream->update();
 }
 
 
 
 static STREAM_UPDATE( amiga_stream_update )
 {
+	amiga_state *state = device->machine().driver_data<amiga_state>();
 	amiga_audio *audio = (amiga_audio *)param;
 	int channum, sampoffs = 0;
 
@@ -148,7 +149,7 @@ static STREAM_UPDATE( amiga_stream_update )
 	{
 		audio_channel *chan = &audio->channel[channum];
 		if (!chan->dmaenabled && ((CUSTOM_REG(REG_DMACON) >> channum) & 1))
-			dma_reload(chan);
+			dma_reload(state, chan);
 		chan->dmaenabled = (CUSTOM_REG(REG_DMACON) >> channum) & 1;
 	}
 
@@ -223,13 +224,13 @@ static STREAM_UPDATE( amiga_stream_update )
 					chan->curlocation++;
 				if (chan->dmaenabled && !(chan->curlocation & 1))
 				{
-					CUSTOM_REG(REG_AUD0DAT + channum * 8) = amiga_chip_ram_r(chan->curlocation);
+					CUSTOM_REG(REG_AUD0DAT + channum * 8) = (*state->m_chip_ram_r)(state, chan->curlocation);
 					if (chan->curlength != 0)
 						chan->curlength--;
 
 					/* if we run out of data, reload the dma */
 					if (chan->curlength == 0)
-						dma_reload(chan);
+						dma_reload(state, chan);
 				}
 
 				/* latch the next byte of the sample */
@@ -241,7 +242,7 @@ static STREAM_UPDATE( amiga_stream_update )
 				/* if we're in manual mode, signal an interrupt once we latch the low byte */
 				if (!chan->dmaenabled && chan->manualmode && (chan->curlocation & 1))
 				{
-					signal_irq(device->machine, NULL, channum);
+					signal_irq(device->machine(), NULL, channum);
 					chan->manualmode = FALSE;
 				}
 			}
@@ -263,19 +264,17 @@ static STREAM_UPDATE( amiga_stream_update )
 
 static DEVICE_START( amiga_sound )
 {
-	running_machine *machine = device->machine;
+	amiga_audio *audio_state = get_safe_token(device);
 	int i;
 
-	/* allocate a new audio state */
-	audio_state = (amiga_audio *)device->token;
 	for (i = 0; i < 4; i++)
 	{
 		audio_state->channel[i].index = i;
-		audio_state->channel[i].irq_timer = timer_alloc(machine, signal_irq, NULL);
+		audio_state->channel[i].irq_timer = device->machine().scheduler().timer_alloc(FUNC(signal_irq));
 	}
 
 	/* create the stream */
-	audio_state->stream = stream_create(device, 0, 4, device->clock / CLOCK_DIVIDER, audio_state, amiga_stream_update);
+	audio_state->stream = device->machine().sound().stream_alloc(*device, 0, 4, device->clock() / CLOCK_DIVIDER, audio_state, amiga_stream_update);
 }
 
 
@@ -284,7 +283,7 @@ DEVICE_GET_INFO( amiga_sound )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(*audio_state);					break;
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(amiga_audio);					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(amiga_sound);	break;
@@ -296,3 +295,4 @@ DEVICE_GET_INFO( amiga_sound )
 }
 
 
+DEFINE_LEGACY_SOUND_DEVICE(AMIGA, amiga_sound);

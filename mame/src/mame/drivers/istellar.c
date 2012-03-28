@@ -19,40 +19,47 @@ Todo:
     Make it work - this one should be close right now :/.
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
-#include "machine/laserdsc.h"
+#include "machine/ldv1000.h"
+
+
+class istellar_state : public driver_device
+{
+public:
+	istellar_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		  m_laserdisc(*this, "laserdisc") { }
+
+	required_device<pioneer_ldv1000_device> m_laserdisc;
+	UINT8 *m_tile_ram;
+	UINT8 *m_tile_control_ram;
+	UINT8 *m_sprite_ram;
+	UINT8 m_ldp_latch1;
+	UINT8 m_ldp_latch2;
+	UINT8 m_z80_2_nmi_enable;
+};
+
 
 /* There is only 1 crystal on the stack of 3 boards - speed is unknown, the following is Daphne's guess */
 #define GUESSED_CLOCK (3072000)
 
 
-/* Misc variables */
-static const device_config *laserdisc;
-
-static UINT8 *tile_ram;
-static UINT8 *tile_control_ram;
-static UINT8 *sprite_ram;
-
-static UINT8 ldp_latch1;
-static UINT8 ldp_latch2;
-
-static UINT8 z80_2_nmi_enable;
-
 /* VIDEO GOODS */
-static VIDEO_UPDATE( istellar )
+static SCREEN_UPDATE_IND16( istellar )
 {
+	istellar_state *state = screen.machine().driver_data<istellar_state>();
 	int charx, chary;
 
 	/* clear */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
 	/* DEBUG */
 	/*
     for (charx = 0; charx < 0x400; charx ++)
     {
-        printf ("%x ", sprite_ram[charx]) ;
+        printf ("%x ", state->m_sprite_ram[charx]) ;
     }
     printf("\n\n\n");
     */
@@ -64,9 +71,9 @@ static VIDEO_UPDATE( istellar )
 		{
 			int current_screen_character = (chary*32) + charx;
 
-			drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0],
-					tile_ram[current_screen_character],
-					(tile_control_ram[current_screen_character] & 0x0f),
+			drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[0],
+					state->m_tile_ram[current_screen_character],
+					(state->m_tile_control_ram[current_screen_character] & 0x0f),
 					0, 0, charx*8, chary*8, 0);
 		}
 	}
@@ -80,7 +87,6 @@ static VIDEO_UPDATE( istellar )
 
 static MACHINE_START( istellar )
 {
-	laserdisc = devtag_get_device(machine, "laserdisc");
 }
 
 
@@ -89,21 +95,23 @@ static MACHINE_START( istellar )
 /* Z80 0 R/W */
 static READ8_HANDLER(z80_0_latch1_read)
 {
-	/*logerror("CPU0 : reading LDP status latch (%x)\n", ldp_latch1);*/
-	return ldp_latch1;
+	istellar_state *state = space->machine().driver_data<istellar_state>();
+	/*logerror("CPU0 : reading LDP status latch (%x)\n", state->m_ldp_latch1);*/
+	return state->m_ldp_latch1;
 }
 
 static WRITE8_HANDLER(z80_0_latch2_write)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	/*logerror("CPU0 : writing cpu_latch2 (%x).  Potentially followed by an IRQ.\n", data);*/
-	ldp_latch2 = data;
+	state->m_ldp_latch2 = data;
 
 	/* A CPU2 NMI */
-	if (z80_2_nmi_enable)
+	if (state->m_z80_2_nmi_enable)
 	{
 		logerror("Executing an NMI on CPU2\n");
-		cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);		/* Maybe this is a ASSERT_LINE, CLEAR_LINE combo? */
-		z80_2_nmi_enable = 0;
+		cputag_set_input_line(space->machine(), "sub", INPUT_LINE_NMI, PULSE_LINE);		/* Maybe this is a ASSERT_LINE, CLEAR_LINE combo? */
+		state->m_z80_2_nmi_enable = 0;
 	}
 }
 
@@ -114,21 +122,24 @@ static WRITE8_HANDLER(z80_0_latch2_write)
 /* Z80 2 R/W */
 static READ8_HANDLER(z80_2_ldp_read)
 {
-	UINT8 readResult = laserdisc_data_r(laserdisc);
+	istellar_state *state = space->machine().driver_data<istellar_state>();
+	UINT8 readResult = state->m_laserdisc->status_r();
 	logerror("CPU2 : reading LDP : %x\n", readResult);
 	return readResult;
 }
 
 static READ8_HANDLER(z80_2_latch2_read)
 {
-	logerror("CPU2 : reading latch2 (%x)\n", ldp_latch2);
-	return ldp_latch2;
+	istellar_state *state = space->machine().driver_data<istellar_state>();
+	logerror("CPU2 : reading latch2 (%x)\n", state->m_ldp_latch2);
+	return state->m_ldp_latch2;
 }
 
 static READ8_HANDLER(z80_2_nmienable)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	logerror("CPU2 : ENABLING NMI\n");
-	z80_2_nmi_enable = 1;
+	state->m_z80_2_nmi_enable = 1;
 	return 0x00;
 }
 
@@ -140,33 +151,35 @@ static READ8_HANDLER(z80_2_unknown_read)
 
 static WRITE8_HANDLER(z80_2_latch1_write)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	logerror("CPU2 : writing latch1 (%x)\n", data);
-	ldp_latch1 = data;
+	state->m_ldp_latch1 = data;
 }
 
 static WRITE8_HANDLER(z80_2_ldp_write)
 {
+	istellar_state *state = space->machine().driver_data<istellar_state>();
 	logerror("CPU2 : writing LDP : 0x%x\n", data);
-	laserdisc_data_w(laserdisc,data);
+	state->m_laserdisc->data_w(data);
 }
 
 
 
 /* PROGRAM MAPS */
-static ADDRESS_MAP_START( z80_0_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_0_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x9fff) AM_ROM
 	AM_RANGE(0xa000,0xa7ff) AM_RAM
-	AM_RANGE(0xa800,0xabff) AM_RAM AM_BASE(&tile_ram)
-	AM_RANGE(0xac00,0xafff) AM_RAM AM_BASE(&tile_control_ram)
-	AM_RANGE(0xb000,0xb3ff) AM_RAM AM_BASE(&sprite_ram)
+	AM_RANGE(0xa800,0xabff) AM_RAM AM_BASE_MEMBER(istellar_state, m_tile_ram)
+	AM_RANGE(0xac00,0xafff) AM_RAM AM_BASE_MEMBER(istellar_state, m_tile_control_ram)
+	AM_RANGE(0xb000,0xb3ff) AM_RAM AM_BASE_MEMBER(istellar_state, m_sprite_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_1_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_1_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x1fff) AM_ROM
 	AM_RANGE(0x4000,0x47ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_2_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_2_mem, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x17ff) AM_ROM
 	AM_RANGE(0x1800,0x1fff) AM_RAM
 	AM_RANGE(0xc000,0xc000) AM_READ(z80_2_unknown_read)		/* Seems to be thrown away every time it's read - maybe interrupt related? */
@@ -174,7 +187,7 @@ ADDRESS_MAP_END
 
 
 /* IO MAPS */
-static ADDRESS_MAP_START( z80_0_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_0_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00,0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x02,0x02) AM_READ_PORT("DSW1")
@@ -183,14 +196,14 @@ static ADDRESS_MAP_START( z80_0_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x05,0x05) AM_READWRITE(z80_0_latch1_read,z80_0_latch2_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_1_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_1_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00,0x00) AM_NOP /*AM_READWRITE(z80_1_slatch_read,z80_1_slatch_write)*/
 	AM_RANGE(0x01,0x01) AM_NOP /*AM_READWRITE(z80_1_nmienable,z80_1_soundwrite_front)*/
 	AM_RANGE(0x02,0x02) AM_NOP /*AM_WRITE(z80_1_soundwrite_rear)*/
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_2_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_2_io, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00,0x00) AM_READWRITE(z80_2_ldp_read,z80_2_ldp_write)
 	AM_RANGE(0x01,0x01) AM_READWRITE(z80_2_latch2_read,z80_2_latch1_write)
@@ -260,7 +273,7 @@ static PALETTE_INIT( istellar )
 	int i;
 
 	/* Oddly enough, the top 4 bits of each byte is 0 */
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine.total_colors(); i++)
 	{
 		int r,g,b;
 		int bit0,bit1,bit2,bit3;
@@ -313,51 +326,51 @@ GFXDECODE_END
 static INTERRUPT_GEN( vblank_callback_istellar )
 {
 	/* Interrupt presumably comes from VBlank */
-	cpu_set_input_line(device, 0, ASSERT_LINE);
+	device_set_input_line(device, 0, ASSERT_LINE);
 
 	/* Interrupt presumably comes from the LDP's status strobe */
-	cputag_set_input_line(device->machine, "sub", 0, ASSERT_LINE);
+	cputag_set_input_line(device->machine(), "sub", 0, ASSERT_LINE);
 }
 
 
 /* DRIVER */
-static MACHINE_DRIVER_START( istellar )
+static MACHINE_CONFIG_START( istellar, istellar_state )
 	/* main cpu */
-	MDRV_CPU_ADD("maincpu", Z80, GUESSED_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(z80_0_mem)
-	MDRV_CPU_IO_MAP(z80_0_io)
-	MDRV_CPU_VBLANK_INT("screen", vblank_callback_istellar)
+	MCFG_CPU_ADD("maincpu", Z80, GUESSED_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(z80_0_mem)
+	MCFG_CPU_IO_MAP(z80_0_io)
+	MCFG_CPU_VBLANK_INT("screen", vblank_callback_istellar)
 
 	/* sound cpu */
-	MDRV_CPU_ADD("audiocpu", Z80, GUESSED_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(z80_1_mem)
-	MDRV_CPU_IO_MAP(z80_1_io)
+	MCFG_CPU_ADD("audiocpu", Z80, GUESSED_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(z80_1_mem)
+	MCFG_CPU_IO_MAP(z80_1_io)
 
 	/* ldp comm cpu */
-	MDRV_CPU_ADD("sub", Z80, GUESSED_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(z80_2_mem)
-	MDRV_CPU_IO_MAP(z80_2_io)
+	MCFG_CPU_ADD("sub", Z80, GUESSED_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(z80_2_mem)
+	MCFG_CPU_IO_MAP(z80_2_io)
 
-	MDRV_MACHINE_START(istellar)
+	MCFG_MACHINE_START(istellar)
 
-	MDRV_LASERDISC_ADD("laserdisc", PIONEER_LDV1000, "screen", "ldsound")
-	MDRV_LASERDISC_OVERLAY(istellar, 256, 256, BITMAP_FORMAT_INDEXED16)
+	MCFG_LASERDISC_LDV1000_ADD("laserdisc")
+	MCFG_LASERDISC_OVERLAY_STATIC(256, 256, istellar)
 
 	/* video hardware */
-	MDRV_LASERDISC_SCREEN_ADD_NTSC("screen", BITMAP_FORMAT_INDEXED16)
+	MCFG_LASERDISC_SCREEN_ADD_NTSC("screen", "laserdisc")
 
-	MDRV_PALETTE_LENGTH(256)
-	MDRV_PALETTE_INIT(istellar)
+	MCFG_PALETTE_LENGTH(256)
+	MCFG_PALETTE_INIT(istellar)
 
-	MDRV_GFXDECODE(istellar)
+	MCFG_GFXDECODE(istellar)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ldsound", LASERDISC, 0)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_MODIFY("laserdisc")
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 /* There is a photo of the PCB with blurry IC locations and labels.  Comments reflect what I can (barely) see. */
@@ -397,7 +410,8 @@ ROM_END
 
 static DRIVER_INIT( istellar )
 {
-	z80_2_nmi_enable = 0;
+	istellar_state *state = machine.driver_data<istellar_state>();
+	state->m_z80_2_nmi_enable = 0;
 }
 
 /*    YEAR  NAME    PARENT   MACHINE  INPUT    INIT    MONITOR  COMPANY          FULLNAME                       FLAGS) */

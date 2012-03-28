@@ -71,18 +71,29 @@ GUN_xP are 6 pin gun connectors (pins 1-4 match the UNICO sytle guns):
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/se3208/se3208.h"
 #include "video/vrender0.h"
 #include "machine/ds1302.h"
 #include "sound/vrender0.h"
+#include "machine/nvram.h"
+
+
+class psattack_state : public driver_device
+{
+public:
+	psattack_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+};
+
 
 static READ32_HANDLER( psattack_unk_r )
 {
 	return 0xffffffff;
 }
 
-static ADDRESS_MAP_START( psattack_mem, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( psattack_mem, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_ROM
 	AM_RANGE(0x01402204, 0x01402207) AM_READ(psattack_unk_r)
 	AM_RANGE(0x01402804, 0x01402807) AM_READ(psattack_unk_r)
@@ -108,12 +119,12 @@ static VIDEO_START(psattack)
 }
 
 
-static VIDEO_UPDATE(psattack)
+static SCREEN_UPDATE_IND16(psattack)
 {
 	return 0;
 }
 
-static VIDEO_EOF(psattack)
+static SCREEN_VBLANK(psattack)
 {
 
 }
@@ -157,37 +168,36 @@ static const vr0_interface vr0_config =
 };
 
 
-static MACHINE_DRIVER_START( psattack )
-	MDRV_CPU_ADD("maincpu", SE3208, 43000000)
-	MDRV_CPU_PROGRAM_MAP(psattack_mem)
- 	MDRV_CPU_VBLANK_INT("screen", psattack_interrupt)
+static MACHINE_CONFIG_START( psattack, psattack_state )
+	MCFG_CPU_ADD("maincpu", SE3208, 43000000)
+	MCFG_CPU_PROGRAM_MAP(psattack_mem)
+	MCFG_CPU_VBLANK_INT("screen", psattack_interrupt)
 
-	MDRV_MACHINE_START(psattack)
-	MDRV_MACHINE_RESET(psattack)
+	MCFG_MACHINE_START(psattack)
+	MCFG_MACHINE_RESET(psattack)
 
-	//MDRV_NVRAM_HANDLER(generic_0fill)
+	//MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(320, 240)
-	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(320, 240)
+	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE_STATIC(psattack)
+	MCFG_SCREEN_VBLANK_STATIC(psattack)
 
-	MDRV_VIDEO_START(psattack)
-	MDRV_VIDEO_UPDATE(psattack)
-	MDRV_VIDEO_EOF(psattack)
+	MCFG_VIDEO_START(psattack)
 
-	MDRV_PALETTE_INIT(RRRRR_GGGGGG_BBBBB)
-	MDRV_PALETTE_LENGTH(65536)
+	MCFG_PALETTE_INIT(RRRRR_GGGGGG_BBBBB)
+	MCFG_PALETTE_LENGTH(65536)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("vrender", VRENDER0, 0)
-	MDRV_SOUND_CONFIG(vr0_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("vrender", VRENDER0, 0)
+	MCFG_SOUND_CONFIG(vr0_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( psattack )
@@ -209,5 +219,5 @@ static DRIVER_INIT(psattack)
 
 }
 
-GAME( 2004, psattack, 0, psattack, psattack, psattack, ROT0, "Uniana", "P's Attack", GAME_NOT_WORKING )
+GAME( 2004, psattack, 0, psattack, psattack, psattack, ROT0, "Uniana", "P's Attack", GAME_IS_SKELETON )
 

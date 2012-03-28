@@ -12,7 +12,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
 #include "cpu/m68000/m68000.h"
@@ -21,7 +21,7 @@
 #include "video/vector.h"
 #include "machine/6840ptm.h"
 #include "machine/z80ctc.h"
-#include "cchasm.h"
+#include "includes/cchasm.h"
 
 #define CCHASM_68K_CLOCK (XTAL_8MHz)
 
@@ -31,14 +31,14 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
-	AM_RANGE(0x040000, 0x04000f) AM_DEVREADWRITE8("6840ptm", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0x040000, 0x04000f) AM_DEVREADWRITE8_MODERN("6840ptm", ptm6840_device, read, write, 0xff)
 	AM_RANGE(0x050000, 0x050001) AM_WRITE(cchasm_refresh_control_w)
 	AM_RANGE(0x060000, 0x060001) AM_READ_PORT("DSW") AM_WRITE(cchasm_led_w)
 	AM_RANGE(0x070000, 0x070001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0xf80000, 0xf800ff) AM_READWRITE(cchasm_io_r,cchasm_io_w)
-	AM_RANGE(0xffb000, 0xffffff) AM_RAM AM_BASE(&cchasm_ram)
+	AM_RANGE(0xffb000, 0xffffff) AM_RAM AM_BASE_MEMBER(cchasm_state, m_ram)
 ADDRESS_MAP_END
 
 /*************************************
@@ -47,7 +47,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x5000, 0x53ff) AM_RAM
@@ -62,14 +62,14 @@ static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7041, 0x7041) AM_NOP // TODO
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ctc", z80ctc_r, z80ctc_w)
 ADDRESS_MAP_END
 
 static WRITE_LINE_DEVICE_HANDLER( cchasm_6840_irq )
 {
-	cputag_set_input_line(device->machine, "maincpu", 4, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", 4, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ptm6840_interface cchasm_6840_intf =
@@ -99,7 +99,7 @@ static INPUT_PORTS_START( cchasm )
 	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x10, 0x10, "Bonus Frequency" )
 	PORT_DIPSETTING(    0x00, "Once" )
 	PORT_DIPSETTING(    0x10, "Every" )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Demo_Sounds ) )
@@ -139,7 +139,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const z80_daisy_chain daisy_chain[] =
+static const z80_daisy_config daisy_chain[] =
 {
 	{ "ctc" },
 	{ NULL }
@@ -153,48 +153,48 @@ static const z80_daisy_chain daisy_chain[] =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( cchasm )
+static MACHINE_CONFIG_START( cchasm, cchasm_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000,CCHASM_68K_CLOCK)	/* 8 MHz (from schematics) */
-	MDRV_CPU_PROGRAM_MAP(memmap)
+	MCFG_CPU_ADD("maincpu", M68000,CCHASM_68K_CLOCK)	/* 8 MHz (from schematics) */
+	MCFG_CPU_PROGRAM_MAP(memmap)
 
-	MDRV_CPU_ADD("audiocpu", Z80,3584229)		/* 3.58  MHz (from schematics) */
-	MDRV_CPU_CONFIG(daisy_chain)
-	MDRV_CPU_PROGRAM_MAP(sound_memmap)
-	MDRV_CPU_IO_MAP(sound_portmap)
+	MCFG_CPU_ADD("audiocpu", Z80,3584229)		/* 3.58  MHz (from schematics) */
+	MCFG_CPU_CONFIG(daisy_chain)
+	MCFG_CPU_PROGRAM_MAP(sound_memmap)
+	MCFG_CPU_IO_MAP(sound_portmap)
 
-	MDRV_Z80CTC_ADD("ctc", 3584229 /* same as "audiocpu" */, cchasm_ctc_intf)
+	MCFG_Z80CTC_ADD("ctc", 3584229 /* same as "audiocpu" */, cchasm_ctc_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(40)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 768-1)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(40)
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 768-1)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(cchasm)
-	MDRV_VIDEO_UPDATE(vector)
+	MCFG_VIDEO_START(cchasm)
 
 	/* sound hardware */
-	MDRV_SOUND_START(cchasm)
+	MCFG_SOUND_START(cchasm)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1818182)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
+	MCFG_SOUND_ADD("ay1", AY8910, 1818182)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1818182)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
+	MCFG_SOUND_ADD("ay2", AY8910, 1818182)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("dac1", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("dac1", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("dac2", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("dac2", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	/* 6840 PTM */
-	MDRV_PTM6840_ADD("6840ptm", cchasm_6840_intf)
-MACHINE_DRIVER_END
+	MCFG_PTM6840_ADD("6840ptm", cchasm_6840_intf)
+MACHINE_CONFIG_END
 
 
 

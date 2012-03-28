@@ -6,13 +6,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "video/konamiic.h"
+#include "emu.h"
+#include "video/konicdev.h"
 #include "includes/ajax.h"
-
-
-UINT8 ajax_priority;
-static int layer_colorbase[3],sprite_colorbase,zoom_colorbase;
 
 
 /***************************************************************************
@@ -21,10 +17,11 @@ static int layer_colorbase[3],sprite_colorbase,zoom_colorbase;
 
 ***************************************************************************/
 
-static void tile_callback(int layer,int bank,int *code,int *color,int *flags,int *priority)
+void ajax_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
 {
+	ajax_state *state = machine.driver_data<ajax_state>();
 	*code |= ((*color & 0x0f) << 8) | (bank << 12);
-	*color = layer_colorbase[layer] + ((*color & 0xf0) >> 4);
+	*color = state->m_layer_colorbase[layer] + ((*color & 0xf0) >> 4);
 }
 
 
@@ -34,7 +31,7 @@ static void tile_callback(int layer,int bank,int *code,int *color,int *flags,int
 
 ***************************************************************************/
 
-static void sprite_callback(int *code,int *color,int *priority,int *shadow)
+void ajax_sprite_callback( running_machine &machine, int *code, int *color, int *priority, int *shadow )
 {
 	/* priority bits:
        4 over zoom (0 = have priority)
@@ -42,11 +39,12 @@ static void sprite_callback(int *code,int *color,int *priority,int *shadow)
        6 over A    (1 = have priority)
        never over F
     */
+	ajax_state *state = machine.driver_data<ajax_state>();
 	*priority = 0xff00;							/* F = 8 */
 	if ( *color & 0x10) *priority |= 0xf0f0;	/* Z = 4 */
 	if (~*color & 0x40) *priority |= 0xcccc;	/* A = 2 */
 	if ( *color & 0x20) *priority |= 0xaaaa;	/* B = 1 */
-	*color = sprite_colorbase + (*color & 0x0f);
+	*color = state->m_sprite_colorbase + (*color & 0x0f);
 }
 
 
@@ -56,10 +54,11 @@ static void sprite_callback(int *code,int *color,int *priority,int *shadow)
 
 ***************************************************************************/
 
-static void zoom_callback(int *code,int *color,int *flags)
+void ajax_zoom_callback( running_machine &machine, int *code, int *color, int *flags )
 {
+	ajax_state *state = machine.driver_data<ajax_state>();
 	*code |= ((*color & 0x07) << 8);
-	*color = zoom_colorbase + ((*color & 0x08) >> 3);
+	*color = state->m_zoom_colorbase + ((*color & 0x08) >> 3);
 }
 
 
@@ -71,15 +70,13 @@ static void zoom_callback(int *code,int *color,int *flags)
 
 VIDEO_START( ajax )
 {
-	layer_colorbase[0] = 64;
-	layer_colorbase[1] = 0;
-	layer_colorbase[2] = 32;
-	sprite_colorbase = 16;
-	zoom_colorbase = 6;	/* == 48 since it's 7-bit graphics */
-	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,tile_callback);
-	K051960_vh_start(machine,"gfx2",NORMAL_PLANE_ORDER,sprite_callback);
-	K051316_vh_start_0(machine,"gfx3",7,FALSE,0,zoom_callback);
-    state_save_register_global(machine, ajax_priority);
+	ajax_state *state = machine.driver_data<ajax_state>();
+
+	state->m_layer_colorbase[0] = 64;
+	state->m_layer_colorbase[1] = 0;
+	state->m_layer_colorbase[2] = 32;
+	state->m_sprite_colorbase = 16;
+	state->m_zoom_colorbase = 6;	/* == 48 since it's 7-bit graphics */
 }
 
 
@@ -90,28 +87,30 @@ VIDEO_START( ajax )
 
 ***************************************************************************/
 
-VIDEO_UPDATE( ajax )
+SCREEN_UPDATE_IND16( ajax )
 {
-	K052109_tilemap_update();
+	ajax_state *state = screen.machine().driver_data<ajax_state>();
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	k052109_tilemap_update(state->m_k052109);
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
-	tilemap_draw(bitmap,cliprect,K052109_tilemap[2],0,1);
-	if (ajax_priority)
+	screen.machine().priority_bitmap.fill(0, cliprect);
+
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
+	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 0, 1);
+	if (state->m_priority)
 	{
 		/* basic layer order is B, zoom, A, F */
-		K051316_zoom_draw_0(bitmap,cliprect,0,4);
-		tilemap_draw(bitmap,cliprect,K052109_tilemap[1],0,2);
+		k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 4);
+		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, 0, 2);
 	}
 	else
 	{
 		/* basic layer order is B, A, zoom, F */
-		tilemap_draw(bitmap,cliprect,K052109_tilemap[1],0,2);
-		K051316_zoom_draw_0(bitmap,cliprect,0,4);
+		k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, 0, 2);
+		k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 4);
 	}
-	tilemap_draw(bitmap,cliprect,K052109_tilemap[0],0,8);
+	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 8);
 
-	K051960_sprites_draw(screen->machine,bitmap,cliprect,-1,-1);
+	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, -1, -1);
 	return 0;
 }

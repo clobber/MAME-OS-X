@@ -6,7 +6,8 @@
 
  I've also seen CDs of this for sale, so maybe there should be a CD too, for the music?
 
-
+TODO:
+can't be emulated without proper mb bios
 
  -- set info
 
@@ -31,7 +32,7 @@ The "backup" directory on hard disk was created by the dumper.
 
 
  -- Hardware info found in the following press release:
-http://www.quantum3d.com/press/HTMLarchive/4-20-98.html
+http://www.wave-report.com/archives/1998/98170702.htm
 
 QUANTUM3D'S HEAVY METAL SYSTEM - HM233G
 NLX form factor system that is based on the Intel 440LX chipset
@@ -57,35 +58,42 @@ TODO:
 ===============================================================================
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i386/i386.h"
 #include "machine/pic8259.h"
 /* Insert IBM PC includes here */
+
+
+class quakeat_state : public driver_device
+{
+public:
+	quakeat_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	device_t	*m_pic8259_1;
+	device_t	*m_pic8259_2;
+};
+
 
 static VIDEO_START(quake)
 {
 }
 
-static VIDEO_UPDATE(quake)
+static SCREEN_UPDATE_IND16(quake)
 {
 	return 0;
 }
 
-static struct {
-	const device_config	*pic8259_1;
-	const device_config	*pic8259_2;
-} quakeat_devices;
-
-static ADDRESS_MAP_START( quake_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( quake_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0000ffff) AM_ROM AM_REGION("pc_bios", 0) /* BIOS */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quake_io, ADDRESS_SPACE_IO, 32 )
+static ADDRESS_MAP_START( quake_io, AS_IO, 32 )
 //  AM_RANGE(0x0000, 0x001f) AM_DEVREADWRITE8("dma8237_1", dma8237_r, dma8237_w, 0xffffffff)
 	AM_RANGE(0x0020, 0x003f) AM_DEVREADWRITE8("pic8259_1", pic8259_r, pic8259_w, 0xffffffff)
 //  AM_RANGE(0x0040, 0x005f) AM_DEVREADWRITE8("pit8254", pit8253_r, pit8253_w, 0xffffffff)
 //  AM_RANGE(0x0060, 0x006f) AM_READWRITE(kbdc8042_32le_r,          kbdc8042_32le_w)
-//  AM_RANGE(0x0070, 0x007f) AM_READWRITE(mc146818_port32le_r,      mc146818_port32le_w)
+//  AM_RANGE(0x0070, 0x007f) AM_DEVREADWRITE8_MODERN("rtc", mc146818_device, read, write, 0xffffffff)
 //  AM_RANGE(0x0080, 0x009f) AM_READWRITE(at_page32_r,              at_page32_w)
 	AM_RANGE(0x00a0, 0x00bf) AM_DEVREADWRITE8("pic8259_2", pic8259_r, pic8259_w, 0xffffffff)
 //  AM_RANGE(0x00c0, 0x00df) AM_DEVREADWRITE("dma8237_2", at32_dma8237_2_r, at32_dma8237_2_w)
@@ -105,25 +113,32 @@ ADDRESS_MAP_END
  *
  *************************************************************/
 
-static PIC8259_SET_INT_LINE( quakeat_pic8259_1_set_int_line )
+static WRITE_LINE_DEVICE_HANDLER( quakeat_pic8259_1_set_int_line )
 {
-	cputag_set_input_line(device->machine, "maincpu", 0, interrupt ? HOLD_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-
-static PIC8259_SET_INT_LINE( quakeat_pic8259_2_set_int_line )
+static READ8_DEVICE_HANDLER( get_slave_ack )
 {
-	pic8259_set_irq_line( quakeat_devices.pic8259_1, 2, interrupt);
+	quakeat_state *state = device->machine().driver_data<quakeat_state>();
+	if (offset==2) { // IRQ = 2
+		return pic8259_acknowledge(state->m_pic8259_2);
+	}
+	return 0x00;
 }
 
-
-static const struct pic8259_interface quakeat_pic8259_1_config = {
-	quakeat_pic8259_1_set_int_line
+static const struct pic8259_interface quakeat_pic8259_1_config =
+{
+	DEVCB_LINE(quakeat_pic8259_1_set_int_line),
+	DEVCB_LINE_VCC,
+	DEVCB_HANDLER(get_slave_ack)
 };
 
-
-static const struct pic8259_interface quakeat_pic8259_2_config = {
-	quakeat_pic8259_2_set_int_line
+static const struct pic8259_interface quakeat_pic8259_2_config =
+{
+	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w),
+	DEVCB_LINE_GND,
+	DEVCB_NULL
 };
 
 /*************************************************************/
@@ -135,48 +150,43 @@ INPUT_PORTS_END
 
 static IRQ_CALLBACK(irq_callback)
 {
-	int r = 0;
-	r = pic8259_acknowledge( quakeat_devices.pic8259_2);
-	if (r==0)
-	{
-		r = pic8259_acknowledge( quakeat_devices.pic8259_1);
-	}
-	return r;
+	quakeat_state *state = device->machine().driver_data<quakeat_state>();
+	return pic8259_acknowledge( state->m_pic8259_1);
 }
 
 static MACHINE_START(quakeat)
 {
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	quakeat_state *state = machine.driver_data<quakeat_state>();
+	device_set_irq_callback(machine.device("maincpu"), irq_callback);
 
-	quakeat_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
-	quakeat_devices.pic8259_2 = devtag_get_device( machine, "pic8259_2" );
+	state->m_pic8259_1 = machine.device( "pic8259_1" );
+	state->m_pic8259_2 = machine.device( "pic8259_2" );
 }
 /*************************************************************/
 
-static MACHINE_DRIVER_START( quake )
+static MACHINE_CONFIG_START( quake, quakeat_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", PENTIUM, 233000000) /* Pentium II, 233MHz */
-	MDRV_CPU_PROGRAM_MAP(quake_map)
-	MDRV_CPU_IO_MAP(quake_io)
+	MCFG_CPU_ADD("maincpu", PENTIUM, 233000000) /* Pentium II, 233MHz */
+	MCFG_CPU_PROGRAM_MAP(quake_map)
+	MCFG_CPU_IO_MAP(quake_io)
 
-	MDRV_MACHINE_START(quakeat)
+	MCFG_MACHINE_START(quakeat)
 
-	MDRV_PIC8259_ADD( "pic8259_1", quakeat_pic8259_1_config )
-	MDRV_PIC8259_ADD( "pic8259_2", quakeat_pic8259_2_config )
+	MCFG_PIC8259_ADD( "pic8259_1", quakeat_pic8259_1_config )
+	MCFG_PIC8259_ADD( "pic8259_2", quakeat_pic8259_2_config )
 
- 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(quake)
 
-	MDRV_PALETTE_LENGTH(0x100)
+	MCFG_PALETTE_LENGTH(0x100)
 
-	MDRV_VIDEO_START(quake)
-	MDRV_VIDEO_UPDATE(quake)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(quake)
+MACHINE_CONFIG_END
 
 
 ROM_START(quake)
@@ -188,4 +198,4 @@ ROM_START(quake)
 ROM_END
 
 
-GAME( 1998, quake,  0,   quake, quake, 0, ROT0, "Lazer-Tron / iD Software", "Quake Arcade Tournament (Release Beta 2)", GAME_NOT_WORKING|GAME_NO_SOUND )
+GAME( 1998, quake,  0,   quake, quake, 0, ROT0, "Lazer-Tron / iD Software", "Quake Arcade Tournament (Release Beta 2)", GAME_IS_SKELETON )

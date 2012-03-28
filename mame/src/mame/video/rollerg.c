@@ -1,10 +1,6 @@
-#include "driver.h"
-#include "video/konamiic.h"
-
-
-static int bg_colorbase,sprite_colorbase,zoom_colorbase;
-
-
+#include "emu.h"
+#include "video/konicdev.h"
+#include "includes/rollerg.h"
 
 /***************************************************************************
 
@@ -12,16 +8,17 @@ static int bg_colorbase,sprite_colorbase,zoom_colorbase;
 
 ***************************************************************************/
 
-static void sprite_callback(int *code,int *color,int *priority_mask)
+void rollerg_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask )
 {
+	rollerg_state *state = machine.driver_data<rollerg_state>();
 #if 0
-if (input_code_pressed(machine, KEYCODE_Q) && (*color & 0x80)) *color = rand();
-if (input_code_pressed(machine, KEYCODE_W) && (*color & 0x40)) *color = rand();
-if (input_code_pressed(machine, KEYCODE_E) && (*color & 0x20)) *color = rand();
-if (input_code_pressed(machine, KEYCODE_R) && (*color & 0x10)) *color = rand();
+	if (machine.input().code_pressed(KEYCODE_Q) && (*color & 0x80)) *color = rand();
+	if (machine.input().code_pressed(KEYCODE_W) && (*color & 0x40)) *color = rand();
+	if (machine.input().code_pressed(KEYCODE_E) && (*color & 0x20)) *color = rand();
+	if (machine.input().code_pressed(KEYCODE_R) && (*color & 0x10)) *color = rand();
 #endif
 	*priority_mask = (*color & 0x10) ? 0 : 0x02;
-	*color = sprite_colorbase + (*color & 0x0f);
+	*color = state->m_sprite_colorbase + (*color & 0x0f);
 }
 
 
@@ -31,11 +28,12 @@ if (input_code_pressed(machine, KEYCODE_R) && (*color & 0x10)) *color = rand();
 
 ***************************************************************************/
 
-static void zoom_callback(int *code,int *color,int *flags)
+void rollerg_zoom_callback( running_machine &machine, int *code, int *color, int *flags )
 {
+	rollerg_state *state = machine.driver_data<rollerg_state>();
 	*flags = TILE_FLIPYX((*color & 0xc0) >> 6);
 	*code |= ((*color & 0x0f) << 8);
-	*color = zoom_colorbase + ((*color & 0x30) >> 4);
+	*color = state->m_zoom_colorbase + ((*color & 0x30) >> 4);
 }
 
 
@@ -48,14 +46,9 @@ static void zoom_callback(int *code,int *color,int *flags)
 
 VIDEO_START( rollerg )
 {
-	bg_colorbase = 16;
-	sprite_colorbase = 16;
-	zoom_colorbase = 0;
-
-	K053245_vh_start(machine,0,"gfx1",NORMAL_PLANE_ORDER,sprite_callback);
-	K051316_vh_start_0(machine,"gfx2",4,FALSE,0,zoom_callback);
-
-	K051316_set_offset(0, 22, 1);
+	rollerg_state *state = machine.driver_data<rollerg_state>();
+	state->m_sprite_colorbase = 16;
+	state->m_zoom_colorbase = 0;
 }
 
 
@@ -66,11 +59,14 @@ VIDEO_START( rollerg )
 
 ***************************************************************************/
 
-VIDEO_UPDATE( rollerg )
+SCREEN_UPDATE_IND16( rollerg )
 {
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
-	bitmap_fill(bitmap,cliprect,16 * bg_colorbase);
-	K051316_zoom_draw_0(bitmap,cliprect,0,1);
-	K053245_sprites_draw(screen->machine,0,bitmap,cliprect);
+	rollerg_state *state = screen.machine().driver_data<rollerg_state>();
+	int bg_colorbase = 16;
+
+	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap.fill(16 * bg_colorbase, cliprect);
+	k051316_zoom_draw(state->m_k051316, bitmap, cliprect, 0, 1);
+	k053245_sprites_draw(state->m_k053244, bitmap, cliprect);
 	return 0;
 }

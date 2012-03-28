@@ -4,10 +4,10 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m6809/m6809.h"
-#include "qix.h"
+#include "includes/qix.h"
 #include "sound/sn76496.h"
 #include "sound/discrete.h"
 
@@ -41,7 +41,7 @@ static WRITE8_DEVICE_HANDLER( qix_vol_w )
 /* qix Sound System Analog emulation                                    */
 /************************************************************************/
 /*
- * This hardware is capable of independant L/R volume control,
+ * This hardware is capable of independent L/R volume control,
  * but only sdungeon uses it for a stereo effect.
  * Other games just use it for fixed L/R volume control.
  *
@@ -61,7 +61,7 @@ static DISCRETE_SOUND_START(qix)
 	DISCRETE_INPUTX_DATA(QIX_DAC_DATA, 128, -128*128, 128)
 	DISCRETE_INPUT_DATA (QIX_VOL_DATA)
 
-	/* Seperate the two 4-bit channels. */
+	/* Separate the two 4-bit channels. */
 	DISCRETE_TRANSFORM3(QIX_VOL_DATA_L, QIX_VOL_DATA, 16, 0x0f, "01/2&")
 	DISCRETE_TRANSFORM2(QIX_VOL_DATA_R, QIX_VOL_DATA, 0x0f, "01&")
 
@@ -101,22 +101,22 @@ static WRITE8_DEVICE_HANDLER( sndpia_2_warning_w )
 
 static TIMER_CALLBACK( deferred_sndpia1_porta_w )
 {
-	const device_config *device = (const device_config *)ptr;
-	pia6821_porta_w(device, 0, param);
+	pia6821_device *device = (pia6821_device *)ptr;
+	device->porta_w(param);
 }
 
 
 static WRITE8_DEVICE_HANDLER( sync_sndpia1_porta_w )
 {
 	/* we need to synchronize this so the sound CPU doesn't drop anything important */
-	timer_call_after_resynch(device->machine, (void *)device, data, deferred_sndpia1_porta_w);
+	device->machine().scheduler().synchronize(FUNC(deferred_sndpia1_porta_w), data, (void *)downcast<pia6821_device *>(device));
 }
 
 
 static WRITE8_DEVICE_HANDLER( slither_coinctl_w )
 {
-	coin_lockout_w(0, (~data >> 6) & 1);
-	coin_counter_w(0, (data >> 5) & 1);
+	coin_lockout_w(device->machine(), 0, (~data >> 6) & 1);
+	coin_counter_w(device->machine(), 0, (data >> 5) & 1);
 }
 
 
@@ -129,19 +129,21 @@ static WRITE8_DEVICE_HANDLER( slither_coinctl_w )
 
 static WRITE_LINE_DEVICE_HANDLER( qix_pia_dint )
 {
-	int combined_state = pia6821_get_irq_a(device) | pia6821_get_irq_b(device);
+	pia6821_device *pia = downcast<pia6821_device *>(device);
+	int combined_state = pia->irq_a_state() | pia->irq_b_state();
 
 	/* DINT is connected to the data CPU's IRQ line */
-	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static WRITE_LINE_DEVICE_HANDLER( qix_pia_sint )
 {
-	int combined_state = pia6821_get_irq_a(device) | pia6821_get_irq_b(device);
+	pia6821_device *pia = downcast<pia6821_device *>(device);
+	int combined_state = pia->irq_a_state() | pia->irq_b_state();
 
 	/* SINT is connected to the sound CPU's IRQ line */
-	cputag_set_input_line(device->machine, "audiocpu", M6800_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "audiocpu", M6800_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -152,10 +154,10 @@ static WRITE_LINE_DEVICE_HANDLER( qix_pia_sint )
  *
  *************************************/
 
-static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
-	AM_RANGE(0x2000, 0x2003) AM_MIRROR(0x5ffc) AM_DEVREADWRITE("sndpia2", pia6821_r, pia6821_w)
-	AM_RANGE(0x4000, 0x4003) AM_MIRROR(0x3ffc) AM_DEVREADWRITE("sndpia1", pia6821_r, pia6821_w)
+	AM_RANGE(0x2000, 0x2003) AM_MIRROR(0x5ffc) AM_DEVREADWRITE_MODERN("sndpia2", pia6821_device, read, write)
+	AM_RANGE(0x4000, 0x4003) AM_MIRROR(0x3ffc) AM_DEVREADWRITE_MODERN("sndpia1", pia6821_device, read, write)
 	AM_RANGE(0xd000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -177,7 +179,7 @@ static const pia6821_interface qixsnd_pia_0_intf =
 	DEVCB_NULL,		/* line CB2 in */
 	DEVCB_DEVICE_HANDLER("sndpia1", sync_sndpia1_porta_w),			/* port A out */
 	DEVCB_DEVICE_HANDLER("discrete", qix_vol_w),					/* port B out */
-	DEVCB_DEVICE_HANDLER("sndpia1", pia6821_ca1_w),						/* line CA2 out */
+	DEVCB_DEVICE_LINE_MEMBER("sndpia1", pia6821_device, ca1_w),		/* line CA2 out */
 	DEVCB_HANDLER(qix_flip_screen_w),								/* port CB2 out */
 	DEVCB_LINE(qix_pia_dint),										/* IRQA */
 	DEVCB_LINE(qix_pia_dint)										/* IRQB */
@@ -191,9 +193,9 @@ static const pia6821_interface qixsnd_pia_1_intf =
 	DEVCB_NULL,		/* line CB1 in */
 	DEVCB_NULL,		/* line CA2 in */
 	DEVCB_NULL,		/* line CB2 in */
-	DEVCB_DEVICE_HANDLER("sndpia0", pia6821_porta_w),			/* port A out */
-	DEVCB_DEVICE_HANDLER("discrete", qix_dac_w),			/* port B out */
-	DEVCB_DEVICE_HANDLER("sndpia0", pia6821_ca1_w),				/* line CA2 out */
+	DEVCB_DEVICE_MEMBER("sndpia0", pia6821_device, porta_w),			/* port A out */
+	DEVCB_DEVICE_HANDLER("discrete", qix_dac_w),				/* port B out */
+	DEVCB_DEVICE_LINE_MEMBER("sndpia0", pia6821_device, ca1_w),	/* line CA2 out */
 	DEVCB_NULL,		/* line CB2 out */
 	DEVCB_LINE(qix_pia_sint),								/* IRQA */
 	DEVCB_LINE(qix_pia_sint)								/* IRQB */
@@ -239,31 +241,31 @@ static const pia6821_interface slithersnd_pia_0_intf =
  *
  *************************************/
 
-MACHINE_DRIVER_START( qix_audio )
-	MDRV_CPU_ADD("audiocpu", M6802, SOUND_CLOCK_OSC/2)		/* 0.92 MHz */
-	MDRV_CPU_PROGRAM_MAP(audio_map)
+MACHINE_CONFIG_FRAGMENT( qix_audio )
+	MCFG_CPU_ADD("audiocpu", M6802, SOUND_CLOCK_OSC/2)		/* 0.92 MHz */
+	MCFG_CPU_PROGRAM_MAP(audio_map)
 
-	MDRV_PIA6821_ADD("sndpia0", qixsnd_pia_0_intf)
-	MDRV_PIA6821_ADD("sndpia1", qixsnd_pia_1_intf)
-	MDRV_PIA6821_ADD("sndpia2", qixsnd_pia_2_intf)
+	MCFG_PIA6821_ADD("sndpia0", qixsnd_pia_0_intf)
+	MCFG_PIA6821_ADD("sndpia1", qixsnd_pia_1_intf)
+	MCFG_PIA6821_ADD("sndpia2", qixsnd_pia_2_intf)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(qix)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(qix)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( slither_audio )
-	MDRV_PIA6821_ADD("sndpia0", slithersnd_pia_0_intf)
+MACHINE_CONFIG_FRAGMENT( slither_audio )
+	MCFG_PIA6821_ADD("sndpia0", slithersnd_pia_0_intf)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn1", SN76489, SLITHER_CLOCK_OSC/4/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("sn1", SN76489, SLITHER_CLOCK_OSC/4/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn2", SN76489, SLITHER_CLOCK_OSC/4/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("sn2", SN76489, SLITHER_CLOCK_OSC/4/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END

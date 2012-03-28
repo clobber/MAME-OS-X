@@ -4,6 +4,7 @@
     (c) 2002-2006 Bryan McPhail (bmcphail@tendril.co.uk) and Phil Stroffolino
 */
 
+#include "emu.h"
 #include "arm.h"
 
 static char *WriteImmediateOperand( char *pBuf, UINT32 opcode )
@@ -397,3 +398,10 @@ CPU_DISASSEMBLE( arm )
 	UINT32 opcode = oprom[0] | (oprom[1] << 8) | (oprom[2] << 16) | (oprom[3] << 24);
 	return 4 | arm_disasm(buffer, pc, opcode);
 }
+
+CPU_DISASSEMBLE( arm_be )
+{
+	UINT32 opcode = oprom[3] | (oprom[2] << 8) | (oprom[1] << 16) | (oprom[0] << 24);
+	return 4 | arm_disasm(buffer, pc, opcode);
+}
+

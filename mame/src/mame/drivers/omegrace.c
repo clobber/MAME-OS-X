@@ -5,7 +5,7 @@
     driver by Bernd Wiebelt
 
     Games supported:
-        * Omega Race
+        * Omega Race [2 sets]
         * Delta Race (Omega Race bootleg by Allied Leisure)
 
     Known bugs:
@@ -22,9 +22,6 @@
 
 
     --------
-
-    Most of the info here comes from the wiretap archive at:
-    http://www.spies.com/arcade/simulation/gameHardware/
 
 
     Omega Race Memory Map
@@ -216,14 +213,23 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "video/vector.h"
 #include "video/avgdvg.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
 
 #include "rendlay.h"
 
+
+class omegrace_state : public driver_device
+{
+public:
+	omegrace_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+};
 
 
 /*************************************
@@ -234,7 +240,7 @@
 
 static MACHINE_RESET( omegrace )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 	/* Omega Race expects the vector processor to be ready. */
 	avgdvg_reset_w(space, 0, 0);
 }
@@ -287,7 +293,7 @@ static const UINT8 spinnerTable[64] =
 
 static READ8_HANDLER( omegrace_spinner1_r )
 {
-	return (spinnerTable[input_port_read(space->machine, "SPIN0") & 0x3f]);
+	return (spinnerTable[input_port_read(space->machine(), "SPIN0") & 0x3f]);
 }
 
 
@@ -301,14 +307,14 @@ static READ8_HANDLER( omegrace_spinner1_r )
 static WRITE8_HANDLER( omegrace_leds_w )
 {
 	/* bits 0 and 1 are coin counters */
-	coin_counter_w(0,data & 0x01);
-	coin_counter_w(1,data & 0x02);
+	coin_counter_w(space->machine(), 0,data & 0x01);
+	coin_counter_w(space->machine(), 1,data & 0x02);
 
 	/* bits 2 to 5 are the start leds (4 and 5 cocktail only) */
-	set_led_status(0,~data & 0x04);
-	set_led_status(1,~data & 0x08);
-	set_led_status(2,~data & 0x10);
-	set_led_status(3,~data & 0x20);
+	set_led_status(space->machine(), 0,~data & 0x04);
+	set_led_status(space->machine(), 1,~data & 0x08);
+	set_led_status(space->machine(), 2,~data & 0x10);
+	set_led_status(space->machine(), 3,~data & 0x20);
 
 	/* bit 6 flips screen (not supported) */
 }
@@ -317,7 +323,7 @@ static WRITE8_HANDLER( omegrace_leds_w )
 static WRITE8_HANDLER( omegrace_soundlatch_w )
 {
 	soundlatch_w (space, offset, data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
 
@@ -328,16 +334,16 @@ static WRITE8_HANDLER( omegrace_soundlatch_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x4bff) AM_RAM
-	AM_RANGE(0x5c00, 0x5cff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) /* NVRAM */
-	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x8000) /* vector ram */
+	AM_RANGE(0x5c00, 0x5cff) AM_RAM AM_SHARE("nvram") /* NVRAM */
+	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x8000) /* vector ram */
 	AM_RANGE(0x9000, 0x9fff) AM_ROM /* vector rom */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x08, 0x08) AM_READ(omegrace_vg_go_r)
 	AM_RANGE(0x09, 0x09) AM_READ(watchdog_reset_r)
@@ -360,13 +366,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 	AM_RANGE(0x1000, 0x13ff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_port, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)	/* likely ay8910 input port, not direct */
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -469,50 +475,50 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( omegrace )
+static MACHINE_CONFIG_START( omegrace, omegrace_state )
 
 	/* basic machine hardware */
 
 	/* main CPU */
 	/* XTAL101 Crystal @ 12mhz */
 	/* through 74LS161, Pin 13 = divide by 4 */
-	MDRV_CPU_ADD("maincpu", Z80,12000000/4)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(port_map)
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold,250)
+	MCFG_CPU_ADD("maincpu", Z80,12000000/4)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(port_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,250)
 
 	/* audio CPU */
 	/* XTAL101 Crystal @ 12mhz */
 	/* through 74LS161, Pin 12 = divide by 8 */
 	/* Fed to CPU as 1.5mhz though line J4-D */
-	MDRV_CPU_ADD("audiocpu", Z80,12000000/8)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sound_port)
-	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,250)
+	MCFG_CPU_ADD("audiocpu", Z80,12000000/8)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sound_port)
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,250)
 
-	MDRV_MACHINE_RESET(omegrace)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_MACHINE_RESET(omegrace)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(40)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(522, 1566, 522, 1566)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(40)
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(522, 1566, 522, 1566)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(dvg)
-	MDRV_VIDEO_UPDATE(vector)
+	MCFG_VIDEO_START(dvg)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
 	/* XTAL101 Crystal @ 12mhz */
 	/* through 74LS92, Pin 8 = divide by 12 */
-	MDRV_SOUND_ADD("ay1", AY8912, 12000000/12)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay1", AY8912, 12000000/12)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay2", AY8912, 12000000/12)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8912, 12000000/12)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
 
@@ -534,7 +540,22 @@ ROM_START( omegrace )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "sound.k5",     0x0000, 0x0800, CRC(7d426017) SHA1(370f0fb5608819de873c845f6010cbde75a9818e) )
 
-	/* DVG PROM */
+	ROM_REGION( 0x100, "user1", 0 )
+	ROM_LOAD( "dvgprom.bin",	0x0000, 0x0100, CRC(d481e958) SHA1(d8790547dc539e25984807573097b61ec3ffe614) )
+ROM_END
+
+ROM_START( omegrace2 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "o.r._1a.m7",					0x0000, 0x1000, CRC(f8539d46) SHA1(bb0c6bc2a84e904d1cb00822052c53c0a8ff1083) )
+	ROM_LOAD( "o.r._2a.l7",					0x1000, 0x1000, CRC(0ff70783) SHA1(5fceaaea1439c3ae408a45f4d7839ec56b71504c) )
+	ROM_LOAD( "o.r._3a.k7",					0x2000, 0x1000, CRC(6349130d) SHA1(a1ff62044d9e59294f56079e704beeebc65a56aa) )
+	ROM_LOAD( "o.r._4a.j7",					0x3000, 0x1000, CRC(0a5ef64a) SHA1(42bcc5d5bfe11af4b26ba7753d83e121eef4b597) )
+	ROM_LOAD( "o.r._vector_i_6-1-81.e1",	0x9000, 0x0800, CRC(1d0fdf3a) SHA1(3333397a9745874cea1dd6a1bda783cc59393b55) )
+	ROM_LOAD( "o.r._vector_ii_6-1-81.f1",	0x9800, 0x0800, CRC(d44c0814) SHA1(2f216ee6de88bbe09775619003aee2d5aa8c554d) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "o.r.r._audio_6-1-81.k5",		0x0000, 0x0800, CRC(7d426017) SHA1(370f0fb5608819de873c845f6010cbde75a9818e) )
+
 	ROM_REGION( 0x100, "user1", 0 )
 	ROM_LOAD( "dvgprom.bin",	0x0000, 0x0100, CRC(d481e958) SHA1(d8790547dc539e25984807573097b61ec3ffe614) )
 ROM_END
@@ -551,7 +572,6 @@ ROM_START( deltrace )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "sound.k5",     0x0000, 0x0800, CRC(7d426017) SHA1(370f0fb5608819de873c845f6010cbde75a9818e) )
 
-	/* DVG PROM */
 	ROM_REGION( 0x100, "user1", 0 )
 	ROM_LOAD( "dvgprom.bin",	0x0000, 0x0100, CRC(d481e958) SHA1(d8790547dc539e25984807573097b61ec3ffe614) )
 ROM_END
@@ -565,8 +585,8 @@ ROM_END
 
 static DRIVER_INIT( omegrace )
 {
-	int i, len = memory_region_length(machine, "user1");
-	UINT8 *prom = memory_region(machine, "user1");
+	int i, len = machine.region("user1")->bytes();
+	UINT8 *prom = machine.region("user1")->base();
 
 	/* Omega Race has two pairs of the state PROM output
      * lines swapped before going into the decoder.
@@ -584,5 +604,6 @@ static DRIVER_INIT( omegrace )
  *
  *************************************/
 
-GAMEL(1981, omegrace, 0,        omegrace, omegrace, omegrace, ROT0, "Midway",         "Omega Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
-GAMEL(1981, deltrace, omegrace, omegrace, omegrace, omegrace, ROT0, "Allied Leisure", "Delta Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
+GAMEL(1981, omegrace,  0,        omegrace, omegrace, omegrace, ROT0, "Midway", "Omega Race (set 1)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
+GAMEL(1981, omegrace2, omegrace, omegrace, omegrace, omegrace, ROT0, "Midway", "Omega Race (set 2)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
+GAMEL(1981, deltrace,  omegrace, omegrace, omegrace, omegrace, ROT0, "bootleg (Allied Leisure)", "Delta Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )

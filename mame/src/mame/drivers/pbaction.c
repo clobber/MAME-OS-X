@@ -63,47 +63,38 @@ Stephh's notes (based on the game Z80 code and some tests) :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
 #include "machine/segacrpt.h"
-
-
-extern UINT8 *pbaction_videoram2,*pbaction_colorram2;
-
-extern WRITE8_HANDLER( pbaction_videoram_w );
-extern WRITE8_HANDLER( pbaction_colorram_w );
-extern WRITE8_HANDLER( pbaction_videoram2_w );
-extern WRITE8_HANDLER( pbaction_colorram2_w );
-extern WRITE8_HANDLER( pbaction_flipscreen_w );
-extern WRITE8_HANDLER( pbaction_scroll_w );
-
-extern VIDEO_START( pbaction );
-extern VIDEO_UPDATE( pbaction );
+#include "includes/pbaction.h"
 
 
 static WRITE8_HANDLER( pbaction_sh_command_w )
 {
-	soundlatch_w(space,offset,data);
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0x00);
+	pbaction_state *state = space->machine().driver_data<pbaction_state>();
+	soundlatch_w(space, offset, data);
+	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0x00);
 }
 
+static WRITE8_HANDLER( nmi_mask_w )
+{
+	pbaction_state *state = space->machine().driver_data<pbaction_state>();
 
-static UINT8 *work_ram;
+	state->m_nmi_mask = data & 1;
+}
 
-
-static ADDRESS_MAP_START( pbaction_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pbaction_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE(&work_ram)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(pbaction_videoram2_w) AM_BASE(&pbaction_videoram2)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(pbaction_colorram2_w) AM_BASE(&pbaction_colorram2)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(pbaction_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(pbaction_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xe000, 0xe07f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe400, 0xe5ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE(&paletteram)
-	AM_RANGE(0xe600, 0xe600) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_MEMBER(pbaction_state, m_work_ram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(pbaction_videoram2_w) AM_BASE_MEMBER(pbaction_state, m_videoram2)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(pbaction_colorram2_w) AM_BASE_MEMBER(pbaction_state, m_colorram2)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(pbaction_videoram_w) AM_BASE_MEMBER(pbaction_state, m_videoram)
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(pbaction_colorram_w) AM_BASE_MEMBER(pbaction_state, m_colorram)
+	AM_RANGE(0xe000, 0xe07f) AM_RAM AM_BASE_SIZE_MEMBER(pbaction_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xe400, 0xe5ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xe600, 0xe600) AM_READ_PORT("P1") AM_WRITE(nmi_mask_w)
 	AM_RANGE(0xe601, 0xe601) AM_READ_PORT("P2")
 	AM_RANGE(0xe602, 0xe602) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xe604, 0xe604) AM_READ_PORT("DSW1") AM_WRITE(pbaction_flipscreen_w)
@@ -112,7 +103,7 @@ static ADDRESS_MAP_START( pbaction_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(pbaction_sh_command_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pbaction_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pbaction_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_READ(soundlatch_r)
@@ -120,7 +111,7 @@ static ADDRESS_MAP_START( pbaction_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( pbaction_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pbaction_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x20, 0x21) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -160,30 +151,30 @@ static INPUT_PORTS_START( pbaction )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW1:!1,!2")
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW1:!3,!4")
 	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:!5,!6")
 	PORT_DIPSETTING(    0x30, "2" )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x10, "4" )
 	PORT_DIPSETTING(    0x20, "5" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SW1:!7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:!8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x07, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPNAME( 0x07, 0x00, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:!1,!2,!3")
 	PORT_DIPSETTING(    0x01, "70k 200k 1000k" )
 	PORT_DIPSETTING(    0x04, "100k 300k 1000k" )
 	PORT_DIPSETTING(    0x00, "70k 200k" )
@@ -192,15 +183,15 @@ static INPUT_PORTS_START( pbaction )
 	PORT_DIPSETTING(    0x02, "100k" )
 	PORT_DIPSETTING(    0x05, "200k" )
 	PORT_DIPSETTING(    0x07, DEF_STR( None ) )
-	PORT_DIPNAME( 0x08, 0x00, "Extra" )
+	PORT_DIPNAME( 0x08, 0x00, "Extra" )			PORT_DIPLOCATION("SW2:!4")
 	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x30, 0x00, "Difficulty (Flippers)" )
+	PORT_DIPNAME( 0x30, 0x00, "Difficulty (Flippers)" )	PORT_DIPLOCATION("SW2:!5,!6")
 	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0xc0, 0x00, "Difficulty (Outlanes)" )
+	PORT_DIPNAME( 0xc0, 0x00, "Difficulty (Outlanes)" )	PORT_DIPLOCATION("SW2:!7,!8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
@@ -262,49 +253,76 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( pbaction_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x02);	/* the CPU is in Interrupt Mode 2 */
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x02);	/* the CPU is in Interrupt Mode 2 */
 }
 
 
-static MACHINE_DRIVER_START( pbaction )
+static MACHINE_START( pbaction )
+{
+	pbaction_state *state = machine.driver_data<pbaction_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_scroll));
+}
+
+static MACHINE_RESET( pbaction )
+{
+	pbaction_state *state = machine.driver_data<pbaction_state>();
+
+	state->m_scroll = 0;
+}
+
+static INTERRUPT_GEN( vblank_irq )
+{
+	pbaction_state *state = device->machine().driver_data<pbaction_state>();
+
+	if(state->m_nmi_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static MACHINE_CONFIG_START( pbaction, pbaction_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz? */
-	MDRV_CPU_PROGRAM_MAP(pbaction_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz? */
+	MCFG_CPU_PROGRAM_MAP(pbaction_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 3072000)
-	MDRV_CPU_PROGRAM_MAP(pbaction_sound_map)
-	MDRV_CPU_IO_MAP(pbaction_sound_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(pbaction_interrupt,2)	/* ??? */
+	MCFG_CPU_ADD("audiocpu", Z80, 3072000)
+	MCFG_CPU_PROGRAM_MAP(pbaction_sound_map)
+	MCFG_CPU_IO_MAP(pbaction_sound_io_map)
+	MCFG_CPU_PERIODIC_INT(pbaction_interrupt,2*60)	/* ??? */
 									/* IRQs are caused by the main CPU */
 
+	MCFG_MACHINE_START(pbaction)
+	MCFG_MACHINE_RESET(pbaction)
+
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(pbaction)
 
-	MDRV_GFXDECODE(pbaction)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(pbaction)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_VIDEO_START(pbaction)
-	MDRV_VIDEO_UPDATE(pbaction)
+	MCFG_VIDEO_START(pbaction)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay3", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay3", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
 
@@ -454,20 +472,22 @@ ROM_END
 
 static READ8_HANDLER( pbactio3_prot_kludge_r )
 {
+	pbaction_state *state = space->machine().driver_data<pbaction_state>();
+
 	/* on startup, the game expect this location to NOT act as RAM */
-	if (cpu_get_pc(space->cpu) == 0xab80)
+	if (cpu_get_pc(&space->device()) == 0xab80)
 		return 0;
 
-	return work_ram[0];
+	return state->m_work_ram[0];
 }
 
 static DRIVER_INIT( pbactio3 )
 {
 	int i;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine.region("maincpu")->base();
 
 	/* first of all, do a simple bitswap */
-	for (i = 0;i < 0xc000;i++)
+	for (i = 0; i < 0xc000; i++)
 	{
 		rom[i] = BITSWAP8(rom[i], 7,6,5,4,1,2,3,0);
 	}
@@ -476,7 +496,7 @@ static DRIVER_INIT( pbactio3 )
 	pbaction_decode(machine, "maincpu");
 
 	/* install a protection (?) workaround */
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xc000, 0, 0, pbactio3_prot_kludge_r );
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xc000, 0xc000, FUNC(pbactio3_prot_kludge_r) );
 }
 
 static DRIVER_INIT( pbactio4 )
@@ -487,8 +507,8 @@ static DRIVER_INIT( pbactio4 )
 
 
 
-GAME( 1985, pbaction, 0,        pbaction, pbaction, 0,        ROT90, "Tehkan", "Pinball Action (set 1)", 0 )
-GAME( 1985, pbaction2,pbaction, pbaction, pbaction, 0,        ROT90, "Tehkan", "Pinball Action (set 2)", 0 )
-GAME( 1985, pbaction3,pbaction, pbaction, pbaction, pbactio3, ROT90, "Tehkan", "Pinball Action (set 3, encrypted)", 0 )
-GAME( 1985, pbaction4,pbaction, pbaction, pbaction, pbactio4, ROT90, "Tehkan", "Pinball Action (set 4, encrypted)", 0 )
-GAME( 1985, pbaction5,pbaction, pbaction, pbaction, pbactio4, ROT90, "Tehkan", "Pinball Action (set 5, encrypted)", 0 )
+GAME( 1985, pbaction,  0,        pbaction, pbaction, 0,        ROT90, "Tehkan", "Pinball Action (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1985, pbaction2, pbaction, pbaction, pbaction, 0,        ROT90, "Tehkan", "Pinball Action (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, pbaction3, pbaction, pbaction, pbaction, pbactio3, ROT90, "Tehkan", "Pinball Action (set 3, encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1985, pbaction4, pbaction, pbaction, pbaction, pbactio4, ROT90, "Tehkan", "Pinball Action (set 4, encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1985, pbaction5, pbaction, pbaction, pbaction, pbactio4, ROT90, "Tehkan", "Pinball Action (set 5, encrypted)", GAME_SUPPORTS_SAVE )

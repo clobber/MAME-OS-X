@@ -74,12 +74,12 @@ TODO:
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/6532riot.h"
 #include "machine/6522via.h"
 #include "sound/ay8910.h"
-#include "gameplan.h"
+#include "includes/gameplan.h"
 
 
 
@@ -91,16 +91,16 @@ TODO:
 
 static WRITE8_DEVICE_HANDLER( io_select_w )
 {
-	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
 
 	switch (data)
 	{
-	case 0x01: state->current_port = 0; break;
-	case 0x02: state->current_port = 1; break;
-	case 0x04: state->current_port = 2; break;
-	case 0x08: state->current_port = 3; break;
-	case 0x80: state->current_port = 4; break;
-	case 0x40: state->current_port = 5; break;
+	case 0x01: state->m_current_port = 0; break;
+	case 0x02: state->m_current_port = 1; break;
+	case 0x04: state->m_current_port = 2; break;
+	case 0x08: state->m_current_port = 3; break;
+	case 0x80: state->m_current_port = 4; break;
+	case 0x40: state->m_current_port = 5; break;
 	}
 }
 
@@ -108,15 +108,15 @@ static WRITE8_DEVICE_HANDLER( io_select_w )
 static READ8_DEVICE_HANDLER( io_port_r )
 {
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3", "DSW0", "DSW1" };
-	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
 
-	return input_port_read(device->machine, portnames[state->current_port]);
+	return input_port_read(device->machine(), portnames[state->m_current_port]);
 }
 
 
 static WRITE8_DEVICE_HANDLER( coin_w )
 {
-	coin_counter_w(0, ~data & 1);
+	coin_counter_w(device->machine(), 0, ~data & 1);
 }
 
 
@@ -139,27 +139,29 @@ static const via6522_interface via_1_interface =
 
 static WRITE8_DEVICE_HANDLER( audio_reset_w )
 {
-	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
-	cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
+
+	device_set_input_line(state->m_audiocpu, INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+
 	if (data == 0)
 	{
-		device_reset(state->riot);
-		cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(10));
+		state->m_riot->reset();
+		device->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(10));
 	}
 }
 
 
 static WRITE8_DEVICE_HANDLER( audio_cmd_w )
 {
-	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
-	riot6532_porta_in_set(state->riot, data, 0x7f);
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
+	riot6532_porta_in_set(state->m_riot, data, 0x7f);
 }
 
 
 static WRITE8_DEVICE_HANDLER( audio_trigger_w )
 {
-	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
-	riot6532_porta_in_set(state->riot, data << 7, 0x80);
+	gameplan_state *state = device->machine().driver_data<gameplan_state>();
+	riot6532_porta_in_set(state->m_riot, data << 7, 0x80);
 }
 
 
@@ -182,15 +184,17 @@ static const via6522_interface via_2_interface =
 
 static WRITE_LINE_DEVICE_HANDLER( r6532_irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, state);
+	gameplan_state *gameplan = device->machine().driver_data<gameplan_state>();
+
+	device_set_input_line(gameplan->m_audiocpu, 0, state);
 	if (state == ASSERT_LINE)
-		cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(10));
+		device->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(10));
 }
 
 
 static WRITE8_DEVICE_HANDLER( r6532_soundlatch_w )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
 	soundlatch_w(space, 0, data);
 }
 
@@ -205,48 +209,17 @@ static const riot6532_interface r6532_interface =
 };
 
 
-
-/*************************************
- *
- *  Start
- *
- *************************************/
-
-static MACHINE_START( gameplan )
-{
-	gameplan_state *state = (gameplan_state *)machine->driver_data;
-
-	state->riot = devtag_get_device(machine, "riot");
-
-	/* register for save states */
-	state_save_register_global(machine, state->current_port);
-}
-
-
-
-/*************************************
- *
- *  Reset
- *
- *************************************/
-
-static MACHINE_RESET( gameplan )
-{
-}
-
-
-
 /*************************************
  *
  *  Main CPU memory handlers
  *
  *************************************/
 
-static ADDRESS_MAP_START( gameplan_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gameplan_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x1c00) AM_RAM
-	AM_RANGE(0x2000, 0x200f) AM_MIRROR(0x07f0) AM_DEVREADWRITE("via6522_0", via_r, via_w)	/* VIA 1 */
-	AM_RANGE(0x2800, 0x280f) AM_MIRROR(0x07f0) AM_DEVREADWRITE("via6522_1", via_r, via_w)	/* VIA 2 */
-	AM_RANGE(0x3000, 0x300f) AM_MIRROR(0x07f0) AM_DEVREADWRITE("via6522_2", via_r, via_w)	/* VIA 3 */
+	AM_RANGE(0x2000, 0x200f) AM_MIRROR(0x07f0) AM_DEVREADWRITE_MODERN("via6522_0", via6522_device, read, write)	/* VIA 1 */
+	AM_RANGE(0x2800, 0x280f) AM_MIRROR(0x07f0) AM_DEVREADWRITE_MODERN("via6522_1", via6522_device, read, write)	/* VIA 2 */
+	AM_RANGE(0x3000, 0x300f) AM_MIRROR(0x07f0) AM_DEVREADWRITE_MODERN("via6522_2", via6522_device, read, write)	/* VIA 3 */
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -258,23 +231,23 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( gameplan_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gameplan_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x1780) AM_RAM  /* 6532 internal RAM */
 	AM_RANGE(0x0800, 0x081f) AM_MIRROR(0x17e0) AM_DEVREADWRITE("riot", riot6532_r, riot6532_w)
-	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_MIRROR(0x1800) AM_ROM
 ADDRESS_MAP_END
 
 
 /* same as Gameplan, but larger ROM */
-static ADDRESS_MAP_START( leprechn_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( leprechn_audio_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x1780) AM_RAM  /* 6532 internal RAM */
 	AM_RANGE(0x0800, 0x081f) AM_MIRROR(0x17e0) AM_DEVREADWRITE("riot", riot6532_r, riot6532_w)
-	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0xe000, 0xefff) AM_MIRROR(0x1000) AM_ROM
 ADDRESS_MAP_END
 
@@ -1006,55 +979,80 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_DRIVER_START( gameplan )
 
-	MDRV_DRIVER_DATA(gameplan_state)
+static MACHINE_START( gameplan )
+{
+	gameplan_state *state = machine.driver_data<gameplan_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_riot = machine.device("riot");
+
+	/* register for save states */
+	state->save_item(NAME(state->m_current_port));
+	state->save_item(NAME(state->m_video_x));
+	state->save_item(NAME(state->m_video_y));
+	state->save_item(NAME(state->m_video_command));
+	state->save_item(NAME(state->m_video_data));
+}
+
+
+static MACHINE_RESET( gameplan )
+{
+	gameplan_state *state = machine.driver_data<gameplan_state>();
+	state->m_current_port = 0;
+	state->m_video_x = 0;
+	state->m_video_y = 0;
+	state->m_video_command = 0;
+	state->m_video_data = 0;
+}
+
+static MACHINE_CONFIG_START( gameplan, gameplan_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, GAMEPLAN_MAIN_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(gameplan_main_map)
+	MCFG_CPU_ADD("maincpu", M6502, GAMEPLAN_MAIN_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(gameplan_main_map)
 
-	MDRV_CPU_ADD("audiocpu", M6502, GAMEPLAN_AUDIO_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(gameplan_audio_map)
+	MCFG_CPU_ADD("audiocpu", M6502, GAMEPLAN_AUDIO_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(gameplan_audio_map)
 
-	MDRV_RIOT6532_ADD("riot", GAMEPLAN_AUDIO_CPU_CLOCK, r6532_interface)
+	MCFG_RIOT6532_ADD("riot", GAMEPLAN_AUDIO_CPU_CLOCK, r6532_interface)
 
-	MDRV_MACHINE_START(gameplan)
-	MDRV_MACHINE_RESET(gameplan)
+	MCFG_MACHINE_START(gameplan)
+	MCFG_MACHINE_RESET(gameplan)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(gameplan_video)
+	MCFG_FRAGMENT_ADD(gameplan_video)
 
 	/* audio hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, GAMEPLAN_AY8910_CLOCK)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
+	MCFG_SOUND_ADD("aysnd", AY8910, GAMEPLAN_AY8910_CLOCK)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 
 	/* via */
-	MDRV_VIA6522_ADD("via6522_0", 0, gameplan_via_0_interface)
-	MDRV_VIA6522_ADD("via6522_1", 0, via_1_interface)
-	MDRV_VIA6522_ADD("via6522_2", 0, via_2_interface)
-MACHINE_DRIVER_END
+	MCFG_VIA6522_ADD("via6522_0", 0, gameplan_via_0_interface)
+	MCFG_VIA6522_ADD("via6522_1", 0, via_1_interface)
+	MCFG_VIA6522_ADD("via6522_2", 0, via_2_interface)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( leprechn )
-
-	MDRV_IMPORT_FROM(gameplan)
-	MDRV_CPU_REPLACE("maincpu", M6502, LEPRECHAUN_MAIN_CPU_CLOCK)
+static MACHINE_CONFIG_DERIVED( leprechn, gameplan )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(LEPRECHAUN_MAIN_CPU_CLOCK)
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("audiocpu")
-	MDRV_CPU_PROGRAM_MAP(leprechn_audio_map)
+	MCFG_CPU_MODIFY("audiocpu")
+	MCFG_CPU_PROGRAM_MAP(leprechn_audio_map)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(leprechn_video)
+	MCFG_FRAGMENT_ADD(leprechn_video)
 
 	/* via */
-	MDRV_DEVICE_REMOVE("via6522_0")
-	MDRV_VIA6522_ADD("via6522_0", 0, leprechn_via_0_interface)
-MACHINE_DRIVER_END
+	MCFG_DEVICE_REMOVE("via6522_0")
+	MCFG_VIA6522_ADD("via6522_0", 0, leprechn_via_0_interface)
+MACHINE_CONFIG_END
 
 
 
@@ -1110,17 +1108,17 @@ ROM_END
 ROM_START( kaos )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "kaosab.g2",    0x9000, 0x0800, CRC(b23d858f) SHA1(e31fa657ace34130211a0b9fc0d115fd89bb20dd) )
-	ROM_CONTINUE(		   	  0xd000, 0x0800 )
+	ROM_CONTINUE(			  0xd000, 0x0800 )
 	ROM_LOAD( "kaosab.j2",    0x9800, 0x0800, CRC(4861e5dc) SHA1(96ca0b8625af3897bd4a50a45ea964715f9e4973) )
-	ROM_CONTINUE(		   	  0xd800, 0x0800 )
+	ROM_CONTINUE(			  0xd800, 0x0800 )
 	ROM_LOAD( "kaosab.j1",    0xa000, 0x0800, CRC(e055db3f) SHA1(099176629723c1a9bdc59f440339b2e8c38c3261) )
-	ROM_CONTINUE(		   	  0xe000, 0x0800 )
+	ROM_CONTINUE(			  0xe000, 0x0800 )
 	ROM_LOAD( "kaosab.g1",    0xa800, 0x0800, CRC(35d7c467) SHA1(6d5bfd29ff7b96fed4b24c899ddd380e47e52bc5) )
-	ROM_CONTINUE(		   	  0xe800, 0x0800 )
+	ROM_CONTINUE(			  0xe800, 0x0800 )
 	ROM_LOAD( "kaosab.f1",    0xb000, 0x0800, CRC(995b9260) SHA1(580896aa8b6f0618dc532a12d0795b0d03f7cadd) )
-	ROM_CONTINUE(		   	  0xf000, 0x0800 )
+	ROM_CONTINUE(			  0xf000, 0x0800 )
 	ROM_LOAD( "kaosab.e1",    0xb800, 0x0800, CRC(3da5202a) SHA1(6b5aaf44377415763aa0895c64765a4b82086f25) )
-	ROM_CONTINUE(		   	  0xf800, 0x0800 )
+	ROM_CONTINUE(			  0xf800, 0x0800 )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "kaossnd.e1",   0xe000, 0x0800, CRC(ab23d52a) SHA1(505f3e4a56e78a3913010f5484891f01c9831480) )
@@ -1194,11 +1192,11 @@ ROM_END
  *
  *************************************/
 
-GAME( 1980, killcom,  0,        gameplan, killcom,  0, ROT0,   "GamePlan (Centuri license)", "Killer Comet", GAME_SUPPORTS_SAVE )
-GAME( 1980, megatack, 0,        gameplan, megatack, 0, ROT0,   "GamePlan (Centuri license)", "Megatack", GAME_SUPPORTS_SAVE )
-GAME( 1981, challeng, 0,        gameplan, challeng, 0, ROT0,   "GamePlan (Centuri license)", "Challenger", GAME_SUPPORTS_SAVE )
-GAME( 1981, kaos,     0,        gameplan, kaos,     0, ROT270, "GamePlan", "Kaos", GAME_SUPPORTS_SAVE )
+GAME( 1980, killcom,  0,        gameplan, killcom,  0, ROT0,   "Game Plan (Centuri license)", "Killer Comet", GAME_SUPPORTS_SAVE )
+GAME( 1980, megatack, 0,        gameplan, megatack, 0, ROT0,   "Game Plan (Centuri license)", "Megatack", GAME_SUPPORTS_SAVE )
+GAME( 1981, challeng, 0,        gameplan, challeng, 0, ROT0,   "Game Plan (Centuri license)", "Challenger", GAME_SUPPORTS_SAVE )
+GAME( 1981, kaos,     0,        gameplan, kaos,     0, ROT270, "Game Plan", "Kaos", GAME_SUPPORTS_SAVE )
 GAME( 1982, leprechn, 0,        leprechn, leprechn, 0, ROT0,   "Tong Electronic", "Leprechaun", GAME_SUPPORTS_SAVE )
-GAME( 1982, potogold, leprechn, leprechn, potogold, 0, ROT0,   "GamePlan", "Pot of Gold", GAME_SUPPORTS_SAVE )
-GAME( 1982, leprechp, leprechn, leprechn, potogold, 0, ROT0,   "Tong Electronic", "Leprechaun (Pacific Polytechnical license)", GAME_SUPPORTS_SAVE )
+GAME( 1982, potogold, leprechn, leprechn, potogold, 0, ROT0,   "Tong Electronic (Game Plan license)", "Pot of Gold", GAME_SUPPORTS_SAVE )
+GAME( 1982, leprechp, leprechn, leprechn, potogold, 0, ROT0,   "Tong Electronic (Pacific Polytechnical license)", "Leprechaun (Pacific)", GAME_SUPPORTS_SAVE )
 GAME( 1982, piratetr, 0,        leprechn, piratetr, 0, ROT0,   "Tong Electronic", "Pirate Treasure", GAME_SUPPORTS_SAVE )

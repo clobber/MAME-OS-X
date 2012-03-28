@@ -80,27 +80,16 @@ Notes:
 
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/mcs51/mcs51.h"
 #include "sound/okim6295.h"
-#include "includes/playmark.h"
+#include "includes/sslam.h"
 
 
 #define oki_time_base 0x08
 
-static emu_timer *music_timer;
 
-static int sslam_sound;
-static int sslam_melody;
-static int sslam_bar;
-static int sslam_track;
-static int sslam_snd_bank;
-UINT16 *sslam_bg_tileram, *sslam_tx_tileram, *sslam_md_tileram;
-UINT16 *sslam_spriteram, *sslam_regs;
-
-static UINT8 playmark_oki_control = 0, playmark_oki_command = 0;
-static UINT8 playmark_oki_bank = 0;
 
 
 /**************************************************************************
@@ -225,95 +214,88 @@ static const UINT8 sslam_snd_loop[8][20] =
 
 
 
-/* video/sslam.c */
-WRITE16_HANDLER( sslam_tx_tileram_w );
-WRITE16_HANDLER( sslam_md_tileram_w );
-WRITE16_HANDLER( sslam_bg_tileram_w );
-WRITE16_HANDLER( powerbls_bg_tileram_w );
-VIDEO_START(sslam);
-VIDEO_START(powerbls);
-VIDEO_UPDATE(sslam);
-VIDEO_UPDATE(powerbls);
-
-
-
 static TIMER_CALLBACK( music_playback )
 {
+	sslam_state *state = machine.driver_data<sslam_state>();
 	int pattern = 0;
-	const device_config *device = devtag_get_device(machine, "oki");
+	okim6295_device *device = machine.device<okim6295_device>("oki");
 
-	if ((okim6295_r(device,0) & 0x08) == 0)
+	if ((device->read_status() & 0x08) == 0)
 	{
-		if (sslam_bar != 0) {
-			sslam_bar += 1;
-			if (sslam_bar >= (sslam_snd_loop[sslam_melody][0] + 1))
-				sslam_bar = 1;
+		if (state->m_bar != 0) {
+			state->m_bar += 1;
+			if (state->m_bar >= (sslam_snd_loop[state->m_melody][0] + 1))
+				state->m_bar = 1;
 		}
-		pattern = sslam_snd_loop[sslam_melody][sslam_bar];
+		pattern = sslam_snd_loop[state->m_melody][state->m_bar];
 
 		if (pattern == 0xff) {		/* Restart track from first bar */
-			sslam_bar = 1;
-			pattern = sslam_snd_loop[sslam_melody][sslam_bar];
+			state->m_bar = 1;
+			pattern = sslam_snd_loop[state->m_melody][state->m_bar];
 		}
 		if (pattern == 0x00) {		/* Non-looped track. Stop playing it */
-			sslam_track = 0;
-			sslam_melody = 0;
-			sslam_bar = 0;
-			timer_enable(music_timer,0);
+			state->m_track = 0;
+			state->m_melody = 0;
+			state->m_bar = 0;
+			state->m_music_timer->enable(false);
 		}
 		if (pattern) {
 			logerror("Changing bar in music track to pattern %02x\n",pattern);
-			okim6295_w(device,0,(0x80 | pattern));
-			okim6295_w(device,0,0x81);
+			device->write_command(0x80 | pattern);
+			device->write_command(0x81);
 		}
 	}
-//  {
-//      pattern = sslam_snd_loop[sslam_melody][sslam_bar];
-//      popmessage("Music track: %02x, Melody: %02x, Pattern: %02x, Bar:%02d",sslam_track,sslam_melody,pattern,sslam_bar);
-//  }
+
+	if (0)
+	{
+		pattern = sslam_snd_loop[state->m_melody][state->m_bar];
+		popmessage("Music track: %02x, Melody: %02x, Pattern: %02x, Bar:%02d",state->m_track,state->m_melody,pattern,state->m_bar);
+	}
 }
 
 
-static void sslam_play(const device_config *device, int track, int data)
+static void sslam_play(device_t *device, int track, int data)
 {
-	int status = okim6295_r(device,0);
+	sslam_state *state = device->machine().driver_data<sslam_state>();
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	int status = oki->read_status();
 
 	if (data < 0x80) {
-		if (track) {
-			if (sslam_track != data) {
-				sslam_track  = data;
-				sslam_bar = 1;
+		if (state->m_track) {
+			if (state->m_track != data) {
+				state->m_track  = data;
+				state->m_bar = 1;
 				if (status & 0x08)
-					okim6295_w(device,0,0x40);
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x81);
-				timer_adjust_periodic(music_timer, ATTOTIME_IN_MSEC(4), 0, ATTOTIME_IN_HZ(250));	/* 250Hz for smooth sequencing */
+					oki->write_command(0x40);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x81);
+				state->m_music_timer->adjust(attotime::from_msec(4), 0, attotime::from_hz(250));	/* 250Hz for smooth sequencing */
 			}
 		}
 		else {
 			if ((status & 0x01) == 0) {
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x11);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x11);
 			}
 			else if ((status & 0x02) == 0) {
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x21);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x21);
 			}
 			else if ((status & 0x04) == 0) {
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x41);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x41);
 			}
 		}
 	}
 	else {		/* use above 0x80 to turn off channels */
 		if (track) {
-			timer_enable(music_timer,0);
-			sslam_track = 0;
-			sslam_melody = 0;
-			sslam_bar = 0;
+			state->m_music_timer->enable(false);
+			state->m_track = 0;
+			state->m_melody = 0;
+			state->m_bar = 0;
 		}
 		data &= 0x7f;
-		okim6295_w(device,0,data);
+		oki->write_command(data);
 	}
 }
 
@@ -321,7 +303,9 @@ static WRITE16_DEVICE_HANDLER( sslam_snd_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		logerror("%s Writing %04x to Sound CPU\n",cpuexec_describe_context(device->machine),data);
+		sslam_state *state = device->machine().driver_data<sslam_state>();
+
+		logerror("%s Writing %04x to Sound CPU\n",device->machine().describe_context(),data);
 		if (data >= 0x40) {
 			if (data == 0xfe) {
 				/* This should reset the sound MCU and stop audio playback, but here, it */
@@ -334,57 +318,57 @@ static WRITE16_DEVICE_HANDLER( sslam_snd_w )
 			}
 		}
 		else if (data == 0) {
-			sslam_bar = 0;		/* Complete any current bars then stop sequencing */
-			sslam_melody = 0;
+			state->m_bar = 0;		/* Complete any current bars then stop sequencing */
+			state->m_melody = 0;
 		}
 		else {
-			sslam_sound = sslam_snd_cmd[data];
+			state->m_sound = sslam_snd_cmd[data];
 
-			if (sslam_sound == 0xff) {
-				popmessage("Unmapped sound command %02x on Bank %02x",data,sslam_snd_bank);
+			if (state->m_sound == 0xff) {
+				popmessage("Unmapped sound command %02x on Bank %02x",data,state->m_snd_bank);
 			}
-			else if (sslam_sound >= 0x70) {
+			else if (state->m_sound >= 0x70) {
 				/* These vocals are in bank 1, but a bug in the actual MCU doesn't set the bank */
-//              if (sslam_snd_bank != 1)
-//                  okim6295_set_bank_base(device, (1 * 0x40000));
+//              if (state->m_snd_bank != 1)
+//                  downcast<okim6295_device *>(device)->set_bank_base((1 * 0x40000));
 //              sslam_snd_bank = 1;
-				sslam_play(device, 0, sslam_sound);
+				sslam_play(device, 0, state->m_sound);
 			}
-			else if (sslam_sound >= 0x69) {
-				if (sslam_snd_bank != 2)
-					okim6295_set_bank_base(device, (2 * 0x40000));
-				sslam_snd_bank = 2;
-				switch (sslam_sound)
+			else if (state->m_sound >= 0x69) {
+				if (state->m_snd_bank != 2)
+					downcast<okim6295_device *>(device)->set_bank_base(2 * 0x40000);
+				state->m_snd_bank = 2;
+				switch (state->m_sound)
 				{
-					case 0x69:	sslam_melody = 5; break;
-					case 0x6b:	sslam_melody = 6; break;
-					case 0x6c:	sslam_melody = 7; break;
-					default:	sslam_melody = 0; sslam_bar = 0; break;	/* Invalid */
+					case 0x69:	state->m_melody = 5; break;
+					case 0x6b:	state->m_melody = 6; break;
+					case 0x6c:	state->m_melody = 7; break;
+					default:	state->m_melody = 0; state->m_bar = 0; break;	/* Invalid */
 				}
-				sslam_play(device, sslam_melody, sslam_sound);
+				sslam_play(device, state->m_melody, state->m_sound);
 			}
-			else if (sslam_sound >= 0x65) {
-				if (sslam_snd_bank != 1)
-					okim6295_set_bank_base(device, (1 * 0x40000));
-				sslam_snd_bank = 1;
-				sslam_melody = 4;
-				sslam_play(device, sslam_melody, sslam_sound);
+			else if (state->m_sound >= 0x65) {
+				if (state->m_snd_bank != 1)
+					downcast<okim6295_device *>(device)->set_bank_base(1 * 0x40000);
+				state->m_snd_bank = 1;
+				state->m_melody = 4;
+				sslam_play(device, state->m_melody, state->m_sound);
 			}
-			else if (sslam_sound >= 0x60) {
-				if (sslam_snd_bank != 0)
-					okim6295_set_bank_base(device, (0 * 0x40000));
-				sslam_snd_bank = 0;
-				switch (sslam_sound)
+			else if (state->m_sound >= 0x60) {
+				if (state->m_snd_bank != 0)
+					downcast<okim6295_device *>(device)->set_bank_base(0 * 0x40000);
+				state->m_snd_bank = 0;
+				switch (state->m_sound)
 				{
-					case 0x60:	sslam_melody = 1; break;
-					case 0x63:	sslam_melody = 2; break;
-					case 0x64:	sslam_melody = 3; break;
-					default:	sslam_melody = 0; sslam_bar = 0; break;	/* Invalid */
+					case 0x60:	state->m_melody = 1; break;
+					case 0x63:	state->m_melody = 2; break;
+					case 0x64:	state->m_melody = 3; break;
+					default:	state->m_melody = 0; state->m_bar = 0; break;	/* Invalid */
 				}
-				sslam_play(device, sslam_melody, sslam_sound);
+				sslam_play(device, state->m_melody, state->m_sound);
 			}
 			else {
-				sslam_play(device, 0, sslam_sound);
+				sslam_play(device, 0, state->m_sound);
 			}
 		}
 	}
@@ -395,22 +379,22 @@ static WRITE16_DEVICE_HANDLER( sslam_snd_w )
 static WRITE16_HANDLER( powerbls_sound_w )
 {
 	soundlatch_w(space, 0, data & 0xff);
-	cputag_set_input_line(space->machine, "audiocpu", MCS51_INT1_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", MCS51_INT1_LINE, HOLD_LINE);
 }
 
 /* Memory Maps */
 
 /* these will need verifying .. the game writes all over the place ... */
 
-static ADDRESS_MAP_START( sslam_program_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sslam_program_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000400, 0x07ffff) AM_RAM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(sslam_bg_tileram_w) AM_BASE(&sslam_bg_tileram)
-	AM_RANGE(0x104000, 0x107fff) AM_RAM_WRITE(sslam_md_tileram_w) AM_BASE(&sslam_md_tileram)
-	AM_RANGE(0x108000, 0x10ffff) AM_RAM_WRITE(sslam_tx_tileram_w) AM_BASE(&sslam_tx_tileram)
-	AM_RANGE(0x110000, 0x11000d) AM_RAM AM_BASE(&sslam_regs)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(sslam_bg_tileram_w) AM_BASE_MEMBER(sslam_state,m_bg_tileram)
+	AM_RANGE(0x104000, 0x107fff) AM_RAM_WRITE(sslam_md_tileram_w) AM_BASE_MEMBER(sslam_state,m_md_tileram)
+	AM_RANGE(0x108000, 0x10ffff) AM_RAM_WRITE(sslam_tx_tileram_w) AM_BASE_MEMBER(sslam_state,m_tx_tileram)
+	AM_RANGE(0x110000, 0x11000d) AM_RAM AM_BASE_MEMBER(sslam_state,m_regs)
 	AM_RANGE(0x200000, 0x200001) AM_WRITENOP
-	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE(&sslam_spriteram)
+	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(sslam_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE_MEMBER(sslam_state,m_spriteram)
 	AM_RANGE(0x304000, 0x304001) AM_WRITENOP
 	AM_RANGE(0x300010, 0x300011) AM_READ_PORT("IN0")
 	AM_RANGE(0x300012, 0x300013) AM_READ_PORT("IN1")
@@ -425,14 +409,14 @@ static ADDRESS_MAP_START( sslam_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0xffffff) AM_ROM   /* I don't honestly know where the rom is mirrored .. so all unmapped reads / writes go to rom */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( powerbls_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( powerbls_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(powerbls_bg_tileram_w) AM_BASE(&sslam_bg_tileram)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(powerbls_bg_tileram_w) AM_BASE_MEMBER(sslam_state,m_bg_tileram)
 	AM_RANGE(0x104000, 0x107fff) AM_RAM // not used
-	AM_RANGE(0x110000, 0x11000d) AM_RAM AM_BASE(&sslam_regs)
+	AM_RANGE(0x110000, 0x11000d) AM_RAM AM_BASE_MEMBER(sslam_state,m_regs)
 	AM_RANGE(0x200000, 0x200001) AM_WRITENOP
-	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE(&sslam_spriteram)
-	AM_RANGE(0x280000, 0x2803ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE_MEMBER(sslam_state,m_spriteram)
+	AM_RANGE(0x280000, 0x2803ff) AM_RAM_WRITE(sslam_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x300010, 0x300011) AM_READ_PORT("IN0")
 	AM_RANGE(0x300012, 0x300013) AM_READ_PORT("IN1")
 	AM_RANGE(0x300014, 0x300015) AM_READ_PORT("IN2")
@@ -450,13 +434,14 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( playmark_snd_command_r )
 {
+	sslam_state *state = space->machine().driver_data<sslam_state>();
 	UINT8 data = 0;
 
-	if ((playmark_oki_control & 0x38) == 0x30) {
+	if ((state->m_oki_control & 0x38) == 0x30) {
 		data = soundlatch_r(space,0);
 	}
-	else if ((playmark_oki_control & 0x38) == 0x28) {
-		data = (okim6295_r(devtag_get_device(space->machine, "oki"),0) & 0x0f);
+	else if ((state->m_oki_control & 0x38) == 0x28) {
+		data = (space->machine().device<okim6295_device>("oki")->read(*space,0) & 0x0f);
 	}
 
 	return data;
@@ -464,32 +449,36 @@ static READ8_HANDLER( playmark_snd_command_r )
 
 static WRITE8_HANDLER( playmark_oki_w )
 {
-	playmark_oki_command = data;
+	sslam_state *state = space->machine().driver_data<sslam_state>();
+
+	state->m_oki_command = data;
 }
 
 static WRITE8_HANDLER( playmark_snd_control_w )
 {
-	playmark_oki_control = data;
+	sslam_state *state = space->machine().driver_data<sslam_state>();
 
-	if(data & 3)
+	state->m_oki_control = data;
+
+	if (data & 3)
 	{
-		if(playmark_oki_bank != ((data & 3) - 1))
+		if (state->m_oki_bank != ((data & 3) - 1))
 		{
-			playmark_oki_bank = (data & 3) - 1;
-			okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), 0x40000 * playmark_oki_bank);
+			state->m_oki_bank = (data & 3) - 1;
+			space->machine().device<okim6295_device>("oki")->set_bank_base(0x40000 * state->m_oki_bank);
 		}
 	}
 
 	if ((data & 0x38) == 0x18)
 	{
-		okim6295_w(devtag_get_device(space->machine, "oki"), 0, playmark_oki_command);
+		space->machine().device<okim6295_device>("oki")->write(*space, 0, state->m_oki_command);
 	}
 
 //  !(data & 0x80) -> sound enable
 //   (data & 0x40) -> always set
 }
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_WRITE(playmark_snd_control_w)
 	AM_RANGE(MCS51_PORT_P3, MCS51_PORT_P3) AM_READWRITE(playmark_snd_command_r, playmark_oki_w)
 ADDRESS_MAP_END
@@ -590,7 +579,7 @@ static INPUT_PORTS_START( sslam )
 	PORT_DIPSETTING(    0x20, "3-4" )
 	PORT_DIPSETTING(    0x10, "3-3" )
 	PORT_DIPSETTING(    0x00, "0-0" )
-	PORT_DIPNAME( 0x40, 0x40, "Play Mode" 	)			PORT_DIPLOCATION("SW1:7")
+	PORT_DIPNAME( 0x40, 0x40, "Play Mode"	)			PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(    0x00, "2 Players" )
 	PORT_DIPSETTING(    0x40, "4 Players" )
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:8")
@@ -721,69 +710,65 @@ GFXDECODE_END
 
 /* Machine Driver */
 
-static MACHINE_DRIVER_START( sslam )
+static MACHINE_CONFIG_START( sslam, sslam_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
-	MDRV_CPU_PROGRAM_MAP(sslam_program_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
+	MCFG_CPU_PROGRAM_MAP(sslam_program_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", I8051, 12000000)
-	MDRV_CPU_FLAGS(CPU_DISABLE)		/* Internal code is not dumped - 2 boards were protected */
+	MCFG_CPU_ADD("audiocpu", I8051, 12000000)
+	MCFG_DEVICE_DISABLE()		/* Internal code is not dumped - 2 boards were protected */
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(58)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 39*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(58)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 39*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(sslam)
 
-	MDRV_GFXDECODE(sslam)
-	MDRV_PALETTE_LENGTH(0x800)
+	MCFG_GFXDECODE(sslam)
+	MCFG_PALETTE_LENGTH(0x800)
 
-	MDRV_VIDEO_START(sslam)
-	MDRV_VIDEO_UPDATE(sslam)
+	MCFG_VIDEO_START(sslam)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( powerbls )
+static MACHINE_CONFIG_START( powerbls, sslam_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
-	MDRV_CPU_PROGRAM_MAP(powerbls_map)
-	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
+	MCFG_CPU_PROGRAM_MAP(powerbls_map)
+	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", I80C51, 12000000)		/* 83C751 */
-	MDRV_CPU_IO_MAP(sound_io_map)
+	MCFG_CPU_ADD("audiocpu", I80C51, 12000000)		/* 83C751 */
+	MCFG_CPU_IO_MAP(sound_io_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(58)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(58)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(powerbls)
 
-	MDRV_GFXDECODE(powerbls)
-	MDRV_PALETTE_LENGTH(0x200)
+	MCFG_GFXDECODE(powerbls)
+	MCFG_PALETTE_LENGTH(0x200)
 
-	MDRV_VIDEO_START(powerbls)
-	MDRV_VIDEO_UPDATE(powerbls)
+	MCFG_VIDEO_START(powerbls)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)	/* verified on original PCB */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)	/* verified on original PCB */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_CONFIG_END
 
 /* maybe one dump is bad .. which? -> 2nd set was verified good from 2 pcbs */
 
@@ -940,23 +925,26 @@ ROM_END
 
 static DRIVER_INIT( sslam )
 {
-	sslam_track = 0;
-	sslam_melody = 0;
-	sslam_bar = 0;
+	sslam_state *state = machine.driver_data<sslam_state>();
+	state->m_track = 0;
+	state->m_melody = 0;
+	state->m_bar = 0;
 
-	state_save_register_global(machine, sslam_track);
-	state_save_register_global(machine, sslam_melody);
-	state_save_register_global(machine, sslam_bar);
-	state_save_register_global(machine, sslam_snd_bank);
+	state->save_item(NAME(state->m_track));
+	state->save_item(NAME(state->m_melody));
+	state->save_item(NAME(state->m_bar));
+	state->save_item(NAME(state->m_snd_bank));
 
-	music_timer = timer_alloc(machine, music_playback, NULL);
+	state->m_music_timer = machine.scheduler().timer_alloc(FUNC(music_playback));
 }
 
 static DRIVER_INIT( powerbls )
 {
-	state_save_register_global(machine, playmark_oki_control);
-	state_save_register_global(machine, playmark_oki_command);
-	state_save_register_global(machine, playmark_oki_bank);
+	sslam_state *state = machine.driver_data<sslam_state>();
+
+	state->save_item(NAME(state->m_oki_control));
+	state->save_item(NAME(state->m_oki_command));
+	state->save_item(NAME(state->m_oki_bank));
 }
 
 

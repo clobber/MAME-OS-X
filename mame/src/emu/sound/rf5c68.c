@@ -2,10 +2,8 @@
 /*    ricoh RF5C68(or clone) PCM controller              */
 /*********************************************************/
 
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "rf5c68.h"
-#include <math.h>
 
 
 #define  NUM_CHANNELS    (8)
@@ -33,16 +31,16 @@ struct _rf5c68_state
 	UINT8				wbank;
 	UINT8				enable;
 	UINT8				data[0x10000];
+	void				(*sample_callback)(device_t* device,int channel);
+	device_t* device;
 };
 
 
-INLINE rf5c68_state *get_safe_token(const device_config *device)
+INLINE rf5c68_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_RF5C68);
-	return (rf5c68_state *)device->token;
+	assert(device->type() == RF5C68);
+	return (rf5c68_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -80,6 +78,13 @@ static STREAM_UPDATE( rf5c68_update )
 			for (j = 0; j < samples; j++)
 			{
 				int sample;
+
+				/* trigger sample callback */
+				if(chip->sample_callback)
+				{
+					if(((chan->addr >> 11) & 0xfff) == 0xfff)
+						chip->sample_callback(chip->device,((chan->addr >> 11)/0x2000));
+				}
 
 				/* fetch the sample and handle looping */
 				sample = chip->data[(chan->addr >> 11) & 0xffff];
@@ -134,17 +139,41 @@ static STREAM_UPDATE( rf5c68_update )
 
 static DEVICE_START( rf5c68 )
 {
+	const rf5c68_interface* intf = (const rf5c68_interface*)device->static_config();
+
 	/* allocate memory for the chip */
 	rf5c68_state *chip = get_safe_token(device);
+	memset(chip->data, 0xff, sizeof(chip->data));
 
 	/* allocate the stream */
-	chip->stream = stream_create(device, 0, 2, device->clock / 384, chip, rf5c68_update);
+	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock() / 384, chip, rf5c68_update);
+
+	chip->device = device;
+
+	/* set up callback */
+	if(intf != NULL)
+		chip->sample_callback = intf->sample_end_callback;
+	else
+		chip->sample_callback = NULL;
 }
 
 
 /************************************************/
 /*    RF5C68 write register                     */
 /************************************************/
+
+READ8_DEVICE_HANDLER( rf5c68_r )
+{
+	rf5c68_state *chip = get_safe_token(device);
+	UINT8 shift;
+
+	chip->stream->update();
+	shift = (offset & 1) ? 11 + 8 : 11;
+
+//  printf("%08x\n",(chip->chan[(offset & 0x0e) >> 1].addr));
+
+	return (chip->chan[(offset & 0x0e) >> 1].addr) >> (shift);
+}
 
 WRITE8_DEVICE_HANDLER( rf5c68_w )
 {
@@ -153,7 +182,7 @@ WRITE8_DEVICE_HANDLER( rf5c68_w )
 	int i;
 
 	/* force the stream to update first */
-	stream_update(chip->stream);
+	chip->stream->update();
 
 	/* switch off the address */
 	switch (offset)
@@ -257,3 +286,5 @@ DEVICE_GET_INFO( rf5c68 )
 }
 
 /**************** end of file ****************/
+
+DEFINE_LEGACY_SOUND_DEVICE(RF5C68, rf5c68);

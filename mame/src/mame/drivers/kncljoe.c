@@ -16,47 +16,38 @@ TODO:
 - sprite vs. sprite priority especially on ground level
 
 Updates:
-- proper sound hw emulation(TS 070308)
-- you can't play anymore after you die(clock speed too low, check XTAL)
-- scrolling in bike levels(scroll register overflow)
-- sprites disappearing at left screen edge(bad clipping)
+- proper sound hw emulation (TS 070308)
+- you can't play anymore after you die (clock speed too low, check XTAL)
+- scrolling in bike levels (scroll register overflow)
+- sprites disappearing at left screen edge (bad clipping)
 - artifacts in stage 3 and others(clear sprite mem at bank switch?)
 (081503AT)
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/ay8910.h"
 #include "sound/sn76496.h"
-
-
-/* from video */
-extern VIDEO_START( kncljoe );
-extern PALETTE_INIT( kncljoe );
-extern VIDEO_UPDATE( kncljoe );
-extern WRITE8_HANDLER(kncljoe_videoram_w);
-extern WRITE8_HANDLER(kncljoe_control_w);
-extern WRITE8_HANDLER(kncljoe_scroll_w);
-extern UINT8 *kncljoe_scrollregs;
-
-static UINT8 port1, port2;
+#include "includes/kncljoe.h"
 
 
 static WRITE8_HANDLER( sound_cmd_w )
 {
+	kncljoe_state *state = space->machine().driver_data<kncljoe_state>();
+
 	if ((data & 0x80) == 0)
 		soundlatch_w(space, 0, data & 0x7f);
 	else
-		cputag_set_input_line(space->machine, "soundcpu", 0, ASSERT_LINE);
+		device_set_input_line(state->m_soundcpu, 0, ASSERT_LINE);
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(kncljoe_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd000, 0xd001) AM_WRITE(kncljoe_scroll_w) AM_BASE(&kncljoe_scrollregs)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(kncljoe_videoram_w) AM_BASE_MEMBER(kncljoe_state, m_videoram)
+	AM_RANGE(0xd000, 0xd001) AM_WRITE(kncljoe_scroll_w) AM_BASE_MEMBER(kncljoe_state, m_scrollregs)
 	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("P1")
 	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("P2")
@@ -68,31 +59,35 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd803, 0xd803) AM_DEVWRITE("sn2", sn76496_w)
 	AM_RANGE(0xd807, 0xd807) AM_READNOP		/* unknown read */
 	AM_RANGE(0xd817, 0xd817) AM_READNOP		/* unknown read */
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE_SIZE_MEMBER(kncljoe_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( m6803_port1_w )
 {
-	port1 = data;
+	kncljoe_state *state = device->machine().driver_data<kncljoe_state>();
+	state->m_port1 = data;
 }
 
 static WRITE8_DEVICE_HANDLER( m6803_port2_w )
 {
+	kncljoe_state *state = device->machine().driver_data<kncljoe_state>();
 
 	/* write latch */
-	if ((port2 & 0x01) && !(data & 0x01))
+	if ((state->m_port2 & 0x01) && !(data & 0x01))
 	{
 		/* control or data port? */
-		if (port2 & 0x08)
-			ay8910_data_address_w(device, port2 >> 2, port1);
+		if (state->m_port2 & 0x08)
+			ay8910_data_address_w(device, state->m_port2 >> 2, state->m_port1);
 	}
-	port2 = data;
+	state->m_port2 = data;
 }
 
 static READ8_DEVICE_HANDLER( m6803_port1_r )
 {
-	if (port2 & 0x08)
+	kncljoe_state *state = device->machine().driver_data<kncljoe_state>();
+
+	if (state->m_port2 & 0x08)
 		return ay8910_r(device, 0);
 	return 0xff;
 }
@@ -104,7 +99,8 @@ static READ8_DEVICE_HANDLER( m6803_port2_r )
 
 static WRITE8_HANDLER( sound_irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "soundcpu", 0, CLEAR_LINE);
+	kncljoe_state *state = space->machine().driver_data<kncljoe_state>();
+	device_set_input_line(state->m_soundcpu, 0, CLEAR_LINE);
 }
 
 static WRITE8_DEVICE_HANDLER(unused_w)
@@ -112,16 +108,16 @@ static WRITE8_DEVICE_HANDLER(unused_w)
 	//unused - no MSM on the pcb
 }
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x0fff) AM_WRITENOP
 	AM_RANGE(0x1000, 0x1fff) AM_WRITE(sound_irq_ack_w)
 	AM_RANGE(0x2000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(M6803_PORT1, M6803_PORT1) AM_DEVREADWRITE("ay", m6803_port1_r, m6803_port1_w)
-	AM_RANGE(M6803_PORT2, M6803_PORT2) AM_DEVREADWRITE("ay", m6803_port2_r, m6803_port2_w)
+static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
+	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_DEVREADWRITE("aysnd", m6803_port1_r, m6803_port1_w)
+	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_DEVREADWRITE("aysnd", m6803_port2_r, m6803_port2_w)
 ADDRESS_MAP_END
 
 
@@ -249,53 +245,77 @@ static const ay8910_interface ay8910_config =
 
 static INTERRUPT_GEN (sound_nmi)
 {
-	cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_DRIVER_START( kncljoe )
+static MACHINE_START( kncljoe )
+{
+	kncljoe_state *state = machine.driver_data<kncljoe_state>();
+
+	state->m_soundcpu = machine.device("soundcpu");
+
+	state->save_item(NAME(state->m_port1));
+	state->save_item(NAME(state->m_port2));
+	state->save_item(NAME(state->m_tile_bank));
+	state->save_item(NAME(state->m_sprite_bank));
+	state->save_item(NAME(state->m_flipscreen));
+}
+
+static MACHINE_RESET( kncljoe )
+{
+	kncljoe_state *state = machine.driver_data<kncljoe_state>();
+
+	state->m_port1 = 0;
+	state->m_port2 = 0;
+	state->m_tile_bank = 0;
+	state->m_sprite_bank = 0;
+	state->m_flipscreen = 0;
+}
+
+static MACHINE_CONFIG_START( kncljoe, kncljoe_state )
 
 	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_6MHz)  /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("maincpu", Z80, XTAL_6MHz)  /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("soundcpu", M6803, XTAL_3_579545MHz) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sound_portmap)
+	MCFG_CPU_PERIODIC_INT(sound_nmi, (double)3970) //measured 3.970 kHz
 
-	MDRV_CPU_ADD("soundcpu", M6803, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sound_portmap)
-	MDRV_CPU_PERIODIC_INT(sound_nmi, (double)3970) //measured 3.970 kHz
-
+	MCFG_MACHINE_START(kncljoe)
+	MCFG_MACHINE_RESET(kncljoe)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1500))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1500))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(kncljoe)
 
-	MDRV_GFXDECODE(kncljoe)
-	MDRV_PALETTE_LENGTH(16*8+16*8)
+	MCFG_GFXDECODE(kncljoe)
+	MCFG_PALETTE_LENGTH(16*8+16*8)
 
-	MDRV_PALETTE_INIT(kncljoe)
-	MDRV_VIDEO_START(kncljoe)
-	MDRV_VIDEO_UPDATE(kncljoe)
+	MCFG_PALETTE_INIT(kncljoe)
+	MCFG_VIDEO_START(kncljoe)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_3_579545MHz/4) /* verified on pcb */
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("aysnd", AY8910, XTAL_3_579545MHz/4) /* verified on pcb */
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("sn1", SN76489, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("sn1", SN76489, XTAL_3_579545MHz) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("sn2", SN76489, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("sn2", SN76489, XTAL_3_579545MHz) /* verified on pcb */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_CONFIG_END
 
 
 
@@ -397,6 +417,6 @@ ROM_END
 
 
 
-GAME( 1985, kncljoe,  0,       kncljoe, kncljoe, 0, ROT0, "[Seibu Kaihatsu] (Taito license)", "Knuckle Joe (set 1)", 0 )
-GAME( 1985, kncljoea, kncljoe, kncljoe, kncljoe, 0, ROT0, "[Seibu Kaihatsu] (Taito license)", "Knuckle Joe (set 2)", 0 )
-GAME( 1985, bcrusher, kncljoe, kncljoe, kncljoe, 0, ROT0, "bootleg",                          "Bone Crusher", 0 )
+GAME( 1985, kncljoe,  0,       kncljoe, kncljoe, 0, ROT0, "Seibu Kaihatsu (Taito license)", "Knuckle Joe (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1985, kncljoea, kncljoe, kncljoe, kncljoe, 0, ROT0, "Seibu Kaihatsu (Taito license)", "Knuckle Joe (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, bcrusher, kncljoe, kncljoe, kncljoe, 0, ROT0, "bootleg",                        "Bone Crusher", GAME_SUPPORTS_SAVE )

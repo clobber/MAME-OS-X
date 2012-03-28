@@ -1,24 +1,11 @@
-#include "driver.h"
+#include "emu.h"
 #include "video/taitoic.h"
-
-#define TC0480SCP_GFX_NUM 1
-
-struct tempsprite
-{
-	int gfx;
-	int code,color;
-	int flipx,flipy;
-	int x,y;
-	int zoomx,zoomy;
-	int primask;
-};
-static struct tempsprite *spritelist;
+#include "includes/superchs.h"
 
 VIDEO_START( superchs )
 {
-	spritelist = auto_alloc_array(machine, struct tempsprite, 0x4000);
-
-	TC0480SCP_vh_start(machine,TC0480SCP_GFX_NUM,0,0x20,0x08,-1,0,0,0,0);
+	superchs_state *state = machine.driver_data<superchs_state>();
+	state->m_spritelist = auto_alloc_array(machine, struct tempsprite, 0x4000);
 }
 
 /************************************************************
@@ -67,9 +54,11 @@ Heavy use is made of sprite zooming.
 
 ********************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,const int *primasks,int x_offs,int y_offs)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,const int *primasks,int x_offs,int y_offs)
 {
-	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	superchs_state *state = machine.driver_data<superchs_state>();
+	UINT32 *spriteram32 = state->m_spriteram;
+	UINT16 *spritemap = (UINT16 *)machine.region("user1")->base();
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, dblsize, curx, cury;
 	int sprites_flipscreen = 0;
@@ -79,9 +68,9 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 	/* pdrawgfx() needs us to draw sprites front to back, so we have to build a list
        while processing sprite ram and then draw them all at the end */
-	struct tempsprite *sprite_ptr = spritelist;
+	struct tempsprite *sprite_ptr = state->m_spritelist;
 
-	for (offs = (spriteram_size/4-4);offs >= 0;offs -= 4)
+	for (offs = (state->m_spriteram_size/4-4);offs >= 0;offs -= 4)
 	{
 		data = spriteram32[offs+0];
 		flipx =    (data & 0x00800000) >> 23;
@@ -176,7 +165,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 				}
 				else
 				{
-					drawgfxzoom_transpen(bitmap,cliprect,machine->gfx[sprite_ptr->gfx],
+					drawgfxzoom_transpen(bitmap,cliprect,machine.gfx[sprite_ptr->gfx],
 							sprite_ptr->code,
 							sprite_ptr->color,
 							sprite_ptr->flipx,sprite_ptr->flipy,
@@ -191,17 +180,17 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 	}
 
 	/* this happens only if primsks != NULL */
-	while (sprite_ptr != spritelist)
+	while (sprite_ptr != state->m_spritelist)
 	{
 		sprite_ptr--;
 
-		pdrawgfxzoom_transpen(bitmap,cliprect,machine->gfx[sprite_ptr->gfx],
+		pdrawgfxzoom_transpen(bitmap,cliprect,machine.gfx[sprite_ptr->gfx],
 				sprite_ptr->code,
 				sprite_ptr->color,
 				sprite_ptr->flipx,sprite_ptr->flipy,
 				sprite_ptr->x,sprite_ptr->y,
 				sprite_ptr->zoomx,sprite_ptr->zoomy,
-				machine->priority_bitmap,sprite_ptr->primask,0);
+				machine.priority_bitmap,sprite_ptr->primask,0);
 	}
 }
 
@@ -210,40 +199,41 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
                 SCREEN REFRESH
 **************************************************************/
 
-VIDEO_UPDATE( superchs )
+SCREEN_UPDATE_IND16( superchs )
 {
+	device_t *tc0480scp = screen.machine().device("tc0480scp");
 	UINT8 layer[5];
 	UINT16 priority;
 	static const int primasks[4] = {0xfffc, 0xfff0, 0xff00, 0x0};
 
-	TC0480SCP_tilemap_update(screen->machine);
+	tc0480scp_tilemap_update(tc0480scp);
 
-	priority = TC0480SCP_get_bg_priority();
-	layer[0] = (priority &0xf000) >> 12;	/* tells us which bg layer is bottom */
-	layer[1] = (priority &0x0f00) >>  8;
-	layer[2] = (priority &0x00f0) >>  4;
-	layer[3] = (priority &0x000f) >>  0;	/* tells us which is top */
+	priority = tc0480scp_get_bg_priority(tc0480scp);
+	layer[0] = (priority & 0xf000) >> 12;	/* tells us which bg layer is bottom */
+	layer[1] = (priority & 0x0f00) >>  8;
+	layer[2] = (priority & 0x00f0) >>  4;
+	layer[3] = (priority & 0x000f) >>  0;	/* tells us which is top */
 	layer[4] = 4;   /* text layer always over bg layers */
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	screen.machine().priority_bitmap.fill(0, cliprect);
 
 	/* We have to assume 2nd to bottom layer is always underneath
        sprites as pdrawgfx cannot yet cope with more than 4 layers */
 
 #ifdef MAME_DEBUG
-	if (!input_code_pressed (screen->machine, KEYCODE_Z)) TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	if (!input_code_pressed (screen->machine, KEYCODE_X)) TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[1],0,1);
-	if (!input_code_pressed (screen->machine, KEYCODE_C)) TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[2],0,2);
-	if (!input_code_pressed (screen->machine, KEYCODE_V)) TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[3],0,4);
-	if (!input_code_pressed (screen->machine, KEYCODE_B)) TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[4],0,8);
-	if (!input_code_pressed (screen->machine, KEYCODE_N)) draw_sprites(screen->machine,bitmap,cliprect,primasks,48,-116);
+	if (!screen.machine().input().code_pressed (KEYCODE_Z)) tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	if (!screen.machine().input().code_pressed (KEYCODE_X)) tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[1], 0, 1);
+	if (!screen.machine().input().code_pressed (KEYCODE_C)) tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[2], 0, 2);
+	if (!screen.machine().input().code_pressed (KEYCODE_V)) tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[3], 0, 4);
+	if (!screen.machine().input().code_pressed (KEYCODE_B)) tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[4], 0, 8);
+	if (!screen.machine().input().code_pressed (KEYCODE_N)) draw_sprites(screen.machine(), bitmap, cliprect, primasks, 48, -116);
 #else
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[1],0,1);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[2],0,2);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[3],0,4);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[4],0,8);	/* text layer */
-	draw_sprites(screen->machine, bitmap,cliprect,primasks,48,-116);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[1], 0, 1);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[2], 0, 2);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[3], 0, 4);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[4], 0, 8);	/* text layer */
+	draw_sprites(screen.machine(), bitmap, cliprect, primasks, 48, -116);
 #endif
 	return 0;
 }

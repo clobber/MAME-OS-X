@@ -74,14 +74,28 @@
 #define VDP_CLOCK		XTAL_10_730MHz
 #define TMS_CLOCK		VDP_CLOCK / 24
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mcs51/mcs51.h"
 #include "video/tms9928a.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
 #include "re900.lh"
 
-static UINT8 *re900_rom;
-static UINT8 psg_pa, psg_pb, mux_data, ledant, player, stat_a;
+
+class re900_state : public driver_device
+{
+public:
+	re900_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_rom;
+	UINT8 m_psg_pa;
+	UINT8 m_psg_pb;
+	UINT8 m_mux_data;
+	UINT8 m_ledant;
+	UINT8 m_player;
+	UINT8 m_stat_a;
+};
 
 
 /****************
@@ -90,7 +104,7 @@ static UINT8 psg_pa, psg_pb, mux_data, ledant, player, stat_a;
 
 static READ8_DEVICE_HANDLER (re_psg_portA_r)
 {
-	if ((input_port_read(device->machine, "IN0") & 0x01) == 0)
+	if ((input_port_read(device->machine(), "IN0") & 0x01) == 0)
 	{
 		output_set_lamp_value(0,1);		// Operator Key ON
 	}
@@ -100,20 +114,21 @@ static READ8_DEVICE_HANDLER (re_psg_portA_r)
 		output_set_lamp_value(0,0);		// Operator Key OFF
 	}
 
-	return input_port_read(device->machine, "IN0");
+	return input_port_read(device->machine(), "IN0");
 }
 
 static READ8_DEVICE_HANDLER (re_psg_portB_r)
 {
+	re900_state *state = device->machine().driver_data<re900_state>();
 	UINT8 retval = 0xff;
 	logerror("llamada a re_psg_portB_r\n");
 	/* This is a hack to select the active player due to Keyboard size restrictions  */
 
-	output_set_lamp_value(player,1);
+	output_set_lamp_value(state->m_player,1);
 
-	if (input_port_read(device->machine, "IN_S"))
+	if (input_port_read(device->machine(), "IN_S"))
 	{
-		if (!stat_a)
+		if (!state->m_stat_a)
 		{
 			output_set_lamp_value(1, 0);
 			output_set_lamp_value(2, 0);
@@ -121,33 +136,33 @@ static READ8_DEVICE_HANDLER (re_psg_portB_r)
 			output_set_lamp_value(4, 0);
 			output_set_lamp_value(5, 0);
 			output_set_lamp_value(6, 0);
-			player++;
+			state->m_player++;
 
-			if (player == 7)
+			if (state->m_player == 7)
 			{
-				player = 1;
+				state->m_player = 1;
 			}
 
-			output_set_lamp_value(player, 1); /* It shows active player via layout buttons   */
-			stat_a = 1;
+			output_set_lamp_value(state->m_player, 1); /* It shows active player via layout buttons   */
+			state->m_stat_a = 1;
 		}
 	}
 
 	else
 	{
-		stat_a = 0;
+		state->m_stat_a = 0;
 	}
 	/* End of Select Player Hack */
 
 	/* "INA": Unified port to share the player Keys among all players - Key In & Key Out have their own buttons on keyboard. */
-	switch( mux_data )
+	switch( state->m_mux_data )
 	{
-		case 0x01: retval = (input_port_read(device->machine, "IN6") | 0x80 ) - (( player == 6 ) ? (input_port_read(device->machine, "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 6 */
-		case 0x02: retval = (input_port_read(device->machine, "IN5") | 0x80 ) - (( player == 5 ) ? (input_port_read(device->machine, "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 5 */
-		case 0x04: retval = (input_port_read(device->machine, "IN4") | 0x80 ) - (( player == 4 ) ? (input_port_read(device->machine, "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 4 */
-		case 0x08: retval = (input_port_read(device->machine, "IN3") | 0x80 ) - (( player == 3 ) ? (input_port_read(device->machine, "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 3 */
-		case 0x10: retval = (input_port_read(device->machine, "IN2") | 0x80 ) - (( player == 2 ) ? (input_port_read(device->machine, "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 2 */
-		case 0x20: retval = (input_port_read(device->machine, "IN1") | 0x80 ) - (( player == 1 ) ? (input_port_read(device->machine, "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 1 */
+		case 0x01: retval = (input_port_read(device->machine(), "IN6") | 0x80 ) - (( state->m_player == 6 ) ? (input_port_read(device->machine(), "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 6 */
+		case 0x02: retval = (input_port_read(device->machine(), "IN5") | 0x80 ) - (( state->m_player == 5 ) ? (input_port_read(device->machine(), "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 5 */
+		case 0x04: retval = (input_port_read(device->machine(), "IN4") | 0x80 ) - (( state->m_player == 4 ) ? (input_port_read(device->machine(), "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 4 */
+		case 0x08: retval = (input_port_read(device->machine(), "IN3") | 0x80 ) - (( state->m_player == 3 ) ? (input_port_read(device->machine(), "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 3 */
+		case 0x10: retval = (input_port_read(device->machine(), "IN2") | 0x80 ) - (( state->m_player == 2 ) ? (input_port_read(device->machine(), "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 2 */
+		case 0x20: retval = (input_port_read(device->machine(), "IN1") | 0x80 ) - (( state->m_player == 1 ) ? (input_port_read(device->machine(), "INA") | 0x80 ) ^ 0xff: 0x00 ); break; /* Player 1 */
 	}
 
 	return retval;
@@ -155,7 +170,8 @@ static READ8_DEVICE_HANDLER (re_psg_portB_r)
 
 static READ8_HANDLER (rom_r)
 {
-	return re900_rom[offset];
+	re900_state *state = space->machine().driver_data<re900_state>();
+	return state->m_rom[offset];
 }
 
 
@@ -165,24 +181,26 @@ static READ8_HANDLER (rom_r)
 
 static WRITE8_DEVICE_HANDLER (re_mux_port_A_w)
 {
-	psg_pa = data;
-	mux_data = ((data >> 2) & 0x3f) ^ 0x3f;
+	re900_state *state = device->machine().driver_data<re900_state>();
+	state->m_psg_pa = data;
+	state->m_mux_data = ((data >> 2) & 0x3f) ^ 0x3f;
 }
 
 static WRITE8_DEVICE_HANDLER (re_mux_port_B_w)
 {
+	re900_state *state = device->machine().driver_data<re900_state>();
 	UINT8 led;
-	psg_pb = data;
-	led = (psg_pa >> 2) & 0x3f;
+	state->m_psg_pb = data;
+	led = (state->m_psg_pa >> 2) & 0x3f;
 
 	if (data == 0x7f)
 	{
 		output_set_lamp_value(20 + led, 1);
 
-		if (led != ledant)
+		if (led != state->m_ledant)
 		{
-			output_set_lamp_value(20 + ledant, 0);
-			ledant = led;
+			output_set_lamp_value(20 + state->m_ledant, 0);
+			state->m_ledant = led;
 		}
 	}
 }
@@ -203,15 +221,15 @@ static WRITE8_HANDLER(re900_watchdog_reset_w)
 *    Memory Map Information    *
 *******************************/
 
-static ADDRESS_MAP_START( mem_prg, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xffff) AM_ROM AM_BASE(&re900_rom)
+static ADDRESS_MAP_START( mem_prg, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0xffff) AM_ROM AM_BASE_MEMBER(re900_state, m_rom)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mem_io, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( mem_io, AS_IO, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_READ (rom_r)
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xe000, 0xe000) AM_WRITE(TMS9928A_vram_w)
-	AM_RANGE(0xe001, 0xe001) AM_WRITE(TMS9928A_register_w)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE_MODERN("tms9128", tms9928a_device, vram_write)
+	AM_RANGE(0xe001, 0xe001) AM_DEVWRITE_MODERN("tms9128", tms9928a_device, register_write)
 	AM_RANGE(0xe800, 0xe801) AM_DEVWRITE("ay_re900", ay8910_address_data_w)
 	AM_RANGE(0xe802, 0xe802) AM_DEVREAD("ay_re900", ay8910_r)
 	AM_RANGE(0xe000, 0xefff) AM_WRITE(re900_watchdog_reset_w)
@@ -221,14 +239,9 @@ static ADDRESS_MAP_START( mem_io, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static INTERRUPT_GEN( re900_video_interrupt )
+static WRITE_LINE_DEVICE_HANDLER(vdp_interrupt)
 {
-	TMS9928A_interrupt(device->machine);
-}
-
-static void vdp_interrupt (running_machine *machine, int state)
-{
-	cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, state ? ASSERT_LINE : CLEAR_LINE );
+	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, state ? ASSERT_LINE : CLEAR_LINE );
 }
 
 
@@ -350,12 +363,11 @@ INPUT_PORTS_END
 *    TMS9928a Interfase    *
 ***************************/
 
-static const TMS9928a_interface tms9928a_interface =
+static TMS9928A_INTERFACE(re900_tms9928a_interface)
 {
-	TMS99x8A,		/* TMS9128NL on pcb */
+	"screen",
 	0x4000,
-	0, 0,
-	vdp_interrupt
+	DEVCB_LINE(vdp_interrupt)
 };
 
 
@@ -387,37 +399,34 @@ static const ay8910_interface ay8910_bs94 =
 *      Machine Driver      *
 ***************************/
 
-static MACHINE_DRIVER_START( re900 )
+static MACHINE_CONFIG_START( re900, re900_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", I8051, MAIN_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(mem_prg)
-	MDRV_CPU_IO_MAP(mem_io)
-	MDRV_CPU_VBLANK_INT("screen", re900_video_interrupt)
+	MCFG_CPU_ADD("maincpu", I8051, MAIN_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(mem_prg)
+	MCFG_CPU_IO_MAP(mem_io)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(tms9928a)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_REFRESH_RATE(60)
+	MCFG_TMS9928A_ADD( "tms9128", TMS9128, re900_tms9928a_interface )	/* TMS9128NL on pcb */
+	MCFG_TMS9928A_SCREEN_ADD_NTSC( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9128", tms9128_device, screen_update )
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
-
-	/* sound hardware   */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay_re900", AY8910, TMS_CLOCK) /* From TMS9128NL - Pin 37 (GROMCLK) */
-	MDRV_SOUND_CONFIG(ay8910_re900)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( bs94 )
-
-	MDRV_IMPORT_FROM(re900)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* sound hardware   */
-	MDRV_SOUND_MODIFY("ay_re900")
-	MDRV_SOUND_CONFIG(ay8910_bs94)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("ay_re900", AY8910, TMS_CLOCK) /* From TMS9128NL - Pin 37 (GROMCLK) */
+	MCFG_SOUND_CONFIG(ay8910_re900)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( bs94, re900 )
+
+	/* sound hardware   */
+	MCFG_SOUND_MODIFY("ay_re900")
+	MCFG_SOUND_CONFIG(ay8910_bs94)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
+MACHINE_CONFIG_END
 
 
 /*************************
@@ -441,10 +450,10 @@ ROM_END
 
 static DRIVER_INIT( re900 )
 {
-	TMS9928A_configure(&tms9928a_interface);
-	player = 1;
-	stat_a = 1;
-	psg_pa = psg_pb = mux_data = ledant = 0;
+	re900_state *state = machine.driver_data<re900_state>();
+	state->m_player = 1;
+	state->m_stat_a = 1;
+	state->m_psg_pa = state->m_psg_pb = state->m_mux_data = state->m_ledant = 0;
 }
 
 

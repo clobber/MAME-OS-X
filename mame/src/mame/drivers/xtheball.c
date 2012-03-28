@@ -6,36 +6,25 @@
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms34010/tms34010.h"
 #include "video/tlc34076.h"
 #include "machine/ticket.h"
+#include "machine/nvram.h"
 #include "sound/dac.h"
 
 
-
-/*************************************
- *
- *  Global variables
- *
- *************************************/
-
-static UINT16 *vram_bg, *vram_fg;
-static UINT8 bitvals[32];
-
-
-
-/*************************************
- *
- *  Machine init
- *
- *************************************/
-
-static MACHINE_RESET( xtheball )
+class xtheball_state : public driver_device
 {
-	tlc34076_reset(6);
-	ticket_dispenser_init(machine, 100, 1, 1);
-}
+public:
+	xtheball_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT16 *m_vram_bg;
+	UINT16 *m_vram_fg;
+	UINT8 m_bitvals[32];
+};
+
 
 
 
@@ -45,19 +34,20 @@ static MACHINE_RESET( xtheball )
  *
  *************************************/
 
-static void xtheball_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+static void xtheball_scanline_update(screen_device &screen, bitmap_rgb32 &bitmap, int scanline, const tms34010_display_params *params)
 {
-	UINT16 *srcbg = &vram_bg[(params->rowaddr << 8) & 0xff00];
-	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
-	const rgb_t *pens = tlc34076_get_pens();
+	xtheball_state *state = screen.machine().driver_data<xtheball_state>();
+	UINT16 *srcbg = &state->m_vram_bg[(params->rowaddr << 8) & 0xff00];
+	UINT32 *dest = &bitmap.pix32(scanline);
+	const rgb_t *pens = tlc34076_get_pens(screen.machine().device("tlc34076"));
 	int coladdr = params->coladdr;
 	int x;
 
 	/* bit value 0x13 controls which foreground mode to use */
-	if (!bitvals[0x13])
+	if (!state->m_bitvals[0x13])
 	{
 		/* mode 0: foreground is the same as background */
-		UINT16 *srcfg = &vram_fg[(params->rowaddr << 8) & 0xff00];
+		UINT16 *srcfg = &state->m_vram_fg[(params->rowaddr << 8) & 0xff00];
 
 		for (x = params->heblnk; x < params->hsblnk; x += 2, coladdr++)
 		{
@@ -72,7 +62,7 @@ static void xtheball_scanline_update(const device_config *screen, bitmap_t *bitm
 	{
 		/* mode 1: foreground is half background resolution in */
 		/* X and supports two pages */
-		UINT16 *srcfg = &vram_fg[(params->rowaddr << 7) & 0xff00];
+		UINT16 *srcfg = &state->m_vram_fg[(params->rowaddr << 7) & 0xff00];
 
 		for (x = params->heblnk; x < params->hsblnk; x += 2, coladdr++)
 		{
@@ -94,25 +84,27 @@ static void xtheball_scanline_update(const device_config *screen, bitmap_t *bitm
  *
  *************************************/
 
-static void xtheball_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void xtheball_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
+	xtheball_state *state = space->machine().driver_data<xtheball_state>();
 	if (address >= 0x01000000 && address <= 0x010fffff)
-		memcpy(shiftreg, &vram_bg[TOWORD(address & 0xff000)], TOBYTE(0x1000));
+		memcpy(shiftreg, &state->m_vram_bg[TOWORD(address & 0xff000)], TOBYTE(0x1000));
 	else if (address >= 0x02000000 && address <= 0x020fffff)
-		memcpy(shiftreg, &vram_fg[TOWORD(address & 0xff000)], TOBYTE(0x1000));
+		memcpy(shiftreg, &state->m_vram_fg[TOWORD(address & 0xff000)], TOBYTE(0x1000));
 	else
-		logerror("%s:xtheball_to_shiftreg(%08X)\n", cpuexec_describe_context(space->machine), address);
+		logerror("%s:xtheball_to_shiftreg(%08X)\n", space->machine().describe_context(), address);
 }
 
 
-static void xtheball_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void xtheball_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
+	xtheball_state *state = space->machine().driver_data<xtheball_state>();
 	if (address >= 0x01000000 && address <= 0x010fffff)
-		memcpy(&vram_bg[TOWORD(address & 0xff000)], shiftreg, TOBYTE(0x1000));
+		memcpy(&state->m_vram_bg[TOWORD(address & 0xff000)], shiftreg, TOBYTE(0x1000));
 	else if (address >= 0x02000000 && address <= 0x020fffff)
-		memcpy(&vram_fg[TOWORD(address & 0xff000)], shiftreg, TOBYTE(0x1000));
+		memcpy(&state->m_vram_fg[TOWORD(address & 0xff000)], shiftreg, TOBYTE(0x1000));
 	else
-		logerror("%s:xtheball_from_shiftreg(%08X)\n", cpuexec_describe_context(space->machine), address);
+		logerror("%s:xtheball_from_shiftreg(%08X)\n", space->machine().describe_context(), address);
 }
 
 
@@ -125,20 +117,22 @@ static void xtheball_from_shiftreg(const address_space *space, UINT32 address, U
 
 static WRITE16_HANDLER( bit_controls_w )
 {
+	xtheball_state *state = space->machine().driver_data<xtheball_state>();
+	UINT8 *bitvals = state->m_bitvals;
 	if (ACCESSING_BITS_0_7)
 	{
 		if (bitvals[offset] != (data & 1))
 		{
-			logerror("%08x:bit_controls_w(%x,%d)\n", cpu_get_pc(space->cpu), offset, data & 1);
+			logerror("%08x:bit_controls_w(%x,%d)\n", cpu_get_pc(&space->device()), offset, data & 1);
 
 			switch (offset)
 			{
 				case 7:
-					ticket_dispenser_w(space, 0, data << 7);
+					ticket_dispenser_w(space->machine().device("ticket"), 0, data << 7);
 					break;
 
 				case 8:
-					set_led_status(0, data & 1);
+					set_led_status(space->machine(), 0, data & 1);
 					break;
 			}
 		}
@@ -191,17 +185,9 @@ static WRITE16_HANDLER( bit_controls_w )
  *
  *************************************/
 
-static READ16_HANDLER( port0_r )
-{
-	int result = input_port_read(space->machine, "DSW");
-	result ^= ticket_dispenser_r(space,0) >> 3;
-	return result;
-}
-
-
 static READ16_HANDLER( analogx_r )
 {
-	return (input_port_read(space->machine, "ANALOGX") << 8) | 0x00ff;
+	return (input_port_read(space->machine(), "ANALOGX") << 8) | 0x00ff;
 }
 
 
@@ -209,7 +195,7 @@ static READ16_HANDLER( analogy_watchdog_r )
 {
 	/* doubles as a watchdog address */
 	watchdog_reset_w(space,0,0);
-	return (input_port_read(space->machine, "ANALOGY") << 8) | 0x00ff;
+	return (input_port_read(space->machine(), "ANALOGY") << 8) | 0x00ff;
 }
 
 
@@ -220,13 +206,13 @@ static READ16_HANDLER( analogy_watchdog_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x01000000, 0x010fffff) AM_RAM AM_BASE(&vram_bg)
-	AM_RANGE(0x02000000, 0x020fffff) AM_RAM AM_BASE(&vram_fg)
-	AM_RANGE(0x03000000, 0x030000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x01000000, 0x010fffff) AM_RAM AM_BASE_MEMBER(xtheball_state, m_vram_bg)
+	AM_RANGE(0x02000000, 0x020fffff) AM_RAM AM_BASE_MEMBER(xtheball_state, m_vram_fg)
+	AM_RANGE(0x03000000, 0x030000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 	AM_RANGE(0x03040000, 0x030401ff) AM_WRITE(bit_controls_w)
-	AM_RANGE(0x03040080, 0x0304008f) AM_READ(port0_r)
+	AM_RANGE(0x03040080, 0x0304008f) AM_READ_PORT("DSW")
 	AM_RANGE(0x03040100, 0x0304010f) AM_READ(analogx_r)
 	AM_RANGE(0x03040110, 0x0304011f) AM_READ_PORT("COIN1")
 	AM_RANGE(0x03040130, 0x0304013f) AM_READ_PORT("SERVICE2")
@@ -251,7 +237,9 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( xtheball )
 	PORT_START("DSW")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x000f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("ticket", ticket_dispenser_line_r)
+	PORT_BIT( 0x00e0, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_DIPNAME( 0x0700, 0x0000, "Target Tickets")
 	PORT_DIPSETTING(      0x0000, "3" )
 	PORT_DIPSETTING(      0x0100, "4" )
@@ -326,7 +314,8 @@ static const tms34010_config tms_config =
 	"screen",						/* the screen operated on */
 	10000000,						/* pixel clock */
 	1,								/* pixels per clock */
-	xtheball_scanline_update,		/* scanline callback */
+	NULL,							/* scanline callback (indexed16) */
+	xtheball_scanline_update,		/* scanline callback (rgb32) */
 	NULL,							/* generate interrupt */
 	xtheball_to_shiftreg,			/* write to shiftreg function */
 	xtheball_from_shiftreg			/* read from shiftreg function */
@@ -340,29 +329,30 @@ static const tms34010_config tms_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( xtheball )
+static MACHINE_CONFIG_START( xtheball, xtheball_state )
 
-	MDRV_CPU_ADD("maincpu", TMS34010, 40000000)
-	MDRV_CPU_CONFIG(tms_config)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_PERIODIC_INT(irq1_line_hold,15000)
+	MCFG_CPU_ADD("maincpu", TMS34010, 40000000)
+	MCFG_CPU_CONFIG(tms_config)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_PERIODIC_INT(irq1_line_hold, 15000)
 
-	MDRV_MACHINE_RESET(xtheball)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MCFG_NVRAM_ADD_1FILL("nvram")
+
+	MCFG_TICKET_DISPENSER_ADD("ticket", 100, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_HIGH)
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(tms340x0)
+	MCFG_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_RAW_PARAMS(10000000, 640, 114, 626, 257, 24, 248)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(10000000, 640, 114, 626, 257, 24, 248)
+	MCFG_SCREEN_UPDATE_STATIC(tms340x0_rgb32)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 

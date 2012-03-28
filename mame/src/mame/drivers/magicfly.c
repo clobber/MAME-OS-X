@@ -1,6 +1,5 @@
 /******************************************************************************
 
-
     MAGIC FLY
     ---------
 
@@ -14,9 +13,18 @@
 
 
     **** NOTE ****
+
     This hardware was clearly designed for poker games.
     You can find a complete hardware & software analysis here:
-    http://www.mameworld.net/robbie
+    http://www.robertofresca.com.ar/
+
+
+    Special Thanks to...
+
+    - EMMA Italian Dumping Team for providing the board.
+    - Rob Ragon for the exhaustive hardware testing.
+    - Iris Falbala, that kindly offered herself as beta tester,
+      poppin' baloons since she was only 2 years old. :)
 
 
 *******************************************************************************
@@ -382,11 +390,18 @@
     - Updated the memory map description and technical notes.
     - Added game notes and documented the test/settings/bookkeeping modes.
 
+    [2011-10-11]
+    - Confirmed and fixed CPU clock for magicfly and 7mezzo.
+    - Rearranged the graphic ROMs addressing. Splitted both gfx banks.
+    - Created and minimized the color palette for both gfx banks.
+    - Fixed colors for magicfly and 7mezzo.
+
 
     TODO:
 
-    - Correct colors. (where is the palette?)
-    - Confirm the CPU clock (there is some lag in MF controls).
+    - Simplify the gfx banks to avoid a custom palette.
+    - Document the correct pinout.
+    - Analyze the PLD. Try to reconstruct.
     - Split the driver.
 
 
@@ -395,93 +410,113 @@
 
 #define MASTER_CLOCK	XTAL_10MHz
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "video/mc6845.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
+
+
+class magicfly_state : public driver_device
+{
+public:
+	magicfly_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram;
+	UINT8 *m_colorram;
+	tilemap_t *m_bg_tilemap;
+	int m_input_selector;
+};
 
 
 /*************************
 *     Video Hardware     *
 *************************/
 
-static tilemap *bg_tilemap;
 
 static WRITE8_HANDLER( magicfly_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	magicfly_state *state = space->machine().driver_data<magicfly_state>();
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static WRITE8_HANDLER( magicfly_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	magicfly_state *state = space->machine().driver_data<magicfly_state>();
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 static TILE_GET_INFO( get_magicfly_tile_info )
 {
+	magicfly_state *state = machine.driver_data<magicfly_state>();
 /*  - bits -
     7654 3210
     ---- -xxx   Tiles color.
     ---- x---   Seems to be a kind of attribute (maybe related to color). Not totally understood yet.
     ---x ----   Tiles bank.
-    -xx- ----   Aparently not used.
+    -xx- ----   Apparently not used.
     x--- ----   Mirrored from bit 3. The code check this one to boot the game.
 
 */
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index];
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index];
 	int bank = (attr & 0x10) >> 4;   /* bit 4 switch the gfx banks */
 	int color = attr & 0x07;         /* bits 0-2 for color */
 
     /* Seems that bit 7 is mirrored from bit 3 to have a normal boot */
     /* Boot only check the first color RAM offset */
 
-	colorram[0] = colorram[0] | ((colorram[0] & 0x08) << 4);	/* only for 1st offset */
-//  colorram[tile_index] = attr | ((attr & 0x08) << 4);         /* for the whole color RAM */
+	state->m_colorram[0] = state->m_colorram[0] | ((state->m_colorram[0] & 0x08) << 4);	/* only for 1st offset */
+	//state->m_colorram[tile_index] = attr | ((attr & 0x08) << 4);         /* for the whole color RAM */
 
 	SET_TILE_INFO(bank, code, color, 0);
 }
 
 static VIDEO_START(magicfly)
 {
-	bg_tilemap = tilemap_create(machine, get_magicfly_tile_info, tilemap_scan_rows, 8, 8, 32, 29);
+	magicfly_state *state = machine.driver_data<magicfly_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_magicfly_tile_info, tilemap_scan_rows, 8, 8, 32, 29);
 }
 
 static TILE_GET_INFO( get_7mezzo_tile_info )
 {
+	magicfly_state *state = machine.driver_data<magicfly_state>();
 /*  - bits -
     7654 3210
     ---- -xxx   Tiles color.
     ---- x---   Seems to be a kind of attribute (maybe related to color). Not totally understood yet.
     ---x ----   Tiles bank.
-    -xx- ----   Aparently not used.
+    -xx- ----   Apparently not used.
     x--- ----   Mirrored from bit 2. The code check this one to boot the game.
 
 */
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index];
+	int attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[tile_index];
 	int bank = (attr & 0x10) >> 4;    /* bit 4 switch the gfx banks */
 	int color = attr & 0x07;          /* bits 0-2 for color */
 
     /* Seems that bit 7 is mirrored from bit 2 to have a normal boot */
     /* Boot only check the first color RAM offset */
 
-	colorram[0] = colorram[0] | ((colorram[0] & 0x04) << 5);	/* only for 1st offset */
-//  colorram[tile_index] = attr | ((attr & 0x04) << 5);         /* for the whole color RAM */
+	state->m_colorram[0] = state->m_colorram[0] | ((state->m_colorram[0] & 0x04) << 5);	/* only for 1st offset */
+	//state->m_colorram[tile_index] = attr | ((attr & 0x04) << 5);         /* for the whole color RAM */
 
 	SET_TILE_INFO(bank, code, color, 0);
 }
 
 static VIDEO_START( 7mezzo )
 {
-	bg_tilemap = tilemap_create(machine, get_7mezzo_tile_info, tilemap_scan_rows, 8, 8, 32, 29);
+	magicfly_state *state = machine.driver_data<magicfly_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_7mezzo_tile_info, tilemap_scan_rows, 8, 8, 32, 29);
 }
 
-static VIDEO_UPDATE( magicfly )
+static SCREEN_UPDATE_IND16( magicfly )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	magicfly_state *state = screen.machine().driver_data<magicfly_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
@@ -489,21 +524,26 @@ static PALETTE_INIT( magicfly )
 {
 	int i;
 
-	for (i = 0; i < 0x100; i += 0x20)
+	for (i = 0x00; i < 0x10; i += 0x10)
 	{
 		/* 1st gfx bank */
 		palette_set_color(machine, i + 0, MAKE_RGB(0x00, 0x00, 0x00));
 		palette_set_color(machine, i + 2, MAKE_RGB(0x00, 0x00, 0x00));
 		palette_set_color(machine, i + 4, MAKE_RGB(0x00, 0x00, 0x00));
 		palette_set_color(machine, i + 6, MAKE_RGB(0x00, 0x00, 0x00));
+		palette_set_color(machine, i + 8, MAKE_RGB(0x00, 0x00, 0x00));
 		palette_set_color(machine, i + 10, MAKE_RGB(0x00, 0x00, 0x00));
-		palette_set_color(machine, i + 11, MAKE_RGB(0x00, 0xff, 0x00));
 		palette_set_color(machine, i + 12, MAKE_RGB(0x00, 0x00, 0x00));
 		palette_set_color(machine, i + 14, MAKE_RGB(0x00, 0x00, 0x00));
 
-		/* 2nd gfx bank */
-		palette_set_color(machine, i + 22, MAKE_RGB(0xe0, 0xe0, 0xe0));
-		palette_set_color(machine, i + 23, MAKE_RGB(0xff, 0xff, 0xff));
+		palette_set_color(machine, i + 1, MAKE_RGB(0x00, 0x00, 0x00));
+		palette_set_color(machine, i + 3, MAKE_RGB(0xff, 0x00, 0x00));
+		palette_set_color(machine, i + 5, MAKE_RGB(0x00, 0xff, 0x00));
+		palette_set_color(machine, i + 7, MAKE_RGB(0xff, 0xff, 0x00));
+		palette_set_color(machine, i + 9, MAKE_RGB(0x00, 0x00, 0xff));
+		palette_set_color(machine, i + 11, MAKE_RGB(0xff, 0x00, 0xff));
+		palette_set_color(machine, i + 13, MAKE_RGB(0x00, 0xff, 0xff));
+		palette_set_color(machine, i + 15, MAKE_RGB(0xff, 0xff, 0xff));
 	}
 }
 
@@ -512,23 +552,24 @@ static PALETTE_INIT( magicfly )
 *         R/W Handlers        *
 ******************************/
 
-static int input_selector = 0;
 
 static READ8_HANDLER( mux_port_r )
 {
-	switch( input_selector )
+	magicfly_state *state = space->machine().driver_data<magicfly_state>();
+	switch( state->m_input_selector )
 	{
-		case 0x01: return input_port_read(space->machine, "IN0-0");
-		case 0x02: return input_port_read(space->machine, "IN0-1");
-		case 0x04: return input_port_read(space->machine, "IN0-2");
-		case 0x08: return input_port_read(space->machine, "IN0-3");
-		case 0x00: return input_port_read(space->machine, "DSW0");
+		case 0x01: return input_port_read(space->machine(), "IN0-0");
+		case 0x02: return input_port_read(space->machine(), "IN0-1");
+		case 0x04: return input_port_read(space->machine(), "IN0-2");
+		case 0x08: return input_port_read(space->machine(), "IN0-3");
+		case 0x00: return input_port_read(space->machine(), "DSW0");
 	}
 	return 0xff;
 }
 
 static WRITE8_HANDLER( mux_port_w )
 {
+	magicfly_state *state = space->machine().driver_data<magicfly_state>();
 /*  - bits -
     7654 3210
     ---- xxxx   Input selector.
@@ -538,13 +579,13 @@ static WRITE8_HANDLER( mux_port_w )
     x--- ----   Sound DAC.
 
 */
-	input_selector = data & 0x0f;	/* Input Selector */
+	state->m_input_selector = data & 0x0f;	/* Input Selector */
 
-	dac_data_w(devtag_get_device(space->machine, "dac"), data & 0x80);		/* Sound DAC */
+	dac_data_w(space->machine().device("dac"), data & 0x80);		/* Sound DAC */
 
-	coin_counter_w(0, data & 0x40);	/* Coin1 */
-	coin_counter_w(1, data & 0x10);	/* Coin2 */
-	coin_counter_w(2, data & 0x20);	/* Payout */
+	coin_counter_w(space->machine(), 0, data & 0x40);	/* Coin1 */
+	coin_counter_w(space->machine(), 1, data & 0x10);	/* Coin2 */
+	coin_counter_w(space->machine(), 2, data & 0x20);	/* Payout */
 }
 
 
@@ -552,12 +593,12 @@ static WRITE8_HANDLER( mux_port_w )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( magicfly_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)    /* MK48Z02B NVRAM */
-	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(magicfly_videoram_w) AM_BASE(&videoram)	/* HM6116LP #1 (2K x 8) RAM (only 1st half used) */
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(magicfly_colorram_w) AM_BASE(&colorram)	/* HM6116LP #2 (2K x 8) RAM (only 1st half used) */
+static ADDRESS_MAP_START( magicfly_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_SHARE("nvram")    /* MK48Z02B NVRAM */
+	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(magicfly_videoram_w) AM_BASE_MEMBER(magicfly_state, m_videoram)	/* HM6116LP #1 (2K x 8) RAM (only 1st half used) */
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(magicfly_colorram_w) AM_BASE_MEMBER(magicfly_state, m_colorram)	/* HM6116LP #2 (2K x 8) RAM (only 1st half used) */
 	AM_RANGE(0x2800, 0x2800) AM_READ(mux_port_r)	/* multiplexed input port */
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(mux_port_w)	/* output port */
 	AM_RANGE(0xc000, 0xffff) AM_ROM					/* ROM space */
@@ -570,7 +611,8 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( magicfly )
 /*  Multiplexed 4 x 5 bits.
-    Code accept only bits 0, 1, 2, 3 and 5 as valid. */
+    Code accept only bits 0, 1, 2, 3 and 5 as valid.
+*/
 	PORT_START("IN0-0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
@@ -632,7 +674,8 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( 7mezzo )
 /*  Multiplexed 4 x 5 bits.
-    Code accept only bits 0, 1, 2, 3 and 5 as valid. */
+    Code accept only bits 0, 1, 2, 3 and 5 as valid.
+*/
 	PORT_START("IN0-0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
@@ -700,9 +743,9 @@ INPUT_PORTS_END
 static const gfx_layout tilelayout =
 {
 	8, 8,
-	256,
+	RGN_FRAC(1,3),
 	3,
-	{ 0, 0x2800*8, 0x4800*8 },	/* bitplanes are separated. */
+	{ 0, RGN_FRAC(1,3), RGN_FRAC(2,3) },
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
 	8*8
@@ -711,7 +754,7 @@ static const gfx_layout tilelayout =
 static const gfx_layout charlayout =
 {
 	8, 8,
-	256,
+	RGN_FRAC(1,1),
 	1,
 	{ 0 },
 	{ 0, 1, 2, 3, 4, 5, 6, 7 },
@@ -725,8 +768,8 @@ static const gfx_layout charlayout =
 ******************************/
 
 static GFXDECODE_START( magicfly )
-	GFXDECODE_ENTRY( "gfx1", 0x1000, tilelayout, 16, 16 )
-	GFXDECODE_ENTRY( "gfx1", 0x1800, charlayout, 0, 16 )
+	GFXDECODE_ENTRY( "gfxbnk1", 0, tilelayout, 16, 1 )
+	GFXDECODE_ENTRY( "gfxbnk0", 0, charlayout, 0, 8 )
 GFXDECODE_END
 
 
@@ -753,47 +796,45 @@ static const mc6845_interface mc6845_intf =
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_DRIVER_START( magicfly )
+static MACHINE_CONFIG_START( magicfly, magicfly_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK/12)	/* guess */
-	MDRV_CPU_PROGRAM_MAP(magicfly_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK/16)	/* guess */
+	MCFG_CPU_PROGRAM_MAP(magicfly_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE((39+1)*8, (31+1)*8)				/* Taken from MC6845 init, registers 00 & 04. Normally programmed with (value-1). */
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 29*8-1)	/* Taken from MC6845 init, registers 01 & 06. */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE((39+1)*8, (31+1)*8)				/* Taken from MC6845 init, registers 00 & 04. Normally programmed with (value-1). */
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 29*8-1)	/* Taken from MC6845 init, registers 01 & 06. */
+	MCFG_SCREEN_UPDATE_STATIC(magicfly)
 
-	MDRV_GFXDECODE(magicfly)
-	MDRV_PALETTE_LENGTH(256)
-	MDRV_PALETTE_INIT(magicfly)
+	MCFG_GFXDECODE(magicfly)
+	MCFG_PALETTE_LENGTH(32)
+	MCFG_PALETTE_INIT(magicfly)
 
-	MDRV_VIDEO_START(magicfly)
-	MDRV_VIDEO_UPDATE(magicfly)
+	MCFG_VIDEO_START(magicfly)
 
-	MDRV_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/16, mc6845_intf) /* guess */
+	MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/16, mc6845_intf) /* guess */
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( 7mezzo )
+static MACHINE_CONFIG_DERIVED( 7mezzo, magicfly )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(magicfly)
 
 	/* video hardware */
-	MDRV_VIDEO_START(7mezzo)
+	MCFG_VIDEO_START(7mezzo)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************
@@ -804,10 +845,19 @@ ROM_START( magicfly )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "magicfly3_3.bin",	0xc000, 0x4000, CRC(c29798d5) SHA1(bf92ac93d650398569b3ab79d01344e74a6d35be) )
 
-	ROM_REGION( 0x6000, "gfx1", 0 )
+	ROM_REGION( 0x6000, "gfx", 0 )
 	ROM_LOAD( "magicfly2.bin",	0x0000, 0x2000, CRC(3596a45b) SHA1(7ec32ec767d0883d05606beb588d8f27ba8f10a4) )
 	ROM_LOAD( "magicfly1.bin",	0x2000, 0x2000, CRC(724d330c) SHA1(cce3923ce48634b27f0e7d29979cd36e7394ab37) )
 	ROM_LOAD( "magicfly0.bin",	0x4000, 0x2000, CRC(44e3c9d6) SHA1(677d25360d261bf2400f399b8015eeb529ad405e) )
+
+	ROM_REGION( 0x0800, "gfxbnk0", 0 )
+//  ROM_FILL(           0x0000, 0x1000, 0 )         /* filling the R-G bitplanes */
+	ROM_COPY( "gfx",	0x1800, 0x0000, 0x0800 )	/* chars */
+
+	ROM_REGION( 0x1800, "gfxbnk1", 0 )
+	ROM_COPY( "gfx",	0x1000, 0x0000, 0x0800 )	/* sprites, bitplane 1 */
+	ROM_COPY( "gfx",	0x3800, 0x0800, 0x0800 )	/* sprites, bitplane 2 */
+	ROM_COPY( "gfx",	0x5800, 0x1000, 0x0800 )	/* sprites, bitplane 3 */
 
 	ROM_REGION( 0x0200, "plds", 0 )
 	ROM_LOAD( "pal16r4a-magicfly.bin",	0x0000, 0x0104, NO_DUMP )	/* PAL is read protected */
@@ -818,13 +868,22 @@ ROM_START( 7mezzo )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "ns3_1.bin",	0xc000, 0x4000, CRC(b1867b76) SHA1(eb76cffb81c865352f4767015edade54801f6155) )
 
-	ROM_REGION( 0x6000, "gfx1", 0 )
+	ROM_REGION( 0x6000, "gfx", 0 )
 	ROM_LOAD( "ns2.bin",	0x0000, 0x2000, CRC(7983a41c) SHA1(68805ea960c2738d3cd2c7490ffed84f90da029b) )    /* Renamed as ns2.bin regarding pcb location and content */
 	ROM_LOAD( "ns1.bin",	0x2000, 0x2000, CRC(a6ada872) SHA1(7f531a76e73d479161e485bdcf816eb8eb9fdc62) )
 	ROM_LOAD( "ns0.bin",	0x4000, 0x2000, CRC(e04fb210) SHA1(81e764e296fe387daf8ca67064d5eba2a4fc3c26) )    /* Renamed as ns0.bin regarding pcb location and content */
 
+	ROM_REGION( 0x0800, "gfxbnk0", 0 )
+//  ROM_FILL(           0x0000, 0x1000, 0 )         /* filling the R-G bitplanes */
+	ROM_COPY( "gfx",	0x1800, 0x0000, 0x0800 )	/* chars */
+
+	ROM_REGION( 0x1800, "gfxbnk1", 0 )
+	ROM_COPY( "gfx",	0x1000, 0x0000, 0x0800 )	/* sprites, bitplane 1 */
+	ROM_COPY( "gfx",	0x3800, 0x0800, 0x0800 )	/* sprites, bitplane 2 */
+	ROM_COPY( "gfx",	0x5800, 0x1000, 0x0800 )	/* sprites, bitplane 3 */
+
 	ROM_REGION( 0x0200, "plds", 0 )
-	ROM_LOAD( "pal16r4a-7mezzo.bin",	0x0000, 0x0104, CRC(61ac7372) SHA1(7560506468a7409075094787182ded24e2d0c0a3) )
+	ROM_LOAD( "pal16r4a-7mezzo.bin",	0x0000, 0x0104, BAD_DUMP CRC(61ac7372) SHA1(7560506468a7409075094787182ded24e2d0c0a3) )
 ROM_END
 
 
@@ -833,5 +892,5 @@ ROM_END
 *************************/
 
 /*    YEAR  NAME      PARENT  MACHINE   INPUT     INIT   ROT    COMPANY      FULLNAME    FLAGS... */
-GAME( 198?, magicfly, 0,      magicfly, magicfly, 0,     ROT0, "P&A Games", "Magic Fly", GAME_IMPERFECT_COLORS )
-GAME( 198?, 7mezzo,   0,      7mezzo,   7mezzo,   0,     ROT0, "<unknown>", "7 e Mezzo", GAME_IMPERFECT_COLORS )
+GAME( 198?, magicfly, 0,      magicfly, magicfly, 0,     ROT0, "P&A Games", "Magic Fly", 0 )
+GAME( 198?, 7mezzo,   0,      7mezzo,   7mezzo,   0,     ROT0, "<unknown>", "7 e Mezzo", 0 )

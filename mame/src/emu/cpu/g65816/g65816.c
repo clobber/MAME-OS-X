@@ -20,16 +20,20 @@ author (Karl Stenerud) at karl@higashiyama-unet.ocn.ne.jp.
 /*
 
 Changes:
+    1.01 (2010-04-04):
+        Angelo Salese
+        - Added boundary checks for MVP and MVN in M mode.
+
     1.00 (2008-11-27):
         R. Belmont
         - Reworked for modern MAME
 
     0.94 (2007-06-14):
             Zsolt Vasvari
-            - Removed unneccessary checks from MVP and MVN
+            - Removed unnecessary checks from MVP and MVN
 
     0.93 (2003-07-05):
-            Angelo Salese <lordkale@libero.it>
+            Angelo Salese
             - Fixed the BCD conversion when using the Decimal Flag in ADC and SBC.
             - Removed the two conversion tables for ADC and SBC as they aren't
               needed anymore.
@@ -88,15 +92,14 @@ TODO general:
 /* ================================= DATA ================================= */
 /* ======================================================================== */
 
+#include "emu.h"
 #include "g65816.h"
 
-INLINE g65816i_cpu_struct *get_safe_token(const device_config *device)
+INLINE g65816i_cpu_struct *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_G65816);
-	return (g65816i_cpu_struct *)device->token;
+	assert(device->type() == G65816 || device->type() == _5A22);
+	return (g65816i_cpu_struct *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /* Temporary Variables */
@@ -245,7 +248,8 @@ static CPU_EXECUTE( g65816 )
 {
 	g65816i_cpu_struct *cpustate = get_safe_token(device);
 
-	return FTABLE_EXECUTE(cpustate, cycles);
+	int clocks = cpustate->ICount;
+	cpustate->ICount = clocks - FTABLE_EXECUTE(cpustate, cpustate->ICount);
 }
 
 
@@ -298,7 +302,7 @@ static void g65816_set_irq_line(g65816i_cpu_struct *cpustate, int line, int stat
 }
 
 /* Set the callback that is called when servicing an interrupt */
-static void g65816_set_irq_callback(g65816i_cpu_struct *cpustate, cpu_irq_callback callback)
+static void g65816_set_irq_callback(g65816i_cpu_struct *cpustate, device_irq_callback callback)
 {
 	INT_ACK = callback;
 }
@@ -314,10 +318,8 @@ static CPU_DISASSEMBLE( g65816 )
 	return g65816_disassemble(buffer, (pc & 0x00ffff), (pc & 0xff0000) >> 16, oprom, FLAG_M, FLAG_X);
 }
 
-static STATE_POSTLOAD( g65816_restore_state )
+static void g65816_restore_state(g65816i_cpu_struct *cpustate)
 {
-	g65816i_cpu_struct *cpustate = (g65816i_cpu_struct *)param;
-
 	// restore proper function pointers
 	g65816i_set_execution_mode(cpustate, (FLAG_M>>4) | (FLAG_X>>4));
 
@@ -329,38 +331,39 @@ static CPU_INIT( g65816 )
 {
 	g65816i_cpu_struct *cpustate = get_safe_token(device);
 
-	memset(cpustate, 0, sizeof(cpustate));
+	memset(cpustate, 0, sizeof(*cpustate));
 
 	g65816_set_irq_callback(cpustate, irqcallback);
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->cpu_type = CPU_TYPE_G65816;
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->b);
-	state_save_register_device_item(device, 0, cpustate->x);
-	state_save_register_device_item(device, 0, cpustate->y);
-	state_save_register_device_item(device, 0, cpustate->s);
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item(device, 0, cpustate->ppc);
-	state_save_register_device_item(device, 0, cpustate->pb);
-	state_save_register_device_item(device, 0, cpustate->db);
-	state_save_register_device_item(device, 0, cpustate->d);
-	state_save_register_device_item(device, 0, cpustate->flag_e);
-	state_save_register_device_item(device, 0, cpustate->flag_m);
-	state_save_register_device_item(device, 0, cpustate->flag_x);
-	state_save_register_device_item(device, 0, cpustate->flag_n);
-	state_save_register_device_item(device, 0, cpustate->flag_v);
-	state_save_register_device_item(device, 0, cpustate->flag_d);
-	state_save_register_device_item(device, 0, cpustate->flag_i);
-	state_save_register_device_item(device, 0, cpustate->flag_z);
-	state_save_register_device_item(device, 0, cpustate->flag_c);
-	state_save_register_device_item(device, 0, cpustate->line_irq);
-	state_save_register_device_item(device, 0, cpustate->line_nmi);
-	state_save_register_device_item(device, 0, cpustate->ir);
-	state_save_register_device_item(device, 0, cpustate->irq_delay);
-	state_save_register_device_item(device, 0, cpustate->stopped);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->b));
+	device->save_item(NAME(cpustate->x));
+	device->save_item(NAME(cpustate->y));
+	device->save_item(NAME(cpustate->s));
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->ppc));
+	device->save_item(NAME(cpustate->pb));
+	device->save_item(NAME(cpustate->db));
+	device->save_item(NAME(cpustate->d));
+	device->save_item(NAME(cpustate->flag_e));
+	device->save_item(NAME(cpustate->flag_m));
+	device->save_item(NAME(cpustate->flag_x));
+	device->save_item(NAME(cpustate->flag_n));
+	device->save_item(NAME(cpustate->flag_v));
+	device->save_item(NAME(cpustate->flag_d));
+	device->save_item(NAME(cpustate->flag_i));
+	device->save_item(NAME(cpustate->flag_z));
+	device->save_item(NAME(cpustate->flag_c));
+	device->save_item(NAME(cpustate->line_irq));
+	device->save_item(NAME(cpustate->line_nmi));
+	device->save_item(NAME(cpustate->ir));
+	device->save_item(NAME(cpustate->irq_delay));
+	device->save_item(NAME(cpustate->stopped));
 
-	state_save_register_postload(device->machine, g65816_restore_state, cpustate);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(g65816_restore_state), cpustate));
 }
 
 /**************************************************************************
@@ -401,7 +404,7 @@ static CPU_SET_INFO( g65816 )
 
 
 
-void g65816_set_read_vector_callback(const device_config *device, read8_space_func read_vector)
+void g65816_set_read_vector_callback(device_t *device, read8_space_func read_vector)
 {
 	g65816i_cpu_struct *cpustate = get_safe_token(device);
 	READ_VECTOR = read_vector;
@@ -413,7 +416,7 @@ void g65816_set_read_vector_callback(const device_config *device, read8_space_fu
 
 CPU_GET_INFO( g65816 )
 {
-	g65816i_cpu_struct *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	g65816i_cpu_struct *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -429,15 +432,15 @@ CPU_GET_INFO( g65816 )
 		case CPUINFO_INT_MIN_CYCLES:				info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:				info->i = 20; /* rough guess */			break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 24;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 24;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:	info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + G65816_LINE_IRQ:		info->i = LINE_IRQ;					break;
 		case CPUINFO_INT_INPUT_STATE + G65816_LINE_NMI:		info->i = LINE_NMI;					break;
@@ -517,6 +520,37 @@ CPU_GET_INFO( g65816 )
 		case CPUINFO_STR_REGISTER + G65816_IRQ_STATE:	sprintf(info->s, "IRQ:%X", cpustate->line_irq); break;
 	}
 }
+
+/*
+SNES specific, used to handle master cycles
+*/
+
+static CPU_INIT( 5a22 )
+{
+	g65816i_cpu_struct *cpustate = get_safe_token(device);
+
+	CPU_INIT_CALL(g65816);
+
+	cpustate->cpu_type = CPU_TYPE_5A22;
+}
+
+
+CPU_GET_INFO( _5a22 )
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as pointers to data or functions --- */
+		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(5a22);	break;
+
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "5A22");			break;
+
+		default:										CPU_GET_INFO_CALL(g65816);				break;
+	}
+}
+
+DEFINE_LEGACY_CPU_DEVICE(G65816, g65816);
+DEFINE_LEGACY_CPU_DEVICE(_5A22, _5a22);
 
 /* ======================================================================== */
 /* ============================== END OF FILE ============================= */

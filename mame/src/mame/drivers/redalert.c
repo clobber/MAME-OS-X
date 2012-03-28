@@ -1,6 +1,6 @@
 /***************************************************************************
 
-    Irem Red Alert hardware
+    redalert.c, Irem M27 hardware
 
     If you have any questions about how this driver works, don't hesitate to
     ask.  - Mike Balfour (mab22@po.cwru.edu)
@@ -91,9 +91,9 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
-#include "redalert.h"
+#include "includes/redalert.h"
 
 
 #define MAIN_PCB_CLOCK		(XTAL_12_5MHz)
@@ -109,20 +109,20 @@
 
 static INTERRUPT_GEN( redalert_vblank_interrupt )
 {
-	if( input_port_read(device->machine, "COIN") )
+	if( input_port_read(device->machine(), "COIN") )
 		/* the service coin as conntected to the CPU's RDY pin as well */
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 
-	cpu_set_input_line(device, M6502_IRQ_LINE, ASSERT_LINE);
+	device_set_input_line(device, M6502_IRQ_LINE, ASSERT_LINE);
 }
 
 
 static READ8_HANDLER( redalert_interrupt_clear_r )
 {
-	cputag_set_input_line(space->machine, "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
 
 	/* the result never seems to be actually used */
-	return video_screen_get_vpos(space->machine->primary_screen);
+	return space->machine().primary_screen->vpos();
 }
 
 
@@ -134,14 +134,14 @@ static WRITE8_HANDLER( redalert_interrupt_clear_w )
 
 static READ8_HANDLER( panther_interrupt_clear_r )
 {
-	cputag_set_input_line(space->machine, "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
 
-	return input_port_read(space->machine, "STICK0");
+	return input_port_read(space->machine(), "STICK0");
 }
 
 static READ8_HANDLER( panther_unk_r )
 {
-	return ((mame_rand(space->machine) & 0x01) | (input_port_read(space->machine, "C020") & 0xfe));
+	return ((space->machine().rand() & 0x01) | (input_port_read(space->machine(), "C020") & 0xfe));
 }
 
 /*************************************
@@ -150,66 +150,66 @@ static READ8_HANDLER( panther_unk_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( redalert_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( redalert_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE(&redalert_bitmap_videoram)
-	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&redalert_charmap_videoram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE_MEMBER(redalert_state, m_bitmap_videoram)
+	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE_MEMBER(redalert_state, m_charmap_videoram)
 	AM_RANGE(0x5000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x0f8f) AM_READ_PORT("C000") AM_WRITENOP
 	AM_RANGE(0xc010, 0xc010) AM_MIRROR(0x0f8f) AM_READ_PORT("C010") AM_WRITENOP
 	AM_RANGE(0xc020, 0xc020) AM_MIRROR(0x0f8f) AM_READ_PORT("C020") AM_WRITENOP
-	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, redalert_audio_command_w)
-	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_video_control)
-	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_bitmap_color)
-	AM_RANGE(0xc060, 0xc060) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, redalert_voice_command_w)
+	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITE(redalert_audio_command_w)
+	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_video_control)
+	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_bitmap_color)
+	AM_RANGE(0xc060, 0xc060) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITE(redalert_voice_command_w)
 	AM_RANGE(0xc070, 0xc070) AM_MIRROR(0x0f8f) AM_READWRITE(redalert_interrupt_clear_r, redalert_interrupt_clear_w)
 	AM_RANGE(0xf000, 0xffff) AM_ROM AM_REGION("maincpu", 0x8000)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ww3_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ww3_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE(&redalert_bitmap_videoram)
-	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&redalert_charmap_videoram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE_MEMBER(redalert_state, m_bitmap_videoram)
+	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE_MEMBER(redalert_state, m_charmap_videoram)
 	AM_RANGE(0x5000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x0f8f) AM_READ_PORT("C000") AM_WRITENOP
 	AM_RANGE(0xc010, 0xc010) AM_MIRROR(0x0f8f) AM_READ_PORT("C010") AM_WRITENOP
 	AM_RANGE(0xc020, 0xc020) AM_MIRROR(0x0f8f) AM_READ_PORT("C020") AM_WRITENOP
-	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, redalert_audio_command_w)
-	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_video_control)
-	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_bitmap_color)
+	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITE(redalert_audio_command_w)
+	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_video_control)
+	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_bitmap_color)
 	AM_RANGE(0xc070, 0xc070) AM_MIRROR(0x0f8f) AM_READWRITE(redalert_interrupt_clear_r, redalert_interrupt_clear_w)
 	AM_RANGE(0xf000, 0xffff) AM_ROM AM_REGION("maincpu", 0x8000)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( panther_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( panther_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE(&redalert_bitmap_videoram)
-	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE(&redalert_charmap_videoram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE_MEMBER(redalert_state, m_bitmap_videoram)
+	AM_RANGE(0x4000, 0x4fff) AM_RAM AM_BASE_MEMBER(redalert_state, m_charmap_videoram)
 	AM_RANGE(0x5000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x0f8f) AM_READ_PORT("C000") AM_WRITENOP
 	AM_RANGE(0xc010, 0xc010) AM_MIRROR(0x0f8f) AM_READ_PORT("C010") AM_WRITENOP
 	AM_RANGE(0xc020, 0xc020) AM_MIRROR(0x0f8f) AM_READ(panther_unk_r) /* vblank? */
-	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, redalert_audio_command_w)
-	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_video_control)
-	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_bitmap_color)
+	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITE(redalert_audio_command_w)
+	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_video_control)
+	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_bitmap_color)
 	AM_RANGE(0xc070, 0xc070) AM_MIRROR(0x0f8f) AM_READWRITE(panther_interrupt_clear_r, redalert_interrupt_clear_w)
 	AM_RANGE(0xf000, 0xffff) AM_ROM AM_REGION("maincpu", 0x8000)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( demoneye_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( demoneye_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE(&redalert_bitmap_videoram)
-	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&redalert_charmap_videoram)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(redalert_bitmap_videoram_w) AM_BASE_MEMBER(redalert_state, m_bitmap_videoram)
+	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE_MEMBER(redalert_state, m_charmap_videoram)
 	AM_RANGE(0x6000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x0f8f) AM_READ_PORT("C000") AM_WRITENOP
 	AM_RANGE(0xc010, 0xc010) AM_MIRROR(0x0f8f) AM_READ_PORT("C010") AM_WRITENOP
 	AM_RANGE(0xc020, 0xc020) AM_MIRROR(0x0f8f) AM_READ_PORT("C020") AM_WRITENOP
-	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, demoneye_audio_command_w)
-	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_video_control)
-	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&redalert_bitmap_color)
-	AM_RANGE(0xc060, 0xc060) AM_MIRROR(0x0f80) AM_READWRITE(SMH_NOP, SMH_NOP)	/* unknown */
-	AM_RANGE(0xc061, 0xc061) AM_MIRROR(0x0f80) AM_READWRITE(SMH_NOP, SMH_NOP)	/* unknown */
-	AM_RANGE(0xc062, 0xc062) AM_MIRROR(0x0f80) AM_READWRITE(SMH_NOP, SMH_NOP)	/* unknown */
+	AM_RANGE(0xc030, 0xc030) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITE(demoneye_audio_command_w)
+	AM_RANGE(0xc040, 0xc040) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_video_control)
+	AM_RANGE(0xc050, 0xc050) AM_MIRROR(0x0f8f) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(redalert_state, m_bitmap_color)
+	AM_RANGE(0xc060, 0xc060) AM_MIRROR(0x0f80) AM_NOP	/* unknown */
+	AM_RANGE(0xc061, 0xc061) AM_MIRROR(0x0f80) AM_NOP	/* unknown */
+	AM_RANGE(0xc062, 0xc062) AM_MIRROR(0x0f80) AM_NOP	/* unknown */
 	AM_RANGE(0xc070, 0xc070) AM_MIRROR(0x0f8f) AM_READWRITE(redalert_interrupt_clear_r, redalert_interrupt_clear_w)	/* probably not correct */
 	AM_RANGE(0xf000, 0xffff) AM_ROM AM_REGION("maincpu", 0x8000)
 ADDRESS_MAP_END
@@ -263,7 +263,7 @@ static INPUT_PORTS_START( redalert )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNUSED )	/* pin 34 - N.C. */
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_COCKTAIL
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_COCKTAIL
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN ) 	/* Meter */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )	/* Meter */
 
 	PORT_START("COIN")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_IMPULSE(1)
@@ -385,61 +385,61 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( redalert )
+static MACHINE_CONFIG_START( redalert, redalert_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(redalert_main_map)
-	MDRV_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
+	MCFG_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(redalert_main_map)
+	MCFG_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(redalert_video)
+	MCFG_FRAGMENT_ADD(redalert_video)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(redalert_audio)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(redalert_audio)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ww3 )
+static MACHINE_CONFIG_START( ww3, redalert_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(ww3_main_map)
-	MDRV_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
+	MCFG_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(ww3_main_map)
+	MCFG_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(ww3_video)
+	MCFG_FRAGMENT_ADD(ww3_video)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(ww3_audio)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(ww3_audio)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( panther )
+static MACHINE_CONFIG_START( panther, redalert_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(panther_main_map)
-	MDRV_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
+	MCFG_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(panther_main_map)
+	MCFG_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(panther_video)
+	MCFG_FRAGMENT_ADD(panther_video)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(ww3_audio)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(ww3_audio)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( demoneye )
+static MACHINE_CONFIG_START( demoneye, redalert_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(demoneye_main_map)
-	MDRV_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
+	MCFG_CPU_ADD("maincpu", M6502, MAIN_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(demoneye_main_map)
+	MCFG_CPU_VBLANK_INT("screen", redalert_vblank_interrupt)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(demoneye_video)
+	MCFG_FRAGMENT_ADD(demoneye_video)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(demoneye_audio)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(demoneye_audio)
+MACHINE_CONFIG_END
 
 
 
@@ -536,7 +536,7 @@ ROM_END
  *
  *************************************/
 
-GAME( 1981, panther,  0, panther,  panther,  0, ROT270, "Irem",       "Panther",    GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1981, redalert, 0, redalert, redalert, 0, ROT270, "Irem + GDI", "Red Alert",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1981, ww3,      0, ww3,      redalert, 0, ROT270, "Irem",       "WW III",     GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1981, demoneye, 0, demoneye, demoneye, 0, ROT270, "Irem",       "Demoneye-X", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1981, panther,  0,        panther,  panther,  0, ROT270, "Irem",               "Panther",    GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1981, redalert, 0,        redalert, redalert, 0, ROT270, "Irem (GDI license)", "Red Alert",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1981, ww3,      redalert, ww3,      redalert, 0, ROT270, "Irem",               "WW III",     GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1981, demoneye, 0,        demoneye, demoneye, 0, ROT270, "Irem",               "Demoneye-X", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

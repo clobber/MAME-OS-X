@@ -34,13 +34,12 @@ Unfortunately it's read protected.
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2612intf.h"
 #include "sound/sn76496.h"
-
-#include "megadriv.h"
+#include "includes/megadriv.h"
 
 static INPUT_PORTS_START( hshavoc )
 	PORT_START("IN0")	/* 16bit */
@@ -120,7 +119,7 @@ static DRIVER_INIT(hshavoc)
 {
 
 	int x;
-	UINT16 *src = (UINT16 *)memory_region(machine, "maincpu");
+	UINT16 *src = (UINT16 *)machine.region("maincpu")->base();
 
 	static const UINT16 typedat[16] = {
 		1,1,1,1, 1,1,1,1,
@@ -219,8 +218,8 @@ static DRIVER_INIT(hshavoc)
 */
 
 	{
-		const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-		memory_install_write16_handler(space, 0x200000, 0x201fff, 0, 0, (write16_space_func) SMH_NOP);
+		address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+		space->nop_write(0x200000, 0x201fff);
 	}
 
 	DRIVER_INIT_CALL(megadriv);

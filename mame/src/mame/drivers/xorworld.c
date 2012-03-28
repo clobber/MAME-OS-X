@@ -15,54 +15,24 @@ Memory Map:
 0xa00008-0xa0000d   EEPROM write/ctrl
 0xffc000-0xffc7ff   Screen      (8x8 tiles  32x32       (256x256))
 0xffc800-0xffc87f   Sprite RAM
+0xffc800-0xffc801   INT 2 ACK\Watchdog timer
+0xffc802-0xffc803   INT 6 ACK/Watchdog timer
 0xffc884-0xffffff   Work RAM
 
 Interrupts:
     Level 2 INT updates the timer
-    Level 6 INT drives the game
-
-Unmapped addresses in the driver:
-
-0xffc800-0xffc801   INT 2 ACK\Watchdog timer
-0xffc802-0xffc803   INT 6 ACK/Watchdog timer
+    Level 6 INT is vblank
 
 EEPROM chip: 93C46
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "machine/eeprom.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/saa1099.h"
+#include "includes/xorworld.h"
 
-
-extern WRITE16_HANDLER(xorworld_videoram16_w);
-
-extern PALETTE_INIT( xorworld );
-extern VIDEO_START( xorworld );
-extern VIDEO_UPDATE( xorworld );
-
-
-/****************************************************************
-                NVRAM load/save/init
-****************************************************************/
-static NVRAM_HANDLER( xorworld )
-{
-	if (read_or_write)
-	{
-		eeprom_save(file);
-	}
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C46);
-
-		if (file)
-		{
-			eeprom_load(file);
-		}
-	}
-}
 
 /****************************************************************
                 Init machine
@@ -74,39 +44,51 @@ static NVRAM_HANDLER( xorworld )
                 EEPROM read/write/control
 ****************************************************************/
 
-static WRITE16_HANDLER( eeprom_chip_select_w )
+static WRITE16_DEVICE_HANDLER( eeprom_chip_select_w )
 {
 	/* bit 0 is CS (active low) */
-	eeprom_set_cs_line((data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->set_cs_line((data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
 }
 
-static WRITE16_HANDLER( eeprom_serial_clock_w )
+static WRITE16_DEVICE_HANDLER( eeprom_serial_clock_w )
 {
 	/* bit 0 is SK (active high) */
-	eeprom_set_clock_line((data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->set_clock_line((data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
 }
 
-static WRITE16_HANDLER( eeprom_data_w )
+static WRITE16_DEVICE_HANDLER( eeprom_data_w )
 {
 	/* bit 0 is EEPROM data (DIN) */
-	eeprom_write_bit(data & 0x01);
+	eeprom_device *eeprom = downcast<eeprom_device *>(device);
+	eeprom->write_bit(data & 0x01);
 }
 
+static WRITE16_HANDLER( xorworld_irq2_ack_w )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 2, CLEAR_LINE);
+}
 
-static ADDRESS_MAP_START( xorworld_map, ADDRESS_SPACE_PROGRAM, 16 )
+static WRITE16_HANDLER( xorworld_irq6_ack_w )
+{
+	cputag_set_input_line(space->machine(), "maincpu", 6, CLEAR_LINE);
+}
+
+static ADDRESS_MAP_START( xorworld_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("P1")
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("P2")
 	AM_RANGE(0x600000, 0x600001) AM_READ_PORT("DSW")
 	AM_RANGE(0x800000, 0x800001) AM_DEVWRITE8("saa", saa1099_data_w, 0x00ff)
 	AM_RANGE(0x800002, 0x800003) AM_DEVWRITE8("saa", saa1099_control_w, 0x00ff)
-	AM_RANGE(0xa00008, 0xa00009) AM_WRITE(eeprom_chip_select_w)
-	AM_RANGE(0xa0000a, 0xa0000b) AM_WRITE(eeprom_serial_clock_w)
-	AM_RANGE(0xa0000c, 0xa0000d) AM_WRITE(eeprom_data_w)
-	AM_RANGE(0xffc000, 0xffc7ff) AM_RAM_WRITE(xorworld_videoram16_w) AM_BASE(&videoram16)
-	AM_RANGE(0xffc800, 0xffc87f) AM_RAM	AM_BASE(&spriteram16)
-	AM_RANGE(0xffc880, 0xffc881) AM_WRITENOP
-	AM_RANGE(0xffc882, 0xffc883) AM_WRITENOP
+	AM_RANGE(0xa00008, 0xa00009) AM_DEVWRITE("eeprom", eeprom_chip_select_w)
+	AM_RANGE(0xa0000a, 0xa0000b) AM_DEVWRITE("eeprom", eeprom_serial_clock_w)
+	AM_RANGE(0xa0000c, 0xa0000d) AM_DEVWRITE("eeprom", eeprom_data_w)
+	AM_RANGE(0xffc000, 0xffc7ff) AM_RAM_WRITE(xorworld_videoram16_w) AM_BASE_MEMBER(xorworld_state, m_videoram)
+	AM_RANGE(0xffc800, 0xffc87f) AM_RAM	AM_BASE_MEMBER(xorworld_state, m_spriteram)
+	AM_RANGE(0xffc880, 0xffc881) AM_WRITE(xorworld_irq2_ack_w)
+	AM_RANGE(0xffc882, 0xffc883) AM_WRITE(xorworld_irq6_ack_w)
 	AM_RANGE(0xffc884, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -125,7 +107,7 @@ static INPUT_PORTS_START( xorworld )
 	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	/* used for accessing the NVRAM */
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)	/* used for accessing the NVRAM */
 	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x60, DEF_STR( Normal ) )
@@ -186,50 +168,36 @@ static GFXDECODE_START( xorworld )
 GFXDECODE_END
 
 
-static INTERRUPT_GEN( xorworld_interrupt )
-{
-	if (cpu_getiloops(device) == 0)
-	{
-		cpu_set_input_line(device, 2, HOLD_LINE);
-	}
-	else if (cpu_getiloops(device) % 2)
-	{
-		cpu_set_input_line(device, 6, HOLD_LINE);
-	}
-}
-
-
-static MACHINE_DRIVER_START( xorworld )
+static MACHINE_CONFIG_START( xorworld, xorworld_state )
 	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", M68000, 10000000)	// 10 MHz
-	MDRV_CPU_PROGRAM_MAP(xorworld_map)
-	MDRV_CPU_VBLANK_INT_HACK(xorworld_interrupt, 4)	// 1 IRQ2 + 1 IRQ4 + 1 IRQ6
+	MCFG_CPU_ADD("maincpu", M68000, 10000000)	// 10 MHz
+	MCFG_CPU_PROGRAM_MAP(xorworld_map)
+	MCFG_CPU_VBLANK_INT("screen",irq6_line_assert) // irq 4 or 6
+	MCFG_CPU_PERIODIC_INT(irq2_line_assert,3*60) //timed irq, unknown timing
 
-	MDRV_QUANTUM_TIME(HZ(60))
+	MCFG_QUANTUM_TIME(attotime::from_hz(60))
 
-	MDRV_NVRAM_HANDLER(xorworld)
+	MCFG_EEPROM_93C46_ADD("eeprom")
 
 	// video hardware
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(xorworld)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_GFXDECODE(xorworld)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_GFXDECODE(xorworld)
-	MDRV_PALETTE_LENGTH(256)
-
-	MDRV_PALETTE_INIT(xorworld)
-	MDRV_VIDEO_START(xorworld)
-	MDRV_VIDEO_UPDATE(xorworld)
+	MCFG_PALETTE_INIT(xorworld)
+	MCFG_VIDEO_START(xorworld)
 
 	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("saa", SAA1099, 8000000 /* guess */)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("saa", SAA1099, 8000000 /* guess */)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( xorworld )
@@ -255,7 +223,7 @@ static DRIVER_INIT( xorworld )
 	/*  patch some strange protection (without this, strange characters appear
         after level 5 and some pieces don't rotate properly some times) */
 
-	UINT16 *rom = (UINT16 *)(memory_region(machine, "maincpu") + 0x1390);
+	UINT16 *rom = (UINT16 *)(machine.region("maincpu")->base() + 0x1390);
 
 	PATCH(0x4239); PATCH(0x00ff); PATCH(0xe196);	/* clr.b $ffe196 */
 	PATCH(0x4239); PATCH(0x00ff); PATCH(0xe197);	/* clr.b $ffe197 */

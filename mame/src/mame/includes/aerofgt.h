@@ -1,11 +1,49 @@
+
+class aerofgt_state : public driver_device
+{
+public:
+	aerofgt_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	/* memory pointers */
+	UINT16 *  m_bg1videoram;
+	UINT16 *  m_bg2videoram;
+	UINT16 *  m_rasterram;
+	UINT16 *  m_bitmapram;
+	UINT16 *  m_spriteram1;
+	UINT16 *  m_spriteram2;
+	UINT16 *  m_spriteram3;
+	UINT16 *  m_tx_tilemap_ram;
+//  UINT16 *  m_paletteram;   // currently this uses generic palette handling
+	size_t    m_spriteram1_size;
+	size_t    m_spriteram2_size;
+	size_t    m_spriteram3_size;
+
+	/* video-related */
+	tilemap_t   *m_bg1_tilemap;
+	tilemap_t   *m_bg2_tilemap;
+	UINT8     m_gfxbank[8];
+	UINT16    m_bank[4];
+	UINT16    m_bg1scrollx;
+	UINT16    m_bg1scrolly;
+	UINT16    m_bg2scrollx;
+	UINT16    m_bg2scrolly;
+	UINT16    m_wbbc97_bitmap_enable;
+	int       m_charpalettebank;
+	int       m_spritepalettebank;
+	int       m_sprite_gfx;
+	int       m_spikes91_lookup;
+
+	/* misc */
+	int       m_pending_command;
+
+	/* devices */
+	device_t *m_audiocpu;
+};
+
+
 /*----------- defined in video/aerofgt.c -----------*/
 
-extern UINT16 *aerofgt_rasterram;
-extern UINT16 *aerofgt_bg1videoram,*aerofgt_bg2videoram;
-extern UINT16 *aerofgt_spriteram1,*aerofgt_spriteram2,*aerofgt_spriteram3;
-extern UINT16 *wbbc97_bitmapram;
-extern size_t aerofgt_spriteram1_size,aerofgt_spriteram2_size,aerofgt_spriteram3_size;
-extern UINT16 *spikes91_tx_tilemap_ram;
 
 WRITE16_HANDLER( aerofgt_bg1videoram_w );
 WRITE16_HANDLER( aerofgt_bg2videoram_w );
@@ -22,18 +60,19 @@ WRITE16_HANDLER( aerofgt_bg2scrollx_w );
 WRITE16_HANDLER( aerofgt_bg2scrolly_w );
 WRITE16_HANDLER( pspikes_palette_bank_w );
 WRITE16_HANDLER( wbbc97_bitmap_enable_w );
+
 VIDEO_START( pspikes );
 VIDEO_START( karatblz );
 VIDEO_START( spinlbrk );
 VIDEO_START( turbofrc );
-VIDEO_UPDATE( pspikes );
-VIDEO_UPDATE( pspikesb );
-VIDEO_UPDATE( spikes91 );
-VIDEO_UPDATE( karatblz );
-VIDEO_UPDATE( spinlbrk );
-VIDEO_UPDATE( turbofrc );
-VIDEO_UPDATE( aerofgt );
-VIDEO_UPDATE( aerfboot );
-VIDEO_UPDATE( aerfboo2 );
 VIDEO_START( wbbc97 );
-VIDEO_UPDATE( wbbc97 );
+SCREEN_UPDATE_IND16( pspikes );
+SCREEN_UPDATE_IND16( pspikesb );
+SCREEN_UPDATE_IND16( spikes91 );
+SCREEN_UPDATE_IND16( karatblz );
+SCREEN_UPDATE_IND16( spinlbrk );
+SCREEN_UPDATE_IND16( turbofrc );
+SCREEN_UPDATE_IND16( aerofgt );
+SCREEN_UPDATE_IND16( aerfboot );
+SCREEN_UPDATE_IND16( aerfboo2 );
+SCREEN_UPDATE_RGB32( wbbc97 );

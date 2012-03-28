@@ -53,22 +53,9 @@ correctly.
 
 0x10 is the video retrace. This controls the speed of the game and generally
      drives the code. This must be triggerd for each video retrace.
-0x08 is the sound card service interupt. The game uses this to throw sounds
+0x08 is the sound card service interrupt. The game uses this to throw sounds
      at the sound CPU.
 
-
-SAVE STATE (lee@lmservers.com):
-1942 uses the Z80 and AY8910 which both support save state.
-
-The global variables in drivers/1942.c are extern and defined in video/1942.c
-The rationale for saving/not saving are as follows:
-UINT8 *c1942_fgvideoram;        Saved via reference to AM_BASE
-UINT8 *c1942_bgvideoram;        Saved via reference to AM_BASE
-
-static int c1942_palette_bank;  Explicitly saved
-static tilemap *fg_tilemap, *bg_tilemap;    Saved due to tilemap supporting save
-
-There are no static local variables.
 
 ***************************************************************************/
 
@@ -76,48 +63,32 @@ There are no static local variables.
 #define SOUND_CPU_CLOCK		(XTAL_12MHz/4) /* 12MHz is the only OSC on the PCB */
 #define AUDIO_CLOCK		(XTAL_12MHz/8) /* 12MHz is the only OSC on the PCB */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
-
-
-extern UINT8 *c1942_fgvideoram;
-extern UINT8 *c1942_bgvideoram;
-
-
-extern WRITE8_HANDLER( c1942_fgvideoram_w );
-extern WRITE8_HANDLER( c1942_bgvideoram_w );
-extern WRITE8_HANDLER( c1942_scroll_w );
-extern WRITE8_HANDLER( c1942_c804_w );
-extern WRITE8_HANDLER( c1942_palette_bank_w );
-
-extern PALETTE_INIT( 1942 );
-extern VIDEO_START( 1942 );
-extern VIDEO_UPDATE( 1942 );
-
+#include "includes/1942.h"
 
 
 static WRITE8_HANDLER( c1942_bankswitch_w )
 {
-	memory_set_bank(space->machine, 1, data & 0x03);
+	memory_set_bank(space->machine(), "bank1", data & 0x03);
 }
 
-
-
-static INTERRUPT_GEN( c1942_interrupt )
+static TIMER_DEVICE_CALLBACK( c1942_scanline )
 {
-	if (cpu_getiloops(device) != 0)
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);/* RST 08h */
-	else
-		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
+
+	if(scanline == 0) // unknown irq event, presumably vblank-in or a periodic one (writes to the soundlatch and drives freeze dip-switch)
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xcf);	/* RST 08h */
 }
 
 
-
-static ADDRESS_MAP_START( c1942_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( c1942_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -128,13 +99,13 @@ static ADDRESS_MAP_START( c1942_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(c1942_c804_w)
 	AM_RANGE(0xc805, 0xc805) AM_WRITE(c1942_palette_bank_w)
 	AM_RANGE(0xc806, 0xc806) AM_WRITE(c1942_bankswitch_w)
-	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(c1942_fgvideoram_w) AM_BASE(&c1942_fgvideoram)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(c1942_bgvideoram_w) AM_BASE(&c1942_bgvideoram)
+	AM_RANGE(0xcc00, 0xcc7f) AM_RAM AM_BASE_SIZE_MEMBER(_1942_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(c1942_fgvideoram_w) AM_BASE_MEMBER(_1942_state, m_fg_videoram)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(c1942_bgvideoram_w) AM_BASE_MEMBER(_1942_state, m_bg_videoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -265,41 +236,61 @@ static GFXDECODE_START( 1942 )
 GFXDECODE_END
 
 
+static MACHINE_START( 1942 )
+{
+	_1942_state *state = machine.driver_data<_1942_state>();
 
-static MACHINE_DRIVER_START( 1942 )
+	state->m_audiocpu = machine.device("audiocpu");
+
+	state->save_item(NAME(state->m_palette_bank));
+	state->save_item(NAME(state->m_scroll));
+}
+
+static MACHINE_RESET( 1942 )
+{
+	_1942_state *state = machine.driver_data<_1942_state>();
+
+	state->m_palette_bank = 0;
+	state->m_scroll[0] = 0;
+	state->m_scroll[1] = 0;
+}
+
+static MACHINE_CONFIG_START( 1942, _1942_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MAIN_CPU_CLOCK)	/* 4 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(c1942_map)
-	MDRV_CPU_VBLANK_INT_HACK(c1942_interrupt,2)
+	MCFG_CPU_ADD("maincpu", Z80, MAIN_CPU_CLOCK)	/* 4 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(c1942_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", c1942_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("audiocpu", Z80, SOUND_CPU_CLOCK)	/* 3 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)
+	MCFG_CPU_ADD("audiocpu", Z80, SOUND_CPU_CLOCK)	/* 3 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)
+
+	MCFG_MACHINE_START(1942)
+	MCFG_MACHINE_RESET(1942)
 
 	/* video hardware */
-	MDRV_GFXDECODE(1942)
-	MDRV_PALETTE_LENGTH(64*4+4*32*8+16*16)
+	MCFG_GFXDECODE(1942)
+	MCFG_PALETTE_LENGTH(64*4+4*32*8+16*16)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(1942)
 
-	MDRV_PALETTE_INIT(1942)
-	MDRV_VIDEO_START(1942)
-	MDRV_VIDEO_UPDATE(1942)
+	MCFG_PALETTE_INIT(1942)
+	MCFG_VIDEO_START(1942)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, AUDIO_CLOCK)	/* 1.5 MHz */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-	MDRV_SOUND_ADD("ay2", AY8910, AUDIO_CLOCK)	/* 1.5 MHz */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay1", AY8910, AUDIO_CLOCK)	/* 1.5 MHz */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("ay2", AY8910, AUDIO_CLOCK)	/* 1.5 MHz */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
 
@@ -514,8 +505,8 @@ ROM_END
 
 static DRIVER_INIT( 1942 )
 {
-	UINT8 *ROM = memory_region(machine, "maincpu");
-	memory_configure_bank(machine, 1, 0, 3, &ROM[0x10000], 0x4000);
+	UINT8 *ROM = machine.region("maincpu")->base();
+	memory_configure_bank(machine, "bank1", 0, 3, &ROM[0x10000], 0x4000);
 }
 
 

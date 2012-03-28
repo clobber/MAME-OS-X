@@ -41,8 +41,13 @@
 
   this simulation is incomplete
 
-  to do:
-  clean it up, consolidate code, make it work!
+  COP TODO list:
+  - collision detection, hitbox parameter is a complete mystery;
+  - collision detection, unknown usage of reads at 0x582-0x588;
+  - The RNG relies on the master CPU clock cycles, but without accurate waitstate support is
+    basically impossible to have a 1:1 matchup. Seibu Cup Soccer Selection for instance should show the
+    first match as Germany vs. USA at twilight, right now is Spain vs. Brazil at sunset.
+  - (MANY other things that needs to be listed here)
 
   Protection information
 
@@ -1344,7 +1349,7 @@ hardware!.  These don't currently make much sense because the hardware specifies
 contain nothing.  It's possible the original hardware has mirroring which this function relies on.
 
 the DMA to private buffer operations are currently ignored due to
-if ((cop_clearfill_lasttrigger==0x14) || (cop_clearfill_lasttrigger==0x15)) return;
+if ((cop_dma_trigger==0x14) || (cop_dma_trigger==0x15)) return;
 
 ----
 
@@ -1353,17 +1358,58 @@ Other Protections?
 Denjin Makai seems to rely on a byteswapped mirror to write the palette.
 Various other ports go through the COP area, and get mapped to inputs / sounds / video registers, this adds to
 the confusion and makes it less clear what is / isn't protection related
-Raiden 2 / Zero Team banking doesn't make much sense, a bank address has been found through testing on real
-hardware, but the game never writes directly to it.
 
- */
-#include "driver.h"
+=================================================================================================================
+Seibu COP memory map
+
+DMA mode partial documentation:
+0x476
+???? ???? ???? ???? SRC table value used for palette DMAs, val << 10
+
+0x478
+xxxx xxxx xxxx xxxx SRC address register, val << 6
+
+0x47a
+xxxx xxxx xxxx xxxx length register, val << 5
+
+0x47c
+xxxx xxxx xxxx xxxx DST address register, val << 6
+
+0x47e
+---- ---x ---x ---- DMA mode (00: DMA, work RAM to work RAM 01: DMA, work RAM to private buffers / 10 <unknown> / 11: fill work RAM)
+---- ---- x--- ---- palette DMA mode (used for brightness effects)
+---- ---- ---- x--- Transfer type (0: word 1:dword)
+---- ---- ---- -xxx Channel #
+
+- channels 0x4 and 0x5 are always used to transfer respectively the VRAM and the palette data to the private buffers.
+  It isn't know at current stage if it's just a design choice or they are dedicated DMAs.
+
+- Some games (Heated Barrel start-up menu, Olympic Soccer '92 OBJ test) sets up the layer clearance in the midst of the
+  frame interval. It might indicate that it delays those DMAs inside the buffers at vblank time.
+
+- Raiden 2 / Raiden DX sets 0x14 with DST = 0xfffe and size as a sprite limit behaviour. The former is probably used to change the
+  order of the loaded tables (they are the only known cases where spriteram is smallest address-wise).
+
+- Reading here is probably used for DMA status of the individual channels or just for read-back of the register, but nothing seems to rely
+  on it so far so nothing is really known about it.
+
+0x6fc
+???? ???? ???? ???? triggers DMA loaded in registers, value looks meaningless
+
+Miscellaneous registers:
+0x470
+???? ???? ???? ???? External pin register, used by some games for prg/gfx banking (per-game specific)
+
+*/
+
+#include "emu.h"
 #include "audio/seibu.h"
 #include "includes/legionna.h"
 #include "includes/raiden2.h"
 #include "machine/seicop.h"
 
 #define seibu_cop_log logerror
+#define LOG_CMDS 1
 
 UINT16 *cop_mcu_ram;
 
@@ -1376,15 +1422,18 @@ static UINT16 cop_438;
 static UINT16 cop_43a;
 static UINT16 cop_43c;
 
-static UINT16 cop_clearfill_address[0x200];
-static UINT16 cop_clearfill_length[0x200];
-static UINT16 cop_clearfill_value[0x200];
-static UINT16 cop_clearfill_lasttrigger = 0;
+static UINT16 cop_dma_src[0x200];
+static UINT16 cop_dma_size[0x200];
+static UINT16 cop_dma_dst[0x200];
+static UINT16 cop_dma_fade_table;
+static UINT16 cop_dma_trigger = 0;
+static UINT16 cop_scale;
 
+static UINT8 cop_rng_max_value;
 
 static UINT16 copd2_offs = 0;
 
-static void copd2_set_tableoffset(running_machine *machine, UINT16 data)
+static void copd2_set_tableoffset(running_machine &machine, UINT16 data)
 {
 	//logerror("mcu_offs %04x\n", data);
 	copd2_offs = data;
@@ -1401,7 +1450,7 @@ static void copd2_set_tableoffset(running_machine *machine, UINT16 data)
     {
         FILE *fp;
         char filename[256];
-        sprintf(filename,"copdat_%s.table2", machine->gamedrv->name);
+        sprintf(filename,"copdat_%s.table2", machine.system().name);
         fp=fopen(filename, "w+b");
         if (fp)
         {
@@ -1412,7 +1461,7 @@ static void copd2_set_tableoffset(running_machine *machine, UINT16 data)
     {
         FILE *fp;
         char filename[256];
-        sprintf(filename,"copdat_%s.table3", machine->gamedrv->name);
+        sprintf(filename,"copdat_%s.table3", machine.system().name);
         fp=fopen(filename, "w+b");
         if (fp)
         {
@@ -1423,7 +1472,7 @@ static void copd2_set_tableoffset(running_machine *machine, UINT16 data)
     {
         FILE *fp;
         char filename[256];
-        sprintf(filename,"copdat_%s.table4", machine->gamedrv->name);
+        sprintf(filename,"copdat_%s.table4", machine.system().name);
         fp=fopen(filename, "w+b");
         if (fp)
         {
@@ -1456,7 +1505,7 @@ static void copd2_set_tableoffset(running_machine *machine, UINT16 data)
 
 }
 
-static void copd2_set_tabledata(running_machine *machine, UINT16 data)
+static void copd2_set_tabledata(running_machine &machine, UINT16 data)
 {
 	copd2_table[copd2_offs] = data;
 	//logerror("mcu_data %04x\n", data);
@@ -1464,7 +1513,7 @@ static void copd2_set_tabledata(running_machine *machine, UINT16 data)
     {
         FILE *fp;
         char filename[256];
-        sprintf(filename,"copdat_%s.data", machine->gamedrv->name);
+        sprintf(filename,"copdat_%s.data", machine.system().name);
         fp=fopen(filename, "w+b");
         if (fp)
         {
@@ -1475,240 +1524,32 @@ static void copd2_set_tabledata(running_machine *machine, UINT16 data)
 #endif
 }
 
+static UINT32 cop_register[8];
+static UINT16 seibu_vregs[0x50/2];
 
-/*Movement protection*//*Legionnaire,Heated Barrel*/
-static UINT32 cop_register[6];
-/*Sprite DMA protection*//*SD Gundam*/
-static UINT8 dma_status;
-static UINT32 dma_src;
-static UINT16 prot_data[2],dma_size;
-/*Number protection*//*Heated Barrel,SD Gundam,Godzilla,Denjin Makai*/
-//static UINT32 prot_bcd[4];
-/*Hit check protection*//*Legionnaire,Heated Barrel,SD Gundam*/
-static UINT8 xy_check;
-
-
-
-
-#define CRT_MODE(_x_,_y_,_flip_) \
-	{ \
-	rectangle visarea = *video_screen_get_visible_area(space->machine->primary_screen); \
-	visarea.min_x = 0; \
-	visarea.max_x = _x_-1; \
-	visarea.min_y = 0; \
-	visarea.max_y = _y_-1; \
-	video_screen_configure(space->machine->primary_screen, _x_, _y_, &visarea, video_screen_get_frame_period(space->machine->primary_screen).attoseconds ); \
-	flip_screen_set(space->machine, _flip_); \
-	} \
-
-/*TODO: -move x-axis limits,to calculate basing on the screen xy-axis values*/
-/*      -the second value should be end of calculation (in other words,check everything between the two values) */
-#define PLAYER 0
-#define ENEMY 1
-static void protection_move_jsr(const address_space *space,UINT32 work_ram,UINT8 k)
+static WRITE16_HANDLER( seibu_common_video_regs_w )
 {
-	static UINT32 move_data,x_data,y_data;
-	/*Read the movement data to execute*/
-	move_data = ((memory_read_word(space, work_ram+0x34)<<16) & 0xffff0000) |
-	             (memory_read_word(space, work_ram+0x36) & 0xffff);
+	legionna_state *state = space->machine().driver_data<legionna_state>();
+	COMBINE_DATA(&seibu_vregs[offset]);
 
-	/*Read the x/y axis of the sprite to change*/
-	x_data = (memory_read_word(space, work_ram+0x8));
-	y_data = (memory_read_word(space, work_ram+0x4));
-	/*it's bit sensitive AFAIK*/
-	/*move_data hi-word on player
-      $17 = walk floor
-      $1b = jump
-      $30 = ?
-    */
-	/*Check the kind of movement that we need to execute*/
-	switch(k & 1)
+	switch(offset)
 	{
-		case PLAYER:
-			switch(move_data & 0xffff)
-			{
-				case 0x0000: x_data++; break; //right
-				case 0x0040: y_data++; break; //down
-				case 0x00c0: y_data--; break; //up
-				case 0x0080: x_data--; break; //left
-				case 0x00a0: y_data--; x_data--; break; //up-left
-				case 0x0060: y_data++; x_data--; break; //down-left
-				case 0x0020: y_data++; x_data++; break; //down-right
-				case 0x00e0: y_data--; x_data++; break; //up-right
-			}
-			break;
-		/*wrong...*/
-		case ENEMY:
-			switch(move_data & 0xffff)
-			{
-				case 0x0000: x_data++; break; //right
-				case 0x0040: y_data++; break; //down
-				case 0x00c0: y_data--; break; //up
-				case 0x0080: x_data--; break; //left
-				case 0x00a0: y_data--; x_data--; break; //up-left
-				case 0x0060: y_data++; x_data--; break; //down-left
-				case 0x0020: y_data++; x_data++; break; //down-right
-				case 0x00e0: y_data--; x_data++; break; //up-right
-				default:
-					popmessage("%08x",move_data);
-				break;
-			}
-			break;
+		case (0x01a/2): { flip_screen_set(space->machine(), seibu_vregs[offset] & 0x01); break; }
+		case (0x01c/2): { state->m_layer_disable =  seibu_vregs[offset]; break; }
+		case (0x020/2): { state->m_scrollram16[0] = seibu_vregs[offset]; break; }
+		case (0x022/2): { state->m_scrollram16[1] = seibu_vregs[offset]; break; }
+		case (0x024/2): { state->m_scrollram16[2] = seibu_vregs[offset]; break; }
+		case (0x026/2): { state->m_scrollram16[3] = seibu_vregs[offset]; break; }
+		case (0x028/2): { state->m_scrollram16[4] = seibu_vregs[offset]; break; }
+		case (0x02a/2): { state->m_scrollram16[5] = seibu_vregs[offset]; break; }
+		default: { logerror("seibu_common_video_regs_w unhandled offset %02x %04x\n",offset,data); break; }
 	}
-	/*Write the new values to the sprite x/y data*/
-	memory_write_word(space, work_ram+0x8,x_data);
-	memory_write_word(space, work_ram+0x4,y_data);
 }
-
-
-static UINT16 hit_check;
-
-static void protection_hit_jsr(const address_space *space,UINT32 work_ram1,UINT32 work_ram2)
-{
-	int x1,y1,x2,y2/*,hit1,hit2*/;
-	x1 = (memory_read_word(space, work_ram1+0x8));
-	y1 = (memory_read_word(space, work_ram1+0x4));
-	//hit1 = (memory_read_word(space, work_ram1-));//this sprite is attacking
-	x2 = (memory_read_word(space, work_ram2+0x8));
-	y2 = (memory_read_word(space, work_ram2+0x4));
-	//hit2 = (memory_read_word(space));
-
-	popmessage("%08x:x=%04x y=%04x %08x:x=%04x y=%04x",work_ram1,x1,y1,work_ram2,x2,y2);
-
-	if((x1 >= (x2-0x80)) &&
-	   (x1 <= (x2+0x80)) &&
-	   (y1 >= (y2-3))  &&
-	   (y1 <= (y2+3)))
-		hit_check = 0;
-	else
-		hit_check = 0xffff;
-}
-
-/*directional movement protection*/
-static void moveprot_jsr(const address_space *space)
-{
-	static INT16 x_axis,y_axis;
-	static UINT16 move_data,distance,move_type;
-	move_data = memory_read_word(space, cop_register[0]+0x36);
-	x_axis = memory_read_word(space, cop_register[0]+0x08);
-	y_axis = memory_read_word(space, cop_register[0]+0x04);
-
-	distance = (move_data & 0xf);
-	move_type = (move_data & 0xf0)>>4;
-	switch(move_type)
-	{
-		case 0x0f://right
-			memory_write_word(space, cop_register[0]+0x08,x_axis+distance);
-			//memory_write_word(space, 0x110004,);
-			break;
-		case 0x0b://up
-			memory_write_word(space, cop_register[0]+0x04,y_axis-distance);
-			break;
-		case 0x07://left
-			memory_write_word(space, cop_register[0]+0x08,x_axis-distance);
-			break;
-		case 0x03://down
-			memory_write_word(space, cop_register[0]+0x04,y_axis+distance);
-			break;
-		case 0x0d://up-right
-			memory_write_word(space, cop_register[0]+0x08,x_axis+distance);
-			memory_write_word(space, cop_register[0]+0x04,y_axis-distance);
-			break;
-		case 0x09://up-left
-			memory_write_word(space, cop_register[0]+0x04,y_axis-distance);
-			memory_write_word(space, cop_register[0]+0x08,x_axis-distance);
-			break;
-		case 0x01://down-right
-			memory_write_word(space, cop_register[0]+0x04,y_axis+distance);
-			memory_write_word(space, cop_register[0]+0x08,x_axis+distance);
-			break;
-		case 0x05://down-left
-			memory_write_word(space, cop_register[0]+0x04,y_axis+distance);
-			memory_write_word(space, cop_register[0]+0x08,x_axis-distance);
-			break;
-		default:
-			logerror("Warning: \"0x205\" command called with move_type parameter = %02x\n",move_type);
-
-			//down-right
-			//down-left
-	}
-	//memory_write_word(space, 0x110008,x_axis+tmp);
-	//memory_write_word(space, 0x110004,y_axis+tmp);
-
-	//memory_write_word(space, 0x110008,x_axis);
-	//memory_write_word(space, 0x110004,y_axis);
-}
-
-/*
-00454E: 3028 0008                move.w  ($8,A0), D0 ;player
-004552: 3228 000C                move.w  ($c,A0), D1
-004556: 342B 0008                move.w  ($8,A3), D2 ;enemy
-00455A: 362B 000C                move.w  ($c,A3), D3
-00455E: 33C0 0011 0048           move.w  D0, $110048.l ;player x
-004564: 33C1 0011 0044           move.w  D1, $110044.l ;player y
-00456A: 33C2 0011 0008           move.w  D2, $110008.l ;enemy x
-004570: 33C3 0011 0004           move.w  D3, $110004.l ;enemy y
-
-*/
-/*sprite "look" protection*/
-static void move2prot_jsr(const address_space *space)
-{
-	static INT16 x_pl,y_pl,x_en,y_en,res;
-	x_pl = memory_read_word(space, cop_register[1]+0x8);
-	y_pl = memory_read_word(space, cop_register[1]+0x4);
-	x_en = memory_read_word(space, cop_register[0]+0x8);
-	y_en = memory_read_word(space, cop_register[0]+0x4);
-
-	res = 0;
-	if(x_en > x_pl)
-		res|=0x80;
-
-	if((x_en > x_pl-0x20) && (x_en < x_pl+0x20))
-		res|=0x40;
-//...
-	//if(y_en > y_pl)
-	//  res|=0x40;
-
-	memory_write_word(space, cop_register[0]+0x36,res);
-}
-
-#ifdef UNUSED_FUNCTION
-/*"To point" movement protection*/
-static void move3x_prot_jsr(const address_space *space)
-{
-	static INT16 x_pl,x_en,x_dis;
-	x_pl = memory_read_word(space, cop_register[1]+0x8);
-	x_en = memory_read_word(space, cop_register[0]+0x8);
-	x_dis = ((memory_read_word(space, cop_register[0]+0x34) & 0xf0) >> 4);
-
-	if(x_en > x_pl)
-		x_dis^=0xffff;
-
-	memory_write_word(space, cop_register[0]+0x36,-0x40);/*enable command*/
-	memory_write_word(space, cop_register[0]+0x14,x_dis);
-}
-
-static void move3y_prot_jsr(const address_space *space)
-{
-	static INT16 y_pl,y_en,y_dis;
-	y_pl = memory_read_word(space, cop_register[1]+0x4);
-	y_en = memory_read_word(space, cop_register[0]+0x4);
-	y_dis = (memory_read_word(space, cop_register[0]+0x34) & 0xf);
-
-	if(y_en > y_pl)
-		y_dis^=0xffff;
-
-	memory_write_word(space, cop_register[0]+0x36,-0x80);/*enable command*/
-	memory_write_word(space, cop_register[0]+0x10,y_dis);
-}
-#endif
-
-
-
-
 
 
 /*
+"The area of ASM snippets"
+
 player-1 priorities list:
 1086d8: show this sprite (bit 15)
 1086dc: lives (BCD,bits 3,2,1,0)
@@ -1719,12 +1560,7 @@ player-1 priorities list:
 1086f0: sprite x axis
 
 Sprite DMA TODO:
--sprite priorities,likely to be a protection issue because in-game sprites MUST
- be behind the foreground layer but the attract mode logos (the ones used when
- the story is explained) should be above it.They both use 0 as priority number.
--sprites at the very left border disappears.
--some bullets STILL remains on screen?
--3rd mid-boss disappears (0x1f0),2nd boss lasers wrong positioning
+- various bits not yet understood in the sprite src tables and in the 0x400/0x402 sprite param;
 
 spriteram DMA [1]
 001DE4: 3086                     move.w  D6, (A0) ;$100400,color + other stuff
@@ -1749,10 +1585,10 @@ spriteram DMA [1]
 001E26: 3143 00A8                move.w  D3, ($a8,A0)
 001E2A: 45EA 0004                lea     ($4,A2), A2
 //at this point we're ready for DMAing
-001E2E: 317C A180 0100           move.w  #$a180, ($100,A0) ;<-DMA parameters!?
-001E34: 317C 6980 0102           move.w  #$6980, ($102,A0) ;<-""
-001E3A: 317C C480 0102           move.w  #$c480, ($102,A0) ;<-""
-001E40: 317C 0000 0010           move.w  #$0, ($10,A0)     ;<-""
+001E2E: 317C A180 0100           move.w  #$a180, ($100,A0) ;<-get x/y from sprite
+001E34: 317C 6980 0102           move.w  #$6980, ($102,A0) ;<-adjust sprite x/y
+001E3A: 317C C480 0102           move.w  #$c480, ($102,A0) ;<-load sprite offset
+001E40: 317C 0000 0010           move.w  #$0, ($10,A0)     ;<-do the job?
 001E46: 302A 0002                move.w  ($2,A2), D0
 001E4A: 816B 0006                or.w    D0, ($6,A3)
 001E4E: 45EA 0006                lea     ($6,A2), A2
@@ -1773,7 +1609,6 @@ spriteram DMA [1]
 001E8C: 6500 000C                bcs     $1e9a
 001E90: 0069 0002 0002           ori.w   #$2, ($2,A1)
 001E96: 6000 000C                bra     $1ea4
-//Note: I believe the above program is there just for protection copy
 001E9A: 3028 01B0                move.w  ($1b0,A0), D0 ;bit 1 = DMA job finished
 001E9E: 0240 0002                andi.w  #$2, D0
 001EA2: 6790                     beq     $1e34
@@ -1800,247 +1635,26 @@ x/y check [2]
 [...]
 //then reads at $580
 
+sine cosine has a weird math problem, it needs that the amp is multiplied by two when the direction is TOTALLY left or TOTALLY up.
+No known explanation to this so far ...
+
+003306: move.w  #$8100, ($100,A0)
+00330C: move.w  #$8900, ($100,A0)
+003312: cmpi.w  #$80, ($36,A1) ;checks if angle is equal to 0x80 (left direction of objects)
+003318: bne     $332a
+00331C: move.l  ($14,A1), D0 ;divide by two if so
+003320: asr.l   #1, D0
+003322: move.l  D0, ($14,A1)
+003326: bra     $333e
+00332A: cmpi.w  #$c0, ($36,A1) ;checks if angle is equal to 0xc0 (up direction of objects)
+003330: bne     $333e
+003334: move.l  ($10,A1), D0 ;divide by two if so
+003338: asr.l   #1, D0
+00333A: move.l  D0, ($10,A1)
+00333E: movem.l (A7)+, D0/A0-A1
+003342: rts
+
 */
-
-static UINT16 s_i;
-
-static void dma_transfer(const address_space *space)
-{
-	static UINT16 rel_xy;
-	static UINT16 abs_x,abs_y;
-	static UINT16 param;
-
-	//for(s_i = dma_size;s_i > 0;s_i--)
-	{
-		/*Sprite Color*/
-		param = memory_read_word(space, 0x100400) & 0x3f;
-		/*Write the entire parameters [offs+0]*/
-		memory_write_word(space, cop_register[5]+4,memory_read_word(space, dma_src) + param);
-		/*Sprite Priority (guess)*/
-		//param = ((memory_read_word(space, 0x100400) & 0x40) ? 0x4000 : 0);
-		/*Write the sprite number [offs+1]*/
-		memory_write_word(space, cop_register[5]+6,memory_read_word(space, dma_src+2));
-		/*Sprite Relative x/y coords*/
-		rel_xy = memory_read_word(space, dma_src+4); /*???*/
-		/*temporary hardwired,it should point to 0x4c0/0x4a0*/
-		abs_x = (memory_read_word(space, 0x110008) - memory_read_word(space, 0x10048e));
-		abs_y = (memory_read_word(space, 0x110004) - memory_read_word(space, 0x10048c));
-		memory_write_word(space, cop_register[5]+8,((rel_xy & 0x7f) + (abs_x) - ((rel_xy & 0x80) ? 0x80 : 0)) & 0x1ff);
-		memory_write_word(space, cop_register[5]+10,(((rel_xy & 0x7f00) >> 8) + (abs_y) + (0x10) - ((rel_xy & 0x8000) ? 0x80 : 0)) & 0x1ff);
-		cop_register[5]+=8;
-		dma_src+=6;
-	}
-}
-
-
-/*
-    switch(memory_read_word(space, cop_register[2]))
-    {
-        case 0xb4: xparam = 0x0c/2; break;
-        case 0xb8: xparam = 0x10/2; break;
-        case 0xbc: xparam = 0x14/2; break;
-        case 0xc0: xparam = 0x18/2; break;
-        case 0xc4: xparam = 0x1c/2; break;
-        case 0xd4: xparam = 0x20/2; break;
-        ...
-        case 0xb0: xparam = 0x08/2;
-        case 0xac: xparam = 0x04/2;
-    }
-*/
-static UINT16 check_calc(UINT16 param)
-{
-	UINT16 num,i;
-
-	i = param;
-	i-=0xac;
-	i/=4;
-	num = (0x4/2);
-	for(;i>0;i--)
-		num+=(0x4/2);
-
-	return num;
-}
-
-static UINT16 hit_check_jsr(const address_space *space)
-{
-	static INT16 xsrc,xdst,ysrc,ydst,xparam,yparam;
-	xsrc = (memory_read_word(space, 0x110008));
-	ysrc = (memory_read_word(space, 0x110004));
-	xdst = (memory_read_word(space, 0x110048));
-	ydst = (memory_read_word(space, 0x110044));
-
-	/*Here we check the destination sprite width*/
-	/*0x4a4/0x4c4*/
-	xparam = check_calc(memory_read_word(space, cop_register[2]));
-	/*Here we check the destination sprite height*/
-	/*0x4a6/0x4c6*/
-	yparam = check_calc(memory_read_word(space, cop_register[3]));
-
-	if(!xparam || !yparam)
-		popmessage("SRC:%04x %04x DST:%04x %04x V:%08x %08x",xsrc,ysrc,xdst,ydst,memory_read_word(space, cop_register[2]),memory_read_word(space, cop_register[3]));
-	if(xdst >= (xsrc-xparam) && ydst >= (ysrc-yparam) &&
-	   xdst <= (xsrc+xparam) && ydst <= (ysrc+yparam))
-		return 0;//sprites collide
-	else
-		return 3;//sprites do not collide
-}
-
-#define UP			0xc0
-#define UP_RIGHT    0xe0
-#define RIGHT       0x00
-#define DOWN_RIGHT	0x20
-#define DOWN		0x40
-#define DOWN_LEFT	0x60
-#define LEFT		0x80
-#define UP_LEFT		0xa0
-
-/*Heated Barrel*/
-/*command 0x8100 will check for the direction of the sprite*/
-/*command 0x8900 will check the "point" movement*/
-static void cop2_move3_prot(const address_space *space)
-{
-	static INT16 x_pl,x_en;
-	static INT16 y_pl,y_en;
-	static INT16 x_dis,y_dis;
-	static INT16 dir,dis;
-	x_pl = memory_read_word(space, cop_register[1]+0x8);
-	x_en = memory_read_word(space, cop_register[0]+0x8);
-	dis = ((memory_read_word(space, cop_register[0]+0x34) & 0xf0) >> 4);
-	y_pl = memory_read_word(space, cop_register[1]+0x4);
-	y_en = memory_read_word(space, cop_register[0]+0x4);
-
-	/*
-    xxxx ---- select the direction of the enemy sprite
-
-                        0xc0 up
-          up-left   0xa0  |  0xe0 up-right
-         left    0x80   <-o->  0x00 right
-        down-left   0x60  |  0x20 down-right
-                        0x40 down
-    */
-
-	if(x_en >= x_pl)
-	{
-		if((y_en >= (y_pl-0x10)) && (y_en <= (y_pl+0x10)))
-			dir = LEFT;
-		else if(y_en < (y_pl-0x10))
-			dir = DOWN_LEFT;
-		else if(y_en > (y_pl+0x10))
-			dir = UP_LEFT;
-	}
-	else if(x_en < x_pl)
-	{
-		if((y_en >= (y_pl-0x10)) && (y_en <= (y_pl+0x10)))
-			dir = RIGHT;
-		else if(y_en < (y_pl-0x10))
-			dir = DOWN_RIGHT;
-		else if(y_en > (y_pl+0x10))
-			dir = UP_RIGHT;
-	}
-	/*UP DOWN cases*/
-	if((x_en >= (x_pl-0x10)) && (x_en <= (x_pl+0x10)))
-	{
-		if(y_en >= y_pl)
-			dir = UP;
-		else if(y_en < y_pl)
-			dir = DOWN;
-	}
-
-	memory_write_word(space, cop_register[0]+0x36,dir);
-
-	/*TODO*/
-	x_dis = (x_pl-x_en);
-	y_dis = (y_pl-y_en);
-
-	if(x_dis > 4)
-		x_dis = 4;
-
-	if(x_dis < -4)
-		x_dis = -4;
-
-	if(y_dis > 4)
-		y_dis = 4;
-
-	if(y_dis < -4)
-		y_dis = -4;
-
-	//if(y_en > y_pl)
-	//  y_dis^=0xffff;
-
-	//if(x_en > x_pl)
-	//  x_dis^=0xffff;
-
-	memory_write_word(space, cop_register[0]+0x10,y_dis);
-	memory_write_word(space, cop_register[0]+0x14,x_dis);
-}
-
-/**/
-static UINT16 cop2_hit_prot(const address_space *space)
-{
-	static INT16 xsrc,xdst;
-	static INT16 ysrc,ydst;
-	static INT16 xp,yp;
-	static INT16 param1,param2;
-	static INT16 val;
-
-	param1 = memory_read_word(space, cop_register[2]);
-	param2 = memory_read_word(space, cop_register[3]);
-
-	xsrc = memory_read_word(space, cop_register[0]+0x8) + memory_read_word(space, cop_register[0]+0x14);
-	ysrc = memory_read_word(space, cop_register[0]+0x4) + memory_read_word(space, cop_register[0]+0x10);
-	xdst = memory_read_word(space, cop_register[1]+0x8) + memory_read_word(space, cop_register[1]+0x14);
-	ydst = memory_read_word(space, cop_register[1]+0x4) + memory_read_word(space, cop_register[1]+0x10);
-
-//  xp = (param1 & 0x00f0) >> 4;
-//  yp = (param1 & 0x0f00) >> 8;
-
-//  popmessage("%04x %04x",param1,param2);
-
-	xp = 0;
-	yp = 0;
-	for(val = ((param1 & 0xff0) >> 4); val > 0; val-=5)
-		xp++;
-
-	for(val = ((param1 & 0xff0) >> 4); val > 0; val-=3)
-		yp++;
-
-	/*TODO*/
-//  xp+=4;
-//  yp+=4;
-
-	if(xsrc >= xdst && xsrc <= xdst+xp && ysrc >= xdst && ysrc <= ydst+yp)
-		return 0;
-	else
-		return 3;
-}
-
-static void cop2_move2_prot(const address_space *space)
-{
-	static INT16 xsrc,ysrc;
-	static INT16 param2;
-
-	xsrc = memory_read_word(space, cop_register[0]+0x14);
-	ysrc = memory_read_word(space, cop_register[0]+0x10);
-	param2 = memory_read_word(space, cop_register[3]);
-
-	switch(param2)
-	{
-		case 0x10:	xsrc++; break; //right
-		case 0x30:	xsrc--; break; //left
-		case 0x40:  ysrc--; break; //up
-		case 0x60: 	ysrc++; break; //down
-		case 0x08:  ysrc--; xsrc++; break; //up-right
-		case 0x38:	ysrc--; xsrc--; break; //up-left
-		case 0x28: 	ysrc++; xsrc--; break; //down-left
-		case 0x18:  ysrc++; xsrc++; break; //down-right
-	}
-
-	memory_write_word(space, cop_register[0]+0x14,xsrc);
-	memory_write_word(space, cop_register[0]+0x10,ysrc);
-}
-
-
-
 
 /********************************************************************************************
 
@@ -2057,7 +1671,7 @@ READ16_HANDLER( copdxbl_0_r )
 	{
 		default:
 		{
-			logerror("%06x: COPX unhandled read returning %04x from offset %04x\n", cpu_get_pc(space->cpu), retvalue, offset*2);
+			logerror("%06x: COPX unhandled read returning %04x from offset %04x\n", cpu_get_pc(&space->device()), retvalue, offset*2);
 			return retvalue;
 		}
 
@@ -2066,353 +1680,164 @@ READ16_HANDLER( copdxbl_0_r )
 		//case (0x5b4/2):
 		//  return cop_mcu_ram[offset];
 
-		case (0x700/2): return input_port_read(space->machine, "DSW1");
-		case (0x704/2):	return input_port_read(space->machine, "PLAYERS12");
-		case (0x708/2):	return input_port_read(space->machine, "PLAYERS34");
-		case (0x70c/2):	return input_port_read(space->machine, "SYSTEM");
-		case (0x71c/2): return input_port_read(space->machine, "DSW2");
+		case (0x700/2): return input_port_read(space->machine(), "DSW1");
+		case (0x704/2):	return input_port_read(space->machine(), "PLAYERS12");
+		case (0x708/2):	return input_port_read(space->machine(), "PLAYERS34");
+		case (0x70c/2):	return input_port_read(space->machine(), "SYSTEM");
+		case (0x71c/2): return input_port_read(space->machine(), "DSW2");
 	}
 }
 
 WRITE16_HANDLER( copdxbl_0_w )
 {
+	legionna_state *state = space->machine().driver_data<legionna_state>();
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
 	switch(offset)
 	{
-
 		default:
 		{
-			logerror("%06x: COPX unhandled write data %04x at offset %04x\n", cpu_get_pc(space->cpu), data, offset*2);
+			logerror("%06x: COPX unhandled write data %04x at offset %04x\n", cpu_get_pc(&space->device()), data, offset*2);
 			break;
 		}
 
-		/*********************************************************************
-        400-5ff -  Protection writes
-        *********************************************************************/
-
-
-		case (0x4a0/2):
-		case (0x4a2/2):
-		case (0x4a4/2):
-		case (0x4a6/2):
-		case (0x4a8/2):
-		case (0x4aa/2):
-		case (0x4ac/2):
-		case (0x4ae/2):
-		case (0x4c0/2):
-		case (0x4c2/2):
-		case (0x4c4/2):
-		case (0x4c6/2):
-		case (0x4c8/2):
-		case (0x4ca/2):
-		case (0x4cc/2):
-		case (0x4ce/2):
-			//cop_reg_w(cop_mcu_ram[offset],offset & 0x000f, (offset < (0x4b0/2)) ? 1 : 0);
-			break;
-		/*layer clearance,but the bootleg doesn't send values,so this function
-          is an original left-over.*/
-		case (0x478/2):
-		{
-			/*
-    AM_RANGE(0x100800, 0x100fff) AM_READWRITE(SMH_RAM,legionna_background_w) AM_BASE(&legionna_back_data)
-    AM_RANGE(0x101000, 0x1017ff) AM_READWRITE(SMH_RAM,legionna_foreground_w) AM_BASE(&legionna_fore_data)
-    AM_RANGE(0x101800, 0x101fff) AM_READWRITE(SMH_RAM,legionna_midground_w) AM_BASE(&legionna_mid_data)
-    AM_RANGE(0x102000, 0x102fff) AM_READWRITE(SMH_RAM,legionna_text_w) AM_BASE(&legionna_textram)
-            */
-			break;
-		}
-		case (0x500/2):
-		{
-			//cop_fct = cop_mcu_ram[offset];
-			//cop_run();
-			break;
-		}
-		case (0x604/2):
-		{
-			//C.R.T. Controller
-			/*
-            data = setting
-            0x01e = 320x256         ---- ---x xxx-
-            0x0e1 = 320x256 REVERSE ---- xxx- ---x
-            0x016 = 320x240         ---- ---x -xx-
-            0x0e9 = 320x240 REVERSE ---- xxx- x--x
-            0x004 = 320x224         ---- ---- -x--
-            0x10b = 320x224 REVERSE ---x ---- x-xx
-            For now we use this by cases and not per bits.
-            */
-
-			switch(data)
-			{
-				case 0x0000:
-				case 0x001e: CRT_MODE(320,256,0); break;
-				case 0x00e1: CRT_MODE(320,256,1); break;
-				case 0x0016: CRT_MODE(320,240,0); break;
-				case 0x00e9: CRT_MODE(320,240,1); break;
-				case 0x0004: CRT_MODE(320,224,0); break;
-				case 0x010b: CRT_MODE(320,224,1); break;
-				default:
-				#ifdef MAME_DEBUG
-				popmessage("Warning: Undefined CRT Mode %04x",data);
-				#endif
-				CRT_MODE(320,256,0);
-			}
-			break;
-		}
 		/*TODO: kludge on x-axis.*/
-		case (0x660/2): { legionna_scrollram16[0] = cop_mcu_ram[offset] - 0x1f0; break; }
-		case (0x662/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x664/2): { legionna_scrollram16[2] = cop_mcu_ram[offset] - 0x1f0; break; }
-		case (0x666/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x668/2): { legionna_scrollram16[4] = cop_mcu_ram[offset] - 0x1f0; break; }
-		case (0x66a/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-		case (0x66c/2): { legionna_scrollram16[6] = cop_mcu_ram[offset] - 0x1f0; break; }
-		case (0x66e/2): { legionna_scrollram16[7] = cop_mcu_ram[offset]; break; }
+		case (0x660/2): { state->m_scrollram16[0] = cop_mcu_ram[offset] - 0x1f0; break; }
+		case (0x662/2): { state->m_scrollram16[1] = cop_mcu_ram[offset]; break; }
+		case (0x664/2): { state->m_scrollram16[2] = cop_mcu_ram[offset] - 0x1f0; break; }
+		case (0x666/2): { state->m_scrollram16[3] = cop_mcu_ram[offset]; break; }
+		case (0x668/2): { state->m_scrollram16[4] = cop_mcu_ram[offset] - 0x1f0; break; }
+		case (0x66a/2): { state->m_scrollram16[5] = cop_mcu_ram[offset]; break; }
+		case (0x66c/2): { state->m_scrollram16[6] = cop_mcu_ram[offset] - 0x1f0; break; }
+		case (0x66e/2): { state->m_scrollram16[7] = cop_mcu_ram[offset]; break; }
 
 		case (0x740/2):
 		{
 			soundlatch_w(space, 0, data & 0xff);
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
+			cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
 			break;
 		}
-		/*video regs (not scrollram,something else)*/
-		//case (0x660/2):
-		//case (0x662/2):
-		//case (0x664/2):
-		//case (0x666/2):
-		//case (0x668/2):
-		//case (0x66a/2):
-		//case (0x66c/2):
-		//case (0x66e/2):
-		//  break;
-		/*bootleg sound HW*/
-		/*case (0x740/2):
-        {
-            soundlatch_w(space, 1, data & 0x00ff);
-            cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
-            break;
-        }*/
 	}
 }
-
-// this still probably contains some useful information, but we should handle
-// things as generically as possible
-#ifdef UNUSED_FUNCTION
-/********************************************************************************************
-
-  COPX-D2 simulation
-    - Raiden 2
-    - Zero Team
-
- *******************************************************************************************/
-
-
-/* Raiden 2 COP2 handling.  Note, some important details about table upload in here that the
-   other simulations are missing */
-
-//  COPX functions, terribly incomplete
-
-typedef struct _cop_state cop_state;
-struct _cop_state
-{
-	UINT16		offset;						/* last write offset */
-	UINT16		ram[0x200/2];				/* RAM from 0x400-0x5ff */
-
-	UINT32		reg[4];						/* registers */
-
-	UINT16		func_trigger[0x100/8];		/* function trigger */
-	UINT16		func_value[0x100/8];		/* function value (?) */
-	UINT16		func_mask[0x100/8];			/* function mask (?) */
-	UINT16		program[0x100];				/* program "code" */
-};
-
-static cop_state cop_data;
-
-
-#define VERBOSE 1
-#define COP_LOG(x)	do { if (VERBOSE) logerror x; } while (0)
-
-
-
-INLINE UINT16 cop_ram_r(cop_state *cop, UINT16 offset)
-{
-	return cop->ram[(offset - 0x400) / 2];
-}
-
-INLINE void cop_ram_w(cop_state *cop, UINT16 offset, UINT16 data)
-{
-	cop->ram[(offset - 0x400) / 2] = data;
-}
-
-INLINE UINT32 r32(offs_t address)
-{
-	return 	(memory_read_word(space, address + 0) << 0) |
-			(memory_read_word(space, address + 2) << 16);
-}
-
-INLINE void w32(offs_t address, UINT32 data)
-{
-	memory_write_word(space, address + 0, data >> 0);
-	memory_write_word(space, address + 2, data >> 16);
-}
-
-
-void cop_init(void)
-{
-	memset(&cop_data, 0, sizeof(cop_data));
-}
-
-WRITE16_HANDLER( raiden2_cop2_w )
-{
-	cop_state *cop = &cop_data;
-	UINT32 temp32;
-	UINT8 regnum;
-	int func;
-
-	/* all COP data writes are word-length (?) */
-	data = COMBINE_DATA(&cop->ram[offset]);
-
-	/* handle writes */
-	switch (offset + (0x400/2))
-	{
-		/* ----- BCD conversion ----- */
-
-		case 0x420/2:		/* LSW of number */
-		case 0x422/2:		/* MSW of number */
-			temp32 = cop_ram_r(cop, 0x420) | (cop_ram_r(cop, 0x422) << 16);
-			cop_ram_w(cop, 0x590, ((temp32 / 1) % 10) + (((temp32 / 10) % 10) << 8) + 0x3030);
-			cop_ram_w(cop, 0x592, ((temp32 / 100) % 10) + (((temp32 / 1000) % 10) << 8) + 0x3030);
-			cop_ram_w(cop, 0x594, ((temp32 / 10000) % 10) + (((temp32 / 100000) % 10) << 8) + 0x3030);
-			cop_ram_w(cop, 0x596, ((temp32 / 1000000) % 10) + (((temp32 / 10000000) % 10) << 8) + 0x3030);
-			cop_ram_w(cop, 0x598, ((temp32 / 100000000) % 10) + (((temp32 / 1000000000) % 10) << 8) + 0x3030);
-			break;
-
-		/* ----- program upload registers ----- */
-
-		case 0x432/2:		/* COP program data */
-			COP_LOG(("%05X:COP Prog Data = %04X\n", cpu_get_pc(space->cpu), data));
-			cop->program[cop_ram_r(cop, 0x434)] = data;
-			break;
-
-		case 0x434/2:		/* COP program address */
-			COP_LOG(("%05X:COP Prog Addr = %04X\n", cpu_get_pc(space->cpu), data));
-			assert((data & ~0xff) == 0);
-			temp32 = (data & 0xff) / 8;
-			cop->func_value[temp32] = cop_ram_r(cop, 0x438);
-			cop->func_mask[temp32] = cop_ram_r(cop, 0x43a);
-			cop->func_trigger[temp32] = cop_ram_r(cop, 0x43c);
-
-			break;
-
-		case 0x438/2:		/* COP program entry value (0,4,5,6,7,8,9,F) */
-			COP_LOG(("%05X:COP Prog Val  = %04X\n", cpu_get_pc(space->cpu), data));
-			break;
-
-		case 0x43a/2:		/* COP program entry mask */
-			COP_LOG(("%05X:COP Prog Mask = %04X\n", cpu_get_pc(space->cpu), data));
-			break;
-
-		case 0x43c/2:		/* COP program trigger value */
-			COP_LOG(("%05X:COP Prog Trig = %04X\n", cpu_get_pc(space->cpu), data));
-			break;
-
-		/* ----- ???? ----- */
-
-		case 0x47a/2:		/* clear RAM */
-			if (cop_ram_r(cop, 0x47e) == 0x118)
-			{
-				UINT32 addr = cop_ram_r(cop, 0x478) << 6;
-				int count = (cop_ram_r(cop, 0x47a) + 1) << 5;
-				COP_LOG(("%05X:COP RAM clear from %05X to %05X\n", cpu_get_pc(space->cpu), addr, addr + count));
-				while (count--)
-					memory_write_byte(space, addr++, 0);
-			}
-			else
-			{
-				COP_LOG(("%05X:COP Unknown RAM clear(%04X) = %04X\n", cpu_get_pc(space->cpu), cop_ram_r(cop, 0x47e), data));
-			}
-			break;
-
-		/* ----- program data registers ----- */
-
-		case 0x4a0/2:		/* COP register high word */
-		case 0x4a2/2:		/* COP register high word */
-		case 0x4a4/2:		/* COP register high word */
-		case 0x4a6/2:		/* COP register high word */
-			regnum = (offset) % 4;
-			COP_LOG(("%05X:COP RegHi(%d) = %04X\n", cpu_get_pc(space->cpu), regnum, data));
-			cop->reg[regnum] = (cop->reg[regnum] & 0x0000ffff) | (data << 16);
-			break;
-
-		case 0x4c0/2:		/* COP register low word */
-		case 0x4c2/2:		/* COP register low word */
-		case 0x4c4/2:		/* COP register low word */
-		case 0x4c6/2:		/* COP register low word */
-			regnum = (offset) % 4;
-			COP_LOG(("%05X:COP RegLo(%d) = %04X\n", cpu_get_pc(space->cpu), regnum, data));
-			cop->reg[regnum] = (cop->reg[regnum] & 0xffff0000) | data;
-			break;
-
-		/* ----- program trigger register ----- */
-
-		case 0x500/2:		/* COP trigger */
-			COP_LOG(("%05X:COP Trigger = %04X\n", cpu_get_pc(space->cpu), data));
-			for (func = 0; func < ARRAY_LENGTH(cop->func_trigger); func++)
-				if (cop->func_trigger[func] == data)
-				{
-					int offs;
-
-					COP_LOG(("  Execute:"));
-					for (offs = 0; offs < 8; offs++)
-					{
-						if (cop->program[func * 8 + offs] == 0)
-							break;
-						COP_LOG((" %04X", cop->program[func * 8 + offs]));
-					}
-					COP_LOG(("\n"));
-
-					/* special cases for now */
-					if (data == 0x5205 || data == 0x5a05)
-					{
-						COP_LOG(("  Copy 32 bits from %05X to %05X\n", cop->reg[0], cop->reg[1]));
-						w32(cop->reg[1], r32(cop->reg[0]));
-					}
-					else if (data == 0xf205)
-					{
-						COP_LOG(("  Copy 32 bits from %05X to %05X\n", cop->reg[0] + 4, cop->reg[1]));
-						w32(cop->reg[2], r32(cop->reg[0] + 4));
-					}
-					break;
-				}
-			logerror("%05X:COP Warning - can't find command - func != ARRAY_LENGTH(cop->func_trigger)\n",  cpu_get_pc(space->cpu));
-			break;
-
-		/* ----- other stuff ----- */
-
-		default:		/* unknown */
-			COP_LOG(("%05X:COP Unknown(%04X) = %04X\n", cpu_get_pc(space->cpu), offset*2 + 0x400, data));
-			break;
-	}
-}
-
-
-READ16_HANDLER( raiden2_cop2_r )
-{
-	cop_state *cop = &cop_data;
-	COP_LOG(("%05X:COP Read(%04X) = %04X\n", cpu_get_pc(space->cpu), offset*2 + 0x400, cop->ram[offset]));
-	return cop->ram[offset];
-}
-#endif
-
-
-
-
 
 /* Generic COP functions
   -- the game specific handlers fall through to these if there
      isn't a specific case for them.  these implement behavior
      which seems common to all the agmes
 */
+
+static UINT16 cop_status,cop_dist,cop_angle;
+static UINT16 cop_hit_status;
+static UINT32 cop_hit_val_x,cop_hit_val_y;
+static UINT32 cop_sort_lookup,cop_sort_ram_addr,cop_sort_param;
+static INT8 cop_angle_compare;
+static UINT8 cop_angle_mod_val;
+static struct
+{
+	int x,y;
+	int min_x,min_y,max_x,max_y;
+	UINT16 hitbox;
+}cop_collision_info[2];
+
+/* Taken from Seibu Cup Soccer bootleg (TODO: understand the algorithm and remove this) */
+static const UINT8 fade_table[0x400] = {
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
+0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
+0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,
+0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
+0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x03,0x03,0x03,0x03,0x03,0x03,
+0x00,0x00,0x00,0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x02,
+0x02,0x02,0x02,0x02,0x03,0x03,0x03,0x03,0x03,0x03,0x03,0x03,0x04,0x04,0x04,0x04,
+0x00,0x00,0x00,0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x02,0x02,0x02,
+0x03,0x03,0x03,0x03,0x03,0x03,0x04,0x04,0x04,0x04,0x04,0x04,0x05,0x05,0x05,0x05,
+0x00,0x00,0x00,0x01,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x02,0x02,0x03,0x03,0x03,
+0x03,0x03,0x03,0x04,0x04,0x04,0x04,0x04,0x05,0x05,0x05,0x05,0x05,0x06,0x06,0x06,
+0x00,0x00,0x00,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x02,0x02,0x03,0x03,0x03,0x03,
+0x04,0x04,0x04,0x04,0x05,0x05,0x05,0x05,0x05,0x06,0x06,0x06,0x06,0x07,0x07,0x07,
+0x00,0x00,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x02,0x03,0x03,0x03,0x03,0x04,0x04,
+0x04,0x04,0x05,0x05,0x05,0x05,0x06,0x06,0x06,0x06,0x07,0x07,0x07,0x07,0x08,0x08,
+0x00,0x00,0x01,0x01,0x01,0x01,0x02,0x02,0x02,0x03,0x03,0x03,0x03,0x04,0x04,0x04,
+0x05,0x05,0x05,0x06,0x06,0x06,0x06,0x07,0x07,0x07,0x08,0x08,0x08,0x08,0x09,0x09,
+0x00,0x00,0x01,0x01,0x01,0x02,0x02,0x02,0x03,0x03,0x03,0x04,0x04,0x04,0x05,0x05,
+0x05,0x05,0x06,0x06,0x06,0x07,0x07,0x07,0x08,0x08,0x08,0x09,0x09,0x09,0x0A,0x0A,
+0x00,0x00,0x01,0x01,0x01,0x02,0x02,0x02,0x03,0x03,0x04,0x04,0x04,0x05,0x05,0x05,
+0x06,0x06,0x06,0x07,0x07,0x07,0x08,0x08,0x09,0x09,0x09,0x0A,0x0A,0x0A,0x0B,0x0B,
+0x00,0x00,0x01,0x01,0x02,0x02,0x02,0x03,0x03,0x03,0x04,0x04,0x05,0x05,0x05,0x06,
+0x06,0x07,0x07,0x07,0x08,0x08,0x09,0x09,0x09,0x0A,0x0A,0x0A,0x0B,0x0B,0x0C,0x0C,
+0x00,0x00,0x01,0x01,0x02,0x02,0x03,0x03,0x03,0x04,0x04,0x05,0x05,0x05,0x06,0x06,
+0x07,0x07,0x08,0x08,0x08,0x09,0x09,0x0A,0x0A,0x0A,0x0B,0x0B,0x0C,0x0C,0x0D,0x0D,
+0x00,0x00,0x01,0x01,0x02,0x02,0x03,0x03,0x04,0x04,0x05,0x05,0x05,0x06,0x06,0x07,
+0x07,0x08,0x08,0x09,0x09,0x09,0x0A,0x0A,0x0B,0x0B,0x0C,0x0C,0x0D,0x0D,0x0E,0x0E,
+0x00,0x00,0x01,0x01,0x02,0x02,0x03,0x03,0x04,0x04,0x05,0x05,0x06,0x06,0x07,0x07,
+0x08,0x08,0x09,0x09,0x0A,0x0A,0x0B,0x0B,0x0C,0x0C,0x0D,0x0D,0x0E,0x0E,0x0F,0x0F,
+0x00,0x01,0x01,0x02,0x02,0x03,0x03,0x04,0x04,0x05,0x05,0x06,0x06,0x07,0x07,0x08,
+0x08,0x09,0x09,0x0A,0x0A,0x0B,0x0B,0x0C,0x0C,0x0D,0x0D,0x0E,0x0E,0x0F,0x0F,0x10,
+0x00,0x01,0x01,0x02,0x02,0x03,0x03,0x04,0x04,0x05,0x05,0x06,0x07,0x07,0x08,0x08,
+0x09,0x09,0x0A,0x0A,0x0B,0x0C,0x0C,0x0D,0x0D,0x0E,0x0E,0x0F,0x0F,0x10,0x10,0x11,
+0x00,0x01,0x01,0x02,0x02,0x03,0x03,0x04,0x05,0x05,0x06,0x06,0x07,0x08,0x08,0x09,
+0x09,0x0A,0x0A,0x0B,0x0C,0x0C,0x0D,0x0D,0x0E,0x0F,0x0F,0x10,0x10,0x11,0x11,0x12,
+0x00,0x01,0x01,0x02,0x02,0x03,0x04,0x04,0x05,0x06,0x06,0x07,0x07,0x08,0x09,0x09,
+0x0A,0x0A,0x0B,0x0C,0x0C,0x0D,0x0D,0x0E,0x0F,0x0F,0x10,0x11,0x11,0x12,0x12,0x13,
+0x00,0x01,0x01,0x02,0x03,0x03,0x04,0x05,0x05,0x06,0x06,0x07,0x08,0x08,0x09,0x0A,
+0x0A,0x0B,0x0C,0x0C,0x0D,0x0E,0x0E,0x0F,0x0F,0x10,0x11,0x11,0x12,0x13,0x13,0x14,
+0x00,0x01,0x01,0x02,0x03,0x03,0x04,0x05,0x05,0x06,0x07,0x07,0x08,0x09,0x09,0x0A,
+0x0B,0x0C,0x0C,0x0D,0x0E,0x0E,0x0F,0x10,0x10,0x11,0x12,0x12,0x13,0x14,0x14,0x15,
+0x00,0x01,0x01,0x02,0x03,0x04,0x04,0x05,0x06,0x06,0x07,0x08,0x09,0x09,0x0A,0x0B,
+0x0B,0x0C,0x0D,0x0D,0x0E,0x0F,0x10,0x10,0x11,0x12,0x12,0x13,0x14,0x15,0x15,0x16,
+0x00,0x01,0x01,0x02,0x03,0x04,0x04,0x05,0x06,0x07,0x07,0x08,0x09,0x0A,0x0A,0x0B,
+0x0C,0x0D,0x0D,0x0E,0x0F,0x10,0x10,0x11,0x12,0x13,0x13,0x14,0x15,0x16,0x16,0x17,
+0x00,0x01,0x02,0x02,0x03,0x04,0x05,0x05,0x06,0x07,0x08,0x09,0x09,0x0A,0x0B,0x0C,
+0x0C,0x0D,0x0E,0x0F,0x0F,0x10,0x11,0x12,0x13,0x13,0x14,0x15,0x16,0x16,0x17,0x18,
+0x00,0x01,0x02,0x02,0x03,0x04,0x05,0x06,0x06,0x07,0x08,0x09,0x0A,0x0A,0x0B,0x0C,
+0x0D,0x0E,0x0F,0x0F,0x10,0x11,0x12,0x13,0x13,0x14,0x15,0x16,0x17,0x17,0x18,0x19,
+0x00,0x01,0x02,0x03,0x03,0x04,0x05,0x06,0x07,0x08,0x08,0x09,0x0A,0x0B,0x0C,0x0D,
+0x0D,0x0E,0x0F,0x10,0x11,0x12,0x12,0x13,0x14,0x15,0x16,0x17,0x17,0x18,0x19,0x1A,
+0x00,0x01,0x02,0x03,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0A,0x0B,0x0C,0x0D,
+0x0E,0x0F,0x10,0x11,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x18,0x19,0x1A,0x1B,
+0x00,0x01,0x02,0x03,0x04,0x05,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,
+0x0E,0x0F,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x17,0x18,0x19,0x1A,0x1B,0x1C,
+0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,
+0x0F,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x16,0x17,0x18,0x19,0x1A,0x1B,0x1C,0x1D,
+0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,
+0x0F,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1B,0x1C,0x1D,0x1E,
+0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,
+0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F };
+
+static UINT16 u1,u2;
+
+#define COP_CMD(_1_,_2_,_3_,_4_,_5_,_6_,_7_,_8_,_u1_,_u2_) \
+	(copd2_table[command+0] == _1_ && copd2_table[command+1] == _2_ && copd2_table[command+2] == _3_ && copd2_table[command+3] == _4_ && \
+	copd2_table[command+4] == _5_ && copd2_table[command+5] == _6_ && copd2_table[command+6] == _7_ && copd2_table[command+7] == _8_ && \
+	u1 == _u1_ && u2 == _u2_) \
+
+
+static UINT8 cop_calculate_collsion_detection(running_machine &machine)
+{
+	static UINT8 res;
+
+	res = 3;
+
+	/* outbound X check */
+	if(cop_collision_info[0].max_x >= cop_collision_info[1].min_x && cop_collision_info[0].min_x <= cop_collision_info[1].max_x)
+		res &= ~1;
+
+	/* outbound Y check */
+	if(cop_collision_info[0].max_y >= cop_collision_info[1].min_y && cop_collision_info[0].min_y <= cop_collision_info[1].max_y)
+		res &= ~2;
+
+	/* TODO: Legionnaire does collision detection via the other two regs,
+             for now just implement a version that allows the player to spam flying kicks and hit everything else on the screen ;-) */
+	cop_hit_val_x = (res & 1) ? cop_collision_info[0].max_x - cop_collision_info[1].min_x : 0;
+	cop_hit_val_y = (res & 2) ? cop_collision_info[0].max_y - cop_collision_info[1].min_y : 0;
+
+	//if(res == 0)
+	//  printf("0:%08x %08x 1:%08x %08x\n",cop_collision_info[0].min_x,cop_collision_info[0].min_y,cop_collision_info[1].min_x,cop_collision_info[1].min_y);
+
+	return res;
+}
 
 static READ16_HANDLER( generic_cop_r )
 {
@@ -2422,21 +1847,116 @@ static READ16_HANDLER( generic_cop_r )
 
 	switch (offset)
 	{
+		/* RNG max value readback, trusted */
+		case 0x02c/2:
+			return retvalue;
+
+		/* DMA mode register readback, trusted */
+		case 0x07e/2:
+			return retvalue;
+
+		case 0x180/2:
+			return cop_hit_status;
+
+		/* these two controls facing direction in Godzilla opponents (only vs.) - x value compare? */
+		case 0x184/2:
+			return (cop_hit_val_x & 0xffff0000) >> 16;
+
+		case 0x182/2:
+			return cop_hit_val_x & 0xffff;
+
+		/* Legionnaire only - y value compare? */
+		case 0x188/2:
+			return (cop_hit_val_y & 0xffff0000) >> 16;
+
+		case 0x186/2:
+			return cop_hit_val_y & 0xffff;
+
+		/* BCD */
+		case 0x190/2:
+		case 0x192/2:
+		case 0x194/2:
+		case 0x196/2:
+		case 0x198/2:
+			return retvalue;
+
+		/* RNG, trusted */
+		case 0x1a0/2:
+		case 0x1a2/2:
+		case 0x1a4/2:
+		case 0x1a6/2:
+			return space->machine().firstcpu->total_cycles() % (cop_rng_max_value+1);
+
+		case 0x1b0/2:
+			return cop_status;
+
+		case 0x1b2/2:
+			return cop_dist;
+
+		case 0x1b4/2:
+			return cop_angle;
+
 		default:
-			seibu_cop_log("%06x: COPX unhandled read returning %04x from offset %04x\n", cpu_get_pc(space->cpu), retvalue, offset*2);
+			seibu_cop_log("%06x: COPX unhandled read returning %04x from offset %04x\n", cpu_get_pc(&space->device()), retvalue, offset*2);
 			return retvalue;
 	}
 }
 
+static UINT32 fill_val;
+static UINT8 pal_brightness_val,pal_brightness_mode;
+static UINT32 cop_sprite_dma_src;
+static int cop_sprite_dma_abs_x,cop_sprite_dma_abs_y,cop_sprite_dma_size;
+static UINT32 cop_sprite_dma_param;
+
 static WRITE16_HANDLER( generic_cop_w )
 {
-	static UINT32 temp32;
+	UINT32 temp32;
 
 	switch (offset)
 	{
 		default:
-			seibu_cop_log("%06x: COPX unhandled write data %04x at offset %04x\n", cpu_get_pc(space->cpu), data, offset*2);
+			seibu_cop_log("%06x: COPX unhandled write data %04x at offset %04x\n", cpu_get_pc(&space->device()), data, offset*2);
 			break;
+
+		/* Sprite DMA */
+		case (0x000/2):
+		case (0x002/2):
+			cop_sprite_dma_param = (cop_mcu_ram[0x000/2]) | (cop_mcu_ram[0x002/2] << 16);
+			//popmessage("%08x",cop_sprite_dma_param & 0xffffffc0);
+			break;
+
+		case (0x00c/2): { cop_sprite_dma_size = cop_mcu_ram[offset]; break; }
+		case (0x010/2):
+		{
+			if(data)
+				printf("Warning: COP RAM 0x410 used with %04x\n",data);
+			else
+			{
+				/* guess */
+				cop_register[4]+=8;
+				cop_sprite_dma_src+=6;
+
+				cop_sprite_dma_size--;
+
+				if(cop_sprite_dma_size > 0)
+					cop_status &= ~2;
+				else
+					cop_status |= 2;
+			}
+			break;
+		}
+
+		case (0x012/2):
+		case (0x014/2):
+			cop_sprite_dma_src = (cop_mcu_ram[0x014/2]) | (cop_mcu_ram[0x012/2] << 16);
+			break;
+
+		/* triggered before 0x6200 in Seibu Cup, looks like an angle value ... */
+		case (0x1c/2): cop_angle_compare = cop_mcu_ram[0x1c/2] & 0xff;	break;
+		case (0x1e/2): cop_angle_mod_val = cop_mcu_ram[0x1e/2] & 0xff; break;
+
+		case (0x08c/2): cop_sprite_dma_abs_y = (cop_mcu_ram[0x08c/2]); break;
+		case (0x08e/2): cop_sprite_dma_abs_x = (cop_mcu_ram[0x08e/2]); break;
 
 		/* BCD Protection */
 		case (0x020/2):
@@ -2453,51 +1973,76 @@ static WRITE16_HANDLER( generic_cop_w )
             This looks like a register for the BCD...
             Godzilla and Heated Barrel sets 3
             Denjin Makai sets 3 at start-up and toggles between 2 and 3 during gameplay on the BCD subroutine
-            SD Gundam sets 0 (maybe there's a mirror somewhere else? 0x01e for example is setted with an 8)
+            SD Gundam sets 0
             */
 			break;
 
+		case (0x028/2):
+		case (0x02a/2):
+			fill_val = (cop_mcu_ram[0x028/2]) | (cop_mcu_ram[0x02a/2] << 16);
+			break;
+
 		/* Command tables for 0x500 / 0x502 commands */
-		case (0x032/2): { copd2_set_tabledata(space->machine, data); break; }
-		case (0x034/2): { copd2_set_tableoffset(space->machine, data); break; }
+		case (0x032/2): { copd2_set_tabledata(space->machine(), data); break; }
+		case (0x034/2): { copd2_set_tableoffset(space->machine(), data); break; }
 		case (0x038/2):	{ cop_438 = data; break; }
 		case (0x03a/2):	{ cop_43a = data; break; }
 		case (0x03c/2): { cop_43c = data; break; }
 
-		/* Layer Clearing */
-		case (0x078/2): /* clear address */
+		/* brightness control */
+		case (0x05a/2): pal_brightness_val = data & 0xff; break;
+		case (0x05c/2): pal_brightness_mode = data & 0xff; break;
+
+		/* DMA / layer clearing */
+
+		/* used in palette DMAs, for fading effects */
+		case (0x076/2):
+			cop_dma_fade_table = data;
+			break;
+
+		case (0x078/2): /* DMA source address */
 		{
-			cop_clearfill_address[cop_clearfill_lasttrigger] = data; // << 6 to get actual address
-			seibu_cop_log("%06x: COPX set layer clear address to %04x (actual %08x)\n", cpu_get_pc(space->cpu), data, data<<6);
+			cop_dma_src[cop_dma_trigger] = data; // << 6 to get actual address
+			//seibu_cop_log("%06x: COPX set layer clear address to %04x (actual %08x)\n", cpu_get_pc(&space->device()), data, data<<6);
 			break;
 		}
 
-		case (0x07a/2): /* clear length */
+		case (0x07a/2): /* DMA length */
 		{
-			cop_clearfill_length[cop_clearfill_lasttrigger] = data;
-			seibu_cop_log("%06x: COPX set layer clear length to %04x (actual %08x)\n", cpu_get_pc(space->cpu), data, data<<5);
-
+			cop_dma_size[cop_dma_trigger] = data;
+			//seibu_cop_log("%06x: COPX set layer clear length to %04x (actual %08x)\n", cpu_get_pc(&space->device()), data, data<<5);
 			break;
 		}
 
-		case (0x07c/2): /* clear value? */
+		case (0x07c/2): /* DMA destination */
 		{
-			cop_clearfill_value[cop_clearfill_lasttrigger] = data;
-			seibu_cop_log("%06x: COPX set layer clear value to %04x (actual %08x)\n", cpu_get_pc(space->cpu), data, data<<6);
+			cop_dma_dst[cop_dma_trigger] = data;
+			//seibu_cop_log("%06x: COPX set layer clear value to %04x (actual %08x)\n", cpu_get_pc(&space->device()), data, data<<6);
 			break;
 		}
 
-		/* unknown, related to clears? / DMA? */
-		case (0x07e/2):
+		case (0x07e/2): /* DMA parameter */
 		{
-			cop_clearfill_lasttrigger = data;
-			seibu_cop_log("%06x: COPX set layer clear trigger? to %04x\n", cpu_get_pc(space->cpu), data);
+			cop_dma_trigger = data;
+			//seibu_cop_log("%06x: COPX set layer clear trigger? to %04x\n", cpu_get_pc(&space->device()), data);
 			if (data>=0x1ff)
 			{
-				seibu_cop_log("invalid!, >0x1ff\n");
-				cop_clearfill_lasttrigger = 0;
+				seibu_cop_log("invalid DMA trigger!, >0x1ff\n");
+				cop_dma_trigger = 0;
 			}
 
+			break;
+		}
+
+		/* max possible value returned by the RNG at 0x5a*, trusted */
+		case (0x02c/2): cop_rng_max_value = cop_mcu_ram[0x2c/2] & 0xff; break;
+
+		case (0x044/2):
+		{
+			/*TODO: this appears to control trigonometry maths, but all games here doesn't seem to like current implementation ... */
+			cop_scale = 1;
+			if(data == 4)
+				cop_scale = 0;
 			break;
 		}
 
@@ -2506,33 +2051,50 @@ static WRITE16_HANDLER( generic_cop_w )
 		case (0x0c0/2): { cop_register[0] = (cop_register[0]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
 
 		case (0x0a2/2): { cop_register[1] = (cop_register[1]&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
-		case (0x0c2/2): { cop_register[1] = (cop_register[1]&0xffff0000)|(cop_mcu_ram[offset]<<0);   break; }
+		case (0x0c2/2): { cop_register[1] = (cop_register[1]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
 
 		case (0x0a4/2): { cop_register[2] = (cop_register[2]&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
 		case (0x0c4/2): { cop_register[2] = (cop_register[2]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
 
 		case (0x0a6/2): { cop_register[3] = (cop_register[3]&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
-		case (0x0c6/2): { cop_register[3] = (cop_register[3]&0xffff0000)|(cop_mcu_ram[offset]<<0);   break; }
+		case (0x0c6/2): { cop_register[3] = (cop_register[3]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
 
-		/* was dma_dst */
 		case (0x0a8/2): { cop_register[4] = (cop_register[4]&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
-		case (0x0c8/2): { cop_register[4] = (cop_register[4]&0xffff0000)|(cop_mcu_ram[offset]<<0);   break; }
+		case (0x0c8/2): { cop_register[4] = (cop_register[4]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
+
+		case (0x0aa/2): { cop_register[5] = (cop_register[5]&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
+		case (0x0ca/2): { cop_register[5] = (cop_register[5]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
+
+		case (0x0ac/2): { cop_register[6] = (cop_register[6]&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
+		case (0x0cc/2): { cop_register[6] = (cop_register[6]&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
+
 
 		case (0x100/2):
+		case (0x102/2):
+		case (0x104/2):
 		{
 			int i;
 			int command;
 
-			seibu_cop_log("%06x: COPX execute table macro command %04x %04x | regs %08x %08x %08x %08x %08x\n", cpu_get_pc(space->cpu), data, cop_mcu_ram[offset], cop_register[0], cop_register[1], cop_register[2], cop_register[3], cop_register[4]);
+			#if LOG_CMDS
+			seibu_cop_log("%06x: COPX execute table macro command %04x %04x | regs %08x %08x %08x %08x %08x\n", cpu_get_pc(&space->device()), data, cop_mcu_ram[offset], cop_register[0], cop_register[1], cop_register[2], cop_register[3], cop_register[4]);
+			#endif
 
 			command = -1;
 			/* search the uploaded 'trigger' table for a matching trigger*/
 			/* note, I don't know what the 'mask' or 'value' tables are... probably important, might determine what actually gets executed! */
+			/* note: Zero Team triggers macro 0x904 instead of 0x905, Seibu Cup Soccer triggers 0xe30e instead of 0xe38e. I highly doubt that AT LEAST
+               it isn't supposed to do anything, especially in the former case (it definitely NEED that sprites have an ark movement when they are knocked down). */
 			for (i=0;i<32;i++)
 			{
-				if (cop_mcu_ram[offset]==copd2_table_4[i])
+				if ((cop_mcu_ram[offset] & 0xff00) == (copd2_table_4[i] & 0xff00))
 				{
+					#if LOG_CMDS
 					seibu_cop_log("    Cop Command %04x found in slot %02x with other params %04x %04x\n", cop_mcu_ram[offset], i, copd2_table_2[i], copd2_table_3[i]);
+					#endif
+
+					u1 = copd2_table_2[i] & 0x000f;
+					u2 = copd2_table_3[i] & 0xffff;
 					command = i;
 				}
 			}
@@ -2544,43 +2106,616 @@ static WRITE16_HANDLER( generic_cop_w )
 			}
 			else
 			{
-				int j;
 				command*=0x8;
-				seibu_cop_log("     Sequence: ");
-				for (j=0;j<0x8;j++)
+				#if LOG_CMDS
 				{
-					seibu_cop_log("%04x ", copd2_table[command+j]);
+					int j;
+					seibu_cop_log("     Sequence: ");
+					for (j=0;j<0x8;j++)
+					{
+						seibu_cop_log("%04x ", copd2_table[command+j]);
+					}
+					seibu_cop_log("\n");
 				}
-				seibu_cop_log("\n");
+				#endif
 			}
 
+			//printf("%04x %04x %04x\n",cop_mcu_ram[offset],u1,u2);
+
+			cop_status &= 0x7fff;
+
+			/*
+            Macro notes:
+            - endianess changes from/to Raiden 2:
+              dword ^= 0
+              word ^= 2
+              byte ^= 3
+            - some macro commands here have a commented algorithm, it's how Seibu Cup Bootleg version handles maths inside the 14/15 roms.
+              The ROMs map tables in the following arrangement:
+              0x00000 - 0x1ffff Sine math results
+              0x20000 - 0x3ffff Cosine math results
+              0x40000 - 0x7ffff Division math results
+              0x80000 - 0xfffff Pythagorean theorem, hypotenuse length math results
+              Surprisingly atan maths are nowhere to be found from the roms.
+            */
+
+			/* "automatic" movement */
+			if(COP_CMD(0x188,0x282,0x082,0xb8e,0x98e,0x000,0x000,0x000,6,0xffeb))
+			{
+				UINT8 offs;
+
+				offs = (offset & 3) * 4;
+
+				space->write_dword(cop_register[0] + 4 + offs, space->read_dword(cop_register[0] + 4 + offs) + space->read_dword(cop_register[0] + 16 + offs));
+				return;
+			}
+
+			/* "automatic" movement, for arks in Legionnaire / Zero Team (expression adjustment) */
+			if(COP_CMD(0x194,0x288,0x088,0x000,0x000,0x000,0x000,0x000,6,0xfbfb))
+			{
+				UINT8 offs;
+
+				offs = (offset & 3) * 4;
+
+				//popmessage("%d %d",space->read_dword(cop_register[0] + 0x2c + 0),space->read_dword(cop_register[0] + 0x2c + 4));
+
+				space->write_dword(cop_register[0] + 16 + offs, space->read_dword(cop_register[0] + 16 + offs) + space->read_dword(cop_register[0] + 0x28 + offs));
+				return;
+			}
+
+			/* SINE math - 0x8100 */
+			/* FIXME: cop scale is unreliable */
+			/*
+                 00000-0ffff:
+                   amp = x/256
+                   ang = x & 255
+                   s = sin(ang*2*pi/256)
+                   val = trunc(s*amp)
+                   if(s<0)
+                     val--
+                   if(s == 192)
+                     val = -2*amp
+            */
+			if(COP_CMD(0xb9a,0xb88,0x888,0x000,0x000,0x000,0x000,0x000,7,0xfdfb))
+			{
+				int raw_angle = (space->read_word(cop_register[0]+(0x34^2)) & 0xff);
+				double angle = raw_angle * M_PI / 128;
+				double amp = 65536*(space->read_word(cop_register[0]+(0x36^2)) & 0xff);
+
+				/* TODO: up direction, why? */
+				if(raw_angle == 0xc0)
+					amp*=2;
+
+				space->write_dword(cop_register[0] + 16, int(amp*sin(angle)) >> (5-cop_scale));
+				return;
+			}
+
+			/* COSINE math - 0x8900 */
+			/* FIXME: cop scale is unreliable */
+			/*
+             10000-1ffff:
+               amp = x/256
+               ang = x & 255
+               s = cos(ang*2*pi/256)
+               val = trunc(s*amp)
+               if(s<0)
+                 val--
+               if(s == 128)
+                 val = -2*amp
+            */
+			if(COP_CMD(0xb9a,0xb8a,0x88a,0x000,0x000,0x000,0x000,0x000,7,0xfdfb))
+			{
+				int raw_angle = (space->read_word(cop_register[0]+(0x34^2)) & 0xff);
+				double angle = raw_angle * M_PI / 128;
+				double amp = 65536*(space->read_word(cop_register[0]+(0x36^2)) & 0xff);
+
+				/* TODO: left direction, why? */
+				if(raw_angle == 0x80)
+					amp*=2;
+
+				space->write_dword(cop_register[0] + 20, int(amp*cos(angle)) >> (5-cop_scale));
+				return;
+			}
+
+			/* 0x130e / 0x138e */
+			if(COP_CMD(0x984,0xaa4,0xd82,0xaa2,0x39b,0xb9a,0xb9a,0xa9a,5,0xbf7f))
+			{
+				int dx = space->read_dword(cop_register[1]+4) - space->read_dword(cop_register[0]+4);
+				int dy = space->read_dword(cop_register[1]+8) - space->read_dword(cop_register[0]+8);
+
+				if(!dy) {
+					cop_status |= 0x8000;
+					cop_angle = 0;
+				} else {
+					cop_angle = atan(double(dx)/double(dy)) * 128 / M_PI;
+					if(dy<0)
+						cop_angle += 0x80;
+				}
+
+				space->write_byte(cop_register[0]+(0x34^3), cop_angle);
+				return;
+			}
+
+			/* Pythagorean theorem, hypotenuse direction - 130e / 138e */
+			//(heatbrl)  | 5 | bf7f | 138e | 984 aa4 d82 aa2 39b b9a b9a b9a
+			if(COP_CMD(0x984,0xaa4,0xd82,0xaa2,0x39b,0xb9a,0xb9a,0xb9a,5,0xbf7f))
+			{
+				int dx = space->read_dword(cop_register[1]+4) - space->read_dword(cop_register[0]+4);
+				int dy = space->read_dword(cop_register[1]+8) - space->read_dword(cop_register[0]+8);
+				if(!dy) {
+					cop_status |= 0x8000;
+					cop_angle = 0;
+				} else {
+					cop_angle = atan(double(dx)/double(dy)) * 128 / M_PI;
+					if(dy<0)
+						cop_angle += 0x80;
+				}
+
+				/* TODO: bit 7 of macro command says if we have to write on work RAM */
+				//if(0)
+					space->write_byte(cop_register[0]+(0x34^3), cop_angle);
+				return;
+			}
+
+			/* Pythagorean theorem, hypotenuse length - 0x3bb0 */
+			//07 | 4 | 007f | 3bb0 | f9c b9c b9c b9c b9c b9c b9c 99c
+			//(grainbow) | 4 | 007f | 3bb0 | f9c b9c b9c b9c b9c b9c b9c 99c
+			/*
+             40000-7ffff:
+               v1 = (x / 32768)*64
+               v2 = (x & 255)*32767/255
+               val = sqrt(v1*v1+v2*v2) (unsigned)
+            */
+			if(COP_CMD(0xf9c,0xb9c,0xb9c,0xb9c,0xb9c,0xb9c,0xb9c,0x99c,4,0x007f))
+			{
+				int dx = space->read_dword(cop_register[1]+4) - space->read_dword(cop_register[0]+4);
+				int dy = space->read_dword(cop_register[1]+8) - space->read_dword(cop_register[0]+8);
+
+				dx = dx >> 16;
+				dy = dy >> 16;
+				cop_dist = sqrt((double)(dx*dx+dy*dy));
+
+				/* TODO: bit 7 of macro command says if we have to write on work RAM */
+				space->write_word(cop_register[0]+(0x38^2), cop_dist);
+				return;
+			}
+
+			/* Division - 0x42c2 */
+			/*
+             20000-2ffff:
+               v1 = x / 1024
+               v2 = x & 1023
+               val = !v1 ? 32767 : trunc(v2/v1+0.5)
+             30000-3ffff:
+               v1 = x / 1024
+               v2 = (x & 1023)*32
+               val = !v1 ? 32767 : trunc(v2/v1+0.5)
+            */
+			if(COP_CMD(0xf9a,0xb9a,0xb9c,0xb9c,0xb9c,0x29c,0x000,0x000,5,0xfcdd))
+			{
+				int div = space->read_word(cop_register[0]+(0x36^2));
+				if(!div)
+					div = 1;
+
+				space->write_word(cop_register[0]+(0x38^2), (space->read_word(cop_register[0]+(0x38^2)) << (5-cop_scale)) / div);
+				return;
+			}
+
+			/*
+                collision detection:
+
+                int dy_0 = space->read_dword(cop_register[0]+4);
+                int dx_0 = space->read_dword(cop_register[0]+8);
+                int dy_1 = space->read_dword(cop_register[1]+4);
+                int dx_1 = space->read_dword(cop_register[1]+8);
+                int hitbox_param1 = space->read_dword(cop_register[2]);
+                int hitbox_param2 = space->read_dword(cop_register[3]);
+
+                TODO: we are ignoring the u1 / u2 params for now
+            */
+
+			if(COP_CMD(0xb80,0xb82,0xb84,0xb86,0x000,0x000,0x000,0x000,u1,u2))
+			{
+				cop_collision_info[0].y = (space->read_dword(cop_register[0]+4));
+				cop_collision_info[0].x = (space->read_dword(cop_register[0]+8));
+				return;
+			}
+
+			//(heatbrl)  | 9 | ffff | b080 | b40 bc0 bc2
+			if(COP_CMD(0xb40,0xbc0,0xbc2,0x000,0x000,0x000,0x000,0x000,u1,u2))
+			{
+				/* Take hitbox param, TODO */
+				cop_collision_info[0].hitbox = space->read_word(cop_register[2]);
+
+				if(cop_collision_info[0].hitbox == 0xc8) //hack for SD Gundam
+				{
+					cop_collision_info[0].min_x = cop_collision_info[0].x + (0 << 16);
+					cop_collision_info[0].min_y = cop_collision_info[0].y - (0x10 << 16);
+					cop_collision_info[0].max_x = cop_collision_info[0].x + (0xc0 << 16);
+					cop_collision_info[0].max_y = cop_collision_info[0].y + (0 << 16);
+				}
+				else
+				{
+					cop_collision_info[0].min_x = cop_collision_info[0].x + (0 << 16);
+					cop_collision_info[0].min_y = cop_collision_info[0].y + (0 << 16);
+					cop_collision_info[0].max_x = cop_collision_info[0].x + (0x10 << 16);
+					cop_collision_info[0].max_y = cop_collision_info[0].y + (0x10 << 16);
+				}
+				/* do the math */
+				cop_hit_status = cop_calculate_collsion_detection(space->machine());
+				return;
+			}
+
+			if(COP_CMD(0xba0,0xba2,0xba4,0xba6,0x000,0x000,0x000,0x000,u1,u2))
+			{
+				cop_collision_info[1].y = (space->read_dword(cop_register[1]+4));
+				cop_collision_info[1].x = (space->read_dword(cop_register[1]+8));
+				return;
+			}
+
+			//(heatbrl)  | 6 | ffff | b880 | b60 be0 be2
+			if(COP_CMD(0xb60,0xbe0,0xbe2,0x000,0x000,0x000,0x000,0x000,u1,u2))
+			{
+				/* Take hitbox param, TODO */
+				cop_collision_info[1].hitbox = space->read_word(cop_register[3]);
+
+				cop_collision_info[1].min_x = cop_collision_info[1].x + (0 << 16);
+				cop_collision_info[1].min_y = cop_collision_info[1].y + (0 << 16);
+				cop_collision_info[1].max_x = cop_collision_info[1].x + (0x10 << 16);
+				cop_collision_info[1].max_y = cop_collision_info[1].y + (0x10 << 16);
+
+				//if(cop_collision_info[0].x || cop_collision_info[1].x)
+				//popmessage("0: %08x %08x %08x 1: %08x %08x %08x",cop_collision_info[0].x,cop_collision_info[0].y,cop_collision_info[0].hitbox,cop_collision_info[1].x,cop_collision_info[1].y,cop_collision_info[1].hitbox);
+
+				/* do the math */
+				cop_hit_status = cop_calculate_collsion_detection(space->machine());
+				return;
+			}
+
+			// grainbow 0d | a | fff3 | 6980 | b80 ba0
+			if(COP_CMD(0xb80,0xba0,0x000,0x000,0x000,0x000,0x000,0x000,10,0xfff3))
+			{
+				UINT8 offs;
+				int abs_x,abs_y,rel_xy;
+
+				offs = (offset & 3) * 4;
+
+				/* TODO: I really suspect that following two are actually taken from the 0xa180 macro command then internally loaded */
+				abs_x = space->read_word(cop_register[0] + 8) - cop_sprite_dma_abs_x;
+				abs_y = space->read_word(cop_register[0] + 4) - cop_sprite_dma_abs_y;
+				rel_xy = space->read_word(cop_sprite_dma_src + 4 + offs);
+
+				//if(rel_xy & 0x0706)
+				//  printf("sprite rel_xy = %04x\n",rel_xy);
+
+				if(rel_xy & 1)
+					space->write_word(cop_register[4] + offs + 4,0xc0 + abs_x - (rel_xy & 0xf8));
+				else
+					space->write_word(cop_register[4] + offs + 4,(((rel_xy & 0x78) + (abs_x) - ((rel_xy & 0x80) ? 0x80 : 0))));
+
+				space->write_word(cop_register[4] + offs + 6,(((rel_xy & 0x7800) >> 8) + (abs_y) - ((rel_xy & 0x8000) ? 0x80 : 0)));
+				return;
+			}
+
+			// grainbow 18 | a | ff00 | c480 | 080 882
+			if(COP_CMD(0x080,0x882,0x000,0x000,0x000,0x000,0x000,0x000,10,0xff00))
+			{
+				UINT8 offs;
+
+				offs = (offset & 3) * 4;
+
+				space->write_word(cop_register[4] + offs + 0,space->read_word(cop_sprite_dma_src + offs) + (cop_sprite_dma_param & 0x3f));
+				//space->write_word(cop_register[4] + offs + 2,space->read_word(cop_sprite_dma_src+2 + offs));
+				return;
+			}
+
+			// cupsoc 1b | 5 | 7ff7 | dde5 | f80 aa2 984 0c2
+			/* radar x/y positions */
+			/* FIXME: x/ys are offsetted */
+			if(COP_CMD(0xf80,0xaa2,0x984,0x0c2,0x000,0x000,0x000,0x000,5,0x7ff7))
+			{
+				UINT8 offs;
+				int div;
+//              INT16 offs_val;
+
+				//printf("%08x %08x %08x %08x %08x %08x %08x\n",cop_register[0],cop_register[1],cop_register[2],cop_register[3],cop_register[4],cop_register[5],cop_register[6]);
+
+				offs = (offset & 3) * 4;
+
+				div = space->read_word(cop_register[4] + offs) + 1;
+//              offs_val = space->read_word(cop_register[3] + offs);
+				//420 / 180 = 500 : 400 = 30 / 50 = 98 / 18
+
+				if(div == 0) { div = 1; }
+
+				space->write_word((cop_register[6] + offs + 4), ((space->read_word(cop_register[5] + offs + 4)) / div));
+				return;
+			}
+
+			//(cupsoc)   | 8 | f3e7 | 6200 | 3a0 3a6 380 aa0 2a6
+			if(COP_CMD(0x3a0,0x3a6,0x380,0xaa0,0x2a6,0x000,0x000,0x000,8,0xf3e7))
+			{
+				INT8 cur_angle;
+
+				cur_angle = space->read_byte(cop_register[1] + (0xc ^ 3));
+				space->write_byte(cop_register[1] + (0^3),space->read_byte(cop_register[1] + (0^3)) & 0xfb); //correct?
+
+				if(cur_angle >= cop_angle_compare)
+				{
+					cur_angle -= cop_angle_mod_val;
+					if(cur_angle <= cop_angle_compare)
+					{
+						cur_angle = cop_angle_compare;
+						space->write_byte(cop_register[1] + (0^3),space->read_byte(cop_register[1] + (0^3)) | 2);
+					}
+				}
+				else if(cur_angle <= cop_angle_compare)
+				{
+					cur_angle += cop_angle_mod_val;
+					if(cur_angle >= cop_angle_compare)
+					{
+						cur_angle = cop_angle_compare;
+						space->write_byte(cop_register[1] + (0^3),space->read_byte(cop_register[1] + (0^3)) | 2);
+					}
+				}
+
+				space->write_byte(cop_register[1] + (0xc ^ 3),cur_angle);
+				return;
+			}
+
+			//(grainbow) | 8 | f3e7 | 6200 | 380 39a 380 a80 29a
+			/* search direction, used on SD Gundam homing weapon */
+			/* FIXME: still doesn't work ... */
+			if(COP_CMD(0x380,0x39a,0x380,0xa80,0x29a,0x000,0x000,0x000,8,0xf3e7))
+			{
+				INT8 cur_angle;
+
+				cur_angle = space->read_byte(cop_register[0] + (0x34 ^ 3));
+				//space->write_byte(cop_register[0] + (0^3),space->read_byte(cop_register[0] + (0^3)) & 0xfb); //correct?
+
+				if(cur_angle >= cop_angle_compare)
+				{
+					cur_angle -= cop_angle_mod_val;
+
+					if(cur_angle <= cop_angle_compare)
+					{
+						cur_angle = cop_angle_compare;
+						//space->write_byte(cop_register[0] + (0^3),space->read_byte(cop_register[0] + (0^3)) | 2);
+					}
+				}
+				else if(cur_angle <= cop_angle_compare)
+				{
+					cur_angle += cop_angle_mod_val;
+
+					if(cur_angle >= cop_angle_compare)
+					{
+						cur_angle = cop_angle_compare;
+						//space->write_byte(cop_register[0] + (0^3),space->read_byte(cop_register[0] + (0^3)) | 2);
+					}
+				}
+
+				space->write_byte(cop_register[0] + (0x34 ^ 3),cur_angle);
+				return;
+			}
+
+			printf("%04x\n",cop_mcu_ram[offset]);
+			break;
+		}
+
+		/* DMA go register */
+		case (0x2fc/2):
+		{
+			//seibu_cop_log("%06x: COPX execute current layer clear??? %04x\n", cpu_get_pc(&space->device()), data);
+
+			if (cop_dma_trigger >= 0x80 && cop_dma_trigger <= 0x87)
+			{
+				UINT32 src,dst,size,i;
+
+				/*
+                Apparently all of those are just different DMA channels, brightness effects are done through a RAM table and the pal_brightness_val / mode
+                0x80 is used by Legionnaire
+                0x81 is used by SD Gundam and Godzilla
+                0x82 is used by Zero Team and X Se Dae
+                0x86 is used by Seibu Cup Soccer
+                0x87 is used by Denjin Makai
+
+                TODO:
+                - Denjin Makai mode 4 is totally guessworked.
+                - SD Gundam doesn't fade colors correctly, it should have the text layer / sprites with normal gradient and the rest dimmed in most cases,
+                  presumably bad RAM table or bad algorithm
+                */
+
+				//if(dma_trigger != 0x87)
+				//printf("SRC: %08x %08x DST:%08x SIZE:%08x TRIGGER: %08x %02x %02x\n",cop_dma_src[cop_dma_trigger] << 6,cop_dma_fade_table * 0x400,cop_dma_dst[cop_dma_trigger] << 6,cop_dma_size[cop_dma_trigger] << 5,cop_dma_trigger,pal_brightness_val,pal_brightness_mode);
+
+				src = (cop_dma_src[cop_dma_trigger] << 6) ;
+				dst = (cop_dma_dst[cop_dma_trigger] << 6);
+				size = ((cop_dma_size[cop_dma_trigger] << 5) - (cop_dma_dst[cop_dma_trigger] << 6) + 0x20)/2;
+
+				for(i = 0;i < size;i++)
+				{
+					UINT16 pal_val;
+					int r,g,b;
+					int rt,gt,bt;
+
+					if(pal_brightness_mode == 5)
+					{
+						bt = ((space->read_word(src + (cop_dma_fade_table * 0x400))) & 0x7c00) >> 5;
+						bt = fade_table[bt|(pal_brightness_val ^ 0)];
+						b = ((space->read_word(src)) & 0x7c00) >> 5;
+						b = fade_table[b|(pal_brightness_val ^ 0x1f)];
+						pal_val = ((b + bt) & 0x1f) << 10;
+						gt = ((space->read_word(src + (cop_dma_fade_table * 0x400))) & 0x03e0);
+						gt = fade_table[gt|(pal_brightness_val ^ 0)];
+						g = ((space->read_word(src)) & 0x03e0);
+						g = fade_table[g|(pal_brightness_val ^ 0x1f)];
+						pal_val |= ((g + gt) & 0x1f) << 5;
+						rt = ((space->read_word(src + (cop_dma_fade_table * 0x400))) & 0x001f) << 5;
+						rt = fade_table[rt|(pal_brightness_val ^ 0)];
+						r = ((space->read_word(src)) & 0x001f) << 5;
+						r = fade_table[r|(pal_brightness_val ^ 0x1f)];
+						pal_val |= ((r + rt) & 0x1f);
+					}
+					else if(pal_brightness_mode == 4) //Denjin Makai
+					{
+						bt =(space->read_word(src + (cop_dma_fade_table * 0x400)) & 0x7c00) >> 10;
+						b = (space->read_word(src) & 0x7c00) >> 10;
+						gt =(space->read_word(src + (cop_dma_fade_table * 0x400)) & 0x03e0) >> 5;
+						g = (space->read_word(src) & 0x03e0) >> 5;
+						rt =(space->read_word(src + (cop_dma_fade_table * 0x400)) & 0x001f) >> 0;
+						r = (space->read_word(src) & 0x001f) >> 0;
+
+						if(pal_brightness_val == 0x10)
+							pal_val = bt << 10 | gt << 5 | rt << 0;
+						else if(pal_brightness_val == 0xff) // TODO: might be the back plane or it still doesn't do any mod, needs PCB tests
+							pal_val = 0;
+						else
+						{
+							bt = fade_table[bt<<5|((pal_brightness_val*2) ^ 0)];
+							b =  fade_table[b<<5|((pal_brightness_val*2) ^ 0x1f)];
+							pal_val = ((b + bt) & 0x1f) << 10;
+							gt = fade_table[gt<<5|((pal_brightness_val*2) ^ 0)];
+							g =  fade_table[g<<5|((pal_brightness_val*2) ^ 0x1f)];
+							pal_val |= ((g + gt) & 0x1f) << 5;
+							rt = fade_table[rt<<5|((pal_brightness_val*2) ^ 0)];
+							r =  fade_table[r<<5|((pal_brightness_val*2) ^ 0x1f)];
+							pal_val |= ((r + rt) & 0x1f);
+						}
+					}
+					else
+					{
+						printf("Warning: palette DMA used with mode %02x!\n",pal_brightness_mode);
+						pal_val = space->read_word(src);
+					}
+
+					space->write_word(dst, pal_val);
+					src+=2;
+					dst+=2;
+				}
+
+				return;
+			}
+
+			/* Seibu Cup Soccer trigger this*/
+			if (cop_dma_trigger == 0x0e)
+			{
+				UINT32 src,dst,size,i;
+
+				src = (cop_dma_src[cop_dma_trigger] << 6);
+				dst = (cop_dma_dst[cop_dma_trigger] << 6);
+				size = ((cop_dma_size[cop_dma_trigger] << 5) - (cop_dma_dst[cop_dma_trigger] << 6) + 0x20)/2;
+
+				for(i = 0;i < size;i++)
+				{
+					space->write_word(dst, space->read_word(src));
+					src+=2;
+					dst+=2;
+				}
+
+				return;
+			}
+
+			/* do the fill  */
+			if (cop_dma_trigger >= 0x118 && cop_dma_trigger <= 0x11f)
+			{
+				UINT32 length, address;
+				int i;
+				if(cop_dma_dst[cop_dma_trigger] != 0x0000) // Invalid?
+					return;
+
+				address = (cop_dma_src[cop_dma_trigger] << 6);
+				length = (cop_dma_size[cop_dma_trigger]+1) << 5;
+
+				//printf("%08x %08x\n",address,length);
+
+				for (i=address;i<address+length;i+=4)
+				{
+					space->write_dword(i, fill_val);
+				}
+
+				return;
+			}
+
+			/* Godzilla specific */
+			if (cop_dma_trigger == 0x116)
+			{
+				UINT32 length, address;
+				int i;
+
+				//if(cop_dma_dst[cop_dma_trigger] != 0x0000) // Invalid?
+				//  return;
+
+				address = (cop_dma_src[cop_dma_trigger] << 6);
+				length = ((cop_dma_size[cop_dma_trigger]+1) << 4);
+
+				for (i=address;i<address+length;i+=4)
+				{
+					space->write_dword(i, fill_val);
+				}
+
+				return;
+			}
+
+			/* private buffer copies */
+			if ((cop_dma_trigger==0x14) || (cop_dma_trigger==0x15)) return;
+
+			printf("SRC: %08x %08x DST:%08x SIZE:%08x TRIGGER: %08x\n",cop_dma_src[cop_dma_trigger] << 6,cop_dma_fade_table,cop_dma_dst[cop_dma_trigger] << 6,cop_dma_size[cop_dma_trigger] << 5,cop_dma_trigger);
 
 			break;
 		}
 
+		/* sort-DMA, oh my ... */
+		case (0x054/2): { cop_sort_lookup = (cop_sort_lookup&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
+		case (0x056/2): { cop_sort_lookup = (cop_sort_lookup&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
+		case (0x050/2): { cop_sort_ram_addr = (cop_sort_ram_addr&0x0000ffff)|(cop_mcu_ram[offset]<<16); break; }
+		case (0x052/2): { cop_sort_ram_addr = (cop_sort_ram_addr&0xffff0000)|(cop_mcu_ram[offset]<<0);  break; }
+		case (0x058/2): { cop_sort_param = cop_mcu_ram[offset]; break; }
 
-		/* hmm, this would be strange the 6xx range should be video regs?? */
-		case (0x2fc/2):
+		case (0x2fe/2):
 		{
-			seibu_cop_log("%06x: COPX execute current layer clear??? %04x\n", cpu_get_pc(space->cpu), data);
+			UINT16 sort_size;
 
-			// I think the value it writes here must match the other value for anything to happen.. maybe */
-			//if (data!=cop_clearfill_value[cop_clearfill_lasttrigger]) break;
-			if ((cop_clearfill_lasttrigger==0x14) || (cop_clearfill_lasttrigger==0x15)) return;
+			sort_size = cop_mcu_ram[offset];
 
-			/* do the fill  */
-			if (cop_clearfill_value[cop_clearfill_lasttrigger]==0x0000)
 			{
-				UINT32 length, address;
-				int i;
-				address = cop_clearfill_address[cop_clearfill_lasttrigger] << 6;
-				length = (cop_clearfill_length[cop_clearfill_lasttrigger]+1) << 5;
+				int i,j;
+				UINT8 xchg_flag;
+				UINT32 addri,addrj;
+				UINT16 vali,valj;
 
-				for (i=address;i<address+length;i+=2)
+				/* TODO: use a better algorithm than bubble sort! */
+				for(i=2;i<sort_size;i+=2)
 				{
-					memory_write_word(space, i, 0x0000);
+					for(j=i-2;j<sort_size;j+=2)
+					{
+						addri = cop_sort_ram_addr+space->read_word(cop_sort_lookup+i);
+						addrj = cop_sort_ram_addr+space->read_word(cop_sort_lookup+j);
+
+						vali = space->read_word(addri);
+						valj = space->read_word(addrj);
+
+						//printf("%08x %08x %04x %04x\n",addri,addrj,vali,valj);
+
+						switch(cop_sort_param)
+						{
+							case 2:	xchg_flag = (vali > valj); break;
+							case 1: xchg_flag = (vali < valj); break;
+							default: xchg_flag = 0; printf("Warning: sort-DMA used with param %02x\n",cop_sort_param); break;
+						}
+
+						if(xchg_flag)
+						{
+							UINT16 xch_val;
+
+							xch_val = space->read_word(cop_sort_lookup+i);
+							space->write_word(cop_sort_lookup+i,space->read_word(cop_sort_lookup+j));
+							space->write_word(cop_sort_lookup+j,xch_val);
+						}
+					}
 				}
 			}
+			//else
+
 			break;
 		}
 	}
@@ -2592,115 +2727,47 @@ static WRITE16_HANDLER( generic_cop_w )
 
 READ16_HANDLER( heatbrl_mcu_r )
 {
-	switch (offset)
+	if(offset >= 0x3c0/2 && offset <= 0x3df/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x340/2 && offset <= 0x34f/2)
 	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "PLAYERS34", "SYSTEM" };
 
-	    /*********************************************************************
-        400-5ff -  Protection reads
-        *********************************************************************/
-
-		case (0x180/2):	{ return xy_check; } /*hit protection*/
-		case (0x182/2):	{ if(input_code_pressed(space->machine, KEYCODE_X)) { return 0; } else { return 3; } } /*---- ---- ---- --xx used bits*/
-		case (0x184/2):	{ if(input_code_pressed(space->machine, KEYCODE_C)) { return 0; } else { return 3; } } /*---- ---- ---- --xx used bits*/
-
-	    case (0x1b0/2): return (0xffff); /* bit 15 is branched on a few times in the $1938 area */
-		case (0x1b4/2):	return (0xffff); /* read at $1932 and stored in ram before +0x5b0 bit 15 tested */
-
-		/*********************************************************************
-        700-7ff - Non-protection reads
-        *********************************************************************/
-
-		/* Seibu Sound System */
-		case (0x3c8/2):	return seibu_main_word_r(space,2,0xffff);
-		case (0x3cc/2):	return seibu_main_word_r(space,3,0xffff);
-		case (0x3d4/2): return seibu_main_word_r(space,5,0xffff);
-
-		/* Inputs */
-		case (0x340/2): return input_port_read(space->machine, "DSW1");
-		case (0x344/2):	return input_port_read(space->machine, "PLAYERS12");
-		case (0x348/2): return input_port_read(space->machine, "PLAYERS34");
-		case (0x34c/2): return input_port_read(space->machine, "SYSTEM");
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
 	}
+
+	return generic_cop_r(space, offset, mem_mask);
 }
 
 WRITE16_HANDLER( heatbrl_mcu_w )
 {
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
-	switch (offset)
+	/* external pin register, used for banking */
+	if(offset == 0x070/2)
 	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-		/*********************************************************************
-        400-5ff -  Protection writes
-        *********************************************************************/
-
-		/* Odd, this is a video register */
-		case (0x070/2): { heatbrl_setgfxbank( cop_mcu_ram[offset] ); break; }
-
-#if 1 // turn off to get the generic sequence logging
-		/* Macros Command Trigger */
-		case (0x100/2):
-		{
-			switch(cop_mcu_ram[offset])
-			{
-				case 0x8100:
-					break;
-				case 0x8900:
-				{
-					cop2_move3_prot(space);
-					break;
-				}
-				case 0x205:
-				{
-					cop2_move2_prot(space);
-					break;
-				}
-				case 0xa100:
-					break;
-				case 0xb080:
-					break;
-				case 0xa900:
-					break;
-				case 0xb880:
-				{
-					xy_check = cop2_hit_prot(space);
-					break;
-				}
-				default:
-					seibu_cop_log("DMA CMD 0x500 with parameter = %04x PC = %08x\n",cop_mcu_ram[offset],cpu_get_previouspc(space->cpu));
-			}
-			break;
-		}
-#endif
-
-		/*********************************************************************
-        600-6ff - Video Registers
-        *********************************************************************/
-
-		// 65a bit 0 is flipscreen
-		case (0x25c/2): { legionna_layer_disable = cop_mcu_ram[offset]; break; } // 65c probably layer disables, like Dcon? Used on screen when you press P1-4 start (values 13, 11, 0 seen)
-		// 660 - 66a scroll control;  is there a layer priority switch...?
-		case (0x260/2): { legionna_scrollram16[0] = cop_mcu_ram[offset]; break; }
-		case (0x262/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x264/2): { legionna_scrollram16[2] = cop_mcu_ram[offset]; break; }
-		case (0x266/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x268/2): { legionna_scrollram16[4] = cop_mcu_ram[offset]; break; }
-		case (0x26a/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-
-		/*********************************************************************
-        700-7ff - Output (Seibu Sound System)
-        *********************************************************************/
-
-		case (0x3c0/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x3c4/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x3d0/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x3d8/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
+		heatbrl_setgfxbank(space->machine(), cop_mcu_ram[offset]);
+		return;
 	}
+
+	if(offset == 0x200/2) //irq ack / sprite buffering?
+		return;
+
+	if(offset >= 0x240/2 && offset <= 0x28f/2)
+	{
+		seibu_common_video_regs_w(space,offset-0x240/2,cop_mcu_ram[offset],mem_mask);
+		return;
+	}
+
+	if(offset >= 0x3c0/2 && offset <= 0x3df/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
+
 }
 
 
@@ -2710,152 +2777,92 @@ WRITE16_HANDLER( heatbrl_mcu_w )
 
 READ16_HANDLER( cupsoc_mcu_r )
 {
-	switch (offset)
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x340/2 && offset <= 0x34f/2)
 	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "PLAYERS34", "SYSTEM" };
 
-		//case (0x07e/2):
-		//case (0x1b0/2):
-		//case (0x1b4/2):
-		//  return cop_mcu_ram[offset];
-
-		/* returning 0xffff for some inputs for now, breaks coinage but
-           allows cupsoc to boot */
-		case (0x300/2): return input_port_read(space->machine, "DSW1");
-		case (0x304/2): return input_port_read(space->machine, "PLAYERS12");
-		case (0x308/2): return input_port_read(space->machine, "PLAYERS34");
-		case (0x30c/2): return input_port_read(space->machine, "SYSTEM");
-		case (0x314/2): return 0xffff;
-		case (0x31c/2): return input_port_read(space->machine, "DSW2");
-
-		case (0x340/2): return 0xffff;
-		case (0x344/2): return 0xffff;
-		case (0x348/2):	return 0xffff;//seibu_main_word_r(space,2,0xffff);
-		case (0x34c/2): return 0xffff;//seibu_main_word_r(space,3,0xffff);
-		case (0x354/2): return 0xffff;//seibu_main_word_r(space,5,0xffff);
-		case (0x35c/2): return 0xffff;
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
 	}
+
+	if(offset == 0x35c/2)
+	{
+		return input_port_read(space->machine(), "DSW2");
+	}
+
+	return generic_cop_r(space, offset, mem_mask);
 }
 
 WRITE16_HANDLER( cupsoc_mcu_w )
 {
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
-	seibu_cop_log("%06x: Legionna write data %04x at offset %04x\n", cpu_get_pc(space->cpu), data, offset*2);
+	if(offset == 0x280/2) //irq ack / sprite buffering?
+		return;
 
-	switch (offset)
+	if(offset >= 0x200/2 && offset <= 0x24f/2)
 	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-		/*********************************************************************
-        400-5ff -  Protection writes
-        *********************************************************************/
-
-		/* Trigger Macro Command */
-		case (0x100/2):
-		{
-			switch(cop_mcu_ram[offset])
-			{
-				/*???*/
-				case 0x8100:
-				{
-					UINT32 src = cop_register[0];
-					memory_write_word(space, src+0x36,0xffc0);
-					break;
-				}
-				case 0x8900:
-				{
-					UINT32 src = cop_register[0];
-					memory_write_word(space, src+0x36,0xff80);
-					break;
-				}
-				/*Right*/
-				case 0x0205:
-				{
-					UINT32 src = cop_register[0];
-					INT16 y = memory_read_word(space, src+0x4);
-					INT16 x = memory_read_word(space, src+0x8);
-					INT16 y_rel = memory_read_word(space, src+0x10);
-					INT16 x_rel = memory_read_word(space, src+0x14);
-					memory_write_word(space, src+0x4,(y+y_rel));
-					memory_write_word(space, src+0x8,(x+x_rel));
-					/*logerror("%08x %08x %08x %08x %08x\n",cop_register[0],
-                                                   memory_read_word(space, cop_reg[0]+0x4),
-                                                   memory_read_word(space, cop_reg[0]+0x8),
-                                                   memory_read_word(space, cop_reg[0]+0x10),
-                                                   memory_read_word(space, cop_reg[0]+0x14));*/
-					break;
-				}
-				/*???*/
-				case 0x3bb0:
-				{
-					//UINT32 dst = cop_register[0];
-					//UINT32 dst = cop_register[1];
-					//memory_write_word(space, dst,  mame_rand(space->machine)/*memory_read_word(space, src)*/);
-					//memory_write_word(space, dst+2,mame_rand(space->machine)/*memory_read_word(space, src+2)*/);
-					//memory_write_word(space, dst+4,mame_rand(space->machine)/*memory_read_word(space, src+4)*/);
-					//memory_write_word(space, dst+6,mame_rand(space->machine)/*memory_read_word(space, src+6)*/);
-					//logerror("%04x\n",cop_register[0]);
-					break;
-				}
-				default:
-					//logerror("%04x\n",data);
-					break;
-			}
-			break;
-		}
-
-		/* Video Regs */
-		case (0x204/2):
-		{
-			//C.R.T. Controller
-			/*
-            data = setting
-            0x01e = 320x256         ---- ---x xxx-
-            0x0e1 = 320x256 REVERSE ---- xxx- ---x
-            0x016 = 320x240         ---- ---x -xx-
-            0x0e9 = 320x240 REVERSE ---- xxx- x--x
-            0x004 = 320x224         ---- ---- -x--
-            0x10b = 320x224 REVERSE ---x ---- x-xx
-            For now we use this by cases and not per bits.
-            */
-
-			switch(data)
-			{
-				case 0x0000:
-				case 0x001e: CRT_MODE(320,256,0); break;
-				case 0x00e1: CRT_MODE(320,256,1); break;
-				case 0x0016: CRT_MODE(320,240,0); break;
-				case 0x00e9: CRT_MODE(320,240,1); break;
-				case 0x0004: CRT_MODE(320,224,0); break;
-				case 0x010b: CRT_MODE(320,224,1); break;
-				default:
-				#ifdef MAME_DEBUG
-				popmessage("Warning: Undefined CRT Mode %04x",data);
-				#endif
-				CRT_MODE(320,256,0);
-			}
-			break;
-		}
-		/*TODO: what's going on here,some scroll values aren't sent in these locations
-                but somewhere else?*/
-		case (0x22c/2): { legionna_scrollram16[0] = cop_mcu_ram[offset]; break; }
-		case (0x22e/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x230/2): { legionna_scrollram16[2] = cop_mcu_ram[offset]; break; }
-		case (0x232/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x234/2): { legionna_scrollram16[4] = cop_mcu_ram[offset]; break; }
-		case (0x236/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-		case (0x238/2): { legionna_scrollram16[6] = cop_mcu_ram[offset]; break; }
-		case (0x23a/2): { legionna_scrollram16[7] = cop_mcu_ram[offset]; break; }
-
-		case (0x340/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x344/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x350/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x358/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
+		seibu_common_video_regs_w(space,offset-0x200/2,cop_mcu_ram[offset],mem_mask);
+		return;
 	}
+
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
+}
+
+READ16_HANDLER( cupsocs_mcu_r )
+{
+	if(offset >= 0x340/2 && offset <= 0x35f/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x300/2 && offset <= 0x30f/2)
+	{
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "PLAYERS34", "SYSTEM" };
+
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
+	}
+
+	if(offset == 0x31c/2)
+	{
+		return input_port_read(space->machine(), "DSW2");
+	}
+
+	return generic_cop_r(space, offset, mem_mask);
+}
+
+WRITE16_HANDLER( cupsocs_mcu_w )
+{
+	COMBINE_DATA(&cop_mcu_ram[offset]);
+
+	if(offset == 0x280/2) //irq ack / sprite buffering?
+		return;
+
+	if(offset >= 0x240/2 && offset <= 0x27f/2)
+	{
+		seibu_common_video_regs_w(space,offset-0x240/2,cop_mcu_ram[offset],mem_mask);
+		return;
+	}
+
+	if(offset >= 0x200/2 && offset <= 0x20f/2)
+	{
+		seibu_common_video_regs_w(space,(offset-0x200/2)+(0x40/2),cop_mcu_ram[offset],mem_mask);
+		return;
+	}
+
+	if(offset >= 0x340/2 && offset <= 0x35f/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
 }
 
 /**********************************************************************************************
@@ -2864,47 +2871,45 @@ WRITE16_HANDLER( cupsoc_mcu_w )
 
 READ16_HANDLER( godzilla_mcu_r )
 {
-	switch (offset)
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x340/2 && offset <= 0x34f/2)
 	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "PLAYERS34", "SYSTEM" };
 
-		/* Non-protection reads */
-		case (0x308/2):	return seibu_main_word_r(space,2,0xffff);
-		case (0x30c/2):	return seibu_main_word_r(space,3,0xffff);
-		case (0x314/2):	return seibu_main_word_r(space,5,0xffff);
-
-		/* Inputs */
-		case (0x340/2): return input_port_read(space->machine, "DSW1");
-		case (0x344/2): return input_port_read(space->machine, "PLAYERS12");
-		case (0x348/2): return input_port_read(space->machine, "PLAYERS34");
-		case (0x34c/2): return input_port_read(space->machine, "SYSTEM");
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
 	}
+
+	return generic_cop_r(space, offset, mem_mask);
 }
 
 WRITE16_HANDLER( godzilla_mcu_w )
 {
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
-	switch (offset)
+	if(offset == 0x070/2)
 	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-
-		case (0x220/2): { legionna_scrollram16[0] = cop_mcu_ram[offset]; break; }
-		case (0x222/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x224/2): { legionna_scrollram16[2] = cop_mcu_ram[offset]; break; }
-		case (0x226/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x228/2): { legionna_scrollram16[4] = cop_mcu_ram[offset]; break; }
-		case (0x22a/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-
-		case (0x300/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x304/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x310/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x318/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
+		denjinmk_setgfxbank(space->machine(), cop_mcu_ram[offset]);
+		return;
 	}
+
+	if(offset == 0x280/2) //irq ack / sprite buffering?
+		return;
+
+	if(offset >= 0x200/2 && offset <= 0x24f/2)
+	{
+		seibu_common_video_regs_w(space,offset-0x200/2,cop_mcu_ram[offset],mem_mask);
+		return;
+	}
+
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
 }
 
 /**********************************************************************************************
@@ -2913,96 +2918,74 @@ WRITE16_HANDLER( godzilla_mcu_w )
 
 READ16_HANDLER( denjinmk_mcu_r )
 {
-	switch (offset)
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x340/2 && offset <= 0x34f/2)
 	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "PLAYERS34", "SYSTEM" };
 
-		/* Non-protection reads */
-
-		case (0x308/2):	return seibu_main_word_r(space,2,0xffff);
-		case (0x30c/2):	return seibu_main_word_r(space,3,0xffff);
-		case (0x314/2): return seibu_main_word_r(space,5,0xffff);
-
-		/* Inputs */
-		case (0x340/2): return input_port_read(space->machine, "DSW1");
-		case (0x344/2):	return input_port_read(space->machine, "PLAYERS12");
-		case (0x348/2): return input_port_read(space->machine, "PLAYERS34");
-		case (0x34c/2): return input_port_read(space->machine, "SYSTEM");
-		case (0x35c/2): return input_port_read(space->machine, "DSW2");
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
 	}
+
+	if(offset == 0x35c/2)
+	{
+		return input_port_read(space->machine(), "DSW2");
+	}
+
+	return generic_cop_r(space, offset, mem_mask);
 }
 
 WRITE16_HANDLER( denjinmk_mcu_w )
 {
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
-	switch (offset)
+	if(offset == 0x280/2) //irq ack / sprite buffering?
+		return;
+
+	if(offset == 0x070/2)
 	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-		//case (0x05a/2): { /* brightness?? */ break; }
-		case (0x070/2): { denjinmk_setgfxbank(cop_mcu_ram[offset]); break; }
-
-		case (0x21c/2): { legionna_layer_disable = cop_mcu_ram[offset]; break; }
-
-		case (0x220/2): { legionna_scrollram16[0] = cop_mcu_ram[offset]; break; }
-		case (0x222/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x224/2): { legionna_scrollram16[2] = cop_mcu_ram[offset]; break; }
-		case (0x226/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x228/2): { legionna_scrollram16[4] = cop_mcu_ram[offset]; break; }
-		case (0x22a/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-
-
-		//case (0x280/2): { /* trigger.. something */ break; }
-
-		case (0x300/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x304/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x310/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x318/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
-
+		denjinmk_setgfxbank(space->machine(), cop_mcu_ram[offset]);
+		return;
 	}
+
+	if(offset >= 0x200/2 && offset <= 0x24f/2)
+	{
+		seibu_common_video_regs_w(space,offset-0x200/2,cop_mcu_ram[offset],mem_mask);
+		return;
+	}
+
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
 }
 
 /**********************************************************************************************
-  SD Gundam Rainbow Trout
+  SD Gundam Sangokushi Rainbow Tairiku Senki
 **********************************************************************************************/
 
 READ16_HANDLER( grainbow_mcu_r )
 {
-	switch (offset)
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x340/2 && offset <= 0x34f/2)
 	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "PLAYERS34", "SYSTEM" };
 
-		/*hit protection*/
-		case (0x180/2): { return xy_check; }
-
-		case (0x1b0/2):
-			return 2;
-			// FIXME: this code is never reached
-			/*check if the DMA has been finished*/
-			if(dma_status == 1)
-			{
-				dma_status = 0;
-				return 2;
-			}
-			return cop_mcu_ram[offset];
-
-		/* Non-protection reads */
-		case (0x308/2): return seibu_main_word_r(space,2,0xffff);
-		case (0x30c/2): return seibu_main_word_r(space,3,0xffff);
-		case (0x314/2): return seibu_main_word_r(space,5,0xffff);
-
-		/* Inputs */
-		case (0x340/2): return input_port_read(space->machine, "DSW1");
-		case (0x344/2):	return input_port_read(space->machine, "PLAYERS12");
-		case (0x348/2): return input_port_read(space->machine, "PLAYERS34");
-		case (0x34c/2): return input_port_read(space->machine, "SYSTEM");
-		case (0x35c/2): return input_port_read(space->machine, "DSW2");
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
 	}
+
+	if(offset == 0x35c/2)
+	{
+		return input_port_read(space->machine(), "DSW2");
+	}
+
+	return generic_cop_r(space, offset, mem_mask);
 }
 
 
@@ -3010,166 +2993,22 @@ WRITE16_HANDLER( grainbow_mcu_w )
 {
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
-	switch (offset)
+	if(offset == 0x280/2) //irq ack / sprite buffering?
+		return;
+
+	if(offset >= 0x200/2 && offset <= 0x24f/2)
 	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-		/*********************************************************************
-        400-5ff -  Protection writes
-        *********************************************************************/
-
-		case (0x00c/2): { dma_size = cop_mcu_ram[offset]; break; }
-
-		/*DMA source address*/
-		case (0x012/2): { prot_data[1] = cop_mcu_ram[offset]; dma_src = (prot_data[0]&0xffff)|((prot_data[1]&0xffff)<<16); break; }
-		case (0x014/2): { prot_data[0] = cop_mcu_ram[offset]; dma_src = (prot_data[0]&0xffff)|((prot_data[1]&0xffff)<<16); break; }
-
-		/* Execute Macro Command */
-		case (0x100/2):
-		{
-			switch(cop_mcu_ram[offset])
-			{
-				case 0xa180:/*do the job [1]*/
-				{
-					//popmessage("%08x %08x %04x",dma_src,cop_register[5]+4,dma_size);
-					/*fix the offset for easier reading*/
-					dma_src+=4;
-					//cop_register[5]+=4;
-					s_i = dma_size;
-					//cop_register[5]+=((memory_read_word(space, 0x110000) & 0x000f) * 8);
-					//memory_write_word(space, 0x1004c8,cop_register[5] & 0xffff);
-					//dma_status = 1;
-					break;
-				}
-				case 0xb100:
-					break;
-				case 0xa980:
-					break;
-				case 0xb900:
-				{
-					xy_check = hit_check_jsr(space);
-					break;
-				}
-				/*bullet movement protection,conflicts with [3],will be worked out*/
-				case 0x8100:
-				{
-					//move3x_prot_jsr(space);
-					break;
-				}
-				case 0x8900:
-				{
-					//move3y_prot_jsr(space);
-					break;
-				}
-				case 0x0205:/*do the job [3]*/
-				{
-					moveprot_jsr(space);
-					break;
-				}
-				case 0x138e:/*do the job [4]*/
-					break;
-				case 0x3bb0:
-				{
-					move2prot_jsr(space);
-					break;
-				}
-				default:
-					seibu_cop_log("DMA CMD 0x500 with parameter = %04x PC = %08x\n",cop_mcu_ram[offset],cpu_get_previouspc(space->cpu));
-			}
-			break;
-		}
-
-		case (0x102/2):
-		{
-			if(cop_mcu_ram[offset] == 0xc480)
-			{
-				dma_transfer(space);
-				s_i--;
-				if(s_i == 0)
-					dma_status = 1;
-			}
-			break;
-		}
-
-		/*Layer Enable,bit wise active low*/
-		case (0x21c/2):
-		{
-			/*
-            ---x ---- (used in test mode)
-            ---- x--- Text Layer
-            ---- -x-- Foreground Layer
-            ---- --x- Midground Layer
-            ---- ---x Background Layer
-            */
-			grainbow_pri_n = cop_mcu_ram[offset] & 0xf;
-			break;
-		}
-
-		/* TODO: tilemaps x-axis are offset,we use a temporary kludge for now */
-		case (0x220/2):	{ legionna_scrollram16[0] = 0x10 + cop_mcu_ram[offset]; break; }
-		case (0x222/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x224/2): { legionna_scrollram16[2] = 0x10 + cop_mcu_ram[offset]; break; }
-		case (0x226/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x228/2): { legionna_scrollram16[4] = 0x10 + cop_mcu_ram[offset]; break; }
-		case (0x22a/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-
-		/* scroll mirrors? */
-		case (0x22c/2):
-		case (0x22e/2):
-		case (0x230/2):
-		case (0x232/2):
-		case (0x234/2):
-		case (0x236/2):
-			break;
-
-
-		/* Text Layer scroll registers */
-		case (0x238/2): { legionna_scrollram16[6] = 0x38 + cop_mcu_ram[offset]; break; }
-		case (0x23a/2): { legionna_scrollram16[7] = cop_mcu_ram[offset]; break; }
-		/*C.R.T. Controller (note:game calls it OBJ register)*/
-		case (0x244/2):
-			{
-				/*
-                data = setting
-                0x01e = 320x256
-                0x0e1 = 320x256 REVERSE
-                0x016 = 320x240
-                0x0e9 = 320x240 REVERSE
-                0x004 = 320x224
-                0x10b = 320x224 REVERSE
-                It is like to be per cases and not per bits.
-                */
-				switch(data)
-				{
-					case 0x0000:
-					case 0x0003:
-					case 0x001e: CRT_MODE(320,224,0); break;
-					case 0x00e1: CRT_MODE(320,224,1); break;
-					case 0x0016: CRT_MODE(320,256,0); break;
-					case 0x00e9: CRT_MODE(320,256,1); break;
-					case 0x0004: CRT_MODE(320,240,0); break;
-					case 0x00fb: CRT_MODE(320,240,1); break;
-					default:
-					#ifdef MAME_DEBUG
-					popmessage("Warning: Undefined CRT Mode %04x",data);
-					#endif
-					CRT_MODE(320,256,0);
-				}
-			}
-			break;
-
-		/* Seems a mirror for the choices in the test menu... */
-		//case (0x27c/2): break;
-		//case (0x280/2): break;
-		//case (0x6fc/2): break;
-
-		case (0x300/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x304/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x310/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x318/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
+		seibu_common_video_regs_w(space,offset-0x200/2,cop_mcu_ram[offset],mem_mask);
+		return;
 	}
+
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
 }
 
 /**********************************************************************************************
@@ -3179,162 +3018,41 @@ WRITE16_HANDLER( grainbow_mcu_w )
 
 READ16_HANDLER( legionna_mcu_r )
 {
-	switch (offset)
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+		return seibu_main_word_r(space,(offset >> 1) & 7,0xffff);
+
+	if(offset >= 0x340/2 && offset <= 0x34f/2)
 	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
+		static const char *const portnames[] = { "DSW1", "PLAYERS12", "UNK", "SYSTEM" };
 
-		/*********************************************************************
-        400-5ff -  Protection reads
-        *********************************************************************/
-
-		case (0x070/2):	return (mame_rand(space->machine) &0xffff); /* read PC $110a, could be some sort of control word:  sometimes a bit is changed then it's poked back in... */
-		case (0x182/2):	return (0); /* read PC $3594 */
-		case (0x184/2):	return (0); /* read PC $3588 */
-		case (0x186/2):	return (0); /* read PC $35a0 */
-		case (0x188/2):	return hit_check; /* read PC $3580 */
-		case (0x1b0/2):	return (0); /* bit 15 is branched on a few times in the $3300 area */
-		case (0x1b4/2):	return (0); /* read and stored in ram before +0x5b0 bit 15 tested */
-
-
-		/*********************************************************************
-        700-7ff - Non-protection reads
-        *********************************************************************/
-
-		/* Seibu Sound System */
-		case (0x308/2):	return seibu_main_word_r(space,2,0xffff);
-		case (0x30c/2):	return seibu_main_word_r(space,3,0xffff);
-		case (0x314/2): return seibu_main_word_r(space,5,0xffff);
-
-		/* Inputs */
-		case (0x340/2): return input_port_read(space->machine, "DSW1");
-		case (0x344/2):	return input_port_read(space->machine, "PLAYERS12");
-		case (0x348/2):	return input_port_read(space->machine, "COIN");
-		case (0x34c/2):	return input_port_read(space->machine, "SYSTEM");
-
+		return input_port_read(space->machine(), portnames[(offset >> 1) & 3]);
 	}
-}
 
+	return generic_cop_r(space, offset, mem_mask);
+}
 
 WRITE16_HANDLER( legionna_mcu_w )
 {
 	COMBINE_DATA(&cop_mcu_ram[offset]);
 
-	seibu_cop_log("%06x: Legionna write data %04x at offset %04x\n", cpu_get_pc(space->cpu), data, offset*2);
+	if(offset == 0x070/2) //external pin: puts bit 13 high, delay, reads 0x748, writes bit 13 low
+		return;
 
+	if(offset == 0x280/2) //irq ack / sprite buffering?
+		return;
 
-	switch (offset)
+	if(offset >= 0x200/2 && offset <= 0x24f/2)
 	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-		/* Execute Macro command from table */
-		case (0x100/2):
-		{
-			/*Movement protection*/
-			if(cop_mcu_ram[offset] == 0x8900 || cop_mcu_ram[offset] == 0x0205)
-			{
-				static UINT16 xy_data[2];
-				static UINT8 k;
-				xy_data[0] = memory_read_word(space, cop_register[2]);
-				xy_data[1] = memory_read_word(space, cop_register[3]);
-				k = (cop_mcu_ram[offset] == 0x0205) ? ENEMY : PLAYER;
-				protection_move_jsr(space,cop_register[0],k);
-				//protection_move_jsr(space,cop_register[1]); //???
-				//popmessage("%08x %08x %04x %04x",cop_register[0],cop_register[1],xy_data[0],xy_data[1]);
-			}
-			else if(cop_mcu_ram[offset] == 0x3bb0 || cop_mcu_ram[offset] == 0x138e)
-			{
-				protection_hit_jsr(space,cop_register[0],cop_register[1]);
-			}
-			break;
-		}
-
-		/*********************************************************************
-        600-6ff - Video Registers
-        *********************************************************************/
-
-		// 61a bit 0 is flipscreen
-		// 61c probably layer disables, like Dcon
-
-		case (0x220/2): { legionna_scrollram16[0] = cop_mcu_ram[offset]; break; }
-		case (0x222/2): { legionna_scrollram16[1] = cop_mcu_ram[offset]; break; }
-		case (0x224/2): { legionna_scrollram16[2] = cop_mcu_ram[offset]; break; }
-		case (0x226/2): { legionna_scrollram16[3] = cop_mcu_ram[offset]; break; }
-		case (0x228/2): { legionna_scrollram16[4] = cop_mcu_ram[offset]; break; }
-		case (0x22a/2): { legionna_scrollram16[5] = cop_mcu_ram[offset]; break; }
-
-		/*********************************************************************
-        700-7ff - Output (Seibu Sound System)
-        *********************************************************************/
-
-		case (0x300/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x304/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x310/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x318/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
+		seibu_common_video_regs_w(space,offset-0x200/2,cop_mcu_ram[offset],mem_mask);
+		return;
 	}
+
+	if(offset >= 0x300/2 && offset <= 0x31f/2)
+	{
+		seibu_main_word_w(space,(offset >> 1) & 7,cop_mcu_ram[offset],0x00ff);
+		return;
+	}
+
+	generic_cop_w(space, offset, data, mem_mask);
 }
 
-
-/**********************************************************************************************
-  Raiden 2 / Zero Team
-**********************************************************************************************/
-
-READ16_HANDLER( raiden2_mcu_r )
-{
-	switch (offset)
-	{
-		default:
-			return generic_cop_r(space, offset, mem_mask);
-
-		case (0x340/2): return input_port_read(space->machine, "DSWA") | (input_port_read(space->machine, "DSWB") << 8);
-		case (0x344/2): return input_port_read(space->machine, "P1") | (input_port_read(space->machine, "P2") << 8);
-		case (0x34c/2): return input_port_read(space->machine, "SYSTEM") | 0xff00;
-
-		/* Inputs */
-		case (0x308/2):	return seibu_main_word_r(space,2,0xffff);
-		case (0x30c/2):	return seibu_main_word_r(space,3,0xffff);
-		case (0x314/2): return seibu_main_word_r(space,5,0xffff);
-
-	}
-}
-
-WRITE16_HANDLER( raiden2_mcu_w )
-{
-	COMBINE_DATA(&cop_mcu_ram[offset]);
-
-	seibu_cop_log("%06x: raiden2 write data %04x at offset %04x\n", cpu_get_pc(space->cpu), data, offset*2);
-
-	switch (offset)
-	{
-		default:
-			generic_cop_w(space, offset, data, mem_mask);
-			break;
-
-		case (0x2a0/2): sprcpt_val_1_w(space,offset,data,mem_mask); break;
-		case (0x2a2/2): sprcpt_val_1_w(space,offset,data,mem_mask); break;
-		case (0x2a4/2): sprcpt_data_3_w(space,offset,data,mem_mask); break;
-		case (0x2a6/2): sprcpt_data_3_w(space,offset,data,mem_mask); break;
-		case (0x2a8/2): sprcpt_data_4_w(space,offset,data,mem_mask); break;
-		case (0x2aa/2): sprcpt_data_4_w(space,offset,data,mem_mask); break;
-		case (0x2ac/2): sprcpt_flags_1_w(space,offset,data,mem_mask); break;
-		case (0x2ae/2): sprcpt_flags_1_w(space,offset,data,mem_mask); break;
-		case (0x2b0/2): sprcpt_data_1_w(space,offset,data,mem_mask); break;
-		case (0x2b2/2): sprcpt_data_1_w(space,offset,data,mem_mask); break;
-		case (0x2b4/2): sprcpt_data_2_w(space,offset,data,mem_mask); break;
-		case (0x2b6/2): sprcpt_data_2_w(space,offset,data,mem_mask); break;
-		case (0x2b8/2): sprcpt_val_2_w(space,offset,data,mem_mask); break;
-		case (0x2ba/2): sprcpt_val_2_w(space,offset,data,mem_mask); break;
-		case (0x2bc/2): sprcpt_adr_w(space,offset,data,mem_mask); break;
-		case (0x2be/2): sprcpt_adr_w(space,offset,data,mem_mask); break;
-		case (0x2ce/2): sprcpt_flags_2_w(space,offset,data,mem_mask); break;
-
-		case (0x300/2):	{ seibu_main_word_w(space,0,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x304/2):	{ seibu_main_word_w(space,1,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x310/2):	{ seibu_main_word_w(space,4,cop_mcu_ram[offset],0x00ff); break; }
-		case (0x318/2):	{ seibu_main_word_w(space,6,cop_mcu_ram[offset],0x00ff); break; }
-
-
-	}
-}

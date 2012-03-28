@@ -30,7 +30,6 @@
 #ifndef __SH2_H__
 #define __SH2_H__
 
-#include "cpuintrf.h"
 
 #define SH2_INT_NONE	-1
 #define SH2_INT_VBLIN	0
@@ -62,20 +61,18 @@ typedef struct _sh2_cpu_core sh2_cpu_core;
 struct _sh2_cpu_core
 {
 	int is_slave;
-	int  (*dma_callback_kludge)(UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_kludge)(device_t *device, UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_fifo_data_available)(device_t *device, UINT32 src, UINT32 dst, UINT32 data, int size);
 };
 
-extern CPU_GET_INFO( sh1 );
-extern CPU_GET_INFO( sh2 );
-
-#define CPU_SH1 CPU_GET_INFO_NAME( sh1 )
-#define CPU_SH2 CPU_GET_INFO_NAME( sh2 )
+DECLARE_LEGACY_CPU_DEVICE(SH1, sh1);
+DECLARE_LEGACY_CPU_DEVICE(SH2, sh2);
 
 WRITE32_HANDLER( sh2_internal_w );
 READ32_HANDLER( sh2_internal_r );
 
-void sh2_set_ftcsr_read_callback(const device_config *device, void (*callback)(UINT32));
-void sh2_set_frt_input(const device_config *device, int state);
+void sh2_set_ftcsr_read_callback(device_t *device, void (*callback)(UINT32));
+void sh2_set_frt_input(device_t *device, int state);
 
 /***************************************************************************
     COMPILER-SPECIFIC OPTIONS
@@ -88,7 +85,7 @@ void sh2_set_frt_input(const device_config *device, int state);
 #define SH2DRC_COMPATIBLE_OPTIONS	(SH2DRC_STRICT_VERIFY | SH2DRC_FLUSH_PC | SH2DRC_STRICT_PCREL)
 #define SH2DRC_FASTEST_OPTIONS	(0)
 
-void sh2drc_set_options(const device_config *device, UINT32 options);
-void sh2drc_add_pcflush(const device_config *device, offs_t address);
+void sh2drc_set_options(device_t *device, UINT32 options);
+void sh2drc_add_pcflush(device_t *device, offs_t address);
 
 #endif /* __SH2_H__ */

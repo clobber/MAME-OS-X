@@ -32,54 +32,46 @@ Stephh's notes (based on the game M6502 code and some tests) :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2203intf.h"
-#include "konamipt.h"
-
-extern UINT8 *scotrsht_scroll;
-
-extern WRITE8_HANDLER( scotrsht_videoram_w );
-extern WRITE8_HANDLER( scotrsht_colorram_w );
-extern WRITE8_HANDLER( scotrsht_charbank_w );
-extern WRITE8_HANDLER( scotrsht_palettebank_w );
-
-extern PALETTE_INIT( scotrsht );
-extern VIDEO_START( scotrsht );
-extern VIDEO_UPDATE( scotrsht );
-
-static int irq_enable;
+#include "includes/konamipt.h"
+#include "includes/scotrsht.h"
 
 static WRITE8_HANDLER( ctrl_w )
 {
-	irq_enable = data & 0x02;
-	flip_screen_set(space->machine, data & 0x08);
+	scotrsht_state *state = space->machine().driver_data<scotrsht_state>();
+
+	state->m_irq_enable = data & 0x02;
+	flip_screen_set(space->machine(), data & 0x08);
 }
 
 static INTERRUPT_GEN( scotrsht_interrupt )
 {
-	if (irq_enable)
-		cpu_set_input_line(device, 0, HOLD_LINE);
+	scotrsht_state *state = device->machine().driver_data<scotrsht_state>();
+
+	if (state->m_irq_enable)
+		device_set_input_line(device, 0, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( scotrsht_soundlatch_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "audiocpu", 0, HOLD_LINE);
 }
 
-static ADDRESS_MAP_START( scotrsht_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(scotrsht_colorram_w) AM_BASE(&colorram)
-    AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(scotrsht_videoram_w) AM_BASE(&videoram)
-    AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size) /* sprites */
+static ADDRESS_MAP_START( scotrsht_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(scotrsht_colorram_w) AM_BASE_MEMBER(scotrsht_state, m_colorram)
+	AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(scotrsht_videoram_w) AM_BASE_MEMBER(scotrsht_state, m_videoram)
+	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE_SIZE_MEMBER(scotrsht_state, m_spriteram, m_spriteram_size) /* sprites */
 	AM_RANGE(0x10c0, 0x1fff) AM_RAM /* work ram */
-    AM_RANGE(0x2000, 0x201f) AM_RAM AM_BASE(&scotrsht_scroll) /* scroll registers */
+	AM_RANGE(0x2000, 0x201f) AM_RAM AM_BASE_MEMBER(scotrsht_state, m_scroll) /* scroll registers */
 	AM_RANGE(0x2040, 0x2040) AM_WRITENOP
 	AM_RANGE(0x2041, 0x2041) AM_WRITENOP
-    AM_RANGE(0x2042, 0x2042) AM_WRITENOP  /* it should be -> bit 2 = scroll direction like in jailbrek, but it's not used */
+	AM_RANGE(0x2042, 0x2042) AM_WRITENOP  /* it should be -> bit 2 = scroll direction like in jailbrek, but it's not used */
 	AM_RANGE(0x2043, 0x2043) AM_WRITE(scotrsht_charbank_w)
-    AM_RANGE(0x2044, 0x2044) AM_WRITE(ctrl_w)
+	AM_RANGE(0x2044, 0x2044) AM_WRITE(ctrl_w)
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(scotrsht_palettebank_w)
 	AM_RANGE(0x3100, 0x3100) AM_WRITE(scotrsht_soundlatch_w)
 	AM_RANGE(0x3200, 0x3200) AM_WRITENOP /* it writes 0, 1 */
@@ -90,18 +82,18 @@ static ADDRESS_MAP_START( scotrsht_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3302, 0x3302) AM_READ_PORT("P2")
 	AM_RANGE(0x3303, 0x3303) AM_READ_PORT("DSW1")
 	AM_RANGE(0x3300, 0x3300) AM_WRITE(watchdog_reset_w) /* watchdog */
-    AM_RANGE(0x4000, 0xffff) AM_ROM
+	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scotrsht_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
-    AM_RANGE(0x0000, 0x3fff) AM_ROM
+static ADDRESS_MAP_START( scotrsht_sound_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( scotrsht_sound_port, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( scotrsht_sound_port, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 
 
@@ -123,40 +115,40 @@ static INPUT_PORTS_START( scotrsht )
 	KONAMI8_B1_UNK(2)
 
 	PORT_START("DSW1")		/* $3303 -> $196e */
-	KONAMI_COINAGE(DEF_STR( Free_Play ), "Invalid")
+	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), "Invalid", SW1)
 	/* "Invalid" = both coin slots disabled */
 
 	PORT_START("DSW2")		/* $3100 -> $196f */
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, "2" )
 	PORT_DIPSETTING(    0x02, "3" )
 	PORT_DIPSETTING(    0x01, "4" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPNAME( 0x04, 0x04, "Dip MUST be OFF !" )         /* see notes */
+	PORT_DIPNAME( 0x04, 0x04, "Dip MUST be OFF !" )		PORT_DIPLOCATION("SW2:3")	/* see notes */
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Bonus_Life ) )       /* code at 0x40f4 */
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:4")	/* code at 0x40f4 */
 	PORT_DIPSETTING(    0x08, "30k 110k 80k+" )
 	PORT_DIPSETTING(    0x00, "40k 120k 90k+" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:5,6")
 	PORT_DIPSETTING(    0x30, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPUNUSED( 0x40, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("DSW3")		/* $3200 -> $1970 */
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW3:1")
 	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Dip MUST be OFF !" )         /* see notes */
+	PORT_DIPNAME( 0x02, 0x02, "Dip MUST be OFF !" )		PORT_DIPLOCATION("SW3:2")	/* see notes */
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPUNUSED( 0x04, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x08, IP_ACTIVE_LOW )
+	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW3:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SW3:4" )
 INPUT_PORTS_END
 
 
@@ -189,38 +181,37 @@ static GFXDECODE_START( scotrsht )
 	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 16*16*8, 16*8 ) /* sprites */
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( scotrsht )
+static MACHINE_CONFIG_START( scotrsht, scotrsht_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, 18432000/6)        /* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(scotrsht_map)
-	MDRV_CPU_VBLANK_INT("screen", scotrsht_interrupt)
+	MCFG_CPU_ADD("maincpu", M6809, 18432000/6)        /* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(scotrsht_map)
+	MCFG_CPU_VBLANK_INT("screen", scotrsht_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 18432000/6)        /* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(scotrsht_sound_map)
-	MDRV_CPU_IO_MAP(scotrsht_sound_port)
+	MCFG_CPU_ADD("audiocpu", Z80, 18432000/6)        /* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(scotrsht_sound_map)
+	MCFG_CPU_IO_MAP(scotrsht_sound_port)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(scotrsht)
 
-	MDRV_GFXDECODE(scotrsht)
-	MDRV_PALETTE_LENGTH(16*8*16+16*8*16)
+	MCFG_GFXDECODE(scotrsht)
+	MCFG_PALETTE_LENGTH(16*8*16+16*8*16)
 
-	MDRV_PALETTE_INIT(scotrsht)
-	MDRV_VIDEO_START(scotrsht)
-	MDRV_VIDEO_UPDATE(scotrsht)
+	MCFG_PALETTE_INIT(scotrsht)
+	MCFG_VIDEO_START(scotrsht)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 18432000/6)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2203, 18432000/6)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

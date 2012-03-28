@@ -11,10 +11,12 @@
 
 #pragma once
 
+#ifndef __EMU_H__
+#error Dont include this file directly; include emu.h instead.
+#endif
+
 #ifndef __OUTPUT_H__
 #define __OUTPUT_H__
-
-#include "mamecore.h"
 
 
 /***************************************************************************
@@ -30,7 +32,7 @@ typedef void (*output_notifier_func)(const char *outname, INT32 value, void *par
 ***************************************************************************/
 
 /* core initialization */
-void output_init(running_machine *machine);
+void output_init(running_machine &machine);
 
 /* set the value for a given output */
 void output_set_value(const char *outname, INT32 value);

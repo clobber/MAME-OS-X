@@ -41,23 +41,30 @@
 #ifndef TTL74148_H
 #define TTL74148_H
 
+#include "devlegcy.h"
 
-/* The interface structure */
-struct TTL74148_interface
+
+typedef struct _ttl74148_config ttl74148_config;
+struct _ttl74148_config
 {
-	void (*output_cb)(running_machine *machine);
+	void (*output_cb)(device_t *device);
 };
 
 
-void TTL74148_config(running_machine *machine, int which, const struct TTL74148_interface *intf);
+#define MCFG_74148_ADD(_tag, _output_cb) \
+	MCFG_DEVICE_ADD(_tag, TTL74148, 0) \
+	MCFG_DEVICE_CONFIG_DATAPTR(ttl74148_config, output_cb, _output_cb)
 
-/* must call TTL74148_update() after setting the inputs */
-void TTL74148_update(running_machine *machine, int which);
 
-void TTL74148_input_line_w(int which, int input_line, int data);
-void TTL74148_enable_input_w(int which, int data);
-int  TTL74148_output_r(int which);
-int  TTL74148_output_valid_r(int which);
-int  TTL74148_enable_output_r(int which);
+/* must call ttl74148_update() after setting the inputs */
+void ttl74148_update(device_t *device);
+
+void ttl74148_input_line_w(device_t *device, int input_line, int data);
+void ttl74148_enable_input_w(device_t *device, int data);
+int  ttl74148_output_r(device_t *device);
+int  ttl74148_output_valid_r(device_t *device);
+int  ttl74148_enable_output_r(device_t *device);
+
+DECLARE_LEGACY_DEVICE(TTL74148, ttl74148);
 
 #endif

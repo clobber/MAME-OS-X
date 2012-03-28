@@ -23,7 +23,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/6840ptm.h"
 #include "video/tms34061.h"
@@ -52,6 +52,38 @@ enum int_levels
 };
 
 
+struct ef9369
+{
+	UINT32 addr;
+	UINT16 clut[16];	/* 13-bits - a marking bit and a 444 color */
+};
+
+
+struct wd1770
+{
+	UINT32	status;
+	UINT8	cmd;
+	UINT8	data;
+
+	UINT32	side;
+	INT32	track;
+	INT32	sector;
+	UINT32	sptr;
+};
+
+
+class guab_state : public driver_device
+{
+public:
+	guab_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	struct ef9369 m_pal;
+	emu_timer *m_fdc_timer;
+	struct wd1770 m_fdc;
+};
+
+
 /*************************************
  *
  *  6840 PTM
@@ -60,7 +92,7 @@ enum int_levels
 
 static WRITE_LINE_DEVICE_HANDLER( ptm_irq )
 {
-	cputag_set_input_line(device->machine, "maincpu", INT_6840PTM, state);
+	cputag_set_input_line(device->machine(), "maincpu", INT_6840PTM, state);
 }
 
 static const ptm6840_interface ptm_intf =
@@ -82,7 +114,7 @@ static const ptm6840_interface ptm_intf =
  * TMS34061 CRTC
  *****************/
 
-static void tms_interrupt(running_machine *machine, int state)
+static void tms_interrupt(running_machine &machine, int state)
 {
 	cputag_set_input_line(machine, "maincpu", INT_TMS34061, state);
 }
@@ -142,16 +174,11 @@ static READ16_HANDLER( guab_tms34061_r )
  *  (16 colors from 4096)
  ****************************/
 
-static struct ef9369
-{
-	UINT32 addr;
-	UINT16 clut[16];	/* 13-bits - a marking bit and a 444 color */
-} pal;
-
-
 /* Non-multiplexed mode */
 static WRITE16_HANDLER( ef9369_w )
 {
+	guab_state *state = space->machine().driver_data<guab_state>();
+	struct ef9369 &pal = state->m_pal;
 	data &= 0x00ff;
 
 	/* Address register */
@@ -180,7 +207,7 @@ static WRITE16_HANDLER( ef9369_w )
 			col = pal.clut[entry] & 0xfff;
 
 			/* Update the MAME palette */
-			palette_set_color_rgb(space->machine, entry, pal4bit(col >> 0), pal4bit(col >> 4), pal4bit(col >> 8));
+			palette_set_color_rgb(space->machine(), entry, pal4bit(col >> 0), pal4bit(col >> 4), pal4bit(col >> 8));
 		}
 
 			/* Address register auto-increment */
@@ -191,6 +218,8 @@ static WRITE16_HANDLER( ef9369_w )
 
 static READ16_HANDLER( ef9369_r )
 {
+	guab_state *state = space->machine().driver_data<guab_state>();
+	struct ef9369 &pal = state->m_pal;
 	if ((offset & 1) == 0)
 	{
 		UINT16 col = pal.clut[pal.addr >> 1];
@@ -214,7 +243,7 @@ static VIDEO_START( guab )
 }
 
 
-static VIDEO_UPDATE( guab )
+static SCREEN_UPDATE_IND16( guab )
 {
 	int x, y;
 	struct tms34061_display state;
@@ -224,22 +253,22 @@ static VIDEO_UPDATE( guab )
 	/* If blanked, fill with black */
 	if (state.blanked)
 	{
-		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+		bitmap.fill(get_black_pen(screen.machine()), cliprect);
 		return 0;
 	}
 
-	for (y = cliprect->min_y; y <= cliprect->max_y; ++y)
+	for (y = cliprect.min_y; y <= cliprect.max_y; ++y)
 	{
 		UINT8 *src = &state.vram[256 * y];
-		UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
+		UINT16 *dest = &bitmap.pix16(y);
 
-		for (x = cliprect->min_x; x <= cliprect->max_x; x += 2)
+		for (x = cliprect.min_x; x <= cliprect.max_x; x += 2)
 		{
 			UINT8 pen = src[x >> 1];
 
 			/* Draw two 4-bit pixels */
-			*dest++ = screen->machine->pens[pen >> 4];
-			*dest++ = screen->machine->pens[pen & 0x0f];
+			*dest++ = screen.machine().pens[pen >> 4];
+			*dest++ = screen.machine().pens[pen & 0x0f];
 		}
 	}
 
@@ -253,20 +282,6 @@ static VIDEO_UPDATE( guab )
  *  (just enough to get by...)
  *
  *************************************/
-
-static struct wd1770
-{
-	UINT32	status;
-	UINT8	cmd;
-	UINT8	data;
-
-	UINT32	side;
-	INT32	track;
-	INT32	sector;
-	UINT32	sptr;
-} fdc;
-
-static emu_timer *fdc_timer;
 
 #define USEC_DELAY			40
 #define DISK_SIDES			2
@@ -295,7 +310,9 @@ enum wd1770_status
 
 static TIMER_CALLBACK( fdc_data_callback )
 {
-	UINT8* disk = (UINT8*)memory_region(machine, "user1");
+	guab_state *state = machine.driver_data<guab_state>();
+	struct wd1770 &fdc = state->m_fdc;
+	UINT8* disk = (UINT8*)machine.region("user1")->base();
 	int more_data = 0;
 
 	/*
@@ -341,7 +358,7 @@ static TIMER_CALLBACK( fdc_data_callback )
 
 	if (more_data)
 	{
-		timer_adjust_oneshot(fdc_timer, ATTOTIME_IN_USEC(USEC_DELAY), 0);
+		state->m_fdc_timer->adjust(attotime::from_usec(USEC_DELAY));
 	}
 	else
 	{
@@ -357,6 +374,8 @@ static TIMER_CALLBACK( fdc_data_callback )
 
 static WRITE16_HANDLER( wd1770_w )
 {
+	guab_state *state = space->machine().driver_data<guab_state>();
+	struct wd1770 &fdc = state->m_fdc;
 	data &= 0xff;
 
 	switch (offset)
@@ -426,7 +445,7 @@ static WRITE16_HANDLER( wd1770_w )
 															fdc.sector));
 
 					/* Set the data read timer */
-					timer_adjust_oneshot(fdc_timer, ATTOTIME_IN_USEC(USEC_DELAY), 0);
+					state->m_fdc_timer->adjust(attotime::from_usec(USEC_DELAY));
 
 					break;
 				}
@@ -445,7 +464,7 @@ static WRITE16_HANDLER( wd1770_w )
 															fdc.sector));
 
 					/* Trigger a DRQ interrupt on the CPU */
-					cputag_set_input_line(space->machine, "maincpu", INT_FLOPPYCTRL, ASSERT_LINE);
+					cputag_set_input_line(space->machine(), "maincpu", INT_FLOPPYCTRL, ASSERT_LINE);
 					fdc.status |= DATA_REQUEST;
 					break;
 				}
@@ -463,7 +482,7 @@ static WRITE16_HANDLER( wd1770_w )
 				case 13:
 				{
 					/* Stop any operation in progress */
-					timer_reset(fdc_timer, attotime_never);
+					state->m_fdc_timer->reset();
 					fdc.status &= ~BUSY;
 					FDC_LOG(("Force Interrupt\n"));
 					break;
@@ -490,11 +509,11 @@ static WRITE16_HANDLER( wd1770_w )
 			fdc.data = data;
 
 			/* Clear the DRQ */
-			cputag_set_input_line(space->machine, "maincpu", INT_FLOPPYCTRL, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "maincpu", INT_FLOPPYCTRL, CLEAR_LINE);
 
 			/* Queue an event to write the data if write command was specified */
 			if (fdc.cmd & 0x20)
-				timer_adjust_oneshot(fdc_timer, ATTOTIME_IN_USEC(USEC_DELAY), 0);
+				state->m_fdc_timer->adjust(attotime::from_usec(USEC_DELAY));
 
 			break;
 		}
@@ -503,6 +522,8 @@ static WRITE16_HANDLER( wd1770_w )
 
 static READ16_HANDLER( wd1770_r )
 {
+	guab_state *state = space->machine().driver_data<guab_state>();
+	struct wd1770 &fdc = state->m_fdc;
 	UINT16 retval = 0;
 
 	switch (offset)
@@ -527,7 +548,7 @@ static READ16_HANDLER( wd1770_r )
 			retval = fdc.data;
 
 			/* Clear the DRQ */
-			cputag_set_input_line(space->machine, "maincpu", INT_FLOPPYCTRL, CLEAR_LINE);
+			cputag_set_input_line(space->machine(), "maincpu", INT_FLOPPYCTRL, CLEAR_LINE);
 			fdc.status &= ~DATA_REQUEST;
 			break;
 		}
@@ -553,7 +574,7 @@ static READ16_HANDLER( io_r )
 		case 0x01:
 		case 0x02:
 		{
-			return input_port_read(space->machine, portnames[offset]);
+			return input_port_read(space->machine(), portnames[offset]);
 		}
 		case 0x30:
 		{
@@ -573,11 +594,11 @@ static INPUT_CHANGED( coin_inserted )
 	if (newval == 0)
 	{
 		UINT32 credit;
-		const address_space *space = cputag_get_address_space(field->port->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = field.machine().device("maincpu")->memory().space(AS_PROGRAM);
 
 		/* Get the current credit value and add the new coin value */
-		credit = memory_read_dword(space, 0x8002c) + (UINT32)(FPTR)param;
-		memory_write_dword(space, 0x8002c, credit);
+		credit = space->read_dword(0x8002c) + (UINT32)(FPTR)param;
+		space->write_dword(0x8002c, credit);
 	}
 }
 
@@ -589,6 +610,8 @@ static INPUT_CHANGED( coin_inserted )
 
 static WRITE16_HANDLER( io_w )
 {
+	guab_state *state = space->machine().driver_data<guab_state>();
+	struct wd1770 &fdc = state->m_fdc;
 	switch (offset)
 	{
 		case 0x10:
@@ -623,7 +646,7 @@ static WRITE16_HANDLER( io_w )
 		}
 		case 0x30:
 		{
-			sn76496_w(devtag_get_device(space->machine, "sn"), 0, data & 0xff);
+			sn76496_w(space->machine().device("snsnd"), 0, data & 0xff);
 			break;
 		}
 		case 0x31:
@@ -656,13 +679,13 @@ static WRITE16_HANDLER( io_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( guab_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( guab_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x040000, 0x04ffff) AM_ROM AM_REGION("maincpu", 0x10000)
 	AM_RANGE(0x0c0000, 0x0c007f) AM_READWRITE(io_r, io_w)
 	AM_RANGE(0x0c0080, 0x0c0083) AM_NOP /* ACIA 1 */
 	AM_RANGE(0x0c00a0, 0x0c00a3) AM_NOP /* ACIA 2 */
-	AM_RANGE(0x0c00c0, 0x0c00cf) AM_DEVREADWRITE8("6840ptm", ptm6840_read, ptm6840_write, 0xff)
+	AM_RANGE(0x0c00c0, 0x0c00cf) AM_DEVREADWRITE8_MODERN("6840ptm", ptm6840_device, read, write, 0xff)
 	AM_RANGE(0x0c00e0, 0x0c00e7) AM_READWRITE(wd1770_r, wd1770_w)
 	AM_RANGE(0x080000, 0x080fff) AM_RAM
 	AM_RANGE(0x100000, 0x100003) AM_READWRITE(ef9369_r, ef9369_w)
@@ -752,44 +775,45 @@ INPUT_PORTS_END
 
  static MACHINE_START( guab )
 {
-	fdc_timer = timer_alloc(machine, fdc_data_callback, NULL);
+	guab_state *state = machine.driver_data<guab_state>();
+	state->m_fdc_timer = machine.scheduler().timer_alloc(FUNC(fdc_data_callback));
 }
 
 static MACHINE_RESET( guab )
 {
-	memset(&fdc, 0, sizeof(fdc));
+	guab_state *state = machine.driver_data<guab_state>();
+	memset(&state->m_fdc, 0, sizeof(state->m_fdc));
 }
 
-static MACHINE_DRIVER_START( guab )
+static MACHINE_CONFIG_START( guab, guab_state )
 	/* TODO: Verify clock */
-	MDRV_CPU_ADD("maincpu", M68000, 8000000)
-	MDRV_CPU_PROGRAM_MAP(guab_map)
+	MCFG_CPU_ADD("maincpu", M68000, 8000000)
+	MCFG_CPU_PROGRAM_MAP(guab_map)
 
-	MDRV_MACHINE_START(guab)
-	MDRV_MACHINE_RESET(guab)
+	MCFG_MACHINE_START(guab)
+	MCFG_MACHINE_RESET(guab)
 
 	/* TODO: Use real video timings */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0, 64*8-1, 0, 32*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0, 64*8-1, 0, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(guab)
 
-	MDRV_PALETTE_LENGTH(16)
+	MCFG_PALETTE_LENGTH(16)
 
-	MDRV_VIDEO_START(guab)
-	MDRV_VIDEO_UPDATE(guab)
+	MCFG_VIDEO_START(guab)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
 	/* TODO: Verify clock */
-	MDRV_SOUND_ADD("sn", SN76489, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("snsnd", SN76489, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	/* 6840 PTM */
-	MDRV_PTM6840_ADD("6840ptm", ptm_intf)
-MACHINE_DRIVER_END
+	MCFG_PTM6840_ADD("6840ptm", ptm_intf)
+MACHINE_CONFIG_END
 
 
 /*************************************

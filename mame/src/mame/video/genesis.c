@@ -1,19 +1,16 @@
 /***********************************************************************************************
 
-    Sega System C/C2 Driver
-    -----------------------
-    Version 0.54 - 02 Feb 2003
-    (for changes see drivers\segac2.c)
+    Old Genesis VDP emulation still used by System 18
+    -------------------------------------------------
+
+    (originally used for Sega System C/C2 Driver, source version 0.54 - 02 Feb 2003)
 
 ***********************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/sn76496.h"
+#include "includes/genesis.h"
 
-#include "genesis.h"
-
-
-static const device_config *genesis_screen;
 
 
 /******************************************************************************
@@ -43,13 +40,13 @@ static const device_config *genesis_screen;
     Function Prototypes
 ******************************************************************************/
 
-static int  vdp_data_r(running_machine *machine);
-static void vdp_data_w(running_machine *machine, int data);
-static int  vdp_control_r(running_machine *machine);
-static void vdp_control_w(const address_space *space, int data);
-static void vdp_register_w(running_machine *machine, int data, int vblank);
-static void vdp_control_dma(const address_space *space, int data);
-static void vdp_dma_68k(const address_space *space);
+static int  vdp_data_r(running_machine &machine);
+static void vdp_data_w(running_machine &machine, int data);
+static int  vdp_control_r(running_machine &machine);
+static void vdp_control_w(address_space *space, int data);
+static void vdp_register_w(running_machine &machine, int data, int vblank);
+static void vdp_control_dma(address_space *space, int data);
+static void vdp_dma_68k(address_space *space);
 static void vdp_dma_fill(int);
 static void vdp_dma_copy(void);
 
@@ -71,6 +68,8 @@ static void drawline_sprite(int line, UINT16 *bmap, int priority, UINT8 *spriteb
        UINT8		genesis_vdp_regs[32];		/* VDP registers */
 
 /* LOCAL */
+static screen_device *genesis_screen;
+
 static UINT8 *		vdp_vram;					/* VDP video RAM */
 static UINT8 *		vdp_vsram;					/* VDP vertical scroll RAM */
 static UINT8		display_enable;				/* is the display enabled? */
@@ -120,7 +119,7 @@ static UINT8		window_width;				/* window width */
 ******************************************************************************/
 
 
-static void start_genesis_vdp(const device_config *screen)
+static void start_genesis_vdp(screen_device &screen)
 {
 	static const UINT8 vdp_init[24] =
 	{
@@ -130,12 +129,12 @@ static void start_genesis_vdp(const device_config *screen)
 	};
 	int i;
 
-	genesis_screen = screen;
+	genesis_screen = &screen;
 
 	/* allocate memory for the VDP, the lookup table, and the buffer bitmap */
-	vdp_vram			= auto_alloc_array(screen->machine, UINT8, VRAM_SIZE);
-	vdp_vsram			= auto_alloc_array(screen->machine, UINT8, VSRAM_SIZE);
-	transparent_lookup	= auto_alloc_array(screen->machine, UINT16, 0x1000);
+	vdp_vram			= auto_alloc_array(screen.machine(), UINT8, VRAM_SIZE);
+	vdp_vsram			= auto_alloc_array(screen.machine(), UINT8, VSRAM_SIZE);
+	transparent_lookup	= auto_alloc_array(screen.machine(), UINT16, 0x1000);
 
 	/* clear the VDP memory, prevents corrupt tile in Puyo Puyo 2 */
 	memset(vdp_vram, 0, VRAM_SIZE);
@@ -164,62 +163,41 @@ static void start_genesis_vdp(const device_config *screen)
 
 	/* reset VDP */
     for (i = 0; i < 24; i++)
-        vdp_register_w(screen->machine, 0x8000 | (i << 8) | vdp_init[i], 1);
+        vdp_register_w(screen.machine(), 0x8000 | (i << 8) | vdp_init[i], 1);
 	vdp_cmdpart = 0;
 	vdp_code    = 0;
 	vdp_address = 0;
 
 	/* Save State Stuff */
-	state_save_register_global_array(screen->machine, genesis_vdp_regs);
-	state_save_register_global_pointer(screen->machine, vdp_vram, 0x10000);
-	state_save_register_global_pointer(screen->machine, vdp_vsram, 0x80);
-	state_save_register_global_array(screen->machine, genesis_bg_pal_lookup);
-	state_save_register_global_array(screen->machine, genesis_sp_pal_lookup);
-	state_save_register_global(screen->machine, display_enable);
-	state_save_register_global(screen->machine, vdp_scrollabase);
-	state_save_register_global(screen->machine, vdp_scrollbbase);
-	state_save_register_global(screen->machine, vdp_windowbase);
-	state_save_register_global(screen->machine, vdp_spritebase);
-	state_save_register_global(screen->machine, vdp_hscrollbase);
-	state_save_register_global(screen->machine, vdp_hscrollmask);
-	state_save_register_global(screen->machine, vdp_hscrollsize);
-	state_save_register_global(screen->machine, vdp_vscrollmode);
-	state_save_register_global(screen->machine, vdp_cmdpart);
-	state_save_register_global(screen->machine, vdp_code);
-	state_save_register_global(screen->machine, vdp_address);
-	state_save_register_global(screen->machine, vdp_dmafill);
-	state_save_register_global(screen->machine, scrollheight);
-	state_save_register_global(screen->machine, scrollwidth);
-	state_save_register_global(screen->machine, bgcol);
-	state_save_register_global(screen->machine, window_down);
-	state_save_register_global(screen->machine, window_vpos);
-}
-
-VIDEO_START(genesis)
-{
-	start_genesis_vdp(machine->primary_screen);
+	state_save_register_global_array(screen.machine(), genesis_vdp_regs);
+	state_save_register_global_pointer(screen.machine(), vdp_vram, 0x10000);
+	state_save_register_global_pointer(screen.machine(), vdp_vsram, 0x80);
+	state_save_register_global_array(screen.machine(), genesis_bg_pal_lookup);
+	state_save_register_global_array(screen.machine(), genesis_sp_pal_lookup);
+	state_save_register_global(screen.machine(), display_enable);
+	state_save_register_global(screen.machine(), vdp_scrollabase);
+	state_save_register_global(screen.machine(), vdp_scrollbbase);
+	state_save_register_global(screen.machine(), vdp_windowbase);
+	state_save_register_global(screen.machine(), vdp_spritebase);
+	state_save_register_global(screen.machine(), vdp_hscrollbase);
+	state_save_register_global(screen.machine(), vdp_hscrollmask);
+	state_save_register_global(screen.machine(), vdp_hscrollsize);
+	state_save_register_global(screen.machine(), vdp_vscrollmode);
+	state_save_register_global(screen.machine(), vdp_cmdpart);
+	state_save_register_global(screen.machine(), vdp_code);
+	state_save_register_global(screen.machine(), vdp_address);
+	state_save_register_global(screen.machine(), vdp_dmafill);
+	state_save_register_global(screen.machine(), scrollheight);
+	state_save_register_global(screen.machine(), scrollwidth);
+	state_save_register_global(screen.machine(), bgcol);
+	state_save_register_global(screen.machine(), window_down);
+	state_save_register_global(screen.machine(), window_vpos);
 }
 
 
-VIDEO_START( segac2 )
+void system18_vdp_start(running_machine &machine)
 {
-	start_genesis_vdp(machine->primary_screen);
-
-	/* C2 has separate sprite/background palettes */
-	genesis_sp_pal_lookup[0] = 0x100;
-	genesis_sp_pal_lookup[1] = 0x110;
-	genesis_sp_pal_lookup[2] = 0x120;
-	genesis_sp_pal_lookup[3] = 0x130;
-}
-
-
-
-
-
-
-void system18_vdp_start(running_machine *machine)
-{
-	start_genesis_vdp(machine->primary_screen);
+	start_genesis_vdp(*machine.primary_screen);
 
 	genesis_palette_base = 0x1800;
 	genesis_bg_pal_lookup[0] = genesis_sp_pal_lookup[0] = 0x1800;
@@ -243,61 +221,13 @@ void system18_vdp_start(running_machine *machine)
 
 ******************************************************************************/
 
-/* set the display enable bit */
-void segac2_enable_display(running_machine *machine, int enable)
-{
-	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
-	display_enable = enable;
-}
-
-
-VIDEO_UPDATE( genesis )
-{
-	int y;
-
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
-		drawline(BITMAP_ADDR16(bitmap, y, 0), y, 0);
-	return 0;
-}
-
-
-VIDEO_UPDATE( segac2 )
-{
-	if (!display_enable)
-		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
-	else
-		VIDEO_UPDATE_CALL(genesis);
-	return 0;
-}
-
-
-
-
-/* megaplay, draws either Genesis or SMS (single screen display) */
-
-/* core refresh: computes the final screen */
-#if 0
-VIDEO_UPDATE( megaplay )
-{
-	int y;
-
-
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
-		drawline(BITMAP_ADDR16(bitmap, y, 0), y, 0);
-
-	//VIDEO_UPDATE_CALL(megaplay_normal);
-
-	return 0;
-}
-#endif
-
-void system18_vdp_update( bitmap_t *bitmap, const rectangle *cliprect )
+void system18_vdp_update( bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
 	int y;
 
 	/* generate the final screen */
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
-		drawline(BITMAP_ADDR16(bitmap, y, 0), y, 0xffff);
+	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
+		drawline(&bitmap.pix16(y), y, 0xffff);
 }
 
 /******************************************************************************
@@ -332,19 +262,19 @@ READ16_HANDLER( genesis_vdp_r )
 	{
 		case 0x00:	/* Read Data */
 		case 0x01:
-			return vdp_data_r(space->machine);
+			return vdp_data_r(space->machine());
 
 		case 0x02:	/* Status Register */
 		case 0x03:
-			return vdp_control_r(space->machine);
+			return vdp_control_r(space->machine());
 
 		case 0x04:	/* HV counter */
 		case 0x05:
 		case 0x06:
 		case 0x07:
 		{
-			int xpos = video_screen_get_hpos(genesis_screen);
-			int ypos = video_screen_get_vpos(genesis_screen);
+			int xpos = genesis_screen->hpos();
+			int ypos = genesis_screen->vpos();
 
 			/* adjust for the weird counting rules */
 			if (xpos > 0xe9) xpos -= (342 - 0x100);
@@ -362,7 +292,7 @@ READ16_HANDLER( genesis_vdp_r )
 
 WRITE16_HANDLER( genesis_vdp_w )
 {
-	const device_config *device;
+	device_t *device;
 	switch (offset)
 	{
 		case 0x00:	/* Write data */
@@ -371,11 +301,11 @@ WRITE16_HANDLER( genesis_vdp_w )
 			{
 				data &= mem_mask;
 				 if (ACCESSING_BITS_8_15)
-				 	data |= data >> 8;
+					data |= data >> 8;
 				 else
-				 	data |= data << 8;
+					data |= data << 8;
 			}
-			vdp_data_w(space->machine, data);
+			vdp_data_w(space->machine(), data);
 			break;
 
 		case 0x02:	/* Control Write */
@@ -384,9 +314,9 @@ WRITE16_HANDLER( genesis_vdp_w )
 			{
 				data &= mem_mask;
 				 if (ACCESSING_BITS_8_15)
-				 	data |= data >> 8;
+					data |= data >> 8;
 				 else
-				 	data |= data << 8;
+					data |= data << 8;
 			}
 			vdp_control_w(space, data);
 			break;
@@ -395,7 +325,7 @@ WRITE16_HANDLER( genesis_vdp_w )
 		case 0x09:
 		case 0x0a:
 		case 0x0b:
-			device = devtag_get_device(space->machine, "sn");
+			device = space->machine().device("snsnd");
 			if (device != NULL && ACCESSING_BITS_0_7)
 				sn76496_w(device, 0, data & 0xff);
 			break;
@@ -417,7 +347,7 @@ WRITE16_HANDLER( genesis_vdp_w )
 ******************************************************************************/
 
 /* Games needing Read to Work .. bloxeed (attract) .. puyo puyo .. probably more */
-static int vdp_data_r(running_machine *machine)
+static int vdp_data_r(running_machine &machine)
 {
 	int read = 0;
 
@@ -436,7 +366,7 @@ static int vdp_data_r(running_machine *machine)
 			break;
 
 		default:		/* Illegal read attempt */
-			logerror("%s: VDP illegal read type %02x\n", cpuexec_describe_context(machine), vdp_code);
+			logerror("%s: VDP illegal read type %02x\n", machine.describe_context(), vdp_code);
 			read = 0x00;
 			break;
 	}
@@ -447,7 +377,7 @@ static int vdp_data_r(running_machine *machine)
 }
 
 
-static void vdp_data_w(running_machine *machine, int data)
+static void vdp_data_w(running_machine &machine, int data)
 {
 	/* kill 2nd write pending flag */
 	vdp_cmdpart = 0;
@@ -468,7 +398,7 @@ static void vdp_data_w(running_machine *machine, int data)
 			/* if the hscroll RAM is changing, force an update */
 			if (vdp_address >= vdp_hscrollbase &&
 				vdp_address < vdp_hscrollbase + vdp_hscrollsize)
-				video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
+				machine.primary_screen->update_partial(machine.primary_screen->vpos());
 
 			/* write to VRAM */
 			if (vdp_address & 1)
@@ -487,7 +417,7 @@ static void vdp_data_w(running_machine *machine, int data)
 		case 0x05:		/* VSRAM write */
 
 			/* vscroll RAM is changing, force an update */
-			video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
+			machine.primary_screen->update_partial(machine.primary_screen->vpos());
 
 			/* write to VSRAM */
 			if (vdp_address & 1)
@@ -497,7 +427,7 @@ static void vdp_data_w(running_machine *machine, int data)
 			break;
 
 		default:		/* Illegal write attempt */
-			logerror("%s: VDP illegal write type %02x data %04x\n", cpuexec_describe_context(machine), vdp_code, data);
+			logerror("%s: VDP illegal write type %02x data %04x\n", machine.describe_context(), vdp_code, data);
 			break;
 	}
 
@@ -541,7 +471,7 @@ static void vdp_data_w(running_machine *machine, int data)
 
 ******************************************************************************/
 
-static int vdp_control_r(running_machine *machine)
+static int vdp_control_r(running_machine &machine)
 {
 	int status = 0x3600; // wwally needs fifo empty set
 
@@ -549,25 +479,25 @@ static int vdp_control_r(running_machine *machine)
 	vdp_cmdpart = 0;
 
 	/* set the VBLANK bit */
-	if (video_screen_get_vblank(machine->primary_screen))
+	if (machine.primary_screen->vblank())
 		status |= 0x0008;
 
 	/* set the HBLANK bit */
-	if (video_screen_get_hblank(machine->primary_screen))
+	if (machine.primary_screen->hblank())
 		status |= 0x0004;
 
 	return (status);
 }
 
 
-static void vdp_control_w(const address_space *space, int data)
+static void vdp_control_w(address_space *space, int data)
 {
 	/* case 1: we're not expecting the 2nd half of a command */
 	if (!vdp_cmdpart)
 	{
 		/* if 10xxxxxx xxxxxxxx this is a register setting command */
 		if ((data & 0xc000) == 0x8000)
-			vdp_register_w(space->machine, data, video_screen_get_vblank(space->machine->primary_screen));
+			vdp_register_w(space->machine(), data, space->machine().primary_screen->vblank());
 
 		/* otherwise this is the First part of a mode setting command */
 		else
@@ -589,7 +519,7 @@ static void vdp_control_w(const address_space *space, int data)
 }
 
 
-static void vdp_register_w(running_machine *machine, int data, int vblank)
+static void vdp_register_w(running_machine &machine, int data, int vblank)
 {
 	int scrwidth = 0;
 	static const UINT8 is_important[32] = { 0,0,1,1,1,1,0,1,0,0,0,1,0,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0 };
@@ -601,7 +531,7 @@ static void vdp_register_w(running_machine *machine, int data, int vblank)
 
 	/* these are mostly important writes; force an update if they written */
 	if (is_important[regnum])
-		video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
+		machine.primary_screen->update_partial(machine.primary_screen->vpos());
 
 	/* For quite a few of the registers its a good idea to set a couple of variable based
        upon the writes here */
@@ -664,13 +594,13 @@ static void vdp_register_w(running_machine *machine, int data, int vblank)
 				break;
 			}
 			{
-				int height = video_screen_get_height(genesis_screen);
-				rectangle visarea = *video_screen_get_visible_area(genesis_screen);
-				attoseconds_t refresh = video_screen_get_frame_period(genesis_screen).attoseconds;
+				int height = genesis_screen->height();
+				rectangle visarea = genesis_screen->visible_area();
+				attoseconds_t refresh = genesis_screen->frame_period().attoseconds;
 
 				/* this gets called from the init! */
 				visarea.max_x = scrwidth*8-1;
-				video_screen_configure(genesis_screen, scrwidth*8, height, &visarea, refresh);
+				genesis_screen->configure(scrwidth*8, height, visarea, refresh);
 			}
 			break;
 
@@ -699,7 +629,7 @@ static void vdp_register_w(running_machine *machine, int data, int vblank)
 }
 
 
-static void vdp_control_dma(const address_space *space, int data)
+static void vdp_control_dma(address_space *space, int data)
 {
 	if ((vdp_code & 0x20) && (genesis_vdp_regs[1] & 0x10))
 	{
@@ -731,7 +661,7 @@ static void vdp_control_dma(const address_space *space, int data)
 
 ******************************************************************************/
 
-static void vdp_dma_68k(const address_space *space)
+static void vdp_dma_68k(address_space *space)
 {
 	int length = genesis_vdp_regs[19] | (genesis_vdp_regs[20] << 8);
 	int source = (genesis_vdp_regs[21] << 1) | (genesis_vdp_regs[22] << 9) | ((genesis_vdp_regs[23] & 0x7f) << 17);
@@ -744,7 +674,7 @@ static void vdp_dma_68k(const address_space *space)
 	/* handle the DMA */
 	for (count = 0; count < length; count++)
 	{
-		vdp_data_w(space->machine, memory_read_word(space, source));
+		vdp_data_w(space->machine(), space->read_word(source));
 		source += 2;
 	}
 }

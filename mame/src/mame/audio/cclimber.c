@@ -1,7 +1,7 @@
-#include "driver.h"
+#include "emu.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
-#include "includes/cclimber.h"
+#include "audio/cclimber.h"
 
 
 /* macro to convert 4-bit unsigned samples to 16-bit signed samples */
@@ -15,19 +15,19 @@ static INT16 *samplebuf;	/* buffer to decode samples at run time */
 
 static SAMPLES_START( cclimber_sh_start )
 {
-	running_machine *machine = device->machine;
+	running_machine &machine = device->machine();
 	samplebuf = 0;
-	if (memory_region(machine, "samples"))
-		samplebuf = auto_alloc_array(machine, INT16, 2 * memory_region_length(machine, "samples"));
+	if (machine.region("samples")->base())
+		samplebuf = auto_alloc_array(machine, INT16, 2 * machine.region("samples")->bytes());
 }
 
 
-static void cclimber_play_sample(running_machine *machine, int start,int freq,int volume)
+static void cclimber_play_sample(running_machine &machine, int start,int freq,int volume)
 {
 	int len;
-	int romlen = memory_region_length(machine, "samples");
-	const UINT8 *rom = memory_region(machine, "samples");
-	const device_config *samples = devtag_get_device(machine, "samples");
+	int romlen = machine.region("samples")->bytes();
+	const UINT8 *rom = machine.region("samples")->base();
+	device_t *samples = machine.device("samples");
 
 
 	if (!rom) return;
@@ -74,7 +74,7 @@ WRITE8_HANDLER( cclimber_sample_trigger_w )
 	if (data == 0)
 		return;
 
-	cclimber_play_sample(space->machine, 32 * sample_num,sample_freq,sample_volume);
+	cclimber_play_sample(space->machine(), 32 * sample_num,sample_freq,sample_volume);
 }
 
 

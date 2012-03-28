@@ -1,4 +1,5 @@
-#include "driver.h"
+#include "emu.h"
+#include "includes/pk8000.h"
 
 static UINT8 pk8000_text_start;
 static UINT8 pk8000_chargen_start;
@@ -94,18 +95,15 @@ PALETTE_INIT( pk8000 )
 	palette_set_colors(machine, 0, pk8000_palette, ARRAY_LENGTH(pk8000_palette));
 }
 
-UINT32 pk8000_video_update(const device_config *screen, bitmap_t *bitmap, const rectangle *cliprect, UINT8 *videomem)
+UINT32 pk8000_video_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect, UINT8 *videomem)
 {
 	int x,y,j,b;
 	UINT16 offset = (pk8000_video_mode & 0xc0) << 8;
 	rectangle my_rect;
-	my_rect.min_x = 0;
-	my_rect.max_x = 256+32-1;
-	my_rect.min_y = 0;
-	my_rect.max_y = 192+32-1;
+	my_rect.set(0, 256+32-1, 0, 192+32-1);
 
 	if (pk8000_video_enable) {
-		bitmap_fill(bitmap, &my_rect, (pk8000_video_color >> 4) & 0x0f);
+		bitmap.fill((pk8000_video_color >> 4) & 0x0f, my_rect);
 
 		if (BIT(pk8000_video_mode,4)==0){
 			// Text mode
@@ -123,7 +121,7 @@ UINT32 pk8000_video_update(const device_config *screen, bitmap_t *bitmap, const 
 							for (b = 0; b < 8; b++)
 							{
 								UINT8 col = (code >> b) & 0x01 ? (color & 0x0f) : ((color>>4) & 0x0f);
-								*BITMAP_ADDR16(bitmap, (y*8)+j+16, x*8+(7-b)+16) =  col;
+								bitmap.pix16((y*8)+j+16, x*8+(7-b)+16) =  col;
 							}
 						}
 					}
@@ -140,7 +138,7 @@ UINT32 pk8000_video_update(const device_config *screen, bitmap_t *bitmap, const 
 							for (b = 2; b < 8; b++)
 							{
 								UINT8 col = ((code >> b) & 0x01) ? (pk8000_video_color) & 0x0f : (pk8000_video_color>>4) & 0x0f;
-								*BITMAP_ADDR16(bitmap, (y*8)+j+16, x*6+(7-b)+16+8) =  col;
+								bitmap.pix16((y*8)+j+16, x*6+(7-b)+16+8) =  col;
 							}
 						}
 					}
@@ -162,7 +160,7 @@ UINT32 pk8000_video_update(const device_config *screen, bitmap_t *bitmap, const 
 						for (b = 0; b < 8; b++)
 						{
 							UINT8 col = (code >> b) & 0x01 ? (color & 0x0f) : ((color>>4) & 0x0f);
-							*BITMAP_ADDR16(bitmap, (y*8)+j+16, x*8+(7-b)+16) =  col;
+							bitmap.pix16((y*8)+j+16, x*8+(7-b)+16) =  col;
 						}
 					}
 				}
@@ -170,7 +168,7 @@ UINT32 pk8000_video_update(const device_config *screen, bitmap_t *bitmap, const 
 		}
 	} else {
 		// Disabled video
-		bitmap_fill(bitmap, &my_rect, 0);
+		bitmap.fill(0, my_rect);
 	}
     return 0;
 }

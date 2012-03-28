@@ -6,17 +6,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/resnet.h"
-
-
-UINT8 *gyruss_videoram;
-UINT8 *gyruss_colorram;
-UINT8 *gyruss_spriteram;
-UINT8 *gyruss_flipscreen;
-
-static tilemap *gyruss_tilemap;
-
+#include "includes/gyruss.h"
 
 /***************************************************************************
 
@@ -51,7 +43,7 @@ PALETTE_INIT( gyruss )
 			0, 0, 0, 0, 0);
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 32);
+	machine.colortable = colortable_alloc(machine, 32);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -76,7 +68,7 @@ PALETTE_INIT( gyruss )
 		bit1 = (color_prom[i] >> 7) & 0x01;
 		b = combine_2_weights(weights_b, bit0, bit1);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -86,14 +78,14 @@ PALETTE_INIT( gyruss )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 
 	/* characters map to the upper 16 palette entries */
 	for (i = 0x100; i < 0x140; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine->colortable, i, ctabentry + 0x10);
+		colortable_entry_set_value(machine.colortable, i, ctabentry + 0x10);
 	}
 }
 
@@ -101,18 +93,20 @@ PALETTE_INIT( gyruss )
 
 WRITE8_HANDLER( gyruss_spriteram_w )
 {
-	video_screen_update_now(space->machine->primary_screen);
-	gyruss_spriteram[offset] = data;
+	gyruss_state *state = space->machine().driver_data<gyruss_state>();
+	space->machine().primary_screen->update_now();
+	state->m_spriteram[offset] = data;
 }
 
 
 static TILE_GET_INFO( gyruss_get_tile_info )
 {
-	int code = ((gyruss_colorram[tile_index] & 0x20) << 3) | gyruss_videoram[tile_index];
-	int color = gyruss_colorram[tile_index] & 0x0f;
-	int flags = TILE_FLIPYX(gyruss_colorram[tile_index] >> 6);
+	gyruss_state *state = machine.driver_data<gyruss_state>();
+	int code = ((state->m_colorram[tile_index] & 0x20) << 3) | state->m_videoram[tile_index];
+	int color = state->m_colorram[tile_index] & 0x0f;
+	int flags = TILE_FLIPYX(state->m_colorram[tile_index] >> 6);
 
-	tileinfo->group = (gyruss_colorram[tile_index] & 0x10) ? 0 : 1;
+	tileinfo.group = (state->m_colorram[tile_index] & 0x10) ? 0 : 1;
 
 	SET_TILE_INFO(2, code, color, flags);
 }
@@ -120,9 +114,10 @@ static TILE_GET_INFO( gyruss_get_tile_info )
 
 VIDEO_START( gyruss )
 {
-	gyruss_tilemap = tilemap_create(machine, gyruss_get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	tilemap_set_transmask(gyruss_tilemap, 0, 0x00, 0);	/* opaque */
-	tilemap_set_transmask(gyruss_tilemap, 1, 0x0f, 0);  /* transparent */
+	gyruss_state *state = machine.driver_data<gyruss_state>();
+	state->m_tilemap = tilemap_create(machine, gyruss_get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	state->m_tilemap->set_transmask(0, 0x00, 0);	/* opaque */
+	state->m_tilemap->set_transmask(1, 0x0f, 0);  /* transparent */
 }
 
 
@@ -130,41 +125,44 @@ VIDEO_START( gyruss )
 READ8_HANDLER( gyruss_scanline_r )
 {
 	/* reads 1V - 128V */
-	return video_screen_get_vpos(space->machine->primary_screen);
+	return space->machine().primary_screen->vpos();
 }
 
 
-static void draw_sprites(bitmap_t *bitmap, const rectangle *cliprect, gfx_element **gfx)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, gfx_element **gfx )
 {
+	gyruss_state *state = machine.driver_data<gyruss_state>();
 	int offs;
 
 	for (offs = 0xbc; offs >= 0; offs -= 4)
 	{
-		int x = gyruss_spriteram[offs];
-		int y = 241 - gyruss_spriteram[offs + 3];
+		int x = state->m_spriteram[offs];
+		int y = 241 - state->m_spriteram[offs + 3];
 
-		int gfx_bank = gyruss_spriteram[offs + 1] & 0x01;
-		int code = ((gyruss_spriteram[offs + 2] & 0x20) << 2) | ( gyruss_spriteram[offs + 1] >> 1);
-		int color = gyruss_spriteram[offs + 2] & 0x0f;
-		int flip_x = ~gyruss_spriteram[offs + 2] & 0x40;
-		int flip_y =  gyruss_spriteram[offs + 2] & 0x80;
+		int gfx_bank = state->m_spriteram[offs + 1] & 0x01;
+		int code = ((state->m_spriteram[offs + 2] & 0x20) << 2) | ( state->m_spriteram[offs + 1] >> 1);
+		int color = state->m_spriteram[offs + 2] & 0x0f;
+		int flip_x = ~state->m_spriteram[offs + 2] & 0x40;
+		int flip_y =  state->m_spriteram[offs + 2] & 0x80;
 
 		drawgfx_transpen(bitmap, cliprect, gfx[gfx_bank], code, color, flip_x, flip_y, x, y, 0);
 	}
 }
 
 
-VIDEO_UPDATE( gyruss )
+SCREEN_UPDATE_IND16( gyruss )
 {
-	if (cliprect->min_y == video_screen_get_visible_area(screen)->min_y)
+	gyruss_state *state = screen.machine().driver_data<gyruss_state>();
+
+	if (cliprect.min_y == screen.visible_area().min_y)
 	{
-		tilemap_mark_all_tiles_dirty_all(screen->machine);
-		tilemap_set_flip_all(screen->machine, (*gyruss_flipscreen & 0x01) ? (TILEMAP_FLIPX | TILEMAP_FLIPY) : 0);
+		screen.machine().tilemap().mark_all_dirty();
+		screen.machine().tilemap().set_flip_all((*state->m_flipscreen & 0x01) ? (TILEMAP_FLIPX | TILEMAP_FLIPY) : 0);
 	}
 
-	tilemap_draw(bitmap, cliprect, gyruss_tilemap, TILEMAP_DRAW_OPAQUE, 0);
-	draw_sprites(bitmap, cliprect, screen->machine->gfx);
-	tilemap_draw(bitmap, cliprect, gyruss_tilemap, 0, 0);
+	state->m_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect, screen.machine().gfx);
+	state->m_tilemap->draw(bitmap, cliprect, 0, 0);
 
 	return 0;
 }

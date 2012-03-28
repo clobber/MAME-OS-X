@@ -9,34 +9,25 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/3526intf.h"
+#include "includes/battlane.h"
 
-extern UINT8 *battlane_spriteram;
-extern UINT8 *battlane_tileram;
-
-extern WRITE8_HANDLER( battlane_palette_w );
-extern WRITE8_HANDLER( battlane_scrollx_w );
-extern WRITE8_HANDLER( battlane_scrolly_w );
-extern WRITE8_HANDLER( battlane_tileram_w );
-extern WRITE8_HANDLER( battlane_spriteram_w );
-extern WRITE8_HANDLER( battlane_bitmap_w );
-extern WRITE8_HANDLER( battlane_video_ctrl_w );
-
-extern VIDEO_START( battlane );
-extern VIDEO_UPDATE( battlane );
-
-
-/* CPU interrupt control register */
-int battlane_cpu_control;
+/*************************************
+ *
+ *  Memory handlers
+ *
+ *************************************/
 
 static WRITE8_HANDLER( battlane_cpu_command_w )
 {
-	battlane_cpu_control = data;
+	battlane_state *state = space->machine().driver_data<battlane_state>();
+
+	state->m_cpu_control = data;
 
 	/*
-    CPU control register
+      CPU control register
 
         0x80    = Video Flip
         0x08    = NMI
@@ -45,7 +36,7 @@ static WRITE8_HANDLER( battlane_cpu_command_w )
         0x01    = Y Scroll MSB
     */
 
-	flip_screen_set(space->machine, data & 0x80);
+	flip_screen_set(space->machine(), data & 0x80);
 
 	/*
         I think that the NMI is an inhibitor. It is constantly set
@@ -56,10 +47,10 @@ static WRITE8_HANDLER( battlane_cpu_command_w )
     */
 
     /*
-    if (~battlane_cpu_control & 0x08)
+    if (~state->m_cpu_control & 0x08)
     {
-        cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
-        cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);
+        device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
+        device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, PULSE_LINE);
     }
     */
 
@@ -67,7 +58,7 @@ static WRITE8_HANDLER( battlane_cpu_command_w )
         CPU2's SWI will trigger an 6809 IRQ on the master by resetting 0x04
         Master will respond by setting the bit back again
     */
-    cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE,  data & 0x04 ? CLEAR_LINE : HOLD_LINE);
+    device_set_input_line(state->m_maincpu, M6809_IRQ_LINE,  data & 0x04 ? CLEAR_LINE : HOLD_LINE);
 
 	/*
     Slave function call (e.g. ROM test):
@@ -85,34 +76,48 @@ static WRITE8_HANDLER( battlane_cpu_command_w )
     FA96: 27 FA       BEQ   $FA92   ; Wait for bit to be set
     */
 
-	cputag_set_input_line(space->machine, "sub", M6809_IRQ_LINE, data & 0x02 ? CLEAR_LINE : HOLD_LINE);
+	device_set_input_line(state->m_subcpu, M6809_IRQ_LINE, data & 0x02 ? CLEAR_LINE : HOLD_LINE);
 }
 
-static ADDRESS_MAP_START( battlane_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(battlane_tileram_w) AM_SHARE(2) AM_BASE(&battlane_tileram)
-	AM_RANGE(0x1800, 0x18ff) AM_RAM_WRITE(battlane_spriteram_w) AM_SHARE(3) AM_BASE(&battlane_spriteram)
+static INTERRUPT_GEN( battlane_cpu1_interrupt )
+{
+	battlane_state *state = device->machine().driver_data<battlane_state>();
+
+	/* See note in battlane_cpu_command_w */
+	if (~state->m_cpu_control & 0x08)
+	{
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, PULSE_LINE);
+	}
+}
+
+
+/*************************************
+ *
+ *  Address maps
+ *
+ *************************************/
+
+static ADDRESS_MAP_START( battlane_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(battlane_tileram_w) AM_SHARE("share2") AM_BASE_MEMBER(battlane_state, m_tileram)
+	AM_RANGE(0x1800, 0x18ff) AM_RAM_WRITE(battlane_spriteram_w) AM_SHARE("share3") AM_BASE_MEMBER(battlane_state, m_spriteram)
 	AM_RANGE(0x1c00, 0x1c00) AM_READ_PORT("P1") AM_WRITE(battlane_video_ctrl_w)
 	AM_RANGE(0x1c01, 0x1c01) AM_READ_PORT("P2") AM_WRITE(battlane_scrollx_w)
 	AM_RANGE(0x1c02, 0x1c02) AM_READ_PORT("DSW1") AM_WRITE(battlane_scrolly_w)
 	AM_RANGE(0x1c03, 0x1c03) AM_READ_PORT("DSW2") AM_WRITE(battlane_cpu_command_w)
-	AM_RANGE(0x1c04, 0x1c05) AM_DEVREADWRITE("ym", ym3526_r, ym3526_w)
+	AM_RANGE(0x1c04, 0x1c05) AM_DEVREADWRITE("ymsnd", ym3526_r, ym3526_w)
 	AM_RANGE(0x1e00, 0x1e3f) AM_WRITE(battlane_palette_w)
-	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(battlane_bitmap_w) AM_SHARE(4)
+	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(battlane_bitmap_w) AM_SHARE("share4")
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static INTERRUPT_GEN( battlane_cpu1_interrupt )
-{
-	/* See note in battlane_cpu_command_w */
 
-	if (~battlane_cpu_control & 0x08)
-	{
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-		cputag_set_input_line(device->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);
-	}
-}
-
+/*************************************
+ *
+ *  Input ports
+ *
+ *************************************/
 
 static INPUT_PORTS_START( battlane )
 	PORT_START("P1")
@@ -175,6 +180,12 @@ static INPUT_PORTS_START( battlane )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 )
 INPUT_PORTS_END
 
+
+/*************************************
+ *
+ *  Graphics definitions
+ *
+ *************************************/
 
 static const gfx_layout spritelayout =
 {
@@ -239,9 +250,16 @@ static GFXDECODE_START( battlane )
 GFXDECODE_END
 
 
-static void irqhandler(const device_config *device, int irq)
+/*************************************
+ *
+ *  Sound interface
+ *
+ *************************************/
+
+static void irqhandler( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "maincpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
+	battlane_state *state = device->machine().driver_data<battlane_state>();
+	device_set_input_line(state->m_maincpu, M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym3526_interface ym3526_config =
@@ -250,45 +268,73 @@ static const ym3526_interface ym3526_config =
 };
 
 
-static MACHINE_DRIVER_START( battlane )
+/*************************************
+ *
+ *  Machine driver
+ *
+ *************************************/
+
+static MACHINE_START( battlane )
+{
+	battlane_state *state = machine.driver_data<battlane_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_subcpu = machine.device("sub");
+
+	state->save_item(NAME(state->m_video_ctrl));
+	state->save_item(NAME(state->m_cpu_control));
+}
+
+static MACHINE_RESET( battlane )
+{
+	battlane_state *state = machine.driver_data<battlane_state>();
+
+	state->m_video_ctrl = 0;
+	state->m_cpu_control = 0;
+}
+
+static MACHINE_CONFIG_START( battlane, battlane_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, 1250000)        /* 1.25 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(battlane_map)
-	MDRV_CPU_VBLANK_INT("screen", battlane_cpu1_interrupt)
+	MCFG_CPU_ADD("maincpu", M6809, 1500000)        /* 1.5 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(battlane_map)
+	MCFG_CPU_VBLANK_INT("screen", battlane_cpu1_interrupt)
 
-	MDRV_CPU_ADD("sub", M6809, 1250000)        /* 1.25 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(battlane_map)
+	MCFG_CPU_ADD("sub", M6809, 1500000)        /* 1.5 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(battlane_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+
+	MCFG_MACHINE_START(battlane)
+	MCFG_MACHINE_RESET(battlane)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32 * 8, 32 * 8)
-	MDRV_SCREEN_VISIBLE_AREA(1 * 8, 31 * 8 - 1, 0 * 8, 32 * 8 - 1)
-	MDRV_GFXDECODE(battlane)
-	MDRV_PALETTE_LENGTH(64)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(32 * 8, 32 * 8)
+	MCFG_SCREEN_VISIBLE_AREA(1 * 8, 31 * 8 - 1, 0 * 8, 32 * 8 - 1)
+	MCFG_SCREEN_UPDATE_STATIC(battlane)
 
-	MDRV_VIDEO_START(battlane)
-	MDRV_VIDEO_UPDATE(battlane)
+	MCFG_GFXDECODE(battlane)
+	MCFG_PALETTE_LENGTH(64)
+
+	MCFG_VIDEO_START(battlane)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3526, 3000000)
-	MDRV_SOUND_CONFIG(ym3526_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM3526, 3000000)
+	MCFG_SOUND_CONFIG(ym3526_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
-/***************************************************************************
-
-  Game driver(s)
-
-***************************************************************************/
+/*************************************
+ *
+ *  ROM definition(s)
+ *
+ *************************************/
 
 ROM_START( battlane )
 	ROM_REGION( 0x8000, "user1", 0 )     /*  */
@@ -375,6 +421,12 @@ ROM_START( battlane3 )
 ROM_END
 
 
-GAME( 1986, battlane,  0,        battlane, battlane, 0, ROT90, "Technos Japan (Taito license)", "Battle Lane! Vol. 5 (set 1)", 0 )
-GAME( 1986, battlane2, battlane, battlane, battlane, 0, ROT90, "Technos Japan (Taito license)", "Battle Lane! Vol. 5 (set 2)", 0 )
-GAME( 1986, battlane3, battlane, battlane, battlane, 0, ROT90, "Technos Japan (Taito license)", "Battle Lane! Vol. 5 (set 3)", 0 )
+/*************************************
+ *
+ *  Game driver(s)
+ *
+ *************************************/
+
+GAME( 1986, battlane,  0,        battlane, battlane, 0, ROT90, "Technos Japan (Taito license)", "Battle Lane! Vol. 5 (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, battlane2, battlane, battlane, battlane, 0, ROT90, "Technos Japan (Taito license)", "Battle Lane! Vol. 5 (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1986, battlane3, battlane, battlane, battlane, 0, ROT90, "Technos Japan (Taito license)", "Battle Lane! Vol. 5 (set 3)", GAME_SUPPORTS_SAVE )

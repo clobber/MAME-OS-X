@@ -24,7 +24,7 @@ static UINT8 *blend_y, *blend_cc;
  *
  *************************************/
 
-void jagobj_init(running_machine *machine)
+void jagobj_init(running_machine &machine)
 {
 	int i;
 
@@ -567,7 +567,7 @@ INLINE UINT8 lookup_pixel(const UINT32 *src, int i, int pitch, int depth)
  *
  *************************************/
 
-static UINT32 *process_bitmap(running_machine *machine, UINT32 *objdata, int vc, int logit)
+static UINT32 *process_bitmap(running_machine &machine, UINT32 *objdata, int vc, int logit)
 {
 	/* extract minimal data */
 	UINT32 upper = objdata[0];
@@ -747,7 +747,7 @@ static UINT32 *process_bitmap(running_machine *machine, UINT32 *objdata, int vc,
  *
  *************************************/
 
-static UINT32 *process_scaled_bitmap(running_machine *machine, UINT32 *objdata, int vc, int logit)
+static UINT32 *process_scaled_bitmap(running_machine &machine, UINT32 *objdata, int vc, int logit)
 {
 	/* extract data */
 	UINT32 upper = objdata[0];
@@ -963,7 +963,7 @@ static UINT32 *process_scaled_bitmap(running_machine *machine, UINT32 *objdata, 
  *
  *************************************/
 
-static UINT32 *process_branch(running_machine *machine, UINT32 *objdata, int vc, int logit)
+static UINT32 *process_branch(running_machine &machine, UINT32 *objdata, int vc, int logit)
 {
 	UINT32 upper = objdata[0];
 	UINT32 lower = objdata[1];
@@ -972,10 +972,8 @@ static UINT32 *process_branch(running_machine *machine, UINT32 *objdata, int vc,
 	UINT32 link = (lower >> 24) | ((upper & 0x7ff) << 8);
 	int taken = 0;
 
-#ifndef MESS
-	if ((ypos & 1) && ypos != 0x7ff)
-		fprintf(stderr, "        branch cc=%d ypos=%X link=%06X - \n", cc, ypos, link << 3);
-#endif
+//  if ((ypos & 1) && ypos != 0x7ff)
+//      fprintf(stderr, "        branch cc=%d ypos=%X link=%06X - \n", cc, ypos, link << 3);
 
 	switch (cc)
 	{
@@ -1027,7 +1025,7 @@ static UINT32 *process_branch(running_machine *machine, UINT32 *objdata, int vc,
  *
  *************************************/
 
-static void process_object_list(running_machine *machine, int vc, UINT16 *_scanline)
+static void process_object_list(running_machine &machine, int vc, UINT16 *_scanline)
 {
 	int done = 0, count = 0;
 	UINT32 *objdata;
@@ -1091,9 +1089,7 @@ static void process_object_list(running_machine *machine, int vc, UINT16 *_scanl
 					logerror("stop   = %08X-%08X\n", objdata[0], objdata[1]);
 				if (interrupt)
 				{
-#ifndef MESS
-					fprintf(stderr, "stop int=%d\n", interrupt);
-#endif
+//                  fprintf(stderr, "stop int=%d\n", interrupt);
 					cpu_irq_state |= 4;
 					update_cpu_irq(machine);
 				}

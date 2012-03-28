@@ -6,11 +6,8 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "poly.h"
-#include "eminline.h"
-#include "mame.h"
-#include "state.h"
-#include <math.h>
 
 
 /***************************************************************************
@@ -74,8 +71,8 @@ struct _poly_edge
 	int					index;					/* index of this edge */
 	const poly_vertex *	v1;						/* pointer to first vertex */
 	const poly_vertex *	v2;						/* pointer to second vertex */
-	float 				dxdy;					/* dx/dy along the edge */
-	float 				dpdy[MAX_VERTEX_PARAMS];/* per-parameter dp/dy values */
+	float				dxdy;					/* dx/dy along the edge */
+	float				dpdy[MAX_VERTEX_PARAMS];/* per-parameter dp/dy values */
 };
 
 
@@ -85,7 +82,7 @@ struct _poly_section
 {
 	const poly_edge *	ledge;					/* pointer to left edge */
 	const poly_edge *	redge;					/* pointer to right edge */
-	float 				ybottom;				/* bottom of this section */
+	float				ybottom;				/* bottom of this section */
 };
 
 
@@ -203,10 +200,9 @@ struct _poly_manager
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void **allocate_array(size_t *itemsize, UINT32 itemcount);
-static void free_array(void **array);
+static void **allocate_array(running_machine &machine, size_t *itemsize, UINT32 itemcount);
 static void *poly_item_callback(void *param, int threadid);
-static STATE_PRESAVE( poly_state_presave );
+static void poly_state_presave(poly_manager *poly);
 
 
 
@@ -239,18 +235,10 @@ INLINE void convert_tri_extent_to_poly_extent(poly_extent *dstextent, const tri_
 	dstextent->stopx = srcextent->stopx;
 
 	/* if we have parameters, process them as well */
-	if (polygon->numparams > 0)
+	for (int paramnum = 0; paramnum < polygon->numparams; paramnum++)
 	{
-		float dx = srcextent->startx - polygon->xorigin;
-		float dy = y - polygon->yorigin;
-		int paramnum;
-
-		/* iterate over parameters */
-		for (paramnum = 0; paramnum < polygon->numparams; paramnum++)
-		{
-			dstextent->param[paramnum].start = polygon->param[paramnum].start + dx * polygon->param[paramnum].dpdx + dy * polygon->param[paramnum].dpdy;
-			dstextent->param[paramnum].dpdx = polygon->param[paramnum].dpdx;
-		}
+		dstextent->param[paramnum].start = polygon->param[paramnum].start + srcextent->startx * polygon->param[paramnum].dpdx + y * polygon->param[paramnum].dpdy;
+		dstextent->param[paramnum].dpdx = polygon->param[paramnum].dpdx;
 	}
 }
 
@@ -328,38 +316,38 @@ INLINE polygon_info *allocate_polygon(poly_manager *poly, int miny, int maxy)
     manager
 -------------------------------------------------*/
 
-poly_manager *poly_alloc(running_machine *machine, int max_polys, size_t extra_data_size, UINT8 flags)
+poly_manager *poly_alloc(running_machine &machine, int max_polys, size_t extra_data_size, UINT8 flags)
 {
 	poly_manager *poly;
 
 	/* allocate the manager itself */
-	poly = alloc_clear_or_die(poly_manager);
+	poly = auto_alloc_clear(machine, poly_manager);
 	poly->flags = flags;
 
 	/* allocate polygons */
 	poly->polygon_size = sizeof(polygon_info);
 	poly->polygon_count = MAX(max_polys, 1);
 	poly->polygon_next = 0;
-	poly->polygon = (polygon_info **)allocate_array(&poly->polygon_size, poly->polygon_count);
+	poly->polygon = (polygon_info **)allocate_array(machine, &poly->polygon_size, poly->polygon_count);
 
 	/* allocate extra data */
 	poly->extra_size = extra_data_size;
 	poly->extra_count = poly->polygon_count;
 	poly->extra_next = 1;
-	poly->extra = allocate_array(&poly->extra_size, poly->extra_count);
+	poly->extra = allocate_array(machine, &poly->extra_size, poly->extra_count);
 
 	/* allocate triangle work units */
 	poly->unit_size = (flags & POLYFLAG_ALLOW_QUADS) ? sizeof(quad_work_unit) : sizeof(tri_work_unit);
 	poly->unit_count = MIN(poly->polygon_count * UNITS_PER_POLY, 65535);
 	poly->unit_next = 0;
-	poly->unit = (work_unit **)allocate_array(&poly->unit_size, poly->unit_count);
+	poly->unit = (work_unit **)allocate_array(machine, &poly->unit_size, poly->unit_count);
 
 	/* create the work queue */
 	if (!(flags & POLYFLAG_NO_WORK_QUEUE))
 		poly->queue = osd_work_queue_alloc(WORK_QUEUE_FLAG_MULTI | WORK_QUEUE_FLAG_HIGH_FREQ);
 
 	/* request a pre-save callback for synchronization */
-	state_save_register_presave(machine, poly_state_presave, poly);
+	machine.save().register_presave(save_prepost_delegate(FUNC(poly_state_presave), poly));
 	return poly;
 }
 
@@ -394,14 +382,6 @@ void poly_free(poly_manager *poly)
 	/* free the work queue */
 	if (poly->queue != NULL)
 		osd_work_queue_free(poly->queue);
-
-	/* free the arrays */
-	free_array(poly->extra);
-	free_array((void **)poly->polygon);
-	free_array((void **)poly->unit);
-
-	/* free the manager itself */
-	free(poly);
 }
 
 
@@ -488,7 +468,7 @@ void *poly_get_extra_data(poly_manager *poly)
     triangle given 3 vertexes
 -------------------------------------------------*/
 
-UINT32 poly_render_triangle(poly_manager *poly, void *dest, const rectangle *cliprect, poly_draw_scanline_func callback, int paramcount, const poly_vertex *v1, const poly_vertex *v2, const poly_vertex *v3)
+UINT32 poly_render_triangle(poly_manager *poly, void *dest, const rectangle &cliprect, poly_draw_scanline_func callback, int paramcount, const poly_vertex *v1, const poly_vertex *v2, const poly_vertex *v3)
 {
 	float dxdy_v1v2, dxdy_v1v3, dxdy_v2v3;
 	const poly_vertex *tv;
@@ -527,11 +507,8 @@ UINT32 poly_render_triangle(poly_manager *poly, void *dest, const rectangle *cli
 	/* clip coordinates */
 	v1yclip = v1y;
 	v3yclip = v3y + ((poly->flags & POLYFLAG_INCLUDE_BOTTOM_EDGE) ? 1 : 0);
-	if (cliprect != NULL)
-	{
-		v1yclip = MAX(v1yclip, cliprect->min_y);
-		v3yclip = MIN(v3yclip, cliprect->max_y + 1);
-	}
+	v1yclip = MAX(v1yclip, cliprect.min_y);
+	v3yclip = MIN(v3yclip, cliprect.max_y + 1);
 	if (v3yclip - v1yclip <= 0)
 		return 0;
 
@@ -605,13 +582,10 @@ UINT32 poly_render_triangle(poly_manager *poly, void *dest, const rectangle *cli
 				istopx++;
 
 			/* apply left/right clipping */
-			if (cliprect != NULL)
-			{
-				if (istartx < cliprect->min_x)
-					istartx = cliprect->min_x;
-				if (istopx > cliprect->max_x)
-					istopx = cliprect->max_x + 1;
-			}
+			if (istartx < cliprect.min_x)
+				istartx = cliprect.min_x;
+			if (istopx > cliprect.max_x)
+				istopx = cliprect.max_x + 1;
 
 			/* set the extent and update the total pixel count */
 			if (istartx >= istopx)
@@ -628,30 +602,36 @@ UINT32 poly_render_triangle(poly_manager *poly, void *dest, const rectangle *cli
 	/* compute parameter starting points and deltas */
 	if (paramcount > 0)
 	{
-		float divisor, dx1, dx2, dy1, dy2, xoffset, yoffset;
-		int paramnum;
+		float a00 = v2->y - v3->y;
+		float a01 = v3->x - v2->x;
+		float a02 = v2->x*v3->y - v3->x*v2->y;
+		float a10 = v3->y - v1->y;
+		float a11 = v1->x - v3->x;
+		float a12 = v3->x*v1->y - v1->x*v3->y;
+		float a20 = v1->y - v2->y;
+		float a21 = v2->x - v1->x;
+		float a22 = v1->x*v2->y - v2->x*v1->y;
+		float det = a02 + a12 + a22;
 
-		/* compute the divisor */
-		divisor = 1.0f / ((v1->x - v2->x) * (v1->y - v3->y) - (v1->x - v3->x) * (v1->y - v2->y));
-
-		/* compute the dx/dy values */
-		dx1 = v1->y - v3->y;
-		dx2 = v1->y - v2->y;
-		dy1 = v1->x - v2->x;
-		dy2 = v1->x - v3->x;
-
-		/* determine x/y offset for subpixel correction so that the starting values are
-           relative to the integer coordinates */
-		xoffset = v1->x - ((float)polygon->xorigin + 0.5f);
-		yoffset = v1->y - ((float)polygon->yorigin + 0.5f);
-
-		/* iterate over parameters */
-		for (paramnum = 0; paramnum < paramcount; paramnum++)
+		if(fabsf(det) < 0.001) {
+			for (int paramnum = 0; paramnum < paramcount; paramnum++)
+			{
+				poly_param *params = &polygon->param[paramnum];
+				params->dpdx = 0;
+				params->dpdy = 0;
+				params->start = v1->p[paramnum];
+			}
+		}
+		else
 		{
-			poly_param *params = &polygon->param[paramnum];
-			params->dpdx = ((v1->p[paramnum] - v2->p[paramnum]) * dx1 - (v1->p[paramnum] - v3->p[paramnum]) * dx2) * divisor;
-			params->dpdy = ((v1->p[paramnum] - v3->p[paramnum]) * dy1 - (v1->p[paramnum] - v2->p[paramnum]) * dy2) * divisor;
-			params->start = v1->p[paramnum] - xoffset * params->dpdx - yoffset * params->dpdy;
+			float idet = 1/det;
+			for (int paramnum = 0; paramnum < paramcount; paramnum++)
+			{
+				poly_param *params = &polygon->param[paramnum];
+				params->dpdx  = idet*(v1->p[paramnum]*a00 + v2->p[paramnum]*a10 + v3->p[paramnum]*a20);
+				params->dpdy  = idet*(v1->p[paramnum]*a01 + v2->p[paramnum]*a11 + v3->p[paramnum]*a21);
+				params->start = idet*(v1->p[paramnum]*a02 + v2->p[paramnum]*a12 + v3->p[paramnum]*a22);
+			}
 		}
 	}
 
@@ -671,7 +651,7 @@ UINT32 poly_render_triangle(poly_manager *poly, void *dest, const rectangle *cli
     triangles in a fan
 -------------------------------------------------*/
 
-UINT32 poly_render_triangle_fan(poly_manager *poly, void *dest, const rectangle *cliprect, poly_draw_scanline_func callback, int paramcount, int numverts, const poly_vertex *v)
+UINT32 poly_render_triangle_fan(poly_manager *poly, void *dest, const rectangle &cliprect, poly_draw_scanline_func callback, int paramcount, int numverts, const poly_vertex *v)
 {
 	UINT32 pixels = 0;
 	int vertnum;
@@ -688,7 +668,7 @@ UINT32 poly_render_triangle_fan(poly_manager *poly, void *dest, const rectangle 
     render of an object, given specific extents
 -------------------------------------------------*/
 
-UINT32 poly_render_triangle_custom(poly_manager *poly, void *dest, const rectangle *cliprect, poly_draw_scanline_func callback, int startscanline, int numscanlines, const poly_extent *extents)
+UINT32 poly_render_triangle_custom(poly_manager *poly, void *dest, const rectangle &cliprect, poly_draw_scanline_func callback, int startscanline, int numscanlines, const poly_extent *extents)
 {
 	INT32 curscan, scaninc;
 	polygon_info *polygon;
@@ -697,16 +677,8 @@ UINT32 poly_render_triangle_custom(poly_manager *poly, void *dest, const rectang
 	UINT32 startunit;
 
 	/* clip coordinates */
-	if (cliprect != NULL)
-	{
-		v1yclip = MAX(startscanline, cliprect->min_y);
-		v3yclip = MIN(startscanline + numscanlines, cliprect->max_y + 1);
-	}
-	else
-	{
-		v1yclip = startscanline;
-		v3yclip = startscanline + numscanlines;
-	}
+	v1yclip = MAX(startscanline, cliprect.min_y);
+	v3yclip = MIN(startscanline + numscanlines, cliprect.max_y + 1);
 	if (v3yclip - v1yclip <= 0)
 		return 0;
 
@@ -755,13 +727,10 @@ UINT32 poly_render_triangle_custom(poly_manager *poly, void *dest, const rectang
 			}
 
 			/* apply left/right clipping */
-			if (cliprect != NULL)
-			{
-				if (istartx < cliprect->min_x)
-					istartx = cliprect->min_x;
-				if (istopx > cliprect->max_x)
-					istopx = cliprect->max_x + 1;
-			}
+			if (istartx < cliprect.min_x)
+				istartx = cliprect.min_x;
+			if (istopx > cliprect.max_x)
+				istopx = cliprect.max_x + 1;
 
 			/* set the extent and update the total pixel count */
 			unit->extent[extnum].startx = istartx;
@@ -795,7 +764,7 @@ UINT32 poly_render_triangle_custom(poly_manager *poly, void *dest, const rectang
     given 4 vertexes
 -------------------------------------------------*/
 
-UINT32 poly_render_quad(poly_manager *poly, void *dest, const rectangle *cliprect, poly_draw_scanline_func callback, int paramcount, const poly_vertex *v1, const poly_vertex *v2, const poly_vertex *v3, const poly_vertex *v4)
+UINT32 poly_render_quad(poly_manager *poly, void *dest, const rectangle &cliprect, poly_draw_scanline_func callback, int paramcount, const poly_vertex *v1, const poly_vertex *v2, const poly_vertex *v3, const poly_vertex *v4)
 {
 	poly_edge fedgelist[3], bedgelist[3];
 	const poly_edge *ledge, *redge;
@@ -838,11 +807,8 @@ UINT32 poly_render_quad(poly_manager *poly, void *dest, const rectangle *cliprec
 	/* clip coordinates */
 	minyclip = miny;
 	maxyclip = maxy + ((poly->flags & POLYFLAG_INCLUDE_BOTTOM_EDGE) ? 1 : 0);
-	if (cliprect != NULL)
-	{
-		minyclip = MAX(minyclip, cliprect->min_y);
-		maxyclip = MIN(maxyclip, cliprect->max_y + 1);
-	}
+	minyclip = MAX(minyclip, cliprect.min_y);
+	maxyclip = MIN(maxyclip, cliprect.max_y + 1);
 	if (maxyclip - minyclip <= 0)
 		return 0;
 
@@ -981,17 +947,14 @@ UINT32 poly_render_quad(poly_manager *poly, void *dest, const rectangle *cliprec
 				istopx++;
 
 			/* apply left/right clipping */
-			if (cliprect != NULL)
+			if (istartx < cliprect.min_x)
 			{
-				if (istartx < cliprect->min_x)
-				{
-					for (paramnum = 0; paramnum < paramcount; paramnum++)
-						unit->extent[extnum].param[paramnum].start += (cliprect->min_x - istartx) * unit->extent[extnum].param[paramnum].dpdx;
-					istartx = cliprect->min_x;
-				}
-				if (istopx > cliprect->max_x)
-					istopx = cliprect->max_x + 1;
+				for (paramnum = 0; paramnum < paramcount; paramnum++)
+					unit->extent[extnum].param[paramnum].start += (cliprect.min_x - istartx) * unit->extent[extnum].param[paramnum].dpdx;
+				istartx = cliprect.min_x;
 			}
+			if (istopx > cliprect.max_x)
+				istopx = cliprect.max_x + 1;
 
 			/* set the extent and update the total pixel count */
 			if (istartx >= istopx)
@@ -1021,7 +984,7 @@ UINT32 poly_render_quad(poly_manager *poly, void *dest, const rectangle *cliprec
     quads in a fan
 -------------------------------------------------*/
 
-UINT32 poly_render_quad_fan(poly_manager *poly, void *dest, const rectangle *cliprect, poly_draw_scanline_func callback, int paramcount, int numverts, const poly_vertex *v)
+UINT32 poly_render_quad_fan(poly_manager *poly, void *dest, const rectangle &cliprect, poly_draw_scanline_func callback, int paramcount, int numverts, const poly_vertex *v)
 {
 	UINT32 pixels = 0;
 	int vertnum;
@@ -1043,7 +1006,7 @@ UINT32 poly_render_quad_fan(poly_manager *poly, void *dest, const rectangle *cli
     to 32 vertices
 -------------------------------------------------*/
 
-UINT32 poly_render_polygon(poly_manager *poly, void *dest, const rectangle *cliprect, poly_draw_scanline_func callback, int paramcount, int numverts, const poly_vertex *v)
+UINT32 poly_render_polygon(poly_manager *poly, void *dest, const rectangle &cliprect, poly_draw_scanline_func callback, int paramcount, int numverts, const poly_vertex *v)
 {
 	poly_edge fedgelist[MAX_POLYGON_VERTS - 1], bedgelist[MAX_POLYGON_VERTS - 1];
 	const poly_edge *ledge, *redge;
@@ -1076,11 +1039,8 @@ UINT32 poly_render_polygon(poly_manager *poly, void *dest, const rectangle *clip
 	/* clip coordinates */
 	minyclip = miny;
 	maxyclip = maxy + ((poly->flags & POLYFLAG_INCLUDE_BOTTOM_EDGE) ? 1 : 0);
-	if (cliprect != NULL)
-	{
-		minyclip = MAX(minyclip, cliprect->min_y);
-		maxyclip = MIN(maxyclip, cliprect->max_y + 1);
-	}
+	minyclip = MAX(minyclip, cliprect.min_y);
+	maxyclip = MIN(maxyclip, cliprect.max_y + 1);
 	if (maxyclip - minyclip <= 0)
 		return 0;
 
@@ -1219,17 +1179,14 @@ UINT32 poly_render_polygon(poly_manager *poly, void *dest, const rectangle *clip
 				istopx++;
 
 			/* apply left/right clipping */
-			if (cliprect != NULL)
+			if (istartx < cliprect.min_x)
 			{
-				if (istartx < cliprect->min_x)
-				{
-					for (paramnum = 0; paramnum < paramcount; paramnum++)
-						unit->extent[extnum].param[paramnum].start += (cliprect->min_x - istartx) * unit->extent[extnum].param[paramnum].dpdx;
-					istartx = cliprect->min_x;
-				}
-				if (istopx > cliprect->max_x)
-					istopx = cliprect->max_x + 1;
+				for (paramnum = 0; paramnum < paramcount; paramnum++)
+					unit->extent[extnum].param[paramnum].start += (cliprect.min_x - istartx) * unit->extent[extnum].param[paramnum].dpdx;
+				istartx = cliprect.min_x;
 			}
+			if (istopx > cliprect.max_x)
+				istopx = cliprect.max_x + 1;
 
 			/* set the extent and update the total pixel count */
 			if (istartx >= istopx)
@@ -1300,7 +1257,7 @@ int poly_zclip_if_less(int numverts, const poly_vertex *v, poly_vertex *outv, in
     allocate_array - allocate an array of pointers
 -------------------------------------------------*/
 
-static void **allocate_array(size_t *itemsize, UINT32 itemcount)
+static void **allocate_array(running_machine &machine, size_t *itemsize, UINT32 itemcount)
 {
 	void **ptrarray;
 	int itemnum;
@@ -1313,30 +1270,15 @@ static void **allocate_array(size_t *itemsize, UINT32 itemcount)
 	*itemsize = ((*itemsize + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE) * CACHE_LINE_SIZE;
 
 	/* allocate the array */
-	ptrarray = alloc_array_clear_or_die(void *, itemcount);
+	ptrarray = auto_alloc_array_clear(machine, void *, itemcount);
 
 	/* allocate the actual items */
-	ptrarray[0] = alloc_array_clear_or_die(UINT8, *itemsize * itemcount);
+	ptrarray[0] = auto_alloc_array_clear(machine, UINT8, *itemsize * itemcount);
 
 	/* initialize the pointer array */
 	for (itemnum = 1; itemnum < itemcount; itemnum++)
 		ptrarray[itemnum] = (UINT8 *)ptrarray[0] + *itemsize * itemnum;
 	return ptrarray;
-}
-
-
-/*-------------------------------------------------
-    free_array - release an array of pointers
--------------------------------------------------*/
-
-static void free_array(void **array)
-{
-	if (array != NULL)
-	{
-		if (array[0] != NULL)
-			free(array[0]);
-		free(array);
-	}
 }
 
 
@@ -1417,8 +1359,7 @@ static void *poly_item_callback(void *param, int threadid)
     ensure everything is synced before saving
 -------------------------------------------------*/
 
-static STATE_PRESAVE( poly_state_presave )
+static void poly_state_presave(poly_manager *poly)
 {
-	poly_manager *poly = (poly_manager *)param;
 	poly_wait(poly, "pre-save");
 }

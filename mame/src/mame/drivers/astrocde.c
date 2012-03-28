@@ -97,38 +97,32 @@
     - In seawolf2, service mode dip switch turns on memory test. Reset with
       2 pressed to get to an input check screen, reset with 1+2 pressed to
       get to a convergence test screen.
+    - Foreign language ROMs aren't tested by the ROM checks
 
 ****************************************************************************
 
     DIP locations verified for:
     - seawolf2 (manual)
     - wow (manual)
+    - spacezap (manual)
     - gorf (manual)
     - robby (manual)
     - profpac (manual)
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
 #include "includes/astrocde.h"
 #include "machine/z80ctc.h"
+#include "machine/nvram.h"
 #include "sound/samples.h"
 #include "sound/astrocde.h"
 #include "sound/ay8910.h"
+
 #include "tenpindx.lh"
 #include "gorf.lh"
-
-
-static UINT8 *protected_ram;
-
-static UINT8 port_1_last;
-static UINT8 port_2_last;
-static UINT8 ram_write_enable;
-static UINT8 input_select;
-static UINT8 profpac_bank;
-
 
 
 /*************************************
@@ -139,13 +133,14 @@ static UINT8 profpac_bank;
 
 static MACHINE_START( astrocde )
 {
-	state_save_register_global(machine, port_1_last);
-	state_save_register_global(machine, port_2_last);
-	state_save_register_global(machine, ram_write_enable);
-	state_save_register_global(machine, input_select);
-	state_save_register_global(machine, profpac_bank);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state_save_register_global(machine, state->m_port_1_last);
+	state_save_register_global(machine, state->m_port_2_last);
+	state_save_register_global(machine, state->m_ram_write_enable);
+	state_save_register_global(machine, state->m_input_select);
+	state_save_register_global(machine, state->m_profpac_bank);
 
-	port_1_last = port_2_last = 0xff;
+	state->m_port_1_last = state->m_port_2_last = 0xff;
 }
 
 
@@ -158,22 +153,25 @@ static MACHINE_START( astrocde )
 
 static WRITE8_HANDLER( protected_ram_enable_w )
 {
-	ram_write_enable = TRUE;
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	state->m_ram_write_enable = TRUE;
 }
 
 
 static READ8_HANDLER( protected_ram_r )
 {
-	ram_write_enable = FALSE;
-	return protected_ram[offset];
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	state->m_ram_write_enable = FALSE;
+	return state->m_protected_ram[offset];
 }
 
 
 static WRITE8_HANDLER( protected_ram_w )
 {
-	if (ram_write_enable)
-		protected_ram[offset] = data;
-	ram_write_enable = FALSE;
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	if (state->m_ram_write_enable)
+		state->m_protected_ram[offset] = data;
+	state->m_ram_write_enable = FALSE;
 }
 
 
@@ -206,9 +204,10 @@ static WRITE8_HANDLER( seawolf2_lamps_w )
 
 static WRITE8_HANDLER( seawolf2_sound_1_w )  // Port 40
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
-	UINT8 rising_bits = data & ~port_1_last;
-	port_1_last = data;
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	device_t *samples = space->machine().device("samples");
+	UINT8 rising_bits = data & ~state->m_port_1_last;
+	state->m_port_1_last = data;
 
 	if (rising_bits & 0x01) sample_start(samples, 1, 1, 0);  /* Left Torpedo */
 	if (rising_bits & 0x02) sample_start(samples, 0, 0, 0);  /* Left Ship Hit */
@@ -221,9 +220,10 @@ static WRITE8_HANDLER( seawolf2_sound_1_w )  // Port 40
 
 static WRITE8_HANDLER( seawolf2_sound_2_w )  // Port 41
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
-	UINT8 rising_bits = data & ~port_2_last;
-	port_2_last = data;
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	device_t *samples = space->machine().device("samples");
+	UINT8 rising_bits = data & ~state->m_port_2_last;
+	state->m_port_2_last = data;
 
 	sample_set_volume(samples, 0, (data & 0x80) ? 1.0 : 0.0);
 	sample_set_volume(samples, 1, (data & 0x80) ? 1.0 : 0.0);
@@ -246,7 +246,7 @@ static WRITE8_HANDLER( seawolf2_sound_2_w )  // Port 41
 	if (rising_bits & 0x10) sample_start(samples, 8, 3, 0);  /* Right Sonar */
 	if (rising_bits & 0x20) sample_start(samples, 3, 3, 0);  /* Left Sonar */
 
-	coin_counter_w(0, data & 0x40);    /* Coin Counter */
+	coin_counter_w(space->machine(), 0, data & 0x40);    /* Coin Counter */
 }
 
 
@@ -259,20 +259,22 @@ static WRITE8_HANDLER( seawolf2_sound_2_w )  // Port 41
 
 static CUSTOM_INPUT( ebases_trackball_r )
 {
+	astrocde_state *state = field.machine().driver_data<astrocde_state>();
 	static const char *const names[] = { "TRACKX2", "TRACKY2", "TRACKX1", "TRACKY1" };
-	return input_port_read(field->port->machine, names[input_select]);
+	return input_port_read(field.machine(), names[state->m_input_select]);
 }
 
 
 static WRITE8_HANDLER( ebases_trackball_select_w )
 {
-	input_select = data & 3;
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	state->m_input_select = data & 3;
 }
 
 
 static WRITE8_HANDLER( ebases_coin_w )
 {
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine(), 0, data & 1);
 }
 
 
@@ -285,9 +287,9 @@ static WRITE8_HANDLER( ebases_coin_w )
 
 static READ8_HANDLER( spacezap_io_r )
 {
-	coin_counter_w(0, (offset >> 8) & 1);
-	coin_counter_w(1, (offset >> 9) & 1);
-	return input_port_read_safe(space->machine, "P3HANDLE", 0xff);
+	coin_counter_w(space->machine(), 0, (offset >> 8) & 1);
+	coin_counter_w(space->machine(), 1, (offset >> 9) & 1);
+	return input_port_read_safe(space->machine(), "P3HANDLE", 0xff);
 }
 
 
@@ -300,17 +302,18 @@ static READ8_HANDLER( spacezap_io_r )
 
 static READ8_HANDLER( wow_io_r )
 {
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
 	UINT8 data = (offset >> 8) & 1;
 
 	switch ((offset >> 9) & 7)
 	{
-		case 0: coin_counter_w(0, data);		break;
-		case 1: coin_counter_w(1, data);		break;
-		case 2: astrocade_sparkle[0] = data;	break;
-		case 3: astrocade_sparkle[1] = data;	break;
-		case 4: astrocade_sparkle[2] = data;	break;
-		case 5: astrocade_sparkle[3] = data;	break;
-		case 7: coin_counter_w(2, data); 		break;
+		case 0: coin_counter_w(space->machine(), 0, data);		break;
+		case 1: coin_counter_w(space->machine(), 1, data);		break;
+		case 2: state->m_sparkle[0] = data;	break;
+		case 3: state->m_sparkle[1] = data;	break;
+		case 4: state->m_sparkle[2] = data;	break;
+		case 5: state->m_sparkle[3] = data;	break;
+		case 7: coin_counter_w(space->machine(), 2, data);		break;
 	}
 	return 0xff;
 }
@@ -325,19 +328,20 @@ static READ8_HANDLER( wow_io_r )
 
 static READ8_HANDLER( gorf_io_1_r )
 {
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
 	UINT8 data = (offset >> 8) & 1;
 
 	switch ((offset >> 9) & 7)
 	{
-		case 0: coin_counter_w(0, data);		break;
-		case 1: coin_counter_w(1, data);		break;
-		case 2: astrocade_sparkle[0] = data;	break;
-		case 3: astrocade_sparkle[1] = data;	break;
-		case 4: astrocade_sparkle[2] = data;	break;
-		case 5: astrocade_sparkle[3] = data;	break;
+		case 0: coin_counter_w(space->machine(), 0, data);		break;
+		case 1: coin_counter_w(space->machine(), 1, data);		break;
+		case 2: state->m_sparkle[0] = data;	break;
+		case 3: state->m_sparkle[1] = data;	break;
+		case 4: state->m_sparkle[2] = data;	break;
+		case 5: state->m_sparkle[3] = data;	break;
 		case 6:
-			sound_set_output_gain(devtag_get_device(space->machine, "astrocade1"), 0, data ? 0.0 : 1.0);
-			sound_set_output_gain(devtag_get_device(space->machine, "samples"), 0, data ? 1.0 : 0.0);
+			space->machine().device<astrocade_device>("astrocade1")->set_output_gain(0, data ? 0.0 : 1.0);
+			space->machine().device<samples_device>("samples")->set_output_gain(0, data ? 1.0 : 0.0);
 			break;
 		case 7:	mame_printf_debug("io_1:%d\n", data); break;
 	}
@@ -377,11 +381,11 @@ static READ8_HANDLER( robby_io_r )
 
 	switch ((offset >> 9) & 7)
 	{
-		case 0: coin_counter_w(0, data);	break;
-		case 1: coin_counter_w(1, data);	break;
-		case 2: coin_counter_w(2, data);	break;
-		case 6: set_led_status(0, data);	break;
-		case 7: set_led_status(1, data);	break;
+		case 0: coin_counter_w(space->machine(), 0, data);	break;
+		case 1: coin_counter_w(space->machine(), 1, data);	break;
+		case 2: coin_counter_w(space->machine(), 2, data);	break;
+		case 6: set_led_status(space->machine(), 0, data);	break;
+		case 7: set_led_status(space->machine(), 1, data);	break;
 	}
 	return 0xff;
 }
@@ -396,10 +400,10 @@ static READ8_HANDLER( robby_io_r )
 
 static READ8_HANDLER( profpac_io_1_r )
 {
-	coin_counter_w(0, (offset >> 8) & 1);
-	coin_counter_w(1, (offset >> 9) & 1);
-	set_led_status(0, (offset >> 10) & 1);
-	set_led_status(1, (offset >> 11) & 1);
+	coin_counter_w(space->machine(), 0, (offset >> 8) & 1);
+	coin_counter_w(space->machine(), 1, (offset >> 9) & 1);
+	set_led_status(space->machine(), 0, (offset >> 10) & 1);
+	set_led_status(space->machine(), 1, (offset >> 11) & 1);
 	return 0xff;
 }
 
@@ -418,24 +422,25 @@ static READ8_HANDLER( profpac_io_2_r )
 
 static WRITE8_HANDLER( profpac_banksw_w )
 {
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
 	int bank = (data >> 5) & 3;
 
 	/* this is accessed from I/O space but modifies program space, so we normalize here */
-	space = cpu_get_address_space(space->cpu, ADDRESS_SPACE_PROGRAM);
+	space = space->device().memory().space(AS_PROGRAM);
 
 	/* remember the banking bits for save state support */
-	profpac_bank = data;
+	state->m_profpac_bank = data;
 
 	/* set the main banking */
-	memory_install_read8_handler(space, 0x4000, 0xbfff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "user1") + 0x8000 * bank);
+	space->install_read_bank(0x4000, 0xbfff, "bank1");
+	memory_set_bankptr(space->machine(), "bank1", space->machine().region("user1")->base() + 0x8000 * bank);
 
 	/* bank 0 reads video RAM in the 4000-7FFF range */
 	if (bank == 0)
-		memory_install_read8_handler(space, 0x4000, 0x7fff, 0, 0, profpac_videoram_r);
+		space->install_legacy_read_handler(0x4000, 0x7fff, FUNC(profpac_videoram_r));
 
 	/* if we have a 640k EPROM board, map that on top of the 4000-7FFF range if specified */
-	if ((data & 0x80) && memory_region(space->machine, "user2") != NULL)
+	if ((data & 0x80) && space->machine().region("user2")->base() != NULL)
 	{
 		/* Note: There is a jumper which could change the base offset to 0xa8 instead */
 		bank = data - 0x80;
@@ -443,20 +448,21 @@ static WRITE8_HANDLER( profpac_banksw_w )
 		/* if the bank is in range, map the appropriate bank */
 		if (bank < 0x28)
 		{
-			memory_install_read8_handler(space, 0x4000, 0x7fff, 0, 0, (read8_space_func)SMH_BANK(2));
-			memory_set_bankptr(space->machine, 2, memory_region(space->machine, "user2") + 0x4000 * bank);
+			space->install_read_bank(0x4000, 0x7fff, "bank2");
+			memory_set_bankptr(space->machine(), "bank2", space->machine().region("user2")->base() + 0x4000 * bank);
 		}
 		else
-			memory_install_read8_handler(space, 0x4000, 0x7fff, 0, 0, (read8_space_func)SMH_UNMAP);
+			space->unmap_read(0x4000, 0x7fff);
 	}
 }
 
 
-static STATE_POSTLOAD( profbank_banksw_restore )
+static void profbank_banksw_restore(running_machine &machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	address_space *space = machine.device("maincpu")->memory().space(AS_IO);
 
-	profpac_banksw_w(space, 0, profpac_bank);
+	profpac_banksw_w(space, 0, state->m_profpac_bank);
 }
 
 
@@ -469,19 +475,21 @@ static STATE_POSTLOAD( profbank_banksw_restore )
 
 static READ8_HANDLER( demndrgn_io_r )
 {
-	coin_counter_w(0, (offset >> 8) & 1);
-	coin_counter_w(1, (offset >> 9) & 1);
-	set_led_status(0, (offset >> 10) & 1);
-	set_led_status(1, (offset >> 11) & 1);
-	input_select = (offset >> 12) & 1;
+	astrocde_state *state = space->machine().driver_data<astrocde_state>();
+	coin_counter_w(space->machine(), 0, (offset >> 8) & 1);
+	coin_counter_w(space->machine(), 1, (offset >> 9) & 1);
+	set_led_status(space->machine(), 0, (offset >> 10) & 1);
+	set_led_status(space->machine(), 1, (offset >> 11) & 1);
+	state->m_input_select = (offset >> 12) & 1;
 	return 0xff;
 }
 
 
 static CUSTOM_INPUT( demndragn_joystick_r )
 {
+	astrocde_state *state = field.machine().driver_data<astrocde_state>();
 	static const char *const names[] = { "MOVEX", "MOVEY" };
-	return input_port_read(field->port->machine, names[input_select]);
+	return input_port_read(field.machine(), names[state->m_input_select]);
 }
 
 
@@ -501,7 +509,7 @@ static WRITE8_HANDLER( demndrgn_sound_w )
 static Z80CTC_INTERFACE( ctc_intf )
 {
 	0,              	/* timer disables */
-	DEVCB_CPU_INPUT_LINE("sub", INPUT_LINE_IRQ0),  	/* interrupt handler */
+	DEVCB_CPU_INPUT_LINE("sub", INPUT_LINE_IRQ0),	/* interrupt handler */
 	DEVCB_NULL,			/* ZC/TO0 callback */
 	DEVCB_NULL,         /* ZC/TO1 callback */
 	DEVCB_NULL			/* ZC/TO2 callback */
@@ -522,7 +530,7 @@ static const ay8910_interface ay8912_interface =
 static WRITE8_HANDLER( tenpindx_sound_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine(), "sub", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -550,7 +558,7 @@ static WRITE8_HANDLER( tenpindx_lamp_w )
 
 static WRITE8_HANDLER( tenpindx_counter_w )
 {
-	coin_counter_w(0, (data >> 0) & 1);
+	coin_counter_w(space->machine(), 0, (data >> 0) & 1);
 	if (data & 0xfc) mame_printf_debug("tenpindx_counter_w = %02X\n", data);
 }
 
@@ -579,75 +587,75 @@ static WRITE8_HANDLER( tenpindx_lights_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( seawolf2_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( seawolf2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
-	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE_MEMBER(astrocde_state, m_videoram)
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ebases_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ebases_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
-	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE_MEMBER(astrocde_state, m_videoram)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacezap_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacezap_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
-	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE(&videoram)
-	AM_RANGE(0xd000, 0xd03f) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE(&protected_ram)
+	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE_MEMBER(astrocde_state, m_videoram)
+	AM_RANGE(0xd000, 0xd03f) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE_MEMBER(astrocde_state, m_protected_ram)
 	AM_RANGE(0xd040, 0xd7ff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( wow_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( wow_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
-	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE_MEMBER(astrocde_state, m_videoram)
 	AM_RANGE(0x8000, 0xcfff) AM_ROM
-	AM_RANGE(0xd000, 0xd03f) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE(&protected_ram)
+	AM_RANGE(0xd000, 0xd03f) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE_MEMBER(astrocde_state, m_protected_ram)
 	AM_RANGE(0xd040, 0xdfff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( robby_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( robby_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
-	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x4000, 0x7fff) AM_RAM AM_BASE_MEMBER(astrocde_state, m_videoram)
 	AM_RANGE(0x8000, 0xdfff) AM_ROM
-  	AM_RANGE(0xe000, 0xe1ff) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE(&protected_ram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xe000, 0xe1ff) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE_MEMBER(astrocde_state, m_protected_ram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xe800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( profpac_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( profpac_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
 	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(profpac_videoram_r, profpac_videoram_w)
-	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
-  	AM_RANGE(0xe000, 0xe1ff) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE(&protected_ram)
-  	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xe000, 0xe1ff) AM_READWRITE(protected_ram_r, protected_ram_w) AM_BASE_MEMBER(astrocde_state, m_protected_ram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xe800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( demndrgn_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( demndrgn_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x0000, 0x3fff) AM_WRITE(astrocade_funcgen_w)
 	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(profpac_videoram_r, profpac_videoram_w)
-	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
-  	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xe800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( tenpin_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( tenpin_sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
@@ -661,19 +669,19 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x0019) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(astrocade_data_chip_register_r, astrocade_data_chip_register_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map_mono_pattern, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map_mono_pattern, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x0019) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(astrocade_data_chip_register_r, astrocade_data_chip_register_w)
 	AM_RANGE(0x0078, 0x007e) AM_MIRROR(0xff00) AM_WRITE(astrocade_pattern_board_w)
 	AM_RANGE(0xa55b, 0xa55b) AM_WRITE(protected_ram_enable_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map_stereo_pattern, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map_stereo_pattern, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x0019) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(astrocade_data_chip_register_r, astrocade_data_chip_register_w)
 	AM_RANGE(0x0050, 0x0058) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVWRITE("astrocade2", astrocade_sound_w)
 	AM_RANGE(0x0078, 0x007e) AM_MIRROR(0xff00) AM_WRITE(astrocade_pattern_board_w)
@@ -681,7 +689,7 @@ static ADDRESS_MAP_START( port_map_stereo_pattern, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map_16col_pattern, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map_16col_pattern, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x0019) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(astrocade_data_chip_register_r, astrocade_data_chip_register_w)
 	AM_RANGE(0x0050, 0x0058) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_DEVWRITE("astrocade2", astrocade_sound_w)
 	AM_RANGE(0x0078, 0x007e) AM_MIRROR(0xff00) AM_WRITE(astrocade_pattern_board_w)
@@ -693,7 +701,7 @@ static ADDRESS_MAP_START( port_map_16col_pattern, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( port_map_16col_pattern_nosound, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( port_map_16col_pattern_nosound, AS_IO, 8 )
 	AM_RANGE(0x0000, 0x0019) AM_MIRROR(0xff00) AM_MASK(0xffff) AM_READWRITE(astrocade_data_chip_register_r, astrocade_data_chip_register_w)
 	AM_RANGE(0x0078, 0x007e) AM_MIRROR(0xff00) AM_WRITE(astrocade_pattern_board_w)
 	AM_RANGE(0x00bf, 0x00bf) AM_MIRROR(0xff00) AM_WRITE(profpac_page_select_w)
@@ -704,13 +712,13 @@ static ADDRESS_MAP_START( port_map_16col_pattern_nosound, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( tenpin_sub_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( tenpin_sub_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x90, 0x93) AM_DEVREADWRITE("ctc", z80ctc_r, z80ctc_w)
 	AM_RANGE(0x97, 0x97) AM_READ(soundlatch_r)
-	AM_RANGE(0x98, 0x98) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x98, 0x98) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x9a, 0x9a) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0x98, 0x98) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x98, 0x98) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x9a, 0x9a) AM_DEVWRITE("aysnd", ay8910_data_w)
 ADDRESS_MAP_END
 
 
@@ -831,9 +839,18 @@ static INPUT_PORTS_START( ebases )
 INPUT_PORTS_END
 
 
+static INPUT_CHANGED( spacezap_monitor )
+{
+	astrocde_state *state = field.machine().driver_data<astrocde_state>();
+	if (newval)
+		state->m_video_config &= ~AC_MONITOR_BW;
+	else
+		state->m_video_config |= AC_MONITOR_BW;
+}
+
 static INPUT_PORTS_START( spacezap )
 	PORT_START("P1HANDLE")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )	// manual says this dip is unused on cocktail cabs
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_SERVICE( 0x08, IP_ACTIVE_LOW )
@@ -842,19 +859,19 @@ static INPUT_PORTS_START( spacezap )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("P2HANDLE")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_COCKTAIL
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_COCKTAIL
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_COCKTAIL
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_COCKTAIL PORT_NAME("P2 Aim Up")
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_COCKTAIL PORT_NAME("P2 Aim Down")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_COCKTAIL PORT_NAME("P2 Aim Left")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_COCKTAIL PORT_NAME("P2 Aim Right")
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "JU:1" )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("P3HANDLE")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("P1 Aim Up") PORT_CODE(KEYCODE_UP)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("P1 Aim Down") PORT_CODE(KEYCODE_DOWN)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("P1 Aim Left") PORT_CODE(KEYCODE_LEFT)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("P1 Aim Right") PORT_CODE(KEYCODE_RIGHT)
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Cabinet ) )	PORT_DIPLOCATION("JU:2")
 	PORT_DIPSETTING(    0x20, DEF_STR( Upright ) )
@@ -875,6 +892,13 @@ static INPUT_PORTS_START( spacezap )
 	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "S1:6" )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "S1:7" )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "S1:8" )
+
+	PORT_START("FAKE")
+	/* Dedicated cabinets had a B/W monitor and color overlay,
+       some (unofficial/repaired?) cabinets had a color monitor. */
+	PORT_CONFNAME( 0x01, 0x00, "Monitor" ) PORT_CHANGED(spacezap_monitor, 0)
+	PORT_CONFSETTING(    0x00, "B/W" )
+	PORT_CONFSETTING(    0x01, "Color" )
 INPUT_PORTS_END
 
 
@@ -924,8 +948,8 @@ static INPUT_PORTS_START( wow )
 	PORT_DIPSETTING(    0x08, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x00, "Foreign (NEED ROM)" )	/* "Requires A082-91374-A000" */
 	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Lives ) )		PORT_DIPLOCATION("S1:5")
- 	PORT_DIPSETTING(    0x10, "2 for 1 Credit / 5 for 2 Credits" )
- 	PORT_DIPSETTING(    0x00, "3 for 1 Credit / 7 for 2 Credits" )
+	PORT_DIPSETTING(    0x10, "2 for 1 Credit / 5 for 2 Credits" )
+	PORT_DIPSETTING(    0x00, "3 for 1 Credit / 7 for 2 Credits" )
 	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("S1:6")
 	PORT_DIPSETTING(    0x20, "After 3rd Level" )
 	PORT_DIPSETTING(    0x00, "After 4th Level" )
@@ -935,6 +959,16 @@ static INPUT_PORTS_START( wow )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("S1:8")
 	PORT_DIPSETTING(    0x00, "On only when controls are touched" )	/* "Touching controls will enable attract sound for 1 cycle." */
 	PORT_DIPSETTING(    0x80, "Always On"  )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( wowg )
+	PORT_INCLUDE(wow)
+
+	PORT_MODIFY("P4HANDLE")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("S1:4") /* Default it to Foreign because this set has the German ROM */
+	PORT_DIPSETTING(    0x08, DEF_STR( English ) )
+	PORT_DIPSETTING(    0x00, "Foreign (German ROM)" )
 INPUT_PORTS_END
 
 
@@ -985,15 +1019,25 @@ static INPUT_PORTS_START( gorf )
 	PORT_DIPNAME( 0x10, 0x00, "Lives per Credit" )		PORT_DIPLOCATION("S1:5")
 	PORT_DIPSETTING(    0x10, "2" )
 	PORT_DIPSETTING(    0x00, "3" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("S1:6")
-	PORT_DIPSETTING(    0x00, "Mission 5" )
-	PORT_DIPSETTING(    0x20, DEF_STR( None ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("S1:6")
+	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
+	PORT_DIPSETTING(    0x20, "Mission 5" )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Free_Play ) )	PORT_DIPLOCATION("S1:7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("S1:8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( gorfpgm1g )
+	PORT_INCLUDE(gorf)
+
+	PORT_MODIFY("P4HANDLE")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Language ) )		PORT_DIPLOCATION("S1:4") /* Default it to Foreign because this set has the German ROM */
+	PORT_DIPSETTING(    0x08, DEF_STR( English ) )
+	PORT_DIPSETTING(    0x00, "Foreign (German ROM)" )
 INPUT_PORTS_END
 
 
@@ -1201,11 +1245,11 @@ INPUT_PORTS_END
 static const char *const seawolf_sample_names[] =
 {
 	"*seawolf",
-	"shiphit.wav",
-	"torpedo.wav",
-	"dive.wav",
-	"sonar.wav",
-	"minehit.wav",
+	"shiphit",
+	"torpedo",
+	"dive",
+	"sonar",
+	"minehit",
 	0
 };
 
@@ -1235,7 +1279,7 @@ static const samples_interface gorf_samples_interface =
  *
  *************************************/
 
-static const z80_daisy_chain tenpin_daisy_chain[] =
+static const z80_daisy_config tenpin_daisy_chain[] =
 {
 	{ "ctc" },
 	{ NULL }
@@ -1249,64 +1293,64 @@ static const z80_daisy_chain tenpin_daisy_chain[] =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( astrocade_base )
+static MACHINE_CONFIG_START( astrocade_base, astrocde_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, ASTROCADE_CLOCK/4)
+	MCFG_CPU_ADD("maincpu", Z80, ASTROCADE_CLOCK/4)
 	/* each game has its own map */
 
-	MDRV_MACHINE_START(astrocde)
+	MCFG_MACHINE_START(astrocde)
 
 	/* video hardware */
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_PALETTE_LENGTH(512)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(ASTROCADE_CLOCK, 455, 0, 352, 262, 0, 240)
-	MDRV_SCREEN_DEFAULT_POSITION(1.1, 0.0, 1.18, -0.018)	/* clip out borders */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(ASTROCADE_CLOCK, 455, 0, 352, 262, 0, 240)
+	MCFG_SCREEN_DEFAULT_POSITION(1.1, 0.0, 1.18, -0.018)	/* clip out borders */
+	MCFG_SCREEN_UPDATE_STATIC(astrocde)
 
-	MDRV_PALETTE_INIT(astrocde)
-	MDRV_VIDEO_START(astrocde)
-	MDRV_VIDEO_UPDATE(astrocde)
-MACHINE_DRIVER_END
+	MCFG_PALETTE_INIT(astrocde)
+	MCFG_VIDEO_START(astrocde)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( astrocade_16color_base )
-	MDRV_IMPORT_FROM(astrocade_base)
+static MACHINE_CONFIG_DERIVED( astrocade_16color_base, astrocade_base )
 
 	/* basic machine hardware */
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_PALETTE_LENGTH(4096)
+	MCFG_PALETTE_LENGTH(4096)
 
-	MDRV_PALETTE_INIT(profpac)
-	MDRV_VIDEO_START(profpac)
-	MDRV_VIDEO_UPDATE(profpac)
-MACHINE_DRIVER_END
+	MCFG_PALETTE_INIT(profpac)
+	MCFG_VIDEO_START(profpac)
 
-
-static MACHINE_DRIVER_START( astrocade_mono_sound )
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("astrocade1",  ASTROCADE, ASTROCADE_CLOCK/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(profpac)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( astrocade_stereo_sound )
+static MACHINE_CONFIG_FRAGMENT( astrocade_mono_sound )
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("astrocade1",  ASTROCADE, ASTROCADE_CLOCK/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ADD("astrocade1",  ASTROCADE, ASTROCADE_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
-	MDRV_SOUND_ADD("astrocade2",  ASTROCADE, ASTROCADE_CLOCK/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+
+static MACHINE_CONFIG_FRAGMENT( astrocade_stereo_sound )
+
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	MCFG_SOUND_ADD("astrocade1",  ASTROCADE, ASTROCADE_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+
+	MCFG_SOUND_ADD("astrocade2",  ASTROCADE, ASTROCADE_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -1316,160 +1360,151 @@ MACHINE_DRIVER_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( seawolf2 )
-	MDRV_IMPORT_FROM(astrocade_base)
+static MACHINE_CONFIG_DERIVED( seawolf2, astrocade_base )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(seawolf2_map)
-	MDRV_CPU_IO_MAP(port_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(seawolf2_map)
+	MCFG_CPU_IO_MAP(port_map)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(seawolf2_samples_interface)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(1, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(2, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(3, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(4, "lspeaker", 0.25)
-	MDRV_SOUND_ROUTE(5, "rspeaker", 0.25)
-	MDRV_SOUND_ROUTE(6, "rspeaker", 0.25)
-	MDRV_SOUND_ROUTE(7, "rspeaker", 0.25)
-	MDRV_SOUND_ROUTE(8, "rspeaker", 0.25)
-	MDRV_SOUND_ROUTE(9, "rspeaker", 0.25)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( ebases )
-	MDRV_IMPORT_FROM(astrocade_base)
-	MDRV_IMPORT_FROM(astrocade_mono_sound)
-
-	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(ebases_map)
-	MDRV_CPU_IO_MAP(port_map)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(seawolf2_samples_interface)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(1, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(2, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(3, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(4, "lspeaker", 0.25)
+	MCFG_SOUND_ROUTE(5, "rspeaker", 0.25)
+	MCFG_SOUND_ROUTE(6, "rspeaker", 0.25)
+	MCFG_SOUND_ROUTE(7, "rspeaker", 0.25)
+	MCFG_SOUND_ROUTE(8, "rspeaker", 0.25)
+	MCFG_SOUND_ROUTE(9, "rspeaker", 0.25)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( spacezap )
-	MDRV_IMPORT_FROM(astrocade_base)
-	MDRV_IMPORT_FROM(astrocade_mono_sound)
+static MACHINE_CONFIG_DERIVED( ebases, astrocade_base )
+	MCFG_FRAGMENT_ADD(astrocade_mono_sound)
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(spacezap_map)
-	MDRV_CPU_IO_MAP(port_map_mono_pattern)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(ebases_map)
+	MCFG_CPU_IO_MAP(port_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wow )
-	MDRV_IMPORT_FROM(astrocade_base)
-	MDRV_IMPORT_FROM(astrocade_stereo_sound)
+static MACHINE_CONFIG_DERIVED( spacezap, astrocade_base )
+	MCFG_FRAGMENT_ADD(astrocade_mono_sound)
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(wow_map)
-	MDRV_CPU_IO_MAP(port_map_stereo_pattern)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(spacezap_map)
+	MCFG_CPU_IO_MAP(port_map_mono_pattern)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( wow, astrocade_base )
+	MCFG_FRAGMENT_ADD(astrocade_stereo_sound)
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(wow_map)
+	MCFG_CPU_IO_MAP(port_map_stereo_pattern)
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_DEFAULT_POSITION(1.0, 0.0, 1.0, 0.0)	/* adjusted to match screenshots */
-//  MDRV_SCREEN_DEFAULT_POSITION(1.066, -0.004, 1.048, -0.026)  /* adjusted to match flyer */
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_DEFAULT_POSITION(1.0, 0.0, 1.0, 0.0)	/* adjusted to match screenshots */
+//  MCFG_SCREEN_DEFAULT_POSITION(1.066, -0.004, 1.048, -0.026)  /* adjusted to match flyer */
 
 	/* sound hardware */
-	MDRV_SPEAKER_ADD("center", 0.0, 0.0, 1.0)
+	MCFG_SPEAKER_ADD("center", 0.0, 0.0, 1.0)
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(wow_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "center", 0.85)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(wow_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "center", 0.85)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( gorf )
-	MDRV_IMPORT_FROM(astrocade_base)
+static MACHINE_CONFIG_DERIVED( gorf, astrocade_base )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(wow_map)
-	MDRV_CPU_IO_MAP(port_map_stereo_pattern)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(wow_map)
+	MCFG_CPU_IO_MAP(port_map_stereo_pattern)
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_DEFAULT_POSITION(1.0, 0.0, 1.0, 0.0)	/* adjusted to match flyer */
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_DEFAULT_POSITION(1.0, 0.0, 1.0, 0.0)	/* adjusted to match flyer */
 
 	/* sound hardware */
-	MDRV_SPEAKER_ADD("upper", 0.0, 0.0, 1.0)
-	MDRV_SPEAKER_ADD("lower", 0.0, -0.5, 1.0)
+	MCFG_SPEAKER_ADD("upper", 0.0, 0.0, 1.0)
+	MCFG_SPEAKER_ADD("lower", 0.0, -0.5, 1.0)
 
-	MDRV_SOUND_ADD("astrocade1",  ASTROCADE, ASTROCADE_CLOCK/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "upper", 1.0)
+	MCFG_SOUND_ADD("astrocade1",  ASTROCADE, ASTROCADE_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "upper", 1.0)
 
-	MDRV_SOUND_ADD("astrocade2",  ASTROCADE, ASTROCADE_CLOCK/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lower", 1.0)
+	MCFG_SOUND_ADD("astrocade2",  ASTROCADE, ASTROCADE_CLOCK/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lower", 1.0)
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(gorf_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "upper", 0.85)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( robby )
-	MDRV_IMPORT_FROM(astrocade_base)
-	MDRV_IMPORT_FROM(astrocade_stereo_sound)
-
-	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(robby_map)
-	MDRV_CPU_IO_MAP(port_map_stereo_pattern)
-
-	MDRV_NVRAM_HANDLER(generic_0fill)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(gorf_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "upper", 0.85)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( profpac )
-	MDRV_IMPORT_FROM(astrocade_16color_base)
-	MDRV_IMPORT_FROM(astrocade_stereo_sound)
+static MACHINE_CONFIG_DERIVED( robby, astrocade_base )
+	MCFG_FRAGMENT_ADD(astrocade_stereo_sound)
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(profpac_map)
-	MDRV_CPU_IO_MAP(port_map_16col_pattern)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(robby_map)
+	MCFG_CPU_IO_MAP(port_map_stereo_pattern)
+
+	MCFG_NVRAM_ADD_0FILL("nvram")
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( demndrgn )
-	MDRV_IMPORT_FROM(astrocade_16color_base)
-
-	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(demndrgn_map)
-	MDRV_CPU_IO_MAP(port_map_16col_pattern_nosound)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( tenpindx )
-	MDRV_IMPORT_FROM(astrocade_16color_base)
+static MACHINE_CONFIG_DERIVED( profpac, astrocade_16color_base )
+	MCFG_FRAGMENT_ADD(astrocade_stereo_sound)
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(profpac_map)
-	MDRV_CPU_IO_MAP(port_map_16col_pattern_nosound)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(profpac_map)
+	MCFG_CPU_IO_MAP(port_map_16col_pattern)
+MACHINE_CONFIG_END
 
-	MDRV_CPU_ADD("sub", Z80, ASTROCADE_CLOCK/4)	/* real clock unknown */
-	MDRV_CPU_CONFIG(tenpin_daisy_chain)
-	MDRV_CPU_PROGRAM_MAP(tenpin_sub_map)
-	MDRV_CPU_IO_MAP(tenpin_sub_io_map)
 
-	MDRV_Z80CTC_ADD("ctc", ASTROCADE_CLOCK/4 /* same as "sub" */, ctc_intf)
+static MACHINE_CONFIG_DERIVED( demndrgn, astrocade_16color_base )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(demndrgn_map)
+	MCFG_CPU_IO_MAP(port_map_16col_pattern_nosound)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( tenpindx, astrocade_16color_base )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(profpac_map)
+	MCFG_CPU_IO_MAP(port_map_16col_pattern_nosound)
+
+	MCFG_CPU_ADD("sub", Z80, ASTROCADE_CLOCK/4)	/* real clock unknown */
+	MCFG_CPU_CONFIG(tenpin_daisy_chain)
+	MCFG_CPU_PROGRAM_MAP(tenpin_sub_map)
+	MCFG_CPU_IO_MAP(tenpin_sub_io_map)
+
+	MCFG_Z80CTC_ADD("ctc", ASTROCADE_CLOCK/4 /* same as "sub" */, ctc_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8912, ASTROCADE_CLOCK/4)	/* real clock unknown */
-	MDRV_SOUND_CONFIG(ay8912_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("aysnd", AY8912, ASTROCADE_CLOCK/4)	/* real clock unknown */
+	MCFG_SOUND_CONFIG(ay8912_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
+MACHINE_CONFIG_END
 
 
 
@@ -1519,6 +1554,20 @@ ROM_START( wow )
 ROM_END
 
 
+ROM_START( wowg )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "wow.x1",       0x0000, 0x1000, CRC(c1295786) SHA1(1e4f30cc15537aed6603b4e664e6e60f4bccb5c5) )
+	ROM_LOAD( "wow.x2",       0x1000, 0x1000, CRC(9be93215) SHA1(0bc8ee6d8391104eb217b612f32856b105946682) )
+	ROM_LOAD( "wow.x3",       0x2000, 0x1000, CRC(75e5a22e) SHA1(50a8ca11909ce49412c47de4da69e39a083ce5af) )
+	ROM_LOAD( "wow.x4",       0x3000, 0x1000, CRC(ef28eb84) SHA1(d6318b3649fccafc2d0a05e5530e88819d299356) )
+	ROM_LOAD( "wow.x5",       0x8000, 0x1000, CRC(16912c2b) SHA1(faf9c96d99bc111c5f1618f6863f22fd9269027b) )
+	//ROM_LOAD( "x6.bin",     0x9000, 0x1000, CRC(74fccdf8) SHA1(539d074241e98048ab8340c9df3dd59dd1a2b623) ) // This was different too, but is bad (ROM test fails and 0x980-0x9ff has bit 0x04 stuck)
+	ROM_LOAD( "wow.x6",       0x9000, 0x1000, CRC(35797f82) SHA1(376bba29e88c16d95438fa996913b76581df0937) )
+	ROM_LOAD( "wow.x7",       0xa000, 0x1000, CRC(ce404305) SHA1(a52c6c7b77842f25c79515460be6b7ed959b5edb) )
+	ROM_LOAD( "german.x11",   0xc000, 0x1000, CRC(16f84d73) SHA1(f426cfdedcd70b157d81b0031df5a65cacea5fb6) )
+ROM_END
+
+
 ROM_START( gorf )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "gorf-a.bin",   0x0000, 0x1000, CRC(5b348321) SHA1(76e2e3ad1a66755f1a369167fdb157690fd44a52) )
@@ -1533,14 +1582,28 @@ ROM_END
 
 ROM_START( gorfpgm1 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "873a",         0x0000, 0x1000, CRC(97cb4a6a) SHA1(efdae9a437c665fb861665a38c6cb13fd848ad91) )
-	ROM_LOAD( "873b",         0x1000, 0x1000, CRC(257236f8) SHA1(d1e8555fe5e6705ef88535bcd6071d1072b01386) )
-	ROM_LOAD( "873c",         0x2000, 0x1000, CRC(16b0638b) SHA1(65e1e2e4df80140976915e0982ce3219b14beece) )
-	ROM_LOAD( "873d",         0x3000, 0x1000, CRC(b5e821dc) SHA1(152840e353d567cbf5a86206dde70e5b64b27236) )
-	ROM_LOAD( "873e",         0x8000, 0x1000, CRC(8e82804b) SHA1(24250edb30efa63c80514629c86c9372b7ca3020) )
-	ROM_LOAD( "873f",         0x9000, 0x1000, CRC(715fb4d9) SHA1(c9f33162093e6ed7e3cb6bb716419e5bc43c0381) )
-	ROM_LOAD( "873g",         0xa000, 0x1000, CRC(8a066456) SHA1(f64bcdadbc62566b55573039b03baf5358e24a36) )
-	ROM_LOAD( "873h",         0xb000, 0x1000, CRC(56d40c7c) SHA1(c7c9a618d9438a76121972ac029ad7036bcf8c6f) )
+	ROM_LOAD( "873a.x1",      0x0000, 0x1000, CRC(97cb4a6a) SHA1(efdae9a437c665fb861665a38c6cb13fd848ad91) )
+	ROM_LOAD( "873b.x2",      0x1000, 0x1000, CRC(257236f8) SHA1(d1e8555fe5e6705ef88535bcd6071d1072b01386) )
+	ROM_LOAD( "873c.x3",      0x2000, 0x1000, CRC(16b0638b) SHA1(65e1e2e4df80140976915e0982ce3219b14beece) )
+	ROM_LOAD( "873d.x4",      0x3000, 0x1000, CRC(b5e821dc) SHA1(152840e353d567cbf5a86206dde70e5b64b27236) )
+	ROM_LOAD( "873e.x5",      0x8000, 0x1000, CRC(8e82804b) SHA1(24250edb30efa63c80514629c86c9372b7ca3020) )
+	ROM_LOAD( "873f.x6",      0x9000, 0x1000, CRC(715fb4d9) SHA1(c9f33162093e6ed7e3cb6bb716419e5bc43c0381) )
+	ROM_LOAD( "873g.x7",      0xa000, 0x1000, CRC(8a066456) SHA1(f64bcdadbc62566b55573039b03baf5358e24a36) )
+	ROM_LOAD( "873h.x8",      0xb000, 0x1000, CRC(56d40c7c) SHA1(c7c9a618d9438a76121972ac029ad7036bcf8c6f) )
+ROM_END
+
+
+ROM_START( gorfpgm1g )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "873a.x1",      0x0000, 0x1000, CRC(97cb4a6a) SHA1(efdae9a437c665fb861665a38c6cb13fd848ad91) )
+	ROM_LOAD( "873b.x2",      0x1000, 0x1000, CRC(257236f8) SHA1(d1e8555fe5e6705ef88535bcd6071d1072b01386) )
+	ROM_LOAD( "873c.x3",      0x2000, 0x1000, CRC(16b0638b) SHA1(65e1e2e4df80140976915e0982ce3219b14beece) )
+	ROM_LOAD( "873d.x4",      0x3000, 0x1000, CRC(b5e821dc) SHA1(152840e353d567cbf5a86206dde70e5b64b27236) )
+	ROM_LOAD( "873e.x5",      0x8000, 0x1000, CRC(8e82804b) SHA1(24250edb30efa63c80514629c86c9372b7ca3020) )
+	ROM_LOAD( "873f.x6",      0x9000, 0x1000, CRC(715fb4d9) SHA1(c9f33162093e6ed7e3cb6bb716419e5bc43c0381) )
+	ROM_LOAD( "873g.x7",      0xa000, 0x1000, CRC(8a066456) SHA1(f64bcdadbc62566b55573039b03baf5358e24a36) )
+	ROM_LOAD( "873h.x8",      0xb000, 0x1000, CRC(56d40c7c) SHA1(c7c9a618d9438a76121972ac029ad7036bcf8c6f) )
+	ROM_LOAD( "german.x11",   0xc000, 0x1000, CRC(3a3dbdcb) SHA1(e20895d41d66d1a23cc445e4ae4628b16ebf83f2) )
 ROM_END
 
 
@@ -1554,7 +1617,7 @@ ROM_START( robby )
 	ROM_LOAD( "rotox6.bin",   0x9000, 0x1000, CRC(7916b730) SHA1(c5166625a404da4a93a1a7ae21d01fdb6e78680e) )
 	ROM_LOAD( "rotox7.bin",   0xa000, 0x1000, CRC(276dc4a5) SHA1(d740b30c28f6a94ee2348291e80d57af5c2e2d99) )
 	ROM_LOAD( "rotox8.bin",   0xb000, 0x1000, CRC(1ef13457) SHA1(4dc1ee9ce2a28c4ba75e630fbfe4659cd68d3a66) )
-  	ROM_LOAD( "rotox9.bin",   0xc000, 0x1000, CRC(370352bf) SHA1(72cd35b4306b46de3d2a3e4e46fa4917ed9d18cb) )
+	ROM_LOAD( "rotox9.bin",   0xc000, 0x1000, CRC(370352bf) SHA1(72cd35b4306b46de3d2a3e4e46fa4917ed9d18cb) )
 	ROM_LOAD( "rotox10.bin",  0xd000, 0x1000, CRC(e762cbda) SHA1(48c274a859963097a90f80c48366250301eddb5f) )
 ROM_END
 
@@ -1669,100 +1732,109 @@ ROM_END
 
 static DRIVER_INIT( seawolf2 )
 {
-	astrocade_video_config = 0x00;
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x40, 0x40, 0, 0xff18, seawolf2_sound_1_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x41, 0x41, 0, 0xff18, seawolf2_sound_2_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x42, 0x43, 0, 0xff18, seawolf2_lamps_w);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state->m_video_config = 0x00;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x40, 0x40, 0, 0xff18, FUNC(seawolf2_sound_1_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x41, 0x41, 0, 0xff18, FUNC(seawolf2_sound_2_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x42, 0x43, 0, 0xff18, FUNC(seawolf2_lamps_w));
 }
 
 
 static DRIVER_INIT( ebases )
 {
-	astrocade_video_config = AC_SOUND_PRESENT;
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x20, 0x20, 0, 0xff07, ebases_coin_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x28, 0x28, 0, 0xff07, ebases_trackball_select_w);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state->m_video_config = AC_SOUND_PRESENT;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x20, 0x20, 0, 0xff07, FUNC(ebases_coin_w));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x28, 0x28, 0, 0xff07, FUNC(ebases_trackball_select_w));
 }
 
 
 static DRIVER_INIT( spacezap )
 {
-	astrocade_video_config = AC_SOUND_PRESENT;
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x13, 0x13, 0x03ff, 0xff00, spacezap_io_r);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state->m_video_config = AC_SOUND_PRESENT | AC_MONITOR_BW;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x13, 0x13, 0x03ff, 0xff00, FUNC(spacezap_io_r));
 }
 
 
 static DRIVER_INIT( wow )
 {
-	astrocade_video_config = AC_SOUND_PRESENT | AC_LIGHTPEN_INTS | AC_STARS;
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x15, 0x15, 0x0fff, 0xff00, wow_io_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x17, 0x17, 0xffff, 0xff00, wow_speech_r);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state->m_video_config = AC_SOUND_PRESENT | AC_LIGHTPEN_INTS | AC_STARS;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x15, 0x15, 0x0fff, 0xff00, FUNC(wow_io_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x17, 0x17, 0xffff, 0xff00, FUNC(wow_speech_r));
 }
 
 
 static DRIVER_INIT( gorf )
 {
-	astrocade_video_config = AC_SOUND_PRESENT | AC_LIGHTPEN_INTS | AC_STARS;
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x15, 0x15, 0x0fff, 0xff00, gorf_io_1_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x16, 0x16, 0x0fff, 0xff00, gorf_io_2_r);
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x17, 0x17, 0xffff, 0xff00, gorf_speech_r);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state->m_video_config = AC_SOUND_PRESENT | AC_LIGHTPEN_INTS | AC_STARS;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x15, 0x15, 0x0fff, 0xff00, FUNC(gorf_io_1_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x16, 0x16, 0x0fff, 0xff00, FUNC(gorf_io_2_r));
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x17, 0x17, 0xffff, 0xff00, FUNC(gorf_speech_r));
 }
 
 
 static DRIVER_INIT( robby )
 {
-	astrocade_video_config = AC_SOUND_PRESENT;
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x15, 0x15, 0x0fff, 0xff00, robby_io_r);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	state->m_video_config = AC_SOUND_PRESENT;
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_read_handler(0x15, 0x15, 0x0fff, 0xff00, FUNC(robby_io_r));
 }
 
 
 static DRIVER_INIT( profpac )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
-	astrocade_video_config = AC_SOUND_PRESENT;
-	memory_install_read8_handler(iospace, 0x14, 0x14, 0x0fff, 0xff00, profpac_io_1_r);
-	memory_install_read8_handler(iospace, 0x15, 0x15, 0x77ff, 0xff00, profpac_io_2_r);
+	state->m_video_config = AC_SOUND_PRESENT;
+	iospace->install_legacy_read_handler(0x14, 0x14, 0x0fff, 0xff00, FUNC(profpac_io_1_r));
+	iospace->install_legacy_read_handler(0x15, 0x15, 0x77ff, 0xff00, FUNC(profpac_io_2_r));
 
 	/* reset banking */
 	profpac_banksw_w(iospace, 0, 0);
-	state_save_register_postload(machine, profbank_banksw_restore, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(profbank_banksw_restore), &machine));
 }
 
 
 static DRIVER_INIT( demndrgn )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
-	astrocade_video_config = 0x00;
-	memory_install_read8_handler(iospace, 0x14, 0x14, 0x1fff, 0xff00, demndrgn_io_r);
-	memory_install_read_port_handler(iospace, 0x1c, 0x1c, 0x0000, 0xff00, "FIREX");
-	memory_install_read_port_handler(iospace, 0x1d, 0x1d, 0x0000, 0xff00, "FIREY");
-	memory_install_write8_handler(iospace, 0x97, 0x97, 0x0000, 0xff00, demndrgn_sound_w);
+	state->m_video_config = 0x00;
+	iospace->install_legacy_read_handler(0x14, 0x14, 0x1fff, 0xff00, FUNC(demndrgn_io_r));
+	iospace->install_read_port(0x1c, 0x1c, 0x0000, 0xff00, "FIREX");
+	iospace->install_read_port(0x1d, 0x1d, 0x0000, 0xff00, "FIREY");
+	iospace->install_legacy_write_handler(0x97, 0x97, 0x0000, 0xff00, FUNC(demndrgn_sound_w));
 
 	/* reset banking */
 	profpac_banksw_w(iospace, 0, 0);
-	state_save_register_postload(machine, profbank_banksw_restore, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(profbank_banksw_restore), &machine));
 }
 
 
 static DRIVER_INIT( tenpindx )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	astrocde_state *state = machine.driver_data<astrocde_state>();
+	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
 
-	astrocade_video_config = 0x00;
-	memory_install_read_port_handler(iospace, 0x60, 0x60, 0x0000, 0xff00, "P60");
-	memory_install_read_port_handler(iospace, 0x61, 0x61, 0x0000, 0xff00, "P61");
-	memory_install_read_port_handler(iospace, 0x62, 0x62, 0x0000, 0xff00, "P62");
-	memory_install_read_port_handler(iospace, 0x63, 0x63, 0x0000, 0xff00, "P63");
-	memory_install_read_port_handler(iospace, 0x64, 0x64, 0x0000, 0xff00, "P64");
-	memory_install_write8_handler(iospace, 0x65, 0x66, 0x0000, 0xff00, tenpindx_lamp_w);
-	memory_install_write8_handler(iospace, 0x67, 0x67, 0x0000, 0xff00, tenpindx_counter_w);
-	memory_install_write8_handler(iospace, 0x68, 0x68, 0x0000, 0xff00, tenpindx_lights_w);
-	memory_install_write8_handler(iospace, 0x97, 0x97, 0x0000, 0xff00, tenpindx_sound_w);
+	state->m_video_config = 0x00;
+	iospace->install_read_port(0x60, 0x60, 0x0000, 0xff00, "P60");
+	iospace->install_read_port(0x61, 0x61, 0x0000, 0xff00, "P61");
+	iospace->install_read_port(0x62, 0x62, 0x0000, 0xff00, "P62");
+	iospace->install_read_port(0x63, 0x63, 0x0000, 0xff00, "P63");
+	iospace->install_read_port(0x64, 0x64, 0x0000, 0xff00, "P64");
+	iospace->install_legacy_write_handler(0x65, 0x66, 0x0000, 0xff00, FUNC(tenpindx_lamp_w));
+	iospace->install_legacy_write_handler(0x67, 0x67, 0x0000, 0xff00, FUNC(tenpindx_counter_w));
+	iospace->install_legacy_write_handler(0x68, 0x68, 0x0000, 0xff00, FUNC(tenpindx_lights_w));
+	iospace->install_legacy_write_handler(0x97, 0x97, 0x0000, 0xff00, FUNC(tenpindx_sound_w));
 
 	/* reset banking */
 	profpac_banksw_w(iospace, 0, 0);
-	state_save_register_postload(machine, profbank_banksw_restore, NULL);
+	machine.save().register_postload(save_prepost_delegate(FUNC(profbank_banksw_restore), &machine));
 }
 
 
@@ -1784,10 +1856,12 @@ GAME( 1980, spacezap, 0,    spacezap, spacezap, spacezap, ROT0,   "Midway", "Spa
 
 /* 91354 CPU board + 90708 game board + 91356 RAM board + 91355 pattern board + 91397 memory board */
 GAME( 1980, wow,      0,    wow,      wow,      wow,      ROT0,   "Midway", "Wizard of Wor", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, wowg,     wow,  wow,      wowg,     wow,      ROT0,   "Midway", "Wizard of Wor (with German Language ROM)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 
 /* 91354 CPU board + 90708 game board + 91356 RAM board + 91355 pattern board + 91364 ROM/RAM board */
 GAMEL(1981, gorf,     0,    gorf,     gorf,     gorf,     ROT270, "Midway", "Gorf", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_gorf  )
 GAMEL(1981, gorfpgm1, gorf, gorf,     gorf,     gorf,     ROT270, "Midway", "Gorf (program 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_gorf )
+GAMEL(1981, gorfpgm1g,gorf, gorf,     gorfpgm1g,gorf,     ROT270, "Midway", "Gorf (program 1, with German Language ROM)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_gorf )
 
 /* 91354 CPU board + 90708 game board + 91356 RAM board + 91355 pattern board + 91423 memory board */
 GAME( 1981, robby,    0,    robby,    robby,    robby,    ROT0,   "Bally Midway", "Robby Roto", GAME_SUPPORTS_SAVE )
@@ -1797,4 +1871,4 @@ GAME( 1983, profpac,  0,    profpac,  profpac,  profpac,  ROT0,   "Bally Midway"
 
 /* 91465 CPU board + 91699 game board + 91466 RAM board + 91488 pattern board + 91467 memory board */
 GAME( 1982, demndrgn, 0,    demndrgn, demndrgn, demndrgn, ROT0,   "Bally Midway", "Demons & Dragons (prototype)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
-GAMEL(1983, tenpindx, 0,    tenpindx, tenpindx, tenpindx, ROT0,   "Bally Midway", "Ten Pin Deluxe", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE, layout_tenpindx )
+GAMEL(1983, tenpindx, 0,    tenpindx, tenpindx, tenpindx, ROT0,   "Bally Midway", "Ten Pin Deluxe", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE | GAME_MECHANICAL, layout_tenpindx )

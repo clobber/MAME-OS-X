@@ -16,32 +16,24 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
+#include "includes/cbuster.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-#include "deco16ic.h"
-
-VIDEO_START( twocrude );
-VIDEO_UPDATE( twocrude );
-
-WRITE16_HANDLER( twocrude_palette_24bit_rg_w );
-WRITE16_HANDLER( twocrude_palette_24bit_b_w );
-
-static UINT16 *twocrude_ram;
-extern void twocrude_pri_w(int pri);
-static UINT16 prot;
-
-/******************************************************************************/
+#include "video/deco16ic.h"
+#include "video/decospr.h"
 
 static WRITE16_HANDLER( twocrude_control_w )
 {
+	cbuster_state *state = space->machine().driver_data<cbuster_state>();
+
 	switch (offset << 1)
 	{
 	case 0: /* DMA flag */
-		buffer_spriteram16_w(space, 0, 0, 0xffff);
+		memcpy(state->m_spriteram16_buffer, state->m_spriteram16, 0x800);
 		return;
 
 	case 6: /* IRQ ack */
@@ -49,7 +41,7 @@ static WRITE16_HANDLER( twocrude_control_w )
 
     case 2: /* Sound CPU write */
 		soundlatch_w(space, 0, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+		device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
     	return;
 
 	case 4: /* Protection, maybe this is a PAL on the board?
@@ -69,40 +61,42 @@ static WRITE16_HANDLER( twocrude_control_w )
             protection?!
 
         */
-		if ((data & 0xffff) == 0x9a00) prot = 0;
-		if ((data & 0xffff) == 0xaa)   prot = 0x74;
-		if ((data & 0xffff) == 0x0200) prot = 0x63 << 8;
-		if ((data & 0xffff) == 0x9a)   prot = 0xe;
-		if ((data & 0xffff) == 0x55)   prot = 0x1e;
-		if ((data & 0xffff) == 0x0e)  {prot = 0x0e; twocrude_pri_w(0);} /* start */
-		if ((data & 0xffff) == 0x00)  {prot = 0x0e; twocrude_pri_w(0);} /* level 0 */
-		if ((data & 0xffff) == 0xf1)  {prot = 0x36; twocrude_pri_w(1);} /* level 1 */
-		if ((data & 0xffff) == 0x80)  {prot = 0x2e; twocrude_pri_w(1);} /* level 2 */
-		if ((data & 0xffff) == 0x40)  {prot = 0x1e; twocrude_pri_w(1);} /* level 3 */
-		if ((data & 0xffff) == 0xc0)  {prot = 0x3e; twocrude_pri_w(0);} /* level 4 */
-		if ((data & 0xffff) == 0xff)  {prot = 0x76; twocrude_pri_w(1);} /* level 5 */
+		if ((data & 0xffff) == 0x9a00) state->m_prot = 0;
+		if ((data & 0xffff) == 0xaa)   state->m_prot = 0x74;
+		if ((data & 0xffff) == 0x0200) state->m_prot = 0x63 << 8;
+		if ((data & 0xffff) == 0x9a)   state->m_prot = 0xe;
+		if ((data & 0xffff) == 0x55)   state->m_prot = 0x1e;
+		if ((data & 0xffff) == 0x0e)  {state->m_prot = 0x0e; state->m_pri = 0;} /* start */
+		if ((data & 0xffff) == 0x00)  {state->m_prot = 0x0e; state->m_pri = 0;} /* level 0 */
+		if ((data & 0xffff) == 0xf1)  {state->m_prot = 0x36; state->m_pri = 1;} /* level 1 */
+		if ((data & 0xffff) == 0x80)  {state->m_prot = 0x2e; state->m_pri = 1;} /* level 2 */
+		if ((data & 0xffff) == 0x40)  {state->m_prot = 0x1e; state->m_pri = 1;} /* level 3 */
+		if ((data & 0xffff) == 0xc0)  {state->m_prot = 0x3e; state->m_pri = 0;} /* level 4 */
+		if ((data & 0xffff) == 0xff)  {state->m_prot = 0x76; state->m_pri = 1;} /* level 5 */
 
 		break;
 	}
-	logerror("Warning %04x- %02x written to control %02x\n", cpu_get_pc(space->cpu), data, offset);
+	logerror("Warning %04x- %02x written to control %02x\n", cpu_get_pc(&space->device()), data, offset);
 }
 
 static READ16_HANDLER( twocrude_control_r )
 {
-	switch (offset<<1)
+	cbuster_state *state = space->machine().driver_data<cbuster_state>();
+
+	switch (offset << 1)
 	{
 		case 0: /* Player 1 & Player 2 joysticks & fire buttons */
-			return input_port_read(space->machine, "P1_P2");
+			return input_port_read(space->machine(), "P1_P2");
 
 		case 2: /* Dip Switches */
-			return input_port_read(space->machine, "DSW");
+			return input_port_read(space->machine(), "DSW");
 
 		case 4: /* Protection */
-			logerror("%04x : protection control read at 30c000 %d\n",cpu_get_pc(space->cpu),offset);
-			return prot;
+			logerror("%04x : protection control read at 30c000 %d\n", cpu_get_pc(&space->device()), offset);
+			return state->m_prot;
 
 		case 6: /* Credits, VBL in byte 7 */
-			return input_port_read(space->machine, "COINS");
+			return input_port_read(space->machine(), "COINS");
 	}
 
 	return ~0;
@@ -110,39 +104,39 @@ static READ16_HANDLER( twocrude_control_r )
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( twocrude_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( twocrude_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE(&twocrude_ram)
+	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_ram)
 
-	AM_RANGE(0x0a0000, 0x0a1fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
-	AM_RANGE(0x0a2000, 0x0a2fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
-	AM_RANGE(0x0a4000, 0x0a47ff) AM_RAM AM_BASE(&deco16_pf1_rowscroll)
-	AM_RANGE(0x0a6000, 0x0a67ff) AM_RAM AM_BASE(&deco16_pf2_rowscroll)
+	AM_RANGE(0x0a0000, 0x0a1fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x0a2000, 0x0a2fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x0a4000, 0x0a47ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf1_rowscroll)
+	AM_RANGE(0x0a6000, 0x0a67ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf2_rowscroll)
 
-	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM_WRITE(deco16_pf3_data_w) AM_BASE(&deco16_pf3_data)
-	AM_RANGE(0x0aa000, 0x0aafff) AM_RAM_WRITE(deco16_pf4_data_w) AM_BASE(&deco16_pf4_data)
-	AM_RANGE(0x0ac000, 0x0ac7ff) AM_RAM AM_BASE(&deco16_pf3_rowscroll)
-	AM_RANGE(0x0ae000, 0x0ae7ff) AM_RAM AM_BASE(&deco16_pf4_rowscroll)
+	AM_RANGE(0x0a8000, 0x0a8fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
+	AM_RANGE(0x0aa000, 0x0aafff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
+	AM_RANGE(0x0ac000, 0x0ac7ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf3_rowscroll)
+	AM_RANGE(0x0ae000, 0x0ae7ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_pf4_rowscroll)
 
-	AM_RANGE(0x0b0000, 0x0b07ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x0b0000, 0x0b07ff) AM_RAM AM_BASE_MEMBER(cbuster_state, m_spriteram16)
 	AM_RANGE(0x0b4000, 0x0b4001) AM_WRITENOP
-	AM_RANGE(0x0b5000, 0x0b500f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf12_control)
-	AM_RANGE(0x0b6000, 0x0b600f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf34_control)
-	AM_RANGE(0x0b8000, 0x0b8fff) AM_RAM_WRITE(twocrude_palette_24bit_rg_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x0b9000, 0x0b9fff) AM_RAM_WRITE(twocrude_palette_24bit_b_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0x0b5000, 0x0b500f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
+	AM_RANGE(0x0b6000, 0x0b600f) AM_DEVWRITE("tilegen2", deco16ic_pf_control_w)
+	AM_RANGE(0x0b8000, 0x0b8fff) AM_RAM_WRITE(twocrude_palette_24bit_rg_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x0b9000, 0x0b9fff) AM_RAM_WRITE(twocrude_palette_24bit_b_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0x0bc000, 0x0bc00f) AM_READWRITE(twocrude_control_r, twocrude_control_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -168,7 +162,7 @@ static INPUT_PORTS_START( twocrude )
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_START2 )
 
-	PORT_START("COINS")	/* Credits */
+	PORT_START("COINS")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN3 )
@@ -270,9 +264,10 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq(const device_config *device, int state)
+static void sound_irq(device_t *device, int state)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 1, state); /* IRQ 2 */
+	cbuster_state *driver_state = device->machine().driver_data<cbuster_state>();
+	device_set_input_line(driver_state->m_audiocpu, 1, state); /* IRQ 2 */
 }
 
 static const ym2151_interface ym2151_config =
@@ -280,60 +275,113 @@ static const ym2151_interface ym2151_config =
 	sound_irq
 };
 
-static MACHINE_DRIVER_START( twocrude )
+static int twocrude_bank_callback( const int bank )
+{
+	return ((bank >> 4) & 0x7) * 0x1000;
+}
+
+static const deco16ic_interface twocrude_deco16ic_tilegen1_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x00, 0x20, /* color base (default values) */
+	0x0f, 0x0f,	/* color masks (default values) */
+	twocrude_bank_callback,
+	twocrude_bank_callback,
+	0,1,
+};
+
+static const deco16ic_interface twocrude_deco16ic_tilegen2_intf =
+{
+	"screen",
+	0, 1,
+	0x0f, 0x0f,	/* trans masks (default values) */
+	0x30, 0x40, /* color base (default values) */
+	0x0f, 0x0f,	/* color masks (default values) */
+	twocrude_bank_callback,
+	twocrude_bank_callback,
+	0,2,
+};
+
+static MACHINE_START( cbuster )
+{
+	cbuster_state *state = machine.driver_data<cbuster_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = machine.device("audiocpu");
+	state->m_deco_tilegen1 = machine.device("tilegen1");
+	state->m_deco_tilegen2 = machine.device("tilegen2");
+
+	state->save_item(NAME(state->m_prot));
+	state->save_item(NAME(state->m_pri));
+}
+
+static MACHINE_RESET( cbuster )
+{
+	cbuster_state *state = machine.driver_data<cbuster_state>();
+
+	state->m_prot = 0;
+	state->m_pri = 0;
+}
+
+static MACHINE_CONFIG_START( twocrude, cbuster_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000) /* Custom chip 59 */
-	MDRV_CPU_PROGRAM_MAP(twocrude_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)/* VBL */
+	MCFG_CPU_ADD("maincpu", M68000, 12000000) /* Custom chip 59 */
+	MCFG_CPU_PROGRAM_MAP(twocrude_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)/* VBL */
 
-	MDRV_CPU_ADD("audiocpu", H6280,32220000/4) /* Custom chip 45, Audio section crystal is 32.220 MHz */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("audiocpu", H6280,32220000/4) /* Custom chip 45, Audio section crystal is 32.220 MHz */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_MACHINE_START(cbuster)
+	MCFG_MACHINE_RESET(cbuster)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(58)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
 
-	MDRV_GFXDECODE(cbuster)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(58)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(twocrude)
+	MCFG_VIDEO_START(twocrude)
 
-	MDRV_VIDEO_START(twocrude)
-	MDRV_VIDEO_UPDATE(twocrude)
+	MCFG_GFXDECODE(cbuster)
+	MCFG_PALETTE_LENGTH(2048)
+
+	MCFG_DECO16IC_ADD("tilegen1", twocrude_deco16ic_tilegen1_intf)
+	MCFG_DECO16IC_ADD("tilegen2", twocrude_deco16ic_tilegen2_intf)
+
+	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
+	decospr_device::set_gfx_region(*device, 3);
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym1", YM2203, 32220000/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+	MCFG_SOUND_ADD("ym1", YM2203, 32220000/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 
-	MDRV_SOUND_ADD("ym2", YM2151, 32220000/9)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.45)
-	MDRV_SOUND_ROUTE(1, "mono", 0.45)
+	MCFG_SOUND_ADD("ym2", YM2151, 32220000/9)
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.45)
+	MCFG_SOUND_ROUTE(1, "mono", 0.45)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
+	MCFG_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 
 ROM_START( cbuster )
 	ROM_REGION( 0x80000, "maincpu", 0 ) /* 68000 code */
-  	ROM_LOAD16_BYTE( "fx01.rom", 0x00000, 0x20000, CRC(ddae6d83) SHA1(ce3fed1393b71821730fb8d87869a89c8e07c456) )
+	ROM_LOAD16_BYTE( "fx01.rom", 0x00000, 0x20000, CRC(ddae6d83) SHA1(ce3fed1393b71821730fb8d87869a89c8e07c456) )
 	ROM_LOAD16_BYTE( "fx00.rom", 0x00001, 0x20000, CRC(5bc2c0de) SHA1(fa9c357ae4a5c814b7113df3b2f12982077f3e6b) )
-  	ROM_LOAD16_BYTE( "fx03.rom", 0x40000, 0x20000, CRC(c3d65bf9) SHA1(99dd650fd4b427bca25a0776fbd6221f93504106) )
- 	ROM_LOAD16_BYTE( "fx02.rom", 0x40001, 0x20000, CRC(b875266b) SHA1(a76f8e061392e17394a3f975584823ad39e0097e) )
+	ROM_LOAD16_BYTE( "fx03.rom", 0x40000, 0x20000, CRC(c3d65bf9) SHA1(99dd650fd4b427bca25a0776fbd6221f93504106) )
+	ROM_LOAD16_BYTE( "fx02.rom", 0x40001, 0x20000, CRC(b875266b) SHA1(a76f8e061392e17394a3f975584823ad39e0097e) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )	/* Sound CPU */
 	ROM_LOAD( "fu11-.rom",     0x00000, 0x10000, CRC(65f20f10) SHA1(cf914893edd98a0f39bbf7068a469ed7d34bd90e) )
@@ -350,7 +398,7 @@ ROM_START( cbuster )
 	ROM_LOAD( "mab-02",        0x000000, 0x80000, CRC(58b7231d) SHA1(5b51a2fa42c67f23648be205295184a1fddc00f5) ) /* Sprites */
 	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "mab-03",        0x0a0000, 0x80000, CRC(76053b9d) SHA1(093cd01a13509701ec9dd1a806132600a5bd1915) )
- 	/* Space for extra sprites to be copied to (0x20000) */
+	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "fu07-.rom",     0x140000, 0x10000, CRC(ca8d0bb3) SHA1(9262d6003cf0cb8c33d0f6c1d0ef35490b29f9b4) ) /* Extra sprites */
 	ROM_LOAD( "fu08-.rom",     0x150000, 0x10000, CRC(c6afc5c8) SHA1(feddd546f09884c51e4d1802477de4e152a51082) )
 	ROM_LOAD( "fu09-.rom",     0x160000, 0x10000, CRC(526809ca) SHA1(2cb9e7417211c1eb23d32e3fee71c5254d34a3ff) )
@@ -368,10 +416,10 @@ ROM_END
 
 ROM_START( cbusterw )
 	ROM_REGION( 0x80000, "maincpu", 0 ) /* 68000 code */
-  	ROM_LOAD16_BYTE( "fu01-.rom", 0x00000, 0x20000, CRC(0203e0f8) SHA1(7709636429f2cab43caba3422122dba970dfb50b) )
+	ROM_LOAD16_BYTE( "fu01-.rom", 0x00000, 0x20000, CRC(0203e0f8) SHA1(7709636429f2cab43caba3422122dba970dfb50b) )
 	ROM_LOAD16_BYTE( "fu00-.rom", 0x00001, 0x20000, CRC(9c58626d) SHA1(6bc950929391221755972658258937a1ef96c244) )
-  	ROM_LOAD16_BYTE( "fu03-.rom", 0x40000, 0x20000, CRC(def46956) SHA1(e1f71a440430f8f9351ee9e1826ca2d0d5a372f8) )
- 	ROM_LOAD16_BYTE( "fu02-.rom", 0x40001, 0x20000, CRC(649c3338) SHA1(06373b364283706f0b00ab6d014c674e4b9818fa) )
+	ROM_LOAD16_BYTE( "fu03-.rom", 0x40000, 0x20000, CRC(def46956) SHA1(e1f71a440430f8f9351ee9e1826ca2d0d5a372f8) )
+	ROM_LOAD16_BYTE( "fu02-.rom", 0x40001, 0x20000, CRC(649c3338) SHA1(06373b364283706f0b00ab6d014c674e4b9818fa) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )	/* Sound CPU */
 	ROM_LOAD( "fu11-.rom",     0x00000, 0x10000, CRC(65f20f10) SHA1(cf914893edd98a0f39bbf7068a469ed7d34bd90e) )
@@ -388,7 +436,7 @@ ROM_START( cbusterw )
 	ROM_LOAD( "mab-02",        0x000000, 0x80000, CRC(58b7231d) SHA1(5b51a2fa42c67f23648be205295184a1fddc00f5) ) /* Sprites */
 	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "mab-03",        0x0a0000, 0x80000, CRC(76053b9d) SHA1(093cd01a13509701ec9dd1a806132600a5bd1915) )
- 	/* Space for extra sprites to be copied to (0x20000) */
+	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "fu07-.rom",     0x140000, 0x10000, CRC(ca8d0bb3) SHA1(9262d6003cf0cb8c33d0f6c1d0ef35490b29f9b4) ) /* Extra sprites */
 	ROM_LOAD( "fu08-.rom",     0x150000, 0x10000, CRC(c6afc5c8) SHA1(feddd546f09884c51e4d1802477de4e152a51082) )
 	ROM_LOAD( "fu09-.rom",     0x160000, 0x10000, CRC(526809ca) SHA1(2cb9e7417211c1eb23d32e3fee71c5254d34a3ff) )
@@ -406,10 +454,10 @@ ROM_END
 
 ROM_START( cbusterj )
 	ROM_REGION( 0x80000, "maincpu", 0 ) /* 68000 code */
-  	ROM_LOAD16_BYTE( "fr01-1",   0x00000, 0x20000, CRC(af3c014f) SHA1(a7724c48f73e52b19f3688a413e2ed013e226c6b) )
+	ROM_LOAD16_BYTE( "fr01-1",   0x00000, 0x20000, CRC(af3c014f) SHA1(a7724c48f73e52b19f3688a413e2ed013e226c6b) )
 	ROM_LOAD16_BYTE( "fr00-1",   0x00001, 0x20000, CRC(f666ad52) SHA1(6f7325bc3bb79fd8112df677250c4bae572dfa43) )
-  	ROM_LOAD16_BYTE( "fr03",     0x40000, 0x20000, CRC(02c06118) SHA1(a251f936f80d8a9af033fe6d0d42e1e17ebbbf98) )
- 	ROM_LOAD16_BYTE( "fr02",     0x40001, 0x20000, CRC(b6c34332) SHA1(c1215c72a03b368655e20f4557475a2fc4c46c9e) )
+	ROM_LOAD16_BYTE( "fr03",     0x40000, 0x20000, CRC(02c06118) SHA1(a251f936f80d8a9af033fe6d0d42e1e17ebbbf98) )
+	ROM_LOAD16_BYTE( "fr02",     0x40001, 0x20000, CRC(b6c34332) SHA1(c1215c72a03b368655e20f4557475a2fc4c46c9e) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )	/* Sound CPU */
 	ROM_LOAD( "fu11-.rom",     0x00000, 0x10000, CRC(65f20f10) SHA1(cf914893edd98a0f39bbf7068a469ed7d34bd90e) )
@@ -426,7 +474,7 @@ ROM_START( cbusterj )
 	ROM_LOAD( "mab-02",        0x000000, 0x80000, CRC(58b7231d) SHA1(5b51a2fa42c67f23648be205295184a1fddc00f5) ) /* Sprites */
 	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "mab-03",        0x0a0000, 0x80000, CRC(76053b9d) SHA1(093cd01a13509701ec9dd1a806132600a5bd1915) )
- 	/* Space for extra sprites to be copied to (0x20000) */
+	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "fr07",          0x140000, 0x10000, CRC(52c85318) SHA1(74032dac7cb7e7d3028aab4c5f5b0a4e2a7caa03) ) /* Extra sprites */
 	ROM_LOAD( "fr08",          0x150000, 0x10000, CRC(ea25fbac) SHA1(d00dce24e94ffc212ab3880c00fcadb7b2116f01) )
 	ROM_LOAD( "fr09",          0x160000, 0x10000, CRC(f8363424) SHA1(6a6b143a3474965ef89f75e9d7b15946ae26d0d4) )
@@ -464,7 +512,7 @@ ROM_START( twocrude )
 	ROM_LOAD( "mab-02",        0x000000, 0x80000, CRC(58b7231d) SHA1(5b51a2fa42c67f23648be205295184a1fddc00f5) ) /* Sprites */
 	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "mab-03",        0x0a0000, 0x80000, CRC(76053b9d) SHA1(093cd01a13509701ec9dd1a806132600a5bd1915) )
- 	/* Space for extra sprites to be copied to (0x20000) */
+	/* Space for extra sprites to be copied to (0x20000) */
 	ROM_LOAD( "ft07",          0x140000, 0x10000, CRC(e3465c25) SHA1(5369a87847e6f881efc8460e6e8efcf8ff46e87f) )
 	ROM_LOAD( "ft08",          0x150000, 0x10000, CRC(c7f1d565) SHA1(d5dc55cf879f7feaff166a6708d60ef0bf31ddf5) )
 	ROM_LOAD( "ft09",          0x160000, 0x10000, CRC(6e3657b9) SHA1(7e6a140e33f9bc18e35c255680eebe152a5d8858) )
@@ -484,44 +532,48 @@ ROM_END
 
 static DRIVER_INIT( twocrude )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT8 *RAM = machine.region("maincpu")->base();
 	UINT8 *PTR;
-	int i,j;
+	int i, j;
 
 	/* Main cpu decrypt */
-	for (i=0x00000; i<0x80000; i+=2) {
-		int h = i+NATIVE_ENDIAN_VALUE_LE_BE(1,0), l = i+NATIVE_ENDIAN_VALUE_LE_BE(0,1);
+	for (i = 0x00000; i < 0x80000; i += 2)
+	{
+		int h = i + NATIVE_ENDIAN_VALUE_LE_BE(1,0), l = i + NATIVE_ENDIAN_VALUE_LE_BE(0,1);
 
-		RAM[h]=(RAM[h] & 0xcf) | ((RAM[h] & 0x10) << 1) | ((RAM[h] & 0x20) >> 1);
-		RAM[h]=(RAM[h] & 0x5f) | ((RAM[h] & 0x20) << 2) | ((RAM[h] & 0x80) >> 2);
+		RAM[h] = (RAM[h] & 0xcf) | ((RAM[h] & 0x10) << 1) | ((RAM[h] & 0x20) >> 1);
+		RAM[h] = (RAM[h] & 0x5f) | ((RAM[h] & 0x20) << 2) | ((RAM[h] & 0x80) >> 2);
 
-		RAM[l]=(RAM[l] & 0xbd) | ((RAM[l] & 0x2) << 5) | ((RAM[l] & 0x40) >> 5);
-		RAM[l]=(RAM[l] & 0xf5) | ((RAM[l] & 0x2) << 2) | ((RAM[l] & 0x8) >> 2);
+		RAM[l] = (RAM[l] & 0xbd) | ((RAM[l] & 0x2) << 5) | ((RAM[l] & 0x40) >> 5);
+		RAM[l] = (RAM[l] & 0xf5) | ((RAM[l] & 0x2) << 2) | ((RAM[l] & 0x8) >> 2);
 	}
 
 	/* Rearrange the 'extra' sprite bank to be in the same format as main sprites */
-	RAM = memory_region(machine, "gfx3") + 0x080000;
-	PTR = memory_region(machine, "gfx3") + 0x140000;
-	for (i=0; i<0x20000; i+=64) {
-		for (j=0; j<16; j+=1) { /* Copy 16 lines down */
-			RAM[i+      0+j*2]=PTR[i/2+      0+j]; /* Pixels 0-7 for each plane */
-			RAM[i+      1+j*2]=PTR[i/2+0x10000+j];
-			RAM[i+0xa0000+j*2]=PTR[i/2+0x20000+j];
-			RAM[i+0xa0001+j*2]=PTR[i/2+0x30000+j];
+	RAM = machine.region("gfx3")->base() + 0x080000;
+	PTR = machine.region("gfx3")->base() + 0x140000;
+	for (i = 0; i < 0x20000; i += 64)
+	{
+		for (j = 0; j < 16; j += 1)
+		{ /* Copy 16 lines down */
+			RAM[i +       0 + j * 2] = PTR[i / 2 +       0 + j]; /* Pixels 0-7 for each plane */
+			RAM[i +       1 + j * 2] = PTR[i / 2 + 0x10000 + j];
+			RAM[i + 0xa0000 + j * 2] = PTR[i / 2 + 0x20000 + j];
+			RAM[i + 0xa0001 + j * 2] = PTR[i / 2 + 0x30000 + j];
 		}
 
-		for (j=0; j<16; j+=1) { /* Copy 16 lines down */
-			RAM[i+   0x20+j*2]=PTR[i/2+   0x10+j]; /* Pixels 8-15 for each plane */
-			RAM[i+   0x21+j*2]=PTR[i/2+0x10010+j];
-			RAM[i+0xa0020+j*2]=PTR[i/2+0x20010+j];
-			RAM[i+0xa0021+j*2]=PTR[i/2+0x30010+j];
+		for (j = 0; j < 16; j += 1)
+		{ /* Copy 16 lines down */
+			RAM[i +    0x20 + j * 2] = PTR[i / 2 +    0x10 + j]; /* Pixels 8-15 for each plane */
+			RAM[i +    0x21 + j * 2] = PTR[i / 2 + 0x10010 + j];
+			RAM[i + 0xa0020 + j * 2] = PTR[i / 2 + 0x20010 + j];
+			RAM[i + 0xa0021 + j * 2] = PTR[i / 2 + 0x30010 + j];
 		}
 	}
 }
 
 /******************************************************************************/
 
-GAME( 1990, cbuster,  0,       twocrude, twocrude, twocrude, ROT0, "Data East Corporation", "Crude Buster (World FX version)", 0 )
-GAME( 1990, cbusterw, cbuster, twocrude, twocrude, twocrude, ROT0, "Data East Corporation", "Crude Buster (World FU version)", 0 )
-GAME( 1990, cbusterj, cbuster, twocrude, twocrude, twocrude, ROT0, "Data East Corporation", "Crude Buster (Japan)", 0 )
-GAME( 1990, twocrude, cbuster, twocrude, twocrude, twocrude, ROT0, "Data East USA", "Two Crude (US)", 0 )
+GAME( 1990, cbuster,  0,       twocrude, twocrude, twocrude, ROT0, "Data East Corporation", "Crude Buster (World FX version)", GAME_SUPPORTS_SAVE )
+GAME( 1990, cbusterw, cbuster, twocrude, twocrude, twocrude, ROT0, "Data East Corporation", "Crude Buster (World FU version)", GAME_SUPPORTS_SAVE )
+GAME( 1990, cbusterj, cbuster, twocrude, twocrude, twocrude, ROT0, "Data East Corporation", "Crude Buster (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1990, twocrude, cbuster, twocrude, twocrude, twocrude, ROT0, "Data East USA", "Two Crude (US)", GAME_SUPPORTS_SAVE )

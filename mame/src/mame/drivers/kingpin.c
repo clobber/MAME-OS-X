@@ -5,7 +5,7 @@ Driver by Andrew Gardner
 Notes:
     There are some writes around 0xe000 in the multi-game set that can't
         possibly go anywhere on the board I own.  A bigger RAM chip would
-        accomodate them though.
+        accommodate them though.
     There are 6 pots labeled vr2-vr7.  Color adjustments?
     The edge-connectors are non-jamma on this board.
 
@@ -19,10 +19,22 @@ Todo:
         -what really is I/O 0x02?
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "video/tms9928a.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
+
+
+class kingpin_state : public driver_device
+{
+public:
+	kingpin_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_code_base;
+};
+
 
 static READ8_HANDLER( io_read_missing_dips )
 {
@@ -87,12 +99,12 @@ INPUT_PORTS_END
 /* Main CPU */
 /* There's an OKI MSM5126-25RS in here - (2k RAM) */
 /* A 3.6V battery traces directly to U19, rendering it nvram */
-static ADDRESS_MAP_START( kingpin_program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingpin_program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kingpin_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( kingpin_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(io_read_missing_dips)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("DSW")
@@ -102,8 +114,8 @@ static ADDRESS_MAP_START( kingpin_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x11, 0x11) AM_READ_PORT("IN1")
 /*  AM_RANGE(0x12, 0x12) AM_WRITE(NO IDEA) */
 /*  AM_RANGE(0x13, 0x13) AM_WRITE(NO IDEA) */
-	AM_RANGE(0x20, 0x20) AM_READWRITE(TMS9928A_vram_r, TMS9928A_vram_w)
-	AM_RANGE(0x21, 0x21) AM_READWRITE(TMS9928A_register_r, TMS9928A_register_w)
+	AM_RANGE(0x20, 0x20) AM_DEVREADWRITE_MODERN("tms9928a", tms9928a_device, vram_read, vram_write)
+	AM_RANGE(0x21, 0x21) AM_DEVREADWRITE_MODERN("tms9928a", tms9928a_device, register_read, register_write)
 /*  AM_RANGE(0x30, 0x30) AM_WRITE(LIKELY LIGHTS) */
 /*  AM_RANGE(0x40, 0x40) AM_WRITE(LIKELY LIGHTS) */
 /*  AM_RANGE(0x50, 0x50) AM_WRITE(LIKELY LIGHTS) */
@@ -114,71 +126,59 @@ ADDRESS_MAP_END
 
 /* Sound CPU */
 /* There's an OKI MSM5126-25RS in here - (2k RAM) */
-static ADDRESS_MAP_START( kingpin_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingpin_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8400, 0x8bff) AM_RAM
 ADDRESS_MAP_END
 
 
-static INTERRUPT_GEN( kingpin_video_interrupt )
+static WRITE_LINE_DEVICE_HANDLER(vdp_interrupt)
 {
-	TMS9928A_interrupt(device->machine);
+	cputag_set_input_line(device->machine(), "maincpu", 0, HOLD_LINE);
 }
 
-static void vdp_interrupt (running_machine *machine, int state)
+static TMS9928A_INTERFACE(kingpin_tms9928a_interface)
 {
-	cputag_set_input_line(machine, "maincpu", 0, HOLD_LINE);
-}
-
-static const TMS9928a_interface tms9928a_interface =
-{
-	TMS99x8A,
+	"screen",
 	0x4000,
-	0,0,
-	vdp_interrupt
+	DEVCB_LINE(vdp_interrupt)
 };
 
-static MACHINE_DRIVER_START( kingpin )
+static MACHINE_CONFIG_START( kingpin, kingpin_state )
 /*  MAIN CPU */
-	MDRV_CPU_ADD("maincpu", Z80, 3579545)
-	MDRV_CPU_PROGRAM_MAP(kingpin_program_map)
-	MDRV_CPU_IO_MAP(kingpin_io_map)
-	MDRV_CPU_VBLANK_INT("screen", kingpin_video_interrupt)
+	MCFG_CPU_ADD("maincpu", Z80, 3579545)
+	MCFG_CPU_PROGRAM_MAP(kingpin_program_map)
+	MCFG_CPU_IO_MAP(kingpin_io_map)
 
 /*  SOUND CPU */
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545)
-	MDRV_CPU_PROGRAM_MAP(kingpin_sound_map)
-	/*MDRV_CPU_IO_MAP(sound_io_map)*/
+	MCFG_CPU_ADD("audiocpu", Z80, 3579545)
+	MCFG_CPU_PROGRAM_MAP(kingpin_sound_map)
+	/*MCFG_CPU_IO_MAP(sound_io_map)*/
 
 /*  VIDEO */
-	MDRV_IMPORT_FROM(tms9928a)
+	MCFG_TMS9928A_ADD( "tms9928a", TMS9928A, kingpin_tms9928a_interface )
+	MCFG_TMS9928A_SCREEN_ADD_NTSC( "screen" )
+	MCFG_SCREEN_UPDATE_DEVICE( "tms9928a", tms9928a_device, screen_update )
 
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 /* Sound chip is a AY-3-8912 */
 /*
-    MDRV_SPEAKER_STANDARD_MONO("mono")
+    MCFG_SPEAKER_STANDARD_MONO("mono")
 
-    MDRV_SOUND_ADD("ay", AY8912, 1500000)
-    MDRV_SOUND_CONFIG(ay8912_interface)
-    MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+    MCFG_SOUND_ADD("aysnd", AY8912, 1500000)
+    MCFG_SOUND_CONFIG(ay8912_interface)
+    MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static DRIVER_INIT( kingpin )
 {
-	static UINT8 *code_base;
-
-	TMS9928A_configure(&tms9928a_interface);
+	kingpin_state *state = machine.driver_data<kingpin_state>();
 
 	/* Hacks to keep the emu a'runnin */
-	code_base = memory_region(machine, "maincpu");
-	code_base[0x17d4] = 0xc3;	/* Maybe sound related? */
+	state->m_code_base = machine.region("maincpu")->base();
+	state->m_code_base[0x17d4] = 0xc3;	/* Maybe sound related? */
 }
 
 ROM_START( kingpin )

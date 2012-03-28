@@ -105,9 +105,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/fd1094.h"
-#include "cpu/m68000/m68kcpu.h"
+#include "cpu/m68000/m68000.h"
 
 #include "debug/debugcmd.h"
 #include "debug/debugcon.h"
@@ -151,7 +151,7 @@
 #define OF_LONG				(SIZE_LONG << 0)	/* long size operation */
 
 /* immediate sizes */
-#define OF_ISIZEMASK 		(SIZE_MASK << 3)
+#define OF_ISIZEMASK		(SIZE_MASK << 3)
 #define OF_IMMB				(SIZE_BYTE << 3)	/* immediate byte follows */
 #define OF_IMMW				(SIZE_WORD << 3)	/* immediate word follows */
 #define OF_IMML				(SIZE_LONG << 3)	/* immediate long follows */
@@ -220,7 +220,7 @@ static UINT8 *				undobuff;
 
 /* array of possible instruction decodings */
 static fd1094_possibility	posslist[4*4*4*4*4];
-static int 					posscount;
+static int					posscount;
 
 /* array of possible seeds */
 static UINT32 *				possible_seed;
@@ -246,7 +246,7 @@ static UINT16 *				keystatus;
 static UINT32				keystatus_words;
 
 /* key changed callback */
-static void					(*key_changed)(running_machine *);
+static void					(*key_changed)(running_machine &);
 
 
 
@@ -254,41 +254,41 @@ static void					(*key_changed)(running_machine *);
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void set_default_key_params(running_machine *machine);
-static void load_overlay_file(running_machine *machine);
-static void save_overlay_file(running_machine *machine);
+static void set_default_key_params(running_machine &machine);
+static void load_overlay_file(running_machine &machine);
+static void save_overlay_file(running_machine &machine);
 
-static int instruction_hook(const device_config *device, offs_t curpc);
+static int instruction_hook(device_t &device, offs_t curpc);
 
-static void execute_fdsave(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdoutput(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdseed(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdlockguess(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdeliminate(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdunlock(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdignore(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdundo(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdstatus(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdstate(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdpc(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdsearch(running_machine *machine, int ref, int params, const char **param);
-static void execute_fddasm(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdcset(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdclist(running_machine *machine, int ref, int params, const char **param);
-static void execute_fdcsearch(running_machine *machine, int ref, int params, const char **param);
+static void execute_fdsave(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdoutput(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdseed(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdlockguess(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdeliminate(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdunlock(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdignore(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdundo(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdstatus(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdstate(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdpc(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdsearch(running_machine &machine, int ref, int params, const char **param);
+static void execute_fddasm(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdcset(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdclist(running_machine &machine, int ref, int params, const char **param);
+static void execute_fdcsearch(running_machine &machine, int ref, int params, const char **param);
 
-static fd1094_possibility *try_all_possibilities(const address_space *space, int basepc, int offset, int length, UINT8 *instrbuffer, UINT8 *keybuffer, fd1094_possibility *possdata);
-static void tag_possibility(running_machine *machine, fd1094_possibility *possdata, UINT8 status);
+static fd1094_possibility *try_all_possibilities(address_space *space, int basepc, int offset, int length, UINT8 *instrbuffer, UINT8 *keybuffer, fd1094_possibility *possdata);
+static void tag_possibility(running_machine &machine, fd1094_possibility *possdata, UINT8 status);
 
-static void perform_constrained_search(running_machine *machine);
+static void perform_constrained_search(running_machine &machine);
 static UINT32 find_global_key_matches(UINT32 startwith, UINT16 *output);
 static int find_constraint_sequence(UINT32 global, int quick);
 static int does_key_work_for_constraints(const UINT16 *base, UINT8 *key);
 static UINT32 reconstruct_base_seed(int keybaseaddr, UINT32 startseed);
 
-static void build_optable(running_machine *machine);
-static int validate_ea(const address_space *space, UINT32 pc, UINT8 modereg, const UINT8 *parambase, UINT32 flags);
-static int validate_opcode(const address_space *space, UINT32 pc, const UINT8 *opdata, int maxwords);
+static void build_optable(running_machine &machine);
+static int validate_ea(address_space *space, UINT32 pc, UINT8 modereg, const UINT8 *parambase, UINT32 flags);
+static int validate_opcode(address_space *space, UINT32 pc, const UINT8 *opdata, int maxwords);
 
 
 
@@ -414,7 +414,7 @@ INLINE void set_constraint(fd1094_constraint *constraint, UINT32 pc, UINT16 stat
     for a given address
 -----------------------------------------------*/
 
-INLINE void print_possibilities(running_machine *machine)
+INLINE void print_possibilities(running_machine &machine)
 {
 	int i;
 
@@ -429,14 +429,14 @@ INLINE void print_possibilities(running_machine *machine)
     0=no, 1=yes, 2=unlikely
 -----------------------------------------------*/
 
-INLINE int pc_is_valid(const address_space *space, UINT32 pc, UINT32 flags)
+INLINE int pc_is_valid(address_space *space, UINT32 pc, UINT32 flags)
 {
 	/* if we're odd or out of range, fail */
 	if ((pc & 1) == 1)
 		return 0;
 	if (pc & 0xff000000)
 		return 0;
-	if (memory_decrypted_read_ptr(space, pc) == NULL)
+	if (space->direct().read_decrypted_ptr(pc) == NULL)
 		return 0;
 	return 1;
 }
@@ -447,7 +447,7 @@ INLINE int pc_is_valid(const address_space *space, UINT32 pc, UINT32 flags)
     valid? 0=no, 1=yes, 2=unlikely
 -----------------------------------------------*/
 
-INLINE int addr_is_valid(const address_space *space, UINT32 addr, UINT32 flags)
+INLINE int addr_is_valid(address_space *space, UINT32 addr, UINT32 flags)
 {
 	/* if this a JMP, the address is a PC */
 	if (flags & OF_JMP)
@@ -460,7 +460,7 @@ INLINE int addr_is_valid(const address_space *space, UINT32 addr, UINT32 flags)
 		return 0;
 
 	/* if we're invalid, fail */
-	if (strcmp(memory_get_handler_string(space, 0, addr), "segaic16_memory_mapper_lsb_r") == 0)
+	if (strcmp(const_cast<address_space *>(space)->get_handler_string(ROW_READ, addr), "segaic16_memory_mapper_lsb_r") == 0)
 		return 2;
 
 	return 1;
@@ -476,17 +476,17 @@ INLINE int addr_is_valid(const address_space *space, UINT32 addr, UINT32 flags)
     fd1094_init_debugging - set up debugging
 -----------------------------------------------*/
 
-void fd1094_init_debugging(running_machine *machine, const char *cpureg, const char *keyreg, const char *statreg, void (*changed)(running_machine *))
+void fd1094_init_debugging(running_machine &machine, const char *cpureg, const char *keyreg, const char *statreg, void (*changed)(running_machine &))
 {
 	/* set the key changed callback */
 	key_changed = changed;
 
 	/* set up the regions */
-	coderegion = (UINT16 *)memory_region(machine, cpureg);
-	coderegion_words = memory_region_length(machine, cpureg) / 2;
-	keyregion = (UINT8 *)memory_region(machine, keyreg);
-	keystatus = (UINT16 *)memory_region(machine, statreg);
-	keystatus_words = memory_region_length(machine, statreg) / 2;
+	coderegion = (UINT16 *)machine.region(cpureg)->base();
+	coderegion_words = machine.region(cpureg)->bytes() / 2;
+	keyregion = (UINT8 *)machine.region(keyreg)->base();
+	keystatus = (UINT16 *)machine.region(statreg)->base();
+	keystatus_words = machine.region(statreg)->bytes() / 2;
 	assert(coderegion_words == keystatus_words);
 
 	/* allocate memory for the ignore table */
@@ -535,7 +535,7 @@ void fd1094_init_debugging(running_machine *machine, const char *cpureg, const c
 	debug_console_register_command(machine, "fdcsearch", CMDFLAG_NONE, 0, 0, 0, execute_fdcsearch);
 
 	/* set up the instruction hook */
-	debug_cpu_set_instruction_hook(cputag_get_cpu(machine, "maincpu"), instruction_hook);
+	machine.device("maincpu")->debug()->set_instruction_hook(instruction_hook);
 
 	/* regenerate the key */
 	if (keydirty)
@@ -548,7 +548,7 @@ void fd1094_init_debugging(running_machine *machine, const char *cpureg, const c
     name, set some defaults
 -----------------------------------------------*/
 
-static void set_default_key_params(running_machine *machine)
+static void set_default_key_params(running_machine &machine)
 {
 	static const struct
 	{
@@ -564,7 +564,7 @@ static void set_default_key_params(running_machine *machine)
 
 	/* look for a matching game and set the key appropriately */
 	for (keynum = 0; keynum < ARRAY_LENGTH(default_keys); keynum++)
-		if (strcmp(machine->gamedrv->name, default_keys[keynum].gamename) == 0)
+		if (strcmp(machine.system().name, default_keys[keynum].gamename) == 0)
 		{
 			fd1094_global = default_keys[keynum].global;
 			fd1094_seed = default_keys[keynum].seed;
@@ -579,20 +579,16 @@ static void set_default_key_params(running_machine *machine)
     file
 -----------------------------------------------*/
 
-static void load_overlay_file(running_machine *machine)
+static void load_overlay_file(running_machine &machine)
 {
-	char filename[20];
-	file_error filerr;
-	mame_file *file;
 	int pcaddr;
 
 	/* determine the filename and open the file */
-	sprintf(filename, "%s.kov", machine->gamedrv->name);
-	filerr = mame_fopen(SEARCHPATH_RAW, filename, OPEN_FLAG_READ, &file);
+	emu_file file(OPEN_FLAG_READ);
+	file_error filerr = file.open(machine.system().name, ".kov");
 	if (filerr == FILERR_NONE)
 	{
-		mame_fread(file, keystatus, keystatus_words * 2);
-		mame_fclose(file);
+		file.read(keystatus, keystatus_words * 2);
 
 		/* convert from big-endian */
 		for (pcaddr = 0; pcaddr < keystatus_words; pcaddr++)
@@ -609,16 +605,13 @@ static void load_overlay_file(running_machine *machine)
     file
 -----------------------------------------------*/
 
-static void save_overlay_file(running_machine *machine)
+static void save_overlay_file(running_machine &machine)
 {
-	char filename[20];
-	file_error filerr;
-	mame_file *file;
 	int pcaddr;
 
 	/* determin the filename and open the file */
-	sprintf(filename, "%s.kov", machine->gamedrv->name);
-	filerr = mame_fopen(SEARCHPATH_RAW, filename, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &file);
+	emu_file file(OPEN_FLAG_WRITE | OPEN_FLAG_CREATE);
+	file_error filerr = file.open(machine.system().name, ".kov");
 	if (filerr == FILERR_NONE)
 	{
 		/* convert to big-endian */
@@ -626,8 +619,7 @@ static void save_overlay_file(running_machine *machine)
 			keystatus[pcaddr] = BIG_ENDIANIZE_INT16(keystatus[pcaddr]);
 
 		/* write the data */
-		mame_fwrite(file, keystatus, keystatus_words * 2);
-		mame_fclose(file);
+		file.write(keystatus, keystatus_words * 2);
 
 		/* convert from big-endian */
 		for (pcaddr = 0; pcaddr < keystatus_words; pcaddr++)
@@ -642,7 +634,7 @@ static void save_overlay_file(running_machine *machine)
     data
 -----------------------------------------------*/
 
-void fd1094_regenerate_key(running_machine *machine)
+void fd1094_regenerate_key(running_machine &machine)
 {
 	int reps = keystatus_words / KEY_SIZE;
 	int keyaddr, repnum;
@@ -676,8 +668,8 @@ void fd1094_regenerate_key(running_machine *machine)
 		(*key_changed)(machine);
 
 	/* force all memory and disassembly views to update */
-	debug_view_update_type(machine, DVT_MEMORY);
-	debug_view_update_type(machine, DVT_DISASSEMBLY);
+	machine.debug_view().update_all(DVT_MEMORY);
+	machine.debug_view().update_all(DVT_DISASSEMBLY);
 
 	/* reset keydirty */
 	keydirty = FALSE;
@@ -688,7 +680,7 @@ void fd1094_regenerate_key(running_machine *machine)
     instruction_hook - per-instruction hook
 -----------------------------------------------*/
 
-static int instruction_hook(const device_config *device, offs_t curpc)
+static int instruction_hook(device_t &device, offs_t curpc)
 {
 	int curfdstate = fd1094_set_state(keyregion, -1);
 	UINT8 instrbuffer[10], keybuffer[5];
@@ -720,20 +712,20 @@ static int instruction_hook(const device_config *device, offs_t curpc)
 	}
 
 	/* try all possible decodings at the current pc */
-	posscount = try_all_possibilities(cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM), curpc, 0, 0, instrbuffer, keybuffer, posslist) - posslist;
+	posscount = try_all_possibilities(device.memory().space(AS_PROGRAM), curpc, 0, 0, instrbuffer, keybuffer, posslist) - posslist;
 	if (keydirty)
-		fd1094_regenerate_key(device->machine);
+		fd1094_regenerate_key(device.machine());
 
 	/* if we only ended up with one possibility, mark that one as good */
 	if (posscount == 1)
 	{
-		tag_possibility(device->machine, &posslist[0], STATUS_LOCKED);
-		fd1094_regenerate_key(device->machine);
+		tag_possibility(device.machine(), &posslist[0], STATUS_LOCKED);
+		fd1094_regenerate_key(device.machine());
 		return 0;
 	}
 
 	/* print possibilities and break */
-	print_possibilities(device->machine);
+	print_possibilities(device.machine());
 	return 1;
 }
 
@@ -742,7 +734,7 @@ static int instruction_hook(const device_config *device, offs_t curpc)
     execute_fdsave - handle the 'fdsave' command
 -----------------------------------------------*/
 
-static void execute_fdsave(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdsave(running_machine &machine, int ref, int params, const char **param)
 {
 	save_overlay_file(machine);
 	debug_console_printf(machine, "File saved\n");
@@ -754,22 +746,18 @@ static void execute_fdsave(running_machine *machine, int ref, int params, const 
     to a file
 -----------------------------------------------*/
 
-static void execute_fdoutput(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdoutput(running_machine &machine, int ref, int params, const char **param)
 {
-	file_error filerr;
-	mame_file *file;
-
 	/* make sure we're up-to-date */
 	if (keydirty)
 		fd1094_regenerate_key(machine);
 
 	/* determin the filename and open the file */
-	filerr = mame_fopen(SEARCHPATH_RAW, param[0], OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &file);
+	emu_file file(OPEN_FLAG_WRITE | OPEN_FLAG_CREATE);
+	file_error filerr = file.open(param[0]);
 	if (filerr == FILERR_NONE)
-	{
-		mame_fwrite(file, keyregion, KEY_SIZE);
-		mame_fclose(file);
-	}
+		file.write(keyregion, KEY_SIZE);
+
 	debug_console_printf(machine, "File '%s' saved\n", param[0]);
 }
 
@@ -778,7 +766,7 @@ static void execute_fdoutput(running_machine *machine, int ref, int params, cons
     execute_fdseed - handle the 'fdseed' command
 -----------------------------------------------*/
 
-static void execute_fdseed(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdseed(running_machine &machine, int ref, int params, const char **param)
 {
 	UINT64 num1, num2;
 
@@ -805,7 +793,7 @@ static void execute_fdseed(running_machine *machine, int ref, int params, const 
     and 'fdguess' commands
 -----------------------------------------------*/
 
-static void execute_fdlockguess(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdlockguess(running_machine &machine, int ref, int params, const char **param)
 {
 	UINT64 num1;
 
@@ -834,7 +822,7 @@ static void execute_fdlockguess(running_machine *machine, int ref, int params, c
     'fdeliminate' command
 -----------------------------------------------*/
 
-static void execute_fdeliminate(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdeliminate(running_machine &machine, int ref, int params, const char **param)
 {
 	int pnum, posssrc, possdst;
 	int plist[10];
@@ -885,17 +873,17 @@ static void execute_fdeliminate(running_machine *machine, int ref, int params, c
     command
 -----------------------------------------------*/
 
-static void execute_fdunlock(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdunlock(running_machine &machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = debug_cpu_get_visible_cpu(machine);
+	device_t *cpu = debug_cpu_get_visible_cpu(machine);
 	int reps = keystatus_words / KEY_SIZE;
 	int keyaddr, repnum;
 	UINT64 offset;
 
 	/* support 0 or 1 parameters */
 	if (params != 1 || !debug_command_parameter_number(machine, param[0], &offset))
- 		offset = cpu_get_pc(cpu);
- 	keyaddr = addr_to_keyaddr(offset / 2);
+		offset = cpu_get_pc(cpu);
+	keyaddr = addr_to_keyaddr(offset / 2);
 
 	/* toggle the ignore PC status */
 	debug_console_printf(machine, "Unlocking PC %06X\n", (int)offset);
@@ -923,9 +911,9 @@ static void execute_fdunlock(running_machine *machine, int ref, int params, cons
     command
 -----------------------------------------------*/
 
-static void execute_fdignore(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdignore(running_machine &machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = debug_cpu_get_visible_cpu(machine);
+	device_t *cpu = debug_cpu_get_visible_cpu(machine);
 	UINT64 offset;
 
 	/* support 0 or 1 parameters */
@@ -936,8 +924,8 @@ static void execute_fdignore(running_machine *machine, int ref, int params, cons
 		return;
 	}
 	if (params != 1 || !debug_command_parameter_number(machine, param[0], &offset))
- 		offset = cpu_get_pc(cpu);
- 	offset /= 2;
+		offset = cpu_get_pc(cpu);
+	offset /= 2;
 
 	/* toggle the ignore PC status */
 	ignorepc[offset] = !ignorepc[offset];
@@ -948,7 +936,7 @@ static void execute_fdignore(running_machine *machine, int ref, int params, cons
 
 	/* if no parameter given, implicitly run as well */
 	if (params == 0)
-		debug_cpu_go(machine, ~0);
+		debug_cpu_get_visible_cpu(machine)->debug()->go();
 }
 
 
@@ -957,7 +945,7 @@ static void execute_fdignore(running_machine *machine, int ref, int params, cons
     command
 -----------------------------------------------*/
 
-static void execute_fdundo(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdundo(running_machine &machine, int ref, int params, const char **param)
 {
 	/* copy the undobuffer back and regenerate the key */
 	memcpy(keystatus, undobuff, keystatus_words * 2);
@@ -971,7 +959,7 @@ static void execute_fdundo(running_machine *machine, int ref, int params, const 
     command
 -----------------------------------------------*/
 
-static void execute_fdstatus(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdstatus(running_machine &machine, int ref, int params, const char **param)
 {
 	int numreps = keystatus_words / KEY_SIZE;
 	int locked = 4, nomatter = 0, guesses = 0;
@@ -1003,7 +991,7 @@ static void execute_fdstatus(running_machine *machine, int ref, int params, cons
     command
 -----------------------------------------------*/
 
-static void execute_fdstate(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdstate(running_machine &machine, int ref, int params, const char **param)
 {
 	UINT64 newstate;
 
@@ -1014,8 +1002,8 @@ static void execute_fdstate(running_machine *machine, int ref, int params, const
 			return;
 		fd1094_set_state(keyregion, newstate);
 		fd1094_regenerate_key(machine);
-		debug_view_update_type(machine, DVT_MEMORY);
-		debug_view_update_type(machine, DVT_DISASSEMBLY);
+		machine.debug_view().update_all(DVT_MEMORY);
+		machine.debug_view().update_all(DVT_DISASSEMBLY);
 	}
 
 	/* 0 parameters displays the current state */
@@ -1028,20 +1016,20 @@ static void execute_fdstate(running_machine *machine, int ref, int params, const
     command
 -----------------------------------------------*/
 
-static void execute_fdpc(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdpc(running_machine &machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = debug_cpu_get_visible_cpu(machine);
+	device_t *cpu = debug_cpu_get_visible_cpu(machine);
 	UINT64 newpc;
 
 	/* support 0 or 1 parameters */
 	if (!debug_command_parameter_number(machine, param[0], &newpc))
- 		newpc = cpu_get_pc(cpu);
+		newpc = cpu_get_pc(cpu);
 
- 	/* set the new PC */
- 	cpu_set_reg(cpu, REG_GENPC, newpc);
+	/* set the new PC */
+	cpu_set_reg(cpu, STATE_GENPC, newpc);
 
- 	/* recompute around that */
- 	instruction_hook(cpu, newpc);
+	/* recompute around that */
+	instruction_hook(*cpu, newpc);
 }
 
 
@@ -1050,10 +1038,10 @@ static void execute_fdpc(running_machine *machine, int ref, int params, const ch
     command
 -----------------------------------------------*/
 
-static void execute_fdsearch(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdsearch(running_machine &machine, int ref, int params, const char **param)
 {
-	const address_space *space = cpu_get_address_space(debug_cpu_get_visible_cpu(machine), ADDRESS_SPACE_PROGRAM);
-	int pc = cpu_get_pc(space->cpu);
+	address_space *space = debug_cpu_get_visible_cpu(machine)->memory().space(AS_PROGRAM);
+	int pc = cpu_get_pc(&space->device());
 	int length, first = TRUE;
 	UINT8 instrdata[2];
 	UINT16 decoded;
@@ -1091,8 +1079,8 @@ static void execute_fdsearch(running_machine *machine, int ref, int params, cons
 			}
 
 			/* set this as our current PC and run the instruction hook */
-			cpu_set_reg(space->cpu, REG_GENPC, pc);
-			if (instruction_hook(space->cpu, pc))
+			cpu_set_reg(&space->device(), STATE_GENPC, pc);
+			if (instruction_hook(space->device(), pc))
 				break;
 		}
 		keystatus[pc/2] |= SEARCH_MASK;
@@ -1176,21 +1164,20 @@ static void execute_fdsearch(running_machine *machine, int ref, int params, cons
     command
 -----------------------------------------------*/
 
-static void execute_fddasm(running_machine *machine, int ref, int params, const char **param)
+static void execute_fddasm(running_machine &machine, int ref, int params, const char **param)
 {
-	const address_space *space = cpu_get_address_space(debug_cpu_get_visible_cpu(machine), ADDRESS_SPACE_PROGRAM);
+	address_space *space = debug_cpu_get_visible_cpu(machine)->memory().space(AS_PROGRAM);
 	int origstate = fd1094_set_state(keyregion, -1);
 	const char *filename;
 	int skipped = FALSE;
-	file_error filerr;
-	mame_file *file;
 	UINT32 pcaddr;
 
 	/* extract the parameters */
 	filename = param[0];
 
 	/* open the file */
-	filerr = mame_fopen(SEARCHPATH_RAW, filename, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &file);
+	emu_file file(OPEN_FLAG_WRITE | OPEN_FLAG_CREATE);
+	file_error filerr = file.open(filename);
 	if (filerr != FILERR_NONE)
 	{
 		debug_console_printf(machine, "Unable to create file '%s'\n", filename);
@@ -1243,9 +1230,9 @@ static void execute_fddasm(running_machine *machine, int ref, int params, const 
 
 		/* print the line */
 		if (skipped)
-			mame_fprintf(file, "\n");
+			file.printf("\n");
 		skipped = FALSE;
-		mame_fprintf(file, " %02X %06X:", keystatus[pcaddr] >> 8, pcaddr * 2);
+		file.printf(" %02X %06X:", keystatus[pcaddr] >> 8, pcaddr * 2);
 		for (pcoffs = 0; pcoffs < 5; pcoffs++)
 		{
 			if (pcoffs < length)
@@ -1254,12 +1241,12 @@ static void execute_fddasm(running_machine *machine, int ref, int params, const 
 				int keystat = keystatus[pcaddr + pcoffs] & STATUS_MASK;
 				if (keystat != STATUS_LOCKED && keystat != STATUS_NOCHANGE)
 					unknowns = TRUE;
-				mame_fprintf(file, " %02X%02X%c", instrbuffer[pcoffs*2+0], instrbuffer[pcoffs*2+1], statchar[keystat]);
+				file.printf(" %02X%02X%c", instrbuffer[pcoffs*2+0], instrbuffer[pcoffs*2+1], statchar[keystat]);
 			}
 			else
-				mame_fprintf(file, "      ");
+				file.printf("      ");
 		}
-		mame_fprintf(file, "%s\n", disasm);
+		file.printf("%s\n", disasm);
 
 		/* if we have unknowns, display them as well */
 		if (unknowns > 0)
@@ -1269,13 +1256,13 @@ static void execute_fddasm(running_machine *machine, int ref, int params, const 
 			for (pnum = 0; pnum < posscount; pnum++)
 				if (strcmp(disasm, posslist[pnum].dasm) != 0)
 				{
-					mame_fprintf(file, "          :");
+					file.printf("          :");
 					for (pcoffs = 0; pcoffs < 5; pcoffs++)
 						if (pcoffs < posslist[pnum].length)
-							mame_fprintf(file, " %02X%02X ", posslist[pnum].instrbuffer[pcoffs*2+0], posslist[pnum].instrbuffer[pcoffs*2+1]);
+							file.printf(" %02X%02X ", posslist[pnum].instrbuffer[pcoffs*2+0], posslist[pnum].instrbuffer[pcoffs*2+1]);
 						else
-							mame_fprintf(file, "      ");
-					mame_fprintf(file, "%s\n", posslist[pnum].dasm);
+							file.printf("      ");
+					file.printf("%s\n", posslist[pnum].dasm);
 				}
 		}
 
@@ -1284,7 +1271,6 @@ static void execute_fddasm(running_machine *machine, int ref, int params, const 
 	}
 
 	/* close the file */
-	mame_fclose(file);
 	fd1094_set_state(keyregion, origstate);
 }
 
@@ -1294,7 +1280,7 @@ static void execute_fddasm(running_machine *machine, int ref, int params, const 
     command
 -----------------------------------------------*/
 
-static void execute_fdcset(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdcset(running_machine &machine, int ref, int params, const char **param)
 {
 	UINT64 pc, value, mask = 0xffff, state = FD1094_STATE_RESET;
 	int cnum;
@@ -1352,7 +1338,7 @@ static void execute_fdcset(running_machine *machine, int ref, int params, const 
     command
 -----------------------------------------------*/
 
-static void execute_fdclist(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdclist(running_machine &machine, int ref, int params, const char **param)
 {
 	int cnum;
 
@@ -1371,7 +1357,7 @@ static void execute_fdclist(running_machine *machine, int ref, int params, const
     command
 -----------------------------------------------*/
 
-static void execute_fdcsearch(running_machine *machine, int ref, int params, const char **param)
+static void execute_fdcsearch(running_machine &machine, int ref, int params, const char **param)
 {
 //  debug_console_printf(machine, "Searching for possible global keys....\n");
 	perform_constrained_search(machine);
@@ -1385,7 +1371,7 @@ static void execute_fdcsearch(running_machine *machine, int ref, int params, con
     length
 -----------------------------------------------*/
 
-static fd1094_possibility *try_all_possibilities(const address_space *space, int basepc, int offset, int length, UINT8 *instrbuffer, UINT8 *keybuffer, fd1094_possibility *possdata)
+static fd1094_possibility *try_all_possibilities(address_space *space, int basepc, int offset, int length, UINT8 *instrbuffer, UINT8 *keybuffer, fd1094_possibility *possdata)
 {
 	UINT8 keymask, keystat;
 	UINT16 possvalue[4];
@@ -1509,7 +1495,7 @@ static fd1094_possibility *try_all_possibilities(const address_space *space, int
     with the specified status
 -----------------------------------------------*/
 
-static void tag_possibility(running_machine *machine, fd1094_possibility *possdata, UINT8 status)
+static void tag_possibility(running_machine &machine, fd1094_possibility *possdata, UINT8 status)
 {
 	int curfdstate = fd1094_set_state(keyregion, -1);
 	int nomatter = 0, locked = 0, guessed = 0;
@@ -1583,7 +1569,7 @@ static void tag_possibility(running_machine *machine, fd1094_possibility *possda
     given sequence/mask pair
 -----------------------------------------------*/
 
-static void perform_constrained_search(running_machine *machine)
+static void perform_constrained_search(running_machine &machine)
 {
 	UINT32 global;
 
@@ -2088,7 +2074,7 @@ static const struct
     build_optable - build up the opcode table
 -----------------------------------------------*/
 
-static void build_optable(running_machine *machine)
+static void build_optable(running_machine &machine)
 {
 	int opnum, inum;
 
@@ -2203,6 +2189,7 @@ static void build_optable(running_machine *machine)
 									length += ((flags & OF_SIZEMASK) == OF_LONG) ? 2 : 1;
 
 								/* make sure we match the disassembler */
+								#ifdef DEBUG
 								{
 									char dummybuffer[40];
 									UINT8 instrbuffer[10];
@@ -2211,6 +2198,7 @@ static void build_optable(running_machine *machine)
 									dummybuffer[0] = 0;
 									assert(length == (m68k_disassemble_raw(dummybuffer, 0, instrbuffer, instrbuffer, M68K_CPU_TYPE_68000) & 0xff) / 2);
 								}
+								#endif
 
 								/* set the value of the entry in the table */
 								optable[opnum | eabits].flags = flags | (length << 28);
@@ -2226,7 +2214,7 @@ static void build_optable(running_machine *machine)
     valid or not, and return the length
 -----------------------------------------------*/
 
-static int validate_ea(const address_space *space, UINT32 pc, UINT8 modereg, const UINT8 *parambase, UINT32 flags)
+static int validate_ea(address_space *space, UINT32 pc, UINT8 modereg, const UINT8 *parambase, UINT32 flags)
 {
 	UINT32 addr;
 	int valid;
@@ -2296,7 +2284,7 @@ static int validate_ea(const address_space *space, UINT32 pc, UINT8 modereg, con
     the length specified
 -----------------------------------------------*/
 
-static int validate_opcode(const address_space *space, UINT32 pc, const UINT8 *opdata, int maxwords)
+static int validate_opcode(address_space *space, UINT32 pc, const UINT8 *opdata, int maxwords)
 {
 	UINT32 immvalue = 0;
 	int iffy = FALSE;

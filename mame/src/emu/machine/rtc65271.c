@@ -15,44 +15,15 @@
     Raphael Nabet, 2003-2004
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "rtc65271.h"
-
-static void field_interrupts(void);
-static TIMER_CALLBACK( rtc_SQW_callback );
-static TIMER_CALLBACK( rtc_begin_update_callback );
-static TIMER_CALLBACK( rtc_end_update_callback );
 
 /* Delay between the beginning (UIP asserted) and the end (UIP cleared and
 update interrupt asserted) of the update cycle */
-#define UPDATE_CYCLE_TIME ATTOTIME_IN_USEC(1984)
+#define UPDATE_CYCLE_TIME attotime::from_usec(1984)
 /* Delay between the assertion of UIP and the effective start of the update
 cycle */
-/*#define UPDATE_CYCLE_DELAY ATTOTIME_IN_USEC(244)*/
-
-static struct
-{
-	running_machine *machine;
-
-	/* 64 8-bit registers (10 clock registers, 4 control/status registers, and
-    50 bytes of user RAM) */
-	UINT8 regs[64];
-	int cur_reg;
-
-	/* extended RAM: 4kbytes of battery-backed RAM (in pages of 32 bytes) */
-	UINT8 *xram;
-	int cur_xram_page;
-
-	/* update timer: called every second */
-	emu_timer *update_timer;
-
-	/* SQW timer: called every periodic clock half-period */
-	emu_timer *SQW_timer;
-	int SQW_internal_state;
-
-	/* callback called when interrupt pin state changes (may be NULL) */
-	void (*interrupt_callback)(running_machine *machine, int state);
-} rtc;
+/*#define UPDATE_CYCLE_DELAY attotime::from_usec(244)*/
 
 enum
 {
@@ -181,148 +152,137 @@ static UINT8 BCD_to_binary(UINT8 data)
     Public functions
 */
 
+//-------------------------------------------------
+//  nvram_default - called to initialize NVRAM to
+//  its default state
+//-------------------------------------------------
 
-/*
-    load the SRAM and register contents from file
-*/
-int rtc65271_file_load(running_machine *machine, mame_file *file)
+void rtc65271_device::nvram_default()
+{
+	memset(m_regs,0, sizeof(m_regs));
+	memset(m_xram,0, sizeof(m_xram));
+}
+
+//-------------------------------------------------
+//  nvram_read - called to read NVRAM from the
+//  .nv file
+//-------------------------------------------------
+
+void rtc65271_device::nvram_read(emu_file &file)
 {
 	UINT8 buf;
 
-
 	/* version flag */
-	if (mame_fread(file, & buf, 1) != 1)
-		return 1;
+	if (file.read(&buf, 1) != 1)
+		return;
 	if (buf != 0)
-		return 1;
+		return;
 
 	/* control registers */
-	if (mame_fread(file, &buf, 1) != 1)
-		return 1;
-	rtc.regs[reg_A] = buf & (reg_A_DV /*| reg_A_RS*/);
-	if (mame_fread(file, &buf, 1) != 1)
-		return 1;
-	rtc.regs[reg_B] = buf & (reg_B_SET | reg_B_DM | reg_B_24h | reg_B_DSE);
+	if (file.read(&buf, 1) != 1)
+		return;
+	m_regs[reg_A] = buf & (reg_A_DV /*| reg_A_RS*/);
+	if (file.read(&buf, 1) != 1)
+		return;
+	m_regs[reg_B] = buf & (reg_B_SET | reg_B_DM | reg_B_24h | reg_B_DSE);
 
 	/* alarm registers */
-	if (mame_fread(file, &rtc.regs[reg_alarm_second], 1) != 1)
-		return 1;
-	if (mame_fread(file, &rtc.regs[reg_alarm_minute], 1) != 1)
-		return 1;
-	if (mame_fread(file, &rtc.regs[reg_alarm_hour], 1) != 1)
-		return 1;
+	if (file.read(&m_regs[reg_alarm_second], 1) != 1)
+		return;
+	if (file.read(&m_regs[reg_alarm_minute], 1) != 1)
+		return;
+	if (file.read(&m_regs[reg_alarm_hour], 1) != 1)
+		return;
 
 	/* user RAM */
-	if (mame_fread(file, rtc.regs+14, 50) != 50)
-		return 1;
+	if (file.read(m_regs+14, 50) != 50)
+		return;
 
 	/* extended RAM */
-	if (mame_fread(file, rtc.xram, 4096) != 4096)
-		return 1;
+	if (file.read(m_xram, 4096) != 4096)
+		return;
 
-	rtc.regs[reg_D] |= reg_D_VRT;	/* the data was backed up successfully */
-	/*rtc.dirty = FALSE;*/
+	m_regs[reg_D] |= reg_D_VRT;	/* the data was backed up successfully */
+	/*m_dirty = FALSE;*/
 
 	{
-		mame_system_time systime;
+		system_time systime;
 
 		/* get the current date/time from the core */
-		mame_get_current_datetime(machine, &systime);
+		machine().current_datetime(systime);
 
 		/* set clock registers */
-		rtc.regs[reg_second] = systime.local_time.second;
-		rtc.regs[reg_minute] = systime.local_time.minute;
-		if (rtc.regs[reg_B] & reg_B_24h)
+		m_regs[reg_second] = systime.local_time.second;
+		m_regs[reg_minute] = systime.local_time.minute;
+		if (m_regs[reg_B] & reg_B_24h)
 			/* 24-hour mode */
-			rtc.regs[reg_hour] = systime.local_time.hour;
+			m_regs[reg_hour] = systime.local_time.hour;
 		else
 		{	/* 12-hour mode */
 			if (systime.local_time.hour >= 12)
 			{
-				rtc.regs[reg_hour] = 0x80;
+				m_regs[reg_hour] = 0x80;
 				systime.local_time.hour -= 12;
 			}
 			else
-				rtc.regs[reg_hour] = 0;
-			rtc.regs[reg_hour] |= systime.local_time.hour ? systime.local_time.hour : 12;
+				m_regs[reg_hour] = 0;
+			m_regs[reg_hour] |= systime.local_time.hour ? systime.local_time.hour : 12;
 		}
-		rtc.regs[reg_weekday] = systime.local_time.weekday + 1;
-		rtc.regs[reg_monthday] = systime.local_time.mday;
-		rtc.regs[reg_month] = systime.local_time.month + 1;
-		rtc.regs[reg_year] = systime.local_time.year % 100;
-		if (! (rtc.regs[reg_B] & reg_B_DM))
+		m_regs[reg_weekday] = systime.local_time.weekday + 1;
+		m_regs[reg_monthday] = systime.local_time.mday;
+		m_regs[reg_month] = systime.local_time.month + 1;
+		m_regs[reg_year] = systime.local_time.year % 100;
+		if (! (m_regs[reg_B] & reg_B_DM))
 		{	/* BCD mode */
-			rtc.regs[reg_second] = binary_to_BCD(rtc.regs[reg_second]);
-			rtc.regs[reg_minute] = binary_to_BCD(rtc.regs[reg_minute]);
-			rtc.regs[reg_hour] = (rtc.regs[reg_hour] & 0x80) | binary_to_BCD(rtc.regs[reg_hour] & 0x7f);
-			/*rtc.regs[reg_weekday] = binary_to_BCD(rtc.regs[reg_weekday]);*/
-			rtc.regs[reg_monthday] = binary_to_BCD(rtc.regs[reg_monthday]);
-			rtc.regs[reg_month] = binary_to_BCD(rtc.regs[reg_month]);
-			rtc.regs[reg_year] = binary_to_BCD(rtc.regs[reg_year]);
+			m_regs[reg_second] = binary_to_BCD(m_regs[reg_second]);
+			m_regs[reg_minute] = binary_to_BCD(m_regs[reg_minute]);
+			m_regs[reg_hour] = (m_regs[reg_hour] & 0x80) | binary_to_BCD(m_regs[reg_hour] & 0x7f);
+			/*m_regs[reg_weekday] = binary_to_BCD(m_regs[reg_weekday]);*/
+			m_regs[reg_monthday] = binary_to_BCD(m_regs[reg_monthday]);
+			m_regs[reg_month] = binary_to_BCD(m_regs[reg_month]);
+			m_regs[reg_year] = binary_to_BCD(m_regs[reg_year]);
 		}
 	}
-
-	return 0;
 }
 
-/*
-    save the SRAM and register contents to file
-*/
-int rtc65271_file_save(mame_file *file)
+//-------------------------------------------------
+//  nvram_write - called to write NVRAM to the
+//  .nv file
+//-------------------------------------------------
+
+void rtc65271_device::nvram_write(emu_file &file)
 {
 	UINT8 buf;
 
 
 	/* version flag */
 	buf = 0;
-	if (mame_fwrite(file, & buf, 1) != 1)
-		return 1;
+	if (file.write(& buf, 1) != 1)
+		return;
 
 	/* control registers */
-	buf = rtc.regs[reg_A] & (reg_A_DV | reg_A_RS);
-	if (mame_fwrite(file, &buf, 1) != 1)
-		return 1;
-	buf = rtc.regs[reg_B] & (reg_B_SET | reg_B_DM | reg_B_24h | reg_B_DSE);
-	if (mame_fwrite(file, &buf, 1) != 1)
-		return 1;
+	buf = m_regs[reg_A] & (reg_A_DV | reg_A_RS);
+	if (file.write(&buf, 1) != 1)
+		return;
+	buf = m_regs[reg_B] & (reg_B_SET | reg_B_DM | reg_B_24h | reg_B_DSE);
+	if (file.write(&buf, 1) != 1)
+		return;
 
 	/* alarm registers */
-	if (mame_fwrite(file, &rtc.regs[reg_alarm_second], 1) != 1)
-		return 1;
-	if (mame_fwrite(file, &rtc.regs[reg_alarm_minute], 1) != 1)
-		return 1;
-	if (mame_fwrite(file, &rtc.regs[reg_alarm_hour], 1) != 1)
-		return 1;
+	if (file.write(&m_regs[reg_alarm_second], 1) != 1)
+		return;
+	if (file.write(&m_regs[reg_alarm_minute], 1) != 1)
+		return;
+	if (file.write(&m_regs[reg_alarm_hour], 1) != 1)
+		return;
 
 	/* user RAM */
-	if (mame_fwrite(file, rtc.regs+14, 50) != 50)
-		return 1;
+	if (file.write(m_regs+14, 50) != 50)
+		return;
 
 	/* extended RAM */
-	if (mame_fwrite(file, rtc.xram, 4096) != 4096)
-		return 1;
-
-	return 0;
-}
-
-/*
-    Initialize clock
-
-    xram: pointer to 4kb RAM area
-    interrupt_callback: callback called when interrupt pin state changes (may
-        be NULL)
-*/
-void rtc65271_init(running_machine *machine, UINT8 *xram, void (*interrupt_callback)(running_machine *machine, int state))
-{
-	memset(&rtc, 0, sizeof(rtc));
-
-	rtc.machine = machine;
-	rtc.xram = xram;
-
-	rtc.update_timer = timer_alloc(machine, rtc_begin_update_callback, NULL);
-	timer_adjust_periodic(rtc.update_timer, ATTOTIME_IN_SEC(1), 0, ATTOTIME_IN_SEC(1));
-	rtc.SQW_timer = timer_alloc(machine, rtc_SQW_callback, NULL);
-	rtc.interrupt_callback = interrupt_callback;
+	if (file.write(m_xram, 4096) != 4096)
+		return;
 }
 
 /*
@@ -331,7 +291,7 @@ void rtc65271_init(running_machine *machine, UINT8 *xram, void (*interrupt_callb
     xramsel: select RTC register if 0, XRAM if 1
     offset: address (A0-A5 pins)
 */
-UINT8 rtc65271_r(int xramsel, offs_t offset)
+UINT8 rtc65271_device::read(int xramsel, offs_t offset)
 {
 	int reply;
 
@@ -339,47 +299,47 @@ UINT8 rtc65271_r(int xramsel, offs_t offset)
 	{
 		if (offset & 0x20)
 			/* XRAM page register */
-			reply = rtc.cur_xram_page;
+			reply = m_cur_xram_page;
 		else
 			/* XRAM data */
-			reply = rtc.xram[(offset & 0x1f) + 0x0020*rtc.cur_xram_page];
+			reply = m_xram[(offset & 0x1f) + 0x0020*m_cur_xram_page];
 	}
 	else
 	{
 		if (offset & 0x01)
 			/* data register */
-			switch (rtc.cur_reg)
+			switch (m_cur_reg)
 			{
 			case reg_C:
-				reply = rtc.regs[rtc.cur_reg];
-				rtc.regs[rtc.cur_reg] = 0;
+				reply = m_regs[m_cur_reg];
+				m_regs[m_cur_reg] = 0;
 				field_interrupts();
 				break;
 			case reg_D:
-				reply = rtc.regs[rtc.cur_reg];
-				rtc.regs[rtc.cur_reg] = /*0*/reg_D_VRT;	/* set VRT flag so that the computer does not complain that the battery is low */
+				reply = m_regs[m_cur_reg];
+				m_regs[m_cur_reg] = /*0*/reg_D_VRT;	/* set VRT flag so that the computer does not complain that the battery is low */
 				break;
 
 			default:
-				reply = rtc.regs[rtc.cur_reg];
+				reply = m_regs[m_cur_reg];
 				break;
 			}
 		else
 			/* indirect address register */
-			reply = rtc.cur_reg;
+			reply = m_cur_reg;
 	}
 
 	return reply;
 }
 
-READ8_HANDLER( rtc65271_rtc_r )
+READ8_MEMBER( rtc65271_device::rtc_r )
 {
-	return rtc65271_r( 0, offset );
+	return read(0, offset );
 }
 
-READ8_HANDLER( rtc65271_xram_r )
+READ8_MEMBER( rtc65271_device::xram_r )
 {
-	return rtc65271_r( 1, offset );
+	return read(1, offset );
 }
 
 /*
@@ -388,62 +348,62 @@ READ8_HANDLER( rtc65271_xram_r )
     xramsel: select RTC register if 0, XRAM if 1
     offset: address (A0-A5 pins)
 */
-void rtc65271_w(int xramsel, offs_t offset, UINT8 data)
+void rtc65271_device::write(int xramsel, offs_t offset, UINT8 data)
 {
 	if (xramsel)
 	{
 		if (offset & 0x20)
 			/* XRAM page register */
-			rtc.cur_xram_page = data & 0x7f;
+			m_cur_xram_page = data & 0x7f;
 		else
 			/* XRAM data */
-			rtc.xram[(offset & 0x1f) + 0x0020*rtc.cur_xram_page] = data;
+			m_xram[(offset & 0x1f) + 0x0020*m_cur_xram_page] = data;
 	}
 	else
 	{
 		if (offset & 0x01)
 			/* data register */
-			switch (rtc.cur_reg)
+			switch (m_cur_reg)
 			{
 			case reg_second:
 				/* the data sheet says bit 7 is read-only.  (I have no idea of
                 the reason why it is.) */
-				rtc.regs[reg_second] = data & 0x7f;
+				m_regs[reg_second] = data & 0x7f;
 				break;
 
 			case reg_A:
-				if ((data & reg_A_RS) != (rtc.regs[rtc.cur_reg] & reg_A_RS))
+				if ((data & reg_A_RS) != (m_regs[m_cur_reg] & reg_A_RS))
 				{
 					if (data & reg_A_RS)
 					{
-						attotime period = ATTOTIME_IN_HZ(SQW_freq_table[data & reg_A_RS]);
-						attotime half_period = attotime_div(period, 2);
-						attotime elapsed = timer_timeelapsed(rtc.update_timer);
+						attotime period = attotime::from_hz(SQW_freq_table[data & reg_A_RS]);
+						attotime half_period = period / 2;
+						attotime elapsed = m_update_timer->elapsed();
 
-						if (attotime_compare(half_period, elapsed) > 0)
-							timer_adjust_oneshot(rtc.SQW_timer, attotime_sub(half_period, elapsed), 0);
+						if (half_period > elapsed)
+							m_SQW_timer->adjust(half_period - elapsed);
 						else
-							timer_adjust_oneshot(rtc.SQW_timer, half_period, 0);
+							m_SQW_timer->adjust(half_period);
 					}
 					else
 					{
-						rtc.SQW_internal_state = 0;	/* right??? */
+						m_SQW_internal_state = 0;	/* right??? */
 
 						/* Stop the divider used for SQW and periodic interrupts. */
-						timer_adjust_oneshot(rtc.SQW_timer, attotime_never, 0);
+						m_SQW_timer->adjust(attotime::never);
 					}
 				}
 				/* The UIP bit is read-only */
-				rtc.regs[reg_A] = (data & ~reg_A_UIP) | (rtc.regs[reg_A] & reg_A_UIP);
+				m_regs[reg_A] = (data & ~reg_A_UIP) | (m_regs[reg_A] & reg_A_UIP);
 				break;
 
 			case reg_B:
-				rtc.regs[rtc.cur_reg] = data;
+				m_regs[m_cur_reg] = data;
 				if (data & reg_B_SET)
 				{
 					/* if we are in SET mode, clear update cycle */
-					rtc.regs[reg_A] &= ~reg_A_UIP;
-					rtc.regs[reg_B] &= ~reg_B_UIE;	/* the data sheet tells this, but I wonder how much sense it makes */
+					m_regs[reg_A] &= ~reg_A_UIP;
+					m_regs[reg_B] &= ~reg_B_UIE;	/* the data sheet tells this, but I wonder how much sense it makes */
 					field_interrupts();
 				}
 				break;
@@ -453,38 +413,38 @@ void rtc65271_w(int xramsel, offs_t offset, UINT8 data)
 				break;
 
 			default:
-				rtc.regs[rtc.cur_reg] = data;
+				m_regs[m_cur_reg] = data;
 				break;
 			}
 		else
 			/* indirect address register */
-			rtc.cur_reg = data & 0x3f;
+			m_cur_reg = data & 0x3f;
 	}
 }
 
-WRITE8_HANDLER( rtc65271_rtc_w )
+WRITE8_MEMBER( rtc65271_device::rtc_w )
 {
-	rtc65271_w( 0, offset, data );
+	write(0, offset, data );
 }
 
-WRITE8_HANDLER( rtc65271_xram_w )
+WRITE8_MEMBER( rtc65271_device::xram_w )
 {
-	rtc65271_w( 1, offset, data );
+	write(1, offset, data );
 }
 
-static void field_interrupts(void)
+void rtc65271_device::field_interrupts()
 {
-	if (rtc.regs[reg_C] & rtc.regs[reg_B] & (reg_C_PF | reg_C_AF | reg_C_UF))
+	if (m_regs[reg_C] & m_regs[reg_B] & (reg_C_PF | reg_C_AF | reg_C_UF))
 	{
-		rtc.regs[reg_C] |= reg_C_IRQF;
-		if (rtc.interrupt_callback)
-			rtc.interrupt_callback(rtc.machine, 1);
+		m_regs[reg_C] |= reg_C_IRQF;
+		if (!m_interrupt_func.isnull())
+			m_interrupt_func(1);
 	}
 	else
 	{
-		rtc.regs[reg_C] &= ~reg_C_IRQF;
-		if (rtc.interrupt_callback)
-			rtc.interrupt_callback(rtc.machine, 0);
+		m_regs[reg_C] &= ~reg_C_IRQF;
+		if (!m_interrupt_func.isnull())
+			m_interrupt_func(0);
 	}
 }
 
@@ -492,38 +452,54 @@ static void field_interrupts(void)
 /*
     Timer handlers
 */
+TIMER_CALLBACK( rtc65271_device::rtc_SQW_callback )
+{
+    rtc65271_device *rtc = reinterpret_cast<rtc65271_device *>(ptr);
+	rtc->rtc_SQW_cb();
+}
 
+TIMER_CALLBACK( rtc65271_device::rtc_begin_update_callback )
+{
+    rtc65271_device *rtc = reinterpret_cast<rtc65271_device *>(ptr);
+	rtc->rtc_begin_update_cb();
+}
+
+TIMER_CALLBACK( rtc65271_device::rtc_end_update_callback )
+{
+    rtc65271_device *rtc = reinterpret_cast<rtc65271_device *>(ptr);
+	rtc->rtc_end_update_cb();
+}
 /*
     Update SQW output state each half-period and assert periodic interrupt each
     period.
 */
-static TIMER_CALLBACK( rtc_SQW_callback )
+void rtc65271_device::rtc_SQW_cb()
 {
 	attotime half_period;
 
-	rtc.SQW_internal_state = ! rtc.SQW_internal_state;
-	if (! rtc.SQW_internal_state)
+	m_SQW_internal_state = ! m_SQW_internal_state;
+	if (! m_SQW_internal_state)
 	{
 		/* high-to-low??? transition -> interrupt (or should it be low-to-high?) */
-		rtc.regs[reg_C] |= reg_C_PF;
+		m_regs[reg_C] |= reg_C_PF;
 		field_interrupts();
 	}
 
-	half_period = attotime_div(ATTOTIME_IN_HZ(SQW_freq_table[rtc.regs[reg_A] & reg_A_RS]), 2);
-	timer_adjust_oneshot(rtc.SQW_timer, half_period, 0);
+	half_period = attotime::from_hz(SQW_freq_table[m_regs[reg_A] & reg_A_RS]) / 2;
+	m_SQW_timer->adjust(half_period);
 }
 
 /*
     Begin update cycle (called every second)
 */
-static TIMER_CALLBACK( rtc_begin_update_callback )
+void rtc65271_device::rtc_begin_update_cb()
 {
-	if (((rtc.regs[reg_A] & reg_A_DV) == 0x20) && ! (rtc.regs[reg_B] & reg_B_SET))
+	if (((m_regs[reg_A] & reg_A_DV) == 0x20) && ! (m_regs[reg_B] & reg_B_SET))
 	{
-		rtc.regs[reg_A] |= reg_A_UIP;
+		m_regs[reg_A] |= reg_A_UIP;
 
 		/* schedule end of update cycle */
-		timer_set(machine, UPDATE_CYCLE_TIME, NULL, 0, rtc_end_update_callback);
+		machine().scheduler().timer_set(UPDATE_CYCLE_TIME, FUNC(rtc_end_update_callback), 0, (void *)this);
 	}
 }
 
@@ -531,7 +507,7 @@ static TIMER_CALLBACK( rtc_begin_update_callback )
     End update cycle (called UPDATE_CYCLE_TIME = 1948us after start of update
     cycle)
 */
-static TIMER_CALLBACK( rtc_end_update_callback )
+void rtc65271_device::rtc_end_update_cb()
 {
 	static const int days_in_month_table[12] =
 	{
@@ -541,11 +517,11 @@ static TIMER_CALLBACK( rtc_end_update_callback )
 	UINT8 (*increment)(UINT8 data);
 	int c59, c23, c12, c11, c29;
 
-	if (! (rtc.regs[reg_A] & reg_A_UIP))
+	if (! (m_regs[reg_A] & reg_A_UIP))
 		/* abort if update cycle has been canceled */
 		return;
 
-	if (rtc.regs[reg_B] & reg_B_DM)
+	if (m_regs[reg_B] & reg_B_DM)
 	{
 		/* binary mode */
 		increment = increment_binary;
@@ -567,95 +543,95 @@ static TIMER_CALLBACK( rtc_end_update_callback )
 	}
 
 	/* increment second */
-	if (rtc.regs[reg_second] < c59)
-		rtc.regs[reg_second] = (*increment)(rtc.regs[reg_second]);
+	if (m_regs[reg_second] < c59)
+		m_regs[reg_second] = (*increment)(m_regs[reg_second]);
 	else
 	{
-		rtc.regs[reg_second] = 0;
+		m_regs[reg_second] = 0;
 
 		/* increment minute */
-		if (rtc.regs[reg_minute] < c59)
-			rtc.regs[reg_minute] = (*increment)(rtc.regs[reg_minute]);
+		if (m_regs[reg_minute] < c59)
+			m_regs[reg_minute] = (*increment)(m_regs[reg_minute]);
 		else
 		{
-			rtc.regs[reg_minute] = 0;
+			m_regs[reg_minute] = 0;
 
 			/* increment hour */
-			if (rtc.regs[reg_B] & reg_B_24h)
+			if (m_regs[reg_B] & reg_B_24h)
 			{
 				/* 24 hour mode */
-				if (rtc.regs[reg_hour] < c23)
-					rtc.regs[reg_hour] = (*increment)(rtc.regs[reg_hour]);
+				if (m_regs[reg_hour] < c23)
+					m_regs[reg_hour] = (*increment)(m_regs[reg_hour]);
 				else
-					rtc.regs[reg_hour] = 0;
+					m_regs[reg_hour] = 0;
 			}
 			else
 			{
 				/* 12 hour mode */
-				if (rtc.regs[reg_hour] < c12)
+				if (m_regs[reg_hour] < c12)
 				{
-					if ((rtc.regs[reg_hour] & 0x7f) == c11)
-						rtc.regs[reg_hour] ^= 0x80;
-					rtc.regs[reg_hour] = ((*increment)(rtc.regs[reg_hour] & 0x7f) & 0x7f)
-											| (rtc.regs[reg_hour] & 0x80);
+					if ((m_regs[reg_hour] & 0x7f) == c11)
+						m_regs[reg_hour] ^= 0x80;
+					m_regs[reg_hour] = ((*increment)(m_regs[reg_hour] & 0x7f) & 0x7f)
+											| (m_regs[reg_hour] & 0x80);
 				}
 				else
-					rtc.regs[reg_hour] = 1 | (rtc.regs[reg_hour] & 0x80);
+					m_regs[reg_hour] = 1 | (m_regs[reg_hour] & 0x80);
 			}
 
 			/* increment day if needed */
-			if (rtc.regs[reg_hour] == ((rtc.regs[reg_B] & reg_B_24h) ? 0 : c12))
+			if (m_regs[reg_hour] == ((m_regs[reg_B] & reg_B_24h) ? 0 : c12))
 			{
 				/* increment day */
 				int days_in_month;
 
-				if (rtc.regs[reg_weekday] < 7)
-					rtc.regs[reg_weekday]++;
+				if (m_regs[reg_weekday] < 7)
+					m_regs[reg_weekday]++;
 				else
-					rtc.regs[reg_weekday] = 1;
+					m_regs[reg_weekday] = 1;
 
-				if ((rtc.regs[reg_month] != 2) || (rtc.regs[reg_year] & 0x03))
+				if ((m_regs[reg_month] != 2) || (m_regs[reg_year] & 0x03))
 				{
-					if (rtc.regs[reg_B] & reg_B_DM)
+					if (m_regs[reg_B] & reg_B_DM)
 					{
 						/* binary mode */
-						days_in_month = days_in_month_table[rtc.regs[reg_month] - 1];
+						days_in_month = days_in_month_table[m_regs[reg_month] - 1];
 					}
 					else
 					{
 						/* BCD mode */
-						days_in_month = binary_to_BCD(days_in_month_table[BCD_to_binary(rtc.regs[reg_month]) - 1]);
+						days_in_month = binary_to_BCD(days_in_month_table[BCD_to_binary(m_regs[reg_month]) - 1]);
 					}
 				}
 				else
 					days_in_month = c29;
 
-				if (rtc.regs[reg_monthday] < days_in_month)
-					rtc.regs[reg_monthday] = (*increment)(rtc.regs[reg_monthday]);
+				if (m_regs[reg_monthday] < days_in_month)
+					m_regs[reg_monthday] = (*increment)(m_regs[reg_monthday]);
 				else
 				{
 					/* increment month */
-					rtc.regs[reg_monthday] = 1;
+					m_regs[reg_monthday] = 1;
 
-					if (rtc.regs[reg_month] < c12)
-						rtc.regs[reg_month] = (*increment)(rtc.regs[reg_month]);
+					if (m_regs[reg_month] < c12)
+						m_regs[reg_month] = (*increment)(m_regs[reg_month]);
 					else
 					{
 						/* increment year */
-						rtc.regs[reg_month] = 1;
+						m_regs[reg_month] = 1;
 
-						if (rtc.regs[reg_B] & reg_B_DM)
+						if (m_regs[reg_B] & reg_B_DM)
 						{
 							/* binary mode */
-							if (rtc.regs[reg_year] < 99)
-								rtc.regs[reg_year]++;
+							if (m_regs[reg_year] < 99)
+								m_regs[reg_year]++;
 							else
-								rtc.regs[reg_year] = 0;
+								m_regs[reg_year] = 0;
 						}
 						else
 						{
 							/* BCD mode */
-							rtc.regs[reg_year] = increment_BCD(rtc.regs[reg_year]);
+							m_regs[reg_year] = increment_BCD(m_regs[reg_year]);
 						}
 					}
 				}
@@ -663,14 +639,65 @@ static TIMER_CALLBACK( rtc_end_update_callback )
 		}
 	}
 
-	rtc.regs[reg_A] &= ~reg_A_UIP;
-	rtc.regs[reg_C] |= reg_C_UF;
+	m_regs[reg_A] &= ~reg_A_UIP;
+	m_regs[reg_C] |= reg_C_UF;
 
 	/* test for alarm (values in range 0xc0-0xff mean "don't care") */
-	if ((((rtc.regs[reg_alarm_second] & 0xc0) == 0xc0) || (rtc.regs[reg_alarm_second] == rtc.regs[reg_second]))
-			&& (((rtc.regs[reg_alarm_minute] & 0xc0) == 0xc0) || (rtc.regs[reg_alarm_minute] == rtc.regs[reg_minute]))
-			&& (((rtc.regs[reg_alarm_hour] & 0xc0) == 0xc0) || (rtc.regs[reg_alarm_hour] == rtc.regs[reg_hour])))
-		rtc.regs[reg_C] |= reg_C_AF;
+	if ((((m_regs[reg_alarm_second] & 0xc0) == 0xc0) || (m_regs[reg_alarm_second] == m_regs[reg_second]))
+			&& (((m_regs[reg_alarm_minute] & 0xc0) == 0xc0) || (m_regs[reg_alarm_minute] == m_regs[reg_minute]))
+			&& (((m_regs[reg_alarm_hour] & 0xc0) == 0xc0) || (m_regs[reg_alarm_hour] == m_regs[reg_hour])))
+		m_regs[reg_C] |= reg_C_AF;
 
 	field_interrupts();
 }
+
+// device type definition
+const device_type RTC65271 = &device_creator<rtc65271_device>;
+
+//-------------------------------------------------
+//  rtc65271_device - constructor
+//-------------------------------------------------
+
+rtc65271_device::rtc65271_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+    : device_t(mconfig, RTC65271, "RTC65271", tag, owner, clock),
+	  device_nvram_interface(mconfig, *this)
+{
+}
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void rtc65271_device::device_config_complete()
+{
+	// inherit a copy of the static data
+	const rtc65271_interface *intf = reinterpret_cast<const rtc65271_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<rtc65271_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		memset(&m_interrupt_cb, 0, sizeof(m_interrupt_cb));
+	}
+}
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+void rtc65271_device::device_start()
+{
+	m_update_timer = machine().scheduler().timer_alloc(FUNC(rtc_begin_update_callback), (void *)this);
+	m_update_timer->adjust(attotime::from_seconds(1), 0, attotime::from_seconds(1));
+	m_SQW_timer = machine().scheduler().timer_alloc(FUNC(rtc_SQW_callback), (void *)this);
+	m_interrupt_func.resolve(m_interrupt_cb, *this);
+
+	save_item(NAME(m_regs));
+	save_item(NAME(m_cur_reg));
+	save_item(NAME(m_xram));
+	save_item(NAME(m_cur_xram_page));
+	save_item(NAME(m_SQW_internal_state));
+}
+

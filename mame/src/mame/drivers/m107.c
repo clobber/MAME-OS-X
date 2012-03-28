@@ -14,7 +14,7 @@
 
 
 To Do:
-  Hook up EEPROM in Kick for the Goal / World PK Soccer
+  Hook up inputs and EEPROM in Kick for the Goal / World PK Soccer
 
 2008-08
 Dip locations have been added assuming that the layout is the same as the
@@ -23,155 +23,121 @@ confirmed for m107 games as well.
 
 *******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/nec/nec.h"
-#include "m107.h"
-#include "iremipt.h"
+#include "includes/m107.h"
+#include "includes/iremipt.h"
 #include "machine/irem_cpu.h"
 #include "sound/2151intf.h"
 #include "sound/iremga20.h"
 
 
-#define M107_IRQ_0 ((m107_irq_vectorbase+0)/4) /* VBL interrupt*/
-#define M107_IRQ_1 ((m107_irq_vectorbase+4)/4) /* ??? */
-#define M107_IRQ_2 ((m107_irq_vectorbase+8)/4) /* Raster interrupt */
-#define M107_IRQ_3 ((m107_irq_vectorbase+12)/4) /* ??? */
+#define M107_IRQ_0 ((state->m_irq_vectorbase+0)/4)  /* VBL interrupt */
+#define M107_IRQ_1 ((state->m_irq_vectorbase+4)/4)  /* ??? */
+#define M107_IRQ_2 ((state->m_irq_vectorbase+8)/4)  /* Raster interrupt */
+#define M107_IRQ_3 ((state->m_irq_vectorbase+12)/4) /* Sound cpu interrupt */
 
-
-
-static emu_timer *scanline_timer;
-static UINT8 m107_irq_vectorbase;
-
-static TIMER_CALLBACK( m107_scanline_interrupt );
 
 /*****************************************************************************/
-
-static WRITE16_HANDLER( bankswitch_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		UINT8 *RAM = memory_region(space->machine, "maincpu");
-		memory_set_bankptr(space->machine, 1,&RAM[0x100000 + ((data&0x7)*0x10000)]);
-	}
-}
 
 static MACHINE_START( m107 )
 {
-	scanline_timer = timer_alloc(machine, m107_scanline_interrupt, NULL);
-}
-
-static MACHINE_RESET( m107 )
-{
-	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
+	// TODO: state save registrations
 }
 
 /*****************************************************************************/
 
-static TIMER_CALLBACK( m107_scanline_interrupt )
+static TIMER_DEVICE_CALLBACK( m107_scanline_interrupt )
 {
+	running_machine &machine = timer.machine();
+	m107_state *state = machine.driver_data<m107_state>();
 	int scanline = param;
 
 	/* raster interrupt */
-	if (scanline == m107_raster_irq_position)
+	if (scanline == state->m_raster_irq_position)
 	{
-		video_screen_update_partial(machine->primary_screen, scanline);
+		machine.primary_screen->update_partial(scanline);
 		cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M107_IRQ_2);
 	}
 
 	/* VBLANK interrupt */
-	else if (scanline == video_screen_get_visible_area(machine->primary_screen)->max_y + 1)
+	else if (scanline == machine.primary_screen->visible_area().max_y + 1)
 	{
-		video_screen_update_partial(machine->primary_screen, scanline);
+		machine.primary_screen->update_partial(scanline);
 		cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M107_IRQ_0);
 	}
-
-	/* adjust for next scanline */
-	if (++scanline >= video_screen_get_height(machine->primary_screen))
-		scanline = 0;
-	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
 }
 
+/*****************************************************************************/
 
 static WRITE16_HANDLER( m107_coincounter_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_counter_w(space->machine(), 0,data & 0x01);
+		coin_counter_w(space->machine(), 1,data & 0x02);
 	}
 }
 
-
-
-enum { VECTOR_INIT, YM2151_ASSERT, YM2151_CLEAR, V30_ASSERT, V30_CLEAR };
-
-static TIMER_CALLBACK( setvector_callback )
+static WRITE16_HANDLER( m107_bankswitch_w )
 {
-	static int irqvector;
-
-	switch(param)
+	if (ACCESSING_BITS_0_7)
 	{
-		case VECTOR_INIT:	irqvector = 0;		break;
-		case YM2151_ASSERT:	irqvector |= 0x2;	break;
-		case YM2151_CLEAR:	irqvector &= ~0x2;	break;
-		case V30_ASSERT:	irqvector |= 0x1;	break;
-		case V30_CLEAR:		irqvector &= ~0x1;	break;
+		memory_set_bank(space->machine(), "bank1", (data & 0x06) >> 1);
+		if (data & 0xf9)
+			logerror("%05x: bankswitch %04x\n", cpu_get_pc(&space->device()), data);
 	}
-
-	if (irqvector & 0x2)		/* YM2151 has precedence */
-		cpu_set_input_line_vector(cputag_get_cpu(machine, "soundcpu"), 0, 0x18);
-	else if (irqvector & 0x1)	/* V30 */
-		cpu_set_input_line_vector(cputag_get_cpu(machine, "soundcpu"), 0, 0x19);
-
-	if (irqvector == 0)	/* no IRQs pending */
-		cputag_set_input_line(machine, "soundcpu", 0, CLEAR_LINE);
-	else	/* IRQ pending */
-		cputag_set_input_line(machine, "soundcpu", 0, ASSERT_LINE);
 }
 
 static WRITE16_HANDLER( m107_soundlatch_w )
 {
-	timer_call_after_resynch(space->machine, NULL, V30_ASSERT, setvector_callback);
+	cputag_set_input_line(space->machine(), "soundcpu", NEC_INPUT_LINE_INTP1, ASSERT_LINE);
 	soundlatch_w(space, 0, data & 0xff);
 //      logerror("soundlatch_w %02x\n",data);
 }
 
-static int sound_status;
-
 static READ16_HANDLER( m107_sound_status_r )
 {
-	return sound_status;
+	m107_state *state = space->machine().driver_data<m107_state>();
+	return state->m_sound_status;
 }
 
 static READ16_HANDLER( m107_soundlatch_r )
 {
+	cputag_set_input_line(space->machine(), "soundcpu", NEC_INPUT_LINE_INTP1, CLEAR_LINE);
 	return soundlatch_r(space, offset) | 0xff00;
 }
 
 static WRITE16_HANDLER( m107_sound_irq_ack_w )
 {
-	timer_call_after_resynch(space->machine, NULL, V30_CLEAR,setvector_callback);
+	cputag_set_input_line(space->machine(), "soundcpu", NEC_INPUT_LINE_INTP1, CLEAR_LINE);
 }
 
 static WRITE16_HANDLER( m107_sound_status_w )
 {
-	COMBINE_DATA(&sound_status);
-	cputag_set_input_line_and_vector(space->machine, "maincpu", 0, HOLD_LINE, M107_IRQ_3);
+	m107_state *state = space->machine().driver_data<m107_state>();
+	COMBINE_DATA(&state->m_sound_status);
+	cputag_set_input_line_and_vector(space->machine(), "maincpu", 0, HOLD_LINE, M107_IRQ_3);
+}
+
+static WRITE16_HANDLER( m107_sound_reset_w )
+{
+	cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, (data) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 /*****************************************************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x9ffff) AM_ROM
-	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK(1)
-	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m107_vram_w) AM_BASE(&m107_vram_data)
+	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK("bank1")
+	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m107_vram_w) AM_BASE_MEMBER(m107_state, m_vram_data)
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM /* System ram */
-	AM_RANGE(0xf8000, 0xf8fff) AM_RAM AM_BASE(&spriteram16)
-	AM_RANGE(0xf9000, 0xf9fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xffff0, 0xfffff) AM_ROM
+	AM_RANGE(0xf8000, 0xf8fff) AM_RAM AM_BASE_MEMBER(m107_state, m_spriteram)
+	AM_RANGE(0xf9000, 0xf9fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xffff0, 0xfffff) AM_ROM AM_REGION("maincpu", 0x7fff0)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 16 )
 	AM_RANGE(0x00, 0x01) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x02, 0x03) AM_READ_PORT("COINS_DSW3")
 	AM_RANGE(0x04, 0x05) AM_READ_PORT("DSW")
@@ -180,31 +146,55 @@ static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 16 )
 	AM_RANGE(0x00, 0x01) AM_WRITE(m107_soundlatch_w)
 	AM_RANGE(0x02, 0x03) AM_WRITE(m107_coincounter_w)
 	AM_RANGE(0x04, 0x05) AM_WRITENOP /* ??? 0008 */
-	AM_RANGE(0x06, 0x07) AM_WRITE(bankswitch_w)
 	AM_RANGE(0x80, 0x9f) AM_WRITE(m107_control_w)
 	AM_RANGE(0xa0, 0xaf) AM_WRITENOP /* Written with 0's in interrupt */
 	AM_RANGE(0xb0, 0xb1) AM_WRITE(m107_spritebuffer_w)
 	AM_RANGE(0xc0, 0xc3) AM_READNOP /* Only wpksoc: ticket related? */
+	AM_RANGE(0xc0, 0xc1) AM_WRITE(m107_sound_reset_w)
+ADDRESS_MAP_END
+
+/* same as M107 but with an extra i/o board */
+static WRITE16_HANDLER( wpksoc_output_w )
+{
+	/*
+    x--- ---- ?
+    ---- --xx lamps
+    */
+	if(data & 0x7c)
+		popmessage("%04x",data);
+}
+
+static ADDRESS_MAP_START( wpksoc_map, AS_PROGRAM, 16 )
+	AM_RANGE(0xf0000, 0xf0001) AM_READ_PORT("WPK_DSW0")
+	AM_RANGE(0xf0002, 0xf0003) AM_READ_PORT("WPK_DSW1")
+	AM_RANGE(0xf0004, 0xf0005) AM_READ_PORT("WPK_DSW2")
+	AM_IMPORT_FROM(main_map)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( wpksoc_io_map, AS_IO, 16 )
+	AM_RANGE(0x22, 0x23) AM_WRITE(wpksoc_output_w)
+	AM_RANGE(0xc0, 0xc1) AM_READ_PORT("WPK_IN0")
+	AM_RANGE(0xc2, 0xc3) AM_READ_PORT("WPK_IN1")
+	AM_IMPORT_FROM(main_portmap)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x1ffff) AM_ROM
-	AM_RANGE(0x9ff00, 0x9ffff) AM_WRITENOP /* Irq controller? */
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
 	AM_RANGE(0xa8000, 0xa803f) AM_DEVREADWRITE8("irem", irem_ga20_r, irem_ga20_w, 0x00ff)
-	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0xa8044, 0xa8045) AM_READWRITE(m107_soundlatch_r, m107_sound_irq_ack_w)
 	AM_RANGE(0xa8046, 0xa8047) AM_WRITE(m107_sound_status_w)
-	AM_RANGE(0xffff0, 0xfffff) AM_ROM
+	AM_RANGE(0xffff0, 0xfffff) AM_ROM AM_REGION("soundcpu", 0x1fff0)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
 static INPUT_PORTS_START( m107_2player )
 	PORT_START("P1_P2")
-	IREM_GENERIC_JOYSTICKS_2_BUTTONS(1, 2)
+	IREM_GENERIC_JOYSTICKS_3_BUTTONS(1, 2)
 
 	PORT_START("COINS_DSW3")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_START1 )
@@ -214,7 +204,7 @@ static INPUT_PORTS_START( m107_2player )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_SERVICE )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_VBLANK )
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_VBLANK ) //this is sprite flag on Irem M92, if this is active low then Dream Soccer '94 is unplayably slow
 
 	/* DIP switch bank 3 */
 	PORT_DIPUNKNOWN_DIPLOC( 0x0100, 0x0100, "SW3:1" )
@@ -293,6 +283,11 @@ static INPUT_PORTS_START( firebarr )
 	PORT_INCLUDE(m107_2player)
 
 	PORT_MODIFY("COINS_DSW3")
+	PORT_DIPNAME( 0x0c00, 0x0800, "Rapid Fire" ) PORT_DIPLOCATION("SW3:3,4")
+	PORT_DIPSETTING(      0x0000, "Button 1 Normal, Button 3 Rapid Fire" )
+	PORT_DIPSETTING(      0x0400, "Button 1 Rapid Fire, Button 3 No Function" )
+	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0c00, DEF_STR( Off ) )
 	PORT_DIPNAME( 0x1000, 0x0000, "Continuous Play" ) PORT_DIPLOCATION("SW3:5")
 	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
@@ -365,7 +360,353 @@ static INPUT_PORTS_START( dsoccr94 )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( wpksoc )
-	PORT_INCLUDE(m107_2player)
+	PORT_START("P1_P2")
+	PORT_BIT(0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("COINS_DSW3")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_SERVICE )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_VBLANK ) //this is sprite flag on Irem M92, if this is active low then Dream Soccer '94 is unplayably slow
+	PORT_DIPNAME( 0x0100, 0x0000, "DSW3" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
+
+	PORT_START("DSW")
+	PORT_DIPNAME( 0x0001, 0x0000, "DSW1" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0001, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0002, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0004, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0010, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0020, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0040, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0080, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0100, 0x0000, "DSW2" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
+
+	PORT_START("P3_P4")
+	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("WPK_DSW0")
+	PORT_DIPNAME( 0x0001, 0x0000, "WPK_DSW0-0" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0001, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0002, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0004, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0010, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0020, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0040, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0080, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0100, 0x0000, "WPK_DSW0-1" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
+
+	PORT_START("WPK_DSW1")
+	PORT_DIPNAME( 0x0001, 0x0000, "WPK_DSW1-0" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0001, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0002, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0004, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00f0, 0x0000, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:5,6,7,8")
+	PORT_DIPSETTING(    0xa0^0xf0, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0xb0^0xf0, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0xc0^0xf0, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0xd0^0xf0, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0xe0^0xf0, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x10^0xf0, "2 Coins to Start/1 to Continue")
+	PORT_DIPSETTING(    0x30^0xf0, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x20^0xf0, DEF_STR( 4C_3C ) )
+	PORT_DIPSETTING(    0xf0^0xf0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x40^0xf0, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x90^0xf0, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x80^0xf0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x70^0xf0, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x60^0xf0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x50^0xf0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00^0xf0, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x0100, 0x0000, "WPK_DSW1-1" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
+
+	PORT_START("WPK_DSW2")
+	PORT_DIPNAME( 0x0001, 0x0000, "WPK_DSW2-0" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0001, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0002, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0004, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x00f0, 0x0000, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW2:5,6,7,8")
+	PORT_DIPSETTING(    0xa0^0xf0, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0xb0^0xf0, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0xc0^0xf0, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0xd0^0xf0, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0xe0^0xf0, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x10^0xf0, "2 Coins to Start/1 to Continue")
+	PORT_DIPSETTING(    0x30^0xf0, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x20^0xf0, DEF_STR( 4C_3C ) )
+	PORT_DIPSETTING(    0xf0^0xf0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x40^0xf0, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x90^0xf0, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x80^0xf0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x70^0xf0, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x60^0xf0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x50^0xf0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00^0xf0, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x0100, 0x0000, "WPK_DSW2-1" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
+
+	PORT_START("WPK_IN0")
+	PORT_DIPNAME( 0x0001, 0x0000, "WPK_IN0-0" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0001, DEF_STR( On ) )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_UNKNOWN ) // motor status?
+	PORT_DIPNAME( 0x0004, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0010, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0020, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0040, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0080, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0100, 0x0000, "WPK_IN0-1" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
+
+	PORT_START("WPK_IN1")
+	PORT_DIPNAME( 0x0001, 0x0000, "WPK_IN1-0" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0001, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0002, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0004, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0004, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0008, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0008, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0010, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0020, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0040, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0080, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0100, 0x0000, "WPK_IN1-1" )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0100, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0200, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0200, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0400, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0800, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x0800, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x1000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x2000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x0000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x8000, DEF_STR( On ) )
 INPUT_PORTS_END
 
 /***************************************************************************/
@@ -376,8 +717,8 @@ static const gfx_layout charlayout =
 	RGN_FRAC(1,1),
 	4,
 	{ 8, 0, 24, 16 },
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },
-	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32 },
+	{ STEP8(0,1) },
+	{ STEP8(0,32) },
 	32*8
 };
 
@@ -387,10 +728,8 @@ static const gfx_layout spritelayout =
 	RGN_FRAC(1,4),
 	4,
 	{ RGN_FRAC(3,4), RGN_FRAC(2,4), RGN_FRAC(1,4), RGN_FRAC(0,4) },
-	{ 0, 1, 2, 3, 4, 5, 6, 7,
-		16*8+0, 16*8+1, 16*8+2, 16*8+3, 16*8+4, 16*8+5, 16*8+6, 16*8+7 },
-	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8,
-			8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
+	{ STEP8(0,1), STEP8(16*8,1) },
+	{ STEP16(0,8) },
 	32*8
 };
 
@@ -400,9 +739,8 @@ static const gfx_layout spritelayout2 =
 	RGN_FRAC(1,4),
 	4,
 	{ RGN_FRAC(3,4), RGN_FRAC(2,4), RGN_FRAC(1,4), RGN_FRAC(0,4) },
-	{ 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7 },
-	{ 0*16, 1*16, 2*16, 3*16, 4*16, 5*16, 6*16, 7*16,
-			8*16, 9*16, 10*16, 11*16, 12*16, 13*16, 14*16, 15*16 },
+	{ STEP8(8,1), STEP8(0,1) },
+	{ STEP16(0,16) },
 	32*8
 };
 
@@ -418,12 +756,9 @@ GFXDECODE_END
 
 /***************************************************************************/
 
-static void sound_irq(const device_config *device, int state)
+static void sound_irq(device_t *device, int state)
 {
-	if (state)
-		timer_call_after_resynch(device->machine, NULL, YM2151_ASSERT,setvector_callback);
-	else
-		timer_call_after_resynch(device->machine, NULL, YM2151_CLEAR,setvector_callback);
+	cputag_set_input_line(device->machine(), "soundcpu", NEC_INPUT_LINE_INTP0, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2151_interface ym2151_config =
@@ -435,68 +770,71 @@ static const ym2151_interface ym2151_config =
 
 static const nec_config firebarr_config ={ rtypeleo_decryption_table, };
 
-static MACHINE_DRIVER_START( firebarr )
+static MACHINE_CONFIG_START( firebarr, m107_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V33, 28000000/2)	/* NEC V33, 28MHz clock */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(main_portmap)
+	MCFG_CPU_ADD("maincpu", V33, 28000000/2)	/* NEC V33, 28MHz clock */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(main_portmap)
 
-	MDRV_CPU_ADD("soundcpu", V30, 14318000/2)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_CONFIG(firebarr_config)
+	MCFG_CPU_ADD("soundcpu", V35, 14318000)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_CONFIG(firebarr_config)
 
-	MDRV_MACHINE_START(m107)
-	MDRV_MACHINE_RESET(m107)
+	MCFG_MACHINE_START(m107)
+
+	MCFG_TIMER_ADD_SCANLINE("scantimer", m107_scanline_interrupt, "screen", 0, 1)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
+	MCFG_SCREEN_UPDATE_STATIC(m107)
 
-	MDRV_GFXDECODE(firebarr)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(firebarr)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(m107)
-	MDRV_VIDEO_UPDATE(m107)
+	MCFG_VIDEO_START(m107)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 14318180/4)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 14318180/4)
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("irem", IREMGA20, 14318180/4)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("irem", IREMGA20, 14318180/4)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 static const nec_config dsoccr94_config ={ dsoccr94_decryption_table, };
-static MACHINE_DRIVER_START( dsoccr94 )
-	MDRV_IMPORT_FROM(firebarr)
+static MACHINE_CONFIG_DERIVED( dsoccr94, firebarr )
 
 	/* basic machine hardware */
-	MDRV_CPU_REPLACE("maincpu", V33, 20000000/2)	/* NEC V33, Could be 28MHz clock? */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(20000000/2)	/* NEC V33, Could be 28MHz clock? */
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(dsoccr94_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(dsoccr94_config)
 
 	/* video hardware */
-	MDRV_GFXDECODE(m107)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(m107)
+MACHINE_CONFIG_END
 
 
 static const nec_config wpksoc_config ={ leagueman_decryption_table, };
-static MACHINE_DRIVER_START( wpksoc )
-	MDRV_IMPORT_FROM(firebarr)
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(wpksoc_config)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( wpksoc, firebarr )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(wpksoc_map)
+	MCFG_CPU_IO_MAP(wpksoc_io_map)
+
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(wpksoc_config)
+MACHINE_CONFIG_END
 
 /***************************************************************************/
 
@@ -507,9 +845,9 @@ ROM_START( firebarr )
 	ROM_LOAD16_BYTE( "f4-a-h1-c.9e", 0x080001, 0x20000, CRC(bb7f6968) SHA1(366747672aac939454d9915cda5277b0438f063b) )
 	ROM_LOAD16_BYTE( "f4-a-l1-c.9h", 0x080000, 0x20000, CRC(9d57edd6) SHA1(16122829b61aa3aee88aeb6634831e8cf95eaee0) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )
-	ROM_LOAD16_BYTE( "f4-b-sh0-b", 0x000001, 0x10000, CRC(30a8e232) SHA1(d4695aed35a1aa796b2872e58a6014e8b28bc154) )
-	ROM_LOAD16_BYTE( "f4-b-sl0-b", 0x000000, 0x10000, CRC(204b5f1f) SHA1(f0386500773cd7cca93f0e8e740db29182320c70) )
+	ROM_REGION( 0x20000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE( "f4-b-sh0-b", 0x00001, 0x10000, CRC(30a8e232) SHA1(d4695aed35a1aa796b2872e58a6014e8b28bc154) )
+	ROM_LOAD16_BYTE( "f4-b-sl0-b", 0x00000, 0x10000, CRC(204b5f1f) SHA1(f0386500773cd7cca93f0e8e740db29182320c70) )
 
 	ROM_REGION( 0x200000, "gfx1", 0 )	/* chars */
 	ROM_LOAD16_BYTE( "f4-c00", 0x000000, 0x80000, CRC(50cab384) SHA1(66e88a1dfa943e0d49c2e186ac2f6cbf5cfe0864) )
@@ -536,15 +874,15 @@ ROM_START( firebarr )
 ROM_END
 
 ROM_START( dsoccr94 )
-	ROM_REGION( 0x180000, "maincpu", 0 ) /* v30 main cpu */
+	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "ds_h0-c.rom", 0x000001, 0x040000, CRC(d01d3fd7) SHA1(925dff999252bf3b920bc0f427744e1464620fe8) )
 	ROM_LOAD16_BYTE( "ds_l0-c.rom", 0x000000, 0x040000, CRC(8af0afe2) SHA1(423c77d392a79cdaed66ad8c13039450d34d3f6d) )
-	ROM_LOAD16_BYTE( "ds_h1-c.rom", 0x100001, 0x040000, CRC(6109041b) SHA1(063898a88f8a6a9f1510aa55e53a39f037b02903) )
-	ROM_LOAD16_BYTE( "ds_l1-c.rom", 0x100000, 0x040000, CRC(97a01f6b) SHA1(e188e28f880f5f3f4d7b49eca639d643989b1468) )
+	ROM_LOAD16_BYTE( "ds_h1-c.rom", 0x080001, 0x040000, CRC(6109041b) SHA1(063898a88f8a6a9f1510aa55e53a39f037b02903) )
+	ROM_LOAD16_BYTE( "ds_l1-c.rom", 0x080000, 0x040000, CRC(97a01f6b) SHA1(e188e28f880f5f3f4d7b49eca639d643989b1468) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )
-	ROM_LOAD16_BYTE( "ds_sh0.rom", 0x000001, 0x010000, CRC(23fe6ffc) SHA1(896377961cafc19e44d9d889f9fbfdbaedd556da) )
-	ROM_LOAD16_BYTE( "ds_sl0.rom", 0x000000, 0x010000, CRC(768132e5) SHA1(1bb64516eb58d3b246f08e1c07f091e78085689f) )
+	ROM_REGION( 0x20000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE( "ds_sh0.rom", 0x00001, 0x10000, CRC(23fe6ffc) SHA1(896377961cafc19e44d9d889f9fbfdbaedd556da) )
+	ROM_LOAD16_BYTE( "ds_sl0.rom", 0x00000, 0x10000, CRC(768132e5) SHA1(1bb64516eb58d3b246f08e1c07f091e78085689f) )
 
 	ROM_REGION( 0x400000, "gfx1", 0 )	/* chars */
 	ROM_LOAD16_BYTE( "ds_c00.rom", 0x000000, 0x100000, CRC(2d31d418) SHA1(6cd0e362bc2e3f2b20d96ee97a04bff46ee3016a) )
@@ -563,13 +901,13 @@ ROM_START( dsoccr94 )
 ROM_END
 
 ROM_START( wpksoc )
-	ROM_REGION( 0x180000, "maincpu", 0 ) /* v30 main cpu */
+	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "pk-h0-eur-d.h0", 0x000001, 0x040000, CRC(b4917788) SHA1(673294c518eaf28354fa6a3058f9325c6d9ddde6) )
 	ROM_LOAD16_BYTE( "pk-l0-eur-d.l0", 0x000000, 0x040000, CRC(03816bae) SHA1(832e2ec722b41d41626fec583fc11e9ff62cdaa0) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )
-	ROM_LOAD16_BYTE( "pk-sh0.sh0", 0x000001, 0x010000, CRC(1145998c) SHA1(cdb2a428e0f35302b81696dab02d3dd2c433f6e5) )
-	ROM_LOAD16_BYTE( "pk-sl0.sl0", 0x000000, 0x010000, CRC(542ee1c7) SHA1(b934adeecbba17cf96b06a2b1dc1ceaebdf9ad10) )
+	ROM_REGION( 0x20000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE( "pk-sh0.sh0", 0x00001, 0x10000, CRC(1145998c) SHA1(cdb2a428e0f35302b81696dab02d3dd2c433f6e5) )
+	ROM_LOAD16_BYTE( "pk-sl0.sl0", 0x00000, 0x10000, CRC(542ee1c7) SHA1(b934adeecbba17cf96b06a2b1dc1ceaebdf9ad10) )
 
 	ROM_REGION( 0x200000, "gfx1", 0 )	/* chars */
 	ROM_LOAD16_BYTE( "pk-c00-os.c00", 0x000000, 0x80000, CRC(42ae3d73) SHA1(e4777066155c9882695ebff0412bd879b8d6f716) )
@@ -592,13 +930,13 @@ ROM_START( wpksoc )
 ROM_END
 
 ROM_START( kftgoal )
-	ROM_REGION( 0x180000, "maincpu", 0 ) /* v30 main cpu */
+	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "pk-h0-usa-d.h0", 0x000001, 0x040000, CRC(aed4cde0) SHA1(2fe04bf93c353108b82a0b6017229e9b0f451b06) )
 	ROM_LOAD16_BYTE( "pk-l0-usa-d.l0", 0x000000, 0x040000, CRC(39fe30d2) SHA1(e0c117da4fe9c779dd534ee0d09685aeb5f579c6) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )
-	ROM_LOAD16_BYTE( "pk-sh0.sh0", 0x000001, 0x010000, CRC(1145998c) SHA1(cdb2a428e0f35302b81696dab02d3dd2c433f6e5) )
-	ROM_LOAD16_BYTE( "pk-sl0.sl0", 0x000000, 0x010000, CRC(542ee1c7) SHA1(b934adeecbba17cf96b06a2b1dc1ceaebdf9ad10) )
+	ROM_REGION( 0x20000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE( "pk-sh0.sh0", 0x00001, 0x10000, CRC(1145998c) SHA1(cdb2a428e0f35302b81696dab02d3dd2c433f6e5) )
+	ROM_LOAD16_BYTE( "pk-sl0.sl0", 0x00000, 0x10000, CRC(542ee1c7) SHA1(b934adeecbba17cf96b06a2b1dc1ceaebdf9ad10) )
 
 	ROM_REGION( 0x200000, "gfx1", 0 )	/* chars */
 	ROM_LOAD16_BYTE( "pk-c00-os.c00", 0x000000, 0x80000, CRC(42ae3d73) SHA1(e4777066155c9882695ebff0412bd879b8d6f716) )
@@ -617,9 +955,9 @@ ROM_START( kftgoal )
 	ROM_LOAD16_BYTE( "pk-031-usa.031", 0x300001, 0x80000, CRC(8aa7dc04) SHA1(8aebdf50a832acf00fcfebb35ab49a06d13bc444) )
 
 	ROM_REGION( 0x100000, "irem", 0 )	 /* ADPCM samples */
-	ROM_LOAD( "pk-da0.da0", 0x000000, 0x80000, CRC(26a34cf4) SHA1(a8a7cd91cdc6d644ee02ca16e7fdc8debf8f3a5f) )
+	ROM_LOAD( "pk-da0.da0", 0x000000, 0x80000, BAD_DUMP CRC(26a34cf4) SHA1(a8a7cd91cdc6d644ee02ca16e7fdc8debf8f3a5f) ) //clearly taken from World PK Soccer, it says "World PK Soccer" at title screen
 
-	ROM_REGION( 0x2000, "user1", 0 ) /* ST M28C64C-20PI Eeprom */
+	ROM_REGION( 0x2000, "eeprom", 0 ) /* ST M28C64C-20PI Eeprom */
 	ROM_LOAD( "st-m28c64c.eeprom", 0x000, 0x2000, CRC(8e0c8b7c) SHA1(0b57290d709e6d54ce1bb3a5c01b80590203c1dd) )
 ROM_END
 
@@ -627,50 +965,39 @@ ROM_END
 
 static DRIVER_INIT( firebarr )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	m107_state *state = machine.driver_data<m107_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
-	memcpy(RAM + 0xffff0, RAM + 0x7fff0, 0x10); /* Start vector */
-	memory_set_bankptr(machine, 1, &RAM[0xa0000]); /* Initial bank */
+	memory_set_bankptr(machine, "bank1", &ROM[0xa0000]);
 
-	RAM = memory_region(machine, "soundcpu");
-	memcpy(RAM + 0xffff0,RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */
-
-	m107_irq_vectorbase = 0x20;
-	m107_spritesystem = 1;
+	state->m_irq_vectorbase = 0x20;
+	state->m_spritesystem = 1;
 }
 
 static DRIVER_INIT( dsoccr94 )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	m107_state *state = machine.driver_data<m107_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
 
-	memcpy(RAM + 0xffff0, RAM + 0x7fff0, 0x10); /* Start vector */
-	memory_set_bankptr(machine, 1, &RAM[0xa0000]); /* Initial bank */
+	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x80000], 0x20000);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x06, 0x07, FUNC(m107_bankswitch_w));
 
-	RAM = memory_region(machine, "soundcpu");
-	memcpy(RAM + 0xffff0, RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */
-
-	m107_irq_vectorbase = 0x80;
-	m107_spritesystem = 0;
+	state->m_irq_vectorbase = 0x80;
+	state->m_spritesystem = 0;
 }
 
 static DRIVER_INIT( wpksoc )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	m107_state *state = machine.driver_data<m107_state>();
 
-	memcpy(RAM + 0xffff0, RAM + 0x7fff0, 0x10); /* Start vector */
-	memory_set_bankptr(machine, 1, &RAM[0xa0000]); /* Initial bank */
-
-	RAM = memory_region(machine, "soundcpu");
-	memcpy(RAM + 0xffff0, RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */
-
-
-	m107_irq_vectorbase = 0x80;
-	m107_spritesystem = 0;
+	state->m_irq_vectorbase = 0x80;
+	state->m_spritesystem = 0;
 }
 
 /***************************************************************************/
 
-GAME( 1993, firebarr,      0, firebarr, firebarr, firebarr, ROT270, "Irem", "Fire Barrel (Japan)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, dsoccr94,      0, dsoccr94, dsoccr94, dsoccr94, ROT0,   "Irem (Data East Corporation license)", "Dream Soccer '94", 0 )
-GAME( 1995, wpksoc,        0, wpksoc,   wpksoc,   wpksoc,   ROT0,   "Jaleco", "World PK Soccer", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, kftgoal,  wpksoc, wpksoc,   wpksoc,   wpksoc,   ROT0,   "Jaleco", "Kick for the Goal", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, firebarr,      0, firebarr, firebarr, firebarr, ROT270, "Irem", "Fire Barrel (Japan)", 0 )
+// Air Assault : World version of Fire Barrel, seen on location at the London Trocadero
+GAME( 1994, dsoccr94,      0, dsoccr94, dsoccr94, dsoccr94, ROT0,   "Irem (Data East Corporation license)", "Dream Soccer '94 (World, M107 hardware)", 0 )
+GAME( 1995, wpksoc,        0, wpksoc,   wpksoc,   wpksoc,   ROT0,   "Jaleco", "World PK Soccer", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_MECHANICAL )
+GAME( 1994, kftgoal,  wpksoc, wpksoc,   wpksoc,   wpksoc,   ROT0,   "Jaleco", "Kick for the Goal", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_MECHANICAL )

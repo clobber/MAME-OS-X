@@ -9,7 +9,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "emuopts.h"
 
 
 
@@ -27,7 +28,7 @@ static emu_timer *watchdog_timer;
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void watchdog_internal_reset(running_machine *machine);
+static void watchdog_internal_reset(running_machine &machine);
 static TIMER_CALLBACK( watchdog_callback );
 
 
@@ -36,16 +37,16 @@ static TIMER_CALLBACK( watchdog_callback );
     watchdog_init - one time initialization
 -------------------------------------------------*/
 
-void watchdog_init(running_machine *machine)
+void watchdog_init(running_machine &machine)
 {
 	/* allocate a timer for the watchdog */
-	watchdog_timer = timer_alloc(machine, watchdog_callback, NULL);
+	watchdog_timer = machine.scheduler().timer_alloc(FUNC(watchdog_callback));
 
-	add_reset_callback(machine, watchdog_internal_reset);
+	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(watchdog_internal_reset), &machine));
 
 	/* save some stuff in the default tag */
-	state_save_register_item(machine, "watchdog", NULL, 0, watchdog_enabled);
-	state_save_register_item(machine, "watchdog", NULL, 0, watchdog_counter);
+	machine.save().save_item(NAME(watchdog_enabled));
+	machine.save().save_item(NAME(watchdog_counter));
 }
 
 
@@ -54,10 +55,10 @@ void watchdog_init(running_machine *machine)
     system
 -------------------------------------------------*/
 
-static void watchdog_internal_reset(running_machine *machine)
+static void watchdog_internal_reset(running_machine &machine)
 {
 	/* set up the watchdog timer; only start off enabled if explicitly configured */
-	watchdog_enabled = (machine->config->watchdog_vblank_count != 0 || attotime_compare(machine->config->watchdog_time, attotime_zero) != 0);
+	watchdog_enabled = (machine.config().m_watchdog_vblank_count != 0 || machine.config().m_watchdog_time != attotime::zero);
 	watchdog_reset(machine);
 	watchdog_enabled = TRUE;
 }
@@ -71,11 +72,14 @@ static TIMER_CALLBACK( watchdog_callback )
 {
 	logerror("Reset caused by the watchdog!!!\n");
 
+	int verbose = machine.options().verbose();
 #ifdef MAME_DEBUG
-	popmessage("Reset caused by the watchdog!!!\n");
+	verbose = 1;
 #endif
+	if (verbose)
+		popmessage("Reset caused by the watchdog!!!\n");
 
-	mame_schedule_soft_reset(machine);
+	machine.schedule_soft_reset();
 }
 
 
@@ -84,18 +88,18 @@ static TIMER_CALLBACK( watchdog_callback )
     timers
 -------------------------------------------------*/
 
-static void on_vblank(const device_config *screen, void *param, int vblank_state)
+static void on_vblank(running_machine &machine, screen_device &screen, bool vblank_state)
 {
 	/* VBLANK starting */
 	if (vblank_state && watchdog_enabled)
 	{
 		/* check the watchdog */
-		if (screen->machine->config->watchdog_vblank_count != 0)
+		if (screen.machine().config().m_watchdog_vblank_count != 0)
 		{
 			watchdog_counter = watchdog_counter - 1;
 
 			if (watchdog_counter == 0)
-				watchdog_callback(screen->machine, NULL, 0);
+				watchdog_callback(screen.machine(), NULL, 0);
 		}
 	}
 }
@@ -105,29 +109,29 @@ static void on_vblank(const device_config *screen, void *param, int vblank_state
     watchdog_reset - reset the watchdog timer
 -------------------------------------------------*/
 
-void watchdog_reset(running_machine *machine)
+void watchdog_reset(running_machine &machine)
 {
 	/* if we're not enabled, skip it */
 	if (!watchdog_enabled)
-		timer_adjust_oneshot(watchdog_timer, attotime_never, 0);
+		watchdog_timer->adjust(attotime::never);
 
 	/* VBLANK-based watchdog? */
-	else if (machine->config->watchdog_vblank_count != 0)
+	else if (machine.config().m_watchdog_vblank_count != 0)
 	{
-		watchdog_counter = machine->config->watchdog_vblank_count;
+		watchdog_counter = machine.config().m_watchdog_vblank_count;
 
 		/* register a VBLANK callback for the primary screen */
-		if (machine->primary_screen != NULL)
-			video_screen_register_vblank_callback(machine->primary_screen, on_vblank, NULL);
+		if (machine.primary_screen != NULL)
+			machine.primary_screen->register_vblank_callback(vblank_state_delegate(FUNC(on_vblank), &machine));
 	}
 
 	/* timer-based watchdog? */
-	else if (attotime_compare(machine->config->watchdog_time, attotime_zero) != 0)
-		timer_adjust_oneshot(watchdog_timer, machine->config->watchdog_time, 0);
+	else if (machine.config().m_watchdog_time != attotime::zero)
+		watchdog_timer->adjust(machine.config().m_watchdog_time);
 
 	/* default to an obscene amount of time (3 seconds) */
 	else
-		timer_adjust_oneshot(watchdog_timer, ATTOTIME_IN_SEC(3), 0);
+		watchdog_timer->adjust(attotime::from_seconds(3));
 }
 
 
@@ -135,7 +139,7 @@ void watchdog_reset(running_machine *machine)
     watchdog_enable - reset the watchdog timer
 -------------------------------------------------*/
 
-void watchdog_enable(running_machine *machine, int enable)
+void watchdog_enable(running_machine &machine, int enable)
 {
 	/* when re-enabled, we reset our state */
 	if (watchdog_enabled != enable)

@@ -14,10 +14,19 @@
  *     terms of its usage and license at any time, including retroactively
  *   - This entire notice must remain in the source code.
  *
+ *
+ *    02/2011 (Sandro Ronco)
+ *   - Added IO_SPACE and updated all access in ME1 memory for use it.
+ *   - Implemented interrupts.
+ *   - Fixed the flags in the ROL/ROR/SHL/SHR opcodes.
+ *   - Fixed decimal add/sub opcodes.
+ *
  * based on info found on an artikel for the tandy trs80 pc2
+ * and on "PC1500 Technical reference manual"
  *
  *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 
 #include "lh5801.h"
@@ -45,12 +54,14 @@ enum
 	LH5801_IRQ_STATE
 };
 
-typedef struct _lh5810_state lh5801_state;
-struct _lh5810_state
+typedef struct _lh5801_state lh5801_state;
+struct _lh5801_state
 {
 	const lh5801_cpu_core *config;
-	const device_config *device;
-	const address_space *program;
+	legacy_cpu_device *device;
+	address_space *program;			//ME0
+	address_space *io;				//ME1
+	direct_read_data *direct;
 
 	PAIR s, p, u, x, y;
 	int tm; //9 bit
@@ -63,17 +74,18 @@ struct _lh5810_state
 
 	int irq_state;
 
+	UINT8 ir_flipflop[3];	//interrupt request flipflop: IR0, IR1, IR2
+	int lines_status[2];	//MI and NMI lines status
+
 	int idle;
 	int icount;
 };
 
-INLINE lh5801_state *get_safe_token(const device_config *device)
+INLINE lh5801_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_LH5801);
-	return (lh5801_state *)device->token;
+	assert(device->type() == LH5801);
+	return (lh5801_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define P cpustate->p.w.l
@@ -104,45 +116,104 @@ static CPU_INIT( lh5801 )
 	lh5801_state *cpustate = get_safe_token(device);
 
 	memset(cpustate, 0, sizeof(*cpustate));
-	cpustate->config = (const lh5801_cpu_core *) device->static_config;
+	cpustate->config = (const lh5801_cpu_core *) device->static_config();
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
+	cpustate->direct = &cpustate->program->direct();
 }
 
 static CPU_RESET( lh5801 )
 {
 	lh5801_state *cpustate = get_safe_token(device);
 
-	P = (memory_read_byte(cpustate->program, 0xfffe)<<8) | memory_read_byte(cpustate->program, 0xffff);
+	P = (cpustate->program->read_byte(0xfffe)<<8) | cpustate->program->read_byte(0xffff);
 
 	cpustate->idle=0;
+
+	memset(cpustate->ir_flipflop, 0, sizeof(cpustate->ir_flipflop));
+	memset(cpustate->lines_status, 0, sizeof(cpustate->lines_status));
 }
+
+
+static void check_irq(device_t *device)
+{
+	lh5801_state *cpustate = get_safe_token(device);
+
+	if (cpustate->ir_flipflop[0])
+	{
+		//NMI interrupt
+		cpustate->ir_flipflop[0] = 0;
+		lh5801_push(cpustate,cpustate->t);
+		cpustate->t&=~IE;
+		lh5801_push_word(cpustate,P);
+		P = (cpustate->program->read_byte(0xfffc)<<8) | cpustate->program->read_byte(0xfffd);
+	}
+	else if (cpustate->ir_flipflop[1] && (cpustate->t & IE))
+	{
+		//counter interrupt (counter not yet implemented)
+		cpustate->ir_flipflop[1] = 0;
+		lh5801_push(cpustate,cpustate->t);
+		cpustate->t&=~IE;
+		lh5801_push_word(cpustate,P);
+		P = (cpustate->program->read_byte(0xfffa)<<8) | cpustate->program->read_byte(0xfffb);
+	}
+	else if (cpustate->ir_flipflop[2] && (cpustate->t & IE))
+	{
+		//MI interrupt
+		cpustate->ir_flipflop[2] = 0;
+		lh5801_push(cpustate, cpustate->t);
+		cpustate->t&=~IE;
+		lh5801_push_word(cpustate, P);
+		P = (cpustate->program->read_byte(0xfff8)<<8) | cpustate->program->read_byte(0xfff9);
+	}
+}
+
 
 static CPU_EXECUTE( lh5801 )
 {
 	lh5801_state *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
+	do
+	{
+		check_irq(device);
 
-	if (cpustate->idle) {
-		cpustate->icount=0;
-	} else {
-		do
+		if (cpustate->idle)
+			cpustate->icount = 0;
+		else
 		{
 			cpustate->oldpc = P;
 
 			debugger_instruction_hook(device, P);
 			lh5801_instruction(cpustate);
+		}
 
-		} while (cpustate->icount > 0);
-	}
-
-	return cycles - cpustate->icount;
+	} while (cpustate->icount > 0);
 }
 
 static void set_irq_line(lh5801_state *cpustate, int irqline, int state)
 {
-	cpustate->idle=0;
+	switch( irqline)
+	{
+		case LH5801_LINE_MI:
+			if (cpustate->lines_status[0] == CLEAR_LINE && state == ASSERT_LINE)
+			{
+				cpustate->idle = 0;
+				cpustate->ir_flipflop[2] = 1;
+			}
+
+			cpustate->lines_status[0] = state;
+			break;
+		case INPUT_LINE_NMI:
+			if (cpustate->lines_status[1] == CLEAR_LINE && state == ASSERT_LINE)
+			{
+				cpustate->idle = 0;
+				cpustate->ir_flipflop[0] = 1;
+			}
+
+			cpustate->lines_status[1] = state;
+			break;
+	}
 }
 
 
@@ -157,7 +228,8 @@ static CPU_SET_INFO( lh5801 )
 	switch (state)
 	{
 		/* --- the following bits of info are set as 64-bit signed integers --- */
-		case CPUINFO_INT_INPUT_STATE:					set_irq_line(cpustate, 0, info->i);				break;
+		case CPUINFO_INT_INPUT_STATE + LH5801_LINE_MI:					set_irq_line(cpustate, LH5801_LINE_MI, info->i);				break;
+		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:					set_irq_line(cpustate, INPUT_LINE_NMI, info->i);				break;
 
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + LH5801_P:			P = info->i;							break;
@@ -183,7 +255,7 @@ static CPU_SET_INFO( lh5801 )
 
 CPU_GET_INFO( lh5801 )
 {
-	lh5801_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	lh5801_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -199,15 +271,15 @@ CPU_GET_INFO( lh5801 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 19;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = cpustate->irq_state;				break;
 
@@ -272,3 +344,5 @@ CPU_GET_INFO( lh5801 )
 		case CPUINFO_STR_REGISTER + LH5801_DP:			sprintf(info->s, "DP:%04X", cpustate->dp); break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(LH5801, lh5801);

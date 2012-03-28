@@ -35,34 +35,59 @@ write
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/espial.h"
+#include "includes/marineb.h"
 
 
 static MACHINE_RESET( marineb )
 {
-	marineb_active_low_flipscreen = 0;
-	MACHINE_RESET_CALL(espial);
+	marineb_state *state = machine.driver_data<marineb_state>();
+
+	state->m_palette_bank = 0;
+	state->m_column_scroll = 0;
+	state->m_flipscreen_x = 0;
+	state->m_flipscreen_y = 0;
+	state->m_marineb_active_low_flipscreen = 0;
 }
 
 static MACHINE_RESET( springer )
 {
-	marineb_active_low_flipscreen = 1;
-	MACHINE_RESET_CALL(espial);
+	marineb_state *state = machine.driver_data<marineb_state>();
+
+	MACHINE_RESET_CALL( marineb );
+
+	state->m_marineb_active_low_flipscreen = 1;
 }
 
-static ADDRESS_MAP_START( marineb_map, ADDRESS_SPACE_PROGRAM, 8 )
+static MACHINE_START( marineb )
+{
+	marineb_state *state = machine.driver_data<marineb_state>();
+
+	state->m_maincpu = machine.device("maincpu");
+	state->m_audiocpu = NULL;
+
+	state->save_item(NAME(state->m_marineb_active_low_flipscreen));
+}
+
+static WRITE8_HANDLER( irq_mask_w )
+{
+	marineb_state *state = space->machine().driver_data<marineb_state>();
+
+	state->m_irq_mask = data & 1;
+}
+
+static ADDRESS_MAP_START( marineb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(marineb_videoram_w) AM_BASE(&marineb_videoram)
-	AM_RANGE(0x8c00, 0x8c3f) AM_RAM AM_BASE(&spriteram)  /* Hoccer only */
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(marineb_colorram_w) AM_BASE(&marineb_colorram)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(marineb_videoram_w) AM_BASE_MEMBER(marineb_state, m_videoram)
+	AM_RANGE(0x8c00, 0x8c3f) AM_RAM AM_BASE_MEMBER(marineb_state, m_spriteram)  /* Hoccer only */
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(marineb_colorram_w) AM_BASE_MEMBER(marineb_state, m_colorram)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(marineb_column_scroll_w)
 	AM_RANGE(0x9a00, 0x9a00) AM_WRITE(marineb_palette_bank_0_w)
 	AM_RANGE(0x9c00, 0x9c00) AM_WRITE(marineb_palette_bank_1_w)
-	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P2") AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P2") AM_WRITE(irq_mask_w)
 	AM_RANGE(0xa001, 0xa001) AM_WRITE(marineb_flipscreen_y_w)
 	AM_RANGE(0xa002, 0xa002) AM_WRITE(marineb_flipscreen_x_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P1")
@@ -71,12 +96,12 @@ static ADDRESS_MAP_START( marineb_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( marineb_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( marineb_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x08, 0x09) AM_DEVWRITE("ay1", ay8910_address_data_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( wanted_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( wanted_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -502,110 +527,125 @@ static GFXDECODE_START( hopprobo )
 	GFXDECODE_ENTRY( "gfx2", 0x0000, marineb_big_spritelayout,    0, 64 )
 GFXDECODE_END
 
+static INTERRUPT_GEN( marineb_vblank_irq )
+{
+	marineb_state *state = device->machine().driver_data<marineb_state>();
 
-static MACHINE_DRIVER_START( marineb )
+	if(state->m_irq_mask)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static INTERRUPT_GEN( wanted_vblank_irq )
+{
+	marineb_state *state = device->machine().driver_data<marineb_state>();
+
+	if(state->m_irq_mask)
+		device_set_input_line(device, 0, HOLD_LINE);
+}
+
+
+static MACHINE_CONFIG_START( marineb, marineb_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(marineb_map)
-	MDRV_CPU_IO_MAP(marineb_io_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(marineb_map)
+	MCFG_CPU_IO_MAP(marineb_io_map)
+	MCFG_CPU_VBLANK_INT("screen", marineb_vblank_irq)
 
-	MDRV_MACHINE_RESET(marineb)
+	MCFG_MACHINE_START(marineb)
+	MCFG_MACHINE_RESET(marineb)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000)	/* frames per second, vblank duration */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000)	/* frames per second, vblank duration */)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(marineb)
 
-	MDRV_GFXDECODE(marineb)
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_GFXDECODE(marineb)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_PALETTE_INIT(espial)
-	MDRV_VIDEO_START(marineb)
-	MDRV_VIDEO_UPDATE(marineb)
+	MCFG_PALETTE_INIT(marineb)
+	MCFG_VIDEO_START(marineb)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( changes )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(marineb)
-
-	/* video hardware */
-	MDRV_GFXDECODE(changes)
-	MDRV_VIDEO_UPDATE(changes)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( springer )
+static MACHINE_CONFIG_DERIVED( changes, marineb )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(marineb)
-	MDRV_MACHINE_RESET(springer)
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(springer)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(changes)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(changes)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hoccer )
+static MACHINE_CONFIG_DERIVED( springer, marineb )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(marineb)
+	MCFG_MACHINE_RESET(springer)
 
 	/* video hardware */
-	MDRV_GFXDECODE(hoccer)
-	MDRV_VIDEO_UPDATE(hoccer)
-MACHINE_DRIVER_END
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(springer)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wanted )
+static MACHINE_CONFIG_DERIVED( hoccer, marineb )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(marineb)
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(wanted_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MDRV_GFXDECODE(wanted)
-	MDRV_VIDEO_UPDATE(springer)
+	MCFG_GFXDECODE(hoccer)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(hoccer)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( wanted, marineb )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(wanted_io_map)
+	MCFG_CPU_VBLANK_INT("screen", wanted_vblank_irq)
+
+	/* video hardware */
+	MCFG_GFXDECODE(wanted)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(springer)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("ay1", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_REPLACE("ay1", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hopprobo )
+static MACHINE_CONFIG_DERIVED( hopprobo, marineb )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(marineb)
 
 	/* video hardware */
-	MDRV_GFXDECODE(hopprobo)
-	MDRV_VIDEO_UPDATE(hopprobo)
-MACHINE_DRIVER_END
+	MCFG_GFXDECODE(hopprobo)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(hopprobo)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bcruzm12 )
+static MACHINE_CONFIG_DERIVED( bcruzm12, wanted )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(wanted)
-	MDRV_MACHINE_RESET(springer)
-MACHINE_DRIVER_END
+	MCFG_MACHINE_RESET(springer)
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -841,13 +881,13 @@ ROM_END
 
 
 /*    year  name      parent   machine   inputs */
-GAME( 1982, marineb,  0,       marineb,  marineb, 0, ROT0,   "Orca", "Marine Boy", 0 )
-GAME( 1982, changes,  0,       changes,  changes, 0, ROT0,   "Orca", "Changes", 0 )
-GAME( 1982, changesa, changes, changes,  changes, 0, ROT0,   "Orca (Eastern Micro Electronics, Inc. license)", "Changes (EME license)", 0)
-GAME( 1982, looper,   changes, changes,  changes, 0, ROT0,   "Orca", "Looper", 0 )
-GAME( 1982, springer, 0,       springer, marineb, 0, ROT270, "Orca", "Springer", 0 )
-GAME( 1983, hoccer,   0,       hoccer,   hoccer,  0, ROT90,  "Eastern Micro Electronics, Inc.", "Hoccer (set 1)", 0 )
-GAME( 1983, hoccer2,  hoccer,  hoccer,   hoccer,  0, ROT90,  "Eastern Micro Electronics, Inc.", "Hoccer (set 2)" , 0)	/* earlier */
-GAME( 1983, bcruzm12, 0,       bcruzm12, bcruzm12,0, ROT90,  "Sigma Enterprises Inc.", "Battle Cruiser M-12", 0 )
-GAME( 1983, hopprobo, 0,       hopprobo, marineb, 0, ROT90,  "Sega", "Hopper Robo", 0 )
-GAME( 1984, wanted,   0,       wanted,   wanted,  0, ROT90,  "Sigma Enterprises Inc.", "Wanted", 0 )
+GAME( 1982, marineb,  0,       marineb,  marineb, 0, ROT0,   "Orca", "Marine Boy", GAME_SUPPORTS_SAVE )
+GAME( 1982, changes,  0,       changes,  changes, 0, ROT0,   "Orca", "Changes", GAME_SUPPORTS_SAVE )
+GAME( 1982, changesa, changes, changes,  changes, 0, ROT0,   "Orca (Eastern Micro Electronics, Inc. license)", "Changes (EME license)", GAME_SUPPORTS_SAVE )
+GAME( 1982, looper,   changes, changes,  changes, 0, ROT0,   "Orca", "Looper", GAME_SUPPORTS_SAVE )
+GAME( 1982, springer, 0,       springer, marineb, 0, ROT270, "Orca", "Springer", GAME_SUPPORTS_SAVE )
+GAME( 1983, hoccer,   0,       hoccer,   hoccer,  0, ROT90,  "Eastern Micro Electronics, Inc.", "Hoccer (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, hoccer2,  hoccer,  hoccer,   hoccer,  0, ROT90,  "Eastern Micro Electronics, Inc.", "Hoccer (set 2)" , GAME_SUPPORTS_SAVE )	/* earlier */
+GAME( 1983, bcruzm12, 0,       bcruzm12, bcruzm12,0, ROT90,  "Sigma Enterprises Inc.", "Battle Cruiser M-12", GAME_SUPPORTS_SAVE )
+GAME( 1983, hopprobo, 0,       hopprobo, marineb, 0, ROT90,  "Sega", "Hopper Robo", GAME_SUPPORTS_SAVE )
+GAME( 1984, wanted,   0,       wanted,   wanted,  0, ROT90,  "Sigma Enterprises Inc.", "Wanted", GAME_SUPPORTS_SAVE )

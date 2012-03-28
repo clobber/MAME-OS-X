@@ -10,176 +10,159 @@
         of arguments to ticket_dispenser_init.
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/ticket.h"
 
 #define DEBUG_TICKET 0
 #define LOG(x) do { if (DEBUG_TICKET) logerror x; } while (0)
 
-#define MAX_DISPENSERS	2
 
-struct ticket_state
+typedef struct _ticket_state ticket_state;
+struct _ticket_state
 {
-	UINT8 status;
-	UINT8 power;
-	emu_timer *timer;
+	int m_active_bit;
+	int m_time_msec;
+	int m_motoron;
+	int m_ticketdispensed;
+	int m_ticketnotdispensed;
+
+	UINT8 m_status;
+	UINT8 m_power;
+	emu_timer *m_timer;
 };
 
-static int active_bit = 0x80;
-static int time_msec;
-static int motoron;
-static int ticketdispensed;
-static int ticketnotdispensed;
-
-static struct ticket_state dispenser[MAX_DISPENSERS];
-
-static TIMER_CALLBACK( ticket_dispenser_toggle );
-
-
-/***************************************************************************
-  ticket_dispenser_init
-
-***************************************************************************/
-void ticket_dispenser_init(running_machine *machine, int msec, int motoronhigh, int statusactivehigh)
+INLINE ticket_state *get_safe_token(device_t *device)
 {
-	int i;
+	assert(device != NULL);
+	assert(device->type() == TICKET_DISPENSER);
 
-	time_msec			= msec;
-	motoron				= motoronhigh  ? active_bit : 0;
-	ticketdispensed		= statusactivehigh ? active_bit : 0;
-	ticketnotdispensed	= ticketdispensed ^ active_bit;
-	dispensed_tickets	= 0;
-
-	for (i = 0; i < MAX_DISPENSERS; i++)
-	{
-		dispenser[i].status	= ticketnotdispensed;
-		dispenser[i].power 	= 0x00;
-		dispenser[i].timer 	= timer_alloc(machine, ticket_dispenser_toggle, &dispenser[i]);
-
-		state_save_register_item(machine, "ticket", NULL, i, dispenser[i].status);
-		state_save_register_item(machine, "ticket", NULL, i, dispenser[i].power);
-	}
-}
-
-/***************************************************************************
-  ticket_dispenser_r
-***************************************************************************/
-READ8_HANDLER( ticket_dispenser_r )
-{
-	return ticket_dispenser_0_r(space, offset);
-}
-
-READ8_HANDLER( ticket_dispenser_0_r )
-{
-	LOG(("PC: %04X  Ticket Status Read = %02X\n", cpu_get_pc(space->cpu), dispenser[0].status));
-	return dispenser[0].status;
-}
-
-READ8_HANDLER( ticket_dispenser_1_r )
-{
-	LOG(("PC: %04X  Ticket Status Read = %02X\n", cpu_get_pc(space->cpu), dispenser[1].status));
-	return dispenser[1].status;
-}
-
-CUSTOM_INPUT( ticket_dispenser_0_port_r )
-{
-	return dispenser[0].status ? 1 : 0;
-}
-
-CUSTOM_INPUT( ticket_dispenser_1_port_r )
-{
-	return dispenser[1].status ? 1 : 0;
-}
-
-/***************************************************************************
-  ticket_dispenser_w
-***************************************************************************/
-WRITE8_HANDLER( ticket_dispenser_w )
-{
-	ticket_dispenser_0_w(space, offset, data);
-}
-
-WRITE8_HANDLER( ticket_dispenser_0_w )
-{
-	/* On an activate signal, start dispensing! */
-	if ((data & active_bit) == motoron)
-	{
-		if (!dispenser[0].power)
-		{
-			LOG(("PC: %04X  Ticket Power On\n", cpu_get_pc(space->cpu)));
-			timer_adjust_oneshot(dispenser[0].timer, ATTOTIME_IN_MSEC(time_msec), 0);
-			dispenser[0].power = 1;
-
-			dispenser[0].status = ticketnotdispensed;
-		}
-	}
-	else
-	{
-		if (dispenser[0].power)
-		{
-			LOG(("PC: %04X  Ticket Power Off\n", cpu_get_pc(space->cpu)));
-			timer_adjust_oneshot(dispenser[0].timer, attotime_never, 0);
-			set_led_status(2,0);
-			dispenser[0].power = 0;
-		}
-	}
-}
-
-WRITE8_HANDLER( ticket_dispenser_1_w )
-{
-	/* On an activate signal, start dispensing! */
-	if ((data & active_bit) == motoron)
-	{
-		if (!dispenser[1].power)
-		{
-			LOG(("PC: %04X  Ticket Power On\n", cpu_get_pc(space->cpu)));
-			timer_adjust_oneshot(dispenser[1].timer, ATTOTIME_IN_MSEC(time_msec), 0);
-			dispenser[1].power = 1;
-
-			dispenser[1].status = ticketnotdispensed;
-		}
-	}
-	else
-	{
-		if (dispenser[1].power)
-		{
-			LOG(("PC: %04X  Ticket Power Off\n", cpu_get_pc(space->cpu)));
-			timer_adjust_oneshot(dispenser[1].timer, attotime_never, 0);
-			set_led_status(2,0);
-			dispenser[1].power = 0;
-		}
-	}
+	return (ticket_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
-/***************************************************************************
-  ticket_dispenser_toggle
-
-  How I think this works:
-  When a ticket dispenses, there is N milliseconds of status = high,
-  and N milliseconds of status = low (a wait cycle?).
-***************************************************************************/
 static TIMER_CALLBACK( ticket_dispenser_toggle )
 {
-	struct ticket_state *dispenser = (struct ticket_state *)ptr;
+	ticket_state *state = get_safe_token((device_t *)ptr);
 
 	/* If we still have power, keep toggling ticket states. */
-	if (dispenser->power)
+	if (state->m_power)
 	{
-		dispenser->status ^= active_bit;
-		LOG(("Ticket Status Changed to %02X\n", dispenser->status));
-		timer_adjust_oneshot(dispenser->timer, ATTOTIME_IN_MSEC(time_msec), 0);
+		state->m_status ^= state->m_active_bit;
+		LOG(("Ticket Status Changed to %02X\n", state->m_status));
+		state->m_timer->adjust(attotime::from_msec(state->m_time_msec));
 	}
 
-	if (dispenser->status == ticketdispensed)
+	if (state->m_status == state->m_ticketdispensed)
 	{
-		set_led_status(2,1);
-		dispensed_tickets++;
+		set_led_status(machine, 2,1);
+		increment_dispensed_tickets(machine, 1);
 
 		LOG(("Ticket Dispensed\n"));
 	}
 	else
 	{
-		set_led_status(2,0);
+		set_led_status(machine, 2,0);
 	}
 }
+
+
+READ8_DEVICE_HANDLER( ticket_dispenser_r )
+{
+	ticket_state *state = get_safe_token(device);
+	LOG(("%s: Ticket Status Read = %02X\n", device->machine().describe_context(), state->m_status));
+	return state->m_status;
+}
+
+
+READ_LINE_DEVICE_HANDLER( ticket_dispenser_line_r )
+{
+	ticket_state *state = get_safe_token(device);
+	return state->m_status ? 1 : 0;
+}
+
+
+WRITE8_DEVICE_HANDLER( ticket_dispenser_w )
+{
+	ticket_state *state = get_safe_token(device);
+
+	/* On an activate signal, start dispensing! */
+	if ((data & state->m_active_bit) == state->m_motoron)
+	{
+		if (!state->m_power)
+		{
+			LOG(("%s: Ticket Power On\n", device->machine().describe_context()));
+			state->m_timer->adjust(attotime::from_msec(state->m_time_msec));
+			state->m_power = 1;
+
+			state->m_status = state->m_ticketnotdispensed;
+		}
+	}
+	else
+	{
+		if (state->m_power)
+		{
+			LOG(("%s: Ticket Power Off\n", device->machine().describe_context()));
+			state->m_timer->adjust(attotime::never);
+			set_led_status(device->machine(), 2,0);
+			state->m_power = 0;
+		}
+	}
+}
+
+
+
+/***************************************************************************
+    DEVICE INTERFACE
+***************************************************************************/
+
+/*-------------------------------------------------
+    device start callback
+-------------------------------------------------*/
+
+static DEVICE_START( ticket )
+{
+	const ticket_config *config = (const ticket_config *)downcast<const legacy_device_base *>(device)->inline_config();
+	ticket_state *state = get_safe_token(device);
+
+	assert(config != NULL);
+
+	/* initialize the state */
+	state->m_active_bit			= 0x80;
+	state->m_time_msec			= device->clock();
+	state->m_motoron				= config->motorhigh  ? state->m_active_bit : 0;
+	state->m_ticketdispensed		= config->statushigh ? state->m_active_bit : 0;
+	state->m_ticketnotdispensed	= state->m_ticketdispensed ^ state->m_active_bit;
+
+	state->m_timer				= device->machine().scheduler().timer_alloc(FUNC(ticket_dispenser_toggle), (void *)device);
+
+	device->save_item(NAME(state->m_status));
+	device->save_item(NAME(state->m_power));
+}
+
+
+/*-------------------------------------------------
+    device reset callback
+-------------------------------------------------*/
+
+static DEVICE_RESET( ticket )
+{
+	ticket_state *state = get_safe_token(device);
+	state->m_status				= state->m_ticketnotdispensed;
+	state->m_power				= 0x00;
+}
+
+
+/*-------------------------------------------------
+    device definition
+-------------------------------------------------*/
+
+static const char DEVTEMPLATE_SOURCE[] = __FILE__;
+
+#define DEVTEMPLATE_ID(p,s)		p##ticket##s
+#define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET | DT_HAS_INLINE_CONFIG
+#define DEVTEMPLATE_NAME		"Ticket Dispenser"
+#define DEVTEMPLATE_FAMILY		"Generic"
+#include "devtempl.h"
+
+
+DEFINE_LEGACY_DEVICE(TICKET_DISPENSER, ticket);

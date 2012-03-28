@@ -62,21 +62,14 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "video/taitoic.h"
 #include "machine/eeprom.h"
 #include "sound/es5506.h"
-#include "includes/taito_f3.h"
 #include "audio/taito_en.h"
+#include "includes/groundfx.h"
 
-VIDEO_START( groundfx );
-VIDEO_UPDATE( groundfx );
-
-static UINT16 coin_word, frame_counter=0;
-static UINT16 port_sel = 0;
-extern UINT16 groundfx_rotate_ctrl[8];
-static UINT32 *groundfx_ram;
 
 /***********************************************************
                 COLOR RAM
@@ -88,15 +81,15 @@ Extract a standard version of this
 static WRITE32_HANDLER( color_ram_w )
 {
 	int a,r,g,b;
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine().generic.paletteram.u32[offset]);
 
 	{
-		a = paletteram32[offset];
+		a = space->machine().generic.paletteram.u32[offset];
 		r = (a &0xff0000) >> 16;
 		g = (a &0xff00) >> 8;
 		b = (a &0xff);
 
-		palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
+		palette_set_color(space->machine(),offset,MAKE_RGB(r,g,b));
 	}
 }
 
@@ -115,18 +108,6 @@ static TIMER_CALLBACK( groundfx_interrupt5 )
                 EPROM
 **********************************************************/
 
-static const UINT8 default_eeprom[128]=
-{
-	0x62,0x11,0x00,0x00,0x00,0x00,0x01,0x00,0x80,0x80,0x30,0x05,0x00,0x00,0x96,0x14,
-	0x17,0x70,0x35,0xcd,0x75,0x30,0x24,0xaa,0x75,0x30,0x51,0xd9,0x75,0x30,0x2d,0x2b,
-	0x75,0x30,0x51,0xb9,0x00,0x00,0xe0,0xa0,0x17,0x70,0x35,0xcd,0x75,0x30,0x24,0xaa,
-	0x75,0x30,0x51,0xd9,0x75,0x30,0x2d,0x2b,0x75,0x30,0x51,0xb9,0x00,0x00,0xff,0xff,
-	0x17,0x70,0x35,0xcd,0x75,0x30,0x24,0xaa,0x75,0x30,0x51,0xd9,0x75,0x30,0x2d,0x2b,
-	0x75,0x30,0x51,0xb9,0xff,0xff,0xff,0xff,0x17,0x70,0x35,0xcd,0x75,0x30,0x24,0xaa,
-	0x75,0x30,0x51,0xd9,0x75,0x30,0x2d,0x2b,0x75,0x30,0x51,0xb9,0xff,0xff,0xff,0xff,
-	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
-};
-
 static const eeprom_interface groundfx_eeprom_interface =
 {
 	6,				/* address bits */
@@ -138,19 +119,6 @@ static const eeprom_interface groundfx_eeprom_interface =
 	"0100110000",	/* lock command */
 };
 
-static NVRAM_HANDLER( groundfx )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else {
-		eeprom_init(machine, &groundfx_eeprom_interface);
-		if (file)
-			eeprom_load(file);
-		else
-			eeprom_set_data(default_eeprom,128);  /* Default the gun setup values */
-	}
-}
-
 
 /**********************************************************
             GAME INPUTS
@@ -158,73 +126,71 @@ static NVRAM_HANDLER( groundfx )
 
 static CUSTOM_INPUT( frame_counter_r )
 {
-	return frame_counter;
+	groundfx_state *state = field.machine().driver_data<groundfx_state>();
+	return state->m_frame_counter;
 }
 
 static CUSTOM_INPUT( coin_word_r )
 {
-	return coin_word;
+	groundfx_state *state = field.machine().driver_data<groundfx_state>();
+	return state->m_coin_word;
 }
 
 static WRITE32_HANDLER( groundfx_input_w )
 {
+	groundfx_state *state = space->machine().driver_data<groundfx_state>();
 	switch (offset)
 	{
 		case 0x00:
-		{
 			if (ACCESSING_BITS_24_31)	/* $500000 is watchdog */
 			{
-				watchdog_reset(space->machine);
+				watchdog_reset(space->machine());
 			}
 
 			if (ACCESSING_BITS_0_7)
 			{
-				eeprom_set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
-				eeprom_write_bit(data & 0x40);
-				eeprom_set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
-				return;
+				input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 			}
 
-			return;
-		}
+			break;
 
 		case 0x01:
-		{
 			if (ACCESSING_BITS_24_31)
 			{
-				coin_lockout_w(0,~data & 0x01000000);
-				coin_lockout_w(1,~data & 0x02000000);
-				coin_counter_w(0, data & 0x04000000);
-				coin_counter_w(1, data & 0x08000000);
-				coin_word = (data >> 16) &0xffff;
+				coin_lockout_w(space->machine(), 0,~data & 0x01000000);
+				coin_lockout_w(space->machine(), 1,~data & 0x02000000);
+				coin_counter_w(space->machine(), 0, data & 0x04000000);
+				coin_counter_w(space->machine(), 1, data & 0x08000000);
+				state->m_coin_word = (data >> 16) &0xffff;
 			}
-		}
+			break;
 	}
 }
 
 static READ32_HANDLER( groundfx_adc_r )
 {
-	return (input_port_read(space->machine, "AN0") << 8) | input_port_read(space->machine, "AN1");
+	return (input_port_read(space->machine(), "AN0") << 8) | input_port_read(space->machine(), "AN1");
 }
 
 static WRITE32_HANDLER( groundfx_adc_w )
 {
 	/* One interrupt per input port (4 per frame, though only 2 used).
         1000 cycle delay is arbitrary */
-	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu,1000), NULL, 0, groundfx_interrupt5);
+	space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(1000), FUNC(groundfx_interrupt5));
 }
 
 static WRITE32_HANDLER( rotate_control_w )	/* only a guess that it's rotation */
 {
+	groundfx_state *state = space->machine().driver_data<groundfx_state>();
 		if (ACCESSING_BITS_0_15)
 		{
-			groundfx_rotate_ctrl[port_sel] = data;
+			state->m_rotate_ctrl[state->m_port_sel] = data;
 			return;
 		}
 
 		if (ACCESSING_BITS_16_31)
 		{
-			port_sel = (data &0x70000) >> 16;
+			state->m_port_sel = (data &0x70000) >> 16;
 		}
 }
 
@@ -249,21 +215,21 @@ static WRITE32_HANDLER( motor_control_w )
              MEMORY STRUCTURES
 ***********************************************************/
 
-static ADDRESS_MAP_START( groundfx_map, ADDRESS_SPACE_PROGRAM, 32 )
+static ADDRESS_MAP_START( groundfx_map, AS_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
-	AM_RANGE(0x200000, 0x21ffff) AM_RAM	AM_BASE(&groundfx_ram) /* main CPUA ram */
-	AM_RANGE(0x300000, 0x303fff) AM_RAM	AM_BASE(&spriteram32) AM_SIZE(&spriteram_size) /* sprite ram */
+	AM_RANGE(0x200000, 0x21ffff) AM_RAM	AM_BASE_MEMBER(groundfx_state, m_ram) /* main CPUA ram */
+	AM_RANGE(0x300000, 0x303fff) AM_RAM	AM_BASE_SIZE_MEMBER(groundfx_state, m_spriteram, m_spriteram_size) /* sprite ram */
 	AM_RANGE(0x400000, 0x400003) AM_WRITE(motor_control_w)	/* gun vibration */
 	AM_RANGE(0x500000, 0x500003) AM_READ_PORT("BUTTONS")
 	AM_RANGE(0x500004, 0x500007) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x500000, 0x500007) AM_WRITE(groundfx_input_w)	/* eeprom etc. */
 	AM_RANGE(0x600000, 0x600003) AM_READWRITE(groundfx_adc_r,groundfx_adc_w)
-	AM_RANGE(0x700000, 0x7007ff) AM_RAM AM_BASE(&f3_shared_ram)
-	AM_RANGE(0x800000, 0x80ffff) AM_READWRITE(TC0480SCP_long_r,TC0480SCP_long_w)	  /* tilemaps */
-	AM_RANGE(0x830000, 0x83002f) AM_READWRITE(TC0480SCP_ctrl_long_r,TC0480SCP_ctrl_long_w)	// debugging
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(TC0100SCN_long_r,TC0100SCN_long_w)	/* piv tilemaps */
-	AM_RANGE(0x920000, 0x92000f) AM_READWRITE(TC0100SCN_ctrl_long_r,TC0100SCN_ctrl_long_w)
-	AM_RANGE(0xa00000, 0xa0ffff) AM_RAM_WRITE(color_ram_w) AM_BASE(&paletteram32) /* palette ram */
+	AM_RANGE(0x700000, 0x7007ff) AM_RAM AM_SHARE("f3_shared")
+	AM_RANGE(0x800000, 0x80ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_long_r, tc0480scp_long_w)	  /* tilemaps */
+	AM_RANGE(0x830000, 0x83002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_long_r, tc0480scp_ctrl_long_w)	// debugging
+	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_long_r, tc0100scn_long_w)	/* piv tilemaps */
+	AM_RANGE(0x920000, 0x92000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_long_r, tc0100scn_ctrl_long_w)
+	AM_RANGE(0xa00000, 0xa0ffff) AM_RAM_WRITE(color_ram_w) AM_BASE_GENERIC(paletteram) /* palette ram */
 	AM_RANGE(0xb00000, 0xb003ff) AM_RAM						// ?? single bytes, blending ??
 	AM_RANGE(0xc00000, 0xc00007) AM_READNOP /* Network? */
 	AM_RANGE(0xd00000, 0xd00003) AM_WRITE(rotate_control_w)	/* perhaps port based rotate control? */
@@ -283,7 +249,7 @@ static INPUT_PORTS_START( groundfx )
 	PORT_BIT( 0x00000010, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x00000020, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x00000040, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x00000080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00000080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x00000100, IP_ACTIVE_LOW, IPT_BUTTON3 )		/* shift hi */
 	PORT_BIT( 0x00000200, IP_ACTIVE_LOW, IPT_BUTTON1 )		/* brake */
 	PORT_BIT( 0x00000400, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -293,6 +259,11 @@ static INPUT_PORTS_START( groundfx )
 	PORT_BIT( 0x00004000, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x00008000, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0xffff0000, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x00000010, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x00000020, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 
 	PORT_START("SYSTEM")
 	PORT_SERVICE_NO_TOGGLE( 0x00000001, IP_ACTIVE_LOW )
@@ -367,47 +338,61 @@ GFXDECODE_END
                  MACHINE DRIVERS
 ***********************************************************/
 
-static MACHINE_RESET( groundfx )
+static const tc0100scn_interface groundfx_tc0100scn_intf =
 {
-	taito_f3_soundsystem_reset(machine);
-	f3_68681_reset(machine);
-}
+	"screen",
+	2, 3,		/* gfxnum, txnum */
+	50, 8,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0480scp_interface groundfx_tc0480scp_intf =
+{
+	1, 4,		/* gfxnum, txnum */
+	0,		/* pixels */
+	0x24, 0,		/* x_offset, y_offset */
+	-1, 0,		/* text_xoff, text_yoff */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0		/* col_base */
+};
 
 static INTERRUPT_GEN( groundfx_interrupt )
 {
-	frame_counter^=1;
-	cpu_set_input_line(device, 4, HOLD_LINE);
+	groundfx_state *state = device->machine().driver_data<groundfx_state>();
+	state->m_frame_counter^=1;
+	device_set_input_line(device, 4, HOLD_LINE);
 }
 
-static MACHINE_DRIVER_START( groundfx )
+static MACHINE_CONFIG_START( groundfx, groundfx_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz */
-	MDRV_CPU_PROGRAM_MAP(groundfx_map)
-	MDRV_CPU_VBLANK_INT("screen", groundfx_interrupt)
+	MCFG_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz */
+	MCFG_CPU_PROGRAM_MAP(groundfx_map)
+	MCFG_CPU_VBLANK_INT("screen", groundfx_interrupt)
 
-	TAITO_F3_SOUND_SYSTEM_CPU(16000000)
-
-	MDRV_MACHINE_RESET(groundfx)
-	MDRV_NVRAM_HANDLER(groundfx)
+	MCFG_EEPROM_ADD("eeprom", groundfx_eeprom_interface)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0, 40*8-1, 3*8, 32*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(40*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0, 40*8-1, 3*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(groundfx)
 
-	MDRV_GFXDECODE(groundfx)
-	MDRV_PALETTE_LENGTH(16384)
+	MCFG_GFXDECODE(groundfx)
+	MCFG_PALETTE_LENGTH(16384)
 
-	MDRV_VIDEO_START(groundfx)
-	MDRV_VIDEO_UPDATE(groundfx)
+	MCFG_VIDEO_START(groundfx)
+
+	MCFG_TC0100SCN_ADD("tc0100scn", groundfx_tc0100scn_intf)
+	MCFG_TC0480SCP_ADD("tc0480scp", groundfx_tc0480scp_intf)
 
 	/* sound hardware */
-	TAITO_F3_SOUND_SYSTEM_ES5505(30476100/2)
-MACHINE_DRIVER_END
+	MCFG_FRAGMENT_ADD(taito_f3_sound)
+MACHINE_CONFIG_END
 
 /***************************************************************************
                     DRIVERS
@@ -447,32 +432,38 @@ ROM_START( groundfx )
 	ROM_REGION16_BE( 0x1000000, "ensoniq.0", ROMREGION_ERASE00 )
 	ROM_LOAD16_BYTE( "d51-01.73", 0x000000, 0x200000, CRC(92f09155) SHA1(8015e1997818bb480174394eb43840bf26679bcf) )	/* Ensoniq samples */
 	ROM_LOAD16_BYTE( "d51-02.74", 0xc00000, 0x200000, CRC(20a9428f) SHA1(c9033d02a49c72f704808f5f899101617d5814e5) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "93c46.164", 0x0000, 0x0080, CRC(6f58851d) SHA1(33bd4478f097dca6b5d222adb89699c6d35ed009) )
 ROM_END
 
 
 static READ32_HANDLER( irq_speedup_r_groundfx )
 {
+	groundfx_state *state = space->machine().driver_data<groundfx_state>();
+	cpu_device *cpu = downcast<cpu_device *>(&space->device());
 	int ptr;
-	if ((cpu_get_sp(space->cpu)&2)==0) ptr=groundfx_ram[(cpu_get_sp(space->cpu)&0x1ffff)/4];
-	else ptr=(((groundfx_ram[(cpu_get_sp(space->cpu)&0x1ffff)/4])&0x1ffff)<<16) |
-	(groundfx_ram[((cpu_get_sp(space->cpu)&0x1ffff)/4)+1]>>16);
+	offs_t sp = cpu->sp();
+	if ((sp&2)==0) ptr=state->m_ram[(sp&0x1ffff)/4];
+	else ptr=(((state->m_ram[(sp&0x1ffff)/4])&0x1ffff)<<16) |
+	(state->m_ram[((sp&0x1ffff)/4)+1]>>16);
 
-	if (cpu_get_pc(space->cpu)==0x1ece && ptr==0x1b9a)
-		cpu_spinuntil_int(space->cpu);
+	if (cpu->pc()==0x1ece && ptr==0x1b9a)
+		cpu->spin_until_interrupt();
 
-	return groundfx_ram[0xb574/4];
+	return state->m_ram[0xb574/4];
 }
 
 
 static DRIVER_INIT( groundfx )
 {
 	UINT32 offset,i;
-	UINT8 *gfx = memory_region(machine, "gfx3");
-	int size=memory_region_length(machine, "gfx3");
+	UINT8 *gfx = machine.region("gfx3")->base();
+	int size=machine.region("gfx3")->bytes();
 	int data;
 
 	/* Speedup handlers */
-	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20b574, 0x20b577, 0, 0, irq_speedup_r_groundfx);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x20b574, 0x20b577, FUNC(irq_speedup_r_groundfx));
 
 	/* make piv tile GFX format suitable for gfxdecode */
 	offset = size/2;

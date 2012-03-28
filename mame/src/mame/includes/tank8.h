@@ -23,6 +23,25 @@
 #define TANK8_BUGLE_DATA2		NODE_14
 
 
+class tank8_state : public driver_device
+{
+public:
+	tank8_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	int m_collision_index;
+	UINT8 *m_video_ram;
+	UINT8 *m_pos_h_ram;
+	UINT8 *m_pos_v_ram;
+	UINT8 *m_pos_d_ram;
+	UINT8 *m_team;
+	tilemap_t *m_tilemap;
+	bitmap_ind16 m_helper1;
+	bitmap_ind16 m_helper2;
+	bitmap_ind16 m_helper3;
+};
+
+
 /*----------- defined in audio/tank8.c -----------*/
 
 DISCRETE_SOUND_EXTERN( tank8 );
@@ -30,21 +49,16 @@ DISCRETE_SOUND_EXTERN( tank8 );
 
 /*----------- defined in drivers/tank8.c -----------*/
 
-void tank8_set_collision(running_machine *machine, int index);
+void tank8_set_collision(running_machine &machine, int index);
 
 
 /*----------- defined in video/tank8.c -----------*/
 
 PALETTE_INIT( tank8 );
-VIDEO_EOF( tank8 );
+SCREEN_VBLANK( tank8 );
 VIDEO_START( tank8 );
-VIDEO_UPDATE( tank8 );
+SCREEN_UPDATE_IND16( tank8 );
 
 WRITE8_HANDLER( tank8_video_ram_w );
 
-extern UINT8 *tank8_video_ram;
-extern UINT8 *tank8_pos_h_ram;
-extern UINT8 *tank8_pos_v_ram;
-extern UINT8 *tank8_pos_d_ram;
-extern UINT8 *tank8_team;
 

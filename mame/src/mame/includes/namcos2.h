@@ -90,25 +90,25 @@ enum
 #define NAMCOS21_NUM_COLORS 0x8000
 
 VIDEO_START( namcos2 );
-VIDEO_UPDATE( namcos2_default );
+SCREEN_UPDATE_IND16( namcos2_default );
 
 VIDEO_START( finallap );
-VIDEO_UPDATE( finallap );
+SCREEN_UPDATE_IND16( finallap );
 
 VIDEO_START( luckywld );
-VIDEO_UPDATE( luckywld );
+SCREEN_UPDATE_IND16( luckywld );
 
 VIDEO_START( metlhawk );
-VIDEO_UPDATE( metlhawk );
+SCREEN_UPDATE_IND16( metlhawk );
 
 VIDEO_START( sgunner );
-VIDEO_UPDATE( sgunner );
+SCREEN_UPDATE_IND16( sgunner );
 
 extern UINT16 *namcos2_sprite_ram;
 WRITE16_HANDLER( namcos2_sprite_ram_w );
 READ16_HANDLER( namcos2_sprite_ram_r );
 
-int namcos2_GetPosIrqScanline( running_machine *machine );
+int namcos2_GetPosIrqScanline( running_machine &machine );
 
 WRITE16_HANDLER( namcos2_gfx_ctrl_w );
 READ16_HANDLER( namcos2_gfx_ctrl_r );
@@ -136,6 +136,7 @@ extern UINT16 *namcos2_68k_roz_ram;
 
 /*----------- defined in machine/namcos2.c -----------*/
 
+extern void (*namcos2_kickstart)(running_machine &machine, int internal);
 extern int namcos2_gametype;
 
 MACHINE_START( namcos2 );
@@ -148,7 +149,6 @@ READ16_HANDLER( namcos2_flap_prot_r );
 /**************************************************************/
 #define NAMCOS2_68K_eeprom_W	namcos2_68k_eeprom_w
 #define NAMCOS2_68K_eeprom_R	namcos2_68k_eeprom_r
-NVRAM_HANDLER( namcos2 );
 WRITE16_HANDLER( namcos2_68k_eeprom_w );
 READ16_HANDLER( namcos2_68k_eeprom_r );
 
@@ -198,27 +198,24 @@ WRITE16_HANDLER( namcos2_68k_gpu_C148_w );
 READ16_HANDLER( namcos2_68k_gpu_C148_r );
 INTERRUPT_GEN( namcos2_68k_gpu_vblank );
 
-void namcos2_adjust_posirq_timer( running_machine *machine, int scanline );
+void namcos2_adjust_posirq_timer( running_machine &machine, int scanline );
 
 /**************************************************************/
 /* MASTER CPU RAM MEMORY                                      */
 /**************************************************************/
 
-#define NAMCOS2_68K_MASTER_RAM_W	SMH_BANK(3)
-#define NAMCOS2_68K_MASTER_RAM_R	SMH_BANK(3)
+#define NAMCOS2_68K_MASTER_RAM	"bank3"
 
 /**************************************************************/
 /* SLAVE CPU RAM MEMORY                                       */
 /**************************************************************/
 
-#define NAMCOS2_68K_SLAVE_RAM_W 	SMH_BANK(4)
-#define NAMCOS2_68K_SLAVE_RAM_R 	SMH_BANK(4)
+#define NAMCOS2_68K_SLAVE_RAM	"bank4"
 
 /**************************************************************/
 /*                                                            */
 /**************************************************************/
-#define BANKED_SOUND_ROM_R		SMH_BANK(6)
-#define CPU3_ROM1				6			/* Bank number */
+#define BANKED_SOUND_ROM		"bank6"
 
 /**************************************************************/
 /* Sound CPU support handlers - 6809                          */

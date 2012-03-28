@@ -19,7 +19,7 @@ todo:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "includes/gomoku.h"
 
@@ -32,20 +32,20 @@ static READ8_HANDLER( input_port_r )
 
 	res = 0;
 	for (i = 0; i < 8; i++)
-		res |= ((input_port_read_safe(space->machine, portnames[i], 0xff) >> offset) & 1) << i;
+		res |= ((input_port_read_safe(space->machine(), portnames[i], 0xff) >> offset) & 1) << i;
 
 	return res;
 }
 
 
-static ADDRESS_MAP_START( gomoku_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( gomoku_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x47ff) AM_ROM
 	AM_RANGE(0x4800, 0x4fff) AM_RAM
-	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(gomoku_videoram_w) AM_BASE(&gomoku_videoram)
-	AM_RANGE(0x5400, 0x57ff) AM_RAM_WRITE(gomoku_colorram_w) AM_BASE(&gomoku_colorram)
-	AM_RANGE(0x5800, 0x58ff) AM_RAM_WRITE(gomoku_bgram_w) AM_BASE(&gomoku_bgram)
-	AM_RANGE(0x6000, 0x601f) AM_WRITE(gomoku_sound1_w) AM_BASE(&gomoku_soundregs1)
-	AM_RANGE(0x6800, 0x681f) AM_WRITE(gomoku_sound2_w) AM_BASE(&gomoku_soundregs2)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(gomoku_videoram_w) AM_BASE_MEMBER(gomoku_state, m_videoram)
+	AM_RANGE(0x5400, 0x57ff) AM_RAM_WRITE(gomoku_colorram_w) AM_BASE_MEMBER(gomoku_state, m_colorram)
+	AM_RANGE(0x5800, 0x58ff) AM_RAM_WRITE(gomoku_bgram_w) AM_BASE_MEMBER(gomoku_state, m_bgram)
+	AM_RANGE(0x6000, 0x601f) AM_DEVWRITE("gomoku", gomoku_sound1_w)
+	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("gomoku", gomoku_sound2_w)
 	AM_RANGE(0x7000, 0x7000) AM_WRITENOP
 	AM_RANGE(0x7001, 0x7001) AM_WRITE(gomoku_flipscreen_w)
 	AM_RANGE(0x7002, 0x7002) AM_WRITE(gomoku_bg_dispsw_w)
@@ -79,21 +79,21 @@ static INPUT_PORTS_START( gomoku )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_COIN2 )
 
 	PORT_START("DSW")
-	PORT_SERVICE( 0x01, IP_ACTIVE_HIGH )
-	PORT_DIPNAME( 0x06, 0x00, DEF_STR( Lives ))
+	PORT_SERVICE( 0x01, IP_ACTIVE_HIGH )  PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x06, 0x00, DEF_STR( Lives ))  PORT_DIPLOCATION("SW1:2,3")
 	PORT_DIPSETTING(    0x00, "2" )
-	PORT_DIPSETTING(    0x02, "4" )
 	PORT_DIPSETTING(    0x04, "3" )
+	PORT_DIPSETTING(    0x02, "4" )
 	PORT_DIPSETTING(    0x06, "5" )
-	PORT_DIPNAME( 0x08, 0x00, "Time" )
+	PORT_DIPNAME( 0x08, 0x00, "Time" )  PORT_DIPLOCATION("SW1:4")
 	PORT_DIPSETTING(    0x00, "60" )
 	PORT_DIPSETTING(    0x08, "80" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )  PORT_DIPLOCATION("SW1:5,6")
 	PORT_DIPSETTING(    0x10, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )  PORT_DIPLOCATION("SW1:7,8")
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_3C ) )
@@ -117,33 +117,32 @@ static GFXDECODE_START( gomoku )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( gomoku )
+static MACHINE_CONFIG_START( gomoku, gomoku_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 18432000/12)		 /* 1.536 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(gomoku_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/12)		 /* 1.536 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(gomoku_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_UPDATE_STATIC(gomoku)
 
-	MDRV_GFXDECODE(gomoku)
-	MDRV_PALETTE_LENGTH(64)
+	MCFG_GFXDECODE(gomoku)
+	MCFG_PALETTE_LENGTH(64)
 
-	MDRV_PALETTE_INIT(gomoku)
-	MDRV_VIDEO_START(gomoku)
-	MDRV_VIDEO_UPDATE(gomoku)
+	MCFG_PALETTE_INIT(gomoku)
+	MCFG_VIDEO_START(gomoku)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("gomoku", GOMOKU, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("gomoku", GOMOKU, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( gomoku )

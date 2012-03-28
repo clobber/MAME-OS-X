@@ -27,9 +27,7 @@
 
  *****************************************************************************/
 
-#include <math.h>		/* for pow() */
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "wavwrite.h"
 #include "sn76477.h"
 
@@ -70,7 +68,7 @@
 #define LOG(n,x) do { if (VERBOSE >= (n)) logerror x; } while (0)
 
 #define CHECK_CHIP_NUM					assert(sn != NULL)
-#define CHECK_CHIP_NUM_AND_BOOLEAN		CHECK_CHIP_NUM; assert((data & 0x01) == data)
+#define CHECK_CHIP_NUM_AND_BOOLEAN		CHECK_CHIP_NUM; assert((state & 0x01) == state)
 #define CHECK_CHIP_NUM_AND_POSITIVE		CHECK_CHIP_NUM; assert(data >= 0.0)
 #define CHECK_CHIP_NUM_AND_VOLTAGE		CHECK_CHIP_NUM; assert((data >= 0.0) && (data <= 5.0))
 #define CHECK_CHIP_NUM_AND_CAP_VOLTAGE	CHECK_CHIP_NUM; assert(((data >= 0.0) && (data <= 5.0)) || (data == SN76477_EXTERNAL_VOLTAGE_DISCONNECT))
@@ -95,7 +93,6 @@
 
 
 #if TEST_MODE
-#include "input.h"
 
 static const sn76477_interface empty_interface =
 {
@@ -104,7 +101,7 @@ static const sn76477_interface empty_interface =
 	0,			/*  6 filter_cap       */
 	0,			/*  7 decay_res        */
 	0,			/*  8 attack_decay_cap */
-	0, 			/* 10 attack_res       */
+	0,			/* 10 attack_res       */
 	0,			/* 11 amplitude_res    */
 	0,			/* 12 feedback_res     */
 	0,			/* 16 vco_voltage      */
@@ -136,8 +133,8 @@ static const sn76477_interface empty_interface =
  *
  *****************************************************************************/
 
-#define ONE_SHOT_CAP_VOLTAGE_MIN 	(0)			/* the voltage at which the one-shot starts from (measured) */
-#define ONE_SHOT_CAP_VOLTAGE_MAX 	(2.5)		/* the voltage at which the one-shot finishes (measured) */
+#define ONE_SHOT_CAP_VOLTAGE_MIN	(0)			/* the voltage at which the one-shot starts from (measured) */
+#define ONE_SHOT_CAP_VOLTAGE_MAX	(2.5)		/* the voltage at which the one-shot finishes (measured) */
 #define ONE_SHOT_CAP_VOLTAGE_RANGE	(ONE_SHOT_CAP_VOLTAGE_MAX - ONE_SHOT_CAP_VOLTAGE_MIN)
 
 #define SLF_CAP_VOLTAGE_MIN			(0.33)		/* the voltage at the bottom peak of the SLF triangle wave (measured) */
@@ -176,7 +173,7 @@ static const double out_pos_gain[] =
 	0.03, 0.11, 0.15, 0.19, 0.21, 0.23, 0.26, 0.29, 0.31, 0.33,  /* 1.0 - 1.9V */
 	0.36, 0.38, 0.41, 0.43, 0.46, 0.49, 0.52, 0.54, 0.57, 0.60,  /* 2.0 - 2.9V */
 	0.62, 0.65, 0.68, 0.70, 0.73, 0.76, 0.80, 0.82, 0.84, 0.87,  /* 3.0 - 3.9V */
-	0.90, 0.93, 0.96, 0.98, 1.00							 	 /* 4.0 - 4.4V */
+	0.90, 0.93, 0.96, 0.98, 1.00								 /* 4.0 - 4.4V */
 };
 
 static const double out_neg_gain[] =
@@ -256,20 +253,18 @@ struct _sn76477_state
 
 	/* others */
 	sound_stream *channel;				/* returned by stream_create() */
-	int sample_rate; 					/* from machine->sample_rate */
-	const device_config *device;
+	int sample_rate;					/* from machine.sample_rate() */
+	device_t *device;
 
 	wav_file *file;						/* handle of the wave file to produce */
 };
 
 
-INLINE sn76477_state *get_safe_token(const device_config *device)
+INLINE sn76477_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_SN76477);
-	return (sn76477_state *)device->token;
+	assert(device->type() == SN76477);
+	return (sn76477_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -652,7 +647,7 @@ static void log_enable_line(sn76477_state *sn)
 		"Enabled", "Inhibited"
 	};
 
-	LOG(1, ("SN76477 '%s':              Enable line (9): %d [%s]\n", sn->device->tag, sn->enable, desc[sn->enable]));
+	LOG(1, ("SN76477 '%s':              Enable line (9): %d [%s]\n", sn->device->tag(), sn->enable, desc[sn->enable]));
 }
 
 
@@ -664,7 +659,7 @@ static void log_mixer_mode(sn76477_state *sn)
 		"SLF/Noise", "SLF/VCO/Noise", "SLF/VCO", "Inhibit"
 	};
 
-	LOG(1, ("SN76477 '%s':           Mixer mode (25-27): %d [%s]\n", sn->device->tag, sn->mixer_mode, desc[sn->mixer_mode]));
+	LOG(1, ("SN76477 '%s':           Mixer mode (25-27): %d [%s]\n", sn->device->tag(), sn->mixer_mode, desc[sn->mixer_mode]));
 }
 
 
@@ -675,7 +670,7 @@ static void log_envelope_mode(sn76477_state *sn)
 		"VCO", "One-Shot", "Mixer Only", "VCO with Alternating Polarity"
 	};
 
-	LOG(1, ("SN76477 '%s':         Envelope mode (1,28): %d [%s]\n", sn->device->tag, sn->envelope_mode, desc[sn->envelope_mode]));
+	LOG(1, ("SN76477 '%s':         Envelope mode (1,28): %d [%s]\n", sn->device->tag(), sn->envelope_mode, desc[sn->envelope_mode]));
 }
 
 
@@ -686,7 +681,7 @@ static void log_vco_mode(sn76477_state *sn)
 		"External (Pin 16)", "Internal (SLF)"
 	};
 
-	LOG(1, ("SN76477 '%s':                VCO mode (22): %d [%s]\n", sn->device->tag, sn->vco_mode, desc[sn->vco_mode]));
+	LOG(1, ("SN76477 '%s':                VCO mode (22): %d [%s]\n", sn->device->tag(), sn->vco_mode, desc[sn->vco_mode]));
 }
 
 
@@ -696,16 +691,16 @@ static void log_one_shot_time(sn76477_state *sn)
 	{
 		if (compute_one_shot_cap_charging_rate(sn) > 0)
 		{
-			LOG(1, ("SN76477 '%s':        One-shot time (23,24): %.4f sec\n", sn->device->tag, ONE_SHOT_CAP_VOLTAGE_RANGE * (1 / compute_one_shot_cap_charging_rate(sn))));
+			LOG(1, ("SN76477 '%s':        One-shot time (23,24): %.4f sec\n", sn->device->tag(), ONE_SHOT_CAP_VOLTAGE_RANGE * (1 / compute_one_shot_cap_charging_rate(sn))));
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s':        One-shot time (23,24): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s':        One-shot time (23,24): N/A\n", sn->device->tag()));
 		}
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s':        One-shot time (23,24): External (cap = %.2fV)\n", sn->device->tag, sn->one_shot_cap_voltage));
+		LOG(1, ("SN76477 '%s':        One-shot time (23,24): External (cap = %.2fV)\n", sn->device->tag(), sn->one_shot_cap_voltage));
 	}
 }
 
@@ -719,29 +714,29 @@ static void log_slf_freq(sn76477_state *sn)
 			double charging_time = (1 / compute_slf_cap_charging_rate(sn)) * SLF_CAP_VOLTAGE_RANGE;
 			double discharging_time = (1 / compute_slf_cap_discharging_rate(sn)) * SLF_CAP_VOLTAGE_RANGE;
 
-			LOG(1, ("SN76477 '%s':        SLF frequency (20,21): %.2f Hz\n", sn->device->tag, 1 / (charging_time + discharging_time)));
+			LOG(1, ("SN76477 '%s':        SLF frequency (20,21): %.2f Hz\n", sn->device->tag(), 1 / (charging_time + discharging_time)));
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s':        SLF frequency (20,21): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s':        SLF frequency (20,21): N/A\n", sn->device->tag()));
 		}
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s':        SLF frequency (20,21): External (cap = %.2fV)\n", sn->device->tag, sn->slf_cap_voltage));
+		LOG(1, ("SN76477 '%s':        SLF frequency (20,21): External (cap = %.2fV)\n", sn->device->tag(), sn->slf_cap_voltage));
 	}
 }
 
 
 static void log_vco_pitch_voltage(sn76477_state *sn)
 {
-	LOG(1, ("SN76477 '%s':       VCO pitch voltage (19): %.2fV\n", sn->device->tag, sn->pitch_voltage));
+	LOG(1, ("SN76477 '%s':       VCO pitch voltage (19): %.2fV\n", sn->device->tag(), sn->pitch_voltage));
 }
 
 
 static void log_vco_duty_cycle(sn76477_state *sn)
 {
-	LOG(1, ("SN76477 '%s':       VCO duty cycle (16,19): %.0f%%\n", sn->device->tag, compute_vco_duty_cycle(sn) * 100.0));
+	LOG(1, ("SN76477 '%s':       VCO duty cycle (16,19): %.0f%%\n", sn->device->tag(), compute_vco_duty_cycle(sn) * 100.0));
 }
 
 
@@ -754,16 +749,16 @@ static void log_vco_freq(sn76477_state *sn)
 			double min_freq = compute_vco_cap_charging_discharging_rate(sn) / (2 * VCO_CAP_VOLTAGE_RANGE);
 			double max_freq = compute_vco_cap_charging_discharging_rate(sn) / (2 * VCO_TO_SLF_VOLTAGE_DIFF);
 
-			LOG(1, ("SN76477 '%s':        VCO frequency (17,18): %.2f Hz - %.1f Hz\n", sn->device->tag, min_freq, max_freq));
+			LOG(1, ("SN76477 '%s':        VCO frequency (17,18): %.2f Hz - %.1f Hz\n", sn->device->tag(), min_freq, max_freq));
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s':        VCO frequency (17,18): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s':        VCO frequency (17,18): N/A\n", sn->device->tag()));
 		}
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s':        VCO frequency (17,18): External (cap = %.2fV)\n", sn->device->tag, sn->vco_cap_voltage));
+		LOG(1, ("SN76477 '%s':        VCO frequency (17,18): External (cap = %.2fV)\n", sn->device->tag(), sn->vco_cap_voltage));
 	}
 }
 
@@ -775,13 +770,13 @@ static void log_vco_ext_voltage(sn76477_state *sn)
 		double min_freq = compute_vco_cap_charging_discharging_rate(sn) / (2 * VCO_CAP_VOLTAGE_RANGE);
 		double max_freq = compute_vco_cap_charging_discharging_rate(sn) / (2 * VCO_TO_SLF_VOLTAGE_DIFF);
 
-		LOG(1, ("SN76477 '%s':        VCO ext. voltage (16): %.2fV (%.2f Hz)\n", sn->device->tag,
+		LOG(1, ("SN76477 '%s':        VCO ext. voltage (16): %.2fV (%.2f Hz)\n", sn->device->tag(),
 				sn->vco_voltage,
 				min_freq + ((max_freq - min_freq) * sn->vco_voltage / VCO_MAX_EXT_VOLTAGE)));
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s':        VCO ext. voltage (16): %.2fV (saturated, no output)\n", sn->device->tag, sn->vco_voltage));
+		LOG(1, ("SN76477 '%s':        VCO ext. voltage (16): %.2fV (saturated, no output)\n", sn->device->tag(), sn->vco_voltage));
 	}
 }
 
@@ -790,17 +785,17 @@ static void log_noise_gen_freq(sn76477_state *sn)
 {
 	if (sn->noise_clock_ext)
 	{
-		LOG(1, ("SN76477 '%s':      Noise gen frequency (4): External\n", sn->device->tag));
+		LOG(1, ("SN76477 '%s':      Noise gen frequency (4): External\n", sn->device->tag()));
 	}
 	else
 	{
 		if (compute_noise_gen_freq(sn) > 0)
 		{
-			LOG(1, ("SN76477 '%s':      Noise gen frequency (4): %d Hz\n", sn->device->tag, compute_noise_gen_freq(sn)));
+			LOG(1, ("SN76477 '%s':      Noise gen frequency (4): %d Hz\n", sn->device->tag(), compute_noise_gen_freq(sn)));
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s':      Noise gen frequency (4): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s':      Noise gen frequency (4): N/A\n", sn->device->tag()));
 		}
 	}
 }
@@ -819,21 +814,21 @@ static void log_noise_filter_freq(sn76477_state *sn)
 				double charging_time = (1 / charging_rate) * NOISE_CAP_VOLTAGE_RANGE;
 				double discharging_time = (1 / charging_rate) * NOISE_CAP_VOLTAGE_RANGE;
 
-				LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): %.0f Hz\n", sn->device->tag, 1 / (charging_time + discharging_time)));
+				LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): %.0f Hz\n", sn->device->tag(), 1 / (charging_time + discharging_time)));
 			}
 			else
 			{
-				LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): Very Large (Filtering Disabled)\n", sn->device->tag));
+				LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): Very Large (Filtering Disabled)\n", sn->device->tag()));
 			}
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): N/A\n", sn->device->tag()));
 		}
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): External (cap = %.2fV)\n", sn->device->tag, sn->noise_filter_cap));
+		LOG(1, ("SN76477 '%s': Noise filter frequency (5,6): External (cap = %.2fV)\n", sn->device->tag(), sn->noise_filter_cap));
 	}
 }
 
@@ -844,16 +839,16 @@ static void log_attack_time(sn76477_state *sn)
 	{
 		if (compute_attack_decay_cap_charging_rate(sn) > 0)
 		{
-			LOG(1, ("SN76477 '%s':           Attack time (8,10): %.4f sec\n", sn->device->tag, AD_CAP_VOLTAGE_RANGE * (1 / compute_attack_decay_cap_charging_rate(sn))));
+			LOG(1, ("SN76477 '%s':           Attack time (8,10): %.4f sec\n", sn->device->tag(), AD_CAP_VOLTAGE_RANGE * (1 / compute_attack_decay_cap_charging_rate(sn))));
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s':           Attack time (8,10): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s':           Attack time (8,10): N/A\n", sn->device->tag()));
 		}
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s':           Attack time (8,10): External (cap = %.2fV)\n", sn->device->tag, sn->attack_decay_cap_voltage));
+		LOG(1, ("SN76477 '%s':           Attack time (8,10): External (cap = %.2fV)\n", sn->device->tag(), sn->attack_decay_cap_voltage));
 	}
 }
 
@@ -864,16 +859,16 @@ static void log_decay_time(sn76477_state *sn)
 	{
 		if (compute_attack_decay_cap_discharging_rate(sn) > 0)
 		{
-			LOG(1, ("SN76477 '%s':             Decay time (7,8): %.4f sec\n", sn->device->tag, AD_CAP_VOLTAGE_RANGE * (1 / compute_attack_decay_cap_discharging_rate(sn))));
+			LOG(1, ("SN76477 '%s':             Decay time (7,8): %.4f sec\n", sn->device->tag(), AD_CAP_VOLTAGE_RANGE * (1 / compute_attack_decay_cap_discharging_rate(sn))));
 		}
 		else
 		{
-			LOG(1, ("SN76477 '%s':            Decay time (8,10): N/A\n", sn->device->tag));
+			LOG(1, ("SN76477 '%s':            Decay time (8,10): N/A\n", sn->device->tag()));
 		}
 	}
 	else
 	{
-		LOG(1, ("SN76477 '%s':             Decay time (7, 8): External (cap = %.2fV)\n", sn->device->tag, sn->attack_decay_cap_voltage));
+		LOG(1, ("SN76477 '%s':             Decay time (7, 8): External (cap = %.2fV)\n", sn->device->tag(), sn->attack_decay_cap_voltage));
 	}
 }
 
@@ -881,7 +876,7 @@ static void log_decay_time(sn76477_state *sn)
 static void log_voltage_out(sn76477_state *sn)
 {
 	LOG(1, ("SN76477 '%s':    Voltage OUT range (11,12): %.2fV - %.2fV (clips above %.2fV)\n",
-			sn->device->tag,
+			sn->device->tag(),
 			OUT_CENTER_LEVEL_VOLTAGE + compute_center_to_peak_voltage_out(sn) * out_neg_gain[(int)(AD_CAP_VOLTAGE_MAX * 10)],
 			OUT_CENTER_LEVEL_VOLTAGE + compute_center_to_peak_voltage_out(sn) * out_pos_gain[(int)(AD_CAP_VOLTAGE_MAX * 10)],
 			OUT_HIGH_CLIP_THRESHOLD));
@@ -920,10 +915,10 @@ static void open_wav_file(sn76477_state *sn)
 {
 	char wav_file_name[30];
 
-	sprintf(wav_file_name, LOG_WAV_FILE_NAME, sn->device->tag);
+	sprintf(wav_file_name, LOG_WAV_FILE_NAME, sn->device->tag());
 	sn->file = wav_open(wav_file_name, sn->sample_rate, 2);
 
-	LOG(1, ("SN76477 '%s':         Logging output: %s\n", sn->device->tag, wav_file_name));
+	LOG(1, ("SN76477 '%s':         Logging output: %s\n", sn->device->tag(), wav_file_name));
 }
 
 
@@ -995,7 +990,7 @@ static void SN76477_test_enable_w(sn76477_state *sn, UINT32 data)
 {
 	if (data != sn->enable)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_enable_w(sn, data);
 
@@ -1004,14 +999,14 @@ static void SN76477_test_enable_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_enable_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_enable_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	SN76477_test_enable_w(sn, data);
+	SN76477_test_enable_w(sn, state);
 #endif
 }
 
@@ -1029,18 +1024,18 @@ static void _SN76477_mixer_a_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_mixer_a_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_mixer_a_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != ((sn->mixer_mode >> 0) & 0x01))
+	if (state != ((sn->mixer_mode >> 0) & 0x01))
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
-		_SN76477_mixer_a_w(sn, data);
+		_SN76477_mixer_a_w(sn, state);
 
 		log_mixer_mode(sn);
 	}
@@ -1054,18 +1049,18 @@ static void _SN76477_mixer_b_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_mixer_b_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_mixer_b_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != ((sn->mixer_mode >> 1) & 0x01))
+	if (state != ((sn->mixer_mode >> 1) & 0x01))
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
-		_SN76477_mixer_b_w(sn, data);
+		_SN76477_mixer_b_w(sn, state);
 
 		log_mixer_mode(sn);
 	}
@@ -1079,18 +1074,18 @@ static void _SN76477_mixer_c_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_mixer_c_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_mixer_c_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != ((sn->mixer_mode >> 2) & 0x01))
+	if (state != ((sn->mixer_mode >> 2) & 0x01))
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
-		_SN76477_mixer_c_w(sn, data);
+		_SN76477_mixer_c_w(sn, state);
 
 		log_mixer_mode(sn);
 	}
@@ -1111,18 +1106,18 @@ static void _SN76477_envelope_1_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_envelope_1_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_envelope_1_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != ((sn->envelope_mode >> 0) & 0x01))
+	if (state != ((sn->envelope_mode >> 0) & 0x01))
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
-		_SN76477_envelope_1_w(sn, data);
+		_SN76477_envelope_1_w(sn, state);
 
 		log_envelope_mode(sn);
 	}
@@ -1136,18 +1131,18 @@ static void _SN76477_envelope_2_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_envelope_2_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_envelope_2_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != ((sn->envelope_mode >> 1) & 0x01))
+	if (state != ((sn->envelope_mode >> 1) & 0x01))
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
-		_SN76477_envelope_2_w(sn, data);
+		_SN76477_envelope_2_w(sn, state);
 
 		log_envelope_mode(sn);
 	}
@@ -1168,18 +1163,18 @@ static void _SN76477_vco_w(sn76477_state *sn, UINT32 data)
 }
 
 
-void sn76477_vco_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_vco_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != sn->vco_mode)
+	if (state != sn->vco_mode)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
-		_SN76477_vco_w(sn, data);
+		_SN76477_vco_w(sn, state);
 
 		log_vco_mode(sn);
 	}
@@ -1200,7 +1195,7 @@ static void _SN76477_one_shot_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_one_shot_res_w(const device_config *device, double data)
+void sn76477_one_shot_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1209,7 +1204,7 @@ void sn76477_one_shot_res_w(const device_config *device, double data)
 
 	if (data != sn->one_shot_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_one_shot_res_w(sn, data);
 
@@ -1232,7 +1227,7 @@ static void _SN76477_one_shot_cap_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_one_shot_cap_w(const device_config *device, double data)
+void sn76477_one_shot_cap_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1241,7 +1236,7 @@ void sn76477_one_shot_cap_w(const device_config *device, double data)
 
 	if (data != sn->one_shot_cap)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_one_shot_cap_w(sn, data);
 
@@ -1258,7 +1253,7 @@ void sn76477_one_shot_cap_w(const device_config *device, double data)
  *
  *****************************************************************************/
 
-void sn76477_one_shot_cap_voltage_w(const device_config *device, double data)
+void sn76477_one_shot_cap_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1270,7 +1265,7 @@ void sn76477_one_shot_cap_voltage_w(const device_config *device, double data)
 		/* switch to internal, if not already */
 		if (sn->one_shot_cap_voltage_ext)
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->one_shot_cap_voltage_ext = 0;
 
@@ -1282,7 +1277,7 @@ void sn76477_one_shot_cap_voltage_w(const device_config *device, double data)
 		/* set the voltage on the cap */
 		if (!sn->one_shot_cap_voltage_ext || (data != sn->one_shot_cap_voltage))
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->one_shot_cap_voltage_ext = 1;
 			sn->one_shot_cap_voltage = data;
@@ -1307,7 +1302,7 @@ static void _SN76477_slf_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_slf_res_w(const device_config *device, double data)
+void sn76477_slf_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1316,7 +1311,7 @@ void sn76477_slf_res_w(const device_config *device, double data)
 
 	if (data != sn->slf_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_slf_res_w(sn, data);
 
@@ -1339,7 +1334,7 @@ static void _SN76477_slf_cap_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_slf_cap_w(const device_config *device, double data)
+void sn76477_slf_cap_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1348,7 +1343,7 @@ void sn76477_slf_cap_w(const device_config *device, double data)
 
 	if (data != sn->slf_cap)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_slf_cap_w(sn, data);
 
@@ -1367,7 +1362,7 @@ void sn76477_slf_cap_w(const device_config *device, double data)
  *
  *****************************************************************************/
 
-void sn76477_slf_cap_voltage_w(const device_config *device, double data)
+void sn76477_slf_cap_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1379,7 +1374,7 @@ void sn76477_slf_cap_voltage_w(const device_config *device, double data)
 		/* switch to internal, if not already */
 		if (sn->slf_cap_voltage_ext)
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->slf_cap_voltage_ext = 0;
 
@@ -1391,7 +1386,7 @@ void sn76477_slf_cap_voltage_w(const device_config *device, double data)
 		/* set the voltage on the cap */
 		if (!sn->slf_cap_voltage_ext || (data != sn->slf_cap_voltage))
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->slf_cap_voltage_ext = 1;
 			sn->slf_cap_voltage = data;
@@ -1416,7 +1411,7 @@ static void _SN76477_vco_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_vco_res_w(const device_config *device, double data)
+void sn76477_vco_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1425,7 +1420,7 @@ void sn76477_vco_res_w(const device_config *device, double data)
 
 	if (data != sn->vco_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_vco_res_w(sn, data);
 
@@ -1448,7 +1443,7 @@ static void _SN76477_vco_cap_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_vco_cap_w(const device_config *device, double data)
+void sn76477_vco_cap_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1457,7 +1452,7 @@ void sn76477_vco_cap_w(const device_config *device, double data)
 
 	if (data != sn->vco_cap)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_vco_cap_w(sn, data);
 
@@ -1474,7 +1469,7 @@ void sn76477_vco_cap_w(const device_config *device, double data)
  *
  *****************************************************************************/
 
-void sn76477_vco_cap_voltage_w(const device_config *device, double data)
+void sn76477_vco_cap_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1486,7 +1481,7 @@ void sn76477_vco_cap_voltage_w(const device_config *device, double data)
 		/* switch to internal, if not already */
 		if (sn->vco_cap_voltage_ext)
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->vco_cap_voltage_ext = 0;
 
@@ -1498,7 +1493,7 @@ void sn76477_vco_cap_voltage_w(const device_config *device, double data)
 		/* set the voltage on the cap */
 		if (!sn->vco_cap_voltage_ext || (data != sn->vco_cap_voltage))
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->vco_cap_voltage_ext = 1;
 			sn->vco_cap_voltage = data;
@@ -1523,7 +1518,7 @@ static void _SN76477_vco_voltage_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_vco_voltage_w(const device_config *device, double data)
+void sn76477_vco_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1532,7 +1527,7 @@ void sn76477_vco_voltage_w(const device_config *device, double data)
 
 	if (data != sn->vco_voltage)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_vco_voltage_w(sn, data);
 
@@ -1556,7 +1551,7 @@ static void _SN76477_pitch_voltage_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_pitch_voltage_w(const device_config *device, double data)
+void sn76477_pitch_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1565,7 +1560,7 @@ void sn76477_pitch_voltage_w(const device_config *device, double data)
 
 	if (data != sn->pitch_voltage)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_pitch_voltage_w(sn, data);
 
@@ -1583,22 +1578,22 @@ void sn76477_pitch_voltage_w(const device_config *device, double data)
  *
  *****************************************************************************/
 
-void sn76477_noise_clock_w(const device_config *device, UINT32 data)
+WRITE_LINE_DEVICE_HANDLER( sn76477_noise_clock_w )
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
 
 	CHECK_CHIP_NUM_AND_BOOLEAN;
 
-	if (data != sn->noise_clock)
+	if (state != sn->noise_clock)
 	{
-		sn->noise_clock = data;
+		sn->noise_clock = state;
 
 		/* on the rising edge shift generate next value,
            if external control is enabled */
 		if (sn->noise_clock && sn->noise_clock_ext)
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->real_noise_bit_ff = generate_next_real_noise_bit(sn);
 		}
@@ -1629,7 +1624,7 @@ static void _SN76477_noise_clock_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_noise_clock_res_w(const device_config *device, double data)
+void sn76477_noise_clock_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1639,7 +1634,7 @@ void sn76477_noise_clock_res_w(const device_config *device, double data)
 	if (((data == 0) && !sn->noise_clock_ext) ||
 		((data != 0) && (data != sn->noise_clock_res)))
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_noise_clock_res_w(sn, data);
 
@@ -1662,7 +1657,7 @@ static void _SN76477_noise_filter_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_noise_filter_res_w(const device_config *device, double data)
+void sn76477_noise_filter_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1671,7 +1666,7 @@ void sn76477_noise_filter_res_w(const device_config *device, double data)
 
 	if (data != sn->noise_filter_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_noise_filter_res_w(sn, data);
 
@@ -1694,7 +1689,7 @@ static void _SN76477_noise_filter_cap_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_noise_filter_cap_w(const device_config *device, double data)
+void sn76477_noise_filter_cap_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1703,7 +1698,7 @@ void sn76477_noise_filter_cap_w(const device_config *device, double data)
 
 	if (data != sn->noise_filter_cap)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_noise_filter_cap_w(sn, data);
 
@@ -1720,7 +1715,7 @@ void sn76477_noise_filter_cap_w(const device_config *device, double data)
  *
  *****************************************************************************/
 
-void sn76477_noise_filter_cap_voltage_w(const device_config *device, double data)
+void sn76477_noise_filter_cap_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1732,7 +1727,7 @@ void sn76477_noise_filter_cap_voltage_w(const device_config *device, double data
 		/* switch to internal, if not already */
 		if (sn->noise_filter_cap_voltage_ext)
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->noise_filter_cap_voltage_ext = 0;
 
@@ -1744,7 +1739,7 @@ void sn76477_noise_filter_cap_voltage_w(const device_config *device, double data
 		/* set the voltage on the cap */
 		if (!sn->noise_filter_cap_voltage_ext || (data != sn->noise_filter_cap_voltage))
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->noise_filter_cap_voltage_ext = 1;
 			sn->noise_filter_cap_voltage = data;
@@ -1769,7 +1764,7 @@ static void _SN76477_attack_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_attack_res_w(const device_config *device, double data)
+void sn76477_attack_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1778,7 +1773,7 @@ void sn76477_attack_res_w(const device_config *device, double data)
 
 	if (data != sn->attack_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_attack_res_w(sn, data);
 
@@ -1801,7 +1796,7 @@ static void _SN76477_decay_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_decay_res_w(const device_config *device, double data)
+void sn76477_decay_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1810,7 +1805,7 @@ void sn76477_decay_res_w(const device_config *device, double data)
 
 	if (data != sn->decay_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_decay_res_w(sn, data);
 
@@ -1833,7 +1828,7 @@ static void _SN76477_attack_decay_cap_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_attack_decay_cap_w(const device_config *device, double data)
+void sn76477_attack_decay_cap_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1842,7 +1837,7 @@ void sn76477_attack_decay_cap_w(const device_config *device, double data)
 
 	if (data != sn->attack_decay_cap)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_attack_decay_cap_w(sn, data);
 
@@ -1860,7 +1855,7 @@ void sn76477_attack_decay_cap_w(const device_config *device, double data)
  *
  *****************************************************************************/
 
-void sn76477_attack_decay_cap_voltage_w(const device_config *device, double data)
+void sn76477_attack_decay_cap_voltage_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1872,7 +1867,7 @@ void sn76477_attack_decay_cap_voltage_w(const device_config *device, double data
 		/* switch to internal, if not already */
 		if (sn->attack_decay_cap_voltage_ext)
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->attack_decay_cap_voltage_ext = 0;
 
@@ -1885,7 +1880,7 @@ void sn76477_attack_decay_cap_voltage_w(const device_config *device, double data
 		/* set the voltage on the cap */
 		if (!sn->attack_decay_cap_voltage_ext || (data != sn->attack_decay_cap_voltage))
 		{
-			stream_update(sn->channel);
+			sn->channel->update();
 
 			sn->attack_decay_cap_voltage_ext = 1;
 			sn->attack_decay_cap_voltage = data;
@@ -1911,7 +1906,7 @@ static void _SN76477_amplitude_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_amplitude_res_w(const device_config *device, double data)
+void sn76477_amplitude_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1920,7 +1915,7 @@ void sn76477_amplitude_res_w(const device_config *device, double data)
 
 	if (data != sn->amplitude_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_amplitude_res_w(sn, data);
 
@@ -1943,7 +1938,7 @@ static void _SN76477_feedback_res_w(sn76477_state *sn, double data)
 }
 
 
-void sn76477_feedback_res_w(const device_config *device, double data)
+void sn76477_feedback_res_w(device_t *device, double data)
 {
 #if TEST_MODE == 0
 	sn76477_state *sn = get_safe_token(device);
@@ -1952,7 +1947,7 @@ void sn76477_feedback_res_w(const device_config *device, double data)
 
 	if (data != sn->feedback_res)
 	{
-		stream_update(sn->channel);
+		sn->channel->update();
 
 		_SN76477_feedback_res_w(sn, data);
 
@@ -1993,13 +1988,13 @@ static STREAM_UPDATE( SN76477_update )
 
 
 #if TEST_MODE
-	static int recursing = 0;	/* we need to prevent recursion since enable_w calls stream_update */
+	static int recursing = 0;	/* we need to prevent recursion since enable_w calls device->machine().input().code_pressed_once(KEYCODE_SPACE->update */
 
-	if (input_code_pressed_once(device->machine, KEYCODE_SPACE) && !recursing)
+	if () && !recursing)
 	{
 		recursing = 1;
 
-		sound_global_enable(device->machine, 1);
+		device->machine().sound().system_enable();
 		SN76477_test_enable_w(sn, !sn->enable);
 	}
 
@@ -2332,60 +2327,60 @@ static STREAM_UPDATE( SN76477_update )
  *
  *****************************************************************************/
 
-static void state_save_register(const device_config *device, sn76477_state *sn)
+static void state_save_register(device_t *device, sn76477_state *sn)
 {
-	state_save_register_device_item(device, 0, sn->enable);
-	state_save_register_device_item(device, 0, sn->envelope_mode);
-	state_save_register_device_item(device, 0, sn->vco_mode);
-	state_save_register_device_item(device, 0, sn->mixer_mode);
+	device->save_item(NAME(sn->enable));
+	device->save_item(NAME(sn->envelope_mode));
+	device->save_item(NAME(sn->vco_mode));
+	device->save_item(NAME(sn->mixer_mode));
 
-	state_save_register_device_item(device, 0, sn->one_shot_res);
-	state_save_register_device_item(device, 0, sn->one_shot_cap);
-	state_save_register_device_item(device, 0, sn->one_shot_cap_voltage_ext);
+	device->save_item(NAME(sn->one_shot_res));
+	device->save_item(NAME(sn->one_shot_cap));
+	device->save_item(NAME(sn->one_shot_cap_voltage_ext));
 
-	state_save_register_device_item(device, 0, sn->slf_res);
-	state_save_register_device_item(device, 0, sn->slf_cap);
-	state_save_register_device_item(device, 0, sn->slf_cap_voltage_ext);
+	device->save_item(NAME(sn->slf_res));
+	device->save_item(NAME(sn->slf_cap));
+	device->save_item(NAME(sn->slf_cap_voltage_ext));
 
-	state_save_register_device_item(device, 0, sn->vco_voltage);
-	state_save_register_device_item(device, 0, sn->vco_res);
-	state_save_register_device_item(device, 0, sn->vco_cap);
-	state_save_register_device_item(device, 0, sn->vco_cap_voltage_ext);
+	device->save_item(NAME(sn->vco_voltage));
+	device->save_item(NAME(sn->vco_res));
+	device->save_item(NAME(sn->vco_cap));
+	device->save_item(NAME(sn->vco_cap_voltage_ext));
 
-	state_save_register_device_item(device, 0, sn->noise_clock_res);
-	state_save_register_device_item(device, 0, sn->noise_clock_ext);
-	state_save_register_device_item(device, 0, sn->noise_clock);
-	state_save_register_device_item(device, 0, sn->noise_filter_res);
-	state_save_register_device_item(device, 0, sn->noise_filter_cap);
-	state_save_register_device_item(device, 0, sn->noise_filter_cap_voltage_ext);
+	device->save_item(NAME(sn->noise_clock_res));
+	device->save_item(NAME(sn->noise_clock_ext));
+	device->save_item(NAME(sn->noise_clock));
+	device->save_item(NAME(sn->noise_filter_res));
+	device->save_item(NAME(sn->noise_filter_cap));
+	device->save_item(NAME(sn->noise_filter_cap_voltage_ext));
 
-	state_save_register_device_item(device, 0, sn->attack_res);
-	state_save_register_device_item(device, 0, sn->decay_res);
-	state_save_register_device_item(device, 0, sn->attack_decay_cap);
-	state_save_register_device_item(device, 0, sn->attack_decay_cap_voltage_ext);
+	device->save_item(NAME(sn->attack_res));
+	device->save_item(NAME(sn->decay_res));
+	device->save_item(NAME(sn->attack_decay_cap));
+	device->save_item(NAME(sn->attack_decay_cap_voltage_ext));
 
-	state_save_register_device_item(device, 0, sn->amplitude_res);
-	state_save_register_device_item(device, 0, sn->feedback_res);
-	state_save_register_device_item(device, 0, sn->pitch_voltage);
+	device->save_item(NAME(sn->amplitude_res));
+	device->save_item(NAME(sn->feedback_res));
+	device->save_item(NAME(sn->pitch_voltage));
 
-	state_save_register_device_item(device, 0, sn->one_shot_cap_voltage);
-	state_save_register_device_item(device, 0, sn->one_shot_running_ff);
+	device->save_item(NAME(sn->one_shot_cap_voltage));
+	device->save_item(NAME(sn->one_shot_running_ff));
 
-	state_save_register_device_item(device, 0, sn->slf_cap_voltage);
-	state_save_register_device_item(device, 0, sn->slf_out_ff);
+	device->save_item(NAME(sn->slf_cap_voltage));
+	device->save_item(NAME(sn->slf_out_ff));
 
-	state_save_register_device_item(device, 0, sn->vco_cap_voltage);
-	state_save_register_device_item(device, 0, sn->vco_out_ff);
-	state_save_register_device_item(device, 0, sn->vco_alt_pos_edge_ff);
+	device->save_item(NAME(sn->vco_cap_voltage));
+	device->save_item(NAME(sn->vco_out_ff));
+	device->save_item(NAME(sn->vco_alt_pos_edge_ff));
 
-	state_save_register_device_item(device, 0, sn->noise_filter_cap_voltage);
-	state_save_register_device_item(device, 0, sn->real_noise_bit_ff);
-	state_save_register_device_item(device, 0, sn->filtered_noise_bit_ff);
-	state_save_register_device_item(device, 0, sn->noise_gen_count);
+	device->save_item(NAME(sn->noise_filter_cap_voltage));
+	device->save_item(NAME(sn->real_noise_bit_ff));
+	device->save_item(NAME(sn->filtered_noise_bit_ff));
+	device->save_item(NAME(sn->noise_gen_count));
 
-	state_save_register_device_item(device, 0, sn->attack_decay_cap_voltage);
+	device->save_item(NAME(sn->attack_decay_cap_voltage));
 
-	state_save_register_device_item(device, 0, sn->rng);
+	device->save_item(NAME(sn->rng));
 }
 
 
@@ -2403,7 +2398,7 @@ static DEVICE_START( sn76477 )
 
 
 #if TEST_MODE == 0
-	intf = (sn76477_interface *)device->static_config;
+	intf = (sn76477_interface *)device->static_config();
 #else
 	intf = &test_interface;
 #endif
@@ -2411,15 +2406,15 @@ static DEVICE_START( sn76477 )
 
 	sn->device = device;
 
-	sn->channel = stream_create(device, 0, 1, device->machine->sample_rate, sn, SN76477_update);
+	sn->channel = device->machine().sound().stream_alloc(*device, 0, 1, device->machine().sample_rate(), sn, SN76477_update);
 
-	if (device->clock > 0)
+	if (device->clock() > 0)
 	{
-		sn->sample_rate = device->clock;
+		sn->sample_rate = device->clock();
 	}
 	else
 	{
-		sn->sample_rate = device->machine->sample_rate;
+		sn->sample_rate = device->machine().sample_rate();
 	}
 
 	intialize_noise(sn);
@@ -2488,3 +2483,5 @@ DEVICE_GET_INFO( sn76477 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(SN76477, sn76477);

@@ -4,22 +4,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/okim6295.h"
-
-
-/* Globals */
-size_t pang_videoram_size;
-UINT8 *pang_videoram;
-UINT8 *pang_colorram;
-
-/* Private */
-static UINT8 *pang_objram;           /* Sprite RAM */
-
-static tilemap *bg_tilemap;
-static int flipscreen;
-
-
+#include "includes/mitchell.h"
 
 /***************************************************************************
 
@@ -29,8 +16,9 @@ static int flipscreen;
 
 static TILE_GET_INFO( get_tile_info )
 {
-	UINT8 attr = pang_colorram[tile_index];
-	int code = pang_videoram[2*tile_index] + (pang_videoram[2*tile_index+1] << 8);
+	mitchell_state *state = machine.driver_data<mitchell_state>();
+	UINT8 attr = state->m_colorram[tile_index];
+	int code = state->m_videoram[2 * tile_index] + (state->m_videoram[2 * tile_index + 1] << 8);
 	SET_TILE_INFO(
 			0,
 			code,
@@ -48,23 +36,19 @@ static TILE_GET_INFO( get_tile_info )
 
 VIDEO_START( pang )
 {
-	pang_objram=NULL;
-	paletteram=NULL;
+	mitchell_state *state = machine.driver_data<mitchell_state>();
 
+	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	state->m_bg_tilemap->set_transparent_pen(15);
 
-	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,64,32);
+	/* OBJ RAM */
+	state->m_objram = auto_alloc_array_clear(machine, UINT8, state->m_videoram_size);
 
-	tilemap_set_transparent_pen(bg_tilemap,15);
+	/* Palette RAM */
+	machine.generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 2 * machine.total_colors());
 
-	/*
-        OBJ RAM
-    */
-	pang_objram=auto_alloc_array_clear(machine, UINT8, pang_videoram_size);
-
-	/*
-        Palette RAM
-    */
-	paletteram = auto_alloc_array_clear(machine, UINT8, 2*machine->config->total_colors);
+	state->save_pointer(NAME(state->m_objram), state->m_videoram_size);
+	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 2 * machine.total_colors());
 }
 
 
@@ -79,52 +63,67 @@ VIDEO_START( pang )
   OBJ / CHAR RAM HANDLERS (BANK 0 = CHAR, BANK 1=OBJ)
 ***************************************************************************/
 
-static int video_bank;
-
 WRITE8_HANDLER( pang_video_bank_w )
 {
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
 	/* Bank handler (sets base pointers for video write) (doesn't apply to mgakuen) */
-	video_bank = data;
+	state->m_video_bank = data;
 }
 
 WRITE8_HANDLER( mstworld_video_bank_w )
 {
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
 	/* Monsters World seems to freak out if more bits are used.. */
-	video_bank = data&1;
+	state->m_video_bank = data & 1;
 }
 
 
 WRITE8_HANDLER( mgakuen_videoram_w )
 {
-	pang_videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset/2);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
 }
 
 READ8_HANDLER( mgakuen_videoram_r )
 {
-	return pang_videoram[offset];
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+	return state->m_videoram[offset];
 }
 
 WRITE8_HANDLER( mgakuen_objram_w )
 {
-	pang_objram[offset]=data;
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+	state->m_objram[offset] = data;
 }
 
 READ8_HANDLER( mgakuen_objram_r )
 {
-	return pang_objram[offset];
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+	return state->m_objram[offset];
 }
 
 WRITE8_HANDLER( pang_videoram_w )
 {
-	if (video_bank) mgakuen_objram_w(space,offset,data);
-	else mgakuen_videoram_w(space,offset,data);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+	if (state->m_video_bank)
+		mgakuen_objram_w(space, offset, data);
+	else
+		mgakuen_videoram_w(space, offset, data);
 }
 
 READ8_HANDLER( pang_videoram_r )
 {
-	if (video_bank) return mgakuen_objram_r(space,offset);
-	else return mgakuen_videoram_r(space,offset);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+	if (state->m_video_bank)
+		return mgakuen_objram_r(space, offset);
+	else
+		return mgakuen_videoram_r(space, offset);
 }
 
 /***************************************************************************
@@ -133,25 +132,27 @@ READ8_HANDLER( pang_videoram_r )
 
 WRITE8_HANDLER( pang_colorram_w )
 {
-	pang_colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 READ8_HANDLER( pang_colorram_r )
 {
-	return pang_colorram[offset];
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+	return state->m_colorram[offset];
 }
 
 /***************************************************************************
   PALETTE HANDLERS (COLOURS: BANK 0 = 0x00-0x3f BANK 1=0x40-0xff)
 ****************************************************************************/
 
-static int paletteram_bank;
-
 WRITE8_HANDLER( pang_gfxctrl_w )
 {
-	const device_config *oki = devtag_get_device(space->machine, "oki");
-logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(space->cpu),data);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(&space->device()),data);
 {
 #if 0
 	char baf[40];
@@ -163,22 +164,61 @@ logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(space->cpu),data);
 	/* bit 0 is unknown (used, maybe back color enable?) */
 
 	/* bit 1 is coin counter */
-	coin_counter_w(0,data & 2);
+	coin_counter_w(space->machine(), 0, data & 2);
 
 	/* bit 2 is flip screen */
-	if (flipscreen != (data & 0x04))
+	if (state->m_flipscreen != (data & 0x04))
 	{
-		flipscreen = data & 0x04;
-		tilemap_set_flip_all(space->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		state->m_flipscreen = data & 0x04;
+		space->machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 	}
 
 	/* bit 3 is unknown (used, e.g. marukin pulses it on the title screen) */
 
 	/* bit 4 selects OKI M6295 bank */
-	if (oki != NULL && sound_get_type(oki) == SOUND_OKIM6295) okim6295_set_bank_base(oki, (data & 0x10) ? 0x40000 : 0x00000);
+	if (state->m_oki != NULL)
+		state->m_oki->set_bank_base((data & 0x10) ? 0x40000 : 0x00000);
 
 	/* bit 5 is palette RAM bank selector (doesn't apply to mgakuen) */
-	paletteram_bank = data & 0x20;
+	state->m_paletteram_bank = data & 0x20;
+
+	/* bits 6 and 7 are unknown, used in several places. At first I thought */
+	/* they were bg and sprites enable, but this screws up spang (screen flickers */
+	/* every time you pop a bubble). However, not using them as enable bits screws */
+	/* up marukin - you can see partially built up screens during attract mode. */
+}
+
+WRITE8_HANDLER( pangbl_gfxctrl_w )
+{
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(&space->device()),data);
+{
+#if 0
+	char baf[40];
+	sprintf(baf,"%02x",data);
+	popmessage(baf);
+#endif
+}
+
+	/* bit 0 is unknown (used, maybe back color enable?) */
+
+	/* bit 1 is coin counter */
+	coin_counter_w(space->machine(), 0, data & 2);
+
+	/* bit 2 is flip screen */
+	if (state->m_flipscreen != (data & 0x04))
+	{
+		state->m_flipscreen = data & 0x04;
+		space->machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	}
+
+	/* bit 3 is unknown (used, e.g. marukin pulses it on the title screen) */
+
+	/* bit 4 selects OKI M6295 bank, nop'ed here */
+
+	/* bit 5 is palette RAM bank selector (doesn't apply to mgakuen) */
+	state->m_paletteram_bank = data & 0x20;
 
 	/* bits 6 and 7 are unknown, used in several places. At first I thought */
 	/* they were bg and sprites enable, but this screws up spang (screen flickers */
@@ -188,7 +228,9 @@ logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(space->cpu),data);
 
 WRITE8_HANDLER( mstworld_gfxctrl_w )
 {
-logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(space->cpu),data);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(&space->device()),data);
 {
 	char baf[40];
 	sprintf(baf,"%02x",data);
@@ -198,23 +240,21 @@ logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(space->cpu),data);
 	/* bit 0 is unknown (used, maybe back color enable?) */
 
 	/* bit 1 is coin counter */
-	coin_counter_w(0,data & 2);
+	coin_counter_w(space->machine(), 0, data & 2);
 
 	/* bit 2 is flip screen */
-	if (flipscreen != (data & 0x04))
+	if (state->m_flipscreen != (data & 0x04))
 	{
-		flipscreen = data & 0x04;
-		tilemap_set_flip_all(space->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		state->m_flipscreen = data & 0x04;
+		space->machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 	}
 
 	/* bit 3 is unknown (used, e.g. marukin pulses it on the title screen) */
 
-	/* bit 4 selects OKI M6295 bank */
-//  okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), (data & 0x10) ? 0x40000 : 0x00000);
-	/* not here.. it has its own z80 + sound banking */
+	/* bit 4 here does not select OKI M6295 bank: mstworld has its own z80 + sound banking */
 
 	/* bit 5 is palette RAM bank selector (doesn't apply to mgakuen) */
-	paletteram_bank = data & 0x20;
+	state->m_paletteram_bank = data & 0x20;
 
 	/* bits 6 and 7 are unknown, used in several places. At first I thought */
 	/* they were bg and sprites enable, but this screws up spang (screen flickers */
@@ -224,24 +264,32 @@ logerror("PC %04x: pang_gfxctrl_w %02x\n",cpu_get_pc(space->cpu),data);
 
 WRITE8_HANDLER( pang_paletteram_w )
 {
-	if (paletteram_bank) paletteram_xxxxRRRRGGGGBBBB_le_w(space,offset + 0x800,data);
-	else paletteram_xxxxRRRRGGGGBBBB_le_w(space,offset,data);
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+	if (state->m_paletteram_bank)
+		paletteram_xxxxRRRRGGGGBBBB_le_w(space, offset + 0x800, data);
+	else
+		paletteram_xxxxRRRRGGGGBBBB_le_w(space, offset, data);
 }
 
 READ8_HANDLER( pang_paletteram_r )
 {
-	if (paletteram_bank) return paletteram[offset + 0x800];
-	return paletteram[offset];
+	mitchell_state *state = space->machine().driver_data<mitchell_state>();
+
+	if (state->m_paletteram_bank)
+		return space->machine().generic.paletteram.u8[offset + 0x800];
+
+	return space->machine().generic.paletteram.u8[offset];
 }
 
 WRITE8_HANDLER( mgakuen_paletteram_w )
 {
-	paletteram_xxxxRRRRGGGGBBBB_le_w(space,offset,data);
+	paletteram_xxxxRRRRGGGGBBBB_le_w(space, offset, data);
 }
 
 READ8_HANDLER( mgakuen_paletteram_r )
 {
-	return paletteram[offset];
+	return space->machine().generic.paletteram.u8[offset];
 }
 
 
@@ -252,37 +300,40 @@ READ8_HANDLER( mgakuen_paletteram_r )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
 {
-	int offs,sx,sy;
+	mitchell_state *state = machine.driver_data<mitchell_state>();
+	int offs, sx, sy;
 
 	/* the last entry is not a sprite, we skip it otherwise spang shows a bubble */
 	/* moving diagonally across the screen */
-	for (offs = 0x1000-0x40;offs >= 0;offs -= 0x20)
+	for (offs = 0x1000 - 0x40; offs >= 0; offs -= 0x20)
 	{
-		int code = pang_objram[offs];
-		int attr = pang_objram[offs+1];
+		int code = state->m_objram[offs];
+		int attr = state->m_objram[offs + 1];
 		int color = attr & 0x0f;
-		sx = pang_objram[offs+3] + ((attr & 0x10) << 4);
-		sy = ((pang_objram[offs+2] + 8) & 0xff) - 8;
+		sx = state->m_objram[offs + 3] + ((attr & 0x10) << 4);
+		sy = ((state->m_objram[offs + 2] + 8) & 0xff) - 8;
 		code += (attr & 0xe0) << 3;
-		if (flipscreen)
+		if (state->m_flipscreen)
 		{
 			sx = 496 - sx;
 			sy = 240 - sy;
 		}
-		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 				 code,
 				 color,
-				 flipscreen,flipscreen,
+				 state->m_flipscreen, state->m_flipscreen,
 				 sx,sy,15);
 	}
 }
 
-VIDEO_UPDATE( pang )
+SCREEN_UPDATE_IND16( pang )
 {
-	bitmap_fill(bitmap,cliprect,0);
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	draw_sprites(screen->machine, bitmap,cliprect);
+	mitchell_state *state = screen.machine().driver_data<mitchell_state>();
+
+	bitmap.fill(0, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
 	return 0;
 }

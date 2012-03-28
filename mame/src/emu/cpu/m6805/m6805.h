@@ -5,14 +5,22 @@
 #ifndef __M6805_H__
 #define __M6805_H__
 
-#include "cpuintrf.h"
 
 enum { M6805_PC=1, M6805_S, M6805_CC, M6805_A, M6805_X, M6805_IRQ_STATE };
 
 #define M6805_IRQ_LINE		0
 
-extern CPU_GET_INFO( m6805 );
-#define CPU_M6805 CPU_GET_INFO_NAME( m6805 )
+DECLARE_LEGACY_CPU_DEVICE(M6805, m6805);
+
+/****************************************************************************
+ * 68HC05EG section
+ ****************************************************************************/
+
+#define M68HC05EG_INT_IRQ	(M6805_IRQ_LINE)
+#define M68HC05EG_INT_TIMER	(M6805_IRQ_LINE+1)
+#define M68HC05EG_INT_CPI	(M6805_IRQ_LINE+2)
+
+DECLARE_LEGACY_CPU_DEVICE(M68HC05EG, m68hc05eg);
 
 /****************************************************************************
  * 68705 section
@@ -28,8 +36,7 @@ extern CPU_GET_INFO( m6805 );
 #define M68705_IRQ_LINE				M6805_IRQ_LINE
 #define M68705_INT_TIMER			0x01
 
-extern CPU_GET_INFO( m68705 );
-#define CPU_M68705 CPU_GET_INFO_NAME( m68705 )
+DECLARE_LEGACY_CPU_DEVICE(M68705, m68705);
 
 /****************************************************************************
  * HD63705 section
@@ -56,8 +63,7 @@ extern CPU_GET_INFO( m68705 );
 #define	HD63705_INT_ADCONV			0x07
 #define HD63705_INT_NMI				0x08
 
-extern CPU_GET_INFO( hd63705 );
-#define CPU_HD63705 CPU_GET_INFO_NAME( hd63705 )
+DECLARE_LEGACY_CPU_DEVICE(HD63705, hd63705);
 
 CPU_DISASSEMBLE( m6805 );
 

@@ -22,28 +22,40 @@ x
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/6821pia.h"
 #include "video/mc6845.h"
 #include "sound/ay8910.h"
 
 
-static UINT8 *attr_ram1, *attr_ram2, *attr_ram3;
-static tilemap *bg_tilemap;
+class coinmstr_state : public driver_device
+{
+public:
+	coinmstr_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
 
-static UINT8 question_adr[4];
+	UINT8 *m_videoram;
+	UINT8 *m_attr_ram1;
+	UINT8 *m_attr_ram2;
+	UINT8 *m_attr_ram3;
+	tilemap_t *m_bg_tilemap;
+	UINT8 m_question_adr[4];
+};
+
 
 static WRITE8_HANDLER( quizmstr_bg_w )
 {
+	coinmstr_state *state = space->machine().driver_data<coinmstr_state>();
+	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
 
 	if(offset >= 0x0240)
-		tilemap_mark_tile_dirty(bg_tilemap,offset - 0x0240);
+		state->m_bg_tilemap->mark_tile_dirty(offset - 0x0240);
 }
 
 
-static void coinmstr_set_pal(running_machine *machine, UINT32 paldat, int col)
+static void coinmstr_set_pal(running_machine &machine, UINT32 paldat, int col)
 {
 	col = col *4;
 
@@ -78,100 +90,105 @@ static void coinmstr_set_pal(running_machine *machine, UINT32 paldat, int col)
 
 static WRITE8_HANDLER( quizmstr_attr1_w )
 {
-	attr_ram1[offset] = data;
+	coinmstr_state *state = space->machine().driver_data<coinmstr_state>();
+	state->m_attr_ram1[offset] = data;
 
 	if(offset >= 0x0240)
 	{
 		// the later games also use attr3 for something..
-		UINT32 	paldata = (attr_ram1[offset] & 0x7f) | ((attr_ram2[offset] & 0x7f) << 7);
-		tilemap_mark_tile_dirty(bg_tilemap, offset - 0x0240);
+		UINT32	paldata = (state->m_attr_ram1[offset] & 0x7f) | ((state->m_attr_ram2[offset] & 0x7f) << 7);
+		state->m_bg_tilemap->mark_tile_dirty(offset - 0x0240);
 
-		coinmstr_set_pal(space->machine, paldata, offset - 0x240);
+		coinmstr_set_pal(space->machine(), paldata, offset - 0x240);
 
 	}
 }
 
 static WRITE8_HANDLER( quizmstr_attr2_w )
 {
-	attr_ram2[offset] = data;
+	coinmstr_state *state = space->machine().driver_data<coinmstr_state>();
+	state->m_attr_ram2[offset] = data;
 
 	if(offset >= 0x0240)
 	{
 		// the later games also use attr3 for something..
-		UINT32 	paldata = (attr_ram1[offset] & 0x7f) | ((attr_ram2[offset] & 0x7f) << 7);
-		tilemap_mark_tile_dirty(bg_tilemap, offset - 0x0240);
+		UINT32	paldata = (state->m_attr_ram1[offset] & 0x7f) | ((state->m_attr_ram2[offset] & 0x7f) << 7);
+		state->m_bg_tilemap->mark_tile_dirty(offset - 0x0240);
 
-		coinmstr_set_pal(space->machine, paldata, offset - 0x240);
+		coinmstr_set_pal(space->machine(), paldata, offset - 0x240);
 
 	}
 }
 
 static WRITE8_HANDLER( quizmstr_attr3_w )
 {
-	attr_ram3[offset] = data;
+	coinmstr_state *state = space->machine().driver_data<coinmstr_state>();
+	state->m_attr_ram3[offset] = data;
 
 	if(offset >= 0x0240)
-		tilemap_mark_tile_dirty(bg_tilemap, offset - 0x0240);
+		state->m_bg_tilemap->mark_tile_dirty(offset - 0x0240);
 
 }
 
 
 static READ8_HANDLER( question_r )
 {
+	coinmstr_state *state = space->machine().driver_data<coinmstr_state>();
 	int address;
-	UINT8 *questions = memory_region(space->machine, "user1");
+	UINT8 *questions = space->machine().region("user1")->base();
 
-	switch(question_adr[2])
+	switch(state->m_question_adr[2])
 	{
-		case 0x38: address = 0x00000; break; // question_adr[3] == 7
-		case 0x39: address = 0x08000; break; // question_adr[3] == 7
-		case 0x3a: address = 0x10000; break; // question_adr[3] == 7
-		case 0x3b: address = 0x18000; break; // question_adr[3] == 7
-		case 0x3c: address = 0x20000; break; // question_adr[3] == 7
-		case 0x3d: address = 0x28000; break; // question_adr[3] == 7
-		case 0x3e: address = 0x30000; break; // question_adr[3] == 7
-		case 0x07: address = 0x38000; break; // question_adr[3] == 7
-		case 0x0f: address = 0x40000; break; // question_adr[3] == 7
-		case 0x17: address = 0x48000; break; // question_adr[3] == 7
-		case 0x1f: address = 0x50000; break; // question_adr[3] == 7
-		case 0x27: address = 0x58000; break; // question_adr[3] == 7
-		case 0x2f: address = 0x60000; break; // question_adr[3] == 7
-		case 0x37: address = 0x68000; break; // question_adr[3] == 7
-		case 0x3f: address = 0x70000 + question_adr[3] * 0x8000; break;
+		case 0x38: address = 0x00000; break; // state->m_question_adr[3] == 7
+		case 0x39: address = 0x08000; break; // state->m_question_adr[3] == 7
+		case 0x3a: address = 0x10000; break; // state->m_question_adr[3] == 7
+		case 0x3b: address = 0x18000; break; // state->m_question_adr[3] == 7
+		case 0x3c: address = 0x20000; break; // state->m_question_adr[3] == 7
+		case 0x3d: address = 0x28000; break; // state->m_question_adr[3] == 7
+		case 0x3e: address = 0x30000; break; // state->m_question_adr[3] == 7
+		case 0x07: address = 0x38000; break; // state->m_question_adr[3] == 7
+		case 0x0f: address = 0x40000; break; // state->m_question_adr[3] == 7
+		case 0x17: address = 0x48000; break; // state->m_question_adr[3] == 7
+		case 0x1f: address = 0x50000; break; // state->m_question_adr[3] == 7
+		case 0x27: address = 0x58000; break; // state->m_question_adr[3] == 7
+		case 0x2f: address = 0x60000; break; // state->m_question_adr[3] == 7
+		case 0x37: address = 0x68000; break; // state->m_question_adr[3] == 7
+		case 0x3f: address = 0x70000 + state->m_question_adr[3] * 0x8000; break;
 
 		default:
 			address = 0;
-			logerror("unknown question rom # = %02X\n",question_adr[2]);
+			logerror("unknown question rom # = %02X\n",state->m_question_adr[2]);
 	}
 
-	if(question_adr[3] == 6 || question_adr[3] > 7)
-		logerror("question_adr[3] = %02X\n",question_adr[3]);
+	if(state->m_question_adr[3] == 6 || state->m_question_adr[3] > 7)
+		logerror("question_adr[3] = %02X\n",state->m_question_adr[3]);
 
 /*
     in these offsets they set 0x80... why?
 
-    if( (question_adr[0] & 0x5f) == 0x00 ||
-        (question_adr[0] & 0x5f) == 0x01 ||
-        (question_adr[0] & 0x5f) == 0x0f ||
-        (question_adr[0] & 0x5f) == 0x56 )
+    if( (state->m_question_adr[0] & 0x5f) == 0x00 ||
+        (state->m_question_adr[0] & 0x5f) == 0x01 ||
+        (state->m_question_adr[0] & 0x5f) == 0x0f ||
+        (state->m_question_adr[0] & 0x5f) == 0x56 )
 */
 
 
 //  don't know...
-//  address |= ((question_adr[0] & 0x7f) << 8) | question_adr[1];
-	address |= (question_adr[1] << 7) | (question_adr[0] & 0x7f);
+//  address |= ((state->m_question_adr[0] & 0x7f) << 8) | state->m_question_adr[1];
+	address |= (state->m_question_adr[1] << 7) | (state->m_question_adr[0] & 0x7f);
 
 	return questions[address];
 }
 
 static WRITE8_HANDLER( question_w )
 {
-	if(data != question_adr[offset])
+	coinmstr_state *state = space->machine().driver_data<coinmstr_state>();
+	if(data != state->m_question_adr[offset])
 	{
 		logerror("offset = %d data = %02X\n",offset,data);
 	}
 
-	question_adr[offset] = data;
+	state->m_question_adr[offset] = data;
 }
 
 static READ8_HANDLER( ff_r )
@@ -181,49 +198,49 @@ static READ8_HANDLER( ff_r )
 
 // Common memory map
 
-static ADDRESS_MAP_START( coinmstr_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( coinmstr_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(quizmstr_bg_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(quizmstr_attr1_w) AM_BASE(&attr_ram1)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(quizmstr_attr2_w) AM_BASE(&attr_ram2)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(quizmstr_attr3_w) AM_BASE(&attr_ram3)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(quizmstr_bg_w) AM_BASE_MEMBER(coinmstr_state, m_videoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(quizmstr_attr1_w) AM_BASE_MEMBER(coinmstr_state, m_attr_ram1)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(quizmstr_attr2_w) AM_BASE_MEMBER(coinmstr_state, m_attr_ram2)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(quizmstr_attr3_w) AM_BASE_MEMBER(coinmstr_state, m_attr_ram3)
 ADDRESS_MAP_END
 
 // Different I/O mappping for every game
 
-static ADDRESS_MAP_START( quizmstr_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( quizmstr_io_map, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(question_r)
 	AM_RANGE(0x00, 0x03) AM_WRITE(question_w)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x41, 0x41) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x48, 0x4b) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x41, 0x41) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x48, 0x4b) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write)
 	AM_RANGE(0x50, 0x53) AM_READNOP
 	AM_RANGE(0x50, 0x53) AM_WRITENOP
-	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
-	AM_RANGE(0x70, 0x70) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x71, 0x71) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write)
+	AM_RANGE(0x70, 0x70) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x71, 0x71) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0xc0, 0xc3) AM_READNOP
 	AM_RANGE(0xc0, 0xc3) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( trailblz_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( trailblz_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(question_r)
 	AM_RANGE(0x00, 0x03) AM_WRITE(question_w)
-	AM_RANGE(0x40, 0x40) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x41, 0x41) AM_DEVWRITE("crtc", mc6845_register_w)
-	AM_RANGE(0x48, 0x49) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x49, 0x49) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w) //?
-	AM_RANGE(0x60, 0x63) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
-	AM_RANGE(0x70, 0x73) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
+	AM_RANGE(0x40, 0x40) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x41, 0x41) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
+	AM_RANGE(0x48, 0x49) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x49, 0x49) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write) //?
+	AM_RANGE(0x60, 0x63) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write)
+	AM_RANGE(0x70, 0x73) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write)
 	AM_RANGE(0xc1, 0xc3) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( supnudg2_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( supnudg2_io_map, AS_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(question_r)
@@ -231,29 +248,29 @@ static ADDRESS_MAP_START( supnudg2_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x41) AM_READNOP
 	AM_RANGE(0x40, 0x43) AM_WRITENOP
 	AM_RANGE(0x43, 0x43) AM_READNOP
-	AM_RANGE(0x48, 0x48) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x49, 0x49) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x48, 0x48) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x49, 0x49) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x50, 0x51) AM_READNOP
 	AM_RANGE(0x50, 0x53) AM_WRITENOP
 	AM_RANGE(0x53, 0x53) AM_READNOP
 	AM_RANGE(0x68, 0x69) AM_READNOP
 	AM_RANGE(0x68, 0x6b) AM_WRITENOP
 	AM_RANGE(0x6b, 0x6b) AM_READNOP
-	AM_RANGE(0x78, 0x79) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x79, 0x79) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x78, 0x79) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x79, 0x79) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xc1) AM_READNOP
 	AM_RANGE(0xc0, 0xc3) AM_WRITENOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pokeroul_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( pokeroul_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x40) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x41, 0x41) AM_DEVWRITE("crtc", mc6845_register_w)
-	AM_RANGE(0x48, 0x49) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x49, 0x49) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w) /* confirmed */
-	AM_RANGE(0x68, 0x6b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w) /* confirmed */
-	AM_RANGE(0x78, 0x7b) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w) /* confirmed */
+	AM_RANGE(0x40, 0x40) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x41, 0x41) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
+	AM_RANGE(0x48, 0x49) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x49, 0x49) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write) /* confirmed */
+	AM_RANGE(0x68, 0x6b) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write) /* confirmed */
+	AM_RANGE(0x78, 0x7b) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write) /* confirmed */
 	AM_RANGE(0xc0, 0xc1) AM_READ(ff_r)	/* needed to boot */
 ADDRESS_MAP_END
 
@@ -261,11 +278,11 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( quizmstr )
 	PORT_START("PIA0.A")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
- 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1) PORT_NAME("Bookkeeping") PORT_TOGGLE /* Button 2 for second page, Button 3 erases data */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1) PORT_NAME("Bookkeeping") PORT_TOGGLE /* Button 2 for second page, Button 3 erases data */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 )
- 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE) PORT_TOGGLE
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE) PORT_TOGGLE
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 )
 
@@ -356,8 +373,8 @@ static INPUT_PORTS_START( quizmstr )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	/* If 0x40 is HIGH the DIP Test Mode does work but bookkeeping shows always 0's */
 	/* If 0x40 is LOW Bookkeeping does work, but the second page (selected categories) is missing */
- 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
- 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("PIA2.B")
 	PORT_DIPNAME( 0x01, 0x01, "PIA2.B" )
@@ -878,25 +895,29 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	coinmstr_state *state = machine.driver_data<coinmstr_state>();
+	UINT8 *videoram = state->m_videoram;
 	int tile = videoram[tile_index + 0x0240];
 	int color = tile_index;
 
-	tile |= (attr_ram1[tile_index + 0x0240] & 0x80) << 1;
-	tile |= (attr_ram2[tile_index + 0x0240] & 0x80) << 2;
+	tile |= (state->m_attr_ram1[tile_index + 0x0240] & 0x80) << 1;
+	tile |= (state->m_attr_ram2[tile_index + 0x0240] & 0x80) << 2;
 
-	tile |= (attr_ram3[tile_index + 0x0240] & 0x03) << (6+4);
+	tile |= (state->m_attr_ram3[tile_index + 0x0240] & 0x03) << (6+4);
 
 	SET_TILE_INFO(0, tile, color, 0);
 }
 
 static VIDEO_START( coinmstr )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 46, 32);
+	coinmstr_state *state = machine.driver_data<coinmstr_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 46, 32);
 }
 
-static VIDEO_UPDATE( coinmstr )
+static SCREEN_UPDATE_IND16( coinmstr )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	coinmstr_state *state = screen.machine().driver_data<coinmstr_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
@@ -980,62 +1001,57 @@ static const mc6845_interface h46505_intf =
 };
 
 
-static MACHINE_DRIVER_START( coinmstr )
-	MDRV_CPU_ADD("cpu",Z80,8000000) // ?
-	MDRV_CPU_PROGRAM_MAP(coinmstr_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_CONFIG_START( coinmstr, coinmstr_state )
+	MCFG_CPU_ADD("maincpu",Z80,8000000) // ?
+	MCFG_CPU_PROGRAM_MAP(coinmstr_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_PIA6821_ADD("pia0", pia_0_intf)
-	MDRV_PIA6821_ADD("pia1", pia_1_intf)
-	MDRV_PIA6821_ADD("pia2", pia_2_intf)
+	MCFG_PIA6821_ADD("pia0", pia_0_intf)
+	MCFG_PIA6821_ADD("pia1", pia_1_intf)
+	MCFG_PIA6821_ADD("pia2", pia_2_intf)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 46*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 64*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 46*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(coinmstr)
 
-	MDRV_GFXDECODE(coinmstr)
-	MDRV_PALETTE_LENGTH(46*32*4)
+	MCFG_GFXDECODE(coinmstr)
+	MCFG_PALETTE_LENGTH(46*32*4)
 
-	MDRV_VIDEO_START(coinmstr)
-	MDRV_VIDEO_UPDATE(coinmstr)
+	MCFG_VIDEO_START(coinmstr)
 
-	MDRV_MC6845_ADD("crtc", H46505, 14000000 / 16, h46505_intf)
+	MCFG_MC6845_ADD("crtc", H46505, 14000000 / 16, h46505_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
-	MDRV_SOUND_CONFIG(ay8912_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
+	MCFG_SOUND_CONFIG(ay8912_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( quizmstr )
-	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
-	MDRV_CPU_IO_MAP(quizmstr_io_map)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( quizmstr, coinmstr )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(quizmstr_io_map)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( trailblz )
-	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
-	MDRV_CPU_IO_MAP(trailblz_io_map)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( trailblz, coinmstr )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(trailblz_io_map)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( supnudg2 )
-	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
-	MDRV_CPU_IO_MAP(supnudg2_io_map)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( supnudg2, coinmstr )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(supnudg2_io_map)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pokeroul )
-	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
-	MDRV_CPU_IO_MAP(pokeroul_io_map)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( pokeroul, coinmstr )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(pokeroul_io_map)
+MACHINE_CONFIG_END
 
 /*
 
@@ -1080,7 +1096,7 @@ CN1/2 is connector for top ROM board                    * - unpopulated socket
 */
 
 ROM_START( quizmstr )
-	ROM_REGION( 0x10000, "cpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "nm_qm4_11.ic9", 0x0000, 0x4000, CRC(3a233bf0) SHA1(7b91b6f19093e67dd5513a000138421d4ef6f0af) )
 	ROM_LOAD( "np_qm4_21.ic6", 0x4000, 0x4000, CRC(a1cd39e4) SHA1(420b0726577471c762ae470bc2138c035f295ad9) )
 	/* 0x8000 - 0xbfff empty */
@@ -1114,7 +1130,7 @@ ROM_END
 
 
 ROM_START( trailblz )
-	ROM_REGION( 0x10000, "cpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "1-4.09",       0x0000, 0x4000, CRC(7c34749c) SHA1(3847188a734b32979f376f51f74dff050b610dfb) )
 	ROM_LOAD( "2-4.06",       0x4000, 0x4000, CRC(81a9809b) SHA1(4d2bfd5223713a9e2e15130a3176118d400ee63e) )
 	/* 0x8000 - 0xbfff empty */
@@ -1129,7 +1145,7 @@ ROM_END
 
 
 ROM_START( supnudg2 )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "u3.bin",       0x0000, 0x8000, CRC(ed04e2cc) SHA1(7d90a588cca2d113487710e897771f9d99e37e62) )
 	ROM_LOAD( "u4.bin",       0x8000, 0x8000, CRC(0551e859) SHA1(b71640097cc75b78f3013f0e77de328bf1a205b1) )
 
@@ -1182,7 +1198,7 @@ ROM_END
 */
 
 ROM_START( pokeroul )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "poker1.ic3",   0x0000, 0x8000, CRC(bfe78d09) SHA1(7cc0f57714ff808a41ce20027a283e5dff60f752) )
 	ROM_LOAD( "poker2.ic4",   0x8000, 0x8000, CRC(34c1b55c) SHA1(fa562d230a57dce3fff176c21c86b461a02749f6) )
 
@@ -1192,26 +1208,39 @@ ROM_START( pokeroul )
 ROM_END
 
 
+ROM_START( jpcoin )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "2.bin", 0x0000, 0x002000, CRC(67e1aa60) SHA1(32301f60a7325f23047d84bb1e9416ea05753493) )
+	ROM_LOAD( "1.bin", 0x2000, 0x002000, CRC(6c79e430) SHA1(56e026329ea6aba122d1f66c375bf4c3cc829feb) )
+
+	ROM_REGION( 0x8000, "gfx1", 0 )
+	ROM_LOAD( "3.bin", 0x0000, 0x004000, CRC(4984053e) SHA1(e0f7c56160f48f7b1c2c407f448c13a191770adc) ) // 1ST AND 2ND HALF IDENTICAL
+	ROM_LOAD( "4.bin", 0x4000, 0x004000, CRC(2bac1c0b) SHA1(3e45fc38ed6d332e1d49b2b66bf8001610f914c5) ) // 1ST AND 2ND HALF IDENTICAL
+ROM_END
+
 static DRIVER_INIT( coinmstr )
 {
-	UINT8 *rom = memory_region(machine, "user1");
-	int length = memory_region_length(machine, "user1");
-	UINT8 *buf = alloc_array_or_die(UINT8, length);
+	UINT8 *rom = machine.region("user1")->base();
+	int length = machine.region("user1")->bytes();
+	UINT8 *buf = auto_alloc_array(machine, UINT8, length);
 	int i;
 
-		memcpy(buf,rom,length);
+	memcpy(buf,rom,length);
 
-		for(i = 0; i < length; i++)
-		{
-			int adr = BITSWAP24(i, 23,22,21,20,19,18,17,16,15, 14,8,7,2,5,12,10,9,11,13,3,6,0,1,4);
-			rom[i] = BITSWAP8(buf[adr],3,2,4,1,5,0,6,7);
-		}
+	for(i = 0; i < length; i++)
+	{
+		int adr = BITSWAP24(i, 23,22,21,20,19,18,17,16,15, 14,8,7,2,5,12,10,9,11,13,3,6,0,1,4);
+		rom[i] = BITSWAP8(buf[adr],3,2,4,1,5,0,6,7);
+	}
 
-		free(buf);
+	auto_free(machine, buf);
 }
+
+
 
 
 GAME( 1985, quizmstr, 0, quizmstr, quizmstr, coinmstr, ROT0, "Loewen Spielautomaten", "Quizmaster (German)",            GAME_UNEMULATED_PROTECTION )
 GAME( 1987, trailblz, 0, trailblz, trailblz, coinmstr, ROT0, "Coinmaster",            "Trail Blazer",                   GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING ) // or Trail Blazer 2 ?
 GAME( 1989, supnudg2, 0, supnudg2, supnudg2, coinmstr, ROT0, "Coinmaster",            "Super Nudger II (Version 5.21)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 GAME( 1990, pokeroul, 0, pokeroul, pokeroul, 0,        ROT0, "Coinmaster",            "Poker Roulette (Version 8.22)",  GAME_NOT_WORKING )
+GAME( 1990, jpcoin,   0, pokeroul, pokeroul, 0,        ROT0, "Coinmaster",            "Joker Poker (Coinmaster)",  GAME_NOT_WORKING ) // io stuff is different at least

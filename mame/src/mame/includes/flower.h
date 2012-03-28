@@ -1,23 +1,40 @@
+#include "devlegcy.h"
+
+class flower_state : public driver_device
+{
+public:
+	flower_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_sn_nmi_enable;
+	UINT8 *m_spriteram;
+	UINT8 *m_textram;
+	UINT8 *m_bg0ram;
+	UINT8 *m_bg1ram;
+	UINT8 *m_bg0_scroll;
+	UINT8 *m_bg1_scroll;
+	tilemap_t *m_bg0_tilemap;
+	tilemap_t *m_bg1_tilemap;
+	tilemap_t *m_text_tilemap;
+	tilemap_t *m_text_right_tilemap;
+};
+
+
 /*----------- defined in audio/flower.c -----------*/
 
-extern UINT8 *flower_soundregs1,*flower_soundregs2;
+WRITE8_DEVICE_HANDLER( flower_sound1_w );
+WRITE8_DEVICE_HANDLER( flower_sound2_w );
 
-WRITE8_HANDLER( flower_sound1_w );
-WRITE8_HANDLER( flower_sound2_w );
-
-DEVICE_GET_INFO( flower_sound );
-#define SOUND_FLOWER DEVICE_GET_INFO_NAME(flower_sound)
+DECLARE_LEGACY_SOUND_DEVICE(FLOWER, flower_sound);
 
 
 /*----------- defined in video/flower.c -----------*/
-
-extern UINT8 *flower_textram, *flower_bg0ram, *flower_bg1ram, *flower_bg0_scroll, *flower_bg1_scroll;
 
 WRITE8_HANDLER( flower_textram_w );
 WRITE8_HANDLER( flower_bg0ram_w );
 WRITE8_HANDLER( flower_bg1ram_w );
 WRITE8_HANDLER( flower_flipscreen_w );
 
-VIDEO_UPDATE( flower );
+SCREEN_UPDATE_IND16( flower );
 VIDEO_START( flower );
 PALETTE_INIT( flower );

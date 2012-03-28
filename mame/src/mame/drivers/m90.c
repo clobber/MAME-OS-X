@@ -14,49 +14,25 @@
 
     Emulation by Bryan McPhail, mish@tendril.co.uk, thanks to Chris Hardy!
 
-Notes:
-
-- Samples are not played in bbmanw/atompunk.
-
-- Not sure about the clock speeds. In hasamu and quizf1 service mode, the
-  selection moves too fast with the clock set at 16 MHz. It's still fast at
-  8 MHz, but at least it's usable.
-
 *****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/nec/nec.h"
-#include "deprecat.h"
-#include "iremipt.h"
+#include "includes/iremipt.h"
 #include "machine/irem_cpu.h"
 #include "audio/m72.h"
 #include "sound/dac.h"
 #include "sound/2151intf.h"
+#include "includes/m90.h"
 
-static UINT32 bankaddress;
-
-extern UINT16 *m90_video_data;
-
-VIDEO_START( m90 );
-VIDEO_START( dynablsb );
-VIDEO_START( bomblord );
-VIDEO_UPDATE( m90 );
-VIDEO_UPDATE( dynablsb );
-VIDEO_UPDATE( bomblord );
-WRITE16_HANDLER( m90_video_w );
-WRITE16_HANDLER( m90_video_control_w );
 
 /***************************************************************************/
 
-static void set_m90_bank(running_machine *machine)
+static MACHINE_START( m90 )
 {
-	UINT8 *rom = memory_region(machine, "user1");
-
-	if (!rom)
-		popmessage("bankswitch with no banked ROM!");
-	else
-		memory_set_bankptr(machine, 1,rom + bankaddress);
+	m90_state *state = machine.driver_data<m90_state>();
+	state->m_audio = machine.device("m72");
 }
 
 /***************************************************************************/
@@ -65,19 +41,25 @@ static WRITE16_HANDLER( m90_coincounter_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_counter_w(space->machine(), 0, data & 0x01);
+		coin_counter_w(space->machine(), 1, data & 0x02);
 
-		if (data&0xfe) logerror("Coin counter %02x\n",data);
+		if (data & 0xfc) logerror("Coin counter %02x\n",data);
 	}
 }
 
 static WRITE16_HANDLER( quizf1_bankswitch_w )
 {
 	if (ACCESSING_BITS_0_7)
+		memory_set_bank(space->machine(), "bank1", data & 0xf);
+}
+
+static WRITE16_HANDLER( dynablsb_sound_command_w )
+{
+	if (ACCESSING_BITS_0_7)
 	{
-		bankaddress = 0x10000 * (data & 0x0f);
-		set_m90_bank(space->machine);
+		soundlatch_w(space, offset, data);
+		cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -90,50 +72,49 @@ static WRITE16_HANDLER( unknown_w )
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( m90_main_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( m90_main_cpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
-	AM_RANGE(0x80000, 0x8ffff) AM_ROMBANK(1)	/* Quiz F1 only */
+	AM_RANGE(0x80000, 0x8ffff) AM_ROMBANK("bank1")	/* Quiz F1 only */
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
-	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m90_video_w) AM_BASE(&m90_video_data)
-	AM_RANGE(0xe0000, 0xe03ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m90_video_w) AM_BASE_MEMBER(m90_state, m_video_data)
+	AM_RANGE(0xe0000, 0xe03ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynablsb_main_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( dynablsb_main_cpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x3ffff) AM_ROM
-	AM_RANGE(0x6000e, 0x60fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x6000e, 0x60fff) AM_RAM AM_BASE_SIZE_MEMBER(m90_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
-	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m90_video_w) AM_BASE(&m90_video_data)
-	AM_RANGE(0xe0000, 0xe03ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m90_video_w) AM_BASE_MEMBER(m90_state, m_video_data)
+	AM_RANGE(0xe0000, 0xe03ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bomblord_main_cpu_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( bomblord_main_cpu_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
-	AM_RANGE(0xc000e, 0xc0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m90_video_w) AM_BASE(&m90_video_data)
-	AM_RANGE(0xe0000, 0xe03ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xc000e, 0xc0fff) AM_RAM AM_BASE_SIZE_MEMBER(m90_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m90_video_w) AM_BASE_MEMBER(m90_state, m_video_data)
+	AM_RANGE(0xe0000, 0xe03ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( m90_main_cpu_io_map, ADDRESS_SPACE_IO, 16 )
-	AM_RANGE(0x00, 0x01) AM_WRITE(m72_sound_command_w)
+static ADDRESS_MAP_START( m90_main_cpu_io_map, AS_IO, 16 )
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("m72", m72_sound_command_w)
 	AM_RANGE(0x00, 0x01) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x02, 0x03) AM_WRITE(m90_coincounter_w)
 	AM_RANGE(0x02, 0x03) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x04, 0x05) AM_WRITE(quizf1_bankswitch_w)
 	AM_RANGE(0x04, 0x05) AM_READ_PORT("DSW")
 	AM_RANGE(0x06, 0x07) AM_READ_PORT("P3_P4")
 	AM_RANGE(0x80, 0x8f) AM_WRITE(m90_video_control_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dynablsb_cpu_io_map, ADDRESS_SPACE_IO, 16 )
-	AM_RANGE(0x00, 0x01) AM_WRITE(m72_sound_command_w)
+static ADDRESS_MAP_START( dynablsb_main_cpu_io_map, AS_IO, 16 )
+	AM_RANGE(0x00, 0x01) AM_WRITE(dynablsb_sound_command_w)
 	AM_RANGE(0x00, 0x01) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x02, 0x03) AM_WRITE(m90_coincounter_w)
 	AM_RANGE(0x02, 0x03) AM_READ_PORT("SYSTEM")
-//  AM_RANGE(0x04, 0x05) AM_WRITE(unknown_w)      /* dynablsb: write continuosly 0x6000 */
+//  AM_RANGE(0x04, 0x05) AM_WRITE(unknown_w)      /* dynablsb: write continuously 0x6000 */
 	AM_RANGE(0x04, 0x05) AM_READ_PORT("DSW")
 	AM_RANGE(0x06, 0x07) AM_READ_PORT("P3_P4")
 	AM_RANGE(0x80, 0x8f) AM_WRITE(m90_video_control_w)
@@ -142,28 +123,34 @@ ADDRESS_MAP_END
 
 /*****************************************************************************/
 
-static ADDRESS_MAP_START( m90_sound_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( m90_sound_cpu_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( m90_sound_cpu_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( m90_sound_cpu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x80, 0x80) AM_READ(soundlatch_r)
-	AM_RANGE(0x80, 0x81) AM_WRITE(rtype2_sample_addr_w)
-	AM_RANGE(0x82, 0x82) AM_DEVWRITE("dac", m72_sample_w)
-	AM_RANGE(0x83, 0x83) AM_WRITE(m72_sound_irq_ack_w)
-	AM_RANGE(0x84, 0x84) AM_READ(m72_sample_r)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("m72", rtype2_sample_addr_w)
+	AM_RANGE(0x82, 0x82) AM_DEVWRITE("m72", m72_sample_w)
+	AM_RANGE(0x83, 0x83) AM_DEVWRITE("m72", m72_sound_irq_ack_w)
+	AM_RANGE(0x84, 0x84) AM_DEVREAD("m72", m72_sample_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bbmanw_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( dynablsb_sound_cpu_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x41) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
-	AM_RANGE(0x42, 0x42) AM_READWRITE(soundlatch_r, m72_sound_irq_ack_w)
-//  AM_RANGE(0x40, 0x41) AM_WRITE(rtype2_sample_addr_w)
-//  AM_RANGE(0x41, 0x41) AM_READ(m72_sample_r)
-//  AM_RANGE(0x42, 0x42) AM_DEVWRITE("dac", m72_sample_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x80, 0x80) AM_READ(soundlatch_r)
+	AM_RANGE(0x82, 0x82) AM_DEVWRITE("dac", dac_signed_w)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( m99_sound_cpu_io_map, AS_IO, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("m72", poundfor_sample_addr_w)
+	AM_RANGE(0x40, 0x41) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x42, 0x42) AM_READ(soundlatch_r)
+	AM_RANGE(0x42, 0x42) AM_DEVWRITE("m72", m72_sound_irq_ack_w)
 ADDRESS_MAP_END
 
 /*****************************************************************************/
@@ -255,7 +242,7 @@ static INPUT_PORTS_START( dynablst )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0600, 0x0600, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(      0x0400, "2 Player Upright" )
-	PORT_DIPSETTING(      0x0600, "4 Player Upright A" ) /* Seperate Coin Slots */
+	PORT_DIPSETTING(      0x0600, "4 Player Upright A" ) /* Separate Coin Slots */
 	PORT_DIPSETTING(      0x0200, "4 Player Upright B" ) /* Shared Coin Slots */
 	PORT_DIPSETTING(      0x0000, DEF_STR( Cocktail ) )  /* This setting shows screen with offset, no cocktail support :-( */
 	PORT_DIPNAME( 0x0800, 0x0800, "Coin Mode" ) PORT_DIPLOCATION("SW2:4")
@@ -273,7 +260,7 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( dynablsb )
 	PORT_START("P1_P2")
-	IREM_GENERIC_JOYSTICKS_4_BUTTONS(2, 1)
+	IREM_GENERIC_JOYSTICKS_2_BUTTONS(2, 1)
 
 	PORT_START("SYSTEM")
 	IREM_COINS
@@ -305,7 +292,7 @@ static INPUT_PORTS_START( dynablsb )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0600, 0x0600, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(      0x0400, "2 Player Upright" )
-	PORT_DIPSETTING(      0x0600, "4 Player Upright A" ) /* Seperate Coin Slots */
+	PORT_DIPSETTING(      0x0600, "4 Player Upright A" ) /* Separate Coin Slots */
 	PORT_DIPSETTING(      0x0200, "4 Player Upright B" ) /* Shared Coin Slots */
 	PORT_DIPSETTING(      0x0000, DEF_STR( Cocktail ) )  /* This setting shows screen with offset, no cocktail support :-( */
 	PORT_DIPNAME( 0x0800, 0x0800, "Coin Mode" ) PORT_DIPLOCATION("SW2:4")
@@ -409,7 +396,7 @@ static INPUT_PORTS_START( bbmanw )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0600, 0x0600, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(      0x0400, "2 Player" )
-	PORT_DIPSETTING(      0x0600, "4 Player Seprate Coins" )		/* Each player has a seperate Coin Slot */
+	PORT_DIPSETTING(      0x0600, "4 Player Separate Coins" )		/* Each player has a separate Coin Slot */
 	PORT_DIPSETTING(      0x0200, "4 Player Shared Coins" )		/* All 4 players Share coin 1&2 */
 	PORT_DIPSETTING(      0x0000, "4 Player 1&2 3&4 Share Coins" )	/* Players 1&2 share coin 1&2, Players 3&4 share coin 3&4 */
 	PORT_DIPNAME( 0x0800, 0x0800, "Coin Mode" ) PORT_DIPLOCATION("SW2:4")
@@ -456,9 +443,9 @@ static INPUT_PORTS_START( quizf1 )
 	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW1:5")
 	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0020, 0x0000, "Input Device" )	 PORT_DIPLOCATION("SW1:6") /* input related (joystick/buttons select?) */
-	PORT_DIPSETTING(      0x0020, DEF_STR( Joystick ) )
-	PORT_DIPSETTING(      0x0000, "Buttons" )
+	PORT_DIPNAME( 0x0020, 0x0000, DEF_STR( Controls ) ) PORT_DIPLOCATION("SW1:6")
+	PORT_DIPSETTING(      0x0020, DEF_STR( Joystick ) )	/* for quiz cabinets with buttons connected to the JAMMA "joystick" pins */
+	PORT_DIPSETTING(      0x0000, "Buttons" )			/* for non-quiz cabinet conversions */
 	PORT_DIPNAME( 0x0040, 0x0000, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW1:7")
 	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
@@ -527,7 +514,7 @@ static INPUT_PORTS_START( matchit2 )
 	PORT_DIPNAME( 0x0600, 0x0600, DEF_STR( Language ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(      0x0600, DEF_STR( English ) )
 	PORT_DIPSETTING(      0x0400, DEF_STR( German ) )
-	PORT_DIPSETTING(      0x0200, "Korean" )
+	PORT_DIPSETTING(      0x0200, DEF_STR( Korean ) )
 	PORT_DIPNAME( 0x0800, 0x0800, "Coin Mode" ) PORT_DIPLOCATION("SW2:4")
 	PORT_DIPSETTING(      0x0800, "1" )
 	PORT_DIPSETTING(      0x0000, "2" )
@@ -685,251 +672,182 @@ static const ym2151_interface ym2151_config =
 	m72_ym2151_irq_handler
 };
 
+/* this bootleg polls the YM2151 instead of taking interrupts from it */
+static const ym2151_interface dynablsb_ym2151_config =
+{
+	NULL
+};
+
+static INTERRUPT_GEN( fake_nmi )
+{
+	m90_state *state = device->machine().driver_data<m90_state>();
+	int sample = m72_sample_r(state->m_audio,0);
+	if (sample)
+		m72_sample_w(state->m_audio,0,sample);
+}
+
+static INTERRUPT_GEN( bomblord_fake_nmi )
+{
+	m90_state *state = device->machine().driver_data<m90_state>();
+	int sample = m72_sample_r(state->m_audio,0);
+	if (sample != 0x80)
+		m72_sample_w(state->m_audio,0,sample);
+}
+
 static INTERRUPT_GEN( m90_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x60/4);
+	generic_pulse_irq_line(device, NEC_INPUT_LINE_INTP0);
+}
+
+static INTERRUPT_GEN( dynablsb_interrupt )
+{
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x60/4);
 }
 
 static INTERRUPT_GEN( bomblord_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x50/4);
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x50/4);
 }
 
 
 /* Basic hardware -- no decryption table is setup for CPU */
-static MACHINE_DRIVER_START( m90 )
+static MACHINE_CONFIG_START( m90, m90_state )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V30,XTAL_32MHz/2/2) /* verified clock on cpu is 16Mhz but probably divided internally by 2 */
-	MDRV_CPU_PROGRAM_MAP(m90_main_cpu_map)
-	MDRV_CPU_IO_MAP(m90_main_cpu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", m90_interrupt)
+	MCFG_CPU_ADD("maincpu", V35, XTAL_32MHz/2)
+	MCFG_CPU_PROGRAM_MAP(m90_main_cpu_map)
+	MCFG_CPU_IO_MAP(m90_main_cpu_io_map)
+	MCFG_CPU_VBLANK_INT("screen", m90_interrupt)
 
-	MDRV_CPU_ADD("soundcpu", Z80, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(m90_sound_cpu_map)
-	MDRV_CPU_IO_MAP(m90_sound_cpu_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,128)	/* clocked by V1? (Vigilante) */
+	MCFG_CPU_ADD("soundcpu", Z80, XTAL_3_579545MHz) /* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(m90_sound_cpu_map)
+	MCFG_CPU_IO_MAP(m90_sound_cpu_io_map)
+	MCFG_CPU_PERIODIC_INT(nmi_line_pulse, 128*60)	/* clocked by V1? (Vigilante) */
 								/* IRQs are generated by main Z80 and YM2151 */
 
-	MDRV_MACHINE_RESET(m72_sound)
+	MCFG_MACHINE_START(m90)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(6*8, 54*8-1, 17*8, 47*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(64*8, 64*8)
+	MCFG_SCREEN_VISIBLE_AREA(6*8, 54*8-1, 17*8, 47*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(m90)
 
-	MDRV_GFXDECODE(m90)
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_GFXDECODE(m90)
+	MCFG_PALETTE_LENGTH(512)
 
-	MDRV_VIDEO_START(m90)
-	MDRV_VIDEO_UPDATE(m90)
+	MCFG_VIDEO_START(m90)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MCFG_SOUND_ADD("m72", M72, 0)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz) /* verified on pcb */
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.15)
+	MCFG_SOUND_ROUTE(1, "mono", 0.15)
+
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_CONFIG_END
 
 
 static const nec_config hasamu_config ={ gunforce_decryption_table, };
-static MACHINE_DRIVER_START( hasamu )
-	MDRV_IMPORT_FROM( m90 )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CONFIG(hasamu_config)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( hasamu, m90 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(hasamu_config)
+MACHINE_CONFIG_END
 
-static const nec_config quizf1_config ={ 	lethalth_decryption_table, };
-static MACHINE_DRIVER_START( quizf1 )
-	MDRV_IMPORT_FROM( m90 )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CONFIG(quizf1_config)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(6*8, 54*8-1, 17*8-8, 47*8-1+8)
-MACHINE_DRIVER_END
+static const nec_config quizf1_config ={	lethalth_decryption_table, };
+static MACHINE_CONFIG_DERIVED( quizf1, m90 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(quizf1_config)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(6*8, 54*8-1, 17*8-8, 47*8-1+8)
+MACHINE_CONFIG_END
 
-static const nec_config matchit2_config ={ 	matchit2_decryption_table, };
-static MACHINE_DRIVER_START( matchit2 )
-	MDRV_IMPORT_FROM( m90 )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CONFIG(matchit2_config)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(6*8, 54*8-1, 17*8-8, 47*8-1+8)
-MACHINE_DRIVER_END
+static const nec_config matchit2_config ={	matchit2_decryption_table, };
+static MACHINE_CONFIG_DERIVED( matchit2, m90 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(matchit2_config)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(6*8, 54*8-1, 17*8-8, 47*8-1+8)
+MACHINE_CONFIG_END
 
-
-static const nec_config riskchal_config ={ 	gussun_decryption_table, };
-static MACHINE_DRIVER_START( riskchal )
-	MDRV_IMPORT_FROM( m90 )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CONFIG(riskchal_config)
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
-MACHINE_DRIVER_END
-
+static const nec_config riskchal_config ={	gussun_decryption_table, };
+static MACHINE_CONFIG_DERIVED( riskchal, m90 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(riskchal_config)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
+MACHINE_CONFIG_END
 
 static const nec_config bomberman_config ={ 	bomberman_decryption_table, };
-static MACHINE_DRIVER_START( bombrman )
+static MACHINE_CONFIG_DERIVED( bombrman, m90 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(bomberman_config)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
+MACHINE_CONFIG_END
 
-	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V30,XTAL_32MHz/2/2) /* verified clock on cpu is 16Mhz but probably divided internally by 2 */
-	MDRV_CPU_CONFIG(bomberman_config)
-	MDRV_CPU_PROGRAM_MAP(m90_main_cpu_map)
-	MDRV_CPU_IO_MAP(m90_main_cpu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", m90_interrupt)
+static const nec_config dynablaster_config ={	dynablaster_decryption_table, };
+static MACHINE_CONFIG_DERIVED( bbmanwj, m90 )
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CONFIG(dynablaster_config)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
+MACHINE_CONFIG_END
 
-	MDRV_CPU_ADD("soundcpu", Z80, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(m90_sound_cpu_map)
-	MDRV_CPU_IO_MAP(m90_sound_cpu_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,128)	/* clocked by V1? (Vigilante) */
-								/* IRQs are generated by main Z80 and YM2151 */
-	MDRV_MACHINE_RESET(m72_sound)
+static MACHINE_CONFIG_DERIVED( bbmanw, bbmanwj )
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_IO_MAP(m99_sound_cpu_io_map)
+	MCFG_CPU_PERIODIC_INT(fake_nmi, 128*60)
+MACHINE_CONFIG_END
 
-	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
 
-	MDRV_GFXDECODE(m90)
-	MDRV_PALETTE_LENGTH(512)
+static MACHINE_CONFIG_DERIVED( bomblord, m90 )
+	MCFG_CPU_REPLACE("maincpu", V30, 32000000/4)
+	MCFG_CPU_PROGRAM_MAP(bomblord_main_cpu_map)
+	MCFG_CPU_IO_MAP(m90_main_cpu_io_map)
+	MCFG_CPU_VBLANK_INT("screen", bomblord_interrupt)
 
-	MDRV_VIDEO_START(m90)
-	MDRV_VIDEO_UPDATE(m90)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_IO_MAP(m99_sound_cpu_io_map)
+	MCFG_CPU_PERIODIC_INT(bomblord_fake_nmi, 128*60)
 
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(bomblord)
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MCFG_VIDEO_START(bomblord)
+MACHINE_CONFIG_END
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_DRIVER_END
 
-static const nec_config dynablaster_config ={ 	dynablaster_decryption_table, };
+static MACHINE_CONFIG_DERIVED( dynablsb, m90 )
+	MCFG_CPU_REPLACE("maincpu", V30, 32000000/4)
+	MCFG_CPU_PROGRAM_MAP(dynablsb_main_cpu_map)
+	MCFG_CPU_IO_MAP(dynablsb_main_cpu_io_map)
+	MCFG_CPU_VBLANK_INT("screen", dynablsb_interrupt)
 
-static MACHINE_DRIVER_START( bbmanw )
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_IO_MAP(dynablsb_sound_cpu_io_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 64*60)	/* half the sample rate of the original */
 
-	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V30,XTAL_32MHz/2/2) /* verified clock on cpu is 16Mhz but probably divided internally by 2 */
-	MDRV_CPU_CONFIG(dynablaster_config)
-	MDRV_CPU_PROGRAM_MAP(m90_main_cpu_map)
-	MDRV_CPU_IO_MAP(m90_main_cpu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", m90_interrupt)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_SIZE(320, 240)
+	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+	MCFG_SCREEN_UPDATE_STATIC(dynablsb)
 
-	MDRV_CPU_ADD("soundcpu", Z80, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(m90_sound_cpu_map)
-	MDRV_CPU_IO_MAP(bbmanw_sound_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,128)	/* clocked by V1? (Vigilante) */
-								/* IRQs are generated by main Z80 and YM2151 */
-	MDRV_MACHINE_RESET(m72_sound)
+	MCFG_VIDEO_START(dynablsb)
 
-	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(10*8, 50*8-1, 17*8, 47*8-1)
+	MCFG_DEVICE_REMOVE("m72")
 
-	MDRV_GFXDECODE(m90)
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_SOUND_MODIFY("ymsnd")
+	MCFG_SOUND_CONFIG(dynablsb_ym2151_config)
+MACHINE_CONFIG_END
 
-	MDRV_VIDEO_START(m90)
-	MDRV_VIDEO_UPDATE(m90)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_DRIVER_END
-
-static const nec_config no_table ={ NULL, };
-
-static MACHINE_DRIVER_START( bbmanwj )
-
-	MDRV_IMPORT_FROM( bbmanw )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(m90_sound_cpu_map)
-	MDRV_CPU_IO_MAP(m90_sound_cpu_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,128)	/* clocked by V1? (Vigilante) */
-								/* IRQs are generated by main Z80 and YM2151 */
-
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( bomblord )
-
-	MDRV_IMPORT_FROM( bbmanw )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_CONFIG(no_table)
-	MDRV_CPU_PROGRAM_MAP(bomblord_main_cpu_map)
-	MDRV_CPU_IO_MAP(dynablsb_cpu_io_map)
-
-	MDRV_VIDEO_START(bomblord)
-	MDRV_VIDEO_UPDATE(bomblord)
-
-	MDRV_CPU_VBLANK_INT("screen", bomblord_interrupt)
-
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( dynablsb )
-
-	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", V30,32000000/4)
-	MDRV_CPU_PROGRAM_MAP(dynablsb_main_cpu_map)
-	MDRV_CPU_IO_MAP(dynablsb_cpu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", m90_interrupt)
-
-	MDRV_CPU_ADD("soundcpu", Z80, XTAL_3_579545MHz)	/* 3.579545 MHz */
-	MDRV_CPU_PROGRAM_MAP(m90_sound_cpu_map)
-	MDRV_CPU_IO_MAP(m90_sound_cpu_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,128)	/* clocked by V1? (Vigilante) */
-								/* IRQs are generated by main Z80 and YM2151 */
-	MDRV_MACHINE_RESET(m72_sound)
-
-	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(320, 240)
-	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
-
-	MDRV_GFXDECODE(m90)
-	MDRV_PALETTE_LENGTH(512)
-
-	MDRV_VIDEO_START(dynablsb)
-	MDRV_VIDEO_UPDATE(dynablsb)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.15)
-	MDRV_SOUND_ROUTE(1, "mono", 0.15)
-
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_DRIVER_END
 
 /***************************************************************************/
 
@@ -1027,7 +945,7 @@ ROM_START( dynablstb )
 	ROM_LOAD( "bbm-c3.69",    0x0c0000, 0x40000, CRC(3c3613af) SHA1(f9554a73e95102333e449f6e81f2bb817ec00881) )
 
 	ROM_REGION( 0x20000, "samples", ROMREGION_ERASE00 )	/* samples */
-	/* Does this have a sample rom? */
+	/* the samples are in the Z80 ROM in this bootleg */
 ROM_END
 
 
@@ -1152,8 +1070,8 @@ ROM_START( quizf1 )
 	ROM_LOAD16_BYTE( "qf1-l0-.79",   0x000000, 0x40000, CRC(94588a6f) SHA1(ee912739c7719fc2b099da0c63f7473eedcfc718) )
 	ROM_COPY( "maincpu", 0x7fff0,  0xffff0, 0x10 )	/* start vector */
 
-	ROM_REGION( 0x100000, "user1", 0 )
-	ROM_LOAD16_BYTE( "qf1-h1-.78",   0x000001, 0x80000, CRC(c6c2eb2b) SHA1(83de08b0c72da8c3e4786063802d83cb1015032a) )	/* banked at 80000-8FFFF */
+	ROM_REGION16_LE( 0x100000, "user1", 0 )	/* banked at 80000-8FFFF */
+	ROM_LOAD16_BYTE( "qf1-h1-.78",   0x000001, 0x80000, CRC(c6c2eb2b) SHA1(83de08b0c72da8c3e4786063802d83cb1015032a) )
 	ROM_LOAD16_BYTE( "qf1-l1-.80",   0x000000, 0x80000, CRC(3132c144) SHA1(de3ae35cdfbb1231cab343142ac700df00f9b77a) )
 
 	ROM_REGION( 0x10000, "soundcpu", 0 )
@@ -1171,12 +1089,12 @@ ROM_END
 
 ROM_START( riskchal )
 	ROM_REGION( CODE_SIZE, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "rc_h0.rom",    0x00001, 0x40000, CRC(4c9b5344) SHA1(61e26950a672c6404e2386acdd098536b61b9933) )
-	ROM_LOAD16_BYTE( "rc_l0.rom",    0x00000, 0x40000, CRC(0455895a) SHA1(1072b8d280f7ccc48cd8fbd81323e1f8c8d0db95) )
+	ROM_LOAD16_BYTE( "rc_h0.ic77",    0x00001, 0x40000, CRC(4c9b5344) SHA1(61e26950a672c6404e2386acdd098536b61b9933) )
+	ROM_LOAD16_BYTE( "rc_l0.ic79",    0x00000, 0x40000, CRC(0455895a) SHA1(1072b8d280f7ccc48cd8fbd81323e1f8c8d0db95) )
 	ROM_COPY( "maincpu", 0x7fff0,  0xffff0, 0x10 )	/* start vector */
 
 	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "rc_sp.rom",    0x0000, 0x10000, CRC(bb80094e) SHA1(1c62e702c395b7ebb666a79af1912b270d5f95aa) )
+	ROM_LOAD( "l4_a-sp.ic33",    0x0000, 0x10000, CRC(bb80094e) SHA1(1c62e702c395b7ebb666a79af1912b270d5f95aa) )
 
 	ROM_REGION( 0x200000, "gfx1", 0 )
 	ROM_LOAD( "rc_c0.rom",    0x000000, 0x80000, CRC(84d0b907) SHA1(a686ccd67d068e5e4ba41bb8b73fdc1cad8eb5ee) )
@@ -1190,12 +1108,12 @@ ROM_END
 
 ROM_START( gussun )
 	ROM_REGION( CODE_SIZE, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "l4_h0.rom",    0x00001, 0x40000, CRC(9d585e61) SHA1(e108a9dc2dc1b75c1439271a2391f943c3a53fe1) )
-	ROM_LOAD16_BYTE( "l4_l0.rom",    0x00000, 0x40000, CRC(c7b4c519) SHA1(44887ccf54f5e507d2db4f09a7c2b7b9ea217058) )
+	ROM_LOAD16_BYTE( "l4_a-h0.ic77",    0x00001, 0x40000, CRC(9d585e61) SHA1(e108a9dc2dc1b75c1439271a2391f943c3a53fe1) )
+	ROM_LOAD16_BYTE( "l4_a-l0.ic79",    0x00000, 0x40000, CRC(c7b4c519) SHA1(44887ccf54f5e507d2db4f09a7c2b7b9ea217058) )
 	ROM_COPY( "maincpu", 0x7fff0,  0xffff0, 0x10 )	/* start vector */
 
 	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "rc_sp.rom",    0x0000, 0x10000, CRC(bb80094e) SHA1(1c62e702c395b7ebb666a79af1912b270d5f95aa) )
+	ROM_LOAD( "l4_a-sp.ic33",    0x0000, 0x10000, CRC(bb80094e) SHA1(1c62e702c395b7ebb666a79af1912b270d5f95aa) )
 
 	ROM_REGION( 0x200000, "gfx1", 0 )
 	ROM_LOAD( "rc_c0.rom",    0x000000, 0x80000, CRC(84d0b907) SHA1(a686ccd67d068e5e4ba41bb8b73fdc1cad8eb5ee) )
@@ -1208,9 +1126,9 @@ ROM_START( gussun )
 ROM_END
 
 ROM_START( matchit2 )
-	ROM_REGION( CODE_SIZE * 2, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sis2-h0b.bin", 0x00001, 0x40000, CRC(9a2556ac) SHA1(3e4d5ac2869c703c5d5b769c2a09e501b5e6462e) ) /* Actually labeled as "SIS2-H0-B" */
-	ROM_LOAD16_BYTE( "sis2-l0b.bin", 0x00000, 0x40000, CRC(d35d948a) SHA1(e4f119fa00fd8ede2533323e14d94ad4d5fabbc5) ) /* Actually labeled as "SIS2-L0-B" */
+	ROM_REGION( CODE_SIZE, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "sis2-h0-b.bin", 0x00001, 0x40000, CRC(9a2556ac) SHA1(3e4d5ac2869c703c5d5b769c2a09e501b5e6462e) ) /* Actually labeled as "SIS2-H0-B" */
+	ROM_LOAD16_BYTE( "sis2-l0-b.bin", 0x00000, 0x40000, CRC(d35d948a) SHA1(e4f119fa00fd8ede2533323e14d94ad4d5fabbc5) ) /* Actually labeled as "SIS2-L0-B" */
 	ROM_COPY( "maincpu", 0x7fff0,  0xffff0, 0x10 )	/* start vector */
 
 	ROM_REGION( 0x10000, "soundcpu", 0 )
@@ -1247,55 +1165,42 @@ ROM_END
 
 
 
-
-static STATE_POSTLOAD( quizf1_postload )
-{
-	set_m90_bank(machine);
-}
-
 static DRIVER_INIT( quizf1 )
 {
-	bankaddress = 0;
-	set_m90_bank(machine);
-
-	state_save_register_global(machine, bankaddress);
-	state_save_register_postload(machine, quizf1_postload, NULL);
+	memory_configure_bank(machine, "bank1", 0, 16, machine.region("user1")->base(), 0x10000);
+	machine.device("maincpu")->memory().space(AS_IO)->install_legacy_write_handler(0x04, 0x05, FUNC(quizf1_bankswitch_w));
 }
 
 
 
 static DRIVER_INIT( bomblord )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT16 *ROM = (UINT16 *)(machine.region("maincpu")->base());
 
-	int i;
-	for (i=0; i<0x100000; i+=8)
+	for (int i = 0; i < 0x100000 / 2; i += 4)
 	{
-		RAM[i+0]=BITSWAP8(RAM[i+0], 6, 4, 7, 3, 1, 2, 0, 5);
-		RAM[i+1]=BITSWAP8(RAM[i+1], 4, 0, 5, 6, 7, 3, 2, 1);
-		RAM[i+2]=BITSWAP8(RAM[i+2], 0, 6, 1, 5, 3, 4, 2, 7);
-		RAM[i+3]=BITSWAP8(RAM[i+3], 4, 3, 5, 2, 6, 1, 7, 0);
-		RAM[i+4]=BITSWAP8(RAM[i+4], 4, 7, 3, 2, 5, 6, 1, 0);
-		RAM[i+5]=BITSWAP8(RAM[i+5], 5, 1, 4, 0, 6, 7, 2, 3);
-		RAM[i+6]=BITSWAP8(RAM[i+6], 6, 3, 7, 5, 0, 1, 4, 2);
-		RAM[i+7]=BITSWAP8(RAM[i+7], 6, 5, 7, 0, 3, 2, 1, 4);
+		ROM[i+0]=BITSWAP16(ROM[i+0],0xc,0x8,0xd,0xe,0xf,0xb,0xa,0x9,0x6,0x4,0x7,0x3,0x1,0x2,0x0,0x5);
+		ROM[i+1]=BITSWAP16(ROM[i+1],0xc,0xb,0xd,0xa,0xe,0x9,0xf,0x8,0x0,0x6,0x1,0x5,0x3,0x4,0x2,0x7);
+		ROM[i+2]=BITSWAP16(ROM[i+2],0xd,0x9,0xc,0x8,0xe,0xf,0xa,0xb,0x4,0x7,0x3,0x2,0x5,0x6,0x1,0x0);
+		ROM[i+3]=BITSWAP16(ROM[i+3],0xe,0xd,0xf,0x8,0xb,0xa,0x9,0xc,0x6,0x3,0x7,0x5,0x0,0x1,0x4,0x2);
 	}
 }
 
 
 
-GAME( 1991, hasamu,   0,        hasamu,   hasamu,   0,        ROT0, "Irem", "Hasamu (Japan)", GAME_NO_COCKTAIL )
-GAME( 1991, dynablst, 0,        bombrman, dynablst, 0,        ROT0, "Irem (licensed from Hudson Soft)", "Dynablaster / Bomber Man", GAME_NO_COCKTAIL )
-GAME( 1991, bombrman, dynablst, bombrman, bombrman, 0,        ROT0, "Irem (licensed from Hudson Soft)", "Bomber Man (Japan)", GAME_NO_COCKTAIL )
-GAME( 1991, atompunk, dynablst, bombrman, atompunk, 0,        ROT0, "Irem America (licensed from Hudson Soft)", "Atomic Punk (US)", GAME_NO_COCKTAIL )
-GAME( 1991, dynablstb,dynablst, dynablsb, dynablsb, 0,        ROT0, "bootleg", "Dynablaster (bootleg)", GAME_NO_COCKTAIL )
-GAME( 1992, bbmanw,   0,        bbmanw,   bbmanw,   0,        ROT0, "Irem", "Bomber Man World / New Dyna Blaster - Global Quest", GAME_IMPERFECT_SOUND | GAME_NO_COCKTAIL )
-GAME( 1992, bbmanwj,  bbmanw,   bbmanwj,  bbmanwj,  0,        ROT0, "Irem", "Bomber Man World (Japan)", GAME_IMPERFECT_SOUND | GAME_NO_COCKTAIL )
-GAME( 1992, newapunk, bbmanw,   bbmanw,   bbmanwj,  0,        ROT0, "Irem America", "New Atomic Punk - Global Quest (US)", GAME_IMPERFECT_SOUND | GAME_NO_COCKTAIL )
-GAME( 1992, bomblord, bbmanw,   bomblord, bbmanw,   bomblord, ROT0, "bootleg", "Bomber Lord (bootleg)", GAME_IMPERFECT_SOUND | GAME_NO_COCKTAIL )
-GAME( 1992, quizf1,   0,        quizf1,   quizf1,   quizf1,   ROT0, "Irem", "Quiz F1 1-2 Finish (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL )
-GAME( 1993, riskchal, 0,        riskchal, riskchal, 0,        ROT0, "Irem", "Risky Challenge", GAME_NO_COCKTAIL )
-GAME( 1993, gussun,   riskchal, riskchal, riskchal, 0,        ROT0, "Irem", "Gussun Oyoyo (Japan)", GAME_NO_COCKTAIL )
-GAME( 1993, matchit2, 0,        matchit2, matchit2, 0,        ROT0, "Tamtex", "Match It II", GAME_NO_COCKTAIL )
-GAME( 1993, shisen2,  matchit2, matchit2, shisen2,  0,        ROT0, "Tamtex", "Shisensho II", GAME_NO_COCKTAIL )
+GAME( 1991, hasamu,   0,        hasamu,   hasamu,   0,        ROT0, "Irem", "Hasamu (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1991, dynablst, 0,        bombrman, dynablst, 0,        ROT0, "Irem (licensed from Hudson Soft)", "Dynablaster / Bomber Man", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1991, bombrman, dynablst, bombrman, bombrman, 0,        ROT0, "Irem (licensed from Hudson Soft)", "Bomber Man (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1991, atompunk, dynablst, bombrman, atompunk, 0,        ROT0, "Irem America (licensed from Hudson Soft)", "Atomic Punk (US)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1991, dynablstb,dynablst, dynablsb, dynablsb, 0,        ROT0, "bootleg", "Dynablaster / Bomber Man (bootleg)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1992, bbmanw,   0,        bbmanw,   bbmanw,   0,        ROT0, "Irem", "Bomber Man World / New Dyna Blaster - Global Quest", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1992, bbmanwj,  bbmanw,   bbmanwj,  bbmanwj,  0,        ROT0, "Irem", "Bomber Man World (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1992, newapunk, bbmanw,   bbmanw,   bbmanwj,  0,        ROT0, "Irem America", "New Atomic Punk - Global Quest (US)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1992, bomblord, bbmanw,   bomblord, bbmanw,   bomblord, ROT0, "bootleg", "Bomber Lord (bootleg)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1992, quizf1,   0,        quizf1,   quizf1,   quizf1,   ROT0, "Irem", "Quiz F1 1-2 Finish (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1993, riskchal, 0,        riskchal, riskchal, 0,        ROT0, "Irem", "Risky Challenge", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1993, gussun,   riskchal, riskchal, riskchal, 0,        ROT0, "Irem", "Gussun Oyoyo (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1993, matchit2, 0,        matchit2, matchit2, 0,        ROT0, "Tamtex", "Match It II", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1993, shisen2,  matchit2, matchit2, shisen2,  0,        ROT0, "Tamtex", "Shisensho II", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+
 

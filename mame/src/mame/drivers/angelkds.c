@@ -24,7 +24,6 @@ Decrypt Space Position Somehow (not something I
 can do)
 Unknown Reads / Writes
 Whats the Prom for? nothing important?
-Clock Speeds etc.
 Is the level order correct?
 the progress sprite on the side of the screen re-appears at the bottom when you get
 to the top, but the wrap-around is needed for other things, actual game bug?
@@ -116,8 +115,6 @@ EPR10135.19
 
 
 --- Team Japump!!! ---
-http://www.rainemu.com/japump/
-http://japump.i.am/
 Dumped by Chackn
 02/25/2000
 
@@ -126,45 +123,24 @@ Dumped by Chackn
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "machine/segacrpt.h"
+#include "machine/segacrp2.h"
 #include "sound/2203intf.h"
+#include "includes/angelkds.h"
 
 static READ8_HANDLER( angelkds_main_sound_r );
 static WRITE8_HANDLER( angelkds_main_sound_w );
 static READ8_HANDLER( angelkds_sub_sound_r );
 static WRITE8_HANDLER( angelkds_sub_sound_w );
 
-extern UINT8 *angelkds_txvideoram, *angelkds_bgtopvideoram, *angelkds_bgbotvideoram;
-
-WRITE8_HANDLER( angelkds_bgtopvideoram_w );
-WRITE8_HANDLER( angelkds_bgbotvideoram_w );
-WRITE8_HANDLER( angelkds_txvideoram_w );
-
-WRITE8_HANDLER( angelkds_bgtopbank_write );
-WRITE8_HANDLER( angelkds_bgtopscroll_write );
-WRITE8_HANDLER( angelkds_bgbotbank_write );
-WRITE8_HANDLER( angelkds_bgbotscroll_write );
-WRITE8_HANDLER( angelkds_txbank_write );
-
-WRITE8_HANDLER( angelkds_paletteram_w );
-WRITE8_HANDLER( angelkds_layer_ctrl_write );
-
-VIDEO_START( angelkds );
-VIDEO_UPDATE( angelkds );
-
 /*** CPU Banking
 
 */
 
-static WRITE8_HANDLER ( angelkds_cpu_bank_write )
+static WRITE8_HANDLER( angelkds_cpu_bank_write )
 {
-	int bankaddress;
-	UINT8 *RAM = memory_region(space->machine, "user1");
-
-	bankaddress = data & 0x0f;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress*0x4000]);
+	memory_set_bank(space->machine(), "bank1", data & 0x0f);	// shall we check (data & 0x0f) < # of available banks (8 or 10 resp.)?
 }
 
 
@@ -184,9 +160,9 @@ static READ8_HANDLER( angelkds_input_r )
 	static const char *const portnames[] = { "I81", "I82" };
 	static const char *const fakenames[] = { "FAKE1", "FAKE2" };
 
-	fake = input_port_read(space->machine, fakenames[offset]);
+	fake = input_port_read(space->machine(), fakenames[offset]);
 
-	return ((fake & 0x01) ? fake  : input_port_read(space->machine, portnames[offset]));
+	return ((fake & 0x01) ? fake  : input_port_read(space->machine(), portnames[offset]));
 }
 
 #else
@@ -195,7 +171,7 @@ static READ8_HANDLER( angelkds_input_r )
 {
 	static const char *const portnames[] = { "I81", "I82" };
 
-	return input_port_read(space->machine, portnames[offset]);
+	return input_port_read(space->machine(), portnames[offset]);
 }
 
 #endif
@@ -214,19 +190,17 @@ only one of the register (f001) is used for both part?
 Interesting note, each Bank in the 0x8000 - 0xbfff appears to
 contain a level.
 
-
-
 */
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(angelkds_bgtopvideoram_w) AM_BASE(&angelkds_bgtopvideoram) /* Top Half of Screen */
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(angelkds_bgbotvideoram_w) AM_BASE(&angelkds_bgbotvideoram) /* Bottom Half of Screen */
-	AM_RANGE(0xe800, 0xebff) AM_RAM_WRITE(angelkds_txvideoram_w) AM_BASE(&angelkds_txvideoram)
-	AM_RANGE(0xec00, 0xecff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0xed00, 0xeeff) AM_RAM_WRITE(angelkds_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(angelkds_bgtopvideoram_w) AM_BASE_MEMBER(angelkds_state, m_bgtopvideoram) /* Top Half of Screen */
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(angelkds_bgbotvideoram_w) AM_BASE_MEMBER(angelkds_state, m_bgbotvideoram) /* Bottom Half of Screen */
+	AM_RANGE(0xe800, 0xebff) AM_RAM_WRITE(angelkds_txvideoram_w) AM_BASE_MEMBER(angelkds_state, m_txvideoram)
+	AM_RANGE(0xec00, 0xecff) AM_RAM AM_BASE_MEMBER(angelkds_state, m_spriteram)
+	AM_RANGE(0xed00, 0xeeff) AM_RAM_WRITE(angelkds_paletteram_w) AM_BASE_MEMBER(angelkds_state, m_paletteram)
 	AM_RANGE(0xef00, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xf000) AM_WRITE(angelkds_bgtopbank_write)
 	AM_RANGE(0xf001, 0xf001) AM_WRITE(angelkds_bgtopscroll_write)
@@ -236,7 +210,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf005, 0xf005) AM_WRITE(angelkds_layer_ctrl_write)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP // 00 on start-up, not again
 	AM_RANGE(0x42, 0x42) AM_WRITE(angelkds_cpu_bank_write)
@@ -252,7 +226,7 @@ ADDRESS_MAP_END
 
 /* sub cpu */
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xaaa9, 0xaaa9) AM_READNOP
@@ -260,7 +234,7 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xaaac, 0xaaac) AM_READNOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_portmap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sub_portmap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x40, 0x41) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
@@ -512,33 +486,35 @@ sound related ?
 
 */
 
-static UINT8 angelkds_sound[4];
-static UINT8 angelkds_sound2[4];
-
 static WRITE8_HANDLER( angelkds_main_sound_w )
 {
-	angelkds_sound[offset]=data;
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	state->m_sound[offset] = data;
 }
 
 static READ8_HANDLER( angelkds_main_sound_r )
 {
-	return angelkds_sound2[offset];
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	return state->m_sound2[offset];
 }
 
 static WRITE8_HANDLER( angelkds_sub_sound_w )
 {
-	angelkds_sound2[offset]=data;
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	state->m_sound2[offset] = data;
 }
 
 static READ8_HANDLER( angelkds_sub_sound_r )
 {
-	return angelkds_sound[offset];
+	angelkds_state *state = space->machine().driver_data<angelkds_state>();
+	return state->m_sound[offset];
 }
 
 
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler( device_t *device, int irq )
 {
-	cputag_set_input_line(device->machine, "sub", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	angelkds_state *state = device->machine().driver_data<angelkds_state>();
+	device_set_input_line(state->m_subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -598,52 +574,79 @@ GFXDECODE_END
 
 static MACHINE_START( angelkds )
 {
-    state_save_register_global_array(machine, angelkds_sound);
-    state_save_register_global_array(machine, angelkds_sound2);
+	angelkds_state *state = machine.driver_data<angelkds_state>();
+
+	state->m_subcpu = machine.device("sub");
+
+	state->save_item(NAME(state->m_layer_ctrl));
+	state->save_item(NAME(state->m_txbank));
+	state->save_item(NAME(state->m_bgbotbank));
+	state->save_item(NAME(state->m_bgtopbank));
+	state->save_item(NAME(state->m_sound));
+	state->save_item(NAME(state->m_sound2));
 }
 
-static MACHINE_DRIVER_START( angelkds )
-	MDRV_CPU_ADD("maincpu", Z80, 8000000) /* 8MHz? 6 seems too slow? */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(main_portmap)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_RESET( angelkds )
+{
+	angelkds_state *state = machine.driver_data<angelkds_state>();
+	int i;
 
-	MDRV_CPU_ADD("sub", Z80, 4000000) /* 8 MHz? */
-	MDRV_CPU_PROGRAM_MAP(sub_map)
-	MDRV_CPU_IO_MAP(sub_portmap)
+	for (i = 0; i < 4; i++)
+	{
+		state->m_sound[i] = 0;
+		state->m_sound2[i] = 0;
+	}
 
-    MDRV_MACHINE_START(angelkds)
+	state->m_layer_ctrl = 0;
+	state->m_txbank = 0;
+	state->m_bgbotbank = 0;
+	state->m_bgtopbank = 0;
+}
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+static MACHINE_CONFIG_START( angelkds, angelkds_state )
+
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_6MHz)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(main_portmap)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_CPU_ADD("sub", Z80, XTAL_4MHz)
+	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MCFG_CPU_IO_MAP(sub_portmap)
+
+	MCFG_MACHINE_START(angelkds)
+	MCFG_MACHINE_RESET(angelkds)
+
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-	MDRV_GFXDECODE(angelkds)
-	MDRV_PALETTE_LENGTH(0x100)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(angelkds)
 
-	MDRV_VIDEO_START(angelkds)
-	MDRV_VIDEO_UPDATE(angelkds)
+	MCFG_GFXDECODE(angelkds)
+	MCFG_PALETTE_LENGTH(0x100)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_VIDEO_START(angelkds)
 
-	MDRV_SOUND_ADD("ym1", YM2203, 4000000)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.65)
-	MDRV_SOUND_ROUTE(1, "mono", 0.65)
-	MDRV_SOUND_ROUTE(2, "mono", 0.65)
-	MDRV_SOUND_ROUTE(3, "mono", 0.45)
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym2", YM2203, 4000000)
-	MDRV_SOUND_ROUTE(0, "mono", 0.65)
-	MDRV_SOUND_ROUTE(1, "mono", 0.65)
-	MDRV_SOUND_ROUTE(2, "mono", 0.65)
-	MDRV_SOUND_ROUTE(3, "mono", 0.45)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ym1", YM2203, XTAL_4MHz)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.65)
+	MCFG_SOUND_ROUTE(1, "mono", 0.65)
+	MCFG_SOUND_ROUTE(2, "mono", 0.65)
+	MCFG_SOUND_ROUTE(3, "mono", 0.45)
+
+	MCFG_SOUND_ADD("ym2", YM2203, XTAL_4MHz)
+	MCFG_SOUND_ROUTE(0, "mono", 0.65)
+	MCFG_SOUND_ROUTE(1, "mono", 0.65)
+	MCFG_SOUND_ROUTE(2, "mono", 0.65)
+	MCFG_SOUND_ROUTE(3, "mono", 0.45)
+MACHINE_CONFIG_END
 
 /*** Rom Loading
 
@@ -743,8 +746,20 @@ ROM_START( spcpostn )
 ROM_END
 
 
-static DRIVER_INIT( spcpostn )	{ spcpostn_decode(machine, "maincpu"); }
+static DRIVER_INIT( angelkds )
+{
+	UINT8 *RAM = machine.region("user1")->base();
+	memory_configure_bank(machine, "bank1", 0, 8, &RAM[0x0000], 0x4000);
+}
+
+static DRIVER_INIT( spcpostn )
+{
+	UINT8 *RAM = machine.region("user1")->base();
+
+	sega_317_0005_decode(machine, "maincpu");
+	memory_configure_bank(machine, "bank1", 0, 10, &RAM[0x0000], 0x4000);
+}
 
 
-GAME( 1988, angelkds, 0, angelkds, angelkds,        0,  ROT90,  "Sega / Nasco?", "Angel Kids (Japan)" , GAME_SUPPORTS_SAVE) /* Nasco not displayed but 'Exa Planning' is */
-GAME( 1986, spcpostn, 0, angelkds, spcpostn, spcpostn,  ROT90,  "Sega / Nasco", "Space Position (Japan)" , GAME_SUPPORTS_SAVE) /* encrypted */
+GAME( 1988, angelkds, 0, angelkds, angelkds, angelkds,  ROT90,  "Sega / Nasco?", "Angel Kids (Japan)" ,     GAME_SUPPORTS_SAVE) /* Nasco not displayed but 'Exa Planning' is */
+GAME( 1986, spcpostn, 0, angelkds, spcpostn, spcpostn,  ROT90,  "Sega / Nasco",  "Space Position (Japan)" , GAME_SUPPORTS_SAVE) /* encrypted */

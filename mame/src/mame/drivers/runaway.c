@@ -10,27 +10,16 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/atari_vg.h"
 #include "sound/pokey.h"
+#include "includes/runaway.h"
 
-extern VIDEO_START( runaway );
-extern VIDEO_START( qwak );
-extern VIDEO_UPDATE( runaway );
-extern VIDEO_UPDATE( qwak );
-
-extern UINT8* runaway_video_ram;
-extern UINT8* runaway_sprite_ram;
-
-extern WRITE8_HANDLER( runaway_paletteram_w );
-extern WRITE8_HANDLER( runaway_video_ram_w );
-extern WRITE8_HANDLER( runaway_tile_bank_w );
-
-static emu_timer *interrupt_timer;
 
 static TIMER_CALLBACK( interrupt_callback )
 {
+	runaway_state *state = machine.driver_data<runaway_state>();
 	/* assume Centipede-style interrupt timing */
 	int scanline = param;
 
@@ -41,17 +30,19 @@ static TIMER_CALLBACK( interrupt_callback )
 	if (scanline >= 263)
 		scanline = 16;
 
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(scanline), scanline);
 }
 
 static MACHINE_START( runaway )
 {
-	interrupt_timer = timer_alloc(machine, interrupt_callback, NULL);
+	runaway_state *state = machine.driver_data<runaway_state>();
+	state->m_interrupt_timer = machine.scheduler().timer_alloc(FUNC(interrupt_callback));
 }
 
 static MACHINE_RESET( runaway )
 {
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, 16, 0), 16);
+	runaway_state *state = machine.driver_data<runaway_state>();
+	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(16), 16);
 }
 
 
@@ -59,11 +50,11 @@ static READ8_HANDLER( runaway_input_r )
 {
 	UINT8 val = 0;
 
-	if (input_port_read(space->machine, "3000D7") & (1 << offset))
+	if (input_port_read(space->machine(), "3000D7") & (1 << offset))
 	{
 		val |= 0x80;
 	}
-	if (input_port_read(space->machine, "3000D6") & (1 << offset))
+	if (input_port_read(space->machine(), "3000D6") & (1 << offset))
 	{
 		val |= 0x40;
 	}
@@ -74,29 +65,29 @@ static READ8_HANDLER( runaway_input_r )
 
 static READ8_DEVICE_HANDLER( runaway_pot_r )
 {
-	return (input_port_read(device->machine, "7000") << (7 - offset)) & 0x80;
+	return (input_port_read(device->machine(), "7000") << (7 - offset)) & 0x80;
 }
 
 
 static WRITE8_HANDLER( runaway_led_w )
 {
-	set_led_status(offset, ~data & 1);
+	set_led_status(space->machine(), offset, ~data & 1);
 }
 
 
 static WRITE8_HANDLER( runaway_irq_ack_w )
 {
-	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
 }
 
 
-static ADDRESS_MAP_START( runaway_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( runaway_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
-	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(runaway_video_ram_w) AM_BASE(&runaway_video_ram)
-	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE(&runaway_sprite_ram)
+	AM_RANGE(0x0400, 0x07bf) AM_RAM_WRITE(runaway_video_ram_w) AM_BASE_MEMBER(runaway_state, m_video_ram)
+	AM_RANGE(0x07c0, 0x07ff) AM_RAM AM_BASE_MEMBER(runaway_state, m_sprite_ram)
 	AM_RANGE(0x1000, 0x1000) AM_WRITE(runaway_irq_ack_w)
-	AM_RANGE(0x1400, 0x143f) AM_DEVWRITE("earom", atari_vg_earom_w)
-	AM_RANGE(0x1800, 0x1800) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x1400, 0x143f) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
+	AM_RANGE(0x1800, 0x1800) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
 	AM_RANGE(0x1c00, 0x1c0f) AM_WRITE(runaway_paletteram_w)
 	AM_RANGE(0x2000, 0x2000) AM_WRITENOP /* coin counter? */
 	AM_RANGE(0x2001, 0x2001) AM_WRITENOP /* coin counter? */
@@ -105,7 +96,7 @@ static ADDRESS_MAP_START( runaway_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x3000, 0x3007) AM_READ(runaway_input_r)
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("4000")
-	AM_RANGE(0x5000, 0x5000) AM_DEVREAD("earom", atari_vg_earom_r)
+	AM_RANGE(0x5000, 0x5000) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
 	AM_RANGE(0x6000, 0x600f) AM_DEVREADWRITE("pokey1", pokey_r,pokey_w)
 	AM_RANGE(0x7000, 0x700f) AM_DEVREADWRITE("pokey2", pokey_r,pokey_w)
 	AM_RANGE(0x8000, 0xcfff) AM_ROM
@@ -356,55 +347,54 @@ static const pokey_interface pokey_interface_2 =
 };
 
 
-static MACHINE_DRIVER_START( runaway )
+static MACHINE_CONFIG_START( runaway, runaway_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 12096000 / 8) /* ? */
-	MDRV_CPU_PROGRAM_MAP(runaway_map)
+	MCFG_CPU_ADD("maincpu", M6502, 12096000 / 8) /* ? */
+	MCFG_CPU_PROGRAM_MAP(runaway_map)
 
-	MDRV_MACHINE_START(runaway)
-	MDRV_MACHINE_RESET(runaway)
+	MCFG_MACHINE_START(runaway)
+	MCFG_MACHINE_RESET(runaway)
 
-	MDRV_ATARIVGEAROM_ADD("earom")
+	MCFG_ATARIVGEAROM_ADD("earom")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 263)
-	MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 239)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(256, 263)
+	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 239)
+	MCFG_SCREEN_UPDATE_STATIC(runaway)
 
-	MDRV_GFXDECODE(runaway)
-	MDRV_PALETTE_LENGTH(16)
+	MCFG_GFXDECODE(runaway)
+	MCFG_PALETTE_LENGTH(16)
 
-	MDRV_VIDEO_START(runaway)
-	MDRV_VIDEO_UPDATE(runaway)
+	MCFG_VIDEO_START(runaway)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey1", POKEY, 12096000 / 8)
-	MDRV_SOUND_CONFIG(pokey_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("pokey1", POKEY, 12096000 / 8)
+	MCFG_SOUND_CONFIG(pokey_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("pokey2", POKEY, 12096000 / 8)
-	MDRV_SOUND_CONFIG(pokey_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("pokey2", POKEY, 12096000 / 8)
+	MCFG_SOUND_CONFIG(pokey_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qwak )
+static MACHINE_CONFIG_DERIVED( qwak, runaway )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(runaway)
 
 	/* video hardware */
-	MDRV_GFXDECODE(qwak)
+	MCFG_GFXDECODE(qwak)
 
-	MDRV_VIDEO_START(qwak)
-	MDRV_VIDEO_UPDATE(qwak)
+	MCFG_VIDEO_START(qwak)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_UPDATE_STATIC(qwak)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( runaway )

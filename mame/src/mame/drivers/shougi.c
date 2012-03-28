@@ -81,11 +81,25 @@ PROM  : Type MB7051
 
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/alph8201/alph8201.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "video/resnet.h"
+
+class shougi_state : public driver_device
+{
+public:
+	shougi_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT8 *m_videoram;
+	int m_nmi_enabled;
+	//UINT8 *m_cpu_sharedram;
+	//UINT8 m_cpu_sharedram_control_val;
+	int m_r;
+};
+
 
 
 /***************************************************************************
@@ -118,7 +132,7 @@ static PALETTE_INIT( shougi )
 			3,	resistances_rg,	weights_g,	1000, 0,
 			2,	resistances_b,	weights_b,	1000, 0);
 
-	for (i = 0;i < machine->config->total_colors;i++)
+	for (i = 0;i < machine.total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -146,8 +160,9 @@ static PALETTE_INIT( shougi )
 
 
 
-static VIDEO_UPDATE( shougi )
+static SCREEN_UPDATE_IND16( shougi )
 {
+	shougi_state *state = screen.machine().driver_data<shougi_state>();
 	int offs;
 
 	for (offs = 0;offs <0x4000; offs++)
@@ -156,18 +171,18 @@ static VIDEO_UPDATE( shougi )
 
 		sx = offs >> 8;		/*00..0x3f (64*4=256)*/
 		sy = offs & 0xff;	/*00..0xff*/
-//      if (flipscreen[0]) sx = 31 - sx;
-//      if (flipscreen[1]) sy = 31 - sy;
+		//if (flipscreen[0]) sx = 31 - sx;
+		//if (flipscreen[1]) sy = 31 - sy;
 
-		data1 = videoram[offs];				/* color */
-		data2 = videoram[0x4000 + offs];	/* pixel data */
+		data1 = state->m_videoram[offs];				/* color */
+		data2 = state->m_videoram[0x4000 + offs];	/* pixel data */
 
 		for (x=0; x<4; x++) /*4 pixels per byte (2 bitplanes in 2 nibbles: 1st=bits 7-4, 2nd=bits 3-0)*/
 		{
 			color= ((data1>>x) & 1) | (((data1>>(4+x)) & 1)<<1);
 			data = ((data2>>x) & 1) | (((data2>>(4+x)) & 1)<<1);
 
-			*BITMAP_ADDR16(bitmap, 255-sy, 255-(sx*4 + x)) = color*4 + data;
+			bitmap.pix16(255-sy, 255-(sx*4 + x)) = color*4 + data;
 		}
 	}
 
@@ -175,9 +190,6 @@ static VIDEO_UPDATE( shougi )
 }
 
 #if 0
-
-static UINT8 *cpu_sharedram;
-static UINT8 cpu_sharedram_control_val = 0;
 
 //to do:
 // add separate sharedram/r/w() for both CPUs and use control value to verify access
@@ -203,14 +215,14 @@ static READ8_HANDLER ( cpu_sharedram_r )
 
 static WRITE8_HANDLER ( cpu_shared_ctrl_sub_w )
 {
-//  cpu_sharedram_control_val = 0;
-//logerror("cpu_sharedram_ctrl=SUB");
+	//cpu_sharedram_control_val = 0;
+	//logerror("cpu_sharedram_ctrl=SUB");
 }
 
 static WRITE8_HANDLER ( cpu_shared_ctrl_main_w )
 {
-//  cpu_sharedram_control_val = 1;
-//logerror("cpu_sharedram_ctrl=MAIN");
+	//cpu_sharedram_control_val = 1;
+	//logerror("cpu_sharedram_ctrl=MAIN");
 }
 
 static WRITE8_HANDLER( shougi_watchdog_reset_w )
@@ -221,44 +233,48 @@ static WRITE8_HANDLER( shougi_watchdog_reset_w )
 static WRITE8_HANDLER( shougi_mcu_halt_off_w )
 {
 	/* logerror("mcu HALT OFF"); */
-	cputag_set_input_line(space->machine, "mcu", INPUT_LINE_HALT, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "mcu", INPUT_LINE_HALT, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( shougi_mcu_halt_on_w )
 {
 	/* logerror("mcu HALT ON"); */
-	cputag_set_input_line(space->machine, "mcu", INPUT_LINE_HALT,ASSERT_LINE);
+	cputag_set_input_line(space->machine(), "mcu", INPUT_LINE_HALT,ASSERT_LINE);
 }
 
 
-static int nmi_enabled = 0;
-
 static WRITE8_HANDLER( nmi_disable_and_clear_line_w )
 {
-	nmi_enabled = 0; /* disable NMIs */
+	shougi_state *state = space->machine().driver_data<shougi_state>();
+
+	state->m_nmi_enabled = 0; /* disable NMIs */
 
 	/* NMI lines are tied together on both CPUs and connected to the LS74 /Q output */
-	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
-	cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+	cputag_set_input_line(space->machine(), "sub", INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	nmi_enabled = 1; /* enable NMIs */
+	shougi_state *state = space->machine().driver_data<shougi_state>();
+
+	state->m_nmi_enabled = 1; /* enable NMIs */
 }
 
 static INTERRUPT_GEN( shougi_vblank_nmi )
 {
-	if ( nmi_enabled == 1 )
+	shougi_state *state = device->machine().driver_data<shougi_state>();
+
+	if ( state->m_nmi_enabled == 1 )
 	{
 		/* NMI lines are tied together on both CPUs and connected to the LS74 /Q output */
-		cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
-		cputag_set_input_line(device->machine, "sub", INPUT_LINE_NMI, ASSERT_LINE);
+		cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+		cputag_set_input_line(device->machine(), "sub", INPUT_LINE_NMI, ASSERT_LINE);
 	}
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM		/* 2114 x 2 (0x400 x 4bit each) */
 
@@ -278,37 +294,38 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1")
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2") AM_WRITE(shougi_watchdog_reset_w)	/* game won't boot if watchdog doesn't work */
-	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x6800, 0x6800) AM_DEVWRITE("ay", ay8910_data_w)
-	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE(1) /* 2114 x 2 (0x400 x 4bit each) */
-	AM_RANGE(0x7800, 0x7bff) AM_RAM AM_SHARE(2) /* 2114 x 2 (0x400 x 4bit each) */
+	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x6800, 0x6800) AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1") /* 2114 x 2 (0x400 x 4bit each) */
+	AM_RANGE(0x7800, 0x7bff) AM_RAM AM_SHARE("share2") /* 2114 x 2 (0x400 x 4bit each) */
 
-	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)	/* 4116 x 16 (32K) */
+	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE_MEMBER(shougi_state,m_videoram)	/* 4116 x 16 (32K) */
 ADDRESS_MAP_END
 
 /* sub */
-static int r=0;
 static READ8_HANDLER ( dummy_r )
 {
-	r ^= 1;
-	if(r)
+	shougi_state *state = space->machine().driver_data<shougi_state>();
+	state->m_r ^= 1;
+
+	if(state->m_r)
 		return 0xff;
 	else
 		return 0;
 }
 
-static ADDRESS_MAP_START( readport_sub, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( readport_sub, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK( 0x00ff )
 	AM_RANGE(0x00, 0x00) AM_READ(dummy_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE(2) /* 2114 x 2 (0x400 x 4bit each) */
+	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE("share2") /* 2114 x 2 (0x400 x 4bit each) */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE(1)
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -373,43 +390,42 @@ INPUT_PORTS_END
 
 
 
-static MACHINE_DRIVER_START( shougi )
+static MACHINE_CONFIG_START( shougi, shougi_state )
 
-	MDRV_CPU_ADD("maincpu", Z80,10000000/4)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", shougi_vblank_nmi)
+	MCFG_CPU_ADD("maincpu", Z80,10000000/4)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", shougi_vblank_nmi)
 
-	MDRV_CPU_ADD("sub", Z80,10000000/4)
-	MDRV_CPU_PROGRAM_MAP(sub_map)
-	MDRV_CPU_IO_MAP(readport_sub)
+	MCFG_CPU_ADD("sub", Z80,10000000/4)
+	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MCFG_CPU_IO_MAP(readport_sub)
 	/* NMIs triggered in shougi_vblank_nmi() */
 
 	/* MCU */
-	MDRV_CPU_ADD("mcu", ALPHA8201, 10000000/4/8)
-	MDRV_CPU_PROGRAM_MAP(mcu_map)
+	MCFG_CPU_ADD("mcu", ALPHA8201, 10000000/4/8)
+	MCFG_CPU_PROGRAM_MAP(mcu_map)
 
-	MDRV_QUANTUM_TIME(HZ(600))
-	MDRV_WATCHDOG_VBLANK_INIT(16)	// assuming it's the same as champbas
+	MCFG_QUANTUM_TIME(attotime::from_hz(600))
+	MCFG_WATCHDOG_VBLANK_INIT(16)	// assuming it's the same as champbas
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 255)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 255)
+	MCFG_SCREEN_UPDATE_STATIC(shougi)
 
-	MDRV_PALETTE_LENGTH(32)
+	MCFG_PALETTE_LENGTH(32)
 
-	MDRV_PALETTE_INIT(shougi)
-	MDRV_VIDEO_UPDATE(shougi)
+	MCFG_PALETTE_INIT(shougi)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 10000000/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("aysnd", AY8910, 10000000/8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_CONFIG_END
 
 
 

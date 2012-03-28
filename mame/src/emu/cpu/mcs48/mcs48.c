@@ -72,8 +72,8 @@ T0 output clock
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
-#include "timer.h"
 #include "mcs48.h"
 
 
@@ -149,19 +149,19 @@ struct _mcs48_state
 
 	UINT16		a11;				/* A11 value, either 0x000 or 0x800 */
 
-	cpu_irq_callback irq_callback;
-	const device_config *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	int			icount;
 
 	/* Memory spaces */
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
 
 	UINT8		feature_mask;		/* processor feature flags */
 	UINT16		int_rom_size;		/* internal rom size */
 
-	cpu_state_table state;			/* state table */
 	UINT8		rtemp;				/* temporary for import/export */
 };
 
@@ -172,78 +172,27 @@ typedef int (*mcs48_ophandler)(mcs48_state *state);
 
 
 /***************************************************************************
-    CPU STATE DESCRIPTION
-***************************************************************************/
-
-#define MCS48_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	CPU_STATE_ENTRY(MCS48_##_name, #_name, _format, mcs48_state, _member, _datamask, MCS48_FEATURE | UPI41_FEATURE, _flags)
-
-#define UPI41_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	CPU_STATE_ENTRY(MCS48_##_name, #_name, _format, mcs48_state, _member, _datamask, UPI41_FEATURE, _flags)
-
-static const cpu_state_entry state_array[] =
-{
-	MCS48_STATE_ENTRY(PC, "%03X", pc, 0xfff, 0)
-	MCS48_STATE_ENTRY(GENPC, "%03X", pc, 0xfff, CPUSTATE_NOSHOW)
-	MCS48_STATE_ENTRY(GENPCBASE, "%03X", prevpc, 0xfff, CPUSTATE_NOSHOW)
-
-	MCS48_STATE_ENTRY(GENSP, "%1X", psw, 0x7, CPUSTATE_NOSHOW)
-
-	MCS48_STATE_ENTRY(A, "%02X", a, 0xff, 0)
-	MCS48_STATE_ENTRY(TC, "%02X", timer, 0xff, 0)
-	MCS48_STATE_ENTRY(TPRE, "%02X", prescaler, 0x1f, 0)
-
-	MCS48_STATE_ENTRY(P1, "%02X", p1, 0xff, 0)
-	MCS48_STATE_ENTRY(P2, "%02X", p2, 0xff, 0)
-
-	MCS48_STATE_ENTRY(R0, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R1, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R2, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R3, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R4, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R5, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R6, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	MCS48_STATE_ENTRY(R7, "%02X", rtemp, 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-
-	MCS48_STATE_ENTRY(EA, "%1u", ea, 0x1, 0)
-
-	UPI41_STATE_ENTRY(STS, "%02X", sts, 0xff, 0)
-	UPI41_STATE_ENTRY(DBBI, "%02X", dbbi, 0xff, 0)
-	UPI41_STATE_ENTRY(DBBO, "%02X", dbbo, 0xff, 0)
-};
-
-static const cpu_state_table state_table_template =
-{
-	NULL,						/* pointer to the base of state (offsets are relative to this) */
-	0,							/* subtype this table refers to */
-	ARRAY_LENGTH(state_array),	/* number of entries */
-	state_array					/* array of entries */
-};
-
-
-
-/***************************************************************************
     MACROS
 ***************************************************************************/
 
-/* ROM is mapped to ADDRESS_SPACE_PROGRAM */
-#define program_r(a)	memory_read_byte_8le(cpustate->program, a)
+/* ROM is mapped to AS_PROGRAM */
+#define program_r(a)	cpustate->program->read_byte(a)
 
-/* RAM is mapped to ADDRESS_SPACE_DATA */
-#define ram_r(a)		memory_read_byte_8le(cpustate->data, a)
-#define ram_w(a,V)		memory_write_byte_8le(cpustate->data, a, V)
+/* RAM is mapped to AS_DATA */
+#define ram_r(a)		cpustate->data->read_byte(a)
+#define ram_w(a,V)		cpustate->data->write_byte(a, V)
 
-/* ports are mapped to ADDRESS_SPACE_IO */
-#define ext_r(a)		memory_read_byte_8le(cpustate->io, a)
-#define ext_w(a,V)		memory_write_byte_8le(cpustate->io, a, V)
-#define port_r(a)		memory_read_byte_8le(cpustate->io, MCS48_PORT_P0 + a)
-#define port_w(a,V)		memory_write_byte_8le(cpustate->io, MCS48_PORT_P0 + a, V)
-#define test_r(a)		memory_read_byte_8le(cpustate->io, MCS48_PORT_T0 + a)
-#define test_w(a,V)		memory_write_byte_8le(cpustate->io, MCS48_PORT_T0 + a, V)
-#define bus_r()			memory_read_byte_8le(cpustate->io, MCS48_PORT_BUS)
-#define bus_w(V)		memory_write_byte_8le(cpustate->io, MCS48_PORT_BUS, V)
-#define ea_r()			memory_read_byte_8le(cpustate->io, MCS48_PORT_EA)
-#define prog_w(V)		memory_write_byte_8le(cpustate->io, MCS48_PORT_PROG, V)
+/* ports are mapped to AS_IO */
+#define ext_r(a)		cpustate->io->read_byte(a)
+#define ext_w(a,V)		cpustate->io->write_byte(a, V)
+#define port_r(a)		cpustate->io->read_byte(MCS48_PORT_P0 + a)
+#define port_w(a,V)		cpustate->io->write_byte(MCS48_PORT_P0 + a, V)
+#define test_r(a)		cpustate->io->read_byte(MCS48_PORT_T0 + a)
+#define test_w(a,V)		cpustate->io->write_byte(MCS48_PORT_T0 + a, V)
+#define bus_r()			cpustate->io->read_byte(MCS48_PORT_BUS)
+#define bus_w(V)		cpustate->io->write_byte(MCS48_PORT_BUS, V)
+#define ea_r()			cpustate->io->read_byte(MCS48_PORT_EA)
+#define prog_w(V)		cpustate->io->write_byte(MCS48_PORT_PROG, V)
 
 /* r0-r7 map to memory via the regptr */
 #define R0				regptr[0]
@@ -269,29 +218,29 @@ static int check_irqs(mcs48_state *cpustate);
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE mcs48_state *get_safe_token(const device_config *device)
+INLINE mcs48_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_I8035 ||
-		   cpu_get_type(device) == CPU_I8048 ||
-		   cpu_get_type(device) == CPU_I8648 ||
-		   cpu_get_type(device) == CPU_I8748 ||
-		   cpu_get_type(device) == CPU_I8039 ||
-		   cpu_get_type(device) == CPU_I8049 ||
-		   cpu_get_type(device) == CPU_I8749 ||
-		   cpu_get_type(device) == CPU_I8040 ||
-		   cpu_get_type(device) == CPU_I8050 ||
-		   cpu_get_type(device) == CPU_I8041 ||
-		   cpu_get_type(device) == CPU_I8741 ||
-		   cpu_get_type(device) == CPU_I8042 ||
-		   cpu_get_type(device) == CPU_I8242 ||
-		   cpu_get_type(device) == CPU_I8742 ||
-		   cpu_get_type(device) == CPU_MB8884 ||
-		   cpu_get_type(device) == CPU_N7751 ||
-		   cpu_get_type(device) == CPU_M58715);
-	return (mcs48_state *)device->token;
+	assert(device->type() == I8021 ||
+		   device->type() == I8022 ||
+		   device->type() == I8035 ||
+		   device->type() == I8048 ||
+		   device->type() == I8648 ||
+		   device->type() == I8748 ||
+		   device->type() == I8039 ||
+		   device->type() == I8049 ||
+		   device->type() == I8749 ||
+		   device->type() == I8040 ||
+		   device->type() == I8050 ||
+		   device->type() == I8041 ||
+		   device->type() == I8741 ||
+		   device->type() == I8042 ||
+		   device->type() == I8242 ||
+		   device->type() == I8742 ||
+		   device->type() == MB8884 ||
+		   device->type() == N7751 ||
+		   device->type() == M58715);
+	return (mcs48_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 
@@ -301,7 +250,7 @@ INLINE mcs48_state *get_safe_token(const device_config *device)
 
 INLINE UINT8 opcode_fetch(mcs48_state *cpustate)
 {
-	return memory_decrypted_read_byte(cpustate->program, cpustate->pc++);
+	return cpustate->direct->read_decrypted_byte(cpustate->pc++);
 }
 
 
@@ -312,7 +261,7 @@ INLINE UINT8 opcode_fetch(mcs48_state *cpustate)
 
 INLINE UINT8 argument_fetch(mcs48_state *cpustate)
 {
-	return memory_raw_read_byte(cpustate->program, cpustate->pc++);
+	return cpustate->direct->read_raw_byte(cpustate->pc++);
 }
 
 
@@ -323,7 +272,7 @@ INLINE UINT8 argument_fetch(mcs48_state *cpustate)
 
 INLINE void update_regptr(mcs48_state *cpustate)
 {
-	cpustate->regptr = (UINT8 *)memory_get_write_ptr(cpustate->data, (cpustate->psw & B_FLAG) ? 24 : 0);
+	cpustate->regptr = (UINT8 *)cpustate->data->get_write_ptr((cpustate->psw & B_FLAG) ? 24 : 0);
 }
 
 
@@ -664,8 +613,8 @@ OPHANDLER( jnt_1 )  		{ execute_jcc(cpustate, test_r(1) == 0); return 2; }
 OPHANDLER( jnz )			{ execute_jcc(cpustate, cpustate->a != 0); return 2; }
 OPHANDLER( jobf )			{ execute_jcc(cpustate, (cpustate->sts & STS_OBF) != 0); return 2; }
 OPHANDLER( jtf )			{ execute_jcc(cpustate, cpustate->timer_flag); cpustate->timer_flag = FALSE; return 2; }
-OPHANDLER( jt_0 )  			{ execute_jcc(cpustate, test_r(0) != 0); return 2; }
-OPHANDLER( jt_1 )  			{ execute_jcc(cpustate, test_r(1) != 0); return 2; }
+OPHANDLER( jt_0 )			{ execute_jcc(cpustate, test_r(0) != 0); return 2; }
+OPHANDLER( jt_1 )			{ execute_jcc(cpustate, test_r(1) != 0); return 2; }
 OPHANDLER( jz )				{ execute_jcc(cpustate, cpustate->a == 0); return 2; }
 
 OPHANDLER( jmp_0 )			{ execute_jmp(cpustate, argument_fetch(cpustate) | 0x000); return 2; }
@@ -782,7 +731,7 @@ OPHANDLER( retr )
 }
 
 OPHANDLER( rl_a )			{ cpustate->a = (cpustate->a << 1) | (cpustate->a >> 7); return 1; }
-OPHANDLER( rlc_a ) 			{ UINT8 newc = cpustate->a & C_FLAG; cpustate->a = (cpustate->a << 1) | (cpustate->psw >> 7); cpustate->psw = (cpustate->psw & ~C_FLAG) | newc; return 1; }
+OPHANDLER( rlc_a )			{ UINT8 newc = cpustate->a & C_FLAG; cpustate->a = (cpustate->a << 1) | (cpustate->psw >> 7); cpustate->psw = (cpustate->psw & ~C_FLAG) | newc; return 1; }
 
 OPHANDLER( rr_a )			{ cpustate->a = (cpustate->a >> 1) | (cpustate->a << 7); return 1; }
 OPHANDLER( rrc_a )			{ UINT8 newc = (cpustate->a << 7) & C_FLAG; cpustate->a = (cpustate->a >> 1) | (cpustate->psw & C_FLAG); cpustate->psw = (cpustate->psw & ~C_FLAG) | newc; return 1; }
@@ -893,7 +842,7 @@ static const mcs48_ophandler opcode_table[256]=
     mcs48_init - generic MCS-48 initialization
 -------------------------------------------------*/
 
-static void mcs48_init(const device_config *device, cpu_irq_callback irqcallback, UINT8 feature_mask, UINT16 romsize)
+static void mcs48_init(legacy_cpu_device *device, device_irq_callback irqcallback, UINT8 feature_mask, UINT16 romsize)
 {
 	mcs48_state *cpustate = get_safe_token(device);
 
@@ -910,44 +859,70 @@ static void mcs48_init(const device_config *device, cpu_irq_callback irqcallback
 	cpustate->int_rom_size = romsize;
 	cpustate->feature_mask = feature_mask;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	/* set up the state table */
-	cpustate->state = state_table_template;
-	cpustate->state.baseptr = cpustate;
-	cpustate->state.subtypemask = feature_mask;
+	{
+		device_state_interface *state;
+		device->interface(state);
+		state->state_add(MCS48_PC,        "PC",        cpustate->pc).mask(0xfff);
+		state->state_add(STATE_GENPC,     "GENPC",     cpustate->pc).mask(0xfff).noshow();
+		state->state_add(STATE_GENPCBASE, "GENPCBASE", cpustate->prevpc).mask(0xfff).noshow();
+		state->state_add(STATE_GENSP,     "GENSP",     cpustate->psw).mask(0x7).noshow();
+		state->state_add(STATE_GENFLAGS,  "GENFLAGS",  cpustate->psw).noshow().formatstr("%10s");
+		state->state_add(MCS48_A,         "A",         cpustate->a);
+		state->state_add(MCS48_TC,        "TC",        cpustate->timer);
+		state->state_add(MCS48_TPRE,      "TPRE",      cpustate->prescaler).mask(0x1f);
+		state->state_add(MCS48_P1,        "P1",        cpustate->p1);
+		state->state_add(MCS48_P2,        "P2",        cpustate->p2);
+
+		astring tempstr;
+		for (int regnum = 0; regnum < 8; regnum++)
+			state->state_add(MCS48_R0 + regnum, tempstr.format("R%d", regnum), cpustate->rtemp).callimport().callexport();
+
+		state->state_add(MCS48_EA,        "EA",        cpustate->ea).mask(0x1);
+
+		if (feature_mask & UPI41_FEATURE)
+		{
+			state->state_add(MCS48_STS,   "STS",       cpustate->sts);
+			state->state_add(MCS48_DBBI,  "DBBI",      cpustate->dbbi);
+			state->state_add(MCS48_DBBO,  "DBBO",      cpustate->dbbo);
+		}
+
+	}
 
 	/* ensure that regptr is valid before get_info gets called */
 	update_regptr(cpustate);
 
-	state_save_register_device_item(device, 0, cpustate->prevpc);
-	state_save_register_device_item(device, 0, cpustate->pc);
+	device->save_item(NAME(cpustate->prevpc));
+	device->save_item(NAME(cpustate->pc));
 
-	state_save_register_device_item(device, 0, cpustate->a);
-	state_save_register_device_item(device, 0, cpustate->psw);
-	state_save_register_device_item(device, 0, cpustate->p1);
-	state_save_register_device_item(device, 0, cpustate->p2);
-	state_save_register_device_item(device, 0, cpustate->ea);
-	state_save_register_device_item(device, 0, cpustate->timer);
-	state_save_register_device_item(device, 0, cpustate->prescaler);
-	state_save_register_device_item(device, 0, cpustate->t1_history);
-	state_save_register_device_item(device, 0, cpustate->sts);
-	state_save_register_device_item(device, 0, cpustate->dbbi);
-	state_save_register_device_item(device, 0, cpustate->dbbo);
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->psw));
+	device->save_item(NAME(cpustate->p1));
+	device->save_item(NAME(cpustate->p2));
+	device->save_item(NAME(cpustate->ea));
+	device->save_item(NAME(cpustate->timer));
+	device->save_item(NAME(cpustate->prescaler));
+	device->save_item(NAME(cpustate->t1_history));
+	device->save_item(NAME(cpustate->sts));
+	device->save_item(NAME(cpustate->dbbi));
+	device->save_item(NAME(cpustate->dbbo));
 
-	state_save_register_device_item(device, 0, cpustate->irq_state);
-	state_save_register_device_item(device, 0, cpustate->irq_in_progress);
-	state_save_register_device_item(device, 0, cpustate->timer_overflow);
-	state_save_register_device_item(device, 0, cpustate->timer_flag);
-	state_save_register_device_item(device, 0, cpustate->tirq_enabled);
-	state_save_register_device_item(device, 0, cpustate->xirq_enabled);
-	state_save_register_device_item(device, 0, cpustate->timecount_enabled);
-	state_save_register_device_item(device, 0, cpustate->flags_enabled);
-	state_save_register_device_item(device, 0, cpustate->dma_enabled);
+	device->save_item(NAME(cpustate->irq_state));
+	device->save_item(NAME(cpustate->irq_in_progress));
+	device->save_item(NAME(cpustate->timer_overflow));
+	device->save_item(NAME(cpustate->timer_flag));
+	device->save_item(NAME(cpustate->tirq_enabled));
+	device->save_item(NAME(cpustate->xirq_enabled));
+	device->save_item(NAME(cpustate->timecount_enabled));
+	device->save_item(NAME(cpustate->flags_enabled));
+	device->save_item(NAME(cpustate->dma_enabled));
 
-	state_save_register_device_item(device, 0, cpustate->a11);
+	device->save_item(NAME(cpustate->a11));
 }
 
 
@@ -1150,8 +1125,6 @@ static CPU_EXECUTE( mcs48 )
 
 	update_regptr(cpustate);
 
-	cpustate->icount = cycles;
-
 	/* external interrupts may have been set since we last checked */
 	curcycles = check_irqs(cpustate);
 	cpustate->icount -= curcycles;
@@ -1177,8 +1150,6 @@ static CPU_EXECUTE( mcs48 )
 			burn_cycles(cpustate, curcycles);
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -1192,7 +1163,7 @@ static CPU_EXECUTE( mcs48 )
     read
 -------------------------------------------------*/
 
-UINT8 upi41_master_r(const device_config *device, UINT8 a0)
+UINT8 upi41_master_r(device_t *device, UINT8 a0)
 {
 	mcs48_state *cpustate = get_safe_token(device);
 
@@ -1218,7 +1189,7 @@ UINT8 upi41_master_r(const device_config *device, UINT8 a0)
 
 static TIMER_CALLBACK( master_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	legacy_cpu_device *device = (legacy_cpu_device *)ptr;
 	mcs48_state *cpustate = get_safe_token(device);
 	UINT8 a0 = (param >> 8) & 1;
 	UINT8 data = param;
@@ -1241,9 +1212,10 @@ static TIMER_CALLBACK( master_callback )
 		cpustate->sts |= STS_F1;
 }
 
-void upi41_master_w(const device_config *device, UINT8 a0, UINT8 data)
+void upi41_master_w(device_t *_device, UINT8 a0, UINT8 data)
 {
-	timer_call_after_resynch(device->machine, (void *)device, (a0 << 8) | data, master_callback);
+	legacy_cpu_device *device = downcast<legacy_cpu_device *>(_device);
+	device->machine().scheduler().synchronize(FUNC(master_callback), (a0 << 8) | data, (void *)device);
 }
 
 
@@ -1253,27 +1225,27 @@ void upi41_master_w(const device_config *device, UINT8 a0, UINT8 data)
 ***************************************************************************/
 
 /* FIXME: the memory maps should probably support rom banking for EA */
-static ADDRESS_MAP_START(program_10bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_10bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0x3ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(program_11bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_11bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0x7ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(program_12bit, ADDRESS_SPACE_PROGRAM, 8)
+static ADDRESS_MAP_START(program_12bit, AS_PROGRAM, 8)
 	AM_RANGE(0x000, 0xfff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_6bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_6bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0x3f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_7bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_7bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0x7f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(data_8bit, ADDRESS_SPACE_DATA, 8)
+static ADDRESS_MAP_START(data_8bit, AS_DATA, 8)
 	AM_RANGE(0x00, 0xff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1292,7 +1264,7 @@ static CPU_IMPORT_STATE( mcs48 )
 {
 	mcs48_state *cpustate = get_safe_token(device);
 
-	switch (entry->index)
+	switch (entry.index())
 	{
 		case MCS48_R0:
 		case MCS48_R1:
@@ -1302,7 +1274,7 @@ static CPU_IMPORT_STATE( mcs48 )
 		case MCS48_R5:
 		case MCS48_R6:
 		case MCS48_R7:
-			cpustate->regptr[entry->index - MCS48_R0] = cpustate->rtemp;
+			cpustate->regptr[entry.index() - MCS48_R0] = cpustate->rtemp;
 			break;
 
 		default:
@@ -1321,7 +1293,7 @@ static CPU_EXPORT_STATE( mcs48 )
 {
 	mcs48_state *cpustate = get_safe_token(device);
 
-	switch (entry->index)
+	switch (entry.index())
 	{
 		case MCS48_R0:
 		case MCS48_R1:
@@ -1331,7 +1303,7 @@ static CPU_EXPORT_STATE( mcs48 )
 		case MCS48_R5:
 		case MCS48_R6:
 		case MCS48_R7:
-			cpustate->rtemp = cpustate->regptr[entry->index - MCS48_R0];
+			cpustate->rtemp = cpustate->regptr[entry.index() - MCS48_R0];
 			break;
 
 		default:
@@ -1340,6 +1312,27 @@ static CPU_EXPORT_STATE( mcs48 )
 	}
 }
 
+static CPU_EXPORT_STRING( mcs48 )
+{
+	mcs48_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case CPUINFO_STR_FLAGS:
+			string.printf("%c%c %c%c%c%c%c%c%c%c",
+				cpustate->irq_state ? 'I':'.',
+				cpustate->a11       ? 'M':'.',
+				cpustate->psw & 0x80 ? 'C':'.',
+				cpustate->psw & 0x40 ? 'A':'.',
+				cpustate->psw & 0x20 ? 'F':'.',
+				cpustate->psw & 0x10 ? 'B':'.',
+				cpustate->psw & 0x08 ? '?':'.',
+				cpustate->psw & 0x04 ? '4':'.',
+				cpustate->psw & 0x02 ? '2':'.',
+				cpustate->psw & 0x01 ? '1':'.');
+			break;
+	}
+}
 
 /*-------------------------------------------------
     mcs48_set_info - set a piece of information
@@ -1366,7 +1359,7 @@ static CPU_SET_INFO( mcs48 )
 
 static CPU_GET_INFO( mcs48 )
 {
-	mcs48_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mcs48_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1376,21 +1369,20 @@ static CPU_GET_INFO( mcs48 )
 		case CPUINFO_INT_DEFAULT_IRQ_VECTOR:			info->i = MCS48_INPUT_IRQ;				break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_LITTLE;			break;
 		case CPUINFO_INT_CLOCK_MULTIPLIER:				info->i = 1;							break;
-		case CPUINFO_INT_CLOCK_DIVIDER:					info->i = 3*5;							break;
 		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:			info->i = 1;							break;
 		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 2;							break;
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 3;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 12;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:	 		info->i = 0;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 			/*info->i = 6 or 7 or 8;*/				break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 			info->i = 0;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:				info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 				info->i = 9;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 				info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 12;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			/*info->i = 6 or 7 or 8;*/				break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 9;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break;
 
 		case CPUINFO_INT_INPUT_STATE + MCS48_INPUT_IRQ:	info->i = cpustate->irq_state ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + MCS48_INPUT_EA:	info->i = cpustate->ea;					break;
@@ -1403,12 +1395,12 @@ static CPU_GET_INFO( mcs48 )
 		case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(mcs48);		break;
 		case CPUINFO_FCT_IMPORT_STATE:	info->import_state = CPU_IMPORT_STATE_NAME(mcs48);		break;
 		case CPUINFO_FCT_EXPORT_STATE:	info->export_state = CPU_EXPORT_STATE_NAME(mcs48);		break;
+		case CPUINFO_FCT_EXPORT_STRING:	info->export_string = CPU_EXPORT_STRING_NAME(mcs48);	break;
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;		break;
-		case CPUINFO_PTR_STATE_TABLE:					info->state_table = &cpustate->state;	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	/* set per-core */						break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA: 		/* set per-core */ 						break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	/* set per-core */						break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		/* set per-core */						break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							/* set per-core */						break;
@@ -1416,20 +1408,6 @@ static CPU_GET_INFO( mcs48 )
 		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.2");					break;
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);				break;
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Mirko Buffoni\nBased on the original work Copyright Dan Boris"); break;
-
-		case CPUINFO_STR_FLAGS:
-			sprintf(info->s, "%c%c %c%c%c%c%c%c%c%c",
-				cpustate->irq_state ? 'I':'.',
-				cpustate->a11       ? 'M':'.',
-				cpustate->psw & 0x80 ? 'C':'.',
-				cpustate->psw & 0x40 ? 'A':'.',
-				cpustate->psw & 0x20 ? 'F':'.',
-				cpustate->psw & 0x10 ? 'B':'.',
-				cpustate->psw & 0x08 ? '?':'.',
-				cpustate->psw & 0x04 ? '4':'.',
-				cpustate->psw & 0x02 ? '2':'.',
-				cpustate->psw & 0x01 ? '1':'.');
-			break;
 	}
 }
 
@@ -1439,12 +1417,16 @@ static CPU_GET_INFO( mcs48 )
     CPU-SPECIFIC CONTEXT ACCESS
 ***************************************************************************/
 
-static void mcs48_generic_get_info(const device_config *device, UINT32 state, cpuinfo *info, UINT8 features, int romsize, int ramsize, const char *name)
+static void mcs48_generic_get_info(legacy_cpu_device *device, UINT32 state, cpuinfo *info, UINT8 features, int romsize, int ramsize, int cycle_states, const char *name)
 {
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:
+		case CPUINFO_INT_CLOCK_DIVIDER:
+			info->i = 3 * cycle_states;
+			break;
+
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:
 			if (ramsize == 64)
 				info->i = 6;
 			else if (ramsize == 128)
@@ -1477,7 +1459,7 @@ static void mcs48_generic_get_info(const device_config *device, UINT32 state, cp
 			break;
 
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:
 			if (romsize == 0)
 				info->internal_map8 = NULL;
 			else if (romsize == 1024)
@@ -1490,7 +1472,7 @@ static void mcs48_generic_get_info(const device_config *device, UINT32 state, cp
 				fatalerror("mcs48_generic_get_info: Invalid RAM size");
 			break;
 
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:
 			if (ramsize == 64)
 				info->internal_map8 = ADDRESS_MAP_NAME(data_6bit);
 			else if (ramsize == 128)
@@ -1515,26 +1497,53 @@ static void mcs48_generic_get_info(const device_config *device, UINT32 state, cp
 
 
 /* Official Intel MCS-48 parts */
-CPU_GET_INFO( i8035 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0,  64, "I8035"); }
-CPU_GET_INFO( i8048 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64, "I8048"); }
-CPU_GET_INFO( i8648 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64, "I8648"); }
-CPU_GET_INFO( i8748 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64, "I8748"); }
-CPU_GET_INFO( i8039 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0, 128, "I8039"); }
-CPU_GET_INFO( i8049 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128, "I8049"); }
-CPU_GET_INFO( i8749 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128, "I8749"); }
-CPU_GET_INFO( i8040 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0, 256, "I8040"); }
-CPU_GET_INFO( i8050 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 4096, 256, "I8050"); }
+CPU_GET_INFO( i8021 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64, 10, "I8021"); }
+CPU_GET_INFO( i8022 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128, 10, "I8022"); }
+CPU_GET_INFO( i8035 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0,  64,  5, "I8035"); }
+CPU_GET_INFO( i8048 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64,  5, "I8048"); }
+CPU_GET_INFO( i8648 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64,  5, "I8648"); }
+CPU_GET_INFO( i8748 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64,  5, "I8748"); }
+CPU_GET_INFO( i8039 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0, 128,  5, "I8039"); }
+CPU_GET_INFO( i8049 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128,  5, "I8049"); }
+CPU_GET_INFO( i8749 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128,  5, "I8749"); }
+CPU_GET_INFO( i8040 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0, 256,  5, "I8040"); }
+CPU_GET_INFO( i8050 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 4096, 256,  5, "I8050"); }
 
 
 /* Official Intel UPI-41 parts */
-CPU_GET_INFO( i8041 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 1024, 128, "I8041"); }
-CPU_GET_INFO( i8741 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 1024, 128, "I8741"); }
-CPU_GET_INFO( i8042 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 2048, 256, "I8042"); }
-CPU_GET_INFO( i8242 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 2048, 256, "I8242"); }
-CPU_GET_INFO( i8742 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 2048, 256, "I8742"); }
+CPU_GET_INFO( i8041 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 1024, 128,  5, "I8041"); }
+CPU_GET_INFO( i8741 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 1024, 128,  5, "I8741"); }
+CPU_GET_INFO( i8042 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 2048, 256,  5, "I8042"); }
+CPU_GET_INFO( i8242 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 2048, 256,  5, "I8242"); }
+CPU_GET_INFO( i8742 )  { mcs48_generic_get_info(device, state, info, UPI41_FEATURE, 2048, 256,  5, "I8742"); }
 
 
 /* Clones */
-CPU_GET_INFO( mb8884 ) { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0,  64, "MB8884"); }
-CPU_GET_INFO( n7751 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64, "N7751"); }
-CPU_GET_INFO( m58715 ) { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128, "M58715"); }
+CPU_GET_INFO( mb8884 ) { mcs48_generic_get_info(device, state, info, MCS48_FEATURE,    0,  64,  5, "MB8884"); }
+CPU_GET_INFO( n7751 )  { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 1024,  64,  5, "N7751"); }
+CPU_GET_INFO( m58715 ) { mcs48_generic_get_info(device, state, info, MCS48_FEATURE, 2048, 128,  5, "M58715"); }
+
+/* Official Intel MCS-48 parts */
+DEFINE_LEGACY_CPU_DEVICE(I8021, i8021);			/* 1k internal ROM,      64 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8022, i8022);			/* 2k internal ROM,     128 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8035, i8035);			/* external ROM,         64 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8048, i8048);			/* 1k internal ROM,      64 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8648, i8648);			/* 1k internal OTP ROM,  64 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8748, i8748);			/* 1k internal EEPROM,   64 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8039, i8039);			/* external ROM,        128 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8049, i8049);			/* 2k internal ROM,     128 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8749, i8749);			/* 2k internal EEPROM,  128 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8040, i8040);			/* external ROM,        256 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8050, i8050);			/* 4k internal ROM,     256 bytes internal RAM */
+
+/* Official Intel UPI-41 parts */
+DEFINE_LEGACY_CPU_DEVICE(I8041, i8041);			/* 1k internal ROM,     128 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8741, i8741);			/* 1k internal EEPROM,  128 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8042, i8042);			/* 2k internal ROM,     256 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8242, i8242);			/* 2k internal ROM,     256 bytes internal RAM */
+DEFINE_LEGACY_CPU_DEVICE(I8742, i8742);			/* 2k internal EEPROM,  256 bytes internal RAM */
+
+/* Clones */
+DEFINE_LEGACY_CPU_DEVICE(MB8884, mb8884);		/* 8035 clone */
+DEFINE_LEGACY_CPU_DEVICE(N7751, n7751);			/* 8048 clone */
+DEFINE_LEGACY_CPU_DEVICE(M58715, m58715);		/* 8049 clone */

@@ -9,13 +9,15 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6805/m6805.h"
 #include "cpu/m68000/m68000.h"
 #include "video/vector.h"
-#include "vertigo.h"
-#include "exidy440.h"
+#include "machine/74148.h"
 #include "machine/pit8253.h"
+#include "machine/nvram.h"
+#include "audio/exidy440.h"
+#include "includes/vertigo.h"
 
 
 
@@ -28,10 +30,10 @@
 static READ16_DEVICE_HANDLER( vertigo_pit8254_lsb_r ) { return pit8253_r( device, offset ); }
 static WRITE16_DEVICE_HANDLER( vertigo_pit8254_lsb_w ) { if (ACCESSING_BITS_0_7) pit8253_w(device, offset, data); }
 
-static ADDRESS_MAP_START( vertigo_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( vertigo_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x000007) AM_ROM
 	AM_RANGE(0x000008, 0x001fff) AM_RAM AM_MIRROR(0x010000)
-	AM_RANGE(0x002000, 0x003fff) AM_RAM AM_BASE(&vertigo_vectorram)
+	AM_RANGE(0x002000, 0x003fff) AM_RAM AM_BASE_MEMBER(vertigo_state, m_vectorram)
 	AM_RANGE(0x004000, 0x00400f) AM_READ(vertigo_io_convert) AM_MIRROR(0x001000)
 	AM_RANGE(0x004010, 0x00401f) AM_READ(vertigo_io_adc) AM_MIRROR(0x001000)
 	AM_RANGE(0x004020, 0x00402f) AM_READ(vertigo_coin_r) AM_MIRROR(0x001000)
@@ -41,7 +43,7 @@ static ADDRESS_MAP_START( vertigo_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x004060, 0x00406f) AM_WRITE(vertigo_motor_w) AM_MIRROR(0x001000)
 	AM_RANGE(0x004070, 0x00407f) AM_WRITE(vertigo_wsot_w) AM_MIRROR(0x001000)
 	AM_RANGE(0x006000, 0x006007) AM_DEVREADWRITE("pit8254", vertigo_pit8254_lsb_r, vertigo_pit8254_lsb_w)
-	AM_RANGE(0x007000, 0x0073ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x007000, 0x0073ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x800000, 0x81ffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -54,7 +56,7 @@ ADDRESS_MAP_END
  *************************************/
 
 #if 0
-static ADDRESS_MAP_START( vertigo_motor, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( vertigo_motor, AS_PROGRAM, 8 )
 	AM_RANGE(0x010, 0x07f) AM_RAM
 	AM_RANGE(0x080, 0x7ff) AM_ROM
 ADDRESS_MAP_END
@@ -103,34 +105,37 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( vertigo )
+static MACHINE_CONFIG_START( vertigo, vertigo_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 8000000)
-	MDRV_CPU_PROGRAM_MAP(vertigo_map)
-	MDRV_CPU_PERIODIC_INT(vertigo_interrupt,60)
+	MCFG_CPU_ADD("maincpu", M68000, 8000000)
+	MCFG_CPU_PROGRAM_MAP(vertigo_map)
+	MCFG_CPU_PERIODIC_INT(vertigo_interrupt,60)
 
-	MDRV_IMPORT_FROM(exidy440_audio)
+	MCFG_FRAGMENT_ADD(exidy440_audio)
 
-	MDRV_PIT8254_ADD( "pit8254", vertigo_pit8254_config )
+	MCFG_PIT8254_ADD( "pit8254", vertigo_pit8254_config )
+
+	MCFG_74148_ADD( "74148", vertigo_update_irq )
 
 	/* motor controller */
 	/*
-    MDRV_CPU_ADD("motor", M6805, 1000000)
-    MDRV_CPU_PROGRAM_MAP(vertigo_motor)
+    MCFG_CPU_ADD("motor", M6805, 1000000)
+    MCFG_CPU_PROGRAM_MAP(vertigo_motor)
     */
-	MDRV_MACHINE_RESET(vertigo)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MCFG_MACHINE_START(vertigo)
+	MCFG_MACHINE_RESET(vertigo)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(0, 510, 0, 400)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(0, 510, 0, 400)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(vector)
-	MDRV_VIDEO_UPDATE(vector)
-MACHINE_DRIVER_END
+	MCFG_VIDEO_START(vector)
+MACHINE_CONFIG_END
 
 
 
@@ -183,15 +188,15 @@ ROM_START( topgunnr )
 	ROM_REGION( 0x010000, "audiocpu", 0 )
 	ROM_LOAD( "vga1_7.g7",	0x0e000, 0x2000, CRC(db109b19) SHA1(c3fbb28cb4679c021bc48f844097add39a2208a5) )
 
-	ROM_REGION( 0x20000, "cvsdcpu", 0 )
+	ROM_REGION( 0x20000, "cvsd", 0 )
 	ROM_LOAD( "vga1_7.l6",	0x00000, 0x2000, CRC(20cbf97a) SHA1(13e138b08ba3328db6a2fba95a369422455d1c5c) )
 	ROM_LOAD( "vga1_7.m6",	0x02000, 0x2000, CRC(76197050) SHA1(d26701ba83a34384348fa34e3de78cc69dc5362e) )
 	ROM_LOAD( "vga1_7.n6",	0x04000, 0x2000, CRC(b93d7cbb) SHA1(1a4d05e03765b66ff20b963c5a0b5f7c3d5a360c) )
 	ROM_LOAD( "vga1_7.p6",	0x06000, 0x2000, CRC(b5bdb067) SHA1(924d76ff09dc173b582f84d1bb7ecd0a60cc1ab4) )
-	ROM_LOAD( "vga1_7.rs6",	 0x08000, 0x2000, CRC(772f13a8) SHA1(87a6247ba58c006d1a062a7ac338c34e85d5cd01) )
-	ROM_LOAD( "vga1_7.st6",	 0x0a000, 0x2000, CRC(a86f2178) SHA1(203fe71e2d42db4fb968c4e529eec7de0788aec1) )
-	ROM_LOAD( "vga1_7.tu6",	 0x0c000, 0x2000, CRC(c1ab1d39) SHA1(ada43570ecf4ae76030dab4a916c53536e41606d) )
-	ROM_LOAD( "vga1_7.uv6",	 0x0e000, 0x2000, CRC(95a05700) SHA1(e9f16408ac9a0ed28af74bfd8419a58e7b0f599a) )
+	ROM_LOAD( "vga1_7.rs6", 0x08000, 0x2000, CRC(772f13a8) SHA1(87a6247ba58c006d1a062a7ac338c34e85d5cd01) )
+	ROM_LOAD( "vga1_7.st6", 0x0a000, 0x2000, CRC(a86f2178) SHA1(203fe71e2d42db4fb968c4e529eec7de0788aec1) )
+	ROM_LOAD( "vga1_7.tu6", 0x0c000, 0x2000, CRC(c1ab1d39) SHA1(ada43570ecf4ae76030dab4a916c53536e41606d) )
+	ROM_LOAD( "vga1_7.uv6", 0x0e000, 0x2000, CRC(95a05700) SHA1(e9f16408ac9a0ed28af74bfd8419a58e7b0f599a) )
 	ROM_LOAD( "vga1_7.l7",	0x10000, 0x2000, CRC(183ba71d) SHA1(03b4dc21094d5911b6f964e060cbe4450ecb71e6) )
 	ROM_LOAD( "vga1_7.m7",	0x12000, 0x2000, CRC(4866b4b7) SHA1(fa28d602b1e0a47528b710602bb32d5cc52c8db8) )
 
@@ -207,4 +212,4 @@ ROM_END
  *
  *************************************/
 
-GAME( 1986, topgunnr, 0, vertigo, vertigo, 0, ROT0, "Exidy", "Top Gunner", GAME_SUPPORTS_SAVE )
+GAME( 1986, topgunnr, 0, vertigo, vertigo, 0, ROT0, "Exidy", "Top Gunner (Exidy)", GAME_SUPPORTS_SAVE )

@@ -6,12 +6,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/resnet.h"
-
-static int palettebank;
-
-static tilemap *bg_tilemap;
+#include "includes/mikie.h"
 
 /***************************************************************************
 
@@ -28,6 +25,7 @@ static tilemap *bg_tilemap;
   bit 0 -- 2.2kohm resistor  -- RED/GREEN/BLUE
 
 ***************************************************************************/
+
 PALETTE_INIT( mikie )
 {
 	static const int resistances[4] = { 2200, 1000, 470, 220 };
@@ -41,7 +39,7 @@ PALETTE_INIT( mikie )
 			4, resistances, bweights, 470, 0);
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x100);
+	machine.colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -70,14 +68,13 @@ PALETTE_INIT( mikie )
 		bit3 = (color_prom[i + 0x200] >> 3) & 0x01;
 		b = combine_4_weights(bweights, bit0, bit1, bit2, bit3);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table,*/
 	color_prom += 0x300;
 
-	/* characters use colors 0x10-0x1f of each 0x20 color bank,
-       while sprites use colors 0-0x0f */
+	/* characters use colors 0x10-0x1f of each 0x20 color bank, while sprites use colors 0-0x0f */
 	for (i = 0; i < 0x200; i++)
 	{
 		int j;
@@ -85,65 +82,80 @@ PALETTE_INIT( mikie )
 		for (j = 0; j < 8; j++)
 		{
 			UINT8 ctabentry = (j << 5) | ((~i & 0x100) >> 4) | (color_prom[i] & 0x0f);
-			colortable_entry_set_value(machine->colortable, ((i & 0x100) << 3) | (j << 8) | (i & 0xff), ctabentry);
+			colortable_entry_set_value(machine.colortable, ((i & 0x100) << 3) | (j << 8) | (i & 0xff), ctabentry);
 		}
 	}
 }
 
 WRITE8_HANDLER( mikie_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	mikie_state *state = space->machine().driver_data<mikie_state>();
+
+	state->m_videoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( mikie_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	mikie_state *state = space->machine().driver_data<mikie_state>();
+
+	state->m_colorram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset);
 }
 
 WRITE8_HANDLER( mikie_palettebank_w )
 {
-	if (palettebank != (data & 0x07))
+	mikie_state *state = space->machine().driver_data<mikie_state>();
+
+	if (state->m_palettebank != (data & 0x07))
 	{
-		palettebank = data & 0x07;
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		state->m_palettebank = data & 0x07;
+		space->machine().tilemap().mark_all_dirty();
 	}
 }
 
 WRITE8_HANDLER( mikie_flipscreen_w )
 {
-	if (flip_screen_get(space->machine) != (data & 0x01))
+	if (flip_screen_get(space->machine()) != (data & 0x01))
 	{
-		flip_screen_set(space->machine, data & 0x01);
-		tilemap_mark_all_tiles_dirty_all(space->machine);
+		flip_screen_set(space->machine(), data & 0x01);
+		space->machine().tilemap().mark_all_dirty();
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index] + ((colorram[tile_index] & 0x20) << 3);
-	int color = (colorram[tile_index] & 0x0f) + 16 * palettebank;
-	int flags = ((colorram[tile_index] & 0x40) ? TILE_FLIPX : 0) | ((colorram[tile_index] & 0x80) ? TILE_FLIPY : 0);
+	mikie_state *state = machine.driver_data<mikie_state>();
+	int code = state->m_videoram[tile_index] + ((state->m_colorram[tile_index] & 0x20) << 3);
+	int color = (state->m_colorram[tile_index] & 0x0f) + 16 * state->m_palettebank;
+	int flags = ((state->m_colorram[tile_index] & 0x40) ? TILE_FLIPX : 0) | ((state->m_colorram[tile_index] & 0x80) ? TILE_FLIPY : 0);
+	if (state->m_colorram[tile_index] & 0x10)
+		tileinfo.category = 1;
+	else
+		tileinfo.category = 0;
 
 	SET_TILE_INFO(0, code, color, flags);
+
+
 }
 
 VIDEO_START( mikie )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
-		 8, 8, 32, 32);
+	mikie_state *state = machine.driver_data<mikie_state>();
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
 {
+	mikie_state *state = machine.driver_data<mikie_state>();
+	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
 	{
-		int gfxbank = (spriteram[offs+2] & 0x40) ? 2 : 1;
+		int gfxbank = (spriteram[offs + 2] & 0x40) ? 2 : 1;
 		int code = (spriteram[offs + 2] & 0x3f) + ((spriteram[offs + 2] & 0x80) >> 1) + ((spriteram[offs] & 0x40) << 1);
-		int color = (spriteram[offs] & 0x0f) + 16 * palettebank;
+		int color = (spriteram[offs] & 0x0f) + 16 * state->m_palettebank;
 		int sx = spriteram[offs + 3];
 		int sy = 244 - spriteram[offs + 1];
 		int flipx = ~spriteram[offs] & 0x10;
@@ -156,16 +168,18 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		}
 
 		drawgfx_transpen(bitmap, cliprect,
-			machine->gfx[gfxbank],
+			machine.gfx[gfxbank],
 			code, color,
 			flipx,flipy,
 			sx,sy, 0);
 	}
 }
 
-VIDEO_UPDATE( mikie )
+SCREEN_UPDATE_IND16( mikie )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	draw_sprites(screen->machine, bitmap, cliprect);
+	mikie_state *state = screen.machine().driver_data<mikie_state>();
+	state->m_bg_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_CATEGORY(0), 0);
+	draw_sprites(screen.machine(), bitmap, cliprect);
+	state->m_bg_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_CATEGORY(1), 0);
 	return 0;
 }

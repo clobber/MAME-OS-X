@@ -3,38 +3,17 @@
  Speed Attack video hardware emulation
 
 *****************************************************************************************/
-#include "driver.h"
+#include "emu.h"
+#include "includes/speedatk.h"
+#include "video/mc6845.h"
 
-static tilemap *bg_tilemap;
-
-/*
-
-Color prom dump(only 0x00-0x10 range has valid data)
-0:---- ---- 0x00 Black
-1:---- -x-- 0x04
-2:---- -xxx 0x07
-3:x-x- -xxx 0xa7
-4:--x- x--- 0x28
-5:xxxx x--- 0xf8
-6:--xx xxxx 0x3f
-7:xxxx xxxx 0xff White
-8:x--- -x-- 0x84
-9:x-x- xx-x 0xad
-a:--x- -x-x 0x25
-b:-xxx xxx- 0x7e
-c:--x- xxxx 0x2f
-d:xx-- ---- 0xc0
-e:--xx -xx- 0x36
-f:xxx- x--- 0xe8
-
-*/
 
 PALETTE_INIT( speedatk )
 {
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x10);
+	machine.colortable = colortable_alloc(machine, 0x10);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x10; i++)
@@ -60,7 +39,7 @@ PALETTE_INIT( speedatk )
 		bit2 = (color_prom[i] >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -69,40 +48,73 @@ PALETTE_INIT( speedatk )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( speedatk_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	speedatk_state *state = space->machine().driver_data<speedatk_state>();
+
+	state->m_videoram[offset] = data;
 }
 
 WRITE8_HANDLER( speedatk_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
-}
+	speedatk_state *state = space->machine().driver_data<speedatk_state>();
 
-static TILE_GET_INFO( get_tile_info )
-{
-	int code, color, region;
-
-	code = videoram[tile_index] + ((colorram[tile_index] & 0xe0) << 3);
-	color = colorram[tile_index] & 0x1f;
-	region = (colorram[tile_index] & 0x10) >> 4;
-
-	SET_TILE_INFO(region, code, color, 0);
+	state->m_colorram[offset] = data;
 }
 
 VIDEO_START( speedatk )
 {
-	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,34,30);
+
 }
 
-VIDEO_UPDATE( speedatk )
+WRITE8_HANDLER( speedatk_6845_w )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	speedatk_state *state = space->machine().driver_data<speedatk_state>();
+
+	if(offset == 0)
+	{
+		state->m_crtc_index = data;
+		space->machine().device<mc6845_device>("crtc")->address_w(*space,0,data);
+	}
+	else
+	{
+		state->m_crtc_vreg[state->m_crtc_index] = data;
+		space->machine().device<mc6845_device>("crtc")->register_w(*space,0,data);
+	}
+}
+
+SCREEN_UPDATE_IND16( speedatk )
+{
+	speedatk_state *state = screen.machine().driver_data<speedatk_state>();
+	int x,y;
+	int count;
+	UINT16 tile;
+	UINT8 color, region;
+
+	bitmap.fill(0, cliprect);
+
+	count = (state->m_crtc_vreg[0x0c]<<8)|(state->m_crtc_vreg[0x0d] & 0xff);
+
+	if(state->m_flip_scr) { count = 0x3ff - count; }
+
+	for(y=0;y<state->m_crtc_vreg[6];y++)
+	{
+		for(x=0;x<state->m_crtc_vreg[1];x++)
+		{
+			tile = state->m_videoram[count] + ((state->m_colorram[count] & 0xe0) << 3);
+			color = state->m_colorram[count] & 0x1f;
+			region = (state->m_colorram[count] & 0x10) >> 4;
+
+			drawgfx_opaque(bitmap,cliprect,screen.machine().gfx[region],tile,color,state->m_flip_scr,state->m_flip_scr,x*8,y*8);
+
+			count = (state->m_flip_scr) ? count-1 : count+1;
+			count&=0x3ff;
+		}
+	}
+
 	return 0;
 }

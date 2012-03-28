@@ -38,53 +38,48 @@ CPU/Video Board Parts:
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "trackfld.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/dac.h"
 #include "sound/sn76496.h"
 #include "sound/vlm5030.h"
 #include "machine/konami1.h"
-#include "konamipt.h"
-
-extern UINT8 *sbasketb_scroll;
-extern UINT8 *sbasketb_palettebank;
-extern UINT8 *sbasketb_spriteram_select;
-
-WRITE8_HANDLER( sbasketb_videoram_w );
-WRITE8_HANDLER( sbasketb_colorram_w );
-WRITE8_HANDLER( sbasketb_flipscreen_w );
-
-PALETTE_INIT( sbasketb );
-VIDEO_START( sbasketb );
-VIDEO_UPDATE( sbasketb );
+#include "includes/konamipt.h"
+#include "audio/trackfld.h"
+#include "includes/sbasketb.h"
 
 
 static WRITE8_HANDLER( sbasketb_sh_irqtrigger_w )
 {
-	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
+	device_set_input_line_and_vector(space->machine().device<cpu_device>("audiocpu"), 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( sbasketb_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine(), offset, data);
 }
 
+static WRITE8_HANDLER( irq_mask_w )
+{
+	sbasketb_state *state = space->machine().driver_data<sbasketb_state>();
 
-static ADDRESS_MAP_START( sbasketb_map, ADDRESS_SPACE_PROGRAM, 8 )
+	state->m_irq_mask = data & 1;
+}
+
+static ADDRESS_MAP_START( sbasketb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(sbasketb_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(sbasketb_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x3800, 0x39ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(sbasketb_colorram_w) AM_BASE_MEMBER(sbasketb_state, m_colorram)
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(sbasketb_videoram_w) AM_BASE_MEMBER(sbasketb_state, m_videoram)
+	AM_RANGE(0x3800, 0x39ff) AM_RAM AM_BASE_MEMBER(sbasketb_state, m_spriteram)
 	AM_RANGE(0x3a00, 0x3bff) AM_RAM           /* Probably unused, but initialized */
 	AM_RANGE(0x3c00, 0x3c00) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x3c10, 0x3c10) AM_READNOP    /* ???? */
-	AM_RANGE(0x3c20, 0x3c20) AM_WRITEONLY AM_BASE(&sbasketb_palettebank)
+	AM_RANGE(0x3c20, 0x3c20) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, m_palettebank)
 	AM_RANGE(0x3c80, 0x3c80) AM_WRITE(sbasketb_flipscreen_w)
-	AM_RANGE(0x3c81, 0x3c81) AM_WRITE(interrupt_enable_w)
+	AM_RANGE(0x3c81, 0x3c81) AM_WRITE(irq_mask_w)
 	AM_RANGE(0x3c83, 0x3c84) AM_WRITE(sbasketb_coin_counter_w)
-	AM_RANGE(0x3c85, 0x3c85) AM_WRITE(SMH_RAM) AM_BASE(&sbasketb_spriteram_select)
+	AM_RANGE(0x3c85, 0x3c85) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, m_spriteram_select)
 	AM_RANGE(0x3d00, 0x3d00) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x3d80, 0x3d80) AM_WRITE(sbasketb_sh_irqtrigger_w)
 	AM_RANGE(0x3e00, 0x3e00) AM_READ_PORT("SYSTEM")
@@ -93,11 +88,11 @@ static ADDRESS_MAP_START( sbasketb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3e03, 0x3e03) AM_READNOP
 	AM_RANGE(0x3e80, 0x3e80) AM_READ_PORT("DSW2")
 	AM_RANGE(0x3f00, 0x3f00) AM_READ_PORT("DSW1")
-	AM_RANGE(0x3f80, 0x3f80) AM_WRITEONLY AM_BASE(&sbasketb_scroll)
-	AM_RANGE(0x6000, 0xffff) AM_READ(SMH_ROM)
+	AM_RANGE(0x3f80, 0x3f80) AM_WRITEONLY AM_BASE_MEMBER(sbasketb_state, m_scroll)
+	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sbasketb_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sbasketb_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -106,7 +101,7 @@ static ADDRESS_MAP_START( sbasketb_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xdfff) AM_DEVWRITE("vlm", hyperspt_sound_w)     /* speech and output controll */
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0xe001, 0xe001) AM_WRITE(konami_SN76496_latch_w)  /* Loads the snd command into the snd latch */
-	AM_RANGE(0xe002, 0xe002) AM_DEVWRITE("sn", konami_SN76496_w)      /* This address triggers the SN chip to read the data port. */
+	AM_RANGE(0xe002, 0xe002) AM_DEVWRITE("snsnd", konami_SN76496_w)      /* This address triggers the SN chip to read the data port. */
 ADDRESS_MAP_END
 
 
@@ -182,44 +177,52 @@ static GFXDECODE_START( sbasketb )
 	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 16*16, 16*16 )
 GFXDECODE_END
 
+static INTERRUPT_GEN( vblank_irq )
+{
+	sbasketb_state *state = device->machine().driver_data<sbasketb_state>();
 
-static MACHINE_DRIVER_START( sbasketb )
+	if(state->m_irq_mask)
+		device_set_input_line(device, 0, HOLD_LINE);
+}
+
+static MACHINE_CONFIG_START( sbasketb, sbasketb_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, 1400000)        /* 1.400 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(sbasketb_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", M6809, 1400000)        /* 1.400 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(sbasketb_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
 
-	MDRV_CPU_ADD("audiocpu", Z80, XTAL_14_31818MHz / 4)	/* 3.5795 MHz */
-	MDRV_CPU_PROGRAM_MAP(sbasketb_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_14_31818MHz / 4)	/* 3.5795 MHz */
+	MCFG_CPU_PROGRAM_MAP(sbasketb_sound_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(sbasketb)
 
-	MDRV_GFXDECODE(sbasketb)
-	MDRV_PALETTE_LENGTH(16*16+16*16*16)
+	MCFG_GFXDECODE(sbasketb)
+	MCFG_PALETTE_LENGTH(16*16+16*16*16)
 
-	MDRV_PALETTE_INIT(sbasketb)
-	MDRV_VIDEO_START(sbasketb)
-	MDRV_VIDEO_UPDATE(sbasketb)
+	MCFG_PALETTE_INIT(sbasketb)
+	MCFG_VIDEO_START(sbasketb)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SOUND_ADD("trackfld_audio", TRACKFLD_AUDIO, 0)
 
-	MDRV_SOUND_ADD("sn", SN76489, XTAL_14_31818MHz / 8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("vlm", VLM5030, XTAL_3_579545MHz) /* Schematics say 3.58MHz, but board uses 3.579545MHz xtal */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("snsnd", SN76489, XTAL_14_31818MHz / 8)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+
+	MCFG_SOUND_ADD("vlm", VLM5030, XTAL_3_579545MHz) /* Schematics say 3.58MHz, but board uses 3.579545MHz xtal */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -400,7 +403,7 @@ static DRIVER_INIT( sbasketb )
 	konami1_decode(machine, "maincpu");
 }
 
-GAME( 1984, sbasketb, 0,        sbasketb, sbasketb, sbasketb, ROT90, "Konami", "Super Basketball (version I, encrypted)",   GAME_SUPPORTS_SAVE )
+GAME( 1984, sbasketb, 0,        sbasketb, sbasketb, sbasketb, ROT90, "Konami", "Super Basketball (version I, encrypted)", GAME_SUPPORTS_SAVE )
 GAME( 1984, sbasketh, sbasketb, sbasketb, sbasketb, 0,        ROT90, "Konami", "Super Basketball (version H, unprotected)", GAME_SUPPORTS_SAVE )
-GAME( 1984, sbasketg, sbasketb, sbasketb, sbasketb, sbasketb, ROT90, "Konami", "Super Basketball (version G, encrypted)",   GAME_SUPPORTS_SAVE )
-GAME( 1984, sbaskete, sbasketb, sbasketb, sbasketb, sbasketb, ROT90, "Konami", "Super Basketball (version E, encrypted)",   GAME_SUPPORTS_SAVE )
+GAME( 1984, sbasketg, sbasketb, sbasketb, sbasketb, sbasketb, ROT90, "Konami", "Super Basketball (version G, encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1984, sbaskete, sbasketb, sbasketb, sbasketb, sbasketb, ROT90, "Konami", "Super Basketball (version E, encrypted)", GAME_SUPPORTS_SAVE )

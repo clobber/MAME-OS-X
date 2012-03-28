@@ -54,30 +54,18 @@ Notes:
   vertical position only, assume this is original behaviour
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/sn76496.h"
+#include "includes/sprcros2.h"
 
-extern UINT8 *sprcros2_fgvideoram, *sprcros2_spriteram, *sprcros2_bgvideoram;
-extern size_t sprcros2_spriteram_size;
-
-WRITE8_HANDLER( sprcros2_fgvideoram_w );
-WRITE8_HANDLER( sprcros2_bgvideoram_w );
-WRITE8_HANDLER( sprcros2_bgscrollx_w );
-WRITE8_HANDLER( sprcros2_bgscrolly_w );
-
-PALETTE_INIT( sprcros2 );
-VIDEO_START( sprcros2 );
-VIDEO_UPDATE( sprcros2 );
-UINT8 sprcros2_m_port7 = 0;
-static UINT8 sprcros2_s_port3 = 0;
 
 
 
 static WRITE8_HANDLER( sprcros2_m_port7_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "master");
+	sprcros2_state *state = space->machine().driver_data<sprcros2_state>();
+	UINT8 *RAM = space->machine().region("master")->base();
 
 	//76543210
 	//x------- unused
@@ -88,17 +76,18 @@ static WRITE8_HANDLER( sprcros2_m_port7_w )
 	//------x- flip screen
 	//-------x nmi enable
 
-	if((sprcros2_m_port7^data)&0x40)
-		memory_set_bankptr(space->machine, 1,&RAM[0x10000+((data&0x40)<<7)]);
+	if((state->m_port7^data)&0x40)
+		memory_set_bankptr(space->machine(), "bank1",&RAM[0x10000+((data&0x40)<<7)]);
 
-	tilemap_set_flip_all( space->machine,data&0x02?(TILEMAP_FLIPX|TILEMAP_FLIPY):0 );
+	space->machine().tilemap().set_flip_all(data&0x02?(TILEMAP_FLIPX|TILEMAP_FLIPY):0 );
 
-	sprcros2_m_port7 = data;
+	state->m_port7 = data;
 }
 
 static WRITE8_HANDLER( sprcros2_s_port3_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "slave");
+	sprcros2_state *state = space->machine().driver_data<sprcros2_state>();
+	UINT8 *RAM = space->machine().region("slave")->base();
 
 	//76543210
 	//xxxx---- unused
@@ -106,24 +95,24 @@ static WRITE8_HANDLER( sprcros2_s_port3_w )
 	//-----xx- unused
 	//-------x nmi enable
 
-	if((sprcros2_s_port3^data)&0x08)
-		memory_set_bankptr(space->machine, 2,&RAM[0x10000+((data&0x08)<<10)]);
+	if((state->m_s_port3^data)&0x08)
+		memory_set_bankptr(space->machine(), "bank2",&RAM[0x10000+((data&0x08)<<10)]);
 
-	sprcros2_s_port3 = data;
+	state->m_s_port3 = data;
 }
 
-static ADDRESS_MAP_START( sprcros2_master_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sprcros2_master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK(1)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_fgvideoram_w) AM_BASE(&sprcros2_fgvideoram)
+	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_fgvideoram_w) AM_BASE_MEMBER(sprcros2_state, m_fgvideoram)
 	AM_RANGE(0xe800, 0xe817) AM_RAM						//always zero
-	AM_RANGE(0xe818, 0xe83f) AM_RAM AM_BASE(&sprcros2_spriteram) AM_SIZE(&sprcros2_spriteram_size)
+	AM_RANGE(0xe818, 0xe83f) AM_RAM AM_BASE_SIZE_MEMBER(sprcros2_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xe840, 0xefff) AM_RAM						//always zero
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE(1)			//shared with slave cpu
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")			//shared with slave cpu
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sprcros2_master_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sprcros2_master_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1") AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2") AM_DEVWRITE("sn2", sn76496_w)
@@ -133,16 +122,16 @@ static ADDRESS_MAP_START( sprcros2_master_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x07, 0x07) AM_WRITE(sprcros2_m_port7_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sprcros2_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sprcros2_slave_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK(2)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_bgvideoram_w) AM_BASE(&sprcros2_bgvideoram)
+	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank2")
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(sprcros2_bgvideoram_w) AM_BASE_MEMBER(sprcros2_state, m_bgvideoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM						//always zero
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sprcros2_slave_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sprcros2_slave_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sprcros2_bgscrollx_w)
 	AM_RANGE(0x01, 0x01) AM_WRITE(sprcros2_bgscrolly_w)
@@ -241,74 +230,80 @@ static GFXDECODE_START( sprcros2 )
 	GFXDECODE_ENTRY( "gfx3", 0, sprcros2_fglayout,     512, 64 )
 GFXDECODE_END
 
-static INTERRUPT_GEN( sprcros2_m_interrupt )
+static TIMER_DEVICE_CALLBACK( sprcros2_m_interrupt )
 {
-	if (cpu_getiloops(device) == 0)
+	sprcros2_state *state = timer.machine().driver_data<sprcros2_state>();
+	int scanline = param;
+
+	if (scanline == 240)
 	{
-		if(sprcros2_m_port7&0x01)
-			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		if(state->m_port7&0x01)
+			device_set_input_line(state->m_master, INPUT_LINE_NMI, PULSE_LINE);
 	}
-	else
+	else if(scanline == 0)
 	{
-		if(sprcros2_m_port7&0x08)
-			cpu_set_input_line(device, 0, HOLD_LINE);
+		if(state->m_port7&0x08)
+			device_set_input_line(state->m_master, 0, HOLD_LINE);
 	}
 }
 
 static INTERRUPT_GEN( sprcros2_s_interrupt )
 {
-	if(sprcros2_s_port3&0x01)
-		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	sprcros2_state *state = device->machine().driver_data<sprcros2_state>();
+
+	if(state->m_s_port3&0x01)
+		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static MACHINE_START( sprcros2 )
 {
-	state_save_register_global(machine, sprcros2_m_port7);
-	state_save_register_global(machine, sprcros2_s_port3);
+	sprcros2_state *state = machine.driver_data<sprcros2_state>();
+
+	state->save_item(NAME(state->m_port7));
+	state->save_item(NAME(state->m_s_port3));
 }
 
-static MACHINE_DRIVER_START( sprcros2 )
+static MACHINE_CONFIG_START( sprcros2, sprcros2_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("master", Z80,10000000/2)
-	MDRV_CPU_PROGRAM_MAP(sprcros2_master_map)
-	MDRV_CPU_IO_MAP(sprcros2_master_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(sprcros2_m_interrupt,2)	//1 nmi + 1 irq
+	MCFG_CPU_ADD("master", Z80,10000000/2)
+	MCFG_CPU_PROGRAM_MAP(sprcros2_master_map)
+	MCFG_CPU_IO_MAP(sprcros2_master_io_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", sprcros2_m_interrupt, "screen", 0, 1)
 
-	MDRV_CPU_ADD("slave", Z80,10000000/2)
-	MDRV_CPU_PROGRAM_MAP(sprcros2_slave_map)
-	MDRV_CPU_IO_MAP(sprcros2_slave_io_map)
-	MDRV_CPU_VBLANK_INT_HACK(sprcros2_s_interrupt,2)	//2 nmis
+	MCFG_CPU_ADD("slave", Z80,10000000/2)
+	MCFG_CPU_PROGRAM_MAP(sprcros2_slave_map)
+	MCFG_CPU_IO_MAP(sprcros2_slave_io_map)
+	MCFG_CPU_PERIODIC_INT(sprcros2_s_interrupt,2*60)	//2 nmis
 
-	MDRV_MACHINE_START(sprcros2)
+	MCFG_MACHINE_START(sprcros2)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(sprcros2)
 
-	MDRV_GFXDECODE(sprcros2)
-	MDRV_PALETTE_LENGTH(768)
+	MCFG_GFXDECODE(sprcros2)
+	MCFG_PALETTE_LENGTH(768)
 
-	MDRV_PALETTE_INIT(sprcros2)
-	MDRV_VIDEO_START(sprcros2)
-	MDRV_VIDEO_UPDATE(sprcros2)
+	MCFG_PALETTE_INIT(sprcros2)
+	MCFG_VIDEO_START(sprcros2)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn1", SN76489, 10000000/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("sn1", SN76489, 10000000/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn2", SN76489, 10000000/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("sn2", SN76489, 10000000/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn3", SN76489, 10000000/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("sn3", SN76489, 10000000/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 ROM_START( sprcros2 )
 	ROM_REGION( 0x14000, "master", 0 )

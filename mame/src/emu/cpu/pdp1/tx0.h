@@ -3,7 +3,6 @@
 #ifndef __TX0_H__
 #define __TX0_H__
 
-#include "cpuintrf.h"
 
 
 /* register ids for tx0_get_reg/tx0_set_reg */
@@ -36,19 +35,16 @@ struct _tx0_reset_param_t
         5: reserved (for unimplemented typ instruction?)
         6: p6h
         7: p7h */
-	void (*io_handlers[8])(const device_config *device);
+	void (*io_handlers[8])(device_t *device);
 	/* select instruction handler */
-	void (*sel_handler)(const device_config *device);
+	void (*sel_handler)(device_t *device);
 	/* callback called when reset line is pulsed: IO devices should reset */
-	void (*io_reset_callback)(const device_config *device);
+	void (*io_reset_callback)(device_t *device);
 };
 
 /* PUBLIC FUNCTIONS */
-CPU_GET_INFO( tx0_64kw );
-CPU_GET_INFO( tx0_8kw );
-
-#define CPU_TX0_64KW CPU_GET_INFO_NAME( tx0_64kw )
-#define CPU_TX0_8KW CPU_GET_INFO_NAME( tx0_8kw )
+DECLARE_LEGACY_CPU_DEVICE(TX0_64KW, tx0_64kw);
+DECLARE_LEGACY_CPU_DEVICE(TX0_8KW, tx0_8kw);
 
 CPU_DISASSEMBLE( tx0_64kw );
 CPU_DISASSEMBLE( tx0_8kw );

@@ -119,32 +119,30 @@ RAM         RW      0f0000-0f3fff       0e0000-0effff?      <
 #define SOUND_CPU_CLOCK		XTAL_7MHz		/* clock for sound 68000 */
 #define OKI4_SOUND_CLOCK	XTAL_4MHz
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
-#include "megasys1.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-
-
-/* Variables only used here: */
-
-static UINT16 ip_select, ip_select_values[5];
-static UINT8 megasys1_ignore_oki_status = 0;	/* used in MACHINE_RESET */
+#include "machine/jalcrpt.h"
+#include "includes/megasys1.h"
 
 
 static MACHINE_RESET( megasys1 )
 {
-	megasys1_ignore_oki_status = 1;	/* ignore oki status due 'protection' */
-	ip_select = 0;	/* reset protection */
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ignore_oki_status = 1;	/* ignore oki status due 'protection' */
+	state->m_ip_select = 0;	/* reset protection */
+	state->m_mcu_hs = 0;
 }
 
 static MACHINE_RESET( megasys1_hachoo )
 {
-	megasys1_ignore_oki_status = 0;	/* strangely hachoo need real oki status */
-	ip_select = 0;	/* reset protection */
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ignore_oki_status = 0;	/* strangely hachoo need real oki status */
+	state->m_ip_select = 0;	/* reset protection */
+	state->m_mcu_hs = 0;
 }
 
 
@@ -159,19 +157,21 @@ static MACHINE_RESET( megasys1_hachoo )
                         [ Main CPU - System A / Z ]
 ***************************************************************************/
 
-#define INTERRUPT_NUM_A		3
-static INTERRUPT_GEN( interrupt_A )
+static TIMER_DEVICE_CALLBACK( megasys1A_scanline )
 {
-	switch ( cpu_getiloops(device) )
-	{
-		case 0:		cpu_set_input_line(device, 3, HOLD_LINE);	break;
-		case 1:		cpu_set_input_line(device, 2, HOLD_LINE);	break;
-		case 2:		cpu_set_input_line(device, 1, HOLD_LINE);	break;
-	}
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 2, HOLD_LINE);
+
+	if(scanline == 0)
+		cputag_set_input_line(timer.machine(), "maincpu", 1, HOLD_LINE);
+
+	if(scanline == 128)
+		cputag_set_input_line(timer.machine(), "maincpu", 3, HOLD_LINE);
 }
 
-
-static ADDRESS_MAP_START( megasys1A_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( megasys1A_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfffff)
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080001) AM_READ_PORT("SYSTEM")
@@ -179,13 +179,13 @@ static ADDRESS_MAP_START( megasys1A_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x080004, 0x080005) AM_READ_PORT("P2")
 	AM_RANGE(0x080006, 0x080007) AM_READ_PORT("DSW")
 	AM_RANGE(0x080008, 0x080009) AM_READ(soundlatch2_word_r)	/* from sound cpu */
-	AM_RANGE(0x084000, 0x0843ff) AM_RAM_WRITE(megasys1_vregs_A_w) AM_BASE(&megasys1_vregs)
-	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x08e000, 0x08ffff) AM_RAM AM_BASE(&megasys1_objectram)
-	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
-	AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
-	AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])
-	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE(&megasys1_ram)
+	AM_RANGE(0x084000, 0x0843ff) AM_RAM_WRITE(megasys1_vregs_A_w) AM_BASE_MEMBER(megasys1_state, m_vregs)
+	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x08e000, 0x08ffff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_objectram)
+	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[0])
+	AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[1])
+	AM_RANGE(0x098000, 0x09bfff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[2])
+	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_ram)
 ADDRESS_MAP_END
 
 
@@ -193,17 +193,19 @@ ADDRESS_MAP_END
                             [ Main CPU - System B ]
 ***************************************************************************/
 
-#define INTERRUPT_NUM_B		3
-static INTERRUPT_GEN( interrupt_B )
+static TIMER_DEVICE_CALLBACK( megasys1B_scanline )
 {
-	switch (cpu_getiloops(device))
-	{
-		case 0:		cpu_set_input_line(device, 4, HOLD_LINE); break;
-		case 1:		cpu_set_input_line(device, 1, HOLD_LINE); break;
-		default:	cpu_set_input_line(device, 2, HOLD_LINE); break;
-	}
-}
+	int scanline = param;
 
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line(timer.machine(), "maincpu", 4, HOLD_LINE);
+
+	if(scanline == 0)
+		cputag_set_input_line(timer.machine(), "maincpu", 2, HOLD_LINE);
+
+	if(scanline == 128)
+		cputag_set_input_line(timer.machine(), "maincpu", 1, HOLD_LINE);
+}
 
 
 /*           Read the input ports, through a protection device:
@@ -217,6 +219,7 @@ static INTERRUPT_GEN( interrupt_B )
 
 static READ16_HANDLER( ip_select_r )
 {
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
 	int i;
 
 //  Coins   P1      P2      DSW1    DSW2
@@ -229,38 +232,39 @@ static READ16_HANDLER( ip_select_r )
 
 
 	/* f(x) = ((x*x)>>4)&0xFF ; f(f($D)) == 6 */
-	if ((ip_select & 0xF0) == 0xF0) return 0x000D;
+	if ((state->m_ip_select & 0xF0) == 0xF0) return 0x000D;
 
-	for (i = 0; i < 5; i++)	if (ip_select == ip_select_values[i]) break;
+	for (i = 0; i < 5; i++)	if (state->m_ip_select == state->m_ip_select_values[i]) break;
 
 	switch (i)
 	{
-			case 0 :	return input_port_read(space->machine, "SYSTEM");
-			case 1 :	return input_port_read(space->machine, "P1");
-			case 2 :	return input_port_read(space->machine, "P2");
-			case 3 :	return input_port_read(space->machine, "DSW1");
-			case 4 :	return input_port_read(space->machine, "DSW2");
+			case 0 :	return input_port_read(space->machine(), "SYSTEM");
+			case 1 :	return input_port_read(space->machine(), "P1");
+			case 2 :	return input_port_read(space->machine(), "P2");
+			case 3 :	return input_port_read(space->machine(), "DSW1");
+			case 4 :	return input_port_read(space->machine(), "DSW2");
 			default	 :	return 0x0006;
 	}
 }
 
 static WRITE16_HANDLER( ip_select_w )
 {
-	COMBINE_DATA(&ip_select);
-	cputag_set_input_line(space->machine, "maincpu", 2, HOLD_LINE);
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+	COMBINE_DATA(&state->m_ip_select);
+	cputag_set_input_line(space->machine(), "maincpu", 2, HOLD_LINE);
 }
 
 
-static ADDRESS_MAP_START( megasys1B_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( megasys1B_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x044000, 0x0443ff) AM_RAM_WRITE(megasys1_vregs_A_w) AM_BASE(&megasys1_vregs)
-	AM_RANGE(0x048000, 0x0487ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x04e000, 0x04ffff) AM_RAM AM_BASE(&megasys1_objectram)
-	AM_RANGE(0x050000, 0x053fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
-	AM_RANGE(0x054000, 0x057fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
-	AM_RANGE(0x058000, 0x05bfff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])
-	AM_RANGE(0x060000, 0x07ffff) AM_RAM AM_BASE(&megasys1_ram)
+	AM_RANGE(0x044000, 0x0443ff) AM_RAM_WRITE(megasys1_vregs_A_w) AM_BASE_MEMBER(megasys1_state, m_vregs)
+	AM_RANGE(0x048000, 0x0487ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x04e000, 0x04ffff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_objectram)
+	AM_RANGE(0x050000, 0x053fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[0])
+	AM_RANGE(0x054000, 0x057fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[1])
+	AM_RANGE(0x058000, 0x05bfff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[2])
+	AM_RANGE(0x060000, 0x07ffff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_ram)
 	AM_RANGE(0x080000, 0x0bffff) AM_ROM
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READWRITE(ip_select_r,ip_select_w)
 ADDRESS_MAP_END
@@ -274,17 +278,17 @@ ADDRESS_MAP_END
 #define INTERRUPT_NUM_C	INTERRUPT_NUM_B
 #define interrupt_C		interrupt_B
 
-static ADDRESS_MAP_START( megasys1C_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( megasys1C_map, AS_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0x1fffff)
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x0c0000, 0x0cffff) AM_READWRITE(megasys1_vregs_C_r,megasys1_vregs_C_w) AM_BASE(&megasys1_vregs)
-	AM_RANGE(0x0d2000, 0x0d3fff) AM_RAM AM_BASE(&megasys1_objectram)
-	AM_RANGE(0x0e0000, 0x0e3fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
-	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
-	AM_RANGE(0x0f0000, 0x0f3fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])
-	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0c0000, 0x0cffff) AM_READWRITE(megasys1_vregs_C_r,megasys1_vregs_C_w) AM_BASE_MEMBER(megasys1_state, m_vregs)
+	AM_RANGE(0x0d2000, 0x0d3fff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_objectram)
+	AM_RANGE(0x0e0000, 0x0e3fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[0])
+	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[1])
+	AM_RANGE(0x0f0000, 0x0f3fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[2])
+	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0d8000, 0x0d8001) AM_READWRITE(ip_select_r,ip_select_w)
-	AM_RANGE(0x1f0000, 0x1fffff) AM_RAM AM_BASE(&megasys1_ram)
+	AM_RANGE(0x1c0000, 0x1cffff) AM_MIRROR(0x30000) AM_RAM AM_BASE_MEMBER(megasys1_state, m_ram) //0x1f****, Cybattler reads attract mode inputs at 0x1d****
 ADDRESS_MAP_END
 
 
@@ -292,24 +296,24 @@ ADDRESS_MAP_END
                             [ Main CPU - System D ]
 ***************************************************************************/
 
-static INTERRUPT_GEN( interrupt_D )
+static INTERRUPT_GEN( megasys1D_irq )
 {
-	cpu_set_input_line(device, 2, HOLD_LINE);
+	device_set_input_line(device, 2, HOLD_LINE);
 }
 
-static ADDRESS_MAP_START( megasys1D_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( megasys1D_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x0c0000, 0x0c9fff) AM_RAM_WRITE(megasys1_vregs_D_w) AM_BASE(&megasys1_vregs)
-	AM_RANGE(0x0ca000, 0x0cbfff) AM_RAM AM_BASE(&megasys1_objectram)
-	AM_RANGE(0x0d0000, 0x0d3fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
-	AM_RANGE(0x0d4000, 0x0d7fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])
-	AM_RANGE(0x0d8000, 0x0d87ff) AM_MIRROR(0x3000) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0c0000, 0x0c9fff) AM_RAM_WRITE(megasys1_vregs_D_w) AM_BASE_MEMBER(megasys1_state, m_vregs)
+	AM_RANGE(0x0ca000, 0x0cbfff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_objectram)
+	AM_RANGE(0x0d0000, 0x0d3fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[1])
+	AM_RANGE(0x0d4000, 0x0d7fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[2])
+	AM_RANGE(0x0d8000, 0x0d87ff) AM_MIRROR(0x3000) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("DSW")
-	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
+	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE_MEMBER(megasys1_state, m_scrollram[0])
 	AM_RANGE(0x0f0000, 0x0f0001) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x0f8000, 0x0f8001) AM_DEVREADWRITE8("oki1", okim6295_r,okim6295_w, 0x00ff)
+	AM_RANGE(0x0f8000, 0x0f8001) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
 //  AM_RANGE(0x100000, 0x100001) // protection
-	AM_RANGE(0x1f0000, 0x1fffff) AM_RAM AM_BASE(&megasys1_ram)
+	AM_RANGE(0x1f0000, 0x1fffff) AM_RAM AM_BASE_MEMBER(megasys1_state, m_ram)
 ADDRESS_MAP_END
 
 
@@ -371,18 +375,19 @@ ADDRESS_MAP_END
 */
 
 /* YM2151 IRQ */
-static void megasys1_sound_irq(const device_config *device, int irq)
+static void megasys1_sound_irq(device_t *device, int irq)
 {
 	if (irq)
-		cputag_set_input_line(device->machine, "soundcpu", 4, HOLD_LINE);
+		cputag_set_input_line(device->machine(), "soundcpu", 4, HOLD_LINE);
 }
 
 static READ8_DEVICE_HANDLER( oki_status_r )
 {
-	if (megasys1_ignore_oki_status == 1)
+	megasys1_state *state = device->machine().driver_data<megasys1_state>();
+	if (state->m_ignore_oki_status == 1)
 		return 0;
 	else
-		return okim6295_r(device,offset);
+		return downcast<okim6295_device *>(device)->read_status();
 }
 
 /***************************************************************************
@@ -390,15 +395,15 @@ static READ8_DEVICE_HANDLER( oki_status_r )
 ***************************************************************************/
 
 
-static ADDRESS_MAP_START( megasys1A_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( megasys1A_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x040001) AM_READ(soundlatch_word_r)
 	AM_RANGE(0x060000, 0x060001) AM_WRITE(soundlatch2_word_w)	// to main cpu
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r,ym2151_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r,ym2151_w, 0x00ff)
 	AM_RANGE(0x0a0000, 0x0a0001) AM_DEVREAD8("oki1", oki_status_r, 0x00ff)
-	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVWRITE8("oki1", okim6295_w, 0x00ff)
+	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVWRITE8_MODERN("oki1", okim6295_device, write, 0x00ff)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_DEVREAD8("oki2", oki_status_r, 0x00ff)
-	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVWRITE8("oki2", okim6295_w, 0x00ff)
+	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVWRITE8_MODERN("oki2", okim6295_device, write, 0x00ff)
 	AM_RANGE(0x0e0000, 0x0fffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -408,15 +413,15 @@ ADDRESS_MAP_END
 ***************************************************************************/
 
 
-static ADDRESS_MAP_START( megasys1B_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( megasys1B_sound_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x040001) AM_READWRITE(soundlatch_word_r,soundlatch2_word_w)	/* from/to main cpu */
 	AM_RANGE(0x060000, 0x060001) AM_READWRITE(soundlatch_word_r,soundlatch2_word_w)	/* from/to main cpu */
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r,ym2151_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r,ym2151_w, 0x00ff)
 	AM_RANGE(0x0a0000, 0x0a0001) AM_DEVREAD8("oki1", oki_status_r, 0x00ff)
-	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVWRITE8("oki1", okim6295_w, 0x00ff)
+	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVWRITE8_MODERN("oki1", okim6295_device, write, 0x00ff)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_DEVREAD8("oki2", oki_status_r, 0x00ff)
-	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVWRITE8("oki2", okim6295_w, 0x00ff)
+	AM_RANGE(0x0c0000, 0x0c0003) AM_DEVWRITE8_MODERN("oki2", okim6295_device, write, 0x00ff)
 	AM_RANGE(0x0e0000, 0x0effff) AM_RAM
 ADDRESS_MAP_END
 
@@ -427,16 +432,16 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( z80_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 	AM_RANGE(0xf000, 0xf000) AM_WRITENOP /* ?? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( z80_sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 
 
@@ -1357,39 +1362,39 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static UINT16 protection_val;
 
 /* Read the input ports, through a protection device */
 static READ16_HANDLER( protection_peekaboo_r )
 {
-	switch (protection_val)
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+	switch (state->m_protection_val)
 	{
 		case 0x02:	return 0x03;
-		case 0x51:	return input_port_read(space->machine, "P1");
-		case 0x52:	return input_port_read(space->machine, "P2");
-		default:	return protection_val;
+		case 0x51:	return input_port_read(space->machine(), "P1");
+		case 0x52:	return input_port_read(space->machine(), "P2");
+		default:	return state->m_protection_val;
 	}
 }
 
 static WRITE16_HANDLER( protection_peekaboo_w )
 {
-	static int bank;
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
 
-	COMBINE_DATA(&protection_val);
+	COMBINE_DATA(&state->m_protection_val);
 
-	if ((protection_val & 0x90) == 0x90)
+	if ((state->m_protection_val & 0x90) == 0x90)
 	{
-		UINT8 *RAM = memory_region(space->machine, "oki1");
-		int new_bank = (protection_val & 0x7) % 7;
+		UINT8 *RAM = space->machine().region("oki1")->base();
+		int new_bank = (state->m_protection_val & 0x7) % 7;
 
-		if (bank != new_bank)
+		if (state->m_bank != new_bank)
 		{
 			memcpy(&RAM[0x20000],&RAM[0x40000 + 0x20000*new_bank],0x20000);
-			bank = new_bank;
+			state->m_bank = new_bank;
 		}
 	}
 
-	cputag_set_input_line(space->machine, "maincpu", 4, HOLD_LINE);
+	cputag_set_input_line(space->machine(), "maincpu", 4, HOLD_LINE);
 }
 
 /*************************************
@@ -1454,103 +1459,130 @@ static const ym2151_interface ym2151_config =
 	megasys1_sound_irq
 };
 
-static MACHINE_DRIVER_START( system_A )
+static MACHINE_CONFIG_START( system_A, megasys1_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, SYS_A_CPU_CLOCK) /* 6MHz verified */
-	MDRV_CPU_PROGRAM_MAP(megasys1A_map)
-	MDRV_CPU_VBLANK_INT_HACK(interrupt_A,INTERRUPT_NUM_A)
+	MCFG_CPU_ADD("maincpu", M68000, SYS_A_CPU_CLOCK) /* 6MHz verified */
+	MCFG_CPU_PROGRAM_MAP(megasys1A_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", megasys1A_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("soundcpu", M68000, SOUND_CPU_CLOCK) /* 7MHz verified */
-	MDRV_CPU_PROGRAM_MAP(megasys1A_sound_map)
+	MCFG_CPU_ADD("soundcpu", M68000, SOUND_CPU_CLOCK) /* 7MHz verified */
+	MCFG_CPU_PROGRAM_MAP(megasys1A_sound_map)
 
-	MDRV_QUANTUM_TIME(HZ(120000))
+	MCFG_QUANTUM_TIME(attotime::from_hz(120000))
 
-	MDRV_MACHINE_RESET(megasys1)
+	MCFG_MACHINE_RESET(megasys1)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(megasys1)
+	MCFG_SCREEN_VBLANK_STATIC(megasys1)
 
-	MDRV_GFXDECODE(ABC)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(ABC)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_PALETTE_INIT(megasys1)
-	MDRV_VIDEO_START(megasys1)
-	MDRV_VIDEO_UPDATE(megasys1)
-	MDRV_VIDEO_EOF(megasys1)
+	MCFG_PALETTE_INIT(megasys1)
+	MCFG_VIDEO_START(megasys1)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CPU_CLOCK/2) /* 3.5MHz (7MHz / 2) verified */
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
+	MCFG_SOUND_ADD("ymsnd", YM2151, SOUND_CPU_CLOCK/2) /* 3.5MHz (7MHz / 2) verified */
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, OKI4_SOUND_CLOCK) /* 4MHz verified */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
+	MCFG_OKIM6295_ADD("oki1", OKI4_SOUND_CLOCK, OKIM6295_PIN7_HIGH) /* 4MHz verified */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, OKI4_SOUND_CLOCK) /* 4MHz verified */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki2", OKI4_SOUND_CLOCK, OKIM6295_PIN7_HIGH) /* 4MHz verified */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( system_A_hachoo )
-	MDRV_IMPORT_FROM(system_A)
-	MDRV_MACHINE_RESET(megasys1_hachoo)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( system_A_hachoo, system_A )
+	MCFG_MACHINE_RESET(megasys1_hachoo)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( system_B )
+static MACHINE_CONFIG_DERIVED( system_B, system_A )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system_A)
 
-	MDRV_CPU_REPLACE("maincpu", M68000, SYS_B_CPU_CLOCK) /* 8MHz */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(megasys1B_map)
-	MDRV_CPU_VBLANK_INT_HACK(interrupt_B,INTERRUPT_NUM_B)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(SYS_B_CPU_CLOCK) /* 8MHz */
+	MCFG_CPU_PROGRAM_MAP(megasys1B_map)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_CALLBACK(megasys1B_scanline)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(megasys1B_sound_map)
-MACHINE_DRIVER_END
-
-static MACHINE_DRIVER_START( system_B_hayaosi1 )
-
-	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system_B)
-
-	MDRV_SOUND_REPLACE("oki1",OKIM6295, 2000000) /* correct speed, but unknown OSC + divider combo */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
-
-	MDRV_SOUND_REPLACE("oki2",OKIM6295, 2000000) /* correct speed, but unknown OSC + divider combo */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
-MACHINE_DRIVER_END
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(megasys1B_sound_map)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( system_C )
+static MACHINE_CONFIG_START( system_Bbl, megasys1_state )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system_A)
-	MDRV_CPU_REPLACE("maincpu", M68000, SYS_C_CPU_CLOCK) /* 12MHz */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(megasys1C_map)
-	MDRV_CPU_VBLANK_INT_HACK(interrupt_C,INTERRUPT_NUM_C)
+	MCFG_CPU_ADD("maincpu", M68000, SYS_B_CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(megasys1B_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", megasys1B_scanline, "screen", 0, 1)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(megasys1B_sound_map)
-MACHINE_DRIVER_END
+	MCFG_MACHINE_RESET(megasys1)
+
+	/* video hardware */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(megasys1)
+	MCFG_SCREEN_VBLANK_STATIC(megasys1)
+
+	MCFG_GFXDECODE(ABC)
+	MCFG_PALETTE_LENGTH(1024)
+
+	MCFG_PALETTE_INIT(megasys1)
+	MCFG_VIDEO_START(megasys1)
+
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	/* just the one OKI, used for sound and music */
+	MCFG_OKIM6295_ADD("oki1", OKI4_SOUND_CLOCK, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( system_B_hayaosi1, system_B )
+
+	/* basic machine hardware */
+
+	MCFG_OKIM6295_REPLACE("oki1", 2000000, OKIM6295_PIN7_HIGH) /* correct speed, but unknown OSC + divider combo */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
+
+	MCFG_OKIM6295_REPLACE("oki2", 2000000, OKIM6295_PIN7_HIGH) /* correct speed, but unknown OSC + divider combo */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
+MACHINE_CONFIG_END
+
+
+static MACHINE_CONFIG_DERIVED( system_C, system_A )
+
+	/* basic machine hardware */
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_CLOCK(SYS_C_CPU_CLOCK) /* 12MHz */
+	MCFG_CPU_PROGRAM_MAP(megasys1C_map)
+	MCFG_TIMER_MODIFY("scantimer")
+	MCFG_TIMER_CALLBACK(megasys1B_scanline)
+
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(megasys1B_sound_map)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -1564,38 +1596,36 @@ MACHINE_DRIVER_END
 ***************************************************************************/
 
 
-static MACHINE_DRIVER_START( system_D )
+static MACHINE_CONFIG_START( system_D, megasys1_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, SYS_D_CPU_CLOCK)	/* 8MHz */
-	MDRV_CPU_PROGRAM_MAP(megasys1D_map)
-	MDRV_CPU_VBLANK_INT("screen", interrupt_D)
+	MCFG_CPU_ADD("maincpu", M68000, SYS_D_CPU_CLOCK)	/* 8MHz */
+	MCFG_CPU_PROGRAM_MAP(megasys1D_map)
+	MCFG_CPU_VBLANK_INT("screen", megasys1D_irq)
 
-	MDRV_MACHINE_RESET(megasys1)
+	MCFG_MACHINE_RESET(megasys1)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(megasys1)
+	MCFG_SCREEN_VBLANK_STATIC(megasys1)
 
-	MDRV_GFXDECODE(ABC)
-	MDRV_PALETTE_LENGTH(1024)
+	MCFG_GFXDECODE(ABC)
+	MCFG_PALETTE_LENGTH(1024)
 
-	MDRV_PALETTE_INIT(megasys1)
-	MDRV_VIDEO_START(megasys1)
-	MDRV_VIDEO_UPDATE(megasys1)
-	MDRV_VIDEO_EOF(megasys1)
+	MCFG_PALETTE_INIT(megasys1)
+	MCFG_VIDEO_START(megasys1)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1",OKIM6295, SYS_D_CPU_CLOCK/4)	/* 2MHz (8MHz / 4) */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki1", SYS_D_CPU_CLOCK/4, OKIM6295_PIN7_HIGH)	/* 2MHz (8MHz / 4) */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -1611,9 +1641,9 @@ MACHINE_DRIVER_END
 ***************************************************************************/
 
 
-static void irq_handler(const device_config *device, int irq)
+static void irq_handler(device_t *device, int irq)
 {
-	cputag_set_input_line(device->machine, "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine(), "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -1627,38 +1657,37 @@ static const ym2203_interface ym2203_config =
 	irq_handler
 };
 
-static MACHINE_DRIVER_START( system_Z )
+static MACHINE_CONFIG_START( system_Z, megasys1_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, SYS_A_CPU_CLOCK) /* 6MHz (12MHz / 2) */
-	MDRV_CPU_PROGRAM_MAP(megasys1A_map)
-	MDRV_CPU_VBLANK_INT_HACK(interrupt_A,INTERRUPT_NUM_A)
+	MCFG_CPU_ADD("maincpu", M68000, SYS_A_CPU_CLOCK) /* 6MHz (12MHz / 2) */
+	MCFG_CPU_PROGRAM_MAP(megasys1A_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", megasys1A_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("soundcpu", Z80, 3000000) /* OSC 12MHz divided by 4 ??? */
-	MDRV_CPU_PROGRAM_MAP(z80_sound_map)
-	MDRV_CPU_IO_MAP(z80_sound_io_map)
+	MCFG_CPU_ADD("soundcpu", Z80, 3000000) /* OSC 12MHz divided by 4 ??? */
+	MCFG_CPU_PROGRAM_MAP(z80_sound_map)
+	MCFG_CPU_IO_MAP(z80_sound_io_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(megasys1)
 
-	MDRV_GFXDECODE(Z)
-	MDRV_PALETTE_LENGTH(768)
+	MCFG_GFXDECODE(Z)
+	MCFG_PALETTE_LENGTH(768)
 
-	MDRV_VIDEO_START(megasys1)
-	MDRV_VIDEO_UPDATE(megasys1)
+	MCFG_VIDEO_START(megasys1)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 1500000)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2203, 1500000)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -2332,7 +2361,6 @@ ROM_START( edf )
 	ROM_LOAD( "rd.20n",    0x0000, 0x0200, CRC(1d877538) SHA1(a5be0dc65dcfc36fbba10d1fddbe155e24b6122f) )
 ROM_END
 
-
 ROM_START( edfu )
 	ROM_REGION( 0xc0000, "maincpu", 0 )		/* Main CPU Code: 00000-3ffff & 80000-bffff */
 	ROM_LOAD16_BYTE( "edf5.b5",  0x000000, 0x020000, CRC(105094d1) SHA1(e962164836756bc20c2b5dc0032042a0219e82d8) )
@@ -2369,6 +2397,41 @@ ROM_START( edfu )
 	ROM_LOAD( "rd.20n",    0x0000, 0x0200, CRC(1d877538) SHA1(a5be0dc65dcfc36fbba10d1fddbe155e24b6122f) )
 ROM_END
 
+
+ROM_START( edfbl )
+	ROM_REGION( 0xc0000, "maincpu", 0 )		/* Main CPU Code: 00000-3ffff & 80000-bffff */
+	ROM_LOAD16_BYTE( "02.bin",  0x000000, 0x020000, CRC(19a0dfa0) SHA1(acd020fa42de9cd98e51fe92377a46846859797b) )
+	ROM_CONTINUE (               0x080000, 0x020000 )
+	ROM_LOAD16_BYTE( "01.bin",  0x000001, 0x020000, CRC(fc893ad0) SHA1(6d7be560e2343f3943f52ccdae7bd255b7720b6e) )
+	ROM_CONTINUE (                  0x080001, 0x020000 )
+
+	/* no 2nd 68k on this bootleg, is there a PIC? */
+
+	ROM_REGION( 0x080000, "gfx1", 0 ) /* Scroll 0 */
+	ROM_LOAD( "07.bin",  0x000000, 0x040000, CRC(4495c228) SHA1(2193561e193e696c66f27fa186f27ffbbdcb1826) )
+	ROM_LOAD( "06.bin",  0x040000, 0x040000, CRC(3e37f226) SHA1(b789c1d2159f54d7464239e111bd729e0582b89b) )
+
+	ROM_REGION( 0x080000, "gfx2", 0 ) /* Scroll 1 */
+	ROM_LOAD( "03.bin",  0x000000, 0x040000, CRC(eea24345) SHA1(1ed690eb62b28cf6bbcb6fec7e8e39daaa340af3) )
+	ROM_LOAD( "04.bin",  0x040000, 0x040000, CRC(2cfe9439) SHA1(c953f1cf16be444eef3dc389305733ac351559b6) )
+
+	ROM_REGION( 0x020000, "gfx3", 0 ) /* Scroll 2 */
+	ROM_LOAD( "05.bin",   0x000000, 0x020000, CRC(96e38983) SHA1(a4fb94f15d9a9f7df1645be66fe3e179d0ebf765) )
+
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* Sprites */
+	ROM_LOAD( "09.bin",  0x000000, 0x040000, CRC(e89d27c0) SHA1(b95d7988f13c578f501dc6cf2a5109dbef2a4d6c) )
+	ROM_LOAD( "08.bin",  0x040000, 0x040000, CRC(603ac969) SHA1(193144080d2cb5536980e5f0f7173fba470ab79f) )
+
+	ROM_REGION( 0x040000, "oki1", 0 ) /* Samples - non-banked sfx? */
+	ROM_LOAD( "12.bin",  0x000000, 0x010000, CRC(e645f447) SHA1(5de3acc32a2211995ed1e9b4577063124b0db45a) )
+
+	ROM_REGION( 0x080000, "okibanks", 0 ) /* Samples - banked music? */
+	ROM_LOAD( "11.bin",  0x000000, 0x040000, CRC(5a8896cb) SHA1(ffa529acc1842868d51c22acf2b6b5a6aa1a79b2) )
+	ROM_LOAD( "10.bin",  0x040000, 0x040000, CRC(baa7c91b) SHA1(1f4d240a4059fad1d09d624275dfe2dffe950a47) )
+
+	ROM_REGION( 0x0200, "proms", 0 ) /* the bootleg has an 82s131 prom like the original, but it isn't confirmed to be the same yet */
+	ROM_LOAD( "rd.20n",    0x0000, 0x0200, CRC(1d877538) SHA1(a5be0dc65dcfc36fbba10d1fddbe155e24b6122f) )
+ROM_END
 
 /***************************************************************************
 
@@ -3316,6 +3379,42 @@ ROM_START( stdragon )
 ROM_END
 
 
+ROM_START( stdragona )
+	ROM_REGION( 0x60000, "maincpu", 0 )		/* Main CPU Code */
+	ROM_LOAD16_BYTE( "jsda-02.bin", 0x000000, 0x020000, CRC(d65d4154) SHA1(f77886590a092743c829fb52b5de0ca8ef51c122) )
+	ROM_LOAD16_BYTE( "jsda-01.bin", 0x000001, 0x020000, CRC(c40c8ee1) SHA1(346b16519f35d7bdb283d87f6f89f54d3b7eefe2) )
+
+	ROM_REGION( 0x20000, "soundcpu", 0 )		/* Sound CPU Code */
+	ROM_LOAD16_BYTE( "jsd-05.bin", 0x000000, 0x010000, CRC(8c04feaa) SHA1(57e86fd88dc72d123a41f0dee80a16be38ac2e81) )
+	ROM_LOAD16_BYTE( "jsd-06.bin", 0x000001, 0x010000, CRC(0bb62f3a) SHA1(68d9f161ba2568f8e046b1a40127bbb973d7a884) )
+
+	ROM_REGION( 0x1000, "mcu", 0 ) /* M50747 MCU Code */
+	ROM_LOAD( "m50747", 0x0000, 0x1000, NO_DUMP )
+
+	ROM_REGION( 0x080000, "gfx1", 0 ) /* Scroll 0 - scrambled */
+	ROM_LOAD( "e71-14.bin", 0x000000, 0x080000, CRC(8e26ff92) SHA1(06985056027facb1d3df08cf04277492c1be6102) )
+
+	ROM_REGION( 0x080000, "gfx2", 0 ) /* Scroll 1 */
+	ROM_LOAD( "e72-18.bin", 0x000000, 0x080000, CRC(0b234711) SHA1(1c5a8db28cef84434c526eab9cf9c4c123cebeea) )
+
+	ROM_REGION( 0x020000, "gfx3", 0 ) /* Scroll 2 */
+	ROM_LOAD( "jsd-19.bin", 0x000000, 0x010000, CRC(25ce807d) SHA1(64accb923e9727093790c8ae8296e9ff2d04af06) )
+
+	ROM_REGION( 0x080000, "gfx4", 0 ) /* Sprites - scrambled */
+	ROM_LOAD( "e73-23.bin", 0x000000, 0x080000,  CRC(00ca3e04) SHA1(ea11007fc8e0b4fa702f24dd740bc0194624836c) )
+
+	ROM_REGION( 0x040000, "oki1", 0 )		/* Samples */
+	ROM_LOAD( "jsd-09.bin", 0x000000, 0x020000, CRC(e366bc5a) SHA1(c97bc1f25357366b4ff1343dfc9d0808a2630b28) )
+	ROM_LOAD( "jsd-10.bin", 0x020000, 0x020000, CRC(4a8f4fe6) SHA1(4f13f0149aa29b7cbddcd782f043bb71b3d27ede) )
+
+	ROM_REGION( 0x040000, "oki2", 0 )		/* Samples */
+	ROM_LOAD( "jsd-07.bin", 0x000000, 0x020000, CRC(6a48e979) SHA1(617281d9fe3c3927f94bf2f66d0a08923a92a6ab) )
+	ROM_LOAD( "jsd-08.bin", 0x020000, 0x020000, CRC(40704962) SHA1(4efd8c4d406600aa486c8b84b6f9882cca5970a4) )
+
+	ROM_REGION( 0x0200, "proms", 0 )		/* Priority PROM */
+	ROM_LOAD( "prom.14m",    0x0000, 0x0200, CRC(1d877538) SHA1(a5be0dc65dcfc36fbba10d1fddbe155e24b6122f) )
+ROM_END
+
 /***************************************************************************
 
                                 [ Soldam ]
@@ -3490,119 +3589,10 @@ ROM_START( tshingen )
 ROM_END
 
 
-/*************************************
- *
- *  Code Decryption
- *
- *************************************/
-
-void phantasm_rom_decode(running_machine *machine, const char *region)
+static void rodlandj_gfx_unmangle(running_machine &machine, const char *region)
 {
-	UINT16	*RAM	=	(UINT16 *) memory_region(machine, region);
-	int i,		size	=	memory_region_length(machine, region);
-	if (size > 0x40000)	size = 0x40000;
-
-	for (i = 0 ; i < size/2 ; i++)
-	{
-		UINT16 x,y;
-
-		x = RAM[i];
-
-// [0] def0 189a bc56 7234
-// [1] fdb9 7531 eca8 6420
-// [2] 0123 4567 ba98 fedc
-#define BITSWAP_0	BITSWAP16(x,0xd,0xe,0xf,0x0,0x1,0x8,0x9,0xa,0xb,0xc,0x5,0x6,0x7,0x2,0x3,0x4)
-#define BITSWAP_1	BITSWAP16(x,0xf,0xd,0xb,0x9,0x7,0x5,0x3,0x1,0xe,0xc,0xa,0x8,0x6,0x4,0x2,0x0)
-#define BITSWAP_2	BITSWAP16(x,0x0,0x1,0x2,0x3,0x4,0x5,0x6,0x7,0xb,0xa,0x9,0x8,0xf,0xe,0xd,0xc)
-
-		if		(i < 0x08000/2)	{ if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
-		else if	(i < 0x10000/2)	{ y = BITSWAP_2; }
-		else if	(i < 0x18000/2)	{ if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
-		else if	(i < 0x20000/2)	{ y = BITSWAP_1; }
-		else 					{ y = BITSWAP_2; }
-
-#undef	BITSWAP_0
-#undef	BITSWAP_1
-#undef	BITSWAP_2
-
-		RAM[i] = y;
-	}
-
-}
-
-void astyanax_rom_decode(running_machine *machine, const char *region)
-{
-	UINT16	*RAM	=	(UINT16 *) memory_region(machine, region);
-	int i,		size	=	memory_region_length(machine, region);
-	if (size > 0x40000)	size = 0x40000;
-
-	for (i = 0 ; i < size/2 ; i++)
-	{
-		UINT16 x,y;
-
-		x = RAM[i];
-
-// [0] def0 a981 65cb 7234
-// [1] fdb9 7531 8ace 0246
-// [2] 4567 0123 ba98 fedc
-
-#define BITSWAP_0	BITSWAP16(x,0xd,0xe,0xf,0x0,0xa,0x9,0x8,0x1,0x6,0x5,0xc,0xb,0x7,0x2,0x3,0x4)
-#define BITSWAP_1	BITSWAP16(x,0xf,0xd,0xb,0x9,0x7,0x5,0x3,0x1,0x8,0xa,0xc,0xe,0x0,0x2,0x4,0x6)
-#define BITSWAP_2	BITSWAP16(x,0x4,0x5,0x6,0x7,0x0,0x1,0x2,0x3,0xb,0xa,0x9,0x8,0xf,0xe,0xd,0xc)
-
-		if		(i < 0x08000/2)	{ if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
-		else if	(i < 0x10000/2)	{ y = BITSWAP_2; }
-		else if	(i < 0x18000/2)	{ if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
-		else if	(i < 0x20000/2)	{ y = BITSWAP_1; }
-		else 					{ y = BITSWAP_2; }
-
-#undef	BITSWAP_0
-#undef	BITSWAP_1
-#undef	BITSWAP_2
-
-		RAM[i] = y;
-	}
-}
-
-void rodland_rom_decode(running_machine *machine, const char *region)
-{
-	UINT16	*RAM	=	(UINT16 *) memory_region(machine, region);
-	int i,		size	=	memory_region_length(machine, region);
-	if (size > 0x40000)	size = 0x40000;
-
-	for (i = 0 ; i < size/2 ; i++)
-	{
-		UINT16 x,y;
-
-		x = RAM[i];
-
-// [0] d0a9 6ebf 5c72 3814  [1] 4567 0123 ba98 fedc
-// [2] fdb9 ce07 5318 a246  [3] 4512 ed3b a967 08fc
-#define BITSWAP_0	BITSWAP16(x,0xd,0x0,0xa,0x9,0x6,0xe,0xb,0xf,0x5,0xc,0x7,0x2,0x3,0x8,0x1,0x4);
-#define BITSWAP_1	BITSWAP16(x,0x4,0x5,0x6,0x7,0x0,0x1,0x2,0x3,0xb,0xa,0x9,0x8,0xf,0xe,0xd,0xc);
-#define	BITSWAP_2	BITSWAP16(x,0xf,0xd,0xb,0x9,0xc,0xe,0x0,0x7,0x5,0x3,0x1,0x8,0xa,0x2,0x4,0x6);
-#define	BITSWAP_3	BITSWAP16(x,0x4,0x5,0x1,0x2,0xe,0xd,0x3,0xb,0xa,0x9,0x6,0x7,0x0,0x8,0xf,0xc);
-
-		if		(i < 0x08000/2)	{	if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
-		else if	(i < 0x10000/2)	{	if ( (i | (0x248/2)) != i ) {y = BITSWAP_2;} else {y = BITSWAP_3;} }
-		else if	(i < 0x18000/2)	{	if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
-		else if	(i < 0x20000/2)	{ y = BITSWAP_1; }
-		else 					{ y = BITSWAP_3; }
-
-#undef	BITSWAP_0
-#undef	BITSWAP_1
-#undef	BITSWAP_2
-#undef	BITSWAP_3
-
-		RAM[i] = y;
-	}
-}
-
-
-static void rodlandj_gfx_unmangle(running_machine *machine, const char *region)
-{
-	UINT8 *rom = memory_region(machine, region);
-	int size = memory_region_length(machine, region);
+	UINT8 *rom = machine.region(region)->base();
+	int size = machine.region(region)->bytes();
 	UINT8 *buffer;
 	int i;
 
@@ -3613,7 +3603,7 @@ static void rodlandj_gfx_unmangle(running_machine *machine, const char *region)
 				| ((rom[i] & 0x48) << 1)
 				| ((rom[i] & 0x10) << 2);
 
-	buffer = alloc_array_or_die(UINT8, size);
+	buffer = auto_alloc_array(machine, UINT8, size);
 
 	memcpy(buffer,rom,size);
 
@@ -3628,13 +3618,13 @@ static void rodlandj_gfx_unmangle(running_machine *machine, const char *region)
 		rom[i] = buffer[a];
 	}
 
-	free(buffer);
+	auto_free(machine, buffer);
 }
 
-static void jitsupro_gfx_unmangle(running_machine *machine, const char *region)
+static void jitsupro_gfx_unmangle(running_machine &machine, const char *region)
 {
-	UINT8 *rom = memory_region(machine, region);
-	int size = memory_region_length(machine, region);
+	UINT8 *rom = machine.region(region)->base();
+	int size = machine.region(region)->bytes();
 	UINT8 *buffer;
 	int i;
 
@@ -3642,7 +3632,7 @@ static void jitsupro_gfx_unmangle(running_machine *machine, const char *region)
 	for (i = 0;i < size;i++)
 		rom[i] =   BITSWAP8(rom[i],0x4,0x3,0x5,0x7,0x6,0x2,0x1,0x0);
 
-	buffer = alloc_array_or_die(UINT8, size);
+	buffer = auto_alloc_array(machine, UINT8, size);
 
 	memcpy(buffer,rom,size);
 
@@ -3655,7 +3645,12 @@ static void jitsupro_gfx_unmangle(running_machine *machine, const char *region)
 		rom[i] = buffer[a];
 	}
 
-	free(buffer);
+	auto_free(machine, buffer);
+}
+
+static void stdragona_gfx_unmangle(running_machine &machine, const char *region)
+{
+	/* todo */
 }
 
 /*************************************
@@ -3664,155 +3659,264 @@ static void jitsupro_gfx_unmangle(running_machine *machine, const char *region)
  *
  *************************************/
 
+/*
+    MCU handshake sequence:
+    the M50747 MCU can overlay 0x20 bytes of data inside the ROM space.
+    The offset where this happens is given by m68k to MCU write [0x8/2] << 6.
+    For example stdragon writes 0x33e -> maps at 0xcf80-0xcfbf while stdragona writes 0x33f -> maps at 0xcfc0-0xcfff.
+*/
+
+#define MCU_HS_LOG 0
+
+#define MCU_HS_SEQ(_1_,_2_,_3_,_4_) \
+	(state->m_mcu_hs_ram[0/2] == _1_ && \
+	 state->m_mcu_hs_ram[2/2] == _2_ && \
+	 state->m_mcu_hs_ram[4/2] == _3_ && \
+	 state->m_mcu_hs_ram[6/2] == _4_)
+
 static DRIVER_INIT( 64street )
 {
-//  UINT16 *RAM = (UINT16 *) memory_region(machine, "maincpu");
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+//  UINT16 *RAM = (UINT16 *) machine.region("maincpu")->base();
 //  RAM[0x006b8/2] = 0x6004;        // d8001 test
 //  RAM[0x10EDE/2] = 0x6012;        // watchdog
 
-	ip_select_values[0] = 0x57;
-	ip_select_values[1] = 0x53;
-	ip_select_values[2] = 0x54;
-	ip_select_values[3] = 0x55;
-	ip_select_values[4] = 0x56;
+	state->m_ip_select_values[0] = 0x57;
+	state->m_ip_select_values[1] = 0x53;
+	state->m_ip_select_values[2] = 0x54;
+	state->m_ip_select_values[3] = 0x55;
+	state->m_ip_select_values[4] = 0x56;
+}
+
+static READ16_HANDLER( megasys1A_mcu_hs_r )
+{
+	UINT16 *ROM  = (UINT16 *) space->machine().region("maincpu")->base();
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+
+	if(state->m_mcu_hs && ((state->m_mcu_hs_ram[8/2] << 6) & 0x3ffc0) == ((offset*2) & 0x3ffc0))
+	{
+		if(MCU_HS_LOG && !space->debugger_access())
+			printf("MCU HS R (%04x) <- [%02x]\n",mem_mask,offset*2);
+
+		return 0x889e;
+	}
+
+	return ROM[offset];
+}
+
+static WRITE16_HANDLER( megasys1A_mcu_hs_w )
+{
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+
+	// following is hachoo, other games differs slightly
+	// R 0x5f0, if bit 0 == 0 then skips hs seq (debug?)
+	// [0/2]: 0x00ff
+	// [2/2]: 0x0055
+	// [4/2]: 0x00aa
+	// [6/2]: 0x0000
+	// [8/2]: 0x0fff
+	// R 0x5f0, if bit 1 == 0 then goes further (debug again?)
+	// R 0x3ffc0, compares with seed 0x889e
+
+	COMBINE_DATA(&state->m_mcu_hs_ram[offset]);
+
+	if(MCU_HS_SEQ(0x00ff,0x0055,0x00aa,0x0000) && offset == 0x8/2)
+		state->m_mcu_hs = 1;
+	else
+		state->m_mcu_hs = 0;
+
+	if(MCU_HS_LOG && !space->debugger_access())
+		printf("MCU HS W %04x (%04x) -> [%02x]\n",data,mem_mask,offset*2);
 }
 
 static DRIVER_INIT( astyanax )
 {
-	UINT16 *RAM;
-
 	astyanax_rom_decode(machine, "maincpu");
 
-	RAM = (UINT16 *) memory_region(machine, "maincpu");
-	RAM[0x0004e6/2] = 0x6040;	// protection
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00000, 0x3ffff, FUNC(megasys1A_mcu_hs_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x20000, 0x20009, FUNC(megasys1A_mcu_hs_w));
 }
 
 static DRIVER_INIT( avspirit )
 {
-	ip_select_values[0] = 0x37;
-	ip_select_values[1] = 0x35;
-	ip_select_values[2] = 0x36;
-	ip_select_values[3] = 0x33;
-	ip_select_values[4] = 0x34;
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ip_select_values[0] = 0x37;
+	state->m_ip_select_values[1] = 0x35;
+	state->m_ip_select_values[2] = 0x36;
+	state->m_ip_select_values[3] = 0x33;
+	state->m_ip_select_values[4] = 0x34;
 
 	/* kludge: avspirit has 0x10000 bytes of RAM while edf has 0x20000. The */
 	/* following is needed to make vh_start() pick the correct address */
 	/* for spriteram16. */
-	megasys1_ram += 0x10000/2;
+	state->m_ram += 0x10000/2;
 }
 
 static DRIVER_INIT( bigstrik )
 {
-	ip_select_values[0] = 0x58;
-	ip_select_values[1] = 0x54;
-	ip_select_values[2] = 0x55;
-	ip_select_values[3] = 0x56;
-	ip_select_values[4] = 0x57;
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ip_select_values[0] = 0x58;
+	state->m_ip_select_values[1] = 0x54;
+	state->m_ip_select_values[2] = 0x55;
+	state->m_ip_select_values[3] = 0x56;
+	state->m_ip_select_values[4] = 0x57;
 }
 
 static DRIVER_INIT( chimerab )
 {
+	megasys1_state *state = machine.driver_data<megasys1_state>();
 	/* same as cybattlr */
-	ip_select_values[0] = 0x56;
-	ip_select_values[1] = 0x52;
-	ip_select_values[2] = 0x53;
-	ip_select_values[3] = 0x54;
-	ip_select_values[4] = 0x55;
+	state->m_ip_select_values[0] = 0x56;
+	state->m_ip_select_values[1] = 0x52;
+	state->m_ip_select_values[2] = 0x53;
+	state->m_ip_select_values[3] = 0x54;
+	state->m_ip_select_values[4] = 0x55;
 }
 
 static DRIVER_INIT( cybattlr )
 {
-	ip_select_values[0] = 0x56;
-	ip_select_values[1] = 0x52;
-	ip_select_values[2] = 0x53;
-	ip_select_values[3] = 0x54;
-	ip_select_values[4] = 0x55;
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ip_select_values[0] = 0x56;
+	state->m_ip_select_values[1] = 0x52;
+	state->m_ip_select_values[2] = 0x53;
+	state->m_ip_select_values[3] = 0x54;
+	state->m_ip_select_values[4] = 0x55;
 }
 
 static DRIVER_INIT( edf )
 {
-	ip_select_values[0] = 0x20;
-	ip_select_values[1] = 0x21;
-	ip_select_values[2] = 0x22;
-	ip_select_values[3] = 0x23;
-	ip_select_values[4] = 0x24;
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ip_select_values[0] = 0x20;
+	state->m_ip_select_values[1] = 0x21;
+	state->m_ip_select_values[2] = 0x22;
+	state->m_ip_select_values[3] = 0x23;
+	state->m_ip_select_values[4] = 0x24;
 }
 
-static DRIVER_INIT( hachoo )
+static READ16_HANDLER( edfbl_input_r )
 {
-	UINT16 *RAM;
+	const char *const in_names[] = { "SYSTEM", "P1", "P2", "DSW1", "DSW2" };
+	UINT16 res;
 
-	astyanax_rom_decode(machine, "maincpu");
+	res = 0;
 
-	RAM  = (UINT16 *) memory_region(machine, "maincpu");
-	RAM[0x0006da/2] = 0x6000;	// protection
+	switch(offset)
+	{
+		case 0x02/2:
+		case 0x04/2:
+		case 0x06/2:
+		case 0x08/2:
+		case 0x0a/2: res = input_port_read(space->machine(), in_names[offset-1]); break;
+	}
+
+	return res;
+}
+
+static DRIVER_INIT( edfbl )
+{
+	//device_t *oki1 = machine.device("oki1");
+
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xe0000, 0xe000f, FUNC(edfbl_input_r));
+	//machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*oki1, 0xe000e, 0xe000f, FUNC(soundlatch_w));
 }
 
 static DRIVER_INIT( hayaosi1 )
 {
-	ip_select_values[0] = 0x51;
-	ip_select_values[1] = 0x52;
-	ip_select_values[2] = 0x53;
-	ip_select_values[3] = 0x54;
-	ip_select_values[4] = 0x55;
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	state->m_ip_select_values[0] = 0x51;
+	state->m_ip_select_values[1] = 0x52;
+	state->m_ip_select_values[2] = 0x53;
+	state->m_ip_select_values[3] = 0x54;
+	state->m_ip_select_values[4] = 0x55;
+}
+
+static READ16_HANDLER( iganinju_mcu_hs_r )
+{
+	UINT16 *ROM  = (UINT16 *) space->machine().region("maincpu")->base();
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+
+	if(state->m_mcu_hs && ((state->m_mcu_hs_ram[8/2] << 6) & 0x3ffc0) == ((offset*2) & 0x3ffc0))
+	{
+		if(MCU_HS_LOG && !space->debugger_access())
+			printf("MCU HS R (%04x) <- [%02x]\n",mem_mask,offset*2);
+
+		return 0x835d;
+	}
+
+	return ROM[offset];
+}
+
+static WRITE16_HANDLER( iganinju_mcu_hs_w )
+{
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+
+	// [0/2]: 0x0000
+	// [2/2]: 0x0055
+	// [4/2]: 0x00aa
+	// [6/2]: 0x00ff
+	// [8/2]: 0x0bc0
+	// expects 0x835d to be read at 0x2f000, does hs sequence until that happens
+
+	COMBINE_DATA(&state->m_mcu_hs_ram[offset]);
+
+	if(MCU_HS_SEQ(0x0000,0x0055,0x00aa,0x00ff) && offset == 0x8/2)
+		state->m_mcu_hs = 1;
+	else
+		state->m_mcu_hs = 0;
+
+	if(MCU_HS_LOG && !space->debugger_access())
+		printf("MCU HS W %04x (%04x) -> [%02x]\n",data,mem_mask,offset*2);
 }
 
 static DRIVER_INIT( iganinju )
 {
-	UINT16 *RAM;
+	//UINT16 *RAM;
 
 	phantasm_rom_decode(machine, "maincpu");
 
-	RAM  = (UINT16 *) memory_region(machine, "maincpu");
-	RAM[0x02f000/2] = 0x835d;	// protection
+	//RAM  = (UINT16 *) machine.region("maincpu")->base();
 
-	RAM[0x00006e/2] = 0x0420;	// the only game that does
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00000, 0x3ffff, FUNC(iganinju_mcu_hs_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x2f000, 0x2f009, FUNC(iganinju_mcu_hs_w));
+
+	//RAM[0x00006e/2] = 0x0420; // the only game that does
 								// not like lev 3 interrupts
 }
 
 static WRITE16_DEVICE_HANDLER( okim6295_both_w )
 {
-	if (ACCESSING_BITS_0_7)	okim6295_w(device, 0, (data >> 0) & 0xff );
-	else				okim6295_w(device, 0, (data >> 8) & 0xff );
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	if (ACCESSING_BITS_0_7)	oki->write_command((data >> 0) & 0xff );
+	else				oki->write_command((data >> 8) & 0xff );
 }
 
 static DRIVER_INIT( jitsupro )
 {
-	const device_config *oki1 = devtag_get_device(machine, "oki1");
-	const device_config *oki2 = devtag_get_device(machine, "oki2");
-	UINT16 *RAM  = (UINT16 *) memory_region(machine, "maincpu");
+	device_t *oki1 = machine.device("oki1");
+	device_t *oki2 = machine.device("oki2");
+	//UINT16 *RAM  = (UINT16 *) machine.region("maincpu")->base();
 
 	astyanax_rom_decode(machine, "maincpu");		// Code
 
 	jitsupro_gfx_unmangle(machine, "gfx1");	// Gfx
 	jitsupro_gfx_unmangle(machine, "gfx4");
 
-	RAM[0x436/2] = 0x4e71;	// protection
-	RAM[0x438/2] = 0x4e71;	//
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00000, 0x3ffff, FUNC(megasys1A_mcu_hs_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x20000, 0x20009, FUNC(megasys1A_mcu_hs_w));
 
 	/* the sound code writes oki commands to both the lsb and msb */
-	memory_install_write16_device_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), oki1, 0xa0000, 0xa0003, 0, 0, okim6295_both_w);
-	memory_install_write16_device_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), oki2, 0xc0000, 0xc0003, 0, 0, okim6295_both_w);
+	machine.device("soundcpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*oki1, 0xa0000, 0xa0003, FUNC(okim6295_both_w));
+	machine.device("soundcpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*oki2, 0xc0000, 0xc0003, FUNC(okim6295_both_w));
 }
 
 static DRIVER_INIT( peekaboo )
 {
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x100000, 0x100001, 0, 0, protection_peekaboo_r, protection_peekaboo_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x100000, 0x100001, FUNC(protection_peekaboo_r), FUNC(protection_peekaboo_w));
 }
 
 static DRIVER_INIT( phantasm )
 {
 	phantasm_rom_decode(machine, "maincpu");
-}
-
-static DRIVER_INIT( plusalph )
-{
-	UINT16 *RAM;
-
-	astyanax_rom_decode(machine, "maincpu");
-
-	RAM  = (UINT16 *) memory_region(machine, "maincpu");
-	RAM[0x0012b6/2] = 0x0000;	// protection
 }
 
 static DRIVER_INIT( rodland )
@@ -3830,11 +3934,14 @@ static DRIVER_INIT( rodlandj )
 
 static READ16_HANDLER( soldamj_spriteram16_r )
 {
-	return spriteram16[offset];
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+	return state->m_spriteram[offset];
 }
+
 static WRITE16_HANDLER( soldamj_spriteram16_w )
 {
-	if (offset < 0x800/2)	COMBINE_DATA(&spriteram16[offset]);
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+	if (offset < 0x800/2)	COMBINE_DATA(&state->m_spriteram[offset]);
 }
 
 static DRIVER_INIT( soldamj )
@@ -3842,7 +3949,7 @@ static DRIVER_INIT( soldamj )
 	astyanax_rom_decode(machine, "maincpu");
 
 	/* Sprite RAM is mirrored */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8c000, 0x8cfff, 0, 0, soldamj_spriteram16_r, soldamj_spriteram16_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x8c000, 0x8cfff, FUNC(soldamj_spriteram16_r), FUNC(soldamj_spriteram16_w));
 }
 
 static DRIVER_INIT( soldam )
@@ -3850,33 +3957,91 @@ static DRIVER_INIT( soldam )
 	phantasm_rom_decode(machine, "maincpu");
 
 	/* Sprite RAM is mirrored */
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8c000, 0x8cfff, 0, 0, soldamj_spriteram16_r, soldamj_spriteram16_w);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x8c000, 0x8cfff, FUNC(soldamj_spriteram16_r), FUNC(soldamj_spriteram16_w));
+}
+
+
+static READ16_HANDLER( stdragon_mcu_hs_r )
+{
+	UINT16 *ROM  = (UINT16 *) space->machine().region("maincpu")->base();
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+
+	if(state->m_mcu_hs && ((state->m_mcu_hs_ram[8/2] << 6) & 0x3ffc0) == ((offset*2) & 0x3ffc0))
+	{
+		if(MCU_HS_LOG && !space->debugger_access())
+			printf("MCU HS R (%04x) <- [%02x]\n",mem_mask,offset*2);
+
+		return 0x835d;
+	}
+
+	return ROM[offset];
+}
+
+static WRITE16_HANDLER( stdragon_mcu_hs_w )
+{
+	megasys1_state *state = space->machine().driver_data<megasys1_state>();
+
+	COMBINE_DATA(&state->m_mcu_hs_ram[offset]);
+
+	if(MCU_HS_SEQ(0x0000,0x0055,0x00aa,0x00ff) && offset == 0x8/2)
+		state->m_mcu_hs = 1;
+	else
+		state->m_mcu_hs = 0;
+
+	if(MCU_HS_LOG && !space->debugger_access())
+		printf("MCU HS W %04x (%04x) -> [%02x]\n",data,mem_mask,offset*2);
 }
 
 
 static DRIVER_INIT( stdragon )
 {
-	UINT16 *RAM;
+	phantasm_rom_decode(machine, "maincpu");
+
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00000, 0x3ffff, FUNC(stdragon_mcu_hs_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x23ff0, 0x23ff9, FUNC(stdragon_mcu_hs_w));
+}
+
+static DRIVER_INIT( stdragona )
+{
+	//UINT16 *RAM;
 
 	phantasm_rom_decode(machine, "maincpu");
 
-	RAM  = (UINT16 *) memory_region(machine, "maincpu");
-	RAM[0x00045e/2] = 0x0098;	// protection
+	stdragona_gfx_unmangle(machine, "gfx1");
+	stdragona_gfx_unmangle(machine, "gfx4");
+
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x00000, 0x3ffff, FUNC(stdragon_mcu_hs_r));
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x23ff0, 0x23ff9, FUNC(stdragon_mcu_hs_w));
 }
 
 static READ16_HANDLER( monkelf_input_r )
 {
-	return 0xffff;
+	const char *const in_names[] = { "P1", "P2", "DSW1", "DSW2", "SYSTEM" };
+	UINT16 res;
+
+	res = 0xffff;
+
+	switch(offset)
+	{
+		case 0x02/2:
+		case 0x04/2:
+		case 0x06/2:
+		case 0x08/2:
+		case 0x0a/2: res = input_port_read(space->machine(), in_names[offset-1]); break;
+	}
+
+	return res;
 }
 
 static DRIVER_INIT( monkelf )
 {
-	UINT16 *ROM = (UINT16*)memory_region(machine, "maincpu");
-	ROM[0x00744/2] = 0x4e71;
+	megasys1_state *state = machine.driver_data<megasys1_state>();
+	UINT16 *ROM = (UINT16*)machine.region("maincpu")->base();
+	ROM[0x00744/2] = 0x4e71; // weird check, 0xe000e R is a port-based trap?
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe0000, 0xe000f, 0, 0, monkelf_input_r);
+	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xe0000, 0xe000f, FUNC(monkelf_input_r));
 
-	megasys1_ram += 0x10000/2;
+	state->m_ram += 0x10000/2;
 
 }
 
@@ -3897,18 +4062,20 @@ GAME( 1988, kazan,    0,        system_A,          kazan,    iganinju, ROT0,   "
 GAME( 1988, iganinju, kazan,    system_A,          kazan,    iganinju, ROT0,   "Jaleco", "Iga Ninjyutsuden (Japan)", 0 )
 GAME( 1989, astyanax, 0,        system_A,          astyanax, astyanax, ROT0,   "Jaleco", "The Astyanax", 0 )
 GAME( 1989, lordofk,  astyanax, system_A,          astyanax, astyanax, ROT0,   "Jaleco", "The Lord of King (Japan)", 0 )
-GAME( 1989, hachoo,   0,        system_A_hachoo,   hachoo,   hachoo,   ROT0,   "Jaleco", "Hachoo!", 0 )
+GAME( 1989, hachoo,   0,        system_A_hachoo,   hachoo,   astyanax, ROT0,   "Jaleco", "Hachoo!", 0 )
 GAME( 1989, jitsupro, 0,        system_A,          jitsupro, jitsupro, ROT0,   "Jaleco", "Jitsuryoku!! Pro Yakyuu (Japan)", 0 )
-GAME( 1989, plusalph, 0,        system_A,          plusalph, plusalph, ROT270, "Jaleco", "Plus Alpha", 0 )
-GAME( 1989, stdragon, 0,        system_A,          stdragon, stdragon, ROT0,   "Jaleco", "Saint Dragon", 0 )
+GAME( 1989, plusalph, 0,        system_A,          plusalph, astyanax, ROT270, "Jaleco", "Plus Alpha", 0 )
+GAME( 1989, stdragon, 0,        system_A,          stdragon, stdragon, ROT0,   "Jaleco", "Saint Dragon (set 1)", 0 )
+GAME( 1989, stdragona,stdragon, system_A,          stdragon, stdragona,ROT0,   "Jaleco", "Saint Dragon (set 2)", GAME_NOT_WORKING ) // gfx scramble
 GAME( 1990, rodland,  0,        system_A,          rodland,  rodland,  ROT0,   "Jaleco", "Rod-Land (World)", 0 )
 GAME( 1990, rodlandj, rodland,  system_A,          rodland,  rodlandj, ROT0,   "Jaleco", "Rod-Land (Japan)", 0 )
-GAME( 1990, rodlandjb,rodland,  system_A,          rodland,  0,        ROT0,   "Jaleco", "Rod-Land (Japan bootleg)", 0 )
+GAME( 1990, rodlandjb,rodland,  system_A,          rodland,  0,        ROT0,   "bootleg","Rod-Land (Japan bootleg)", 0 )
 GAME( 1991, avspirit, 0,        system_B,          avspirit, avspirit, ROT0,   "Jaleco", "Avenging Spirit", 0 )
 GAME( 1990, phantasm, avspirit, system_A,          phantasm, phantasm, ROT0,   "Jaleco", "Phantasm (Japan)", 0 )
-GAME( 1990, monkelf,  avspirit, system_B,          avspirit, monkelf,  ROT0,   "bootleg", "Monky Elf (Korean bootleg of Avenging Spirit)", GAME_NOT_WORKING )
+GAME( 1990, monkelf,  avspirit, system_B,          avspirit, monkelf,  ROT0,   "bootleg","Monky Elf (Korean bootleg of Avenging Spirit)", GAME_NOT_WORKING )
 GAME( 1991, edf,      0,        system_B,          edf,      edf,      ROT0,   "Jaleco", "E.D.F. : Earth Defense Force", 0 )
 GAME( 1991, edfu,     edf,      system_B,          edf,      edf,      ROT0,   "Jaleco", "E.D.F. : Earth Defense Force (North America)", 0 )
+GAME( 1991, edfbl,    edf,      system_Bbl,        edf,      edfbl,    ROT0,   "bootleg","E.D.F. : Earth Defense Force (bootleg)", GAME_NO_SOUND )
 GAME( 1991, 64street, 0,        system_C,          64street, 64street, ROT0,   "Jaleco", "64th. Street - A Detective Story (World)", 0 )
 GAME( 1991, 64streetj,64street, system_C,          64street, 64street, ROT0,   "Jaleco", "64th. Street - A Detective Story (Japan)", 0 )
 GAME( 1992, soldam,   0,        system_A,          soldam,   soldam,   ROT0,   "Jaleco", "Soldam", 0 )

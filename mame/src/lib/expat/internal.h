@@ -16,11 +16,11 @@
    inline      - Used for selected internal functions for which inlining
                  may improve performance on some platforms.
 
-   Note: Use of these macros is based on judgement, not hard rules,
+   Note: Use of these macros is based on judgment, not hard rules,
          and therefore subject to change.
 */
 
-#if defined(__GNUC__) && defined(__i386__)
+#if defined(__GNUC__) && defined(__i386__) && !defined(__MINGW32__)
 /* We'll use this version by default only where we know it helps.
 
    regparm() generates warnings on Solaris boxes.   See SF bug #692878.

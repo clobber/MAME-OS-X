@@ -7,8 +7,8 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
-#include "deprecat.h"
 #include "esrip.h"
 
 CPU_DISASSEMBLE( esrip );
@@ -109,24 +109,23 @@ typedef struct
 	UINT16	*ipt_ram;
 	UINT8	*lbrm;
 
-	const	device_config *device;
-	const	address_space *program;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
 	int		icount;
 
 	read16_device_func	fdt_r;
 	write16_device_func	fdt_w;
-	UINT8 (*status_in)(running_machine *machine);
-	int (*draw)(running_machine *machine, int l, int r, int fig, int attr, int addr, int col, int x_scale, int bank);
+	UINT8 (*status_in)(running_machine &machine);
+	int (*draw)(running_machine &machine, int l, int r, int fig, int attr, int addr, int col, int x_scale, int bank);
 } esrip_state;
 
 
-INLINE esrip_state *get_safe_token(const device_config *device)
+INLINE esrip_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_ESRIP);
-	return (esrip_state *)device->token;
+	assert(device->type() == ESRIP);
+	return (esrip_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 
@@ -134,7 +133,7 @@ INLINE esrip_state *get_safe_token(const device_config *device)
     PUBLIC FUNCTIONS
 ***************************************************************************/
 
-UINT8 get_rip_status(const device_config *cpu)
+UINT8 get_rip_status(device_t *cpu)
 {
 	esrip_state *cpustate = get_safe_token(cpu);
 	return cpustate->status_out;
@@ -250,70 +249,71 @@ static void make_ops(esrip_state *cpustate)
 static CPU_INIT( esrip )
 {
 	esrip_state *cpustate = get_safe_token(device);
-	esrip_config* _config = (esrip_config*)device->static_config;
+	esrip_config* _config = (esrip_config*)device->static_config();
 
-	memset(cpustate, 0, sizeof(cpustate));
+	memset(cpustate, 0, sizeof(*cpustate));
 
 	/* Register configuration structure callbacks */
 	cpustate->fdt_r = _config->fdt_r;
 	cpustate->fdt_w = _config->fdt_w;
-	cpustate->lbrm = (UINT8*)memory_region(device->machine, _config->lbrm_prom);
+	cpustate->lbrm = (UINT8*)device->machine().region(_config->lbrm_prom)->base();
 	cpustate->status_in = _config->status_in;
 	cpustate->draw = _config->draw;
 
 	/* Allocate image pointer table RAM */
-	cpustate->ipt_ram = auto_alloc_array(device->machine, UINT16, IPT_RAM_SIZE/2);
+	cpustate->ipt_ram = auto_alloc_array(device->machine(), UINT16, IPT_RAM_SIZE/2);
 
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 
 	/* Create the instruction decode lookup table */
-	cpustate->optable = auto_alloc_array(device->machine, UINT8, 65536);
+	cpustate->optable = auto_alloc_array(device->machine(), UINT8, 65536);
 	make_ops(cpustate);
 
 	/* Register stuff for state saving */
-	state_save_register_device_item(device, 0, cpustate->acc);
-	state_save_register_device_item_array(device, 0, cpustate->ram);
-	state_save_register_device_item(device, 0, cpustate->d_latch);
-	state_save_register_device_item(device, 0, cpustate->i_latch);
-	state_save_register_device_item(device, 0, cpustate->result);
-	state_save_register_device_item(device, 0, cpustate->new_status);
-	state_save_register_device_item(device, 0, cpustate->status);
-	state_save_register_device_item(device, 0, cpustate->inst);
-	state_save_register_device_item(device, 0, cpustate->immflag);
-	state_save_register_device_item(device, 0, cpustate->ct);
-	state_save_register_device_item(device, 0, cpustate->t);
-	state_save_register_device_item(device, 0, cpustate->l1);
-	state_save_register_device_item(device, 0, cpustate->l2);
-	state_save_register_device_item(device, 0, cpustate->l3);
-	state_save_register_device_item(device, 0, cpustate->l4);
-	state_save_register_device_item(device, 0, cpustate->l5);
-	state_save_register_device_item(device, 0, cpustate->l6);
-	state_save_register_device_item(device, 0, cpustate->l7);
-	state_save_register_device_item(device, 0, cpustate->pl1);
-	state_save_register_device_item(device, 0, cpustate->pl2);
-	state_save_register_device_item(device, 0, cpustate->pl3);
-	state_save_register_device_item(device, 0, cpustate->pl4);
-	state_save_register_device_item(device, 0, cpustate->pl5);
-	state_save_register_device_item(device, 0, cpustate->pl6);
-	state_save_register_device_item(device, 0, cpustate->pl7);
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item(device, 0, cpustate->status_out);
-	state_save_register_device_item(device, 0, cpustate->x_scale);
-	state_save_register_device_item(device, 0, cpustate->y_scale);
-	state_save_register_device_item(device, 0, cpustate->img_bank);
-	state_save_register_device_item(device, 0, cpustate->line_latch);
-	state_save_register_device_item(device, 0, cpustate->fig_latch);
-	state_save_register_device_item(device, 0, cpustate->attr_latch);
-	state_save_register_device_item(device, 0, cpustate->adl_latch);
-	state_save_register_device_item(device, 0, cpustate->adr_latch);
-	state_save_register_device_item(device, 0, cpustate->iaddr_latch);
-	state_save_register_device_item(device, 0, cpustate->c_latch);
-	state_save_register_device_item(device, 0, cpustate->fdt_cnt);
-	state_save_register_device_item(device, 0, cpustate->ipt_cnt);
-	state_save_register_device_item(device, 0, cpustate->fig);
-	state_save_register_device_item(device, 0, cpustate->fig_cycles);
-	state_save_register_device_item_pointer(device, 0, cpustate->ipt_ram, IPT_RAM_SIZE / sizeof(UINT16));
+	device->save_item(NAME(cpustate->acc));
+	device->save_item(NAME(cpustate->ram));
+	device->save_item(NAME(cpustate->d_latch));
+	device->save_item(NAME(cpustate->i_latch));
+	device->save_item(NAME(cpustate->result));
+	device->save_item(NAME(cpustate->new_status));
+	device->save_item(NAME(cpustate->status));
+	device->save_item(NAME(cpustate->inst));
+	device->save_item(NAME(cpustate->immflag));
+	device->save_item(NAME(cpustate->ct));
+	device->save_item(NAME(cpustate->t));
+	device->save_item(NAME(cpustate->l1));
+	device->save_item(NAME(cpustate->l2));
+	device->save_item(NAME(cpustate->l3));
+	device->save_item(NAME(cpustate->l4));
+	device->save_item(NAME(cpustate->l5));
+	device->save_item(NAME(cpustate->l6));
+	device->save_item(NAME(cpustate->l7));
+	device->save_item(NAME(cpustate->pl1));
+	device->save_item(NAME(cpustate->pl2));
+	device->save_item(NAME(cpustate->pl3));
+	device->save_item(NAME(cpustate->pl4));
+	device->save_item(NAME(cpustate->pl5));
+	device->save_item(NAME(cpustate->pl6));
+	device->save_item(NAME(cpustate->pl7));
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->status_out));
+	device->save_item(NAME(cpustate->x_scale));
+	device->save_item(NAME(cpustate->y_scale));
+	device->save_item(NAME(cpustate->img_bank));
+	device->save_item(NAME(cpustate->line_latch));
+	device->save_item(NAME(cpustate->fig_latch));
+	device->save_item(NAME(cpustate->attr_latch));
+	device->save_item(NAME(cpustate->adl_latch));
+	device->save_item(NAME(cpustate->adr_latch));
+	device->save_item(NAME(cpustate->iaddr_latch));
+	device->save_item(NAME(cpustate->c_latch));
+	device->save_item(NAME(cpustate->fdt_cnt));
+	device->save_item(NAME(cpustate->ipt_cnt));
+	device->save_item(NAME(cpustate->fig));
+	device->save_item(NAME(cpustate->fig_cycles));
+	device->save_pointer(NAME(cpustate->ipt_ram), IPT_RAM_SIZE / sizeof(UINT16));
 }
 
 
@@ -354,9 +354,9 @@ static CPU_EXIT( esrip )
     PRIVATE FUNCTIONS
 ***************************************************************************/
 
-static int get_hblank(running_machine *machine)
+static int get_hblank(running_machine &machine)
 {
-	return video_screen_get_hblank(machine->primary_screen);
+	return machine.primary_screen->hblank();
 }
 
 /* Return the state of the LBRM line (Y-scaling related) */
@@ -384,7 +384,7 @@ INLINE int check_jmp(esrip_state *cpustate, UINT8 jmp_ctrl)
 			/* T3 */      case 6: ret = BIT(cpustate->t, 2);  break;
 			/* T4 */      case 1: ret = BIT(cpustate->t, 3);  break;
 			/* /LBRM */   case 5: ret = !get_lbrm(cpustate);  break;
-			/* /HBLANK */ case 3: ret = !get_hblank(cpustate->device->machine); break;
+			/* /HBLANK */ case 3: ret = !get_hblank(cpustate->device->machine()); break;
 			/* JMP */     case 7: ret = 0;                    break;
 		}
 
@@ -1618,7 +1618,7 @@ static void test(esrip_state *cpustate, UINT16 inst)
 		default:   INVALID;
 	}
 
-	cpustate->ct = res && 1;
+	cpustate->ct = res ? 1 : 0;
 }
 
 
@@ -1664,13 +1664,11 @@ INLINE void am29116_execute(esrip_state *cpustate, UINT16 inst, int _sre)
 static CPU_EXECUTE( esrip )
 {
 	esrip_state *cpustate = get_safe_token(device);
-	int calldebugger = (device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0;
+	int calldebugger = (device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0;
 	UINT8 status;
 
-	cpustate->icount = cycles;
-
 	/* I think we can get away with placing this outside of the loop */
-	status = cpustate->status_in(device->machine);
+	status = cpustate->status_in(device->machine());
 
 	/* Core execution loop */
 	do
@@ -1781,7 +1779,7 @@ static CPU_EXECUTE( esrip )
 		cpustate->pl7 = cpustate->l7;
 
 		/* Latch instruction */
-		inst = memory_decrypted_read_qword(cpustate->program, RIP_PC << 3);
+		inst = cpustate->direct->read_decrypted_qword(RIP_PC << 3);
 
 		in_h = inst >> 32;
 		in_l = inst & 0xffffffff;
@@ -1813,7 +1811,7 @@ static CPU_EXECUTE( esrip )
 			cpustate->attr_latch = x_bus;
 
 			cpustate->fig = 1;
-			cpustate->fig_cycles = cpustate->draw(device->machine, cpustate->adl_latch, cpustate->adr_latch, cpustate->fig_latch, cpustate->attr_latch, cpustate->iaddr_latch, cpustate->c_latch, cpustate->x_scale, cpustate->img_bank);
+			cpustate->fig_cycles = cpustate->draw(device->machine(), cpustate->adl_latch, cpustate->adr_latch, cpustate->fig_latch, cpustate->attr_latch, cpustate->iaddr_latch, cpustate->c_latch, cpustate->x_scale, cpustate->img_bank);
 		}
 
 		/* X-scale */
@@ -1861,8 +1859,6 @@ static CPU_EXECUTE( esrip )
 
 		cpustate->icount--;
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -1891,7 +1887,7 @@ static CPU_SET_INFO( esrip )
 
 CPU_GET_INFO( esrip )
 {
-	esrip_state *cpustate = (device->token != NULL) ? get_safe_token(device) : NULL;
+	esrip_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1905,15 +1901,15 @@ CPU_GET_INFO( esrip )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;					break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;					break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 64;			break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 9;			break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = -3;			break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;			break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA: 	info->i = 0;			break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA: 	info->i = 0;			break;
-		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;			break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO: 		info->i = 0;			break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO: 		info->i = 0;			break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;			break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 9;			break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -3;			break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;			break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;			break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;			break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;			break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;			break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;			break;
 
 		case CPUINFO_INT_REGISTER:
 		case CPUINFO_INT_PC:							info->i = RIP_PC;	break;
@@ -1947,7 +1943,7 @@ CPU_GET_INFO( esrip )
 																		cpustate->status & 0x04 ? 'N' : '.',
 																		cpustate->status & 0x02 ? 'C' : '.',
 																		cpustate->status & 0x01 ? 'Z' : '.',
-																		get_hblank(device->machine) ? 'H' : '.'); break;
+																		get_hblank(device->machine()) ? 'H' : '.'); break;
 
 		case CPUINFO_STR_REGISTER + ESRIP_PC:			sprintf(info->s, "PC: %04X", RIP_PC); break;
 		case CPUINFO_STR_REGISTER + ESRIP_ACC:			sprintf(info->s, "ACC: %04X", cpustate->acc); break;
@@ -2000,3 +1996,5 @@ CPU_GET_INFO( esrip )
 		case CPUINFO_STR_REGISTER + ESRIP_IADDR:		sprintf(info->s, "IADR: %04X", cpustate->iaddr_latch); break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(ESRIP, esrip);

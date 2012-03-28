@@ -9,178 +9,90 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deco16ic.h"
-
-static UINT16 vaportra_priority[2];
-
-/******************************************************************************/
-
-static int vaportra_bank_callback(const int bank)
-{
-	return ((bank>>4)&0x7) * 0x1000;
-}
-
-
-VIDEO_START( vaportra )
-{
-	deco16_2_video_init(machine, 0);
-
-	deco16_pf1_rowscroll = 0;
-	deco16_pf2_rowscroll = 0;
-	deco16_pf3_rowscroll = 0;
-	deco16_pf4_rowscroll = 0;
-
-	deco16_set_tilemap_bank_callback(0, vaportra_bank_callback);
-	deco16_set_tilemap_bank_callback(1, vaportra_bank_callback);
-	deco16_set_tilemap_bank_callback(2, vaportra_bank_callback);
-	deco16_set_tilemap_bank_callback(3, vaportra_bank_callback);
-
-	deco16_pf1_colour_bank=0x00;
-	deco16_pf2_colour_bank=0x20;
-	deco16_pf4_colour_bank=0x40;
-	deco16_pf3_colour_bank=0x30;
-}
+#include "emu.h"
+#include "video/deco16ic.h"
+#include "includes/vaportra.h"
+#include "video/decmxc06.h"
 
 /******************************************************************************/
-
 
 WRITE16_HANDLER( vaportra_priority_w )
 {
-	COMBINE_DATA(&vaportra_priority[offset]);
+	vaportra_state *state = space->machine().driver_data<vaportra_state>();
+	COMBINE_DATA(&state->m_priority[offset]);
 }
 
 /******************************************************************************/
 
-static void update_24bitcol(running_machine *machine, int offset)
+static void update_24bitcol( running_machine &machine, int offset )
 {
-	UINT8 r,g,b;
+	UINT8 r, g, b;
 
-	r = (paletteram16[offset] >> 0) & 0xff;
-	g = (paletteram16[offset] >> 8) & 0xff;
-	b = (paletteram16_2[offset] >> 0) & 0xff;
+	r = (machine.generic.paletteram.u16[offset] >> 0) & 0xff;
+	g = (machine.generic.paletteram.u16[offset] >> 8) & 0xff;
+	b = (machine.generic.paletteram2.u16[offset] >> 0) & 0xff;
 
-	palette_set_color(machine,offset,MAKE_RGB(r,g,b));
+	palette_set_color(machine, offset, MAKE_RGB(r,g,b));
 }
 
 WRITE16_HANDLER( vaportra_palette_24bit_rg_w )
 {
-	COMBINE_DATA(&paletteram16[offset]);
-	update_24bitcol(space->machine, offset);
+	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	update_24bitcol(space->machine(), offset);
 }
 
 WRITE16_HANDLER( vaportra_palette_24bit_b_w )
 {
-	COMBINE_DATA(&paletteram16_2[offset]);
-	update_24bitcol(space->machine, offset);
+	COMBINE_DATA(&space->machine().generic.paletteram2.u16[offset]);
+	update_24bitcol(space->machine(), offset);
 }
 
 /******************************************************************************/
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int pri)
+
+SCREEN_UPDATE_IND16( vaportra )
 {
-	int offs,priority_value;
+	vaportra_state *state = screen.machine().driver_data<vaportra_state>();
+	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	int pri = state->m_priority[0] & 0x03;
 
-	priority_value=vaportra_priority[1];
+	flip_screen_set(screen.machine(), !BIT(flip, 7));
+	deco16ic_pf_update(state->m_deco_tilegen1, 0, 0);
+	deco16ic_pf_update(state->m_deco_tilegen2, 0, 0);
 
-	for (offs = 0;offs < 0x400;offs += 4)
-	{
-		int x,y,sprite,colour,multi,fx,fy,inc,flash,mult;
-
-		y = buffered_spriteram16[offs];
-		if ((y&0x8000) == 0) continue;
-
-		sprite = buffered_spriteram16[offs+1] & 0x1fff;
-		x = buffered_spriteram16[offs+2];
-		colour = (x >> 12) &0xf;
-		if (pri && (colour>=priority_value)) continue;
-		if (!pri && !(colour>=priority_value)) continue;
-
-		flash=x&0x800;
-		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
-
-		fx = y & 0x2000;
-		fy = y & 0x4000;
-		multi = (1 << ((y & 0x1800) >> 11)) - 1;	/* 1x, 2x, 4x, 8x height */
-
-		x = x & 0x01ff;
-		y = y & 0x01ff;
-		if (x >= 256) x -= 512;
-		if (y >= 256) y -= 512;
-		x = 240 - x;
-		y = 240 - y;
-
-		if (x>256) continue; /* Speedup */
-
-		sprite &= ~multi;
-		if (fy)
-			inc = -1;
-		else
-		{
-			sprite += multi;
-			inc = 1;
-		}
-
-		if (flip_screen_get(machine))
-		{
-			y=240-y;
-			x=240-x;
-			if (fx) fx=0; else fx=1;
-			if (fy) fy=0; else fy=1;
-			mult=16;
-		}
-		else mult=-16;
-
-		while (multi >= 0)
-		{
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[3],
-					sprite - multi * inc,
-					colour,
-					fx,fy,
-					x,y + mult * multi,0);
-
-			multi--;
-		}
-	}
-}
-
-
-VIDEO_UPDATE( vaportra )
-{
-	int pri=vaportra_priority[0] & 0x03;
-
-	flip_screen_set(screen->machine,  !(deco16_pf12_control[0]&0x80) );
-
-	deco16_pf12_update(deco16_pf1_rowscroll,deco16_pf2_rowscroll);
-	deco16_pf34_update(deco16_pf3_rowscroll,deco16_pf4_rowscroll);
+	screen.machine().device<deco_mxc06_device>("spritegen")->set_pri_type(1); // force priorities to be handled in a different way for this driver for now
 
 	/* Draw playfields */
-	if (pri==0) {
-		deco16_tilemap_4_draw(screen,bitmap,cliprect,TILEMAP_DRAW_OPAQUE,0);
-		deco16_tilemap_3_draw(screen,bitmap,cliprect,0,0);
-		draw_sprites(screen->machine, bitmap,cliprect,0);
-		deco16_tilemap_2_draw(screen,bitmap,cliprect,0,0);
+	if (pri == 0)
+	{
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 0);
+		screen.machine().device<deco_mxc06_device>("spritegen")->draw_sprites(screen.machine(), bitmap, cliprect, screen.machine().generic.buffered_spriteram.u16, 0, state->m_priority[1], 0x0f);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
 	}
-	else if (pri==1) {
-		deco16_tilemap_3_draw(screen,bitmap,cliprect,TILEMAP_DRAW_OPAQUE,0);
-		deco16_tilemap_4_draw(screen,bitmap,cliprect,0,0);
-		draw_sprites(screen->machine, bitmap,cliprect,0);
-		deco16_tilemap_2_draw(screen,bitmap,cliprect,0,0);
+	else if (pri == 1)
+	{
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 0);
+		screen.machine().device<deco_mxc06_device>("spritegen")->draw_sprites(screen.machine(), bitmap, cliprect, screen.machine().generic.buffered_spriteram.u16, 0, state->m_priority[1], 0x0f);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
 	}
-	else if (pri==2) {
-		deco16_tilemap_4_draw(screen,bitmap,cliprect,TILEMAP_DRAW_OPAQUE,0);
-		deco16_tilemap_2_draw(screen,bitmap,cliprect,0,0);
-		draw_sprites(screen->machine, bitmap,cliprect,0);
-		deco16_tilemap_3_draw(screen,bitmap,cliprect,0,0);
+	else if (pri == 2)
+	{
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+		screen.machine().device<deco_mxc06_device>("spritegen")->draw_sprites(screen.machine(), bitmap, cliprect, screen.machine().generic.buffered_spriteram.u16, 0, state->m_priority[1], 0x0f);
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 0);
 	}
-	else {
-		deco16_tilemap_3_draw(screen,bitmap,cliprect,TILEMAP_DRAW_OPAQUE,0);
-		deco16_tilemap_2_draw(screen,bitmap,cliprect,0,0);
-		draw_sprites(screen->machine, bitmap,cliprect,0);
-		deco16_tilemap_4_draw(screen,bitmap,cliprect,0,0);
+	else
+	{
+		deco16ic_tilemap_1_draw(state->m_deco_tilegen2, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
+		screen.machine().device<deco_mxc06_device>("spritegen")->draw_sprites(screen.machine(), bitmap, cliprect, screen.machine().generic.buffered_spriteram.u16, 0, state->m_priority[1], 0x0f);
+		deco16ic_tilemap_2_draw(state->m_deco_tilegen2, bitmap, cliprect, 0, 0);
 	}
 
-	draw_sprites(screen->machine,bitmap,cliprect,1);
-	deco16_tilemap_1_draw(screen,bitmap,cliprect,0,0);
+	screen.machine().device<deco_mxc06_device>("spritegen")->draw_sprites(screen.machine(), bitmap, cliprect, screen.machine().generic.buffered_spriteram.u16, 1, state->m_priority[1], 0x0f);
+	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
 	return 0;
 }

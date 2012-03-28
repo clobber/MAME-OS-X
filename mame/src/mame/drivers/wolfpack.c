@@ -4,32 +4,10 @@ Atari Wolf Pack (prototype) driver
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/s14001a.h"
-
-extern int wolfpack_collision;
-
-extern UINT8* wolfpack_alpha_num_ram;
-
-PALETTE_INIT( wolfpack );
-VIDEO_UPDATE( wolfpack );
-VIDEO_START( wolfpack );
-VIDEO_EOF( wolfpack );
-
-WRITE8_HANDLER( wolfpack_video_invert_w );
-WRITE8_HANDLER( wolfpack_ship_reflect_w );
-WRITE8_HANDLER( wolfpack_pt_pos_select_w );
-WRITE8_HANDLER( wolfpack_pt_horz_w );
-WRITE8_HANDLER( wolfpack_pt_pic_w );
-WRITE8_HANDLER( wolfpack_ship_h_w );
-WRITE8_HANDLER( wolfpack_torpedo_pic_w );
-WRITE8_HANDLER( wolfpack_ship_size_w );
-WRITE8_HANDLER( wolfpack_ship_h_precess_w );
-WRITE8_HANDLER( wolfpack_ship_pic_w );
-WRITE8_HANDLER( wolfpack_torpedo_h_w );
-WRITE8_HANDLER( wolfpack_torpedo_v_w );
-
+#include "includes/wolfpack.h"
 
 static TIMER_CALLBACK( periodic_callback )
 {
@@ -42,26 +20,27 @@ static TIMER_CALLBACK( periodic_callback )
 	if (scanline >= 262)
 		scanline = 0;
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), NULL, scanline, periodic_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(scanline), FUNC(periodic_callback), scanline);
 }
 
 
 static MACHINE_RESET( wolfpack )
 {
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), NULL, 0, periodic_callback);
+	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(0), FUNC(periodic_callback));
 }
 
 
 static CUSTOM_INPUT( wolfpack_dial_r )
 {
 	int bit = (FPTR)param;
-	return ((input_port_read(field->port->machine, "DIAL") + bit) / 2) & 0x01;
+	return ((input_port_read(field.machine(), "DIAL") + bit) / 2) & 0x01;
 }
 
 
 static READ8_HANDLER( wolfpack_misc_r )
 {
-	const device_config *device = devtag_get_device(space->machine, "speech");
+	wolfpack_state *state = space->machine().driver_data<wolfpack_state>();
+	device_t *device = space->machine().device("speech");
 	UINT8 val = 0;
 
 	/* BIT0 => SPEECH BUSY */
@@ -76,10 +55,10 @@ static READ8_HANDLER( wolfpack_misc_r )
 	if (!s14001a_bsy_r(device))
         val |= 0x01;
 
-	if (!wolfpack_collision)
+	if (!state->m_collision)
 		val |= 0x10;
 
-	if (video_screen_get_vpos(space->machine->primary_screen) >= 240)
+	if (space->machine().primary_screen->vpos() >= 240)
 		val |= 0x80;
 
 	return val;
@@ -113,26 +92,27 @@ static WRITE8_DEVICE_HANDLER( wolfpack_start_speech_w )
 
 static WRITE8_HANDLER( wolfpack_attract_w )
 {
-	coin_lockout_global_w(!(data & 1));
+	coin_lockout_global_w(space->machine(), !(data & 1));
 }
 
 
 static WRITE8_HANDLER( wolfpack_credit_w )
 {
-	set_led_status(0, !(data & 1));
+	set_led_status(space->machine(), 0, !(data & 1));
 }
 
 
 static WRITE8_HANDLER( wolfpack_coldetres_w )
 {
-	wolfpack_collision = 0;
+	wolfpack_state *state = space->machine().driver_data<wolfpack_state>();
+	state->m_collision = 0;
 }
 
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x100)
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("INPUTS")
-	AM_RANGE(0x1000, 0x10ff) AM_WRITE(SMH_RAM) AM_BASE(&wolfpack_alpha_num_ram)
+	AM_RANGE(0x1000, 0x10ff) AM_WRITEONLY AM_BASE_MEMBER(wolfpack_state, m_alpha_num_ram)
 	AM_RANGE(0x2000, 0x2000) AM_READ(wolfpack_misc_r)
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(wolfpack_high_explo_w)
 	AM_RANGE(0x2001, 0x2001) AM_WRITE(wolfpack_sonar_ping_w)
@@ -306,34 +286,33 @@ static GFXDECODE_START( wolfpack )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START(wolfpack)
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+static MACHINE_CONFIG_START( wolfpack, wolfpack_state )
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502, 12096000 / 16)
-	MDRV_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_ADD("maincpu", M6502, 12096000 / 16)
+	MCFG_CPU_PROGRAM_MAP(main_map)
 
 	/* video hardware */
-	MDRV_MACHINE_RESET(wolfpack)
+	MCFG_MACHINE_RESET(wolfpack)
 
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 262)
-	MDRV_SCREEN_VISIBLE_AREA(0, 511, 16, 239)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(512, 262)
+	MCFG_SCREEN_VISIBLE_AREA(0, 511, 16, 239)
+	MCFG_SCREEN_UPDATE_STATIC(wolfpack)
+	MCFG_SCREEN_VBLANK_STATIC(wolfpack)
 
-	MDRV_GFXDECODE(wolfpack)
-	MDRV_PALETTE_LENGTH(12)
-	MDRV_PALETTE_INIT(wolfpack)
-	MDRV_VIDEO_START(wolfpack)
-	MDRV_VIDEO_UPDATE(wolfpack)
-	MDRV_VIDEO_EOF(wolfpack)
+	MCFG_GFXDECODE(wolfpack)
+	MCFG_PALETTE_LENGTH(12)
+	MCFG_PALETTE_INIT(wolfpack)
+	MCFG_VIDEO_START(wolfpack)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("speech", S14001A, 20000) /* RC Clock (C=100pf, R=470K-670K ohms, adjustable) ranging from 14925.37313hz to 21276.59574hz, likely factory set to 20000hz since anything below 19500 is too slow */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("speech", S14001A, 20000) /* RC Clock (C=100pf, R=470K-670K ohms, adjustable) ranging from 14925.37313hz to 21276.59574hz, likely factory set to 20000hz since anything below 19500 is too slow */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 ROM_START( wolfpack )

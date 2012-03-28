@@ -8,8 +8,7 @@ Tomasz Slanina
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "deprecat.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6805/m6805.h"
 #include "sound/ay8910.h"
@@ -18,127 +17,101 @@ Tomasz Slanina
 #include "changela.lh"
 
 
-static UINT8 portA_in,portA_out,ddrA;
-static UINT8 portB_out,ddrB;
-static UINT8 portC_in,portC_out,ddrC;
-
-static UINT8 mcu_out;
-static UINT8 mcu_in;
-static UINT8 mcu_PC1;
-static UINT8 mcu_PC0;
-
-UINT8 changela_tree0_col;
-UINT8 changela_tree1_col;
-UINT8 changela_left_bank_col;
-UINT8 changela_right_bank_col;
-UINT8 changela_boat_shore_col;
-UINT8 changela_collision_reset;
-UINT8 changela_tree_collision_reset;
-
-static MACHINE_RESET (changela)
-{
-	mcu_PC1=0;
-	mcu_PC0=0;
-
-	changela_tree0_col = 0;
-	changela_tree1_col = 0;
-	changela_left_bank_col = 0;
-	changela_right_bank_col = 0;
-	changela_boat_shore_col = 0;
-	changela_collision_reset = 0;
-	changela_tree_collision_reset = 0;
-}
-
 static READ8_HANDLER( mcu_r )
 {
-	//mame_printf_debug("Z80 MCU  R = %x\n",mcu_out);
-	return mcu_out;
+	changela_state *state = space->machine().driver_data<changela_state>();
+
+	//mame_printf_debug("Z80 MCU  R = %x\n", state->m_mcu_out);
+	return state->m_mcu_out;
 }
 
 /* latch LS374 at U39 */
 static WRITE8_HANDLER( mcu_w )
 {
-	mcu_in = data;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_mcu_in = data;
 }
-
 
 
 /*********************************
         MCU
 *********************************/
 
-
-
-static READ8_HANDLER( changela_68705_portA_r )
+static READ8_HANDLER( changela_68705_port_a_r )
 {
-	return (portA_out & ddrA) | (portA_in & ~ddrA);
+	changela_state *state = space->machine().driver_data<changela_state>();
+	return (state->m_port_a_out & state->m_ddr_a) | (state->m_port_a_in & ~state->m_ddr_a);
 }
 
-static WRITE8_HANDLER( changela_68705_portA_w )
+static WRITE8_HANDLER( changela_68705_port_a_w )
 {
-	portA_out = data;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_port_a_out = data;
 }
 
-static WRITE8_HANDLER( changela_68705_ddrA_w )
+static WRITE8_HANDLER( changela_68705_ddr_a_w )
 {
-	ddrA = data;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_ddr_a = data;
 }
 
-
-static READ8_HANDLER( changela_68705_portB_r )
+static READ8_HANDLER( changela_68705_port_b_r )
 {
-	return (portB_out & ddrB) | (input_port_read(space->machine, "MCU") & ~ddrB);
+	changela_state *state = space->machine().driver_data<changela_state>();
+	return (state->m_port_b_out & state->m_ddr_b) | (input_port_read(space->machine(), "MCU") & ~state->m_ddr_b);
 }
 
-static WRITE8_HANDLER( changela_68705_portB_w )
+static WRITE8_HANDLER( changela_68705_port_b_w )
 {
-	portB_out = data;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_port_b_out = data;
 }
 
-static WRITE8_HANDLER( changela_68705_ddrB_w )
+static WRITE8_HANDLER( changela_68705_ddr_b_w )
 {
-	ddrB = data;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_ddr_b = data;
 }
 
-
-static READ8_HANDLER( changela_68705_portC_r )
+static READ8_HANDLER( changela_68705_port_c_r )
 {
-	return (portC_out & ddrC) | (portC_in & ~ddrC);
+	changela_state *state = space->machine().driver_data<changela_state>();
+	return (state->m_port_c_out & state->m_ddr_c) | (state->m_port_c_in & ~state->m_ddr_c);
 }
 
-static WRITE8_HANDLER( changela_68705_portC_w )
+static WRITE8_HANDLER( changela_68705_port_c_w )
 {
+	changela_state *state = space->machine().driver_data<changela_state>();
 	/* PC3 is connected to the CLOCK input of the LS374,
         so we latch the data on positive going edge of the clock */
 
 /* this is strange because if we do this corectly - it just doesn't work */
-	if( (data&8) /*& (!(portC_out&8))*/ )
-		mcu_out  = portA_out;
-
+	if ((data & 8) /*& (!(state->m_port_c_out & 8))*/ )
+		state->m_mcu_out = state->m_port_a_out;
 
 	/* PC2 is connected to the /OE input of the LS374 */
+	if (!(data & 4))
+		state->m_port_a_in = state->m_mcu_in;
 
-	if(!(data&4))
-		portA_in = mcu_in;
-
-	portC_out = data;
+	state->m_port_c_out = data;
 }
 
-static WRITE8_HANDLER( changela_68705_ddrC_w )
+static WRITE8_HANDLER( changela_68705_ddr_c_w )
 {
-	ddrC = data;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_ddr_c = data;
 }
 
 
-static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
-	AM_RANGE(0x0000, 0x0000) AM_READWRITE(changela_68705_portA_r, changela_68705_portA_w)
-	AM_RANGE(0x0001, 0x0001) AM_READWRITE(changela_68705_portB_r, changela_68705_portB_w)
-	AM_RANGE(0x0002, 0x0002) AM_READWRITE(changela_68705_portC_r, changela_68705_portC_w)
+	AM_RANGE(0x0000, 0x0000) AM_READWRITE(changela_68705_port_a_r, changela_68705_port_a_w)
+	AM_RANGE(0x0001, 0x0001) AM_READWRITE(changela_68705_port_b_r, changela_68705_port_b_w)
+	AM_RANGE(0x0002, 0x0002) AM_READWRITE(changela_68705_port_c_r, changela_68705_port_c_w)
 
-	AM_RANGE(0x0004, 0x0004) AM_WRITE(changela_68705_ddrA_w)
-	AM_RANGE(0x0005, 0x0005) AM_WRITE(changela_68705_ddrB_w)
-	AM_RANGE(0x0006, 0x0006) AM_WRITE(changela_68705_ddrC_w)
+	AM_RANGE(0x0004, 0x0004) AM_WRITE(changela_68705_ddr_a_w)
+	AM_RANGE(0x0005, 0x0005) AM_WRITE(changela_68705_ddr_b_w)
+	AM_RANGE(0x0006, 0x0006) AM_WRITE(changela_68705_ddr_c_w)
 
 	AM_RANGE(0x0000, 0x007f) AM_RAM
 	AM_RANGE(0x0080, 0x07ff) AM_ROM
@@ -149,47 +122,48 @@ ADDRESS_MAP_END
 /* U30 */
 static READ8_HANDLER( changela_24_r )
 {
-	return ((portC_out&2)<<2) | 7;	/* bits 2,1,0-N/C inputs */
+	changela_state *state = space->machine().driver_data<changela_state>();
+	return ((state->m_port_c_out & 2) << 2) | 7;	/* bits 2,1,0-N/C inputs */
 }
 
 static READ8_HANDLER( changela_25_r )
 {
+	changela_state *state = space->machine().driver_data<changela_state>();
 	//collisions on bits 3,2, bits 1,0-N/C inputs
-	return (changela_tree1_col << 3) | (changela_tree0_col << 2) | 0x03;
+	return (state->m_tree1_col << 3) | (state->m_tree0_col << 2) | 0x03;
 }
 
 static READ8_HANDLER( changela_30_r )
 {
-	return input_port_read(space->machine, "WHEEL") & 0x0f;	//wheel control (clocked input) signal on bits 3,2,1,0
+	return input_port_read(space->machine(), "WHEEL") & 0x0f;	//wheel control (clocked input) signal on bits 3,2,1,0
 }
 
 static READ8_HANDLER( changela_31_r )
 {
+	changela_state *state = space->machine().driver_data<changela_state>();
 	/* If the new value is less than the old value, and it did not wrap around,
        or if the new value is greater than the old value, and it did wrap around,
        then we are moving LEFT. */
-	static UINT8 prev_value = 0;
-	UINT8 curr_value = input_port_read(space->machine, "WHEEL");
-	static int dir = 0;
+	UINT8 curr_value = input_port_read(space->machine(), "WHEEL");
 
-	if( (curr_value < prev_value && (prev_value - curr_value) < 0x80)
-	||  (curr_value > prev_value && (curr_value - prev_value) > 0x80) )
-		dir = 1;
-	if( (prev_value < curr_value && (curr_value - prev_value) < 0x80)
-	||  (prev_value > curr_value && (prev_value - curr_value) > 0x80) )
-		dir = 0;
+	if ((curr_value < state->m_prev_value_31 && (state->m_prev_value_31 - curr_value) < 0x80)
+	||  (curr_value > state->m_prev_value_31 && (curr_value - state->m_prev_value_31) > 0x80))
+		state->m_dir_31 = 1;
+	if ((state->m_prev_value_31 < curr_value && (curr_value - state->m_prev_value_31) < 0x80)
+	||  (state->m_prev_value_31 > curr_value && (state->m_prev_value_31 - curr_value) > 0x80))
+		state->m_dir_31 = 0;
 
-	prev_value = curr_value;
+	state->m_prev_value_31 = curr_value;
 
 	//wheel UP/DOWN control signal on bit 3, collisions on bits:2,1,0
-	return (dir << 3) | (changela_left_bank_col << 2) | (changela_right_bank_col << 1) | changela_boat_shore_col;
+	return (state->m_dir_31 << 3) | (state->m_left_bank_col << 2) | (state->m_right_bank_col << 1) | state->m_boat_shore_col;
 }
 
 static READ8_HANDLER( changela_2c_r )
 {
-	int val = input_port_read(space->machine, "IN0");
+	int val = input_port_read(space->machine(), "IN0");
 
-    val = (val&0x30) | ((val&1)<<7) | (((val&1)^1)<<6);
+	val = (val & 0x30) | ((val & 1) << 7) | (((val & 1) ^ 1) << 6);
 
 	return val;
 }
@@ -200,11 +174,11 @@ static READ8_HANDLER( changela_2d_r )
 	int v8 = 0;
 	int gas;
 
-	if ((video_screen_get_vpos(space->machine->primary_screen) & 0xf8)==0xf8)
+	if ((space->machine().primary_screen->vpos() & 0xf8) == 0xf8)
 		v8 = 1;
 
 	/* Gas pedal is made up of 2 switches, 1 active low, 1 active high */
-	switch(input_port_read(space->machine, "IN1") & 0x03)
+	switch (input_port_read(space->machine(), "IN1") & 0x03)
 	{
 		case 0x02:
 			gas = 0x80;
@@ -217,35 +191,38 @@ static READ8_HANDLER( changela_2d_r )
 			break;
 	}
 
-	return (input_port_read(space->machine, "IN1") & 0x20) | gas | (v8<<4);
+	return (input_port_read(space->machine(), "IN1") & 0x20) | gas | (v8 << 4);
 }
 
-static WRITE8_HANDLER( mcu_PC0_w )
+static WRITE8_HANDLER( mcu_pc_0_w )
 {
-	portC_in = (portC_in&0xfe) | (data&1);
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_port_c_in = (state->m_port_c_in & 0xfe) | (data & 1);
 }
 
 static WRITE8_HANDLER( changela_collision_reset_0 )
 {
-	changela_collision_reset = data & 0x01;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_collision_reset = data & 0x01;
 }
 
 static WRITE8_HANDLER( changela_collision_reset_1 )
 {
-	changela_tree_collision_reset = data & 0x01;
+	changela_state *state = space->machine().driver_data<changela_state>();
+	state->m_tree_collision_reset = data & 0x01;
 }
 
 static WRITE8_HANDLER( changela_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine(), offset, data);
 }
 
 
-static ADDRESS_MAP_START( changela_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( changela_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE(&spriteram) /* OBJ0 RAM */
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_BASE(&videoram)	/* OBJ1 RAM */
-	AM_RANGE(0xa000, 0xa07f) AM_WRITE(changela_colors_w) AM_BASE(&colorram)	/* Color 93419 RAM 64x9(nine!!!) bits A0-used as the 8-th bit data input (d0-d7->normal, a0->d8) */
+	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_BASE_MEMBER(changela_state, m_spriteram) /* OBJ0 RAM */
+	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_BASE_MEMBER(changela_state, m_videoram)	/* OBJ1 RAM */
+	AM_RANGE(0xa000, 0xa07f) AM_WRITE(changela_colors_w) AM_BASE_MEMBER(changela_state, m_colorram)	/* Color 93419 RAM 64x9(nine!!!) bits A0-used as the 8-th bit data input (d0-d7->normal, a0->d8) */
 	AM_RANGE(0xb000, 0xbfff) AM_ROM
 
 	AM_RANGE(0xc000, 0xc7ff) AM_READWRITE(changela_mem_device_r, changela_mem_device_w)	/* RAM4 (River Bed RAM); RAM5 (Tree RAM) */
@@ -265,7 +242,7 @@ static ADDRESS_MAP_START( changela_map, ADDRESS_SPACE_PROGRAM, 8 )
 //AM_RANGE(0xd023, 0xd023) AM_WRITENOP
 
 	/* LS139 - U24 */
-	AM_RANGE(0xd024, 0xd024) AM_READWRITE(changela_24_r, mcu_PC0_w)
+	AM_RANGE(0xd024, 0xd024) AM_READWRITE(changela_24_r, mcu_pc_0_w)
 	AM_RANGE(0xd025, 0xd025) AM_READWRITE(changela_25_r, changela_collision_reset_1)
 	AM_RANGE(0xd026, 0xd026) AM_WRITENOP
 	AM_RANGE(0xd028, 0xd028) AM_READ(mcu_r)
@@ -442,55 +419,139 @@ static const ay8910_interface ay8910_interface_2 =
 };
 
 
-static INTERRUPT_GEN( chl_interrupt )
+TIMER_DEVICE_CALLBACK( changela_scanline )
 {
-	int vector = video_screen_get_vblank(device->machine->primary_screen) ? 0xdf : 0xcf; /* 4 irqs per frame: 3 times 0xcf, 1 time 0xdf */
+	int scanline = param;
 
-//    video_screen_update_partial(device->machine->primary_screen, video_screen_get_vpos(device->machine->primary_screen));
-
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, vector);
-
-	/* it seems the V8 == Vblank and it is connected to the INT on the 68705 */
-	//so we should cause an INT on the MCU cpu here, as well.
-	//but only once per frame !
-	if (vector == 0xdf) /* only on vblank */
-		generic_pulse_irq_line(cputag_get_cpu(device->machine, "mcu"), 0);
-
+	if(scanline == 256) // vblank irq
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xdf);
+	else if(((scanline % 64) == 0)) // timer irq, 3 times per given vblank field
+		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xcf);
 }
 
-static MACHINE_DRIVER_START( changela )
+static INTERRUPT_GEN( chl_mcu_irq )
+{
+	changela_state *state = device->machine().driver_data<changela_state>();
 
-	MDRV_CPU_ADD("maincpu", Z80,5000000)
-	MDRV_CPU_PROGRAM_MAP(changela_map)
-	MDRV_CPU_VBLANK_INT_HACK(chl_interrupt,4)
+	generic_pulse_irq_line(state->m_mcu, 0);
+}
 
-	MDRV_CPU_ADD("mcu", M68705,2500000)
-	MDRV_CPU_PROGRAM_MAP(mcu_map)
+static MACHINE_START(changela)
+{
+	changela_state *state = machine.driver_data<changela_state>();
 
-	MDRV_MACHINE_RESET(changela)
+	state->m_mcu = machine.device("mcu");
 
+	/* video */
+	state->save_item(NAME(state->m_slopeROM_bank));
+	state->save_item(NAME(state->m_tree_en));
+	state->save_item(NAME(state->m_horizon));
+	state->save_item(NAME(state->m_mem_dev_selected));
+	state->save_item(NAME(state->m_v_count_river));
+	state->save_item(NAME(state->m_v_count_tree));
+	state->save_item(NAME(state->m_tree_on));
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 262)  /* vert size is a guess */
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 32*8-1)
+	/* mcu */
+	state->save_item(NAME(state->m_port_a_in));
+	state->save_item(NAME(state->m_port_a_out));
+	state->save_item(NAME(state->m_ddr_a));
+	state->save_item(NAME(state->m_port_b_out));
+	state->save_item(NAME(state->m_ddr_b));
+	state->save_item(NAME(state->m_port_c_in));
+	state->save_item(NAME(state->m_port_c_out));
+	state->save_item(NAME(state->m_ddr_c));
 
-	MDRV_PALETTE_LENGTH(0x40)
+	state->save_item(NAME(state->m_mcu_out));
+	state->save_item(NAME(state->m_mcu_in));
+	state->save_item(NAME(state->m_mcu_pc_1));
+	state->save_item(NAME(state->m_mcu_pc_0));
 
-	MDRV_VIDEO_START(changela)
-	MDRV_VIDEO_UPDATE(changela)
+	/* misc */
+	state->save_item(NAME(state->m_tree0_col));
+	state->save_item(NAME(state->m_tree1_col));
+	state->save_item(NAME(state->m_left_bank_col));
+	state->save_item(NAME(state->m_right_bank_col));
+	state->save_item(NAME(state->m_boat_shore_col));
+	state->save_item(NAME(state->m_collision_reset));
+	state->save_item(NAME(state->m_tree_collision_reset));
+	state->save_item(NAME(state->m_prev_value_31));
+	state->save_item(NAME(state->m_dir_31));
+}
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+static MACHINE_RESET (changela)
+{
+	changela_state *state = machine.driver_data<changela_state>();
 
-	MDRV_SOUND_ADD("ay1", AY8910, 1250000)
-	MDRV_SOUND_CONFIG(ay8910_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	/* video */
+	state->m_slopeROM_bank = 0;
+	state->m_tree_en = 0;
+	state->m_horizon = 0;
+	state->m_mem_dev_selected = 0;
+	state->m_v_count_river = 0;
+	state->m_v_count_tree = 0;
+	state->m_tree_on[0] = 0;
+	state->m_tree_on[1] = 0;
 
-	MDRV_SOUND_ADD("ay2", AY8910, 1250000)
-	MDRV_SOUND_CONFIG(ay8910_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+	/* mcu */
+	state->m_mcu_pc_1 = 0;
+	state->m_mcu_pc_0 = 0;
+
+	state->m_port_a_in = 0;
+	state->m_port_a_out = 0;
+	state->m_ddr_a = 0;
+	state->m_port_b_out = 0;
+	state->m_ddr_b = 0;
+	state->m_port_c_in = 0;
+	state->m_port_c_out = 0;
+	state->m_ddr_c = 0;
+	state->m_mcu_out = 0;
+	state->m_mcu_in = 0;
+
+	/* misc */
+	state->m_tree0_col = 0;
+	state->m_tree1_col = 0;
+	state->m_left_bank_col = 0;
+	state->m_right_bank_col = 0;
+	state->m_boat_shore_col = 0;
+	state->m_collision_reset = 0;
+	state->m_tree_collision_reset = 0;
+	state->m_prev_value_31 = 0;
+	state->m_dir_31 = 0;
+}
+
+static MACHINE_CONFIG_START( changela, changela_state )
+
+	MCFG_CPU_ADD("maincpu", Z80,5000000)
+	MCFG_CPU_PROGRAM_MAP(changela_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", changela_scanline, "screen", 0, 1)
+
+	MCFG_CPU_ADD("mcu", M68705,2500000)
+	MCFG_CPU_PROGRAM_MAP(mcu_map)
+	MCFG_CPU_VBLANK_INT("screen",chl_mcu_irq)
+
+	MCFG_MACHINE_START(changela)
+	MCFG_MACHINE_RESET(changela)
+
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(32*8, 262)  /* vert size is a guess */
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 32*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(changela)
+
+	MCFG_PALETTE_LENGTH(0x40)
+
+	MCFG_VIDEO_START(changela)
+
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ay1", AY8910, 1250000)
+	MCFG_SOUND_CONFIG(ay8910_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+
+	MCFG_SOUND_ADD("ay2", AY8910, 1250000)
+	MCFG_SOUND_CONFIG(ay8910_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_CONFIG_END
 
 
 ROM_START( changela )
@@ -528,29 +589,4 @@ ROM_START( changela )
 	ROM_LOAD( "cl88",	0x0000, 0x0020, CRC(da4d6625) SHA1(2d9a268973518252eb36f479ab650af8c16c885c) ) /* math train state machine */
 ROM_END
 
-static DRIVER_INIT(changela)
-{
-	state_save_register_global(machine, portA_in);
-	state_save_register_global(machine, portA_out);
-	state_save_register_global(machine, ddrA);
-	state_save_register_global(machine, portB_out);
-	state_save_register_global(machine, ddrB);
-	state_save_register_global(machine, portC_in);
-	state_save_register_global(machine, portC_out);
-	state_save_register_global(machine, ddrC);
-
-	state_save_register_global(machine, mcu_out);
-	state_save_register_global(machine, mcu_in);
-	state_save_register_global(machine, mcu_PC1);
-	state_save_register_global(machine, mcu_PC0);
-
-	state_save_register_global(machine, changela_tree0_col);
-	state_save_register_global(machine, changela_tree1_col);
-	state_save_register_global(machine, changela_left_bank_col);
-	state_save_register_global(machine, changela_right_bank_col);
-	state_save_register_global(machine, changela_boat_shore_col);
-	state_save_register_global(machine, changela_collision_reset);
-	state_save_register_global(machine, changela_tree_collision_reset);
-}
-
-GAMEL( 1983, changela, 0, changela, changela, changela, ROT180, "Taito Corporation", "Change Lanes", GAME_SUPPORTS_SAVE, layout_changela )
+GAMEL( 1983, changela, 0, changela, changela, 0,   ROT180, "Taito Corporation", "Change Lanes", GAME_SUPPORTS_SAVE, layout_changela )

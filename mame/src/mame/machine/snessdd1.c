@@ -8,21 +8,22 @@
 
 ***************************************************************************/
 
-static UINT8 sdd1_read(running_machine* machine, UINT32 addr);
+static UINT8 sdd1_read(running_machine& machine, UINT32 addr);
 
-typedef struct //Input Manager
+class SDD1_IM //Input Manager
 {
-	running_machine* machine;
+public:
+	SDD1_IM(running_machine &machine)
+		: m_machine(machine) { }
+
+	running_machine &machine() const { return m_machine; }
+
 	UINT32 byte_ptr;
 	UINT8 bit_count;
-} SDD1_IM;
 
-static SDD1_IM* SDD1_IM_ctor(running_machine* machine)
-{
-	SDD1_IM* newclass = (SDD1_IM*)auto_alloc_array(machine, UINT8, sizeof(SDD1_IM));
-	newclass->machine = machine;
-	return newclass;
-}
+private:
+	running_machine& m_machine;
+};
 
 static void SDD1_IM_prepareDecomp(SDD1_IM* thisptr, UINT32 in_buf)
 {
@@ -34,13 +35,13 @@ static UINT8 SDD1_IM_getCodeword(SDD1_IM* thisptr, const UINT8 code_len)
 {
 	UINT8 codeword;
 
-	codeword = sdd1_read(thisptr->machine, thisptr->byte_ptr) << thisptr->bit_count;
+	codeword = sdd1_read(thisptr->machine(), thisptr->byte_ptr) << thisptr->bit_count;
 
 	++thisptr->bit_count;
 
 	if (codeword & 0x80)
 	{
-		codeword |= sdd1_read(thisptr->machine, thisptr->byte_ptr + 1) >> (9 - thisptr->bit_count);
+		codeword |= sdd1_read(thisptr->machine(), thisptr->byte_ptr + 1) >> (9 - thisptr->bit_count);
 		thisptr->bit_count += code_len;
 	}
 
@@ -53,19 +54,20 @@ static UINT8 SDD1_IM_getCodeword(SDD1_IM* thisptr, const UINT8 code_len)
 	return codeword;
 }
 
-typedef struct //Golomb-Code Decoder
+class SDD1_GCD //Golomb-Code Decoder
 {
-	running_machine* machine;
-	SDD1_IM* IM;
-} SDD1_GCD;
+public:
+	SDD1_GCD(running_machine &machine, SDD1_IM* associatedIM)
+		: IM(associatedIM),
+		   m_machine(machine) { }
 
-static SDD1_GCD* SDD1_GCD_ctor(running_machine* machine, SDD1_IM* associatedIM)
-{
-	SDD1_GCD* newclass = (SDD1_GCD*)auto_alloc_array(machine, UINT8, sizeof(SDD1_GCD));
-	newclass->machine = machine;
-	newclass->IM = associatedIM;
-	return newclass;
-}
+	running_machine &machine() const { return m_machine; }
+
+	SDD1_IM* IM;
+
+private:
+	running_machine& m_machine;
+};
 
 static void SDD1_GCD_getRunCount(SDD1_GCD* thisptr, UINT8 code_num, UINT8* MPScount, UINT8* LPSind)
 {
@@ -118,23 +120,24 @@ static void SDD1_GCD_getRunCount(SDD1_GCD* thisptr, UINT8 code_num, UINT8* MPSco
 	}
 }
 
-typedef struct // Bits Generator
+class SDD1_BG // Bits Generator
 {
-	running_machine* machine;
+public:
+	SDD1_BG(running_machine &machine, SDD1_GCD* associatedGCD, UINT8 code)
+		: code_num(code),
+		  GCD(associatedGCD),
+		  m_machine(machine) { }
+
+	running_machine &machine() const { return m_machine; }
+
 	UINT8 code_num;
 	UINT8 MPScount;
 	UINT8 LPSind;
 	SDD1_GCD* GCD;
-} SDD1_BG;
 
-static SDD1_BG* SDD1_BG_ctor(running_machine* machine, SDD1_GCD* associatedGCD, UINT8 code)
-{
-	SDD1_BG* newclass = (SDD1_BG*)auto_alloc_array(machine, UINT8, sizeof(SDD1_BG));
-	newclass->machine = machine;
-	newclass->code_num = code;
-	newclass->GCD = associatedGCD;
-	return newclass;
-}
+public:
+	running_machine& m_machine;
+} ;
 
 static void SDD1_BG_prepareDecomp(SDD1_BG* thisptr)
 {
@@ -225,31 +228,34 @@ typedef struct
 	UINT8 MPS;
 } SDD1_PEM_ContextInfo;
 
-typedef struct //Probability Estimation Module
+class SDD1_PEM //Probability Estimation Module
 {
-	running_machine* machine;
-	SDD1_PEM_ContextInfo contextInfo[32];
-	SDD1_BG* BG[8];
-} SDD1_PEM;
-
-static SDD1_PEM* SDD1_PEM_ctor(running_machine* machine,
+public:
+	SDD1_PEM(running_machine& machine,
 							   SDD1_BG* associatedBG0, SDD1_BG* associatedBG1,
 							   SDD1_BG* associatedBG2, SDD1_BG* associatedBG3,
 							   SDD1_BG* associatedBG4, SDD1_BG* associatedBG5,
 							   SDD1_BG* associatedBG6, SDD1_BG* associatedBG7)
-{
-	SDD1_PEM* newclass = (SDD1_PEM*)auto_alloc_array(machine, UINT8, sizeof(SDD1_PEM));
-	newclass->machine = machine;
-	newclass->BG[0] = associatedBG0;
-	newclass->BG[1] = associatedBG1;
-	newclass->BG[2] = associatedBG2;
-	newclass->BG[3] = associatedBG3;
-	newclass->BG[4] = associatedBG4;
-	newclass->BG[5] = associatedBG5;
-	newclass->BG[6] = associatedBG6;
-	newclass->BG[7] = associatedBG7;
-	return newclass;
-}
+		: m_machine(machine)
+	{
+		BG[0] = associatedBG0;
+		BG[1] = associatedBG1;
+		BG[2] = associatedBG2;
+		BG[3] = associatedBG3;
+		BG[4] = associatedBG4;
+		BG[5] = associatedBG5;
+		BG[6] = associatedBG6;
+		BG[7] = associatedBG7;
+	}
+
+	running_machine &machine() const { return m_machine; }
+
+	SDD1_PEM_ContextInfo contextInfo[32];
+	SDD1_BG* BG[8];
+
+private:
+	running_machine& m_machine;
+} ;
 
 static void SDD1_PEM_prepareDecomp(SDD1_PEM* thisptr)
 {
@@ -292,30 +298,31 @@ static UINT8 SDD1_PEM_getBit(SDD1_PEM* thisptr, UINT8 context)
 	return bit ^ currentMPS;
 }
 
-typedef struct
+class SDD1_CM
 {
-	running_machine* machine;
+public:
+	SDD1_CM(running_machine& machine, SDD1_PEM* associatedPEM)
+		: PEM(associatedPEM),
+		  m_machine(machine) { }
+
+	running_machine &machine() const { return m_machine; }
+
 	UINT8 bitplanesInfo;
 	UINT8 contextBitsInfo;
 	UINT8 bit_number;
 	UINT8 currBitplane;
 	UINT16 prevBitplaneBits[8];
 	SDD1_PEM* PEM;
-} SDD1_CM;
 
-static SDD1_CM* SDD1_CM_ctor(running_machine* machine, SDD1_PEM* associatedPEM)
-{
-	SDD1_CM* newclass = (SDD1_CM*)auto_alloc_array(machine, UINT8, sizeof(SDD1_CM));
-	newclass->machine = machine;
-	newclass->PEM = associatedPEM;
-	return newclass;
-}
+private:
+	running_machine& m_machine;
+} ;
 
 static void SDD1_CM_prepareDecomp(SDD1_CM* thisptr, UINT32 first_byte)
 {
 	INT32 i = 0;
-	thisptr->bitplanesInfo = sdd1_read(thisptr->machine, first_byte) & 0xc0;
-	thisptr->contextBitsInfo = sdd1_read(thisptr->machine, first_byte) & 0x30;
+	thisptr->bitplanesInfo = sdd1_read(thisptr->machine(), first_byte) & 0xc0;
+	thisptr->contextBitsInfo = sdd1_read(thisptr->machine(), first_byte) & 0x30;
 	thisptr->bit_number = 0;
 	for (i = 0; i < 8; i++)
 	{
@@ -394,26 +401,27 @@ static UINT8 SDD1_CM_getBit(SDD1_CM* thisptr)
 	return bit;
 }
 
-typedef struct
+class SDD1_OL
 {
-	running_machine* machine;
+public:
+	SDD1_OL(running_machine& machine, SDD1_CM* associatedCM)
+		: CM(associatedCM),
+		  m_machine(machine) { }
+
+	running_machine &machine() const { return m_machine; }
+
 	UINT8 bitplanesInfo;
 	UINT16 length;
 	UINT8* buffer;
 	SDD1_CM* CM;
-} SDD1_OL;
 
-static SDD1_OL* SDD1_OL_ctor(running_machine* machine, SDD1_CM* associatedCM)
-{
-	SDD1_OL* newclass = (SDD1_OL*)auto_alloc_array(machine, UINT8, sizeof(SDD1_OL));
-	newclass->machine = machine;
-	newclass->CM = associatedCM;
-	return newclass;
-}
+private:
+	running_machine& m_machine;
+} ;
 
 static void SDD1_OL_prepareDecomp(SDD1_OL* thisptr, UINT32 first_byte, UINT16 out_len, UINT8 *out_buf)
 {
-	thisptr->bitplanesInfo = sdd1_read(thisptr->machine, first_byte) & 0xc0;
+	thisptr->bitplanesInfo = sdd1_read(thisptr->machine(), first_byte) & 0xc0;
 	thisptr->length = out_len;
 	thisptr->buffer = out_buf;
 }
@@ -469,38 +477,42 @@ static void SDD1_OL_launch(SDD1_OL* thisptr)
 	}
 }
 
-typedef struct
+class SDD1emu
 {
-	running_machine* machine;
+public:
+	SDD1emu(running_machine &machine);
+
+	running_machine &machine() const { return m_machine; }
+
 	SDD1_IM* IM;
 	SDD1_GCD* GCD;
-	SDD1_BG* BG0;	SDD1_BG* BG1;	SDD1_BG* BG2; 	SDD1_BG* BG3;
-	SDD1_BG* BG4;	SDD1_BG* BG5;	SDD1_BG* BG6; 	SDD1_BG* BG7;
+	SDD1_BG* BG0;	SDD1_BG* BG1;	SDD1_BG* BG2;	SDD1_BG* BG3;
+	SDD1_BG* BG4;	SDD1_BG* BG5;	SDD1_BG* BG6;	SDD1_BG* BG7;
 	SDD1_PEM* PEM;
 	SDD1_CM* CM;
 	SDD1_OL* OL;
-} SDD1emu;
 
-static SDD1emu* SDD1emu_ctor(running_machine *machine)
+private:
+	running_machine& m_machine;
+};
+
+SDD1emu::SDD1emu(running_machine &machine)
+	: m_machine(machine)
 {
-	SDD1emu* newclass = (SDD1emu*)auto_alloc_array(machine, UINT8, sizeof(SDD1emu));
-	newclass->machine = machine;
-
-	newclass->IM = SDD1_IM_ctor(machine);
-	newclass->GCD = SDD1_GCD_ctor(machine, newclass->IM);
-	newclass->BG0 = SDD1_BG_ctor(machine, newclass->GCD, 0);
-	newclass->BG1 = SDD1_BG_ctor(machine, newclass->GCD, 1);
-	newclass->BG2 = SDD1_BG_ctor(machine, newclass->GCD, 2);
-	newclass->BG3 = SDD1_BG_ctor(machine, newclass->GCD, 3);
-	newclass->BG4 = SDD1_BG_ctor(machine, newclass->GCD, 4);
-	newclass->BG5 = SDD1_BG_ctor(machine, newclass->GCD, 5);
-	newclass->BG6 = SDD1_BG_ctor(machine, newclass->GCD, 6);
-	newclass->BG7 = SDD1_BG_ctor(machine, newclass->GCD, 7);
-	newclass->PEM = SDD1_PEM_ctor(machine, newclass->BG0, newclass->BG1, newclass->BG2, newclass->BG3,
-										   newclass->BG4, newclass->BG5, newclass->BG6, newclass->BG7);
-	newclass->CM = SDD1_CM_ctor(machine, newclass->PEM);
-	newclass->OL = SDD1_OL_ctor(machine, newclass->CM);
-	return newclass;
+	IM = auto_alloc(machine, SDD1_IM(machine));
+	GCD = auto_alloc(machine, SDD1_GCD(machine, IM));
+	BG0 = auto_alloc(machine, SDD1_BG(machine, GCD, 0));
+	BG1 = auto_alloc(machine, SDD1_BG(machine, GCD, 1));
+	BG2 = auto_alloc(machine, SDD1_BG(machine, GCD, 2));
+	BG3 = auto_alloc(machine, SDD1_BG(machine, GCD, 3));
+	BG4 = auto_alloc(machine, SDD1_BG(machine, GCD, 4));
+	BG5 = auto_alloc(machine, SDD1_BG(machine, GCD, 5));
+	BG6 = auto_alloc(machine, SDD1_BG(machine, GCD, 6));
+	BG7 = auto_alloc(machine, SDD1_BG(machine, GCD, 7));
+	PEM = auto_alloc(machine, SDD1_PEM(machine, BG0, BG1, BG2, BG3,
+										   BG4, BG5, BG6, BG7));
+	CM = auto_alloc(machine, SDD1_CM(machine, PEM));
+	OL = auto_alloc(machine, SDD1_OL(machine, CM));
 }
 
 static void SDD1emu_decompress(SDD1emu* thisptr, UINT32 in_buf, UINT16 out_len, UINT8 *out_buf)
@@ -545,7 +557,7 @@ typedef struct
 
 static _snes_sdd1_t snes_sdd1;
 
-static void sdd1_init(running_machine* machine)
+static void sdd1_init(running_machine& machine)
 {
 	UINT8 i;
 
@@ -563,13 +575,13 @@ static void sdd1_init(running_machine* machine)
 		snes_sdd1.dma[i].size = 0;
 	}
 
-	snes_sdd1.sdd1emu = SDD1emu_ctor(machine);
+	snes_sdd1.sdd1emu = auto_alloc(machine, SDD1emu(machine));
 
 	snes_sdd1.buffer.data = (UINT8*)auto_alloc_array(machine, UINT8, 0x10000);
 	snes_sdd1.buffer.ready = 0;
 }
 
-static UINT8 sdd1_mmio_read(const address_space *space, UINT32 addr)
+static UINT8 sdd1_mmio_read(address_space *space, UINT32 addr)
 {
 	addr &= 0xffff;
 
@@ -582,22 +594,18 @@ static UINT8 sdd1_mmio_read(const address_space *space, UINT32 addr)
 	{
 		case 0x4804:
 			return (snes_sdd1.mmc[0] >> 20) & 7;
-			break;
 		case 0x4805:
 			return (snes_sdd1.mmc[1] >> 20) & 7;
-			break;
 		case 0x4806:
 			return (snes_sdd1.mmc[2] >> 20) & 7;
-			break;
 		case 0x4807:
 			return (snes_sdd1.mmc[3] >> 20) & 7;
-			break;
 	}
 
-	return 0xff;
+	return snes_open_bus_r(space, 0);
 }
 
-static void sdd1_mmio_write(const address_space *space, UINT32 addr, UINT8 data)
+static void sdd1_mmio_write(address_space *space, UINT32 addr, UINT8 data)
 {
 	addr &= 0xffff;
 
@@ -624,6 +632,7 @@ static void sdd1_mmio_write(const address_space *space, UINT32 addr, UINT8 data)
 				break;
 		}
 		snes_ram[addr] = data;
+		snes_io_dma_w(space, addr, data);
 		return;
 	}
 
@@ -651,9 +660,9 @@ static void sdd1_mmio_write(const address_space *space, UINT32 addr, UINT8 data)
 	}
 }
 
-static UINT8 sdd1_read(running_machine* machine, UINT32 addr)
+static UINT8 sdd1_read(running_machine& machine, UINT32 addr)
 {
-	unsigned char *ROM = memory_region(machine, "cart");
+	unsigned char *ROM = machine.region("cart")->base();
 
 	if(snes_sdd1.sdd1_enable & snes_sdd1.xfer_enable)
 	{
@@ -702,6 +711,6 @@ static UINT8 sdd1_read(running_machine* machine, UINT32 addr)
 	return ROM[snes_sdd1.mmc[(addr >> 20) & 3] + (addr & 0x0fffff)];
 }
 
-static void sdd1_reset(running_machine *machine)
+static void sdd1_reset(running_machine &machine)
 {
 }

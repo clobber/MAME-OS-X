@@ -6,38 +6,11 @@
 
 **************************************************************************/
 
-#include "driver.h"
-#include "cpu/tms34010/tms34010.h"
-#include "video/tlc34076.h"
-#include "btoads.h"
+#include "emu.h"
+#include "includes/btoads.h"
 
 
 #define BT_DEBUG 0
-
-
-
-/*************************************
- *
- *  Global variables
- *
- *************************************/
-
-UINT16 *btoads_vram_fg0, *btoads_vram_fg1, *btoads_vram_fg_data;
-UINT16 *btoads_vram_bg0, *btoads_vram_bg1;
-UINT16 *btoads_sprite_scale;
-UINT16 *btoads_sprite_control;
-
-static UINT8 *vram_fg_draw, *vram_fg_display;
-
-static INT32 xscroll0, yscroll0;
-static INT32 xscroll1, yscroll1;
-static UINT8 screen_control;
-
-static UINT16 sprite_source_offs;
-static UINT8 *sprite_dest_base;
-static UINT16 sprite_dest_offs;
-
-static UINT16 misc_control;
 
 
 
@@ -47,21 +20,21 @@ static UINT16 misc_control;
  *
  *************************************/
 
-VIDEO_START( btoads )
+void btoads_state::video_start()
 {
 	/* initialize the swapped pointers */
-	vram_fg_draw = (UINT8 *)btoads_vram_fg0;
-	vram_fg_display = (UINT8 *)btoads_vram_fg1;
+	m_vram_fg_draw = m_vram_fg0;
+	m_vram_fg_display = m_vram_fg1;
 
-	state_save_register_global(machine, xscroll0);
-	state_save_register_global(machine, xscroll1);
-	state_save_register_global(machine, yscroll0);
-	state_save_register_global(machine, yscroll1);
-	state_save_register_global(machine, screen_control);
+	save_item(NAME(m_xscroll0));
+	save_item(NAME(m_xscroll1));
+	save_item(NAME(m_yscroll0));
+	save_item(NAME(m_yscroll1));
+	save_item(NAME(m_screen_control));
 
-	state_save_register_global(machine, sprite_source_offs);
-	state_save_register_global(machine, sprite_dest_offs);
-	state_save_register_global(machine, misc_control);
+	save_item(NAME(m_sprite_source_offs));
+	save_item(NAME(m_sprite_dest_offs));
+	save_item(NAME(m_misc_control));
 }
 
 
@@ -72,38 +45,38 @@ VIDEO_START( btoads )
  *
  *************************************/
 
-WRITE16_HANDLER( btoads_misc_control_w )
+WRITE16_MEMBER( btoads_state::misc_control_w )
 {
-	COMBINE_DATA(&misc_control);
+	COMBINE_DATA(&m_misc_control);
 
 	/* bit 3 controls sound reset line */
-	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, (misc_control & 8) ? CLEAR_LINE : ASSERT_LINE);
+	m_audiocpu->set_input_line(INPUT_LINE_RESET, (m_misc_control & 8) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
-WRITE16_HANDLER( btoads_display_control_w )
+WRITE16_MEMBER( btoads_state::display_control_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
 		/* allow multiple changes during display */
-		int scanline = video_screen_get_vpos(space->machine->primary_screen);
+		int scanline = machine().primary_screen->vpos();
 		if (scanline > 0)
-			video_screen_update_partial(space->machine->primary_screen, scanline - 1);
+			machine().primary_screen->update_partial(scanline - 1);
 
 		/* bit 15 controls which page is rendered and which page is displayed */
 		if (data & 0x8000)
 		{
-			vram_fg_draw = (UINT8 *)btoads_vram_fg1;
-			vram_fg_display = (UINT8 *)btoads_vram_fg0;
+			m_vram_fg_draw = m_vram_fg1;
+			m_vram_fg_display = m_vram_fg0;
 		}
 		else
 		{
-			vram_fg_draw = (UINT8 *)btoads_vram_fg0;
-			vram_fg_display = (UINT8 *)btoads_vram_fg1;
+			m_vram_fg_draw = m_vram_fg0;
+			m_vram_fg_display = m_vram_fg1;
 		}
 
 		/* stash the remaining data for later */
-		screen_control = data >> 8;
+		m_screen_control = data >> 8;
 	}
 }
 
@@ -115,29 +88,29 @@ WRITE16_HANDLER( btoads_display_control_w )
  *
  *************************************/
 
-WRITE16_HANDLER( btoads_scroll0_w )
+WRITE16_MEMBER( btoads_state::scroll0_w )
 {
 	/* allow multiple changes during display */
-	video_screen_update_now(space->machine->primary_screen);
+	machine().primary_screen->update_now();
 
 	/* upper bits are Y scroll, lower bits are X scroll */
 	if (ACCESSING_BITS_8_15)
-		yscroll0 = data >> 8;
+		m_yscroll0 = data >> 8;
 	if (ACCESSING_BITS_0_7)
-		xscroll0 = data & 0xff;
+		m_xscroll0 = data & 0xff;
 }
 
 
-WRITE16_HANDLER( btoads_scroll1_w )
+WRITE16_MEMBER( btoads_state::scroll1_w )
 {
 	/* allow multiple changes during display */
-	video_screen_update_now(space->machine->primary_screen);
+	machine().primary_screen->update_now();
 
 	/* upper bits are Y scroll, lower bits are X scroll */
 	if (ACCESSING_BITS_8_15)
-		yscroll1 = data >> 8;
+		m_yscroll1 = data >> 8;
 	if (ACCESSING_BITS_0_7)
-		xscroll1 = data & 0xff;
+		m_xscroll1 = data & 0xff;
 }
 
 
@@ -148,15 +121,15 @@ WRITE16_HANDLER( btoads_scroll1_w )
  *
  *************************************/
 
-WRITE16_HANDLER( btoads_paletteram_w )
+WRITE16_MEMBER( btoads_state::paletteram_w )
 {
-	tlc34076_lsb_w(space, offset/2, data, mem_mask);
+	tlc34076_w(m_tlc34076, offset/2, data);
 }
 
 
-READ16_HANDLER( btoads_paletteram_r )
+READ16_MEMBER( btoads_state::paletteram_r )
 {
-	return tlc34076_lsb_r(space, offset/2, mem_mask);
+	return tlc34076_r(m_tlc34076, offset/2);
 }
 
 
@@ -167,27 +140,27 @@ READ16_HANDLER( btoads_paletteram_r )
  *
  *************************************/
 
-WRITE16_HANDLER( btoads_vram_bg0_w )
+WRITE16_MEMBER( btoads_state::vram_bg0_w )
 {
-	COMBINE_DATA(&btoads_vram_bg0[offset & 0x3fcff]);
+	COMBINE_DATA(&m_vram_bg0[offset & 0x3fcff]);
 }
 
 
-WRITE16_HANDLER( btoads_vram_bg1_w )
+WRITE16_MEMBER( btoads_state::vram_bg1_w )
 {
-	COMBINE_DATA(&btoads_vram_bg1[offset & 0x3fcff]);
+	COMBINE_DATA(&m_vram_bg1[offset & 0x3fcff]);
 }
 
 
-READ16_HANDLER( btoads_vram_bg0_r )
+READ16_MEMBER( btoads_state::vram_bg0_r )
 {
-	return btoads_vram_bg0[offset & 0x3fcff];
+	return m_vram_bg0[offset & 0x3fcff];
 }
 
 
-READ16_HANDLER( btoads_vram_bg1_r )
+READ16_MEMBER( btoads_state::vram_bg1_r )
 {
-	return btoads_vram_bg1[offset & 0x3fcff];
+	return m_vram_bg1[offset & 0x3fcff];
 }
 
 
@@ -198,29 +171,29 @@ READ16_HANDLER( btoads_vram_bg1_r )
  *
  *************************************/
 
-WRITE16_HANDLER( btoads_vram_fg_display_w )
+WRITE16_MEMBER( btoads_state::vram_fg_display_w )
 {
 	if (ACCESSING_BITS_0_7)
-		vram_fg_display[offset] = data;
+		m_vram_fg_display[offset] = data;
 }
 
 
-WRITE16_HANDLER( btoads_vram_fg_draw_w )
+WRITE16_MEMBER( btoads_state::vram_fg_draw_w )
 {
 	if (ACCESSING_BITS_0_7)
-		vram_fg_draw[offset] = data;
+		m_vram_fg_draw[offset] = data;
 }
 
 
-READ16_HANDLER( btoads_vram_fg_display_r )
+READ16_MEMBER( btoads_state::vram_fg_display_r )
 {
-	return vram_fg_display[offset];
+	return m_vram_fg_display[offset];
 }
 
 
-READ16_HANDLER( btoads_vram_fg_draw_r )
+READ16_MEMBER( btoads_state::vram_fg_draw_r )
 {
-	return vram_fg_draw[offset];
+	return m_vram_fg_draw[offset];
 }
 
 
@@ -231,19 +204,19 @@ READ16_HANDLER( btoads_vram_fg_draw_r )
  *
  *************************************/
 
-static void render_sprite_row(UINT16 *sprite_source, UINT32 address)
+void btoads_state::render_sprite_row(UINT16 *sprite_source, UINT32 address)
 {
-	int flipxor = ((*btoads_sprite_control >> 10) & 1) ? 0xffff : 0x0000;
-	int width = (~*btoads_sprite_control & 0x1ff) + 2;
-	int color = (~*btoads_sprite_control >> 8) & 0xf0;
-	int srcoffs = sprite_source_offs << 8;
+	int flipxor = ((*m_sprite_control >> 10) & 1) ? 0xffff : 0x0000;
+	int width = (~*m_sprite_control & 0x1ff) + 2;
+	int color = (~*m_sprite_control >> 8) & 0xf0;
+	int srcoffs = m_sprite_source_offs << 8;
 	int srcend = srcoffs + (width << 8);
-	int srcstep = 0x100 - btoads_sprite_scale[0];
-	int dststep = 0x100 - btoads_sprite_scale[8];
-	int dstoffs = sprite_dest_offs << 8;
+	int srcstep = 0x100 - m_sprite_scale[0];
+	int dststep = 0x100 - m_sprite_scale[8];
+	int dstoffs = m_sprite_dest_offs << 8;
 
 	/* non-shadow case */
-	if (!(misc_control & 0x10))
+	if (!(m_misc_control & 0x10))
 	{
 		for ( ; srcoffs < srcend; srcoffs += srcstep, dstoffs += dststep)
 		{
@@ -252,7 +225,7 @@ static void render_sprite_row(UINT16 *sprite_source, UINT32 address)
 			{
 				src = (src >> (((srcoffs ^ flipxor) >> 6) & 0x0c)) & 0x0f;
 				if (src)
-					sprite_dest_base[(dstoffs >> 8) & 0x1ff] = src | color;
+					m_sprite_dest_base[(dstoffs >> 8) & 0x1ff] = src | color;
 			}
 		}
 	}
@@ -267,13 +240,13 @@ static void render_sprite_row(UINT16 *sprite_source, UINT32 address)
 			{
 				src = (src >> (((srcoffs ^ flipxor) >> 6) & 0x0c)) & 0x0f;
 				if (src)
-					sprite_dest_base[(dstoffs >> 8) & 0x1ff] = color;
+					m_sprite_dest_base[(dstoffs >> 8) & 0x1ff] = color;
 			}
 		}
 	}
 
-	sprite_source_offs += width;
-	sprite_dest_offs = dstoffs >> 8;
+	m_sprite_source_offs += width;
+	m_sprite_dest_offs = dstoffs >> 8;
 }
 
 
@@ -284,40 +257,40 @@ static void render_sprite_row(UINT16 *sprite_source, UINT32 address)
  *
  *************************************/
 
-void btoads_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void btoads_state::to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	address &= ~0x40000000;
 
 	/* reads from this first region are usual shift register reads */
 	if (address >= 0xa0000000 && address <= 0xa3ffffff)
-		memcpy(shiftreg, &vram_fg_display[TOWORD(address & 0x3fffff)], TOBYTE(0x1000));
+		memcpy(shiftreg, &m_vram_fg_display[TOWORD(address & 0x3fffff)], TOBYTE(0x1000));
 
 	/* reads from this region set the sprite destination address */
 	else if (address >= 0xa4000000 && address <= 0xa7ffffff)
 	{
-		sprite_dest_base = &vram_fg_draw[TOWORD(address & 0x3fc000)];
-		sprite_dest_offs = (address & 0x003fff) >> 5;
+		m_sprite_dest_base = &m_vram_fg_draw[TOWORD(address & 0x3fc000)];
+		m_sprite_dest_offs = (address & 0x003fff) >> 5;
 	}
 
 	/* reads from this region set the sprite source address */
 	else if (address >= 0xa8000000 && address <= 0xabffffff)
 	{
-		memcpy(shiftreg, &btoads_vram_fg_data[TOWORD(address & 0x7fc000)], TOBYTE(0x2000));
-		sprite_source_offs = (address & 0x003fff) >> 3;
+		memcpy(shiftreg, &m_vram_fg_data[TOWORD(address & 0x7fc000)], TOBYTE(0x2000));
+		m_sprite_source_offs = (address & 0x003fff) >> 3;
 	}
 
 	else
-		logerror("%s:btoads_to_shiftreg(%08X)\n", cpuexec_describe_context(space->machine), address);
+		logerror("%s:btoads_to_shiftreg(%08X)\n", machine().describe_context(), address);
 }
 
 
-void btoads_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void btoads_state::from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	address &= ~0x40000000;
 
 	/* writes to this first region are usual shift register writes */
 	if (address >= 0xa0000000 && address <= 0xa3ffffff)
-		memcpy(&vram_fg_display[TOWORD(address & 0x3fc000)], shiftreg, TOBYTE(0x1000));
+		memcpy(&m_vram_fg_display[TOWORD(address & 0x3fc000)], shiftreg, TOBYTE(0x1000));
 
 	/* writes to this region are ignored for our purposes */
 	else if (address >= 0xa4000000 && address <= 0xa7ffffff)
@@ -325,14 +298,14 @@ void btoads_from_shiftreg(const address_space *space, UINT32 address, UINT16 *sh
 
 	/* writes to this region copy standard data */
 	else if (address >= 0xa8000000 && address <= 0xabffffff)
-		memcpy(&btoads_vram_fg_data[TOWORD(address & 0x7fc000)], shiftreg, TOBYTE(0x2000));
+		memcpy(&m_vram_fg_data[TOWORD(address & 0x7fc000)], shiftreg, TOBYTE(0x2000));
 
 	/* writes to this region render the current sprite data */
 	else if (address >= 0xac000000 && address <= 0xafffffff)
 		render_sprite_row(shiftreg, address);
 
 	else
-		logerror("%s:btoads_from_shiftreg(%08X)\n", cpuexec_describe_context(space->machine), address);
+		logerror("%s:btoads_from_shiftreg(%08X)\n", machine().describe_context(), address);
 }
 
 
@@ -343,19 +316,19 @@ void btoads_from_shiftreg(const address_space *space, UINT32 address, UINT16 *sh
  *
  *************************************/
 
-void btoads_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+void btoads_state::scanline_update(screen_device &screen, bitmap_rgb32 &bitmap, int scanline, const tms34010_display_params *params)
 {
 	UINT32 fulladdr = ((params->rowaddr << 16) | params->coladdr) >> 4;
-	UINT16 *bg0_base = &btoads_vram_bg0[(fulladdr + (yscroll0 << 10)) & 0x3fc00];
-	UINT16 *bg1_base = &btoads_vram_bg1[(fulladdr + (yscroll1 << 10)) & 0x3fc00];
-	UINT8 *spr_base = &vram_fg_display[fulladdr & 0x3fc00];
-	UINT32 *dst = BITMAP_ADDR32(bitmap, scanline, 0);
-	const rgb_t *pens = tlc34076_get_pens();
+	UINT16 *bg0_base = &m_vram_bg0[(fulladdr + (m_yscroll0 << 10)) & 0x3fc00];
+	UINT16 *bg1_base = &m_vram_bg1[(fulladdr + (m_yscroll1 << 10)) & 0x3fc00];
+	UINT8 *spr_base = &m_vram_fg_display[fulladdr & 0x3fc00];
+	UINT32 *dst = &bitmap.pix32(scanline);
+	const rgb_t *pens = tlc34076_get_pens(m_tlc34076);
 	int coladdr = fulladdr & 0x3ff;
 	int x;
 
 	/* for each scanline, switch off the render mode */
-	switch (screen_control & 3)
+	switch (m_screen_control & 3)
 	{
 		/* mode 0: used in ship level, snake boss, title screen (free play) */
 		/* priority is:
@@ -377,8 +350,8 @@ void btoads_scanline_update(const device_config *screen, bitmap_t *bitmap, int s
 				}
 				else
 				{
-					UINT16 bg0pix = bg0_base[(coladdr + xscroll0) & 0xff];
-					UINT16 bg1pix = bg1_base[(coladdr + xscroll1) & 0xff];
+					UINT16 bg0pix = bg0_base[(coladdr + m_xscroll0) & 0xff];
+					UINT16 bg1pix = bg1_base[(coladdr + m_xscroll1) & 0xff];
 					UINT8 sprpix = spr_base[coladdr & 0xff];
 
 					if (bg1pix & 0x80)
@@ -422,8 +395,8 @@ void btoads_scanline_update(const device_config *screen, bitmap_t *bitmap, int s
 				}
 				else
 				{
-					UINT16 bg0pix = bg0_base[(coladdr + xscroll0) & 0xff];
-					UINT16 bg1pix = bg1_base[(coladdr + xscroll1) & 0xff];
+					UINT16 bg0pix = bg0_base[(coladdr + m_xscroll0) & 0xff];
+					UINT16 bg1pix = bg1_base[(coladdr + m_xscroll1) & 0xff];
 
 					if (bg0pix & 0xff)
 						dst[x + 0] = pens[bg0pix & 0xff];
@@ -464,8 +437,8 @@ void btoads_scanline_update(const device_config *screen, bitmap_t *bitmap, int s
 				}
 				else
 				{
-					UINT16 bg0pix = bg0_base[(coladdr + xscroll0) & 0xff];
-					UINT16 bg1pix = bg1_base[(coladdr + xscroll1) & 0xff];
+					UINT16 bg0pix = bg0_base[(coladdr + m_xscroll0) & 0xff];
+					UINT16 bg1pix = bg1_base[(coladdr + m_xscroll1) & 0xff];
 
 					if (bg1pix & 0xff)
 						dst[x + 0] = pens[bg1pix & 0xff];
@@ -491,8 +464,8 @@ void btoads_scanline_update(const device_config *screen, bitmap_t *bitmap, int s
 		case 3:
 			for (x = params->heblnk; x < params->hsblnk; x += 2, coladdr++)
 			{
-				UINT16 bg0pix = bg0_base[(coladdr + xscroll0) & 0xff];
-				UINT16 bg1pix = bg1_base[(coladdr + xscroll1) & 0xff];
+				UINT16 bg0pix = bg0_base[(coladdr + m_xscroll0) & 0xff];
+				UINT16 bg1pix = bg1_base[(coladdr + m_xscroll1) & 0xff];
 				UINT8 sprpix = spr_base[coladdr & 0xff];
 
 				if (bg1pix & 0x80)
@@ -522,26 +495,25 @@ void btoads_scanline_update(const device_config *screen, bitmap_t *bitmap, int s
 
 	/* debugging - dump the screen contents to a file */
 #if BT_DEBUG
-	popmessage("screen_control = %02X", screen_control & 0x7f);
+	popmessage("screen_control = %02X", m_screen_control & 0x7f);
 
-	if (input_code_pressed(screen->machine, KEYCODE_X))
+	if (machine().input().code_pressed(KEYCODE_X))
 	{
-		static int count = 0;
 		char name[10];
 		FILE *f;
 		int i;
 
-		while (input_code_pressed(screen->machine, KEYCODE_X)) ;
+		while (machine().input().code_pressed(KEYCODE_X)) ;
 
-		sprintf(name, "disp%d.log", count++);
+		sprintf(name, "disp%d.log", m_xcount++);
 		f = fopen(name, "w");
-		fprintf(f, "screen_control = %04X\n\n", screen_control << 8);
+		fprintf(f, "screen_control = %04X\n\n", m_screen_control << 8);
 
 		for (i = 0; i < 3; i++)
 		{
-			UINT16 *base = (i == 0) ? (UINT16 *)vram_fg_display : (i == 1) ? btoads_vram_bg0 : btoads_vram_bg1;
-			int xscr = (i == 0) ? 0 : (i == 1) ? xscroll0 : xscroll1;
-			int yscr = (i == 0) ? 0 : (i == 1) ? yscroll0 : yscroll1;
+			UINT16 *base = (i == 0) ? (UINT16 *)m_vram_fg_display : (i == 1) ? m_vram_bg0 : m_vram_bg1;
+			int xscr = (i == 0) ? 0 : (i == 1) ? m_xscroll0 : m_xscroll1;
+			int yscr = (i == 0) ? 0 : (i == 1) ? m_yscroll0 : m_yscroll1;
 			int y;
 
 			for (y = 0; y < 224; y++)

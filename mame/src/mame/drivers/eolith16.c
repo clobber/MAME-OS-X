@@ -9,15 +9,24 @@
 
 **********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/e132xs/e132xs.h"
-#include "deprecat.h"
 #include "machine/eeprom.h"
 #include "sound/okim6295.h"
-#include "eolithsp.h"
+#include "includes/eolithsp.h"
 
-static UINT16 *vram;
-static int vbuffer = 0;
+
+class eolith16_state : public driver_device
+{
+public:
+	eolith16_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT16 *m_vram;
+	int m_vbuffer;
+};
+
+
 
 // It's configured for 512 bytes
 static const eeprom_interface eeprom_interface_93C66 =
@@ -33,12 +42,11 @@ static const eeprom_interface eeprom_interface_93C66 =
 
 static WRITE16_HANDLER( eeprom_w )
 {
-	vbuffer = (data & 0x80) >> 7;
-	coin_counter_w(0, data & 1);
+	eolith16_state *state = space->machine().driver_data<eolith16_state>();
+	state->m_vbuffer = (data & 0x80) >> 7;
+	coin_counter_w(space->machine(), 0, data & 1);
 
-	eeprom_write_bit(data & 0x40);
-	eeprom_set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
-	eeprom_set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
+	input_port_write(space->machine(), "EEPROMOUT", data, 0xff);
 
 	//data & 0x100 and data & 0x004 always set
 }
@@ -46,27 +54,29 @@ static WRITE16_HANDLER( eeprom_w )
 static READ16_HANDLER( eolith16_custom_r )
 {
 	eolith_speedup_read(space);
-	return input_port_read(space->machine, "SPECIAL");
+	return input_port_read(space->machine(), "SPECIAL");
 }
 
 
 
 static WRITE16_HANDLER( vram_w )
 {
-	COMBINE_DATA(&vram[offset + (0x10000/2) * vbuffer]);
+	eolith16_state *state = space->machine().driver_data<eolith16_state>();
+	COMBINE_DATA(&state->m_vram[offset + (0x10000/2) * state->m_vbuffer]);
 }
 
 static READ16_HANDLER( vram_r )
 {
-	return vram[offset + (0x10000/2) * vbuffer];
+	eolith16_state *state = space->machine().driver_data<eolith16_state>();
+	return state->m_vram[offset + (0x10000/2) * state->m_vbuffer];
 }
 
-static ADDRESS_MAP_START( eolith16_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( eolith16_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_RAM
 	AM_RANGE(0x50000000, 0x5000ffff) AM_READWRITE(vram_r, vram_w)
 	AM_RANGE(0x90000000, 0x9000002f) AM_WRITENOP //?
 	AM_RANGE(0xff000000, 0xff1fffff) AM_ROM AM_REGION("user2", 0)
-	AM_RANGE(0xffe40000, 0xffe40001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0xffe40000, 0xffe40001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0xffe80000, 0xffe80001) AM_WRITE(eeprom_w)
 	AM_RANGE(0xffea0000, 0xffea0001) AM_READ(eolith16_custom_r)
 	AM_RANGE(0xffea0002, 0xffea0003) AM_READ_PORT("SYSTEM")
@@ -77,7 +87,7 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( eolith16 )
 	PORT_START("SPECIAL")
-	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL) // eeprom bit
+	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(eolith_speedup_getvblank, NULL)
 	PORT_BIT( 0xff6f, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -98,15 +108,22 @@ static INPUT_PORTS_START( eolith16 )
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x00000010, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
+	PORT_BIT( 0x00000020, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
+	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
 INPUT_PORTS_END
 
 static VIDEO_START( eolith16 )
 {
-	vram = auto_alloc_array(machine, UINT16, 0x10000);
+	eolith16_state *state = machine.driver_data<eolith16_state>();
+	state->m_vram = auto_alloc_array(machine, UINT16, 0x10000);
 }
 
-static VIDEO_UPDATE( eolith16 )
+static SCREEN_UPDATE_IND16( eolith16 )
 {
+	eolith16_state *state = screen.machine().driver_data<eolith16_state>();
 	int x,y,count;
 	int color;
 
@@ -115,11 +132,11 @@ static VIDEO_UPDATE( eolith16 )
 	{
 		for (x=0;x < 320/2;x++)
 		{
-			color = vram[count + (0x10000/2) * (vbuffer ^ 1)] & 0xff;
-			*BITMAP_ADDR16(bitmap, y, x*2 + 0) = color;
+			color = state->m_vram[count + (0x10000/2) * (state->m_vbuffer ^ 1)] & 0xff;
+			bitmap.pix16(y, x*2 + 0) = color;
 
-			color = (vram[count + (0x10000/2) * (vbuffer ^ 1)] & 0xff00) >> 8;
-			*BITMAP_ADDR16(bitmap, y, x*2 + 1) = color;
+			color = (state->m_vram[count + (0x10000/2) * (state->m_vbuffer ^ 1)] & 0xff00) >> 8;
+			bitmap.pix16(y, x*2 + 1) = color;
 
 			count++;
 		}
@@ -127,16 +144,6 @@ static VIDEO_UPDATE( eolith16 )
 	return 0;
 }
 
-static NVRAM_HANDLER( eolith16_eeprom )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C66);
-		if (file)	eeprom_load(file);
-	}
-}
 
 // setup a custom palette because pixels use 8 bits per color
 static PALETTE_INIT( eolith16 )
@@ -164,34 +171,32 @@ static PALETTE_INIT( eolith16 )
 
 
 
-static MACHINE_DRIVER_START( eolith16 )
-	MDRV_CPU_ADD("maincpu", E116T, 60000000)		/* no internal multiplier */
-	MDRV_CPU_PROGRAM_MAP(eolith16_map)
-	MDRV_CPU_VBLANK_INT_HACK(eolith_speedup,262)
+static MACHINE_CONFIG_START( eolith16, eolith16_state )
+	MCFG_CPU_ADD("maincpu", E116T, 60000000)		/* no internal multiplier */
+	MCFG_CPU_PROGRAM_MAP(eolith16_map)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", eolith_speedup, "screen", 0, 1)
 
-	MDRV_NVRAM_HANDLER(eolith16_eeprom)
+	MCFG_EEPROM_ADD("eeprom", eeprom_interface_93C66)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 512)
-	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 199)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
+	MCFG_SCREEN_SIZE(512, 262)
+	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 199)
+	MCFG_SCREEN_UPDATE_STATIC(eolith16)
 
-	MDRV_PALETTE_LENGTH(256)
+	MCFG_PALETTE_LENGTH(256)
 
-	MDRV_PALETTE_INIT(eolith16)
-	MDRV_VIDEO_START(eolith16)
-	MDRV_VIDEO_UPDATE(eolith16)
+	MCFG_PALETTE_INIT(eolith16)
+	MCFG_VIDEO_START(eolith16)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 /*
 

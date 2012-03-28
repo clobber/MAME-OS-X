@@ -9,7 +9,7 @@
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "debughlp.h"
 #include <ctype.h>
 
@@ -70,6 +70,7 @@ static const help_item static_help_list[] =
 		"  Expressions\n"
 		"  Comments\n"
 		"  Cheats\n"
+		"  Image\n"
 	},
 	{
 		"general",
@@ -106,6 +107,9 @@ static const help_item static_help_list[] =
 		"  save <filename>,<address>,<length>[,<cpu>] -- save binary program memory to the given file\n"
 		"  saved <filename>,<address>,<length>[,<cpu>] -- save binary data memory to the given file\n"
 		"  savei <filename>,<address>,<length>[,<cpu>] -- save binary I/O memory to the given file\n"
+		"  load <filename>,<address>,<length>[,<cpu>] -- load binary program memory from the given file\n"
+		"  loadd <filename>,<address>,<length>[,<cpu>] -- load binary data memory from the given file\n"
+		"  loadi <filename>,<address>,<length>[,<cpu>] -- load binary I/O memory from the given file\n"
 		"  map <address> -- map logical program address to physical address and bank\n"
 		"  mapd <address> -- map logical data address to physical address and bank\n"
 		"  mapi <address> -- map logical I/O address to physical address and bank\n"
@@ -216,6 +220,16 @@ static const help_item static_help_list[] =
 		"  cheatnextf <condition>[,<comparisonvalue>] -- continue cheat search comparing with the the first value\n"
 		"  cheatlist [<filename>] -- show the list of cheat search matches or save them to <filename>\n"
 		"  cheatundo -- undo the last cheat search (state only)\n"
+	},
+	{
+		"image",
+		"\n"
+		"Image Commands\n"
+		"Type help <command> for further details on each command\n"
+		"\n"
+		"  images -- lists all image devices and mounted files\n"
+		"  mount <device>,<filename> -- mounts file to named device\n"
+		"  unmount <device> -- unmounts file from named device\n"
 	},
 	{
 		"do",
@@ -487,6 +501,28 @@ static const help_item static_help_list[] =
 		"\n"
 		"saved harddriv.bin,3000,1000,3\n"
 		"  Saves data memory addresses 3000-3fff from CPU #3 to the binary file 'harddriv.bin'.\n"
+	},
+	{
+		"load",
+		"\n"
+		"  load[{d|i}] <filename>,<address>,<length>[,<cpu>]\n"
+		"\n"
+		"The load/loadd/loadi commands load raw memory from the binary file specified in the <filename> "
+		"parameter. 'load' will load program space memory, while 'loadd' will load data space memory "
+		"and 'loadi' will load I/O space memory. <address> indicates the address of the start of saving, "
+		"and <length> indicates how much memory to load. The range <address> through <address>+<length>-1 "
+		"inclusive will be read in from the file. If you specify <length> = 0 or a length greater than the "
+		"total length of the file it will load the entire contents of the file and no more. You can also load "
+		"memory from another CPU by specifying the <cpu> parameter.\n"
+		"NOTE: This will only actually write memory that is possible to overwrite in the Memory Window\n"
+		"\n"
+		"Examples:\n"
+		"\n"
+		"load venture.bin,0,10000\n"
+		"  Loads addresses 0-ffff in the current CPU from the binary file 'venture.bin'.\n"
+		"\n"
+		"loadd harddriv.bin,3000,1000,3\n"
+		"  Loads data memory addresses 3000-3fff from CPU #3 from the binary file 'harddriv.bin'.\n"
 	},
 	{
 		"step",
@@ -1113,6 +1149,9 @@ static const help_item static_help_list[] =
 		"  greaterof [gt]\n"
 		"   without <comparisonvalue> this condition is invalid\n"
 		"   with <comparisonvalue> search for all bytes that are larger than the <comparisonvalue>.\n"
+		"  changedby [ch, ~]\n"
+		"   without <comparisonvalue> this condition is invalid\n"
+		"   with <comparisonvalue> search for all bytes that have changed by the <comparisonvalue> since the last search.\n"
 		"\n"
 		"Examples:\n"
 		"\n"
@@ -1156,6 +1195,9 @@ static const help_item static_help_list[] =
 		"  greaterof [gt]\n"
 		"   without <comparisonvalue> this condition is invalid.\n"
 		"   with <comparisonvalue> search for all bytes that are larger than the <comparisonvalue>.\n"
+		"  changedby [ch, ~]\n"
+		"   without <comparisonvalue> this condition is invalid\n"
+		"   with <comparisonvalue> search for all bytes that have changed by the <comparisonvalue> since the initial search.\n"
 		"\n"
 		"Examples:\n"
 		"\n"
@@ -1192,6 +1234,43 @@ static const help_item static_help_list[] =
 		"\n"
 		"cheatundo\n"
 		"  Undo the last search (state only).\n"
+	},
+	{
+		"images",
+		"\n"
+		"  images\n"
+		"\n"
+		"Used to display list of available image devices.\n"
+		"\n"
+		"Examples:\n"
+		"\n"
+		"images\n"
+		"  Show list of devices and mounted files for current driver.\n"
+	},
+	{
+		"mount",
+		"\n"
+		"  mount <device>,<filename>\n"
+		"\n"
+		"Mount <filename> to image <device>.\n"
+		"<filename> can be softlist item or full path to file.\n"
+		"\n"
+		"Examples:\n"
+		"\n"
+		"mount cart,aladdin\n"
+		"  Mounts softlist item alladin on cart device.\n"
+	},
+	{
+		"unmount",
+		"\n"
+		"  unmount <device>\n"
+		"\n"
+		"Unmounts file from image <device>.\n"
+		"\n"
+		"Examples:\n"
+		"\n"
+		"unmount cart\n"
+		"  Unmounts any file mounted on device named cart.\n"
 	}
 };
 

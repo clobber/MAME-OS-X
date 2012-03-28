@@ -292,15 +292,27 @@ Contra III   CONTRA_III_1   TC574000   CONTRA_III_0   TC574000    GAME1_NSSU    
 -----------------------------------------------------------------------------------------------------------------------------------------------------
 
 ***************************************************************************/
-#include "driver.h"
-#include "cpu/spc700/spc700.h"
-#include "cpu/g65816/g65816.h"
+
+#include "emu.h"
+#include "cpu/z80/z80.h"
 #include "includes/snes.h"
 
-static ADDRESS_MAP_START( snes_map, ADDRESS_SPACE_PROGRAM, 8)
+
+class nss_state : public snes_state
+{
+public:
+	nss_state(const machine_config &mconfig, device_type type, const char *tag)
+		: snes_state(mconfig, type, tag) { }
+
+	UINT8 m_m50458_rom_bank;
+	UINT8 m_vblank_bit;
+};
+
+
+static ADDRESS_MAP_START( snes_map, AS_PROGRAM, 8)
 	AM_RANGE(0x000000, 0x2fffff) AM_READWRITE(snes_r_bank1, snes_w_bank1)	/* I/O and ROM (repeats for each bank) */
 	AM_RANGE(0x300000, 0x3fffff) AM_READWRITE(snes_r_bank2, snes_w_bank2)	/* I/O and ROM (repeats for each bank) */
-	AM_RANGE(0x400000, 0x5fffff) AM_READWRITE(snes_r_bank3, SMH_ROM)	/* ROM (and reserved in Mode 20) */
+	AM_RANGE(0x400000, 0x5fffff) AM_READ(snes_r_bank3)						/* ROM (and reserved in Mode 20) */
 	AM_RANGE(0x600000, 0x6fffff) AM_READWRITE(snes_r_bank4, snes_w_bank4)	/* used by Mode 20 DSP-1 */
 	AM_RANGE(0x700000, 0x7dffff) AM_READWRITE(snes_r_bank5, snes_w_bank5)
 	AM_RANGE(0x7e0000, 0x7fffff) AM_RAM					/* 8KB Low RAM, 24KB High RAM, 96KB Expanded RAM */
@@ -308,31 +320,203 @@ static ADDRESS_MAP_START( snes_map, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE(0xc00000, 0xffffff) AM_READWRITE(snes_r_bank7, snes_w_bank7)	/* Mirror and ROM */
 ADDRESS_MAP_END
 
-static READ8_HANDLER( spc_ram_100_r )
+static READ8_DEVICE_HANDLER( spc_ram_100_r )
 {
-	return spc_ram_r(space, offset + 0x100);
+	return spc_ram_r(device, offset + 0x100);
 }
 
-static WRITE8_HANDLER( spc_ram_100_w )
+static WRITE8_DEVICE_HANDLER( spc_ram_100_w )
 {
-	spc_ram_w(space, offset + 0x100, data);
+	spc_ram_w(device, offset + 0x100, data);
 }
 
-static ADDRESS_MAP_START( spc_mem, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x00ef) AM_READWRITE(spc_ram_r, spc_ram_w) AM_BASE(&spc_ram)   	/* lower 32k ram */
-	AM_RANGE(0x00f0, 0x00ff) AM_READWRITE(spc_io_r, spc_io_w)   	/* spc io */
-	AM_RANGE(0x0100, 0xffff) AM_WRITE(spc_ram_100_w)
-	AM_RANGE(0x0100, 0xffbf) AM_READ(spc_ram_100_r)
-	AM_RANGE(0xffc0, 0xffff) AM_READ(spc_ipl_r)
+static ADDRESS_MAP_START( spc_mem, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x00ef) AM_DEVREADWRITE("spc700", spc_ram_r, spc_ram_w)	/* lower 32k ram */
+	AM_RANGE(0x00f0, 0x00ff) AM_DEVREADWRITE("spc700", spc_io_r, spc_io_w)  	/* spc io */
+	AM_RANGE(0x0100, 0xffff) AM_DEVWRITE("spc700", spc_ram_100_w)
+	AM_RANGE(0x0100, 0xffbf) AM_DEVREAD("spc700", spc_ram_100_r)
+	AM_RANGE(0xffc0, 0xffff) AM_DEVREAD("spc700", spc_ipl_r)
 ADDRESS_MAP_END
 
+/* NSS specific */
+/*
+Notes of interest:
+
+nss_smw
+
+bp 2914 onward is a crc check with the Instruction ROM
+c0fe - c0ff pointers to the checksum
+
+bp 6b9e EEPROM write
+bp 6bf9 EEPROM read
+8080 - 8081 EEPROM checksummed value
+
+8700 - 870c  EEPROM2 checksummed value (0x8707 value and'ed with 0x03)
+bp 6f8d check the EEPROM2 results
+870d EEPROM2 result of checksum
+
+bp 6dce onward looks bogus, but it's probably the way it's intended to be
+
+M50458 charset is checked at 1382, a word checksum is provided at offsets 0xffe-0xfff of the given ROM
+
+*/
+
+static READ8_HANDLER( nss_eeprom_r )
+{
+	return 0x40; // eeprom read bit
+}
+
+static WRITE8_HANDLER( nss_eeprom_w )
+{
+	/*
+    x--- ---- EEPROM CS bit?
+    ---x ---- EEPROM clock bit?
+    ---- x--- EEPROM write bit
+    ---- ---x EEPROM reset bit? (active low)
+    */
+
+//  printf("EEPROM write %02x\n",data);
+}
+
+
+static READ8_HANDLER( m50458_r )
+{
+	nss_state *state = space->machine().driver_data<nss_state>();
+	if(state->m_m50458_rom_bank)
+	{
+		UINT8 *gfx_rom = space->machine().region("m50458_gfx")->base();
+
+		return gfx_rom[offset & 0xfff];
+	}
+	else
+	{
+		UINT8 *gfx_ram = space->machine().region("m50458_vram")->base();
+
+		return gfx_ram[offset & 0xfff];
+	}
+
+	return 0;
+}
+
+static WRITE8_HANDLER( m50458_w )
+{
+	nss_state *state = space->machine().driver_data<nss_state>();
+	if(state->m_m50458_rom_bank)
+		logerror("Warning: write to M50458 GFX ROM!\n");
+	else
+	{
+		UINT8 *gfx_ram = space->machine().region("m50458_vram")->base();
+
+		gfx_ram[offset & 0xfff] = data;
+	}
+}
+
+
+static ADDRESS_MAP_START( bios_map, AS_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0x87ff) AM_RAM
+	AM_RANGE(0x8800, 0x8fff) AM_RAM // vram perhaps?
+	AM_RANGE(0x9000, 0x9fff) AM_READWRITE(m50458_r,m50458_w) // M50458 vram & GFX rom routes here
+	AM_RANGE(0xa000, 0xa000) AM_READ(nss_eeprom_r)
+	AM_RANGE(0xe000, 0xe000) AM_WRITE(nss_eeprom_w)
+	AM_RANGE(0xc000, 0xdfff) AM_MIRROR(0x2000) AM_RAM AM_REGION("ibios_rom", 0x6000)
+ADDRESS_MAP_END
+
+static READ8_HANDLER( port00_r )
+{
+	nss_state *state = space->machine().driver_data<nss_state>();
+	/*
+    -x-- ---- almost certainly tied to the vblank signal
+    */
+
+
+	state->m_vblank_bit^=0x40;
+
+	return state->m_vblank_bit | 0xbf;
+}
+
+
+static READ8_HANDLER( port01_r )
+{
+	return 0xff;
+}
+
+static READ8_HANDLER( port02_r )
+{
+	/*
+    ---- -x-- (makes the BIOS to jump at 0x4258, sets 0x80 bit 1 and then jumps to unmapped area of the BIOS (bankswitch?))
+    ---- ---x
+    */
+
+	return 0xfb;
+}
+
+static READ8_HANDLER( port03_r )
+{
+	/*
+    x--- ---- EEPROM2 read bit
+    ---- ---x tested at 7006, some status bit
+
+    */
+
+	return 0xfe;
+}
+
+static WRITE8_HANDLER( port80_w )
+{
+	nss_state *state = space->machine().driver_data<nss_state>();
+	/*
+    ---- -x-- written when 0x9000-0x9fff is read, probably a bankswitch
+    ---- --x- see port 0x02 note
+    ---- ---x BIOS bankswitch
+    */
+
+	memory_set_bank(space->machine(), "bank1", data & 1);
+	state->m_m50458_rom_bank = data & 4;
+}
+
+static WRITE8_HANDLER( port82_w ) // EEPROM2?
+{
+	/*
+    ---- x--- EEPROM2 clock bit?
+    ---- -x-- EEPROM2 write bit
+    ---- --x- EEPROM2 CS bit?
+    */
+}
+
+static ADDRESS_MAP_START( bios_io_map, AS_IO, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0x00, 0x00) AM_READ(port00_r)
+	AM_RANGE(0x01, 0x01) AM_READ(port01_r)
+	AM_RANGE(0x02, 0x02) AM_READ(port02_r)
+	AM_RANGE(0x03, 0x03) AM_READ(port03_r)
+	AM_RANGE(0x72, 0x72) AM_WRITENOP //?
+	AM_RANGE(0x80, 0x80) AM_WRITE(port80_w)
+	AM_RANGE(0x82, 0x82) AM_WRITE(port82_w)
+	AM_RANGE(0xea, 0xea) AM_WRITENOP //?
+
+ADDRESS_MAP_END
+
+static MACHINE_START( nss )
+{
+	nss_state *state = machine.driver_data<nss_state>();
+	UINT8 *ROM = machine.region("bios")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x8000);
+	memory_set_bank(machine, "bank1", 0);
+
+	state->m_m50458_rom_bank = 0;
+
+	MACHINE_START_CALL(snes);
+}
+
 static INPUT_PORTS_START( snes )
-	PORT_START("PAD1L")		/* IN 0 : Joypad 1 - L */
+	PORT_START("SERIAL1_DATA1_L")
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P1 Button A") PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P1 Button X") PORT_PLAYER(1)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P1 Button L") PORT_PLAYER(1)
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P1 Button R") PORT_PLAYER(1)
-	PORT_START("PAD1H")		/* IN 1 : Joypad 1 - H */
+	PORT_START("SERIAL1_DATA1_H")
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P1 Button B") PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P1 Button Y") PORT_PLAYER(1)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE1 ) PORT_NAME("P1 Select")
@@ -342,12 +526,12 @@ static INPUT_PORTS_START( snes )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(1)
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
 
-	PORT_START("PAD2L")		/* IN 2 : Joypad 2 - L */
+	PORT_START("SERIAL2_DATA1_L")
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P2 Button A") PORT_PLAYER(2)
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P2 Button X") PORT_PLAYER(2)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P2 Button L") PORT_PLAYER(2)
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P2 Button R") PORT_PLAYER(2)
-	PORT_START("PAD2H")		/* IN 3 : Joypad 2 - H */
+	PORT_START("SERIAL2_DATA1_H")
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P2 Button B") PORT_PLAYER(2)
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P2 Button Y") PORT_PLAYER(2)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE2 ) PORT_NAME("P2 Select")
@@ -357,37 +541,17 @@ static INPUT_PORTS_START( snes )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
 
-	PORT_START("PAD3L")		/* IN 4 : Joypad 3 - L */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P3 Button A") PORT_PLAYER(3)
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P3 Button X") PORT_PLAYER(3)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P3 Button L") PORT_PLAYER(3)
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P3 Button R") PORT_PLAYER(3)
-	PORT_START("PAD3H")		/* IN 5 : Joypad 3 - H */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P3 Button B") PORT_PLAYER(3)
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P3 Button Y") PORT_PLAYER(3)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE3 ) PORT_NAME("P3 Select")
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START3 ) PORT_NAME("P3 Start")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(3)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(3)
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(3)
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(3)
+	PORT_START("SERIAL1_DATA2_L")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_START("SERIAL1_DATA2_H")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("PAD4L")		/* IN 6 : Joypad 4 - L */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P4 Button A") PORT_PLAYER(4)
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P4 Button X") PORT_PLAYER(4)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P4 Button L") PORT_PLAYER(4)
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P4 Button R") PORT_PLAYER(4)
-	PORT_START("PAD4H")		/* IN 7 : Joypad 4 - H */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P4 Button B") PORT_PLAYER(4)
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P4 Button Y") PORT_PLAYER(4)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE4 ) PORT_NAME("P4 Select")
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START4 ) PORT_NAME("P4 Start")
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(4)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(4)
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(4)
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(4)
+	PORT_START("SERIAL2_DATA2_L")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_START("SERIAL2_DATA2_H")
+	PORT_BIT( 0xff, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("DSW")	/* IN 8 : dip-switches */
+	PORT_START("DSW")
 	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Hard )  )
@@ -407,36 +571,130 @@ static INPUT_PORTS_START( snes )
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+
+#if SNES_LAYER_DEBUG
+	PORT_START("DEBUG1")
+	PORT_CONFNAME( 0x03, 0x00, "Select BG1 priority" )
+	PORT_CONFSETTING(    0x00, "All" )
+	PORT_CONFSETTING(    0x01, "BG1B (lower) only" )
+	PORT_CONFSETTING(    0x02, "BG1A (higher) only" )
+	PORT_CONFNAME( 0x0c, 0x00, "Select BG2 priority" )
+	PORT_CONFSETTING(    0x00, "All" )
+	PORT_CONFSETTING(    0x04, "BG2B (lower) only" )
+	PORT_CONFSETTING(    0x08, "BG2A (higher) only" )
+	PORT_CONFNAME( 0x30, 0x00, "Select BG3 priority" )
+	PORT_CONFSETTING(    0x00, "All" )
+	PORT_CONFSETTING(    0x10, "BG3B (lower) only" )
+	PORT_CONFSETTING(    0x20, "BG3A (higher) only" )
+	PORT_CONFNAME( 0xc0, 0x00, "Select BG4 priority" )
+	PORT_CONFSETTING(    0x00, "All" )
+	PORT_CONFSETTING(    0x40, "BG4B (lower) only" )
+	PORT_CONFSETTING(    0x80, "BG4A (higher) only" )
+
+	PORT_START("DEBUG2")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle BG 1") PORT_CODE(KEYCODE_1_PAD) PORT_TOGGLE
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle BG 2") PORT_CODE(KEYCODE_2_PAD) PORT_TOGGLE
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle BG 3") PORT_CODE(KEYCODE_3_PAD) PORT_TOGGLE
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle BG 4") PORT_CODE(KEYCODE_4_PAD) PORT_TOGGLE
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Objects") PORT_CODE(KEYCODE_5_PAD) PORT_TOGGLE
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Main/Sub") PORT_CODE(KEYCODE_6_PAD) PORT_TOGGLE
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Color Math") PORT_CODE(KEYCODE_7_PAD) PORT_TOGGLE
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Windows") PORT_CODE(KEYCODE_8_PAD) PORT_TOGGLE
+
+	PORT_START("DEBUG3")
+	PORT_BIT( 0x4, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mosaic") PORT_CODE(KEYCODE_9_PAD) PORT_TOGGLE
+	PORT_CONFNAME( 0x70, 0x00, "Select OAM priority" )
+	PORT_CONFSETTING(    0x00, "All" )
+	PORT_CONFSETTING(    0x10, "OAM0 only" )
+	PORT_CONFSETTING(    0x20, "OAM1 only" )
+	PORT_CONFSETTING(    0x30, "OAM2 only" )
+	PORT_CONFSETTING(    0x40, "OAM3 only" )
+	PORT_CONFNAME( 0x80, 0x00, "Draw sprite in reverse order" )
+	PORT_CONFSETTING(    0x00, DEF_STR( Off ) )
+	PORT_CONFSETTING(    0x80, DEF_STR( On ) )
+
+	PORT_START("DEBUG4")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 0 draw") PORT_TOGGLE
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 1 draw") PORT_TOGGLE
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 2 draw") PORT_TOGGLE
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 3 draw") PORT_TOGGLE
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 4 draw") PORT_TOGGLE
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 5 draw") PORT_TOGGLE
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 6 draw") PORT_TOGGLE
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Toggle Mode 7 draw") PORT_TOGGLE
+#endif
 INPUT_PORTS_END
 
-static MACHINE_DRIVER_START( snes )
+static const gfx_layout nss_char_layout_16x18 =
+{
+	16,18,
+	RGN_FRAC(1,1),
+	1,
+	{ 0 },
+	{ 0, 1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13,14,15 },
+	{ 0*16, 1*16, 2*16, 3*16, 4*16, 5*16, 6*16, 7*16,8*16, 9*16, 10*16, 11*16, 12*16, 13*16, 14*16, 15*16, 16*16,17*16 },
+	16*18
+};
+
+static const gfx_layout nss_char_layout_16x16 =
+{
+	16,16,
+	RGN_FRAC(1,1),
+	1,
+	{ 0 },
+	{ 0, 1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13,14,15 },
+	{ 0*16, 1*16, 2*16, 3*16, 4*16, 5*16, 6*16, 7*16,8*16, 9*16, 10*16, 11*16, 12*16, 13*16, 14*16, 15*16 },
+	16*16
+};
+
+
+/* decoded for debugging purpose, this will be nuked in the end... */
+static GFXDECODE_START( nss )
+	GFXDECODE_ENTRY( "chargen",   0x00000, nss_char_layout_16x18,    0, 1 )
+	GFXDECODE_ENTRY( "m50458_gfx",   0x00000, nss_char_layout_16x16,    0, 1 )
+GFXDECODE_END
+
+static MACHINE_CONFIG_START( snes, nss_state )
+
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", G65816, 3580000)	/* 2.68Mhz, also 3.58Mhz */
-	MDRV_CPU_PROGRAM_MAP(snes_map)
+	MCFG_CPU_ADD("maincpu", _5A22, 3580000*6)	/* 2.68Mhz, also 3.58Mhz */
+	MCFG_CPU_PROGRAM_MAP(snes_map)
 
-	MDRV_CPU_ADD("soundcpu", SPC700, 2048000/2)	/* 2.048 Mhz, but internal divider */
-	MDRV_CPU_PROGRAM_MAP(spc_mem)
+	MCFG_CPU_ADD("soundcpu", SPC700, 2048000/2)	/* 2.048 Mhz, but internal divider */
+	MCFG_CPU_PROGRAM_MAP(spc_mem)
 
-	MDRV_QUANTUM_TIME(HZ(24000))
+//  MCFG_QUANTUM_TIME(attotime::from_hz(24000))
+	MCFG_QUANTUM_PERFECT_CPU("maincpu")
 
-	MDRV_MACHINE_START( snes )
-	MDRV_MACHINE_RESET( snes )
+	MCFG_MACHINE_START( snes )
+	MCFG_MACHINE_RESET( snes )
 
 	/* video hardware */
-	MDRV_VIDEO_START( snes )
-	MDRV_VIDEO_UPDATE( snes )
+	MCFG_VIDEO_START( snes )
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_RAW_PARAMS(DOTCLK_NTSC, SNES_HTOTAL, 0, SNES_SCR_WIDTH, SNES_VTOTAL_NTSC, 0, SNES_SCR_HEIGHT_NTSC)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(DOTCLK_NTSC, SNES_HTOTAL, 0, SNES_SCR_WIDTH, SNES_VTOTAL_NTSC, 0, SNES_SCR_HEIGHT_NTSC)
+	MCFG_SCREEN_UPDATE_STATIC( snes )
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SOUND_ADD("spc700", SNES, 0)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.00)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.00)
+MACHINE_CONFIG_END
 
-	MDRV_SOUND_ADD("snes", SNES, 0)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.00)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.00)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( nss, snes )
+
+	MCFG_CPU_ADD("bios", Z80, 4000000)
+	MCFG_CPU_PROGRAM_MAP(bios_map)
+	MCFG_CPU_IO_MAP(bios_io_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+//  MCFG_CPU_FLAGS(CPU_DISABLE)
+
+	MCFG_GFXDECODE( nss )
+	MCFG_PALETTE_LENGTH(2)
+	MCFG_MACHINE_START( nss )
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -447,18 +705,27 @@ MACHINE_DRIVER_END
 #define NSS_BIOS \
 	ROM_REGION(0x100,           "user5", 0)		/* IPL ROM */ \
 	ROM_LOAD("spc700.rom", 0, 0x40, CRC(44bb3a40) SHA1(97e352553e94242ae823547cd853eecda55c20f0) ) \
-	ROM_REGION(0x1000,           "addons", 0)		/* add-on chip ROMs (DSP1 could be needed if we dump smk). the second 0x800 host DSP3 ROM in MESS */\
-	ROM_LOAD("dsp1data.bin", 0x000000, 0x000800, CRC(4b02d66d) SHA1(1534f4403d2a0f68ba6e35186fe7595d33de34b1))\
-	ROM_REGION(0x10000,         "bios",  0)		/* Bios CPU (what is it?) */ \
-	ROM_LOAD("nss-c.dat"  , 0, 0x8000, CRC(a8e202b3) SHA1(b7afcfe4f5cf15df53452dc04be81929ced1efb2) )	/* bios */ \
-	ROM_LOAD("nss-ic14.02", 0, 0x8000, CRC(e06cb58f) SHA1(62f507e91a2797919a78d627af53f029c7d81477) )	/* bios */ \
+	ROM_REGION(0x10000,           "addons", ROMREGION_ERASE00)		/* add-on chip ROMs (DSP1 will be needed if we dump the NSS version of Super Mario Kart)*/\
+	ROM_LOAD( "dsp1b.bin", SNES_DSP1B_OFFSET, 0x002800, CRC(453557e0) SHA1(3a218b0e4572a8eba6d0121b17fdac9529609220) ) \
+	ROM_REGION(0x20000,         "bios",  0)		/* Bios CPU (what is it?) */ \
+	ROM_LOAD("nss-c.dat"  , 0x10000, 0x8000, CRC(a8e202b3) SHA1(b7afcfe4f5cf15df53452dc04be81929ced1efb2) )	/* bios */ \
+	ROM_LOAD("nss-ic14.02", 0x18000, 0x8000, CRC(e06cb58f) SHA1(62f507e91a2797919a78d627af53f029c7d81477) )	/* bios */ \
+	ROM_REGION( 0x1200, "chargen", ROMREGION_ERASEFF ) \
+	ROM_LOAD("m50458_char.bin",     0x0000, 0x1200, BAD_DUMP CRC(011cc342) SHA1(d5b9f32d6e251b4b25945267d7c68c099bd83e96) ) \
+	ROM_REGION( 0x1000, "m50458_gfx", ROMREGION_ERASEFF ) \
+	ROM_LOAD("m50458_char_mod.bin", 0x0000, 0x1000, BAD_DUMP CRC(8c4326ef) SHA1(21a63c5245ff7f3f70cb45e217b3045b19d0d799) ) \
+	ROM_REGION( 0x1000, "m50458_vram", ROMREGION_ERASE00 ) \
+	ROM_REGION( 0x2000, "dspprg", ROMREGION_ERASEFF) \
+	ROM_REGION( 0x800, "dspdata", ROMREGION_ERASEFF)
+
+
 
 ROM_START( nss )
 	NSS_BIOS
 	ROM_REGION( 0x100000, "user3", ROMREGION_ERASEFF )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", ROMREGION_ERASEFF )
+	ROM_REGION( 0x8000, "ibios_rom", ROMREGION_ERASEFF )
 ROM_END
 
 
@@ -469,7 +736,7 @@ ROM_START( nss_actr )
 	ROM_LOAD( "act-rais.ic2", 0x80000, 0x80000, CRC(4df9cc63) SHA1(3e98d9693d60d125a1257ba79701f27bda688261) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "act-rais.ic8", 0x0000, 0x8000, CRC(08b38ce6) SHA1(4cbb7fd28d98ffef0f17747201625883af954e3a) )
 ROM_END
 
@@ -480,7 +747,7 @@ ROM_START( nss_con3 )
 	ROM_LOAD( "contra3.ic2", 0x80000, 0x80000, CRC(2f3e3b5b) SHA1(0186b92f022701f6ae29984252e6d346acf6550b) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "contra3.ic8", 0x0000, 0x8000, CRC(0fbfa23b) SHA1(e7a1a78a58c64297e7b9623350ec57aed8035a4f) )
 ROM_END
 
@@ -491,7 +758,7 @@ ROM_START( nss_adam )
 	ROM_LOAD( "addams.ic2", 0x80000, 0x80000, CRC(6196adcf) SHA1(a450f278a37d5822f607aa3631831a461e8b147e) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "addams.ic8", 0x0000, 0x8000, CRC(57c7f72c) SHA1(2e3642b4b5438f6c535d6d1eb668e1663062cf78) )
 ROM_END
 
@@ -502,7 +769,7 @@ ROM_START( nss_aten )
 	ROM_LOAD( "amtennis.ic2", 0x80000, 0x80000, CRC(7738c5f2) SHA1(eb0089e9724c7b3834d9f6c47b92f5a1bb26fc77) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "amtennis.ic8", 0x0000, 0x8000, CRC(d2cd3926) SHA1(49fc253b1b9497ef1374c7db0bd72c163ffb07e7) )
 ROM_END
 
@@ -513,7 +780,7 @@ ROM_START( nss_rob3 )
 	ROM_LOAD( "robocop3.ic2", 0x80000, 0x80000, CRC(a94e1b56) SHA1(7403d70504310ad5949a3b45b4a1e71e7d2bce77) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "robocop3.ic8", 0x0000, 0x8000, CRC(90d13c51) SHA1(6751dab14b7d178350ac333f07dd2c3852e4ae23) )
 ROM_END
 
@@ -524,7 +791,7 @@ ROM_START( nss_ncaa )
 	ROM_LOAD( "ncaa.ic2", 0x80000, 0x80000, CRC(83ef6936) SHA1(8e0f38c763861e33684c6ddb742385b0522af78a) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "ncaa.ic8", 0x0000, 0x8000, CRC(b9fa28d5) SHA1(bc538bcff5c19eae4becc6582b5c111d287b76fa) )
 ROM_END
 
@@ -535,7 +802,7 @@ ROM_START( nss_skin )
 	ROM_LOAD( "skins.ic2", 0x80000, 0x80000, CRC(365fd19e) SHA1(f60d7ac39fe83fb98730e73fbef410c90a4ff35b) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "skins.ic8", 0x0000, 0x8000, CRC(9f33d5ce) SHA1(4d279ad3665bd94c7ca9cb2778572bed42c5b298) )
 ROM_END
 
@@ -546,7 +813,7 @@ ROM_START( nss_lwep )
 	ROM_LOAD( "nss-lw.ic2", 0x80000, 0x80000, CRC(86365042) SHA1(f818024c6f858fd2780396b6c83d3a37a97fa08a) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "nss-lw.ic8", 0x0000, 0x8000, CRC(1acc1d5d) SHA1(4c8b100ac5847915aaf3b5bfbcb4f632606c97de) )
 ROM_END
 
@@ -556,7 +823,7 @@ ROM_START( nss_ssoc )
 	ROM_LOAD( "s-soccer.ic1", 0x00000, 0x80000,  CRC(70b7f50e) SHA1(92856118528995e3a0b7d22340d440bef5fd61ac) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "s-soccer.ic3", 0x0000, 0x8000, CRC(c09211c3) SHA1(b274a57f93ae0a8774664df3d3615fb7dbecfa2e) )
 ROM_END
 
@@ -566,7 +833,7 @@ ROM_START( nss_smw )
 	ROM_LOAD( "nss-mw-0_prg.ic1", 0x000000, 0x80000, CRC(c46766f2) SHA1(06a6efc246c6fdb83efab1d402d61d2179a84494) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "mw.ic3", 0x0000, 0x8000, CRC(f2c5466e) SHA1(e116f01342fcf359498ed8750741c139093b1fb2) )
 ROM_END
 
@@ -576,7 +843,7 @@ ROM_START( nss_fzer )
 	ROM_LOAD( "nss-fz-0.ic2", 0x000000, 0x100000, CRC(e9b3cdf1) SHA1(ab616eecd292b94ca74c55446bddd23e9dc3e3bb) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "fz.ic7", 0x0000, 0x8000, CRC(48ae570d) SHA1(934f9fec47dcf9e49936388968d2db50c69950da) )
 ROM_END
 
@@ -586,20 +853,20 @@ ROM_START( nss_sten )
 	ROM_LOAD( "nss-st-0.ic1", 0x000000, 0x100000, CRC(f131611f) SHA1(0797936e1fc9e705cd7e029097fc013a58e69002) )
 
 	/* instruction / data rom for bios */
-	ROM_REGION( 0x8000, "user4", 0 )
+	ROM_REGION( 0x8000, "ibios_rom", 0 )
 	ROM_LOAD( "st.ic3", 0x0000, 0x8000, CRC(8880596e) SHA1(ec6d68fc2f51f7d94f496cd72cf898db65324542) )
 ROM_END
 
-GAME( 199?, nss,       0,     snes,	     snes,    snes,		ROT0, "Nintendo",					"Nintendo Super System BIOS", GAME_IS_BIOS_ROOT )
-GAME( 1992, nss_actr,  nss,	  snes,	     snes,    snes,		ROT0, "Enix",						"Act Raiser (Nintendo Super System)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // time broken (?)
-GAME( 1992, nss_adam,  nss,	  snes,	     snes,    snes,		ROT0, "Ocean",						"The Addams Family (Nintendo Super System)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1992, nss_aten,  nss,	  snes,	     snes,    snes,		ROT0, "Absolute Entertainment Inc.","David Crane's Amazing Tennis (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // gfx problems with net
-GAME( 1992, nss_con3,  nss,	  snes,	     snes,    snes,		ROT0, "Konami",						"Contra 3: The Alien Wars (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
-GAME( 1992, nss_lwep,  nss,	  snes,	     snes,    snes,		ROT0, "Ocean",						"Lethal Weapon (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
-GAME( 1992, nss_ncaa,  nss,	  snes,	     snes,    snes,		ROT0, "Sculptured Software Inc.",	"NCAA Basketball (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
-GAME( 1992, nss_rob3,  nss,	  snes,	     snes,    snes,		ROT0, "Ocean",						"Robocop 3 (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // invisible enemy? gameplay prob?
-GAME( 1992, nss_skin,  nss,	  snes,	     snes,    snes,		ROT0, "Irem",						"Skins Game (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // no controls
-GAME( 1992, nss_ssoc,  nss,	  snes,	     snes,    snes,		ROT0, "Human Inc.",					"Super Soccer (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // some gfx issues
-GAME( 1991, nss_smw,   nss,	  snes,	     snes,    snes,		ROT0, "Nintendo",					"Super Mario World (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
-GAME( 1991, nss_fzer,  nss,	  snes,	     snes,    snes,		ROT0, "Nintendo",					"F-Zero (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
-GAME( 1991, nss_sten,  nss,	  snes,	     snes,    snes,		ROT0, "Nintendo",					"Super Tennis (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 199?, nss,       0,     nss,      snes,    snes,    ROT0, "Nintendo",                    "Nintendo Super System BIOS", GAME_IS_BIOS_ROOT )
+GAME( 1992, nss_actr,  nss,   nss,      snes,    snes,    ROT0, "Enix",                        "Act Raiser (Nintendo Super System)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // sound sometimes dies, timing issues
+GAME( 1992, nss_adam,  nss,   nss,      snes,    snes,    ROT0, "Ocean",                       "The Addams Family (Nintendo Super System)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1992, nss_aten,  nss,   nss,      snes,    snes,    ROT0, "Absolute Entertainment Inc.", "David Crane's Amazing Tennis (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1992, nss_con3,  nss,   nss,      snes,    snes,    ROT0, "Konami",                      "Contra 3: The Alien Wars (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1992, nss_lwep,  nss,   nss,      snes,    snes,    ROT0, "Ocean",                       "Lethal Weapon (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1992, nss_ncaa,  nss,   nss,      snes,    snes,    ROT0, "Sculptured Software Inc.",    "NCAA Basketball (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1992, nss_rob3,  nss,   nss,      snes,    snes,    ROT0, "Ocean",                       "Robocop 3 (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // any sprite minus Robocop is missing
+GAME( 1992, nss_skin,  nss,   nss,      snes,    snes,    ROT0, "Irem",                        "Skins Game (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // gfx issue caused by timing at start-up
+GAME( 1992, nss_ssoc,  nss,   nss,      snes,    snes,    ROT0, "Human Inc.",                  "Super Soccer (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1991, nss_smw,   nss,   nss,      snes,    snes,    ROT0, "Nintendo",                    "Super Mario World (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1991, nss_fzer,  nss,   nss,      snes,    snes,    ROT0, "Nintendo",                    "F-Zero (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1991, nss_sten,  nss,   nss,      snes,    snes,    ROT0, "Nintendo",                    "Super Tennis (Nintendo Super System)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )

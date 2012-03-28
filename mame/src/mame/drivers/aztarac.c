@@ -13,12 +13,13 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "video/vector.h"
-#include "aztarac.h"
+#include "includes/aztarac.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
 
 
 
@@ -36,7 +37,7 @@ static IRQ_CALLBACK(aztarac_irq_callback)
 
 static MACHINE_RESET( aztarac )
 {
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), aztarac_irq_callback);
+	device_set_irq_callback(machine.device("maincpu"), aztarac_irq_callback);
 }
 
 
@@ -49,7 +50,8 @@ static MACHINE_RESET( aztarac )
 
 static READ16_HANDLER( nvram_r )
 {
-	return generic_nvram16[offset] | 0xfff0;
+	aztarac_state *state = space->machine().driver_data<aztarac_state>();
+	return state->m_nvram[offset] | 0xfff0;
 }
 
 
@@ -62,8 +64,8 @@ static READ16_HANDLER( nvram_r )
 
 static READ16_HANDLER( joystick_r )
 {
-    return (((input_port_read(space->machine, "STICKZ") - 0xf) << 8) |
-            ((input_port_read(space->machine, "STICKY") - 0xf) & 0xff));
+    return (((input_port_read(space->machine(), "STICKZ") - 0xf) << 8) |
+            ((input_port_read(space->machine(), "STICKY") - 0xf) & 0xff));
 }
 
 
@@ -74,15 +76,15 @@ static READ16_HANDLER( joystick_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00bfff) AM_ROM
-	AM_RANGE(0x022000, 0x0220ff) AM_READ(nvram_r) AM_WRITEONLY AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x022000, 0x0220ff) AM_READ(nvram_r) AM_WRITEONLY AM_SHARE("nvram")
 	AM_RANGE(0x027000, 0x027001) AM_READ(joystick_r)
 	AM_RANGE(0x027004, 0x027005) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x027008, 0x027009) AM_READWRITE(aztarac_sound_r, aztarac_sound_w)
 	AM_RANGE(0x02700c, 0x02700d) AM_READ_PORT("DIAL")
 	AM_RANGE(0x02700e, 0x02700f) AM_READ(watchdog_reset16_r)
-	AM_RANGE(0xff8000, 0xffafff) AM_RAM AM_BASE(&aztarac_vectorram)
+	AM_RANGE(0xff8000, 0xffafff) AM_RAM AM_BASE_MEMBER(aztarac_state, m_vectorram)
 	AM_RANGE(0xffb000, 0xffb001) AM_WRITE(aztarac_ubr_w)
 	AM_RANGE(0xffe000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -95,7 +97,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8800) AM_READ(aztarac_snd_command_r)
@@ -143,44 +145,44 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( aztarac )
+static MACHINE_CONFIG_START( aztarac, aztarac_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 8000000)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 8000000)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 2000000)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_PERIODIC_INT(aztarac_snd_timed_irq, 100)
+	MCFG_CPU_ADD("audiocpu", Z80, 2000000)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(aztarac_snd_timed_irq, 100)
 
-	MDRV_MACHINE_RESET(aztarac)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MCFG_MACHINE_RESET(aztarac)
+	MCFG_NVRAM_ADD_1FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", VECTOR)
-	MDRV_SCREEN_REFRESH_RATE(40)
-	MDRV_SCREEN_SIZE(400, 300)
-	MDRV_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 768-1)
+	MCFG_SCREEN_ADD("screen", VECTOR)
+	MCFG_SCREEN_REFRESH_RATE(40)
+	MCFG_SCREEN_SIZE(400, 300)
+	MCFG_SCREEN_VISIBLE_AREA(0, 1024-1, 0, 768-1)
+	MCFG_SCREEN_UPDATE_STATIC(vector)
 
-	MDRV_VIDEO_START(aztarac)
-	MDRV_VIDEO_UPDATE(vector)
+	MCFG_VIDEO_START(aztarac)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("ay1", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("ay2", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("ay3", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("ay3", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("ay4", AY8910, 2000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ay4", AY8910, 2000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+MACHINE_CONFIG_END
 
 
 

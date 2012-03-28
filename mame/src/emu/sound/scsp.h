@@ -7,14 +7,17 @@
 #ifndef __SCSP_H__
 #define __SCSP_H__
 
+#include "devlegcy.h"
+
 typedef struct _scsp_interface scsp_interface;
 struct _scsp_interface
 {
 	int roffset;				/* offset in the region */
-	void (*irq_callback)(const device_config *device, int state);	/* irq callback */
+	void (*irq_callback)(device_t *device, int state);	/* irq callback */
+	devcb_write_line   main_irq;
 };
 
-void scsp_set_ram_base(const device_config *device, void *base);
+void scsp_set_ram_base(device_t *device, void *base);
 
 // SCSP register access
 READ16_DEVICE_HANDLER( scsp_r );
@@ -26,7 +29,6 @@ READ16_DEVICE_HANDLER( scsp_midi_out_r );
 
 extern UINT32* stv_scu;
 
-DEVICE_GET_INFO( scsp );
-#define SOUND_SCSP DEVICE_GET_INFO_NAME( scsp )
+DECLARE_LEGACY_SOUND_DEVICE(SCSP, scsp);
 
 #endif /* __SCSP_H__ */

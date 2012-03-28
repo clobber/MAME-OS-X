@@ -6,13 +6,18 @@
     AMD/Fujitsu 29F016 (byte-wide)
     Sharp LH28F400 (word-wide)
 
-    Flash ROMs use a standardized command set accross manufacturers,
+    Flash ROMs use a standardized command set across manufacturers,
     so this emulation should work even for non-Intel and non-Sharp chips
     as long as the game doesn't query the maker ID.
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "intelfsh.h"
+
+
+//**************************************************************************
+//  CONSTANTS
+//**************************************************************************
 
 enum
 {
@@ -30,186 +35,401 @@ enum
 	FM_ERASEAMD3,	// part 3 of AMD erase sequence
 	FM_ERASEAMD4,	// part 4 of AMD erase sequence
 	FM_BYTEPROGRAM,
+	FM_BANKSELECT,
 };
 
-struct flash_chip
+
+
+//**************************************************************************
+//  GLOBAL VARIABLES
+//**************************************************************************
+
+// device type definition
+const device_type INTEL_28F016S5 = &device_creator<intel_28f016s5_device>;
+const device_type SHARP_LH28F016S = &device_creator<sharp_lh28f016s_device>;
+const device_type AMD_29F080 = &device_creator<amd_29f080_device>;
+const device_type FUJITSU_29F016A = &device_creator<fujitsu_29f016a_device>;
+const device_type FUJITSU_29DL16X = &device_creator<fujitsu_29dl16x_device>;
+const device_type INTEL_E28F400 = &device_creator<intel_e28f400_device>;
+const device_type MACRONIX_29L001MC = &device_creator<macronix_29l001mc_device>;
+const device_type PANASONIC_MN63F805MNP = &device_creator<panasonic_mn63f805mnp_device>;
+const device_type SANYO_LE26FV10N1TS = &device_creator<sanyo_le26fv10n1ts_device>;
+
+const device_type SHARP_LH28F400 = &device_creator<sharp_lh28f400_device>;
+const device_type INTEL_E28F008SA = &device_creator<intel_e28f008sa_device>;
+const device_type INTEL_TE28F160 = &device_creator<intel_te28f160_device>;
+const device_type SHARP_UNK128MBIT = &device_creator<sharp_unk128mbit_device>;
+
+static ADDRESS_MAP_START( memory_map8_512Kb, AS_PROGRAM, 8 )
+	AM_RANGE(0x00000, 0x00ffff) AM_RAM
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( memory_map8_1Mb, AS_PROGRAM, 8 )
+	AM_RANGE(0x00000, 0x01ffff) AM_RAM
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( memory_map8_8Mb, AS_PROGRAM, 8 )
+	AM_RANGE(0x00000, 0x0fffff) AM_RAM
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( memory_map8_16Mb, AS_PROGRAM, 8 )
+	AM_RANGE(0x00000, 0x1fffff) AM_RAM
+ADDRESS_MAP_END
+
+
+static ADDRESS_MAP_START( memory_map16_4Mb, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000, 0x03ffff) AM_RAM
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( memory_map16_16Mb, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000, 0x0fffff) AM_RAM
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( memory_map16_64Mb, AS_PROGRAM, 16 )
+	AM_RANGE(0x00000, 0x3fffff) AM_RAM
+ADDRESS_MAP_END
+
+
+
+//**************************************************************************
+//  LIVE DEVICE
+//**************************************************************************
+
+//-------------------------------------------------
+//  intelfsh_device - constructor
+//-------------------------------------------------
+
+intelfsh_device::intelfsh_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 variant)
+	: device_t(mconfig, type, name, tag, owner, clock),
+	  device_memory_interface(mconfig, *this),
+	  device_nvram_interface(mconfig, *this),
+	  m_type(variant),
+	  m_size(0),
+	  m_bits(8),
+	  m_device_id(0),
+	  m_maker_id(0),
+	  m_sector_is_4k(false),
+	  m_status(0x80),
+	  m_erase_sector(0),
+	  m_flash_mode(FM_NORMAL),
+	  m_flash_master_lock(false),
+	  m_timer(NULL),
+	  m_bank(0)
 {
-	int type;
-	int size;
-	int bits;
-	int status;
-	int erase_sector;
-	INT32 flash_mode;
-	INT32 flash_master_lock;
-	int device_id;
-	int maker_id;
-	emu_timer *timer;
-	void *flash_memory;
-};
+	address_map_constructor map = NULL;
 
-static struct flash_chip chips[FLASH_CHIPS_MAX];
-
-static TIMER_CALLBACK( erase_finished )
-{
-	struct flash_chip *c = (struct flash_chip *)ptr;
-
-	switch( c->flash_mode )
-	{
-	case FM_READSTATUS:
-		c->status = 0x80;
-		break;
-
-	case FM_ERASEAMD4:
-		c->flash_mode = FM_NORMAL;
-		break;
-	}
-}
-
-void* intelflash_getmemptr(int chip)
-{
-	struct flash_chip *c;
-	if( chip >= FLASH_CHIPS_MAX )
-	{
-		logerror( "intelflash_init: invalid chip %d\n", chip );
-		return 0;
-	}
-	c = &chips[ chip ];
-
-	return c->flash_memory;
-}
-
-void intelflash_init(running_machine *machine, int chip, int type, void *data)
-{
-	struct flash_chip *c;
-	if( chip >= FLASH_CHIPS_MAX )
-	{
-		logerror( "intelflash_init: invalid chip %d\n", chip );
-		return;
-	}
-	c = &chips[ chip ];
-
-	c->type = type;
-	switch( c->type )
+	switch( variant )
 	{
 	case FLASH_INTEL_28F016S5:
 	case FLASH_SHARP_LH28F016S:
-		c->bits = 8;
-		c->size = 0x200000;
-		c->maker_id = 0x89;
-		c->device_id = 0xaa;
+		m_bits = 8;
+		m_size = 0x200000;
+		m_maker_id = 0x89;
+		m_device_id = 0xaa;
+		map = ADDRESS_MAP_NAME( memory_map8_16Mb );
+		break;
+	case FLASH_AMD_29F080:
+		m_bits = 8;
+		m_size = 0x100000;
+		m_maker_id = 0x01;
+		m_device_id = 0xd5;
+		map = ADDRESS_MAP_NAME( memory_map8_8Mb );
 		break;
 	case FLASH_SHARP_LH28F400:
 	case FLASH_INTEL_E28F400:
-		c->bits = 16;
-		c->size = 0x80000;
-		c->maker_id = 0xb0;
-		c->device_id = 0xed;
+		m_bits = 16;
+		m_size = 0x80000;
+		m_maker_id = 0xb0;
+		m_device_id = 0xed;
+		map = ADDRESS_MAP_NAME( memory_map16_4Mb );
 		break;
 	case FLASH_FUJITSU_29F016A:
-		c->bits = 8;
-		c->size = 0x200000;
-		c->maker_id = 0x04;
-		c->device_id = 0xad;
+		m_bits = 8;
+		m_size = 0x200000;
+		m_maker_id = 0x04;
+		m_device_id = 0xad;
+		map = ADDRESS_MAP_NAME( memory_map8_16Mb );
+		break;
+	case FLASH_FUJITSU_29DL16X:
+		m_bits = 8;
+		m_size = 0x200000;
+		m_maker_id = 0x04;
+		m_device_id = 0x35;
+		map = ADDRESS_MAP_NAME( memory_map8_16Mb );
 		break;
 	case FLASH_INTEL_E28F008SA:
-		c->bits = 8;
-		c->size = 0x100000;
-		c->maker_id = 0x89;
-		c->device_id = 0xa2;
+		m_bits = 8;
+		m_size = 0x100000;
+		m_maker_id = 0x89;
+		m_device_id = 0xa2;
+		map = ADDRESS_MAP_NAME( memory_map8_8Mb );
 		break;
 	case FLASH_INTEL_TE28F160:
-		c->bits = 16;
-		c->size = 0x200000;
-		c->maker_id = 0xb0;
-		c->device_id = 0xd0;
+		m_bits = 16;
+		m_size = 0x200000;
+		m_maker_id = 0xb0;
+		m_device_id = 0xd0;
+		map = ADDRESS_MAP_NAME( memory_map16_16Mb );
 		break;
 	case FLASH_SHARP_UNK128MBIT:
-		c->bits = 16;
-		c->size = 0x800000;
-		c->maker_id = 0xb0;
-		c->device_id = 0xb0;
+		m_bits = 16;
+		m_size = 0x800000;
+		m_maker_id = 0xb0;
+		m_device_id = 0xb0;
+		map = ADDRESS_MAP_NAME( memory_map16_64Mb );
 		break;
 	case FLASH_MACRONIX_29L001MC:
-		c->bits = 8;
-		c->size = 0x20000;
-		c->maker_id = 0xc2;
-		c->device_id = 0x51;
+		m_bits = 8;
+		m_size = 0x20000;
+		m_maker_id = 0xc2;
+		m_device_id = 0x51;
+		map = ADDRESS_MAP_NAME( memory_map8_1Mb );
+		break;
+	case FLASH_PANASONIC_MN63F805MNP:
+		m_bits = 8;
+		m_size = 0x10000;
+		m_maker_id = 0x32;
+		m_device_id = 0x1b;
+		m_sector_is_4k = true;
+		map = ADDRESS_MAP_NAME( memory_map8_512Kb );
+		break;
+	case FLASH_SANYO_LE26FV10N1TS:
+		m_bits = 8;
+		m_size = 0x20000;
+		m_maker_id = 0x62;
+		m_device_id = 0x13;
+		m_sector_is_4k = true;
+		map = ADDRESS_MAP_NAME( memory_map8_1Mb );
 		break;
 	}
-	if( data == NULL )
-	{
-		data = auto_alloc_array( machine, UINT8, c->size );
-		memset( data, 0xff, c->size );
-	}
 
-	c->status = 0x80;
-	c->flash_mode = FM_NORMAL;
-	c->flash_master_lock = 0;
-	c->timer = timer_alloc(machine, erase_finished, c);
-	c->flash_memory = data;
+	int addrbits;
+	for (addrbits = 24; addrbits > 0; addrbits--)
+		if ((m_size & (1 << addrbits)) != 0)
+			break;
 
-	state_save_register_item( machine, "intelfsh", NULL, chip, c->status );
-	state_save_register_item( machine, "intelfsh", NULL, chip, c->flash_mode );
-	state_save_register_item( machine, "intelfsh", NULL, chip, c->flash_master_lock );
-	state_save_register_memory( machine, "intelfsh", NULL, chip, "flash_memory", c->flash_memory, c->bits/8, c->size / (c->bits/8) );
+	m_space_config = address_space_config("flash", ENDIANNESS_BIG, m_bits, addrbits, (m_bits == 8) ? 0 : -1, map);
 }
 
-UINT32 intelflash_read(int chip, UINT32 address)
+intelfsh8_device::intelfsh8_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 variant)
+	: intelfsh_device(mconfig, type, name, tag, owner, clock, variant) { }
+
+intelfsh16_device::intelfsh16_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock, UINT32 variant)
+	: intelfsh_device(mconfig, type, name, tag, owner, clock, variant) { }
+
+
+intel_28f016s5_device::intel_28f016s5_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, INTEL_28F016S5, "Intel 28F016S5 Flash", tag, owner, clock, FLASH_INTEL_28F016S5) { }
+
+fujitsu_29f016a_device::fujitsu_29f016a_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, FUJITSU_29F016A, "Fujitsu 29F016A Flash", tag, owner, clock, FLASH_FUJITSU_29F016A) { }
+
+fujitsu_29dl16x_device::fujitsu_29dl16x_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, FUJITSU_29DL16X, "Fujitsu 29DL16X Flash", tag, owner, clock, FLASH_FUJITSU_29DL16X) { }
+
+sharp_lh28f016s_device::sharp_lh28f016s_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, SHARP_LH28F016S, "Sharp LH28F016S Flash", tag, owner, clock, FLASH_SHARP_LH28F016S) { }
+
+amd_29f080_device::amd_29f080_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, AMD_29F080, "AMD 29F080 Flash", tag, owner, clock, FLASH_AMD_29F080) { }
+
+intel_e28f008sa_device::intel_e28f008sa_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, INTEL_E28F008SA, "Intel E28F008SA Flash", tag, owner, clock, FLASH_INTEL_E28F008SA) { }
+
+macronix_29l001mc_device::macronix_29l001mc_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, MACRONIX_29L001MC, "Macronix 29L001MC Flash", tag, owner, clock, FLASH_MACRONIX_29L001MC) { }
+
+panasonic_mn63f805mnp_device::panasonic_mn63f805mnp_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, PANASONIC_MN63F805MNP, "Panasonic MN63F805MNP Flash", tag, owner, clock, FLASH_PANASONIC_MN63F805MNP) { }
+
+sanyo_le26fv10n1ts_device::sanyo_le26fv10n1ts_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh8_device(mconfig, SANYO_LE26FV10N1TS, "Sanyo LE26FV10N1TS Flash", tag, owner, clock, FLASH_SANYO_LE26FV10N1TS) { }
+
+sharp_lh28f400_device::sharp_lh28f400_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh16_device(mconfig, SHARP_LH28F400, "Sharp LH28F400 Flash", tag, owner, clock, FLASH_SHARP_LH28F400) { }
+
+intel_te28f160_device::intel_te28f160_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh16_device(mconfig, INTEL_TE28F160, "Intel TE28F160 Flash", tag, owner, clock, FLASH_INTEL_TE28F160) { }
+
+intel_e28f400_device::intel_e28f400_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh16_device(mconfig, INTEL_E28F400, "Intel E28F400 Flash", tag, owner, clock, FLASH_INTEL_E28F400) { }
+
+sharp_unk128mbit_device::sharp_unk128mbit_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
+	: intelfsh16_device(mconfig, SHARP_UNK128MBIT, "Sharp Unknown 128Mbit Flash", tag, owner, clock, FLASH_SHARP_UNK128MBIT) { }
+
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void intelfsh_device::device_start()
+{
+	m_timer = timer_alloc();
+
+	save_item( NAME(m_status) );
+	save_item( NAME(m_flash_mode) );
+	save_item( NAME(m_flash_master_lock) );
+}
+
+
+//-------------------------------------------------
+//  device_timer - handler timer events
+//-------------------------------------------------
+
+void intelfsh_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	switch( m_flash_mode )
+	{
+	case FM_READSTATUS:
+		m_status = 0x80;
+		break;
+
+	case FM_ERASEAMD4:
+		m_flash_mode = FM_NORMAL;
+		break;
+	}
+}
+
+
+//-------------------------------------------------
+//  memory_space_config - return a description of
+//  any address spaces owned by this device
+//-------------------------------------------------
+
+const address_space_config *intelfsh_device::memory_space_config(address_spacenum spacenum) const
+{
+	return (spacenum == 0) ? &m_space_config : NULL;
+}
+
+
+//-------------------------------------------------
+//  nvram_default - called to initialize NVRAM to
+//  its default state
+//-------------------------------------------------
+
+void intelfsh_device::nvram_default()
+{
+	// region always wins
+	if (m_region != NULL)
+	{
+		UINT32 bytes = m_region->bytes();
+		if (bytes > m_size)
+			bytes = m_size;
+
+		if (m_bits == 8)
+		{
+			for (offs_t offs = 0; offs < bytes; offs++)
+				m_addrspace[0]->write_byte(offs, m_region->u8(offs));
+		}
+		else
+		{
+			for (offs_t offs = 0; offs < bytes; offs += 2)
+				m_addrspace[0]->write_word(offs, m_region->u16(offs / 2));
+		}
+		return;
+	}
+
+	// otherwise, default to 0xff
+	for (offs_t offs = 0; offs < m_size; offs++)
+		m_addrspace[0]->write_byte(offs, 0xff);
+}
+
+
+//-------------------------------------------------
+//  nvram_read - called to read NVRAM from the
+//  .nv file
+//-------------------------------------------------
+
+void intelfsh_device::nvram_read(emu_file &file)
+{
+	UINT8 *buffer = global_alloc_array(UINT8, m_size);
+	file.read(buffer, m_size);
+	for (int byte = 0; byte < m_size; byte++)
+		m_addrspace[0]->write_byte(byte, buffer[byte]);
+	global_free(buffer);
+}
+
+
+//-------------------------------------------------
+//  nvram_write - called to write NVRAM to the
+//  .nv file
+//-------------------------------------------------
+
+void intelfsh_device::nvram_write(emu_file &file)
+{
+	UINT8 *buffer = global_alloc_array(UINT8, m_size);
+	for (int byte = 0; byte < m_size; byte++)
+		buffer[byte] = m_addrspace[0]->read_byte(byte);
+	file.write(buffer, m_size);
+	global_free(buffer);
+}
+
+
+//-------------------------------------------------
+//  read_full - generic read, called by the
+//  bit-width-specific readers
+//-------------------------------------------------
+
+UINT32 intelfsh_device::read_full(UINT32 address)
 {
 	UINT32 data = 0;
-	struct flash_chip *c;
-	if( chip >= FLASH_CHIPS_MAX )
-	{
-		logerror( "intelflash_read: invalid chip %d\n", chip );
-		return 0;
-	}
-	c = &chips[ chip ];
-
-	switch( c->flash_mode )
+	address += m_bank << 16;
+	switch( m_flash_mode )
 	{
 	default:
 	case FM_NORMAL:
-		switch( c->bits )
+		switch( m_bits )
 		{
 		case 8:
 			{
-				UINT8 *flash_memory = (UINT8 *)c->flash_memory;
-				data = flash_memory[ address ];
+				data = m_addrspace[0]->read_byte(address);
 			}
 			break;
 		case 16:
 			{
-				UINT16 *flash_memory = (UINT16 *)c->flash_memory;
-				data = flash_memory[ address ];
+				data = m_addrspace[0]->read_word(address * 2);
 			}
 			break;
 		}
 		break;
 	case FM_READSTATUS:
-		data = c->status;
+		data = m_status;
 		break;
 	case FM_READAMDID3:
-		switch (address)
+		if (m_maker_id == 0x04 && m_device_id == 0x35)
 		{
-			case 0:	data = c->maker_id; break;
-			case 1: data = c->device_id; break;
-			case 2: data = 0; break;
+			//used in Fujitsu 29DL16X 8bits mode
+			switch (address)
+			{
+				case 0:	data = m_maker_id; break;
+				case 2: data = m_device_id; break;
+				case 4: data = 0; break;
+			}
+		}
+		else
+		{
+			switch (address)
+			{
+				case 0:	data = m_maker_id; break;
+				case 1: data = m_device_id; break;
+				case 2: data = 0; break;
+			}
 		}
 		break;
 	case FM_READID:
 		switch (address)
 		{
 		case 0:	// maker ID
-			data = c->maker_id;
+			data = m_maker_id;
 			break;
 		case 1:	// chip ID
-			data = c->device_id;
+			data = m_device_id;
 			break;
 		case 2:	// block lock config
 			data = 0; // we don't support this yet
 			break;
 		case 3: // master lock config
-			if (c->flash_master_lock)
+			if (m_flash_master_lock)
 			{
 				data = 1;
 			}
@@ -222,50 +442,48 @@ UINT32 intelflash_read(int chip, UINT32 address)
 		break;
 	case FM_ERASEAMD4:
 		// reads outside of the erasing sector return normal data
-		if ((address < c->erase_sector) || (address >= c->erase_sector+(64*1024)))
+		if ((address < m_erase_sector) || (address >= m_erase_sector+(64*1024)))
 		{
-			switch( c->bits )
+			switch( m_bits )
 			{
 			case 8:
 				{
-					UINT8 *flash_memory = (UINT8 *)c->flash_memory;
-					data = flash_memory[ address ];
+					data = m_addrspace[0]->read_byte(address);
 				}
 				break;
 			case 16:
 				{
-					UINT16 *flash_memory = (UINT16 *)c->flash_memory;
-					data = flash_memory[ address ];
+					data = m_addrspace[0]->read_word(address * 2);
 				}
 				break;
 			}
 		}
 		else
 		{
-			c->status ^= ( 1 << 6 ) | ( 1 << 2 );
-			data = c->status;
+			m_status ^= ( 1 << 6 ) | ( 1 << 2 );
+			data = m_status;
 		}
 		break;
 	}
 
-//  logerror( "%s: intelflash_read( %d, %08x ) %08x\n", cpuexec_describe_context(machine), chip, address, data );
+//  logerror( "intelflash_read( %d, %08x ) %08x\n", chip, address, data );
 
 	return data;
 }
 
-void intelflash_write(int chip, UINT32 address, UINT32 data)
+
+//-------------------------------------------------
+//  write_full - generic write, called by the
+//  bit-width-specific writers
+//-------------------------------------------------
+
+void intelfsh_device::write_full(UINT32 address, UINT32 data)
 {
-	struct flash_chip *c;
-	if( chip >= FLASH_CHIPS_MAX )
-	{
-		logerror( "intelflash_write: invalid chip %d\n", chip );
-		return;
-	}
-	c = &chips[ chip ];
+//  logerror( "intelflash_write( %d, %08x, %08x )\n", chip, address, data );
 
-//  logerror( "%s: intelflash_write( %d, %08x, %08x )\n", cpuexec_describe_context(machine), chip, address, data );
+	address += m_bank << 16;
 
-	switch( c->flash_mode )
+	switch( m_flash_mode )
 	{
 	case FM_NORMAL:
 	case FM_READSTATUS:
@@ -275,32 +493,36 @@ void intelflash_write(int chip, UINT32 address, UINT32 data)
 		{
 		case 0xf0:
 		case 0xff:	// reset chip mode
-			c->flash_mode = FM_NORMAL;
+			m_flash_mode = FM_NORMAL;
 			break;
 		case 0x90:	// read ID
-			c->flash_mode = FM_READID;
+			m_flash_mode = FM_READID;
 			break;
 		case 0x40:
 		case 0x10:	// program
-			c->flash_mode = FM_WRITEPART1;
+			m_flash_mode = FM_WRITEPART1;
 			break;
 		case 0x50:	// clear status reg
-			c->status = 0x80;
-			c->flash_mode = FM_READSTATUS;
+			m_status = 0x80;
+			m_flash_mode = FM_READSTATUS;
 			break;
 		case 0x20:	// block erase
-			c->flash_mode = FM_CLEARPART1;
+			m_flash_mode = FM_CLEARPART1;
 			break;
 		case 0x60:	// set master lock
-			c->flash_mode = FM_SETMASTER;
+			m_flash_mode = FM_SETMASTER;
 			break;
 		case 0x70:	// read status
-			c->flash_mode = FM_READSTATUS;
+			m_flash_mode = FM_READSTATUS;
 			break;
 		case 0xaa:	// AMD ID select part 1
-			if( ( address & 0xffff ) == 0x555 )
+			if( ( address & 0xfff ) == 0x555 )
 			{
-				c->flash_mode = FM_READAMDID1;
+				m_flash_mode = FM_READAMDID1;
+			}
+			else if( ( address & 0xfff ) == 0xaaa )
+			{
+				m_flash_mode = FM_READAMDID1;
 			}
 			break;
 		default:
@@ -311,41 +533,111 @@ void intelflash_write(int chip, UINT32 address, UINT32 data)
 	case FM_READAMDID1:
 		if( ( address & 0xffff ) == 0x2aa && ( data & 0xff ) == 0x55 )
 		{
-			c->flash_mode = FM_READAMDID2;
+			m_flash_mode = FM_READAMDID2;
+		}
+		else if( ( address & 0xffff ) == 0x2aaa && ( data & 0xff ) == 0x55 )
+		{
+			m_flash_mode = FM_READAMDID2;
+		}
+		else if( ( address & 0xfff ) == 0x555 && ( data & 0xff ) == 0x55 )
+		{
+			m_flash_mode = FM_READAMDID2;
+		}
+		else if( ( address & 0x7ff ) == 0x2aa && ( data & 0xff ) == 0x55 && m_type == FLASH_AMD_29F080 )
+		{
+			m_flash_mode = FM_READAMDID2;
 		}
 		else
 		{
 			logerror( "unexpected %08x=%02x in FM_READAMDID1\n", address, data & 0xff );
-			c->flash_mode = FM_NORMAL;
+			m_flash_mode = FM_NORMAL;
 		}
 		break;
 	case FM_READAMDID2:
 		if( ( address & 0xffff ) == 0x555 && ( data & 0xff ) == 0x90 )
 		{
-			c->flash_mode = FM_READAMDID3;
+			m_flash_mode = FM_READAMDID3;
+		}
+		else if( ( address & 0xffff ) == 0x5555 && ( data & 0xff ) == 0x90 )
+		{
+			m_flash_mode = FM_READAMDID3;
+		}
+		else if( ( address & 0xfff ) == 0xaaa && ( data & 0xff ) == 0x90 )
+		{
+			m_flash_mode = FM_READAMDID3;
 		}
 		else if( ( address & 0xffff ) == 0x555 && ( data & 0xff ) == 0x80 )
 		{
-			c->flash_mode = FM_ERASEAMD1;
+			m_flash_mode = FM_ERASEAMD1;
+		}
+		else if( ( address & 0xffff ) == 0x5555 && ( data & 0xff ) == 0x80 )
+		{
+			m_flash_mode = FM_ERASEAMD1;
+		}
+		else if( ( address & 0xfff ) == 0xaaa && ( data & 0xff ) == 0x80 )
+		{
+			m_flash_mode = FM_ERASEAMD1;
 		}
 		else if( ( address & 0xffff ) == 0x555 && ( data & 0xff ) == 0xa0 )
 		{
-			c->flash_mode = FM_BYTEPROGRAM;
+			m_flash_mode = FM_BYTEPROGRAM;
+		}
+		else if( ( address & 0xffff ) == 0x5555 && ( data & 0xff ) == 0xa0 )
+		{
+			m_flash_mode = FM_BYTEPROGRAM;
+		}
+		else if( ( address & 0xfff ) == 0xaaa && ( data & 0xff ) == 0xa0 )
+		{
+			m_flash_mode = FM_BYTEPROGRAM;
 		}
 		else if( ( address & 0xffff ) == 0x555 && ( data & 0xff ) == 0xf0 )
 		{
-			c->flash_mode = FM_NORMAL;
+			m_flash_mode = FM_NORMAL;
+		}
+		else if( ( address & 0xffff ) == 0x5555 && ( data & 0xff ) == 0xf0 )
+		{
+			m_flash_mode = FM_NORMAL;
+		}
+		else if( ( address & 0xfff ) == 0xaaa && ( data & 0xff ) == 0xf0 )
+		{
+			m_flash_mode = FM_NORMAL;
+		}
+		else if( ( address & 0xffff ) == 0x5555 && ( data & 0xff ) == 0xb0 && m_maker_id == 0x62 && m_device_id == 0x13 )
+		{
+			m_flash_mode = FM_BANKSELECT;
+		}
+
+		// for AMD 29F080 address bits A11-A19 don't care
+		else if(( address & 0x7ff ) == 0x555 && ( data & 0xff ) == 0x80 && m_type == FLASH_AMD_29F080 )
+		{
+			m_flash_mode = FM_ERASEAMD1;
+		}
+		else if(( address & 0x7ff ) == 0x555 && ( data & 0xff ) == 0x90 && m_type == FLASH_AMD_29F080 )
+		{
+			m_flash_mode = FM_READAMDID3;
+		}
+		else if(( address & 0x7ff ) == 0x555 && ( data & 0xff ) == 0xa0 && m_type == FLASH_AMD_29F080 )
+		{
+			m_flash_mode = FM_BYTEPROGRAM;
+		}
+		else if(( address & 0x7ff ) == 0x555 && ( data & 0xff ) == 0xf0 && m_type == FLASH_AMD_29F080 )
+		{
+			m_flash_mode = FM_NORMAL;
 		}
 		else
 		{
 			logerror( "unexpected %08x=%02x in FM_READAMDID2\n", address, data & 0xff );
-			c->flash_mode = FM_NORMAL;
+			m_flash_mode = FM_NORMAL;
 		}
 		break;
 	case FM_ERASEAMD1:
-		if( ( address & 0xffff ) == 0x555 && ( data & 0xff ) == 0xaa )
+		if( ( address & 0xfff ) == 0x555 && ( data & 0xff ) == 0xaa )
 		{
-			c->flash_mode = FM_ERASEAMD2;
+			m_flash_mode = FM_ERASEAMD2;
+		}
+		else if( ( address & 0xfff ) == 0xaaa && ( data & 0xff ) == 0xaa )
+		{
+			m_flash_mode = FM_ERASEAMD2;
 		}
 		else
 		{
@@ -355,7 +647,15 @@ void intelflash_write(int chip, UINT32 address, UINT32 data)
 	case FM_ERASEAMD2:
 		if( ( address & 0xffff ) == 0x2aa && ( data & 0xff ) == 0x55 )
 		{
-			c->flash_mode = FM_ERASEAMD3;
+			m_flash_mode = FM_ERASEAMD3;
+		}
+		else if( ( address & 0xffff ) == 0x2aaa && ( data & 0xff ) == 0x55 )
+		{
+			m_flash_mode = FM_ERASEAMD3;
+		}
+		else if( ( address & 0xfff ) == 0x555 && ( data & 0xff ) == 0x55 )
+		{
+			m_flash_mode = FM_ERASEAMD3;
 		}
 		else
 		{
@@ -363,42 +663,47 @@ void intelflash_write(int chip, UINT32 address, UINT32 data)
 		}
 		break;
 	case FM_ERASEAMD3:
-		if( ( address & 0xffff ) == 0x555 && ( data & 0xff ) == 0x10 )
+		if( (( address & 0xfff ) == 0x555 && ( data & 0xff ) == 0x10 ) ||
+		    (( address & 0xfff ) == 0xaaa && ( data & 0xff ) == 0x10 ) )
 		{
 			// chip erase
-			memset( c->flash_memory, 0xff, c->size);
+			for (offs_t offs = 0; offs < m_size; offs++)
+				m_addrspace[0]->write_byte(offs, 0xff);
 
-			c->status = 1 << 3;
-			c->flash_mode = FM_ERASEAMD4;
+			m_status = 1 << 3;
+			m_flash_mode = FM_ERASEAMD4;
 
-			timer_adjust_oneshot( c->timer, ATTOTIME_IN_SEC( 17 ), 0 );
+			if (m_sector_is_4k)
+			{
+				m_timer->adjust( attotime::from_seconds( 1 ) );
+			}
+			else
+			{
+				m_timer->adjust( attotime::from_seconds( 16 ) );
+			}
 		}
 		else if( ( data & 0xff ) == 0x30 )
 		{
 			// sector erase
-			// clear the 64k block containing the current address to all 0xffs
-			switch( c->bits )
+			// clear the 4k/64k block containing the current address to all 0xffs
+			UINT32 base = address * ((m_bits == 16) ? 2 : 1);
+			if (m_sector_is_4k)
 			{
-			case 8:
-				{
-					UINT8 *flash_memory = (UINT8 *)c->flash_memory;
-					memset( &flash_memory[ address & ~0xffff ], 0xff, 64 * 1024 );
-					c->erase_sector = address & ~0xffff;
-				}
-				break;
-			case 16:
-				{
-					UINT16 *flash_memory = (UINT16 *)c->flash_memory;
-					memset( &flash_memory[ address & ~0x7fff ], 0xff, 64 * 1024 );
-					c->erase_sector = address & ~0x7fff;
-				}
-				break;
+				for (offs_t offs = 0; offs < 4 * 1024; offs++)
+					m_addrspace[0]->write_byte((base & ~0xfff) + offs, 0xff);
+				m_erase_sector = address & ((m_bits == 16) ? ~0x7ff : ~0xfff);
+				m_timer->adjust( attotime::from_msec( 125 ) );
+			}
+			else
+			{
+				for (offs_t offs = 0; offs < 64 * 1024; offs++)
+					m_addrspace[0]->write_byte((base & ~0xffff) + offs, 0xff);
+				m_erase_sector = address & ((m_bits == 16) ? ~0x7fff : ~0xffff);
+				m_timer->adjust( attotime::from_seconds( 1 ) );
 			}
 
-			c->status = 1 << 3;
-			c->flash_mode = FM_ERASEAMD4;
-
-			timer_adjust_oneshot( c->timer, ATTOTIME_IN_SEC( 1 ), 0 );
+			m_status = 1 << 3;
+			m_flash_mode = FM_ERASEAMD4;
 		}
 		else
 		{
@@ -406,68 +711,51 @@ void intelflash_write(int chip, UINT32 address, UINT32 data)
 		}
 		break;
 	case FM_BYTEPROGRAM:
-		switch( c->bits )
+		switch( m_bits )
 		{
 		case 8:
 			{
-				UINT8 *flash_memory = (UINT8 *)c->flash_memory;
-				flash_memory[ address ] = data;
+				m_addrspace[0]->write_byte(address, data);
 			}
 			break;
 		default:
-			logerror( "FM_BYTEPROGRAM not supported when c->bits == %d\n", c->bits );
+			logerror( "FM_BYTEPROGRAM not supported when m_bits == %d\n", m_bits );
 			break;
 		}
-		c->flash_mode = FM_NORMAL;
+		m_flash_mode = FM_NORMAL;
 		break;
 	case FM_WRITEPART1:
-		switch( c->bits )
+		switch( m_bits )
 		{
 		case 8:
 			{
-				UINT8 *flash_memory = (UINT8 *)c->flash_memory;
-				flash_memory[ address ] = data;
+				m_addrspace[0]->write_byte(address, data);
 			}
 			break;
 		case 16:
 			{
-				UINT16 *flash_memory = (UINT16 *)c->flash_memory;
-				flash_memory[ address ] = data;
+				m_addrspace[0]->write_word(address * 2, data);
 			}
 			break;
 		default:
-			logerror( "FM_WRITEPART1 not supported when c->bits == %d\n", c->bits );
+			logerror( "FM_WRITEPART1 not supported when m_bits == %d\n", m_bits );
 			break;
 		}
-		c->status = 0x80;
-		c->flash_mode = FM_READSTATUS;
+		m_status = 0x80;
+		m_flash_mode = FM_READSTATUS;
 		break;
 	case FM_CLEARPART1:
 		if( ( data & 0xff ) == 0xd0 )
 		{
 			// clear the 64k block containing the current address to all 0xffs
-			switch( c->bits )
-			{
-			case 8:
-				{
-					UINT8 *flash_memory = (UINT8 *)c->flash_memory;
-					memset( &flash_memory[ address & ~0xffff ], 0xff, 64 * 1024 );
-				}
-				break;
-			case 16:
-				{
-					UINT16 *flash_memory = (UINT16 *)c->flash_memory;
-					memset( &flash_memory[ address & ~0x7fff ], 0xff, 64 * 1024 );
-				}
-				break;
-			default:
-				logerror( "FM_CLEARPART1 not supported when c->bits == %d\n", c->bits );
-				break;
-			}
-			c->status = 0x00;
-			c->flash_mode = FM_READSTATUS;
+			UINT32 base = address * ((m_bits == 16) ? 2 : 1);
+			for (offs_t offs = 0; offs < 64 * 1024; offs++)
+				m_addrspace[0]->write_byte((base & ~0xffff) + offs, 0xff);
 
-			timer_adjust_oneshot( c->timer, ATTOTIME_IN_SEC( 1 ), 0 );
+			m_status = 0x00;
+			m_flash_mode = FM_READSTATUS;
+
+			m_timer->adjust( attotime::from_seconds( 1 ) );
 			break;
 		}
 		else
@@ -479,53 +767,20 @@ void intelflash_write(int chip, UINT32 address, UINT32 data)
 		switch( data & 0xff )
 		{
 		case 0xf1:
-			c->flash_master_lock = 1;
+			m_flash_master_lock = true;
 			break;
 		case 0xd0:
-			c->flash_master_lock = 0;
+			m_flash_master_lock = false;
 			break;
 		default:
 			logerror( "unexpected %08x=%02x in FM_SETMASTER:\n", address, data & 0xff );
 			break;
 		}
-		c->flash_mode = FM_NORMAL;
+		m_flash_mode = FM_NORMAL;
 		break;
-	}
-}
-
-void nvram_handler_intelflash(running_machine *machine, int chip,mame_file *file,int read_or_write)
-{
-	struct flash_chip *c;
-	if( chip >= FLASH_CHIPS_MAX )
-	{
-		logerror( "intelflash_nvram: invalid chip %d\n", chip );
-		return;
-	}
-	c = &chips[ chip ];
-
-	switch( c->bits )
-	{
-	case 8:
-		if (read_or_write)
-		{
-			mame_fwrite( file, c->flash_memory, c->size );
-		}
-		else if (file)
-		{
-			mame_fread( file, c->flash_memory, c->size );
-		}
-		break;
-	case 16:
-		if (read_or_write)
-		{
-			/// TODO: endian conversion
-			mame_fwrite( file, c->flash_memory, c->size );
-		}
-		else if (file)
-		{
-			mame_fread( file, c->flash_memory, c->size );
-			/// TODO: endian conversion
-		}
+	case FM_BANKSELECT:
+		m_bank = data & 0xff;
+		m_flash_mode = FM_NORMAL;
 		break;
 	}
 }

@@ -213,11 +213,21 @@
 #define COM_CLOCK	XTAL_20MHz
 #define SND_CLOCK	XTAL_16_9344MHz
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/h83002/h8.h"
 #include "sound/ymz280b.h"
+#include "machine/nvram.h"
 
-static UINT16 *vram;
+
+class coinmvga_state : public driver_device
+{
+public:
+	coinmvga_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag) { }
+
+	UINT16 *m_vram;
+	struct { int r,g,b,offs,offs_internal; } m_bgpal, m_fgpal;
+};
 
 
 /*************************
@@ -227,13 +237,13 @@ static UINT16 *vram;
 
 static VIDEO_START( coinmvga )
 {
-
 }
 
 
-static VIDEO_UPDATE( coinmvga )
+static SCREEN_UPDATE_IND16( coinmvga )
 {
-	const gfx_element *gfx = screen->machine->gfx[0];
+	coinmvga_state *state = screen.machine().driver_data<coinmvga_state>();
+	const gfx_element *gfx = screen.machine().gfx[0];
 	int count = 0x04000/2;
 
 	int y,x;
@@ -243,7 +253,7 @@ static VIDEO_UPDATE( coinmvga )
 	{
 		for (x=0;x<128;x++)
 		{
-			int tile = vram[count];
+			int tile = state->m_vram[count];
 			//int colour = tile>>12;
 			drawgfx_opaque(bitmap,cliprect,gfx,tile,0,0,0,x*8,y*8);
 
@@ -273,30 +283,29 @@ static PALETTE_INIT( coinmvga )
 
 static WRITE16_HANDLER( ramdac_bg_w )
 {
-	static int pal_offs,internal_pal_offs,r,g,b;
-
+	coinmvga_state *state = space->machine().driver_data<coinmvga_state>();
 	if(ACCESSING_BITS_8_15)
 	{
-		pal_offs = data >> 8;
-		internal_pal_offs = 0;
+		state->m_bgpal.offs = data >> 8;
+		state->m_bgpal.offs_internal = 0;
 	}
 	else //if(mem_mask == 0x00ff)
 	{
-		switch(internal_pal_offs)
+		switch(state->m_bgpal.offs_internal)
 		{
 			case 0:
-				r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-				internal_pal_offs++;
+				state->m_bgpal.r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+				state->m_bgpal.offs_internal++;
 				break;
 			case 1:
-				g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-				internal_pal_offs++;
+				state->m_bgpal.g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+				state->m_bgpal.offs_internal++;
 				break;
 			case 2:
-				b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-				palette_set_color(space->machine, pal_offs, MAKE_RGB(r, g, b));
-				internal_pal_offs = 0;
-				pal_offs++;
+				state->m_bgpal.b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+				palette_set_color(space->machine(), state->m_bgpal.offs, MAKE_RGB(state->m_bgpal.r, state->m_bgpal.g, state->m_bgpal.b));
+				state->m_bgpal.offs_internal = 0;
+				state->m_bgpal.offs++;
 				break;
 		}
 	}
@@ -305,30 +314,29 @@ static WRITE16_HANDLER( ramdac_bg_w )
 
 static WRITE16_HANDLER( ramdac_fg_w )
 {
-	static int pal_offs,internal_pal_offs,r,g,b;
-
+	coinmvga_state *state = space->machine().driver_data<coinmvga_state>();
 	if(ACCESSING_BITS_8_15)
 	{
-		pal_offs = data >> 8;
-		internal_pal_offs = 0;
+		state->m_fgpal.offs = data >> 8;
+		state->m_fgpal.offs_internal = 0;
 	}
 	else
 	{
-		switch(internal_pal_offs)
+		switch(state->m_fgpal.offs_internal)
 		{
 			case 0:
-				r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-				internal_pal_offs++;
+				state->m_fgpal.r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+				state->m_fgpal.offs_internal++;
 				break;
 			case 1:
-				g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-				internal_pal_offs++;
+				state->m_fgpal.g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+				state->m_fgpal.offs_internal++;
 				break;
 			case 2:
-				b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
-				palette_set_color(space->machine, 0x100+pal_offs, MAKE_RGB(r, g, b));
-				internal_pal_offs = 0;
-				pal_offs++;
+				state->m_fgpal.b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+				palette_set_color(space->machine(), 0x100+state->m_fgpal.offs, MAKE_RGB(state->m_fgpal.r, state->m_fgpal.g, state->m_fgpal.b));
+				state->m_fgpal.offs_internal = 0;
+				state->m_fgpal.offs++;
 				break;
 		}
 	}
@@ -337,20 +345,20 @@ static WRITE16_HANDLER( ramdac_fg_w )
 /*
 static READ16_HANDLER( test_r )
 {
-    return mame_rand(space->machine);
+    return space->machine().rand();
 }*/
 
 /*************************
 * Memory Map Information *
 *************************/
 
-static ADDRESS_MAP_START( coinmvga_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( coinmvga_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x0fffff) AM_ROM AM_REGION("maincpu", 0) //maybe not
 
 //  AM_RANGE(0x0a0000, 0x0fffff) AM_RAM
 //  AM_RANGE(0x100000, 0x1fffff) AM_RAM //colorama
-	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_BASE(&vram)
+	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_BASE_MEMBER(coinmvga_state, m_vram)
 //  AM_RANGE(0x40746e, 0x40746f) AM_READ(test_r) AM_WRITENOP //touch screen related, colorama
 //  AM_RANGE(0x403afa, 0x403afb) AM_READ(test_r) AM_WRITENOP //touch screen related, cmrltv75
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM
@@ -365,7 +373,7 @@ static ADDRESS_MAP_START( coinmvga_map, ADDRESS_SPACE_PROGRAM, 16 )
 	//0x800008 "arrow" w?
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( coinmvga_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( coinmvga_io_map, AS_IO, 8 )
 /*  Digital I/O ports (ports 4-B are valid on 16-bit H8/3xx) */
 //  AM_RANGE(H8_PORT_4, H8_PORT_4)
 //  AM_RANGE(H8_PORT_5, H8_PORT_5)
@@ -644,7 +652,7 @@ static const ymz280b_interface ymz280b_intf =
 static INTERRUPT_GEN( vblank_irq )
 {
 	//printf("1\n");
-	cpu_set_input_line(device, 2, HOLD_LINE);
+	device_set_input_line(device, 2, HOLD_LINE);
 }
 
 
@@ -652,40 +660,39 @@ static INTERRUPT_GEN( vblank_irq )
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_DRIVER_START( coinmvga )
+static MACHINE_CONFIG_START( coinmvga, coinmvga_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", H83007, CPU_CLOCK)	/* xtal */
-	MDRV_CPU_PROGRAM_MAP(coinmvga_map)
-	MDRV_CPU_IO_MAP(coinmvga_io_map)
-	MDRV_CPU_VBLANK_INT("screen", vblank_irq)	/* wrong, fix me */
+	MCFG_CPU_ADD("maincpu", H83007, CPU_CLOCK)	/* xtal */
+	MCFG_CPU_PROGRAM_MAP(coinmvga_map)
+	MCFG_CPU_IO_MAP(coinmvga_io_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_irq)	/* wrong, fix me */
 
-//  MDRV_NVRAM_HANDLER(generic_0fill)
+//  MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(640,480)
-	MDRV_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(640,480)
+	MCFG_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
+	MCFG_SCREEN_UPDATE_STATIC(coinmvga)
 
-	MDRV_GFXDECODE(coinmvga)
+	MCFG_GFXDECODE(coinmvga)
 
-	MDRV_PALETTE_INIT(coinmvga)
-	MDRV_PALETTE_LENGTH(512)
+	MCFG_PALETTE_INIT(coinmvga)
+	MCFG_PALETTE_LENGTH(512)
 
-	MDRV_VIDEO_START(coinmvga)
-	MDRV_VIDEO_UPDATE(coinmvga)
+	MCFG_VIDEO_START(coinmvga)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ymz", YMZ280B, SND_CLOCK)
-	MDRV_SOUND_CONFIG(ymz280b_intf)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymz", YMZ280B, SND_CLOCK)
+	MCFG_SOUND_CONFIG(ymz280b_intf)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 /*************************
@@ -862,7 +869,7 @@ ROM_END
 static DRIVER_INIT( colorama )
 {
 	UINT16 *ROM;
-	ROM = (UINT16 *)memory_region(machine, "maincpu");
+	ROM = (UINT16 *)machine.region("maincpu")->base();
 
 	// rte in non-irq routines? wtf? patch them to rts...
 	ROM[0x02B476/2] = 0x5470;
@@ -879,7 +886,7 @@ static DRIVER_INIT( colorama )
 static DRIVER_INIT( cmrltv75 )
 {
 	UINT16 *ROM;
-	ROM = (UINT16 *)memory_region(machine, "maincpu");
+	ROM = (UINT16 *)machine.region("maincpu")->base();
 
 	// rte in non-irq routines? wtf? patch them to rts...
 	ROM[0x056fd6/2] = 0x5470;
@@ -896,7 +903,7 @@ static DRIVER_INIT( cmrltv75 )
 *************************/
 
 /*    YEAR  NAME       PARENT    MACHINE   INPUT     INIT      ROT     COMPANY                    FULLNAME                                     FLAGS */
-GAME( 2001, colorama,  0,        coinmvga, coinmvga, colorama, ROT0,  "Coinmaster-Gaming, Ltd.", "Colorama (english)",                         GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2001, cmrltv75,  0,        coinmvga, coinmvga, cmrltv75, ROT90, "Coinmaster-Gaming, Ltd.", "Coinmaster Roulette V75 (Y2K, spanish)",     GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2000, cmkenosp,  0,        coinmvga, coinmvga, 0,        ROT90, "Coinmaster-Gaming, Ltd.", "Coinmaster Keno (Y2K, spanish, 2000-12-14)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2000, cmkenospa, cmkenosp, coinmvga, coinmvga, 0,        ROT90, "Coinmaster-Gaming, Ltd.", "Coinmaster Keno (Y2K, spanish, 2000-12-02)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2001, colorama,  0,        coinmvga, coinmvga, colorama, ROT0,  "Coinmaster-Gaming, Ltd.", "Colorama (English)",                         GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2001, cmrltv75,  0,        coinmvga, coinmvga, cmrltv75, ROT90, "Coinmaster-Gaming, Ltd.", "Coinmaster Roulette V75 (Y2K, Spanish)",     GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2000, cmkenosp,  0,        coinmvga, coinmvga, 0,        ROT90, "Coinmaster-Gaming, Ltd.", "Coinmaster Keno (Y2K, Spanish, 2000-12-14)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2000, cmkenospa, cmkenosp, coinmvga, coinmvga, 0,        ROT90, "Coinmaster-Gaming, Ltd.", "Coinmaster Keno (Y2K, Spanish, 2000-12-02)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING )

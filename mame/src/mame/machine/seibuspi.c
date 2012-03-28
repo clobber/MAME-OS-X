@@ -1,5 +1,5 @@
-#include "driver.h"
-#include "includes/seibuspi.h"
+#include "emu.h"
+#include "machine/seibuspi.h"
 
 
 

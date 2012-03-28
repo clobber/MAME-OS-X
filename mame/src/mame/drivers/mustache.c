@@ -27,10 +27,11 @@ YM2151:
 . Pin 24 - 3577600.55 OSC1/4
 
 ***************************************************************************/
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "audio/seibu.h"	// for seibu_sound_decrypt on the MAIN cpu (not sound)
 #include "audio/t5182.h"
+#include "includes/mustache.h"
 
 #define XTAL1  14318180
 #define XTAL2  18432000
@@ -41,34 +42,15 @@ YM2151:
 #define YM_CLOCK    (XTAL1/4)
 
 
-WRITE8_HANDLER( mustache_videoram_w );
-WRITE8_HANDLER( mustache_scroll_w );
-WRITE8_HANDLER ( mustache_video_control_w);
-VIDEO_START( mustache );
-VIDEO_UPDATE( mustache );
-PALETTE_INIT( mustache );
-
-
-static READ8_HANDLER(t5182shared_r)
-{
-	return t5182_sharedram[offset];
-}
-
-static WRITE8_HANDLER(t5182shared_w)
-{
-	t5182_sharedram[offset] = data;
-}
-
-
-static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(mustache_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(mustache_videoram_w) AM_BASE_MEMBER(mustache_state, m_videoram)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(t5182_sound_irq_w)
 	AM_RANGE(0xd001, 0xd001) AM_READ(t5182_sharedram_semaphore_snd_r)
 	AM_RANGE(0xd002, 0xd002) AM_WRITE(t5182_sharedram_semaphore_main_acquire_w)
 	AM_RANGE(0xd003, 0xd003) AM_WRITE(t5182_sharedram_semaphore_main_release_w)
-	AM_RANGE(0xd400, 0xd4ff) AM_READWRITE(t5182shared_r, t5182shared_w)
+	AM_RANGE(0xd400, 0xd4ff) AM_READWRITE(t5182_sharedram_r, t5182_sharedram_w)
 	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("P1")
 	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("P2")
 	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("START")
@@ -76,7 +58,7 @@ static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("DSWB")
 	AM_RANGE(0xd806, 0xd806) AM_WRITE(mustache_scroll_w)
 	AM_RANGE(0xd807, 0xd807) AM_WRITE(mustache_video_control_w)
-	AM_RANGE(0xe800, 0xefff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xe800, 0xefff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(mustache_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -105,25 +87,25 @@ static INPUT_PORTS_START( mustache )
 	PORT_BIT( 0xf9, IP_ACTIVE_LOW, IPT_UNUSED  )
 
 	PORT_START("DSWA")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW 2:!1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x06, 0x04, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x06, 0x04, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW 2:!2,!3")
 	PORT_DIPSETTING(    0x06, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW 2:!4,!5")
 	PORT_DIPSETTING(    0x10, "1" )
 	PORT_DIPSETTING(    0x18, "3" )
 	PORT_DIPSETTING(    0x08, "4" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW 2:!6")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("DSWB")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW 1:!1,!2,!3")
 	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
@@ -132,15 +114,16 @@ static INPUT_PORTS_START( mustache )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW 1:!4,!5")
 	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x18, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
-	PORT_SERVICE( 0x20, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Free_Play ) )
+	PORT_SERVICE( 0x20, IP_ACTIVE_LOW ) PORT_DIPLOCATION("SW 1:!6")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Free_Play ) ) PORT_DIPLOCATION("SW 1:!7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+// There is an 8th dipswitch here, which controls screen flip, but the operator sheet implies it does it via hardware, i.e. not readable by cpu. May need further investigation.
 
 	PORT_START(T5182COINPORT)
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_IMPULSE(2)
@@ -181,8 +164,9 @@ static TIMER_CALLBACK( clear_irq_cb )
 
 static INTERRUPT_GEN( assert_irq )
 {
-	cpu_set_input_line(device, 0, ASSERT_LINE);
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 14288), NULL, 0, clear_irq_cb);
+	mustache_state *state = device->machine().driver_data<mustache_state>();
+	device_set_input_line(device, 0, ASSERT_LINE);
+    state->m_clear_irq_timer->adjust(downcast<cpu_device *>(device)->cycles_to_attotime(14288));
        /* Timing here is an educated GUESS, Z80 /INT must stay high so the irq
           fires no less than TWICE per frame, else game doesn't work right.
       6000000 / 56.747 = 105732.4616 cycles per frame, we'll call it A
@@ -194,40 +178,47 @@ static INTERRUPT_GEN( assert_irq )
        */
 }
 
-static MACHINE_DRIVER_START( mustache )
+static MACHINE_START( mustache )
+{
+	mustache_state *state = machine.driver_data<mustache_state>();
+	state->m_clear_irq_timer = machine.scheduler().timer_alloc(FUNC(clear_irq_cb));
+}
+
+static MACHINE_CONFIG_START( mustache, mustache_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(memmap)
-	MDRV_CPU_VBLANK_INT("screen", assert_irq)
+	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(memmap)
+	MCFG_CPU_VBLANK_INT("screen", assert_irq)
 
-	MDRV_CPU_ADD(CPUTAG_T5182,Z80, T5182_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(t5182_map)
-	MDRV_CPU_IO_MAP(t5182_io)
+	MCFG_CPU_ADD(CPUTAG_T5182,Z80, T5182_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(t5182_map)
+	MCFG_CPU_IO_MAP(t5182_io)
+
+	MCFG_MACHINE_START(mustache)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(56.747)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0, 31*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(56.747)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0, 31*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(mustache)
 
-	MDRV_GFXDECODE(mustache)
-	MDRV_PALETTE_LENGTH(8*16+16*8)
+	MCFG_GFXDECODE(mustache)
+	MCFG_PALETTE_LENGTH(8*16+16*8)
 
-	MDRV_PALETTE_INIT(mustache)
-	MDRV_VIDEO_START(mustache)
-	MDRV_VIDEO_UPDATE(mustache)
+	MCFG_PALETTE_INIT(mustache)
+	MCFG_VIDEO_START(mustache)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, YM_CLOCK)
-	MDRV_SOUND_CONFIG(t5182_ym2151_interface)
-	MDRV_SOUND_ROUTE(0, "mono", 1.0)
-	MDRV_SOUND_ROUTE(1, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM2151, YM_CLOCK)
+	MCFG_SOUND_CONFIG(t5182_ym2151_interface)
+	MCFG_SOUND_ROUTE(0, "mono", 1.0)
+	MCFG_SOUND_ROUTE(1, "mono", 1.0)
+MACHINE_CONFIG_END
 
 ROM_START( mustache )
 	ROM_REGION( 0x20000, "maincpu", 0 )
@@ -261,11 +252,11 @@ static DRIVER_INIT( mustache )
 {
 	int i;
 
-	int G1 = memory_region_length(machine, "gfx1")/3;
-	int G2 = memory_region_length(machine, "gfx2")/2;
-	UINT8 *gfx1 = memory_region(machine, "gfx1");
-	UINT8 *gfx2 = memory_region(machine, "gfx2");
-	UINT8 *buf=alloc_array_or_die(UINT8, G2*2);
+	int G1 = machine.region("gfx1")->bytes()/3;
+	int G2 = machine.region("gfx2")->bytes()/2;
+	UINT8 *gfx1 = machine.region("gfx1")->base();
+	UINT8 *gfx2 = machine.region("gfx2")->base();
+	UINT8 *buf=auto_alloc_array(machine, UINT8, G2*2);
 
 	/* BG data lines */
 	for (i=0;i<G1; i++)
@@ -301,9 +292,9 @@ static DRIVER_INIT( mustache )
 	for (i = 0; i < 2*G2; i++)
 		gfx2[i] = buf[BITSWAP24(i,23,22,21,20,19,18,17,16,15,12,11,10,9,8,7,6,5,4,13,14,3,2,1,0)];
 
-	free(buf);
+	auto_free(machine, buf);
 	seibu_sound_decrypt(machine,"maincpu",0x8000);
 }
 
 
-GAME( 1987, mustache, 0, mustache, mustache, mustache, ROT90, "[Seibu Kaihatsu] (March license)", "Mustache Boy", 0 )
+GAME( 1987, mustache, 0, mustache, mustache, mustache, ROT90, "Seibu Kaihatsu (March license)", "Mustache Boy", 0 )

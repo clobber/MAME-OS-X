@@ -150,7 +150,6 @@ static CPU_RESET( ppc403 )
 static CPU_EXECUTE( ppc403 )
 {
 	UINT32 fit_trigger_cycle;
-	ppc_icount = cycles;
 	ppc_tb_base_icount = cycles;
 
 	fit_trigger_cycle = 0x7fffffff;
@@ -244,8 +243,6 @@ static CPU_EXECUTE( ppc403 )
 
 	// update timebase
 	ppc.tb += (ppc_tb_base_icount - ppc_icount);
-
-	return cycles - ppc_icount;
 }
 
 void ppc403_exception(int exception)
@@ -275,7 +272,7 @@ void ppc403_exception(int exception)
 		}
 
 		case EXCEPTION_TRAP:			/* Program exception / Trap */
-			{
+		{
 				UINT32 msr = ppc_get_msr();
 
 				SRR0 = ppc.pc;
@@ -296,7 +293,7 @@ void ppc403_exception(int exception)
 		}
 
 		case EXCEPTION_SYSTEM_CALL:		/* System call */
-			{
+		{
 				UINT32 msr = ppc_get_msr();
 
 				SRR0 = ppc.npc;
@@ -637,7 +634,7 @@ static void ppc403_spu_w(UINT32 a, UINT8 d)
 
 						for (i=0; i < length; i++)
 						{
-							memory_write_byte_32be(ppc.program, ppc.dma[ch].da++, spu_rx_dma_ptr[i]);
+							ppc.program->write_byte(ppc.dma[ch].da++, spu_rx_dma_ptr[i]);
 						}
 					}
 
@@ -797,7 +794,7 @@ static void ppc403_dma_exec(int ch)
 				if( ppc.dma[ch].cr & DMA_TD )	/* peripheral to mem */
 				{
 					// nothing to do for now */
-					}
+				}
 				else							/* mem to peripheral */
 				{
 
@@ -812,7 +809,7 @@ static void ppc403_dma_exec(int ch)
 							int length = ppc.dma[ch].ct;
 
 							for( i=0; i < length; i++ ) {
-								spu_tx_dma_ptr[i] = memory_read_byte_32be(ppc.program, ppc.dma[ch].da++);
+								spu_tx_dma_ptr[i] = ppc.program->read_byte(ppc.dma[ch].da++);
 							}
 							spu_tx_dma_handler(length);
 						}
@@ -909,47 +906,47 @@ static void ppc403_dma_exec(int ch)
 
 /*********************************************************************************/
 
-static UINT8 ppc403_read8(const address_space *space, UINT32 a)
+static UINT8 ppc403_read8(address_space *space, UINT32 a)
 {
 	if(a >= 0x40000000 && a <= 0x4000000f)		/* Serial Port */
 		return ppc403_spu_r(a);
-	return memory_read_byte_32be(space, a);
+	return space->read_byte(a);
 }
 
 #define ppc403_read16	memory_read_word_32be
 #define ppc403_read32	memory_read_dword_32be
 
-static void ppc403_write8(const address_space *space, UINT32 a, UINT8 d)
+static void ppc403_write8(address_space *space, UINT32 a, UINT8 d)
 {
 	if( a >= 0x40000000 && a <= 0x4000000f )		/* Serial Port */
 	{
 		ppc403_spu_w(a, d);
 		return;
 	}
-	memory_write_byte_32be(space, a, d);
+	space->write_byte(a, d);
 }
 
 #define ppc403_write16	memory_write_word_32be
 #define ppc403_write32	memory_write_dword_32be
 
-static UINT16 ppc403_read16_unaligned(const address_space *space, UINT32 a)
+static UINT16 ppc403_read16_unaligned(address_space *space, UINT32 a)
 {
 	fatalerror("ppc: Unaligned read16 %08X at %08X", a, ppc.pc);
 	return 0;
 }
 
-static UINT32 ppc403_read32_unaligned(const address_space *space, UINT32 a)
+static UINT32 ppc403_read32_unaligned(address_space *space, UINT32 a)
 {
 	fatalerror("ppc: Unaligned read32 %08X at %08X", a, ppc.pc);
 	return 0;
 }
 
-static void ppc403_write16_unaligned(const address_space *space, UINT32 a, UINT16 d)
+static void ppc403_write16_unaligned(address_space *space, UINT32 a, UINT16 d)
 {
 	fatalerror("ppc: Unaligned write16 %08X, %04X at %08X", a, d, ppc.pc);
 }
 
-static void ppc403_write32_unaligned(const address_space *space, UINT32 a, UINT32 d)
+static void ppc403_write32_unaligned(address_space *space, UINT32 a, UINT32 d)
 {
 	fatalerror("ppc: Unaligned write32 %08X, %08X at %08X", a, d, ppc.pc);
 }

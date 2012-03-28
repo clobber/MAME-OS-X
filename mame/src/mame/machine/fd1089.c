@@ -119,7 +119,7 @@ CPU #     Type  Status   Game              Seed   Unencrypted data range
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "fd1089.h"
 
 
@@ -397,15 +397,21 @@ static UINT16 fd1089_decrypt(offs_t addr,UINT16 val,const UINT8 *key,int opcode,
 
 static UINT16 *decrypted;
 
-static void sys16_decrypt(running_machine *machine, const UINT8 *key,int cputype)
+static void clear_decrypted(running_machine &machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT16 *rom = (UINT16 *)memory_region(machine, "maincpu");
-	int size = memory_region_length(machine, "maincpu");
+	decrypted = NULL;
+}
+
+static void sys16_decrypt(running_machine &machine, const UINT8 *key,int cputype)
+{
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
+	int size = machine.region("maincpu")->bytes();
 	int A;
 	decrypted = auto_alloc_array(machine, UINT16, size/2);
 
-	memory_set_decrypted_region(space, 0x000000, size - 1, decrypted);
+	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(clear_decrypted), &machine));
+	space->set_decrypted_region(0x000000, size - 1, decrypted);
 
 	for (A = 0;A < size;A+=2)
 	{
@@ -424,13 +430,13 @@ void *fd1089_get_decrypted_base(void)
 	return decrypted;
 }
 
-void fd1089a_decrypt(running_machine *machine)
+void fd1089a_decrypt(running_machine &machine)
 {
-	sys16_decrypt(machine, memory_region(machine, "fd1089a"), FD1089A);
+	sys16_decrypt(machine, machine.region("fd1089a")->base(), FD1089A);
 }
 
-void fd1089b_decrypt(running_machine *machine)
+void fd1089b_decrypt(running_machine &machine)
 {
-	sys16_decrypt(machine, memory_region(machine, "fd1089b"), FD1089B);
+	sys16_decrypt(machine, machine.region("fd1089b")->base(), FD1089B);
 }
 

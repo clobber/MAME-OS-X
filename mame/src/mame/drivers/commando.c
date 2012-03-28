@@ -38,32 +38,19 @@ write:
 ****************************************************************************
 
 Note : there is an ingame typo bug that doesn't display the bonus life values
-       correctly on the title screen in 'commando', 'commandj' and 'spaceinv'.
+       correctly on the title screen in 'commando', 'commandoj' and 'spaceinv'.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/2203intf.h"
+#include "includes/commando.h"
 
-extern UINT8 *commando_videoram2, *commando_colorram2;
-
-extern WRITE8_HANDLER( commando_videoram_w );
-extern WRITE8_HANDLER( commando_colorram_w );
-extern WRITE8_HANDLER( commando_videoram2_w );
-extern WRITE8_HANDLER( commando_colorram2_w );
-extern WRITE8_HANDLER( commando_scrollx_w );
-extern WRITE8_HANDLER( commando_scrolly_w );
-extern WRITE8_HANDLER( commando_c804_w );
-
-extern VIDEO_START( commando );
-extern VIDEO_UPDATE( commando );
-extern VIDEO_EOF( commando );
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( commando_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( commando_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
@@ -74,16 +61,16 @@ static ADDRESS_MAP_START( commando_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(commando_c804_w)
 	AM_RANGE(0xc808, 0xc809) AM_WRITE(commando_scrollx_w)
 	AM_RANGE(0xc80a, 0xc80b) AM_WRITE(commando_scrolly_w)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(commando_videoram2_w) AM_BASE(&commando_videoram2)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(commando_colorram2_w) AM_BASE(&commando_colorram2)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(commando_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(commando_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(commando_videoram2_w) AM_BASE_MEMBER(commando_state, m_videoram2)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(commando_colorram2_w) AM_BASE_MEMBER(commando_state, m_colorram2)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(commando_videoram_w) AM_BASE_MEMBER(commando_state, m_videoram)
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(commando_colorram_w) AM_BASE_MEMBER(commando_state, m_colorram)
 	AM_RANGE(0xe000, 0xfdff) AM_RAM
-	AM_RANGE(0xfe00, 0xff7f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xfe00, 0xff7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xff80, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -167,7 +154,7 @@ static INPUT_PORTS_START( commando )
 	PORT_DIPSETTING(    0xc0, DEF_STR( Cocktail ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( commandu )
+static INPUT_PORTS_START( commandou )
 	PORT_INCLUDE(commando)
 
 	PORT_MODIFY("DSW2")
@@ -231,48 +218,73 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( commando_interrupt )
 {
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	// RST 10h - VBLANK
+	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	// RST 10h - VBLANK
 }
 
 /* Machine Driver */
 
-static MACHINE_DRIVER_START( commando )
-	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", Z80, PHI_MAIN)	// ???
-	MDRV_CPU_PROGRAM_MAP(commando_map)
-	MDRV_CPU_VBLANK_INT("screen", commando_interrupt)
+static MACHINE_START( commando )
+{
+	commando_state *state = machine.driver_data<commando_state>();
 
-	MDRV_CPU_ADD("audiocpu", Z80, PHI_B)	// 3 MHz
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)
+	state->m_audiocpu = machine.device("audiocpu");
 
-	// video hardware
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	state->save_item(NAME(state->m_scroll_x));
+	state->save_item(NAME(state->m_scroll_y));
+}
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+static MACHINE_RESET( commando )
+{
+	commando_state *state = machine.driver_data<commando_state>();
 
-	MDRV_GFXDECODE(commando)
-	MDRV_PALETTE_LENGTH(256)
+	state->m_scroll_x[0] = 0;
+	state->m_scroll_x[1] = 0;
+	state->m_scroll_y[0] = 0;
+	state->m_scroll_y[1] = 0;
+}
 
-	MDRV_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MDRV_VIDEO_START(commando)
-	MDRV_VIDEO_UPDATE(commando)
-	MDRV_VIDEO_EOF(commando)
 
-	// sound hardware
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+static MACHINE_CONFIG_START( commando, commando_state )
 
-	MDRV_SOUND_ADD("ym1", YM2203, PHI_B/2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", Z80, PHI_MAIN)	// ???
+	MCFG_CPU_PROGRAM_MAP(commando_map)
+	MCFG_CPU_VBLANK_INT("screen", commando_interrupt)
 
-	MDRV_SOUND_ADD("ym2", YM2203, PHI_B/2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
-MACHINE_DRIVER_END
+	MCFG_CPU_ADD("audiocpu", Z80, PHI_B)	// 3 MHz
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 4*60)
+
+	MCFG_MACHINE_START(commando)
+	MCFG_MACHINE_RESET(commando)
+
+	/* video hardware */
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_UPDATE_STATIC(commando)
+	MCFG_SCREEN_VBLANK_STATIC(commando)
+
+	MCFG_GFXDECODE(commando)
+	MCFG_PALETTE_LENGTH(256)
+
+	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
+	MCFG_VIDEO_START(commando)
+
+	/* sound hardware */
+	MCFG_SPEAKER_STANDARD_MONO("mono")
+
+	MCFG_SOUND_ADD("ym1", YM2203, PHI_B/2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+
+	MCFG_SOUND_ADD("ym2", YM2203, PHI_B/2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+MACHINE_CONFIG_END
+
 
 /* ROMs */
 
@@ -386,7 +398,7 @@ ROM_END
 
 ROM_START( commandob )
 	ROM_REGION( 2*0x10000, "maincpu", 0 )	/* 64k for code + 64k for decrypted opcodes */
-	ROM_LOAD( "commandb_04_9m_27256.bin",  0x0000, 0x8000, CRC(348a7654) SHA1(f3668c47c154a9c7d7afeabb0259c9bc56e847ac) )
+	ROM_LOAD( "commandob_04_9m_27256.bin",  0x0000, 0x8000, CRC(348a7654) SHA1(f3668c47c154a9c7d7afeabb0259c9bc56e847ac) )
 	ROM_LOAD( "cm03.8m",  0x8000, 0x4000, CRC(35486542) SHA1(531a85c9e03970ce037be84f2240c2df6f6e3ec1) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
@@ -425,7 +437,7 @@ ROM_START( commandob )
            and the CPU1 (a Z80 compatible NEC D780C-1). This sub-board is plugged on what seems to be
            a ROM socket. */
 	ROM_REGION( 0x0200, "plds", 0 )
-	ROM_LOAD( "commandb_pal16l8a.bin", 0x0000, 0x0104, NO_DUMP ) /* I Didn't try to dump it... */
+	ROM_LOAD( "commandob_pal16l8a.bin", 0x0000, 0x0104, NO_DUMP ) /* I Didn't try to dump it... */
 ROM_END
 
 ROM_START( sinvasn )
@@ -504,12 +516,12 @@ ROM_END
 
 static DRIVER_INIT( commando )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT8 *rom = memory_region(machine, "maincpu");
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *rom = machine.region("maincpu")->base();
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0xc000);
 	int A;
 
-	memory_set_decrypted_region(space, 0x0000, 0xbfff, decrypt);
+	space->set_decrypted_region(0x0000, 0xbfff, decrypt);
 
 	// the first opcode is *not* encrypted
 	decrypt[0] = rom[0];
@@ -524,12 +536,12 @@ static DRIVER_INIT( commando )
 
 static DRIVER_INIT( spaceinv )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	UINT8 *rom = memory_region(machine, "maincpu");
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	UINT8 *rom = machine.region("maincpu")->base();
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0xc000);
 	int A;
 
-	memory_set_decrypted_region(space, 0x0000, 0xbfff, decrypt);
+	space->set_decrypted_region(0x0000, 0xbfff, decrypt);
 
 	// the first opcode *is* encrypted
 	for (A = 0; A < 0xc000; A++)
@@ -543,9 +555,9 @@ static DRIVER_INIT( spaceinv )
 
 /* Game Drivers */
 
-GAME( 1985, commando, 0,        commando, commando, commando, ROT270, "Capcom", "Commando (World)", 0 )
-GAME( 1985, commandou,commando, commando, commandu, commando, ROT270, "Capcom (Data East USA license)", "Commando (US)", 0 )
-GAME( 1985, commandoj,commando, commando, commando, commando, ROT270, "Capcom", "Senjou no Ookami", 0 )
-GAME( 1985, commandob,commando, commando, commando, spaceinv, ROT270, "bootleg", "Commando (bootleg)", 0 )
-GAME( 1985, sinvasn,  commando, commando, commando, commando, ROT270, "Capcom", "Space Invasion (Europe)", 0 )
-GAME( 1985, sinvasnb, commando, commando, commando, spaceinv, ROT270, "bootleg", "Space Invasion (bootleg)", 0 )
+GAME( 1985, commando,  0,        commando, commando, commando, ROT270, "Capcom", "Commando (World)", GAME_SUPPORTS_SAVE )
+GAME( 1985, commandou, commando, commando, commandou,commando, ROT270, "Capcom (Data East USA license)", "Commando (US)", GAME_SUPPORTS_SAVE )
+GAME( 1985, commandoj, commando, commando, commando, commando, ROT270, "Capcom", "Senjou no Ookami", GAME_SUPPORTS_SAVE )
+GAME( 1985, commandob, commando, commando, commando, spaceinv, ROT270, "bootleg", "Commando (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1985, sinvasn,   commando, commando, commando, commando, ROT270, "Capcom", "Space Invasion (Europe)", GAME_SUPPORTS_SAVE )
+GAME( 1985, sinvasnb,  commando, commando, commando, spaceinv, ROT270, "bootleg", "Space Invasion (bootleg)", GAME_SUPPORTS_SAVE )

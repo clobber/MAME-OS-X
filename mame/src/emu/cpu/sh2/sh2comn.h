@@ -11,14 +11,17 @@
 #ifndef __SH2COMN_H__
 #define __SH2COMN_H__
 
-#include "timer.h"
 
 #define USE_SH2DRC
+
+// do we use a timer for the DMA, or have it in CPU_EXECUTE
+#define USE_TIMER_FOR_DMA
 
 #ifdef USE_SH2DRC
 #include "cpu/drcfe.h"
 #include "cpu/drcuml.h"
 #include "cpu/drcumlsh.h"
+class sh2_frontend;
 #endif
 
 #define SH2_CODE_XOR(a)		((a) ^ NATIVE_ENDIAN_VALUE_LE_BE(2,0))
@@ -110,42 +113,51 @@ typedef struct
 	UINT32 target;				// target for jmp/jsr/etc so the delay slot can't kill it
 	irq_entry     irq_queue[16];
 
-	int pcfsel;	     			// last pcflush entry set
+	int pcfsel;	    			// last pcflush entry set
 	int maxpcfsel;				// highest valid pcflush entry
 	UINT32 pcflushes[16];			// pcflush entries
 
 	INT8	irq_line_state[17];
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
-	const address_space *internal;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *internal;
 	UINT32	*m;
 	INT8  nmi_line_state;
 
-	UINT16 	frc;
-	UINT16 	ocra, ocrb, icr;
-	UINT64 	frc_base;
+	UINT16	frc;
+	UINT16	ocra, ocrb, icr;
+	UINT64	frc_base;
 
 	int		frt_input;
 	int 	internal_irq_level;
 	int 	internal_irq_vector;
+	int				icount;
 
 	emu_timer *timer;
-	emu_timer *dma_timer[2];
+	emu_timer *dma_current_active_timer[2];
 	int     dma_timer_active[2];
 
+	int active_dma_incs[2];
+	int active_dma_incd[2];
+	int active_dma_size[2];
+	int active_dma_steal[2];
+	UINT32 active_dma_src[2];
+	UINT32 active_dma_dst[2];
+	UINT32 active_dma_count[2];
+
 	int     is_slave, cpu_type;
-	int  (*dma_callback_kludge)(UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_kludge)(device_t *device, UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_fifo_data_available)(device_t *device, UINT32 src, UINT32 dst, UINT32 data, int size);
 
 	void	(*ftcsr_read_callback)(UINT32 data);
 
 #ifdef USE_SH2DRC
-	drccache *			cache;			       	/* pointer to the DRC code cache */
+	drc_cache *			cache;			    	/* pointer to the DRC code cache */
 	drcuml_state *		drcuml;					/* DRC UML generator state */
-	drcfe_state *		drcfe;					/* pointer to the DRC front-end state */
+	sh2_frontend *		drcfe;					/* pointer to the DRC front-end state */
 	UINT32				drcoptions;			/* configurable DRC options */
-
-	int				icount;
 
 	/* internal stuff */
 	UINT8				cache_dirty;		    	/* true if we need to flush the cache */
@@ -157,25 +169,49 @@ typedef struct
 	UINT32				irq;				/* irq we're taking */
 
 	/* register mappings */
-	drcuml_parameter	regmap[16];		     		/* parameter to register mappings for all 16 integer registers */
+	uml::parameter		regmap[16];		    		/* parameter to register mappings for all 16 integer registers */
 
-	drcuml_codehandle *	entry;			    		/* entry point */
-	drcuml_codehandle *	read8;					/* read byte */
-	drcuml_codehandle *	write8;					/* write byte */
-	drcuml_codehandle *	read16;					/* read half */
-	drcuml_codehandle *	write16;		    		/* write half */
-	drcuml_codehandle *	read32;					/* read word */
-	drcuml_codehandle *	write32;		    		/* write word */
+	uml::code_handle *	entry;			    		/* entry point */
+	uml::code_handle *	read8;					/* read byte */
+	uml::code_handle *	write8;					/* write byte */
+	uml::code_handle *	read16;					/* read half */
+	uml::code_handle *	write16;		    		/* write half */
+	uml::code_handle *	read32;					/* read word */
+	uml::code_handle *	write32;		    		/* write word */
 
-	drcuml_codehandle *	interrupt;				/* interrupt */
-	drcuml_codehandle *	nocode;					/* nocode */
-	drcuml_codehandle *	out_of_cycles;				/* out of cycles exception handler */
+	uml::code_handle *	interrupt;				/* interrupt */
+	uml::code_handle *	nocode;					/* nocode */
+	uml::code_handle *	out_of_cycles;				/* out of cycles exception handler */
 #endif
-} SH2;
+} sh2_state;
 
-void sh2_common_init(SH2 *sh2, const device_config *device, cpu_irq_callback irqcallback);
-void sh2_recalc_irq(SH2 *sh2);
-void sh2_set_irq_line(SH2 *sh2, int irqline, int state);
-void sh2_exception(SH2 *sh2, const char *message, int irqline);
+#ifdef USE_SH2DRC
+class sh2_frontend : public drc_frontend
+{
+public:
+	sh2_frontend(sh2_state &state, UINT32 window_start, UINT32 window_end, UINT32 max_sequence);
+
+protected:
+	virtual bool describe(opcode_desc &desc, const opcode_desc *prev);
+
+private:
+	bool describe_group_0(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_2(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_3(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_4(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_6(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_8(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_12(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+
+	sh2_state &m_context;
+};
+#endif
+
+void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callback irqcallback);
+void sh2_recalc_irq(sh2_state *sh2);
+void sh2_set_irq_line(sh2_state *sh2, int irqline, int state);
+void sh2_exception(sh2_state *sh2, const char *message, int irqline);
+void sh2_do_dma(sh2_state *sh2, int dma);
+void sh2_notify_dma_data_available(device_t *device);
 
 #endif /* __SH2COMN_H__ */

@@ -7,7 +7,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/rp5h01.h"
 
 
@@ -41,19 +41,11 @@ struct _rp5h01_state
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE rp5h01_state *get_safe_token(const device_config *device)
+INLINE rp5h01_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert((device->type == RP5H01));
-	return (rp5h01_state *)device->token;
-}
-
-INLINE const rp5h01_interface *get_interface(const device_config *device)
-{
-	assert(device != NULL);
-	assert((device->type == RP5H01));
-	return (const rp5h01_interface *) device->static_config;
+	assert((device->type() == RP5H01));
+	return (rp5h01_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 /***************************************************************************
@@ -180,16 +172,17 @@ READ8_DEVICE_HANDLER( rp5h01_data_r )
 static DEVICE_START( rp5h01 )
 {
 	rp5h01_state *rp5h01 = get_safe_token(device);
-	const rp5h01_interface *intf = get_interface(device);
 
-	rp5h01->data = &(memory_region(device->machine, intf->region)[intf->offset]);
+	assert(device->static_config() == NULL);
+
+	rp5h01->data = *device->region();
 
 	/* register for state saving */
-	state_save_register_device_item(device, 0, rp5h01->counter);
-	state_save_register_device_item(device, 0, rp5h01->counter_mode);
-	state_save_register_device_item(device, 0, rp5h01->enabled);
-	state_save_register_device_item(device, 0, rp5h01->old_reset);
-	state_save_register_device_item(device, 0, rp5h01->old_clock);
+	device->save_item(NAME(rp5h01->counter));
+	device->save_item(NAME(rp5h01->counter_mode));
+	device->save_item(NAME(rp5h01->enabled));
+	device->save_item(NAME(rp5h01->old_reset));
+	device->save_item(NAME(rp5h01->old_clock));
 }
 
 /*-------------------------------------------------
@@ -217,5 +210,7 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
 #define DEVTEMPLATE_NAME		"RP5H01"
 #define DEVTEMPLATE_FAMILY		"RP5H01"
-#define DEVTEMPLATE_CLASS		DEVICE_CLASS_PERIPHERAL
 #include "devtempl.h"
+
+
+DEFINE_LEGACY_DEVICE(RP5H01, rp5h01);

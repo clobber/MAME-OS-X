@@ -18,6 +18,17 @@
 
 #define VERBOSE 0
 
+#ifdef USE_SH4DRC
+#include "cpu/drcfe.h"
+#include "cpu/drcuml.h"
+#include "cpu/drcumlsh.h"
+
+class sh4_frontend;
+#endif
+
+#define CPU_TYPE_SH3	(2)
+#define CPU_TYPE_SH4	(3)
+
 #define LOG(x)	do { if (VERBOSE) logerror x; } while (0)
 
 #define EXPPRI(pl,po,p,n)	(((4-(pl)) << 24) | ((15-(po)) << 16) | ((p) << 8) | (255-(n)))
@@ -61,12 +72,63 @@ typedef struct
 	int		exception_requesting[128];
 
 	INT8	irq_line_state[17];
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *internal;
-	const address_space *program;
-	const address_space *io;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *internal;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
+
+	// sh4 internal
 	UINT32	*m;
+
+	// timer regs handled manually for reuse
+	UINT32 SH4_TSTR;
+	UINT32 SH4_TCNT0;
+	UINT32 SH4_TCNT1;
+	UINT32 SH4_TCNT2;
+	UINT32 SH4_TCR0;
+	UINT32 SH4_TCR1;
+	UINT32 SH4_TCR2;
+	UINT32 SH4_TCOR0;
+	UINT32 SH4_TCOR1;
+	UINT32 SH4_TCOR2;
+	UINT32 SH4_TOCR;
+	UINT32 SH4_TCPR2;
+
+	// INTC regs
+	UINT32 SH4_IPRA;
+
+	UINT32 SH4_IPRC;
+
+	// DMAC regs
+	UINT32 SH4_SAR0;
+	UINT32 SH4_SAR1;
+	UINT32 SH4_SAR2;
+	UINT32 SH4_SAR3;
+
+	UINT32 SH4_DAR0;
+	UINT32 SH4_DAR1;
+	UINT32 SH4_DAR2;
+	UINT32 SH4_DAR3;
+
+	UINT32 SH4_CHCR0;
+	UINT32 SH4_CHCR1;
+	UINT32 SH4_CHCR2;
+	UINT32 SH4_CHCR3;
+
+	UINT32 SH4_DMATCR0;
+	UINT32 SH4_DMATCR1;
+	UINT32 SH4_DMATCR2;
+	UINT32 SH4_DMATCR3;
+
+	UINT32 SH4_DMAOR;
+
+
+	// sh3 internal
+	UINT32  m_sh3internal_upper[0x3000/4];
+	UINT32  m_sh3internal_lower[0x1000];
+
 	INT8	nmi_line_state;
 
 	UINT8 sleep_mode;
@@ -82,6 +144,13 @@ typedef struct
 	emu_timer *timer[3];
 	UINT32	refresh_timer_base;
 	int     dma_timer_active[4];
+	UINT32	dma_source[4];
+	UINT32	dma_destination[4];
+	UINT32	dma_count[4];
+	int		dma_wordsize[4];
+	int		dma_source_increment[4];
+	int		dma_destination_increment[4];
+	int		dma_mode[4];
 
 	int 	sh4_icount;
 	int     is_slave;
@@ -98,7 +167,88 @@ typedef struct
 	UINT32 sh4_tlb_data[64];
 	UINT8 sh4_mmu_enabled;
 
-} SH4;
+	int cpu_type;
+
+#ifdef USE_SH4DRC
+	int	icount;
+
+	int pcfsel;	    			// last pcflush entry set
+	int maxpcfsel;				// highest valid pcflush entry
+	UINT32 pcflushes[16];		// pcflush entries
+
+	drc_cache *			cache;		    	/* pointer to the DRC code cache */
+	drcuml_state *		drcuml;				/* DRC UML generator state */
+	sh4_frontend *		drcfe;				/* pointer to the DRC front-end class */
+	UINT32				drcoptions;			/* configurable DRC options */
+
+	/* internal stuff */
+	UINT8				cache_dirty;    	/* true if we need to flush the cache */
+
+	/* parameters for subroutines */
+	UINT64				numcycles;		    /* return value from gettotalcycles */
+	UINT32				arg0;			    /* print_debug argument 1 */
+	UINT32				arg1;			    /* print_debug argument 2 */
+	UINT32				irq;				/* irq we're taking */
+
+	/* register mappings */
+	uml::parameter	regmap[16];		    		/* parameter to register mappings for all 16 integer registers */
+
+	uml::code_handle *	entry;			    		/* entry point */
+	uml::code_handle *	read8;					/* read byte */
+	uml::code_handle *	write8;					/* write byte */
+	uml::code_handle *	read16;					/* read half */
+	uml::code_handle *	write16;		    		/* write half */
+	uml::code_handle *	read32;					/* read word */
+	uml::code_handle *	write32;		    		/* write word */
+
+	uml::code_handle *	interrupt;				/* interrupt */
+	uml::code_handle *	nocode;					/* nocode */
+	uml::code_handle *	out_of_cycles;				/* out of cycles exception handler */
+
+	UINT32 prefadr;
+	UINT32 target;
+#endif
+} sh4_state;
+
+#ifdef USE_SH4DRC
+class sh4_frontend : public drc_frontend
+{
+public:
+	sh4_frontend(sh4_state &state, UINT32 window_start, UINT32 window_end, UINT32 max_sequence);
+
+protected:
+	virtual bool describe(opcode_desc &desc, const opcode_desc *prev);
+
+private:
+	bool describe_group_0(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_2(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_3(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_4(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_6(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_8(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_12(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+	bool describe_group_15(opcode_desc &desc, const opcode_desc *prev, UINT16 opcode);
+
+	sh4_state &m_context;
+};
+
+INLINE sh4_state *get_safe_token(device_t *device)
+{
+	assert(device != NULL);
+	assert(device->type() == SH3LE || device->type() == SH3BE ||
+		   device->type() == SH4LE || device->type() == SH4BE );
+	return *(sh4_state **)downcast<legacy_cpu_device *>(device)->token();
+}
+#else
+INLINE sh4_state *get_safe_token(device_t *device)
+{
+	assert(device != NULL);
+	assert(device->type() == SH3LE || device->type() == SH3BE ||
+		   device->type() == SH4LE || device->type() == SH4BE );
+	return (sh4_state *)downcast<legacy_cpu_device *>(device)->token();
+}
+#endif
+
 
 enum
 {
@@ -134,23 +284,47 @@ enum
 #define Rn	((opcode>>8)&15)
 #define Rm	((opcode>>4)&15)
 
-void sh4_exception_recompute(SH4 *sh4); // checks if there is any interrupt with high enough priority
-void sh4_exception_request(SH4 *sh4, int exception); // start requesting an exception
-void sh4_exception_unrequest(SH4 *sh4, int exception); // stop requesting an exception
-void sh4_exception_checkunrequest(SH4 *sh4, int exception);
-void sh4_exception(SH4 *sh4, const char *message, int exception); // handle exception
-void sh4_change_register_bank(SH4 *sh4, int to);
-void sh4_syncronize_register_bank(SH4 *sh4, int to);
-void sh4_swap_fp_registers(SH4 *sh4);
-void sh4_default_exception_priorities(SH4 *sh4); // setup default priorities for exceptions
-void sh4_parse_configuration(SH4 *sh4, const struct sh4_config *conf);
-void sh4_set_irq_line(SH4 *sh4, int irqline, int state); // set state of external interrupt line
-#ifdef LSB_FIRST
-void sh4_swap_fp_couples(SH4 *sh4);
-#endif
-void sh4_common_init(const device_config *device);
+#define REGFLAG_R(n)                    (1 << (n))
+#define REGFLAG_FR(n)                   (1 << (n))
+#define REGFLAG_XR(n)                   (1 << (n))
 
-INLINE void sh4_check_pending_irq(SH4 *sh4, const char *message) // look for highest priority active exception and handle it
+/* register flags 1 */
+#define REGFLAG_PR						(1 << 0)
+#define REGFLAG_MACL					(1 << 1)
+#define REGFLAG_MACH					(1 << 2)
+#define REGFLAG_GBR						(1 << 3)
+#define REGFLAG_VBR						(1 << 4)
+#define REGFLAG_SR						(1 << 5)
+#define REGFLAG_SGR						(1 << 6)
+#define REGFLAG_FPUL					(1 << 7)
+#define REGFLAG_FPSCR					(1 << 8)
+#define REGFLAG_DBR						(1 << 9)
+#define REGFLAG_SSR						(1 << 10)
+#define REGFLAG_SPC						(1 << 11)
+
+void sh4_exception_recompute(sh4_state *sh4); // checks if there is any interrupt with high enough priority
+void sh4_exception_request(sh4_state *sh4, int exception); // start requesting an exception
+void sh4_exception_unrequest(sh4_state *sh4, int exception); // stop requesting an exception
+void sh4_exception_checkunrequest(sh4_state *sh4, int exception);
+void sh4_exception(sh4_state *sh4, const char *message, int exception); // handle exception
+void sh4_change_register_bank(sh4_state *sh4, int to);
+void sh4_syncronize_register_bank(sh4_state *sh4, int to);
+void sh4_swap_fp_registers(sh4_state *sh4);
+void sh4_default_exception_priorities(sh4_state *sh4); // setup default priorities for exceptions
+void sh4_parse_configuration(sh4_state *sh4, const struct sh4_config *conf);
+void sh4_set_irq_line(sh4_state *sh4, int irqline, int state); // set state of external interrupt line
+#ifdef LSB_FIRST
+void sh4_swap_fp_couples(sh4_state *sh4);
+#endif
+void sh4_common_init(device_t *device);
+UINT32 sh4_getsqremap(sh4_state *sh4, UINT32 address);
+void sh4_handler_ipra_w(sh4_state *sh4, UINT32 data, UINT32 mem_mask);
+
+READ64_HANDLER( sh4_tlb_r );
+WRITE64_HANDLER( sh4_tlb_w );
+
+
+INLINE void sh4_check_pending_irq(sh4_state *sh4, const char *message) // look for highest priority active exception and handle it
 {
 	int a,irq,z;
 

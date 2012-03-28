@@ -10,8 +10,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "eminline.h"
+#include "emu.h"
 #include "rgbutil.h"
 
 
@@ -165,6 +164,7 @@ const struct _rgbsse_statics rgbsse_statics =
 ***************************************************************************/
 
 #if defined(__ALTIVEC__)
+#include <altivec.h>
 const struct _rgbvmx_statics rgbvmx_statics =
 {
 	{ 255, 255, 255, 255, 255, 255, 255, 255 },

@@ -13,15 +13,10 @@
 
 ***************************************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "emu.h"
 #include <ctype.h>
-#include "mame.h"
-#include "driver.h"
-#include "osdepend.h"
 
-static int interrupt_enable;
+static int irq_mask;
 
 typedef UINT16 word;
 typedef UINT8 byte;
@@ -176,7 +171,7 @@ int jrpacman_romdecodeB(int offset)
     This function would look suprisingly similiar to the source code to
 the encoder pals, I imagine. I wrote is based on the jedec file that I
 got from VideoDoctor. It needs to be run during the game, since the
-logic is kind of wierd and state based. This is slow. So you'll see
+logic is kind of weird and state based. This is slow. So you'll see
 that I made it store its "decrypted" opcodes in another array. When I
 ran the program and was satisfied that it had decrypted enough code, I
 dumped this new array out into some ROM files.  These ROM files are
@@ -403,9 +398,9 @@ void write_rom_section(char *prefix,char *suffix,int start,int end)
 }
 #endif
 
-WRITE8_HANDLER( jrpacman_interrupt_enable_w )
+WRITE8_HANDLER( jrpacman_interrupt_mask_w )
 {
-	interrupt_enable = data;
+	irq_mask = data;
 }
 
 
@@ -491,15 +486,14 @@ void main()
 
 void Load(char *name,byte *buffer,int from, int length)
 {
-	file_error filerr;
-	mame_file *file;
-
-	filerr = mame_fopen(NULL, name, OPEN_FLAG_READ, &file);
-	if (filerr != FILERR_NONE)
-		return;
-	while (length--)
-		buffer[from++]=mame_fgetc(file);
-	mame_fclose(file);
+/*
+    emu_file file(options, NULL, OPEN_FLAG_READ);
+    file_error filerr = file.open(name);
+    if (filerr != FILERR_NONE)
+        return;
+    while (length--)
+        buffer[from++]=file->getc();
+*/
 }
 
 void CreateJrDecodeTable(byte *x, int length)

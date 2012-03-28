@@ -9,17 +9,18 @@ Supported games:
 
     Toaplan Board Number:   TP-009
     Taito Game Number:      B25
-        Wardners Forest (World)
+        Wardner         (World)
         Pyros           (USA)
-        Wardna no Mori  (Japan)
+        Wardner no Mori (Japan)
 
 Notes:
-        Basically the same video and machine hardware as Flying shark,
+        Basically the same video and machine hardware as Flying Shark,
           except for the Main CPU which is a Z80 here.
         See twincobr.c machine and video drivers to complete the
           hardware setup.
-        Also see Input Port definition header below, for instructions
-          on how to enter test mode.
+        To enter the "test mode", press START1 when the grid is displayed.
+        Press 0 (actually P1 button 3) on startup to skip some video RAM tests
+        (code at 0x6d25 in 'wardner', 0x6d2f in 'wardnerj' or 0x6d2c in 'pyros').
 
 **************************** Memory & I/O Maps *****************************
 Z80:(0)  Main CPU
@@ -27,8 +28,8 @@ Z80:(0)  Main CPU
 7000-7fff Main RAM
 8000-ffff Level and scenery ROMS. This is banked with the following
 8000-8fff Sprite RAM
-a000-adff Pallette RAM
-ae00-afff Spare unused, but tested Pallette RAM
+a000-adff Palette RAM
+ae00-afff Spare unused, but tested Palette RAM
 c000-c7ff Sound RAM - shared with C000-C7FF in Z80(1) RAM
 
 in:
@@ -107,7 +108,7 @@ c000-cfff Sound RAM, $C000-C7FF shared with $C000-C7FF in Z80(0) ram
 
 
 
-TMS320C10 DSP: Harvard type architecture. RAM and ROM on seperate data buses.
+TMS320C10 DSP: Harvard type architecture. RAM and ROM on separate data buses.
 0000-05ff ROM 16-bit opcodes (word access only).
 0000-0090 Internal RAM (words).
 
@@ -123,30 +124,40 @@ out:
 ***************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/tms32010/tms32010.h"
-#include "twincobr.h"
 #include "sound/3812intf.h"
+#include "includes/toaplipt.h"
+#include "includes/twincobr.h"
 
 
+class wardner_state : public twincobr_state
+{
+public:
+	wardner_state(const machine_config &mconfig, device_type type, const char *tag)
+		: twincobr_state(mconfig, type,tag) { }
 
-static UINT8 *rambase_ae00, *rambase_c000;
+	UINT8 *m_rambase_ae00;
+	UINT8 *m_rambase_c000;
+};
+
 
 static WRITE8_HANDLER( wardner_ramrom_bank_sw )
 {
-	if (wardner_membank != data) {
+	wardner_state *state = space->machine().driver_data<wardner_state>();
+	if (state->m_wardner_membank != data) {
 		int bankaddress = 0;
 
-		const address_space *mainspace;
-		UINT8 *RAM = memory_region(space->machine, "maincpu");
+		address_space *mainspace;
+		UINT8 *RAM = space->machine().region("maincpu")->base();
 
-		mainspace = cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-		wardner_membank = data;
+		mainspace = space->machine().device("maincpu")->memory().space(AS_PROGRAM);
+		state->m_wardner_membank = data;
 
 		if (data)
 		{
-			memory_install_read8_handler(mainspace, 0x8000, 0xffff, 0, 0, (read8_space_func)SMH_BANK(1));
+			mainspace->install_read_bank(0x8000, 0xffff, "bank1");
 			switch (data)
 			{
 				case 2:  bankaddress = 0x10000; break;
@@ -158,52 +169,53 @@ static WRITE8_HANDLER( wardner_ramrom_bank_sw )
 				case 6:  bankaddress = 0x30000; break; /* not used */
 				default: bankaddress = 0x00000; break; /* not used */
 			}
-			memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+			memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
 		}
 		else
 		{
-			memory_install_read8_handler(mainspace, 0x8000, 0x8fff, 0, 0, wardner_sprite_r);
-			memory_install_read8_handler(mainspace, 0xa000, 0xadff, 0, 0, (read8_space_func)SMH_BANK(4));
-			memory_install_read8_handler(mainspace, 0xae00, 0xafff, 0, 0, (read8_space_func)SMH_BANK(2));
-			memory_install_read8_handler(mainspace, 0xc000, 0xc7ff, 0, 0, (read8_space_func)SMH_BANK(3));
-			memory_set_bankptr(space->machine, 1, &RAM[0x0000]);
-			memory_set_bankptr(space->machine, 2, rambase_ae00);
-			memory_set_bankptr(space->machine, 3, rambase_c000);
-			memory_set_bankptr(space->machine, 4, paletteram);
+			mainspace->install_legacy_read_handler(0x8000, 0x8fff, FUNC(wardner_sprite_r));
+			mainspace->install_read_bank(0xa000, 0xadff, "bank4");
+			mainspace->install_read_bank(0xae00, 0xafff, "bank2");
+			mainspace->install_read_bank(0xc000, 0xc7ff, "bank3");
+			memory_set_bankptr(space->machine(), "bank1", &RAM[0x0000]);
+			memory_set_bankptr(space->machine(), "bank2", state->m_rambase_ae00);
+			memory_set_bankptr(space->machine(), "bank3", state->m_rambase_c000);
+			memory_set_bankptr(space->machine(), "bank4", space->machine().generic.paletteram.v);
 		}
 	}
 }
 
-STATE_POSTLOAD( wardner_restore_bank )
+void wardner_restore_bank(running_machine &machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	wardner_state *state = machine.driver_data<wardner_state>();
+	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
 
 	wardner_ramrom_bank_sw(space,0,1);	/* Dummy value to ensure restoration */
-	wardner_ramrom_bank_sw(space,0,wardner_membank);
+	wardner_ramrom_bank_sw(space,0,state->m_wardner_membank);
 }
 
 
 /***************************** Z80 Main Memory Map **************************/
 
-static ADDRESS_MAP_START( main_program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
 	AM_RANGE(0x7000, 0x7fff) AM_RAM
 
-	AM_RANGE(0x8000, 0xffff) AM_READ(SMH_BANK(1)) /* Overlapped RAM/Banked ROM - See below */
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1") /* Overlapped RAM/Banked ROM - See below */
 
-	AM_RANGE(0x8000, 0x8fff) AM_WRITE(wardner_sprite_w) AM_BASE((void *)&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x8000, 0x8fff) AM_WRITE(wardner_sprite_w) AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x9000, 0x9fff) AM_ROM
-	AM_RANGE(0xa000, 0xadff) AM_WRITE(paletteram_xBBBBBGGGGGRRRRR_le_w) AM_BASE(&paletteram)
-	AM_RANGE(0xae00, 0xafff) AM_RAM AM_BASE(&rambase_ae00)
+	AM_RANGE(0xa000, 0xadff) AM_WRITE(paletteram_xBBBBBGGGGGRRRRR_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xae00, 0xafff) AM_RAM AM_BASE_MEMBER(wardner_state, m_rambase_ae00)
 	AM_RANGE(0xb000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE(&rambase_c000) AM_SHARE(1)	/* Shared RAM with Sound Z80 */
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_MEMBER(wardner_state, m_rambase_c000) AM_SHARE("share1")	/* Shared RAM with Sound Z80 */
 	AM_RANGE(0xc800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITE(wardner_CRTC_reg_sel_w)
-	AM_RANGE(0x02, 0x02) AM_WRITE(wardner_CRTC_data_w)
+	AM_RANGE(0x00, 0x00) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
+	AM_RANGE(0x02, 0x02) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
 	AM_RANGE(0x10, 0x13) AM_WRITE(wardner_txscroll_w)		/* scroll text layer */
 	AM_RANGE(0x14, 0x15) AM_WRITE(wardner_txlayer_w)		/* offset in text video RAM */
 	AM_RANGE(0x20, 0x23) AM_WRITE(wardner_bgscroll_w)		/* scroll bg layer */
@@ -225,29 +237,29 @@ ADDRESS_MAP_END
 
 /***************************** Z80 Sound Memory Map *************************/
 
-static ADDRESS_MAP_START( sound_program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x807f) AM_RAM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE(1)	/* Shared RAM with Main Z80 */
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE("share1")	/* Shared RAM with Main Z80 */
 	AM_RANGE(0xc800, 0xcfff) AM_RAM
 
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 ADDRESS_MAP_END
 
 
 /***************************** TMS32010 Memory Map **************************/
 
-static ADDRESS_MAP_START( DSP_program_map, ADDRESS_SPACE_PROGRAM, 16 )
+static ADDRESS_MAP_START( DSP_program_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x000, 0x5ff) AM_ROM
 ADDRESS_MAP_END
 
 	/* $000 - 08F  TMS32010 Internal Data RAM in Data Address Space */
 
-static ADDRESS_MAP_START( DSP_io_map, ADDRESS_SPACE_IO, 16 )
+static ADDRESS_MAP_START( DSP_io_map, AS_IO, 16 )
 	AM_RANGE(0, 0) AM_WRITE(wardner_dsp_addrsel_w)
 	AM_RANGE(1, 1) AM_READWRITE(wardner_dsp_r, wardner_dsp_w)
 	AM_RANGE(3, 3) AM_WRITE(twincobr_dsp_bio_w)
@@ -255,124 +267,79 @@ static ADDRESS_MAP_START( DSP_io_map, ADDRESS_SPACE_IO, 16 )
 ADDRESS_MAP_END
 
 
-
-
 /*****************************************************************************
+
     Input Port definitions
 
-    There is a test mode for button/switch tests. To enter Test mode,
-    set the Cross Hatch Pattern DSW to on, restart and then press
-    player 1 start button when in the cross-hatch screen.
 *****************************************************************************/
 
-#define  WARDNER_PLAYER_INPUT( player )		/* Player 1 button 3 skips video RAM tests */	 \
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(player) PORT_8WAY \
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(player) PORT_8WAY \
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(player) PORT_8WAY \
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(player) PORT_8WAY \
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(player)	/* Fire */		 \
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(player)	/* Jump */		 \
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(player)	/* Shot C */	 \
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_PLAYER(player)	/* Shot D */
+/* verified from Z80 code */
+static INPUT_PORTS_START( wardner_generic )
+	PORT_START("P1")
+	TOAPLAN_JOY_UDLR_2_BUTTONS( 1 )                         /* buttons 3 & 4 named "SHOTC" and "SHOTD" in "test mode" */
 
-static INPUT_PORTS_START( wardner )
-	PORT_START("SYSTEM")	/* test button doesnt seem to do anything ? */
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN3 )		/* Service button */
+	PORT_START("P2")
+	TOAPLAN_JOY_UDLR_2_BUTTONS( 2 )                         /* buttons 3 & 4 named "SHOTC" and "SHOTD" in "test mode" */
+
+	PORT_START("SYSTEM")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SERVICE1 )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_TILT )
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNUSED )	/* Test button */
+	TOAPLAN_TEST_SWITCH( 0x04, IP_ACTIVE_HIGH )             /* "TEST" in "test mode" */
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_COIN2 )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_START1 )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_START2 )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )	/* V-Blank */
-
-	PORT_START("P1")
-	WARDNER_PLAYER_INPUT( 1 )
-
-	PORT_START("P2")
-	WARDNER_PLAYER_INPUT( 2 )
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )            /* "V-BLANKING" in "test mode" */
 
 	PORT_START("DSWA")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(	0x01, DEF_STR( Upright ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Flip_Screen ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x00, "Cross Hatch Pattern" )
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(	0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(	0x30, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(	0x20, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(	0x10, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(	0xc0, DEF_STR( 1C_6C ) )
+	TOAPLAN_MACHINE_COCKTAIL_LOC(SW1)
+	TOAPLAN_COINAGE_WORLD_LOC(SW1)
 
 	PORT_START("DSWB")
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(	0x01, DEF_STR( Easy ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Normal ) )
-	PORT_DIPSETTING(	0x02, DEF_STR( Hard ) )
-	PORT_DIPSETTING(	0x03, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Bonus_Life ) )
-	PORT_DIPSETTING(	0x00, "30000 & 80000" )
-	PORT_DIPSETTING(	0x04, "50000 & 100000" )
-	PORT_DIPSETTING(	0x08, "50000" )
-	PORT_DIPSETTING(	0x0c, "100000" )
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Lives ) )
+	TOAPLAN_DIFFICULTY_LOC(SW2)
+	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:!3,!4")	/* table at 0x13ce ('wardner') or 0x13de ('wardnerj') */
+	PORT_DIPSETTING(	0x00, "30k 80k 50k+" )
+	PORT_DIPSETTING(	0x04, "50k 100k 50k+" )
+	PORT_DIPSETTING(	0x08, "30k Only" )
+	PORT_DIPSETTING(	0x0c, "50k Only" )
+	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:!5,!6")
 	PORT_DIPSETTING(	0x30, "1" )
 	PORT_DIPSETTING(	0x00, "3" )
 	PORT_DIPSETTING(	0x10, "4" )
 	PORT_DIPSETTING(	0x20, "5" )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_HIGH, "SW2:!7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_HIGH, "SW2:!8" )
 INPUT_PORTS_END
 
+/* verified from Z80 code */
+static INPUT_PORTS_START( wardner )
+	PORT_INCLUDE( wardner_generic )
+
+	PORT_MODIFY("P1")
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OTHER ) PORT_NAME("Skip Video RAM Tests") PORT_CODE(KEYCODE_0)
+	/* actually player 1 button 3 - not used in gameplay */
+	/* code at 0x6d25 ('wardner'), 0x6d2f ('wardnerj') or 0x6d2c ('pyros') */
+INPUT_PORTS_END
+
+/* verified from Z80 code */
 static INPUT_PORTS_START( wardnerj )
 	PORT_INCLUDE( wardner )
 
 	PORT_MODIFY("DSWA")
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(	0x30, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(	0x10, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(	0xc0, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( 1C_2C ) )
+	TOAPLAN_COINAGE_JAPAN_LOC(SW1)
 INPUT_PORTS_END
 
+/* verified from Z80 code */
 static INPUT_PORTS_START( pyros )
-	PORT_INCLUDE( wardner )
-
-	PORT_MODIFY("DSWA")
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(	0x30, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(	0x10, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(	0xc0, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( 1C_2C ) )
+	PORT_INCLUDE( wardnerj )
 
 	PORT_MODIFY("DSWB")
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Allow_Continue ) )
+	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:!3,!4")	/* table at 0x13ce */
+	PORT_DIPSETTING(	0x00, "30k 80k 50k+" )
+	PORT_DIPSETTING(	0x04, "50k 100k 50k+" )
+	PORT_DIPSETTING(	0x08, "50k Only" )
+	PORT_DIPSETTING(	0x0c, "100k Only" )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SW2:!7")   /* additional code at 0x6037 */
 	PORT_DIPSETTING(	0x40, DEF_STR( No ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Yes ) )
 INPUT_PORTS_END
@@ -415,9 +382,9 @@ static const gfx_layout spritelayout =
 
 
 /* handler called by the 3812 emulator when the internal timers cause an IRQ */
-static void irqhandler(const device_config *device, int linestate)
+static void irqhandler(device_t *device, int linestate)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
+	cputag_set_input_line(device->machine(), "audiocpu", 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -434,51 +401,51 @@ static GFXDECODE_START( wardner )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( wardner )
+
+
+static MACHINE_CONFIG_START( wardner, wardner_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80,24000000/4)			/* 6MHz ??? - Real board crystal is 24MHz */
-	MDRV_CPU_PROGRAM_MAP(main_program_map)
-	MDRV_CPU_IO_MAP(main_io_map)
-	MDRV_CPU_VBLANK_INT("screen", wardner_interrupt)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_24MHz/4)		/* 6MHz */
+	MCFG_CPU_PROGRAM_MAP(main_program_map)
+	MCFG_CPU_IO_MAP(main_io_map)
+	MCFG_CPU_VBLANK_INT("screen", wardner_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80,24000000/7)			/* 3.43MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(sound_program_map)
-	MDRV_CPU_IO_MAP(sound_io_map)
+	MCFG_CPU_ADD("audiocpu", Z80, XTAL_14MHz/4)		/* 3.5MHz */
+	MCFG_CPU_PROGRAM_MAP(sound_program_map)
+	MCFG_CPU_IO_MAP(sound_io_map)
 
-	MDRV_CPU_ADD("dsp", TMS32010,14000000)	/* 14MHz Crystal CLKin */
-	MDRV_CPU_PROGRAM_MAP(DSP_program_map)
+	MCFG_CPU_ADD("dsp", TMS32010, XTAL_14MHz)		/* 14MHz Crystal CLKin */
+	MCFG_CPU_PROGRAM_MAP(DSP_program_map)
 	/* Data Map is internal to the CPU */
-	MDRV_CPU_IO_MAP(DSP_io_map)
+	MCFG_CPU_IO_MAP(DSP_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))					/* 100 CPU slices per frame */
+	MCFG_QUANTUM_TIME(attotime::from_hz(6000))						/* 100 CPU slices per frame */
 
-	MDRV_MACHINE_RESET(wardner)
+	MCFG_MACHINE_RESET(wardner)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK | VIDEO_BUFFERS_SPRITERAM)
+	MCFG_MC6845_ADD("crtc", HD6845, XTAL_14MHz/4, twincobr_mc6845_intf)	/* 3.5MHz measured on CLKin */
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(56)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK | VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_GFXDECODE(wardner)
-	MDRV_PALETTE_LENGTH(1792)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(XTAL_14MHz/2, 446, 0, 320, 286, 0, 240)
+	MCFG_SCREEN_UPDATE_STATIC(toaplan0)
+	MCFG_SCREEN_VBLANK_STATIC(toaplan0)
 
-	MDRV_VIDEO_START(toaplan0)
-	MDRV_VIDEO_EOF(toaplan0)
-	MDRV_VIDEO_UPDATE(toaplan0)
+	MCFG_GFXDECODE(wardner)
+	MCFG_PALETTE_LENGTH(1792)
+
+	MCFG_VIDEO_START(toaplan0)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 24000000/7)
-	MDRV_SOUND_CONFIG(ym3812_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_14MHz/4)
+	MCFG_SOUND_CONFIG(ym3812_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_CONFIG_END
 
 
 
@@ -651,6 +618,6 @@ static DRIVER_INIT( wardner )
 
 
 
-GAME( 1987, wardner,  0,       wardner, wardner,  wardner, ROT0, "[Toaplan] Taito Corporation Japan", "Wardner (World)", GAME_SUPPORTS_SAVE )
-GAME( 1987, pyros,    wardner, wardner, pyros,    wardner, ROT0, "[Toaplan] Taito America Corporation", "Pyros (US)", GAME_SUPPORTS_SAVE )
-GAME( 1987, wardnerj, wardner, wardner, wardnerj, wardner, ROT0, "[Toaplan] Taito Corporation", "Wardner no Mori (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1987, wardner,  0,       wardner, wardner,  wardner, ROT0, "Toaplan / Taito Corporation Japan", "Wardner (World)", GAME_SUPPORTS_SAVE )
+GAME( 1987, pyros,    wardner, wardner, pyros,    wardner, ROT0, "Toaplan / Taito America Corporation", "Pyros (US)", GAME_SUPPORTS_SAVE )
+GAME( 1987, wardnerj, wardner, wardner, wardnerj, wardner, ROT0, "Toaplan / Taito Corporation", "Wardner no Mori (Japan)", GAME_SUPPORTS_SAVE )

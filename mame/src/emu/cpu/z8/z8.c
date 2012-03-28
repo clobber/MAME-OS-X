@@ -21,7 +21,7 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "debugger.h"
 #include "z8.h"
 
@@ -159,9 +159,10 @@ enum
 typedef struct _z8_state z8_state;
 struct _z8_state
 {
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
 
 	/* registers */
 	UINT16 pc;				/* program counter */
@@ -182,74 +183,27 @@ struct _z8_state
 	int clock;				/* clock */
 	int icount;				/* instruction counter */
 
-	cpu_state_table state_table;
-
 	/* timers */
 	emu_timer *t0_timer;
 	emu_timer *t1_timer;
 };
 
 /***************************************************************************
-    CPU STATE DESCRIPTION
-***************************************************************************/
-
-#define Z8_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	CPU_STATE_ENTRY(Z8_##_name, #_name, _format, z8_state, _member, _datamask, ~0, _flags)
-
-static const cpu_state_entry state_array[] =
-{
-	Z8_STATE_ENTRY(PC,  "%04X", pc, 0xffff, 0)
-	Z8_STATE_ENTRY(GENPC, "%04X", pc, 0xffff, CPUSTATE_NOSHOW)
-	Z8_STATE_ENTRY(SP, "%04X", fake_sp, 0xffff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(GENSP, "%04X", fake_sp, 0xffff, CPUSTATE_NOSHOW | CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(RP, "%02X", r[Z8_REGISTER_RP], 0xff, 0)
-	Z8_STATE_ENTRY(T0, "%02X", t0, 0xff, 0)
-	Z8_STATE_ENTRY(T1, "%02X", t1, 0xff, 0)
-
-	Z8_STATE_ENTRY(R0, "%02X", fake_r[0], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R1, "%02X", fake_r[1], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R2, "%02X", fake_r[2], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R3, "%02X", fake_r[3], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R4, "%02X", fake_r[4], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R5, "%02X", fake_r[5], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R6, "%02X", fake_r[6], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R7, "%02X", fake_r[7], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R8, "%02X", fake_r[8], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R9, "%02X", fake_r[9], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R10, "%02X", fake_r[10], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R11, "%02X", fake_r[11], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R12, "%02X", fake_r[12], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R13, "%02X", fake_r[13], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R14, "%02X", fake_r[14], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-	Z8_STATE_ENTRY(R15, "%02X", fake_r[15], 0xff, CPUSTATE_IMPORT | CPUSTATE_EXPORT)
-};
-
-static const cpu_state_table state_table_template =
-{
-	NULL,						/* pointer to the base of state (offsets are relative to this) */
-	0,							/* subtype this table refers to */
-	ARRAY_LENGTH(state_array),	/* number of entries */
-	state_array					/* array of entries */
-};
-
-/***************************************************************************
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE z8_state *get_safe_token(const device_config *device)
+INLINE z8_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert((cpu_get_type(device) == CPU_Z8601) ||
-		(cpu_get_type(device) == CPU_UB8830D) ||
-		(cpu_get_type(device) == CPU_Z8611));
-	return (z8_state *)device->token;
+	assert((device->type() == Z8601) ||
+		(device->type() == UB8830D) ||
+		(device->type() == Z8611));
+	return (z8_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 INLINE UINT8 fetch(z8_state *cpustate)
 {
-	UINT8 data = memory_decrypted_read_byte(cpustate->program, cpustate->pc);
+	UINT8 data = cpustate->direct->read_decrypted_byte(cpustate->pc);
 
 	cpustate->pc++;
 
@@ -280,7 +234,7 @@ INLINE UINT8 register_read(z8_state *cpustate, UINT8 offset)
 
 		if (!(P3M & Z8_P3M_P0_STROBED))
 		{
-			if (mask) cpustate->input[offset] = memory_read_byte_8be(cpustate->io, offset);
+			if (mask) cpustate->input[offset] = cpustate->io->read_byte(offset);
 		}
 
 		data |= cpustate->input[offset] & mask;
@@ -296,7 +250,7 @@ INLINE UINT8 register_read(z8_state *cpustate, UINT8 offset)
 
 		if ((P3M & Z8_P3M_P33_P34_MASK) != Z8_P3M_P33_P34_DAV1_RDY1)
 		{
-			if (mask) cpustate->input[offset] = memory_read_byte_8be(cpustate->io, offset);
+			if (mask) cpustate->input[offset] = cpustate->io->read_byte(offset);
 		}
 
 		data |= cpustate->input[offset] & mask;
@@ -307,7 +261,7 @@ INLINE UINT8 register_read(z8_state *cpustate, UINT8 offset)
 
 		if (!(P3M & Z8_P3M_P2_STROBED))
 		{
-			if (mask) cpustate->input[offset] = memory_read_byte_8be(cpustate->io, offset);
+			if (mask) cpustate->input[offset] = cpustate->io->read_byte(offset);
 		}
 
 		data = (cpustate->input[offset] & mask) | (cpustate->output[offset] & ~mask);
@@ -320,7 +274,7 @@ INLINE UINT8 register_read(z8_state *cpustate, UINT8 offset)
 			mask = 0x0f;
 		}
 
-		if (mask) cpustate->input[offset] = memory_read_byte_8be(cpustate->io, offset);
+		if (mask) cpustate->input[offset] = cpustate->io->read_byte(offset);
 
 		data = (cpustate->input[offset] & mask) | (cpustate->output[offset] & ~mask);
 		break;
@@ -365,19 +319,19 @@ INLINE void register_write(z8_state *cpustate, UINT8 offset, UINT8 data)
 		cpustate->output[offset] = data;
 		if ((P01M & Z8_P01M_P0L_MODE_MASK) == Z8_P01M_P0L_MODE_OUTPUT) mask |= 0x0f;
 		if ((P01M & Z8_P01M_P0H_MODE_MASK) == Z8_P01M_P0H_MODE_OUTPUT) mask |= 0xf0;
-		if (mask) memory_write_byte_8be(cpustate->io, offset, data & mask);
+		if (mask) cpustate->io->write_byte(offset, data & mask);
 		break;
 
 	case Z8_REGISTER_P1:
 		cpustate->output[offset] = data;
 		if ((P01M & Z8_P01M_P1_MODE_MASK) == Z8_P01M_P1_MODE_OUTPUT) mask = 0xff;
-		if (mask) memory_write_byte_8be(cpustate->io, offset, data & mask);
+		if (mask) cpustate->io->write_byte(offset, data & mask);
 		break;
 
 	case Z8_REGISTER_P2:
 		cpustate->output[offset] = data;
 		mask = cpustate->r[Z8_REGISTER_P2M] ^ 0xff;
-		if (mask) memory_write_byte_8be(cpustate->io, offset, data & mask);
+		if (mask) cpustate->io->write_byte(offset, data & mask);
 		break;
 
 	case Z8_REGISTER_P3:
@@ -389,7 +343,7 @@ INLINE void register_write(z8_state *cpustate, UINT8 offset, UINT8 data)
 			mask = 0xf0;
 		}
 
-		if (mask) memory_write_byte_8be(cpustate->io, offset, data & mask);
+		if (mask) cpustate->io->write_byte(offset, data & mask);
 		break;
 
 	case Z8_REGISTER_SIO:
@@ -399,18 +353,18 @@ INLINE void register_write(z8_state *cpustate, UINT8 offset, UINT8 data)
 		if (data & Z8_TMR_LOAD_T0)
 		{
 			cpustate->t0 = T0;
-			timer_adjust_periodic(cpustate->t0_timer, attotime_zero, 0, ATTOTIME_IN_HZ(cpustate->clock / 2 / 4 / ((PRE0 >> 2) + 1)));
+			cpustate->t0_timer->adjust(attotime::zero, 0, attotime::from_hz(cpustate->clock / 2 / 4 / ((PRE0 >> 2) + 1)));
 		}
 
-		timer_enable(cpustate->t0_timer, data & Z8_TMR_ENABLE_T0);
+		cpustate->t0_timer->enable(data & Z8_TMR_ENABLE_T0);
 
 		if (data & Z8_TMR_LOAD_T1)
 		{
 			cpustate->t1 = T1;
-			timer_adjust_periodic(cpustate->t1_timer, attotime_zero, 0, ATTOTIME_IN_HZ(cpustate->clock / 2 / 4 / ((PRE1 >> 2) + 1)));
+			cpustate->t1_timer->adjust(attotime::zero, 0, attotime::from_hz(cpustate->clock / 2 / 4 / ((PRE1 >> 2) + 1)));
 		}
 
-		timer_enable(cpustate->t1_timer, data & Z8_TMR_ENABLE_T1);
+		cpustate->t1_timer->enable(data & Z8_TMR_ENABLE_T1);
 		break;
 
 	case Z8_REGISTER_P2M:
@@ -483,7 +437,7 @@ INLINE void stack_push_byte(z8_state *cpustate, UINT8 src)
 		register_pair_write(cpustate, Z8_REGISTER_SPH, sp);
 
 		/* @SP <- src */
-		memory_write_byte(cpustate->data, sp, src);
+		cpustate->data->write_byte(sp, src);
 	}
 }
 
@@ -505,7 +459,7 @@ INLINE void stack_push_word(z8_state *cpustate, UINT16 src)
 		register_pair_write(cpustate, Z8_REGISTER_SPH, sp);
 
 		/* @SP <- src */
-		memory_write_word_8le(cpustate->data, sp, src);
+		cpustate->data->write_word(sp, src);
 	}
 }
 
@@ -527,7 +481,7 @@ INLINE UINT8 stack_pop_byte(z8_state *cpustate)
 		register_pair_write(cpustate, Z8_REGISTER_SPH, sp);
 
 		/* @SP <- src */
-		return memory_read_byte(cpustate->data, sp);
+		return cpustate->data->read_byte(sp);
 	}
 }
 
@@ -549,7 +503,7 @@ INLINE UINT16 stack_pop_word(z8_state *cpustate)
 		register_pair_write(cpustate, Z8_REGISTER_SPH, sp);
 
 		/* @SP <- src */
-		return memory_read_word_8le(cpustate->data, sp);
+		return cpustate->data->read_word(sp);
 	}
 }
 
@@ -659,8 +613,8 @@ static TIMER_CALLBACK( t0_tick )
 	if (cpustate->t0 == 0)
 	{
 		cpustate->t0 = T0;
-		timer_adjust_periodic(cpustate->t0_timer, attotime_zero, 0, ATTOTIME_IN_HZ(cpustate->clock / 2 / 4 / ((PRE0 >> 2) + 1)));
-		timer_enable(cpustate->t0_timer, PRE0 & Z8_PRE0_COUNT_MODULO_N);
+		cpustate->t0_timer->adjust(attotime::zero, 0, attotime::from_hz(cpustate->clock / 2 / 4 / ((PRE0 >> 2) + 1)));
+		cpustate->t0_timer->enable(PRE0 & Z8_PRE0_COUNT_MODULO_N);
 		cpustate->irq[4] = ASSERT_LINE;
 	}
 }
@@ -674,8 +628,8 @@ static TIMER_CALLBACK( t1_tick )
 	if (cpustate->t1 == 0)
 	{
 		cpustate->t1 = T1;
-		timer_adjust_periodic(cpustate->t1_timer, attotime_zero, 0, ATTOTIME_IN_HZ(cpustate->clock / 2 / 4 / ((PRE1 >> 2) + 1)));
-		timer_enable(cpustate->t1_timer, PRE1 & Z8_PRE0_COUNT_MODULO_N);
+		cpustate->t1_timer->adjust(attotime::zero, 0, attotime::from_hz(cpustate->clock / 2 / 4 / ((PRE1 >> 2) + 1)));
+		cpustate->t1_timer->enable(PRE1 & Z8_PRE0_COUNT_MODULO_N);
 		cpustate->irq[5] = ASSERT_LINE;
 	}
 }
@@ -689,27 +643,41 @@ static CPU_INIT( z8 )
 	z8_state *cpustate = get_safe_token(device);
 
 	/* set up the state table */
-	cpustate->state_table = state_table_template;
-	cpustate->state_table.baseptr = cpustate;
-	cpustate->state_table.subtypemask = 1;
+	{
+		device_state_interface *state;
+		device->interface(state);
+		state->state_add(Z8_PC,         "PC",        cpustate->pc);
+		state->state_add(STATE_GENPC,   "GENPC",     cpustate->pc).noshow();
+		state->state_add(Z8_SP,         "SP",        cpustate->fake_sp).callimport().callexport();
+		state->state_add(STATE_GENSP,   "GENSP",     cpustate->fake_sp).callimport().callexport().noshow();
+		state->state_add(Z8_RP,         "RP",        cpustate->r[Z8_REGISTER_RP]);
+		state->state_add(Z8_T0,         "T0",        cpustate->t0);
+		state->state_add(Z8_T1,         "T1",        cpustate->t1);
+		state->state_add(STATE_GENFLAGS, "GENFLAGS", cpustate->r[Z8_REGISTER_FLAGS]).noshow().formatstr("%6s");
 
-	cpustate->clock = device->clock;
+		astring tempstr;
+		for (int regnum = 0; regnum < 16; regnum++)
+			state->state_add(Z8_R0 + regnum, tempstr.format("R%d", regnum), cpustate->fake_r[regnum]).callimport().callexport();
+	}
+
+	cpustate->clock = device->clock();
 
 	/* find address spaces */
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	/* allocate timers */
-	cpustate->t0_timer = timer_alloc(device->machine, t0_tick, cpustate);
-	cpustate->t1_timer = timer_alloc(device->machine, t1_tick, cpustate);
+	cpustate->t0_timer = device->machine().scheduler().timer_alloc(FUNC(t0_tick), cpustate);
+	cpustate->t1_timer = device->machine().scheduler().timer_alloc(FUNC(t1_tick), cpustate);
 
 	/* register for state saving */
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item_array(device, 0, cpustate->r);
-	state_save_register_device_item_array(device, 0, cpustate->input);
-	state_save_register_device_item_array(device, 0, cpustate->output);
-	state_save_register_device_item_array(device, 0, cpustate->irq);
+	device->save_item(NAME(cpustate->pc));
+	device->save_item(NAME(cpustate->r));
+	device->save_item(NAME(cpustate->input));
+	device->save_item(NAME(cpustate->output));
+	device->save_item(NAME(cpustate->irq));
 }
 
 /***************************************************************************
@@ -720,8 +688,6 @@ static CPU_EXECUTE( z8 )
 {
 	z8_state *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
-
 	do
 	{
 		UINT8 opcode;
@@ -730,7 +696,7 @@ static CPU_EXECUTE( z8 )
 		debugger_instruction_hook(device, cpustate->pc);
 
 		/* TODO: sample interrupts */
-		cpustate->input[3] = memory_read_byte_8be(cpustate->io, 3);
+		cpustate->input[3] = cpustate->io->read_byte(3);
 
 		/* fetch opcode */
 		opcode = fetch(cpustate);
@@ -742,8 +708,6 @@ static CPU_EXECUTE( z8 )
 		cpustate->icount -= cycles;
 	}
 	while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 /***************************************************************************
@@ -770,11 +734,11 @@ static CPU_RESET( z8 )
     ADDRESS MAPS
 ***************************************************************************/
 
-static ADDRESS_MAP_START( program_2kb, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_2kb, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( program_4kb, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( program_4kb, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -786,7 +750,7 @@ static CPU_IMPORT_STATE( z8 )
 {
 	z8_state *cpustate = get_safe_token(device);
 
-	switch (entry->index)
+	switch (entry.index())
 	{
 		case Z8_SP:
 		case Z8_GENSP:
@@ -795,7 +759,7 @@ static CPU_IMPORT_STATE( z8 )
 			break;
 
 		case Z8_R0: case Z8_R1: case Z8_R2: case Z8_R3: case Z8_R4: case Z8_R5: case Z8_R6: case Z8_R7: case Z8_R8: case Z8_R9: case Z8_R10: case Z8_R11: case Z8_R12: case Z8_R13: case Z8_R14: case Z8_R15:
-			cpustate->r[cpustate->r[Z8_REGISTER_RP] + (entry->index - Z8_R0)] = cpustate->fake_r[entry->index - Z8_R0];
+			cpustate->r[cpustate->r[Z8_REGISTER_RP] + (entry.index() - Z8_R0)] = cpustate->fake_r[entry.index() - Z8_R0];
 			break;
 
 		default:
@@ -808,7 +772,7 @@ static CPU_EXPORT_STATE( z8 )
 {
 	z8_state *cpustate = get_safe_token(device);
 
-	switch (entry->index)
+	switch (entry.index())
 	{
 		case Z8_SP:
 		case Z8_GENSP:
@@ -816,12 +780,28 @@ static CPU_EXPORT_STATE( z8 )
 			break;
 
 		case Z8_R0: case Z8_R1: case Z8_R2: case Z8_R3: case Z8_R4: case Z8_R5: case Z8_R6: case Z8_R7: case Z8_R8: case Z8_R9: case Z8_R10: case Z8_R11: case Z8_R12: case Z8_R13: case Z8_R14: case Z8_R15:
-			cpustate->fake_r[entry->index - Z8_R0] = cpustate->r[cpustate->r[Z8_REGISTER_RP] + (entry->index - Z8_R0)];
+			cpustate->fake_r[entry.index() - Z8_R0] = cpustate->r[cpustate->r[Z8_REGISTER_RP] + (entry.index() - Z8_R0)];
 			break;
 
 		default:
 			fatalerror("CPU_EXPORT_STATE(z8) called for unexpected value\n");
 			break;
+	}
+}
+
+static CPU_EXPORT_STRING( z8 )
+{
+	z8_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS: string.printf("%c%c%c%c%c%c",
+									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_C ? 'C' : '.',
+									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_Z ? 'Z' : '.',
+									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_S ? 'S' : '.',
+									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_V ? 'V' : '.',
+									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_D ? 'D' : '.',
+									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_H ? 'H' : '.');	break;
 	}
 }
 
@@ -844,7 +824,7 @@ static CPU_SET_INFO( z8 )
 
 static CPU_GET_INFO( z8 )
 {
-	z8_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	z8_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -860,15 +840,15 @@ static CPU_GET_INFO( z8 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 6;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 20;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:			info->i = 16;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:			info->i = 0;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:			info->i = 16;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 			info->i = 0;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:				info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 				info->i = 2;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 				info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:			info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:			info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:			info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:				info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:				info->i = 2;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:				info->i = 0;							break;
 
 		/* --- the following bits of info are returned as pointers to functions --- */
 		case CPUINFO_FCT_SET_INFO:				info->setinfo = CPU_SET_INFO_NAME(z8);			break;
@@ -878,10 +858,10 @@ static CPU_GET_INFO( z8 )
 		case CPUINFO_FCT_DISASSEMBLE:			info->disassemble = CPU_DISASSEMBLE_NAME(z8);	break;
 		case CPUINFO_FCT_IMPORT_STATE:			info->import_state = CPU_IMPORT_STATE_NAME(z8);	break;
 		case CPUINFO_FCT_EXPORT_STATE:			info->export_state = CPU_EXPORT_STATE_NAME(z8);	break;
+		case CPUINFO_FCT_EXPORT_STRING:			info->export_string = CPU_EXPORT_STRING_NAME(z8);	break;
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:	info->icount = &cpustate->icount;				break;
-		case CPUINFO_PTR_STATE_TABLE:			info->state_table = &cpustate->state_table;		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "Z8");					break;
@@ -889,15 +869,6 @@ static CPU_GET_INFO( z8 )
 		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");					break;
 		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);				break;
 		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright MESS Team"); break;
-
-		case CPUINFO_STR_FLAGS: sprintf(info->s,
-									"%c%c%c%c%c%c",
-									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_C ? 'C' : '.',
-									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_Z ? 'Z' : '.',
-									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_S ? 'S' : '.',
-									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_V ? 'V' : '.',
-									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_D ? 'D' : '.',
-									 cpustate->r[Z8_REGISTER_FLAGS] & Z8_FLAGS_H ? 'H' : '.');	break;
 	}
 }
 
@@ -910,7 +881,7 @@ CPU_GET_INFO( z8601 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_2kb);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_2kb);	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "Z8601");								break;
@@ -924,7 +895,7 @@ CPU_GET_INFO( ub8830d )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_2kb);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_2kb);	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "UB8830D");								break;
@@ -938,7 +909,7 @@ CPU_GET_INFO( z8611 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as pointers --- */
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_4kb);	break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(program_4kb);	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "Z8611");								break;
@@ -946,3 +917,7 @@ CPU_GET_INFO( z8611 )
 		default:										CPU_GET_INFO_CALL(z8);									break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(Z8601, z8601);
+DEFINE_LEGACY_CPU_DEVICE(UB8830D, ub8830d);
+DEFINE_LEGACY_CPU_DEVICE(Z8611, z8611);

@@ -3,7 +3,6 @@
 #ifndef __M68000_H__
 #define __M68000_H__
 
-#include "cpuintrf.h"
 
 /* There are 7 levels of interrupt to the 68K.
  * A transition from < 7 to 7 will cause a non-maskable interrupt (NMI).
@@ -17,6 +16,9 @@
 #define M68K_IRQ_6    6
 #define M68K_IRQ_7    7
 
+// special input lines
+#define M68K_LINE_BUSERROR 16
+
 /* CPU types for use in m68k_set_cpu_type() */
 enum
 {
@@ -29,10 +31,27 @@ enum
 	M68K_CPU_TYPE_68EC030,
 	M68K_CPU_TYPE_68030,
 	M68K_CPU_TYPE_68EC040,
+	M68K_CPU_TYPE_68LC040,
 	M68K_CPU_TYPE_68040,
-	M68K_CPU_TYPE_SCC68070
+	M68K_CPU_TYPE_SCC68070,
+	M68K_CPU_TYPE_68340,
+    M68K_CPU_TYPE_COLDFIRE
 };
 
+// function codes
+enum
+{
+	M68K_FC_USER_DATA = 1,
+	M68K_FC_USER_PROGRAM = 2,
+	M68K_FC_SUPERVISOR_DATA = 5,
+	M68K_FC_SUPERVISOR_PROGRAM = 6,
+	M68K_FC_INTERRUPT = 7
+};
+
+/* HMMU enable types for use with m68k_set_hmmu_enable() */
+#define M68K_HMMU_DISABLE	0	/* no translation */
+#define M68K_HMMU_ENABLE_II	1	/* Mac II style fixed translation */
+#define M68K_HMMU_ENABLE_LC	2	/* Mac LC style fixed translation */
 
 /* Special interrupt acknowledge values.
  * Use these as special returns from the interrupt acknowledge callback
@@ -58,52 +77,49 @@ enum
 	M68K_SFC, M68K_DFC, M68K_CACR, M68K_CAAR, M68K_PREF_ADDR, M68K_PREF_DATA,
 	M68K_D0, M68K_D1, M68K_D2, M68K_D3, M68K_D4, M68K_D5, M68K_D6, M68K_D7,
 	M68K_A0, M68K_A1, M68K_A2, M68K_A3, M68K_A4, M68K_A5, M68K_A6, M68K_A7,
+	M68K_FP0, M68K_FP1, M68K_FP2, M68K_FP3, M68K_FP4, M68K_FP5, M68K_FP6, M68K_FP7,
+	M68K_FPSR, M68K_FPCR,
 
-	M68K_GENPC = REG_GENPC,
-	M68K_GENSP = REG_GENSP,
-	M68K_GENPCBASE = REG_GENPCBASE
+	M68K_GENPC = STATE_GENPC,
+	M68K_GENSP = STATE_GENSP,
+	M68K_GENPCBASE = STATE_GENPCBASE
 };
 
-typedef void (*m68k_bkpt_ack_func)(const device_config *device, UINT32 data);
-typedef void (*m68k_reset_func)(const device_config *device);
-typedef void (*m68k_cmpild_func)(const device_config *device, UINT32 data, UINT8 reg);
-typedef void (*m68k_rte_func)(const device_config *device);
-typedef int (*m68k_tas_func)(const device_config *device);
+typedef void (*m68k_bkpt_ack_func)(device_t *device, UINT32 data);
+typedef void (*m68k_reset_func)(device_t *device);
+typedef void (*m68k_cmpild_func)(device_t *device, UINT32 data, UINT8 reg);
+typedef void (*m68k_rte_func)(device_t *device);
+typedef int (*m68k_tas_func)(device_t *device);
 
 
-CPU_GET_INFO( m68000 );
-CPU_GET_INFO( m68008 );
-CPU_GET_INFO( m68010 );
-CPU_GET_INFO( m68ec020 );
-CPU_GET_INFO( m68020 );
-CPU_GET_INFO( m68020pmmu );
-CPU_GET_INFO( m68ec030 );
-CPU_GET_INFO( m68030 );
-CPU_GET_INFO( m68ec040 );
-CPU_GET_INFO( m68040 );
+DECLARE_LEGACY_CPU_DEVICE(M68000, m68000);
+DECLARE_LEGACY_CPU_DEVICE(M68008, m68008);
+DECLARE_LEGACY_CPU_DEVICE(M68008PLCC, m68008plcc);
+DECLARE_LEGACY_CPU_DEVICE(M68010, m68010);
+DECLARE_LEGACY_CPU_DEVICE(M68EC020, m68ec020);
+DECLARE_LEGACY_CPU_DEVICE(M68020, m68020);
+DECLARE_LEGACY_CPU_DEVICE(M68020PMMU, m68020pmmu);
+DECLARE_LEGACY_CPU_DEVICE(M68020HMMU, m68020hmmu);
+DECLARE_LEGACY_CPU_DEVICE(M68EC030, m68ec030);
+DECLARE_LEGACY_CPU_DEVICE(M68030, m68030);
+DECLARE_LEGACY_CPU_DEVICE(M68EC040, m68ec040);
+DECLARE_LEGACY_CPU_DEVICE(M68LC040, m68lc040);
+DECLARE_LEGACY_CPU_DEVICE(M68040, m68040);
+DECLARE_LEGACY_CPU_DEVICE(SCC68070, scc68070);
+DECLARE_LEGACY_CPU_DEVICE(M68340, m68340);
+DECLARE_LEGACY_CPU_DEVICE(MCF5206E, mcf5206e);
 
-CPU_GET_INFO( scc68070 );
 
-#define CPU_M68000 CPU_GET_INFO_NAME( m68000 )
-#define CPU_M68008 CPU_GET_INFO_NAME( m68008 )
-#define CPU_M68010 CPU_GET_INFO_NAME( m68010 )
-#define CPU_M68EC020 CPU_GET_INFO_NAME( m68ec020 )
-#define CPU_M68020 CPU_GET_INFO_NAME( m68020 )
-#define CPU_M68020_68851 CPU_GET_INFO_NAME( m68020pmmu )
-#define CPU_M68EC030 CPU_GET_INFO_NAME( m68ec030 )
-#define CPU_M68030 CPU_GET_INFO_NAME( m68030 )
-#define CPU_M68EC040 CPU_GET_INFO_NAME( m68ec040 )
-#define CPU_M68040 CPU_GET_INFO_NAME( m68040 )
+void m68k_set_encrypted_opcode_range(device_t *device, offs_t start, offs_t end);
 
-#define CPU_SCC68070 CPU_GET_INFO_NAME( scc68070 )
-
-void m68k_set_encrypted_opcode_range(const device_config *device, offs_t start, offs_t end);
+void m68k_set_hmmu_enable(device_t *device, int enable);
 
 unsigned int m68k_disassemble_raw(char* str_buff, unsigned int pc, const unsigned char* opdata, const unsigned char* argdata, unsigned int cpu_type);
 
-void m68k_set_reset_callback(const device_config *device, m68k_reset_func callback);
-void m68k_set_cmpild_callback(const device_config *device, m68k_cmpild_func callback);
-void m68k_set_rte_callback(const device_config *device, m68k_rte_func callback);
-void m68k_set_tas_callback(const device_config *device, m68k_tas_func callback);
+void m68k_set_reset_callback(device_t *device, m68k_reset_func callback);
+void m68k_set_cmpild_callback(device_t *device, m68k_cmpild_func callback);
+void m68k_set_rte_callback(device_t *device, m68k_rte_func callback);
+void m68k_set_tas_callback(device_t *device, m68k_tas_func callback);
+UINT16 m68k_get_fc(device_t *device);
 
 #endif /* __M68000_H__ */

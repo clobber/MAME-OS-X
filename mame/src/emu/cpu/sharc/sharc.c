@@ -3,8 +3,9 @@
    Written by Ville Linde
 */
 
-#include "sharc.h"
+#include "emu.h"
 #include "debugger.h"
+#include "sharc.h"
 
 CPU_DISASSEMBLE( sharc );
 
@@ -123,10 +124,10 @@ struct _SHARC_REGS
 	UINT16 *internal_ram;
 	UINT16 *internal_ram_block0, *internal_ram_block1;
 
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
-	const address_space *data;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	address_space *data;
 	void (*opcode_handler)(SHARC_REGS *cpustate);
 	int icount;
 	UINT64 opcode;
@@ -183,13 +184,11 @@ static void (* sharc_op[512])(SHARC_REGS *cpustate);
 						((UINT64)(cpustate->internal_ram[((pc-0x20000) * 3) + 1]) << 16) | \
 						((UINT64)(cpustate->internal_ram[((pc-0x20000) * 3) + 2]) << 0)
 
-INLINE SHARC_REGS *get_safe_token(const device_config *device)
+INLINE SHARC_REGS *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_ADSP21062);
-	return (SHARC_REGS *)device->token;
+	assert(device->type() == ADSP21062);
+	return (SHARC_REGS *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 INLINE void CHANGE_PC(SHARC_REGS *cpustate, UINT32 newpc)
@@ -370,7 +369,7 @@ static void build_opcode_table(void)
 
 /*****************************************************************************/
 
-void sharc_external_iop_write(const device_config *device, UINT32 address, UINT32 data)
+void sharc_external_iop_write(device_t *device, UINT32 address, UINT32 data)
 {
 	SHARC_REGS *cpustate = get_safe_token(device);
 	if (address == 0x1c)
@@ -387,7 +386,7 @@ void sharc_external_iop_write(const device_config *device, UINT32 address, UINT3
 	}
 }
 
-void sharc_external_dma_write(const device_config *device, UINT32 address, UINT64 data)
+void sharc_external_dma_write(device_t *device, UINT32 address, UINT64 data)
 {
 	SHARC_REGS *cpustate = get_safe_token(device);
 	switch ((cpustate->dma[6].control >> 6) & 0x3)
@@ -419,136 +418,136 @@ void sharc_external_dma_write(const device_config *device, UINT32 address, UINT6
 static CPU_INIT( sharc )
 {
 	SHARC_REGS *cpustate = get_safe_token(device);
-	const sharc_config *cfg = (const sharc_config *)device->static_config;
+	const sharc_config *cfg = (const sharc_config *)device->static_config();
 	int saveindex;
 
 	cpustate->boot_mode = cfg->boot_mode;
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
 
 	build_opcode_table();
 
-	cpustate->internal_ram = auto_alloc_array(device->machine, UINT16, 2 * 0x10000);		// 2x 128KB
+	cpustate->internal_ram = auto_alloc_array(device->machine(), UINT16, 2 * 0x10000);		// 2x 128KB
 	cpustate->internal_ram_block0 = &cpustate->internal_ram[0];
 	cpustate->internal_ram_block1 = &cpustate->internal_ram[0x20000/2];
 
-	state_save_register_device_item(device, 0, cpustate->pc);
-	state_save_register_device_item_pointer(device, 0, (&cpustate->r[0].r), ARRAY_LENGTH(cpustate->r));
-	state_save_register_device_item_pointer(device, 0, (&cpustate->reg_alt[0].r), ARRAY_LENGTH(cpustate->reg_alt));
-	state_save_register_device_item(device, 0, cpustate->mrf);
-	state_save_register_device_item(device, 0, cpustate->mrb);
+	device->save_item(NAME(cpustate->pc));
+	device->save_pointer(NAME(&cpustate->r[0].r), ARRAY_LENGTH(cpustate->r));
+	device->save_pointer(NAME(&cpustate->reg_alt[0].r), ARRAY_LENGTH(cpustate->reg_alt));
+	device->save_item(NAME(cpustate->mrf));
+	device->save_item(NAME(cpustate->mrb));
 
-	state_save_register_device_item_array(device, 0, cpustate->pcstack);
-	state_save_register_device_item_array(device, 0, cpustate->lcstack);
-	state_save_register_device_item_array(device, 0, cpustate->lastack);
-	state_save_register_device_item(device, 0, cpustate->lstkp);
+	device->save_item(NAME(cpustate->pcstack));
+	device->save_item(NAME(cpustate->lcstack));
+	device->save_item(NAME(cpustate->lastack));
+	device->save_item(NAME(cpustate->lstkp));
 
-	state_save_register_device_item(device, 0, cpustate->faddr);
-	state_save_register_device_item(device, 0, cpustate->daddr);
-	state_save_register_device_item(device, 0, cpustate->pcstk);
-	state_save_register_device_item(device, 0, cpustate->pcstkp);
-	state_save_register_device_item(device, 0, cpustate->laddr);
-	state_save_register_device_item(device, 0, cpustate->curlcntr);
-	state_save_register_device_item(device, 0, cpustate->lcntr);
+	device->save_item(NAME(cpustate->faddr));
+	device->save_item(NAME(cpustate->daddr));
+	device->save_item(NAME(cpustate->pcstk));
+	device->save_item(NAME(cpustate->pcstkp));
+	device->save_item(NAME(cpustate->laddr));
+	device->save_item(NAME(cpustate->curlcntr));
+	device->save_item(NAME(cpustate->lcntr));
 
-	state_save_register_device_item_array(device, 0, cpustate->dag1.i);
-	state_save_register_device_item_array(device, 0, cpustate->dag1.m);
-	state_save_register_device_item_array(device, 0, cpustate->dag1.b);
-	state_save_register_device_item_array(device, 0, cpustate->dag1.l);
-	state_save_register_device_item_array(device, 0, cpustate->dag2.i);
-	state_save_register_device_item_array(device, 0, cpustate->dag2.m);
-	state_save_register_device_item_array(device, 0, cpustate->dag2.b);
-	state_save_register_device_item_array(device, 0, cpustate->dag2.l);
-	state_save_register_device_item_array(device, 0, cpustate->dag1_alt.i);
-	state_save_register_device_item_array(device, 0, cpustate->dag1_alt.m);
-	state_save_register_device_item_array(device, 0, cpustate->dag1_alt.b);
-	state_save_register_device_item_array(device, 0, cpustate->dag1_alt.l);
-	state_save_register_device_item_array(device, 0, cpustate->dag2_alt.i);
-	state_save_register_device_item_array(device, 0, cpustate->dag2_alt.m);
-	state_save_register_device_item_array(device, 0, cpustate->dag2_alt.b);
-	state_save_register_device_item_array(device, 0, cpustate->dag2_alt.l);
+	device->save_item(NAME(cpustate->dag1.i));
+	device->save_item(NAME(cpustate->dag1.m));
+	device->save_item(NAME(cpustate->dag1.b));
+	device->save_item(NAME(cpustate->dag1.l));
+	device->save_item(NAME(cpustate->dag2.i));
+	device->save_item(NAME(cpustate->dag2.m));
+	device->save_item(NAME(cpustate->dag2.b));
+	device->save_item(NAME(cpustate->dag2.l));
+	device->save_item(NAME(cpustate->dag1_alt.i));
+	device->save_item(NAME(cpustate->dag1_alt.m));
+	device->save_item(NAME(cpustate->dag1_alt.b));
+	device->save_item(NAME(cpustate->dag1_alt.l));
+	device->save_item(NAME(cpustate->dag2_alt.i));
+	device->save_item(NAME(cpustate->dag2_alt.m));
+	device->save_item(NAME(cpustate->dag2_alt.b));
+	device->save_item(NAME(cpustate->dag2_alt.l));
 
 	for (saveindex = 0; saveindex < ARRAY_LENGTH(cpustate->dma); saveindex++)
 	{
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].control);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].int_index);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].int_modifier);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].int_count);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].chain_ptr);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].gen_purpose);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].ext_index);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].ext_modifier);
-		state_save_register_device_item(device, saveindex, cpustate->dma[saveindex].ext_count);
+		device->save_item(NAME(cpustate->dma[saveindex].control), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].int_index), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].int_modifier), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].int_count), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].chain_ptr), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].gen_purpose), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].ext_index), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].ext_modifier), saveindex);
+		device->save_item(NAME(cpustate->dma[saveindex].ext_count), saveindex);
 	}
 
-	state_save_register_device_item(device, 0, cpustate->mode1);
-	state_save_register_device_item(device, 0, cpustate->mode2);
-	state_save_register_device_item(device, 0, cpustate->astat);
-	state_save_register_device_item(device, 0, cpustate->stky);
-	state_save_register_device_item(device, 0, cpustate->irptl);
-	state_save_register_device_item(device, 0, cpustate->imask);
-	state_save_register_device_item(device, 0, cpustate->imaskp);
-	state_save_register_device_item(device, 0, cpustate->ustat1);
-	state_save_register_device_item(device, 0, cpustate->ustat2);
+	device->save_item(NAME(cpustate->mode1));
+	device->save_item(NAME(cpustate->mode2));
+	device->save_item(NAME(cpustate->astat));
+	device->save_item(NAME(cpustate->stky));
+	device->save_item(NAME(cpustate->irptl));
+	device->save_item(NAME(cpustate->imask));
+	device->save_item(NAME(cpustate->imaskp));
+	device->save_item(NAME(cpustate->ustat1));
+	device->save_item(NAME(cpustate->ustat2));
 
-	state_save_register_device_item_array(device, 0, cpustate->flag);
+	device->save_item(NAME(cpustate->flag));
 
-	state_save_register_device_item(device, 0, cpustate->syscon);
-	state_save_register_device_item(device, 0, cpustate->sysstat);
+	device->save_item(NAME(cpustate->syscon));
+	device->save_item(NAME(cpustate->sysstat));
 
 	for (saveindex = 0; saveindex < ARRAY_LENGTH(cpustate->status_stack); saveindex++)
 	{
-		state_save_register_device_item(device, saveindex, cpustate->status_stack[saveindex].mode1);
-		state_save_register_device_item(device, saveindex, cpustate->status_stack[saveindex].astat);
+		device->save_item(NAME(cpustate->status_stack[saveindex].mode1), saveindex);
+		device->save_item(NAME(cpustate->status_stack[saveindex].astat), saveindex);
 	}
-	state_save_register_device_item(device, 0, cpustate->status_stkp);
+	device->save_item(NAME(cpustate->status_stkp));
 
-	state_save_register_device_item(device, 0, cpustate->px);
+	device->save_item(NAME(cpustate->px));
 
-	state_save_register_device_item_pointer(device, 0, cpustate->internal_ram, 2 * 0x10000);
+	device->save_pointer(NAME(cpustate->internal_ram), 2 * 0x10000);
 
-	state_save_register_device_item(device, 0, cpustate->opcode);
-	state_save_register_device_item(device, 0, cpustate->fetch_opcode);
-	state_save_register_device_item(device, 0, cpustate->decode_opcode);
+	device->save_item(NAME(cpustate->opcode));
+	device->save_item(NAME(cpustate->fetch_opcode));
+	device->save_item(NAME(cpustate->decode_opcode));
 
-	state_save_register_device_item(device, 0, cpustate->nfaddr);
+	device->save_item(NAME(cpustate->nfaddr));
 
-	state_save_register_device_item(device, 0, cpustate->idle);
-	state_save_register_device_item(device, 0, cpustate->irq_active);
-	state_save_register_device_item(device, 0, cpustate->active_irq_num);
+	device->save_item(NAME(cpustate->idle));
+	device->save_item(NAME(cpustate->irq_active));
+	device->save_item(NAME(cpustate->active_irq_num));
 
-	state_save_register_device_item(device, 0, cpustate->dmaop_src);
-	state_save_register_device_item(device, 0, cpustate->dmaop_dst);
-	state_save_register_device_item(device, 0, cpustate->dmaop_chain_ptr);
-	state_save_register_device_item(device, 0, cpustate->dmaop_src_modifier);
-	state_save_register_device_item(device, 0, cpustate->dmaop_dst_modifier);
-	state_save_register_device_item(device, 0, cpustate->dmaop_src_count);
-	state_save_register_device_item(device, 0, cpustate->dmaop_dst_count);
-	state_save_register_device_item(device, 0, cpustate->dmaop_pmode);
-	state_save_register_device_item(device, 0, cpustate->dmaop_cycles);
-	state_save_register_device_item(device, 0, cpustate->dmaop_channel);
-	state_save_register_device_item(device, 0, cpustate->dmaop_chained_direction);
+	device->save_item(NAME(cpustate->dmaop_src));
+	device->save_item(NAME(cpustate->dmaop_dst));
+	device->save_item(NAME(cpustate->dmaop_chain_ptr));
+	device->save_item(NAME(cpustate->dmaop_src_modifier));
+	device->save_item(NAME(cpustate->dmaop_dst_modifier));
+	device->save_item(NAME(cpustate->dmaop_src_count));
+	device->save_item(NAME(cpustate->dmaop_dst_count));
+	device->save_item(NAME(cpustate->dmaop_pmode));
+	device->save_item(NAME(cpustate->dmaop_cycles));
+	device->save_item(NAME(cpustate->dmaop_channel));
+	device->save_item(NAME(cpustate->dmaop_chained_direction));
 
-	state_save_register_device_item(device, 0, cpustate->interrupt_active);
+	device->save_item(NAME(cpustate->interrupt_active));
 
-	state_save_register_device_item(device, 0, cpustate->iop_latency_cycles);
-	state_save_register_device_item(device, 0, cpustate->iop_latency_reg);
-	state_save_register_device_item(device, 0, cpustate->iop_latency_data);
+	device->save_item(NAME(cpustate->iop_latency_cycles));
+	device->save_item(NAME(cpustate->iop_latency_reg));
+	device->save_item(NAME(cpustate->iop_latency_data));
 
-	state_save_register_device_item(device, 0, cpustate->delay_slot1);
-	state_save_register_device_item(device, 0, cpustate->delay_slot2);
+	device->save_item(NAME(cpustate->delay_slot1));
+	device->save_item(NAME(cpustate->delay_slot2));
 
-	state_save_register_device_item(device, 0, cpustate->systemreg_latency_cycles);
-	state_save_register_device_item(device, 0, cpustate->systemreg_latency_reg);
-	state_save_register_device_item(device, 0, cpustate->systemreg_latency_data);
-	state_save_register_device_item(device, 0, cpustate->systemreg_previous_data);
+	device->save_item(NAME(cpustate->systemreg_latency_cycles));
+	device->save_item(NAME(cpustate->systemreg_latency_reg));
+	device->save_item(NAME(cpustate->systemreg_latency_data));
+	device->save_item(NAME(cpustate->systemreg_previous_data));
 
-	state_save_register_device_item(device, 0, cpustate->astat_old);
-	state_save_register_device_item(device, 0, cpustate->astat_old_old);
-	state_save_register_device_item(device, 0, cpustate->astat_old_old_old);
+	device->save_item(NAME(cpustate->astat_old));
+	device->save_item(NAME(cpustate->astat_old_old));
+	device->save_item(NAME(cpustate->astat_old_old_old));
 }
 
 static CPU_RESET( sharc )
@@ -607,7 +606,7 @@ static void sharc_set_irq_line(SHARC_REGS *cpustate, int irqline, int state)
 	}
 }
 
-void sharc_set_flag_input(const device_config *device, int flag_num, int state)
+void sharc_set_flag_input(device_t *device, int flag_num, int state)
 {
 	SHARC_REGS *cpustate = get_safe_token(device);
 	if (flag_num >= 0 && flag_num < 4)
@@ -670,14 +669,13 @@ static void check_interrupts(SHARC_REGS *cpustate)
 static CPU_EXECUTE( sharc )
 {
 	SHARC_REGS *cpustate = get_safe_token(device);
-	cpustate->icount = cycles;
 
 	if (cpustate->idle && cpustate->irq_active == 0)
 	{
 		// handle pending DMA transfers
 		if (cpustate->dmaop_cycles > 0)
 		{
-			cpustate->dmaop_cycles -= cycles;
+			cpustate->dmaop_cycles -= cpustate->icount;
 			if (cpustate->dmaop_cycles <= 0)
 			{
 				cpustate->dmaop_cycles = 0;
@@ -691,8 +689,6 @@ static CPU_EXECUTE( sharc )
 
 		cpustate->icount = 0;
 		debugger_instruction_hook(device, cpustate->daddr);
-
-		return cycles;
 	}
 	if (cpustate->irq_active != 0)
 	{
@@ -838,8 +834,6 @@ static CPU_EXECUTE( sharc )
 
 		--cpustate->icount;
 	};
-
-	return cycles - cpustate->icount;
 }
 
 /**************************************************************************
@@ -966,7 +960,7 @@ static CPU_SET_INFO( adsp21062 )
 static CPU_READ( sharc )
 {
 	SHARC_REGS *cpustate = get_safe_token(device);
-	if (space == ADDRESS_SPACE_PROGRAM)
+	if (space == AS_PROGRAM)
 	{
 		int address = offset >> 3;
 
@@ -992,7 +986,7 @@ static CPU_READ( sharc )
 			*value = 0;
 		}
 	}
-	else if (space == ADDRESS_SPACE_DATA)
+	else if (space == AS_DATA)
 	{
 		int address = offset >> 2;
 		if (address >= 0x20000)
@@ -1052,13 +1046,13 @@ static CPU_READOP( sharc )
 }
 
 // This is just used to stop the debugger from complaining about executing from I/O space
-static ADDRESS_MAP_START( internal_pgm, ADDRESS_SPACE_PROGRAM, 64 )
+static ADDRESS_MAP_START( internal_pgm, AS_PROGRAM, 64 )
 	AM_RANGE(0x20000, 0x7ffff) AM_RAM
 ADDRESS_MAP_END
 
 static CPU_GET_INFO( sharc )
 {
-	SHARC_REGS *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	SHARC_REGS *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch(state)
 	{
@@ -1074,15 +1068,15 @@ static CPU_GET_INFO( sharc )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 24;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = -3;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = -2;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 24;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -3;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = -2;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 
@@ -1199,7 +1193,7 @@ static CPU_GET_INFO( sharc )
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
 		case CPUINFO_FCT_READ:							info->read = CPU_READ_NAME(sharc);		break;
 		case CPUINFO_FCT_READOP:						info->readop = CPU_READOP_NAME(sharc);	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map64 = ADDRESS_MAP_NAME(internal_pgm); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map64 = ADDRESS_MAP_NAME(internal_pgm); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_FAMILY:					strcpy(info->s, "SHARC");				break;
@@ -1324,3 +1318,5 @@ CPU_GET_INFO( adsp21062 )
 		default:										CPU_GET_INFO_CALL(sharc);				break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(ADSP21062, adsp21062);

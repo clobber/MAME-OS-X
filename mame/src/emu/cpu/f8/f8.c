@@ -26,6 +26,7 @@
    added interrupt functionality
  */
 
+#include "emu.h"
 #include "debugger.h"
 #include "f8.h"
 
@@ -51,22 +52,21 @@ struct _f8_Regs
 	UINT8	dbus;	/* data bus value */
 	UINT16	io; 	/* last I/O address */
 	UINT16  irq_vector;
-	cpu_irq_callback irq_callback;
-	const device_config *device;
-	const address_space *program;
-	const address_space *iospace;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *iospace;
 	int icount;
 	UINT8   r[64];  /* scratchpad RAM */
 	int     irq_request;
 };
 
-INLINE f8_Regs *get_safe_token(const device_config *device)
+INLINE f8_Regs *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_F8);
-	return (f8_Regs *)device->token;
+	assert(device->type() == F8);
+	return (f8_Regs *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /* timer shifter polynome values (will be used for timer interrupts) */
@@ -119,7 +119,7 @@ static void ROMC_00(f8_Regs *cpustate, int insttim)	/* SKR - added parameter to 
      * of PC0.
      */
 
-	cpustate->dbus = memory_decrypted_read_byte(cpustate->program, cpustate->pc0);
+	cpustate->dbus = cpustate->direct->read_decrypted_byte(cpustate->pc0);
     cpustate->pc0 += 1;
     cpustate->icount -= insttim;	/* SKR - ROMC00 is usually short, not short+long, */
                             /* but DS is long */
@@ -133,7 +133,7 @@ static void ROMC_01(f8_Regs *cpustate)
      * location addressed by PC0; then all devices add the 8-bit value
      * on the data bus as signed binary number to PC0.
      */
-	cpustate->dbus = memory_raw_read_byte(cpustate->program, cpustate->pc0);
+	cpustate->dbus = cpustate->direct->read_raw_byte(cpustate->pc0);
 	cpustate->pc0 += (INT8)cpustate->dbus;
     cpustate->icount -= cL;
 }
@@ -146,7 +146,7 @@ static void ROMC_02(f8_Regs *cpustate)
      * the memory location addressed by DC0; then all devices increment
      * DC0.
      */
-    cpustate->dbus = memory_read_byte_8be(cpustate->program, cpustate->dc0);
+    cpustate->dbus = cpustate->program->read_byte(cpustate->dc0);
     cpustate->dc0 += 1;
     cpustate->icount -= cL;
 }
@@ -157,7 +157,7 @@ static void ROMC_03(f8_Regs *cpustate, int insttim)	/* SKR - added parameter to 
      * Similiar to 0x00, except that it is used for immediate operands
      * fetches (using PC0) instead of instruction fetches.
      */
-    cpustate->dbus = cpustate->io = memory_raw_read_byte(cpustate->program, cpustate->pc0);
+    cpustate->dbus = cpustate->io = cpustate->direct->read_raw_byte(cpustate->pc0);
     cpustate->pc0 += 1;
     cpustate->icount -= insttim;
 }
@@ -177,7 +177,7 @@ static void ROMC_05(f8_Regs *cpustate)
      * Store the data bus contents into the memory location pointed
      * to by DC0; increment DC0.
      */
-    memory_write_byte_8be(cpustate->program, cpustate->dc0, cpustate->dbus);
+    cpustate->program->write_byte(cpustate->dc0, cpustate->dbus);
     cpustate->dc0 += 1;
     cpustate->icount -= cL;
 }
@@ -251,7 +251,7 @@ static void ROMC_0C(f8_Regs *cpustate)
      * by PC0 into the data bus; then all devices move the value that
      * has just been placed on the data bus into the low order byte of PC0.
      */
-    cpustate->dbus = memory_raw_read_byte(cpustate->program, cpustate->pc0);
+    cpustate->dbus = cpustate->direct->read_raw_byte(cpustate->pc0);
     cpustate->pc0 = (cpustate->pc0 & 0xff00) | cpustate->dbus;
     cpustate->icount -= cL;
 }
@@ -274,7 +274,7 @@ static void ROMC_0E(f8_Regs *cpustate)
      * The value on the data bus is then moved to the low order byte
      * of DC0 by all devices.
      */
-    cpustate->dbus = memory_raw_read_byte(cpustate->program, cpustate->pc0);
+    cpustate->dbus = cpustate->direct->read_raw_byte(cpustate->pc0);
     cpustate->dc0 = (cpustate->dc0 & 0xff00) | cpustate->dbus;
     cpustate->icount -= cL;
 }
@@ -288,7 +288,7 @@ static void ROMC_0F(f8_Regs *cpustate)
      * must move the contents of the data bus into the low order
      * byte of PC0.
      */
-    cpustate->irq_vector = (*cpustate->irq_callback)(cpustate->device, 0);
+    cpustate->irq_vector = (*cpustate->irq_callback)(cpustate->device, F8_INPUT_LINE_INT_REQ);
     cpustate->dbus = cpustate->irq_vector & 0x00ff;
     cpustate->pc1 = cpustate->pc0;
     cpustate->pc0 = (cpustate->pc0 & 0xff00) | cpustate->dbus;
@@ -314,7 +314,7 @@ static void ROMC_11(f8_Regs *cpustate)
      * data bus. All devices must then move the contents of the
      * data bus to the upper byte of DC0.
      */
-    cpustate->dbus = memory_raw_read_byte(cpustate->program, cpustate->pc0);
+    cpustate->dbus = cpustate->direct->read_raw_byte(cpustate->pc0);
 	cpustate->dc0 = (cpustate->dc0 & 0x00ff) | (cpustate->dbus << 8);
     cpustate->icount -= cL;
 }
@@ -413,7 +413,7 @@ static void ROMC_1A(f8_Regs *cpustate)
      * register was addressed; the device containing the addressed port
      * must place the contents of the data bus into the address port.
      */
-    memory_write_byte_8be(cpustate->iospace, cpustate->io, cpustate->dbus);
+    cpustate->iospace->write_byte(cpustate->io, cpustate->dbus);
     cpustate->icount -= cL;
 }
 
@@ -426,7 +426,7 @@ static void ROMC_1B(f8_Regs *cpustate)
      * contents of timer and interrupt control registers cannot be read
      * back onto the data bus).
      */
-	cpustate->dbus = memory_read_byte_8be(cpustate->iospace, cpustate->io);
+	cpustate->dbus = cpustate->iospace->read_byte(cpustate->io);
     cpustate->icount -= cL;
 }
 
@@ -1213,7 +1213,7 @@ static void f8_xm(f8_Regs *cpustate)
 
 /***************************************************
  *  O Z C S 1000 1101
- *  0 x 0 x CM
+ *  x x x x CM
  ***************************************************/
 static void f8_cm(f8_Regs *cpustate)	/* SKR changed to match f8_ci(cpustate) */
 {
@@ -1268,7 +1268,7 @@ static void f8_ins_0(f8_Regs *cpustate, int n)
 {
     ROMC_1C(cpustate, cS);
     CLR_OZCS;
-    cpustate->a = memory_read_byte_8be(cpustate->iospace, n);
+    cpustate->a = cpustate->iospace->read_byte(n);
     SET_SZ(cpustate->a);
 }
 
@@ -1293,7 +1293,7 @@ static void f8_ins_1(f8_Regs *cpustate, int n)
 static void f8_outs_0(f8_Regs *cpustate, int n)
 {
     ROMC_1C(cpustate, cS);
-    memory_write_byte_8be(cpustate->iospace, n, cpustate->a);
+    cpustate->iospace->write_byte(n, cpustate->a);
 }
 
 /***************************************************
@@ -1545,14 +1545,15 @@ static CPU_RESET( f8 )
 	f8_Regs *cpustate = get_safe_token(device);
 	UINT8 data;
 	int i;
-	cpu_irq_callback save_callback;
+	device_irq_callback save_callback;
 
 	save_callback = cpustate->irq_callback;
 	memset(cpustate, 0, sizeof(f8_Regs));
 	cpustate->irq_callback = save_callback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->iospace = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->iospace = device->space(AS_IO);
 	cpustate->w&=~I;
 
 	/* save PC0 to PC1 and reset PC0 */
@@ -1586,7 +1587,6 @@ static CPU_RESET( f8 )
 static CPU_EXECUTE( f8 )
 {
     f8_Regs *cpustate = get_safe_token(device);
-    cpustate->icount = cycles;
 
     do
     {
@@ -1749,22 +1749,22 @@ static CPU_EXECUTE( f8 )
 	case 0x8e: /* 1000 1110 */	f8_adc(cpustate);			break;
 	case 0x8f: /* 1000 1111 */	f8_br7(cpustate);			break;
 
-	case 0x90: /* 1001 0000 */	f8_bf(cpustate, 0x0); 		break;
-	case 0x91: /* 1001 0001 */	f8_bf(cpustate, 0x1); 		break;
-	case 0x92: /* 1001 0010 */	f8_bf(cpustate, 0x2); 		break;
-	case 0x93: /* 1001 0011 */	f8_bf(cpustate, 0x3); 		break;
-	case 0x94: /* 1001 0100 */	f8_bf(cpustate, 0x4); 		break;
-	case 0x95: /* 1001 0101 */	f8_bf(cpustate, 0x5); 		break;
-	case 0x96: /* 1001 0110 */	f8_bf(cpustate, 0x6); 		break;
-	case 0x97: /* 1001 0111 */	f8_bf(cpustate, 0x7); 		break;
-	case 0x98: /* 1001 1000 */	f8_bf(cpustate, 0x8); 		break;
-	case 0x99: /* 1001 1001 */	f8_bf(cpustate, 0x9); 		break;
-	case 0x9a: /* 1001 1010 */	f8_bf(cpustate, 0xa); 		break;
-	case 0x9b: /* 1001 1011 */	f8_bf(cpustate, 0xb); 		break;
-	case 0x9c: /* 1001 1100 */	f8_bf(cpustate, 0xc); 		break;
-	case 0x9d: /* 1001 1101 */	f8_bf(cpustate, 0xd); 		break;
-	case 0x9e: /* 1001 1110 */	f8_bf(cpustate, 0xe); 		break;
-	case 0x9f: /* 1001 1111 */	f8_bf(cpustate, 0xf); 		break;
+	case 0x90: /* 1001 0000 */	f8_bf(cpustate, 0x0);		break;
+	case 0x91: /* 1001 0001 */	f8_bf(cpustate, 0x1);		break;
+	case 0x92: /* 1001 0010 */	f8_bf(cpustate, 0x2);		break;
+	case 0x93: /* 1001 0011 */	f8_bf(cpustate, 0x3);		break;
+	case 0x94: /* 1001 0100 */	f8_bf(cpustate, 0x4);		break;
+	case 0x95: /* 1001 0101 */	f8_bf(cpustate, 0x5);		break;
+	case 0x96: /* 1001 0110 */	f8_bf(cpustate, 0x6);		break;
+	case 0x97: /* 1001 0111 */	f8_bf(cpustate, 0x7);		break;
+	case 0x98: /* 1001 1000 */	f8_bf(cpustate, 0x8);		break;
+	case 0x99: /* 1001 1001 */	f8_bf(cpustate, 0x9);		break;
+	case 0x9a: /* 1001 1010 */	f8_bf(cpustate, 0xa);		break;
+	case 0x9b: /* 1001 1011 */	f8_bf(cpustate, 0xb);		break;
+	case 0x9c: /* 1001 1100 */	f8_bf(cpustate, 0xc);		break;
+	case 0x9d: /* 1001 1101 */	f8_bf(cpustate, 0xd);		break;
+	case 0x9e: /* 1001 1110 */	f8_bf(cpustate, 0xe);		break;
+	case 0x9f: /* 1001 1111 */	f8_bf(cpustate, 0xf);		break;
 
 	case 0xa0: /* 1010 0000 */	f8_ins_0(cpustate, 0x0);		break;
 	case 0xa1: /* 1010 0001 */	f8_ins_0(cpustate, 0x1);		break;
@@ -1783,39 +1783,39 @@ static CPU_EXECUTE( f8 )
 	case 0xae: /* 1010 1110 */	f8_ins_1(cpustate, 0xe);		break;
 	case 0xaf: /* 1010 1111 */	f8_ins_1(cpustate, 0xf);		break;
 
-	case 0xb0: /* 1011 0000 */	f8_outs_0(cpustate, 0x0); 	break;
-	case 0xb1: /* 1011 0001 */	f8_outs_0(cpustate, 0x1); 	break;
+	case 0xb0: /* 1011 0000 */	f8_outs_0(cpustate, 0x0);	break;
+	case 0xb1: /* 1011 0001 */	f8_outs_0(cpustate, 0x1);	break;
 	case 0xb2: /* 1011 0010 */	illegal(cpustate);			break;
 	case 0xb3: /* 1011 0011 */	illegal(cpustate);			break;
-	case 0xb4: /* 1011 0100 */	f8_outs_1(cpustate, 0x4); 	break;
-	case 0xb5: /* 1011 0101 */	f8_outs_1(cpustate, 0x5); 	break;
-	case 0xb6: /* 1011 0110 */	f8_outs_1(cpustate, 0x6); 	break;
-	case 0xb7: /* 1011 0111 */	f8_outs_1(cpustate, 0x7); 	break;
-	case 0xb8: /* 1011 1000 */	f8_outs_1(cpustate, 0x8); 	break;
-	case 0xb9: /* 1011 1001 */	f8_outs_1(cpustate, 0x9); 	break;
-	case 0xba: /* 1011 1010 */	f8_outs_1(cpustate, 0xa); 	break;
-	case 0xbb: /* 1011 1011 */	f8_outs_1(cpustate, 0xb); 	break;
-	case 0xbc: /* 1011 1100 */	f8_outs_1(cpustate, 0xc); 	break;
-	case 0xbd: /* 1011 1101 */	f8_outs_1(cpustate, 0xd); 	break;
-	case 0xbe: /* 1011 1110 */	f8_outs_1(cpustate, 0xe); 	break;
-	case 0xbf: /* 1011 1111 */	f8_outs_1(cpustate, 0xf); 	break;
+	case 0xb4: /* 1011 0100 */	f8_outs_1(cpustate, 0x4);	break;
+	case 0xb5: /* 1011 0101 */	f8_outs_1(cpustate, 0x5);	break;
+	case 0xb6: /* 1011 0110 */	f8_outs_1(cpustate, 0x6);	break;
+	case 0xb7: /* 1011 0111 */	f8_outs_1(cpustate, 0x7);	break;
+	case 0xb8: /* 1011 1000 */	f8_outs_1(cpustate, 0x8);	break;
+	case 0xb9: /* 1011 1001 */	f8_outs_1(cpustate, 0x9);	break;
+	case 0xba: /* 1011 1010 */	f8_outs_1(cpustate, 0xa);	break;
+	case 0xbb: /* 1011 1011 */	f8_outs_1(cpustate, 0xb);	break;
+	case 0xbc: /* 1011 1100 */	f8_outs_1(cpustate, 0xc);	break;
+	case 0xbd: /* 1011 1101 */	f8_outs_1(cpustate, 0xd);	break;
+	case 0xbe: /* 1011 1110 */	f8_outs_1(cpustate, 0xe);	break;
+	case 0xbf: /* 1011 1111 */	f8_outs_1(cpustate, 0xf);	break;
 
-	case 0xc0: /* 1100 0000 */	f8_as(cpustate, 0x0); 		break;
-	case 0xc1: /* 1100 0001 */	f8_as(cpustate, 0x1); 		break;
-	case 0xc2: /* 1100 0010 */	f8_as(cpustate, 0x2); 		break;
-	case 0xc3: /* 1100 0011 */	f8_as(cpustate, 0x3); 		break;
-	case 0xc4: /* 1100 0100 */	f8_as(cpustate, 0x4); 		break;
-	case 0xc5: /* 1100 0101 */	f8_as(cpustate, 0x5); 		break;
-	case 0xc6: /* 1100 0110 */	f8_as(cpustate, 0x6); 		break;
-	case 0xc7: /* 1100 0111 */	f8_as(cpustate, 0x7); 		break;
-	case 0xc8: /* 1100 1000 */	f8_as(cpustate, 0x8); 		break;
-	case 0xc9: /* 1100 1001 */	f8_as(cpustate, 0x9); 		break;
-	case 0xca: /* 1100 1010 */	f8_as(cpustate, 0xa); 		break;
-	case 0xcb: /* 1100 1011 */	f8_as(cpustate, 0xb); 		break;
-	case 0xcc: /* 1100 1100 */	f8_as_isar(cpustate); 		break;
+	case 0xc0: /* 1100 0000 */	f8_as(cpustate, 0x0);		break;
+	case 0xc1: /* 1100 0001 */	f8_as(cpustate, 0x1);		break;
+	case 0xc2: /* 1100 0010 */	f8_as(cpustate, 0x2);		break;
+	case 0xc3: /* 1100 0011 */	f8_as(cpustate, 0x3);		break;
+	case 0xc4: /* 1100 0100 */	f8_as(cpustate, 0x4);		break;
+	case 0xc5: /* 1100 0101 */	f8_as(cpustate, 0x5);		break;
+	case 0xc6: /* 1100 0110 */	f8_as(cpustate, 0x6);		break;
+	case 0xc7: /* 1100 0111 */	f8_as(cpustate, 0x7);		break;
+	case 0xc8: /* 1100 1000 */	f8_as(cpustate, 0x8);		break;
+	case 0xc9: /* 1100 1001 */	f8_as(cpustate, 0x9);		break;
+	case 0xca: /* 1100 1010 */	f8_as(cpustate, 0xa);		break;
+	case 0xcb: /* 1100 1011 */	f8_as(cpustate, 0xb);		break;
+	case 0xcc: /* 1100 1100 */	f8_as_isar(cpustate);		break;
 	case 0xcd: /* 1100 1101 */	f8_as_isar_i(cpustate); 	break;
 	case 0xce: /* 1100 1110 */	f8_as_isar_d(cpustate); 	break;
-	case 0xcf: /* 1100 1111 */	illegal(cpustate); 			break;
+	case 0xcf: /* 1100 1111 */	illegal(cpustate);			break;
 
 	case 0xd0: /* 1101 0000 */	f8_asd(cpustate, 0x0);		break;
 	case 0xd1: /* 1101 0001 */	f8_asd(cpustate, 0x1);		break;
@@ -1834,35 +1834,35 @@ static CPU_EXECUTE( f8 )
 	case 0xde: /* 1101 1110 */	f8_asd_isar_d(cpustate);	break;
 	case 0xdf: /* 1101 1111 */	illegal(cpustate);			break;
 
-	case 0xe0: /* 1110 0000 */	f8_xs(cpustate, 0x0); 		break;
-	case 0xe1: /* 1110 0001 */	f8_xs(cpustate, 0x1); 		break;
-	case 0xe2: /* 1110 0010 */	f8_xs(cpustate, 0x2); 		break;
-	case 0xe3: /* 1110 0011 */	f8_xs(cpustate, 0x3); 		break;
-	case 0xe4: /* 1110 0100 */	f8_xs(cpustate, 0x4); 		break;
-	case 0xe5: /* 1110 0101 */	f8_xs(cpustate, 0x5); 		break;
-	case 0xe6: /* 1110 0110 */	f8_xs(cpustate, 0x6); 		break;
-	case 0xe7: /* 1110 0111 */	f8_xs(cpustate, 0x7); 		break;
-	case 0xe8: /* 1110 1000 */	f8_xs(cpustate, 0x8); 		break;
-	case 0xe9: /* 1110 1001 */	f8_xs(cpustate, 0x9); 		break;
-	case 0xea: /* 1110 1010 */	f8_xs(cpustate, 0xa); 		break;
-	case 0xeb: /* 1110 1011 */	f8_xs(cpustate, 0xb); 		break;
+	case 0xe0: /* 1110 0000 */	f8_xs(cpustate, 0x0);		break;
+	case 0xe1: /* 1110 0001 */	f8_xs(cpustate, 0x1);		break;
+	case 0xe2: /* 1110 0010 */	f8_xs(cpustate, 0x2);		break;
+	case 0xe3: /* 1110 0011 */	f8_xs(cpustate, 0x3);		break;
+	case 0xe4: /* 1110 0100 */	f8_xs(cpustate, 0x4);		break;
+	case 0xe5: /* 1110 0101 */	f8_xs(cpustate, 0x5);		break;
+	case 0xe6: /* 1110 0110 */	f8_xs(cpustate, 0x6);		break;
+	case 0xe7: /* 1110 0111 */	f8_xs(cpustate, 0x7);		break;
+	case 0xe8: /* 1110 1000 */	f8_xs(cpustate, 0x8);		break;
+	case 0xe9: /* 1110 1001 */	f8_xs(cpustate, 0x9);		break;
+	case 0xea: /* 1110 1010 */	f8_xs(cpustate, 0xa);		break;
+	case 0xeb: /* 1110 1011 */	f8_xs(cpustate, 0xb);		break;
 	case 0xec: /* 1110 1100 */	f8_xs_isar(cpustate);		break;
 	case 0xed: /* 1110 1101 */	f8_xs_isar_i(cpustate);		break;
 	case 0xee: /* 1110 1110 */	f8_xs_isar_d(cpustate);		break;
 	case 0xef: /* 1110 1111 */	illegal(cpustate);			break;
 
-	case 0xf0: /* 1111 0000 */	f8_ns(cpustate, 0x0); 		break;
-	case 0xf1: /* 1111 0001 */	f8_ns(cpustate, 0x1); 		break;
-	case 0xf2: /* 1111 0010 */	f8_ns(cpustate, 0x2); 		break;
-	case 0xf3: /* 1111 0011 */	f8_ns(cpustate, 0x3); 		break;
-	case 0xf4: /* 1111 0100 */	f8_ns(cpustate, 0x4); 		break;
-	case 0xf5: /* 1111 0101 */	f8_ns(cpustate, 0x5); 		break;
-	case 0xf6: /* 1111 0110 */	f8_ns(cpustate, 0x6); 		break;
-	case 0xf7: /* 1111 0111 */	f8_ns(cpustate, 0x7); 		break;
-	case 0xf8: /* 1111 1000 */	f8_ns(cpustate, 0x8); 		break;
-	case 0xf9: /* 1111 1001 */	f8_ns(cpustate, 0x9); 		break;
-	case 0xfa: /* 1111 1010 */	f8_ns(cpustate, 0xa); 		break;
-	case 0xfb: /* 1111 1011 */	f8_ns(cpustate, 0xb); 		break;
+	case 0xf0: /* 1111 0000 */	f8_ns(cpustate, 0x0);		break;
+	case 0xf1: /* 1111 0001 */	f8_ns(cpustate, 0x1);		break;
+	case 0xf2: /* 1111 0010 */	f8_ns(cpustate, 0x2);		break;
+	case 0xf3: /* 1111 0011 */	f8_ns(cpustate, 0x3);		break;
+	case 0xf4: /* 1111 0100 */	f8_ns(cpustate, 0x4);		break;
+	case 0xf5: /* 1111 0101 */	f8_ns(cpustate, 0x5);		break;
+	case 0xf6: /* 1111 0110 */	f8_ns(cpustate, 0x6);		break;
+	case 0xf7: /* 1111 0111 */	f8_ns(cpustate, 0x7);		break;
+	case 0xf8: /* 1111 1000 */	f8_ns(cpustate, 0x8);		break;
+	case 0xf9: /* 1111 1001 */	f8_ns(cpustate, 0x9);		break;
+	case 0xfa: /* 1111 1010 */	f8_ns(cpustate, 0xa);		break;
+	case 0xfb: /* 1111 1011 */	f8_ns(cpustate, 0xb);		break;
 	case 0xfc: /* 1111 1100 */	f8_ns_isar(cpustate);		break;
 	case 0xfd: /* 1111 1101 */	f8_ns_isar_i(cpustate);		break;
 	case 0xfe: /* 1111 1110 */	f8_ns_isar_d(cpustate);		break;
@@ -1878,9 +1878,9 @@ static CPU_EXECUTE( f8 )
 	    break;
 	default:
 	    if (cpustate->w&I && cpustate->irq_request) {
-		ROMC_1C(cpustate, cL);
-		ROMC_0F(cpustate);
-		ROMC_13(cpustate);
+			ROMC_1C(cpustate, cL);
+			ROMC_0F(cpustate);
+			ROMC_13(cpustate);
 	    }
 	    if((op>=0x30)&&(op<=0x3f))	/* SKR - DS is a long cycle inst */
 	    	ROMC_00(cpustate, cL);
@@ -1890,8 +1890,6 @@ static CPU_EXECUTE( f8 )
 	}
 
     } while( cpustate->icount > 0 );
-
-    return cycles - cpustate->icount;
 }
 
 CPU_DISASSEMBLE( f8 );
@@ -1901,8 +1899,22 @@ static CPU_INIT( f8 )
 	f8_Regs *cpustate = get_safe_token(device);
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->iospace = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
+	cpustate->iospace = device->space(AS_IO);
+
+	device->save_item(NAME(cpustate->pc0));
+	device->save_item(NAME(cpustate->pc1));
+	device->save_item(NAME(cpustate->dc0));
+	device->save_item(NAME(cpustate->dc1));
+	device->save_item(NAME(cpustate->a));
+	device->save_item(NAME(cpustate->w));
+	device->save_item(NAME(cpustate->is));
+	device->save_item(NAME(cpustate->dbus));
+	device->save_item(NAME(cpustate->io));
+	device->save_item(NAME(cpustate->irq_vector));
+	device->save_item(NAME(cpustate->irq_request));
+	device->save_item(NAME(cpustate->r));
 }
 
 static CPU_SET_INFO( f8 )
@@ -1914,14 +1926,14 @@ static CPU_SET_INFO( f8 )
 	case CPUINFO_INT_SP:			cpustate->pc1 = info->i;						break;
 	case CPUINFO_INT_PC:
 		cpustate->pc0 = info->i;
-		cpustate->dbus = memory_decrypted_read_byte(cpustate->program, cpustate->pc0);
+		cpustate->dbus = cpustate->direct->read_decrypted_byte(cpustate->pc0);
     	cpustate->pc0 += 1;
-  		break;
+		break;
 	case CPUINFO_INT_PREVIOUSPC:	break;	/* TODO? */
-	case CPUINFO_INT_INPUT_STATE:		cpustate->irq_request = info->i;				break;
+	case CPUINFO_INT_INPUT_STATE + F8_INPUT_LINE_INT_REQ:		cpustate->irq_request = info->i;				break;
 	case CPUINFO_INT_REGISTER + F8_PC0:
 		cpustate->pc0 = info->i;
-		cpustate->dbus = memory_decrypted_read_byte(cpustate->program, cpustate->pc0);
+		cpustate->dbus = cpustate->direct->read_decrypted_byte(cpustate->pc0);
     	cpustate->pc0 += 1;
 		break;
 	case CPUINFO_INT_REGISTER + F8_PC1: cpustate->pc1 = info->i; break;
@@ -2006,7 +2018,7 @@ static CPU_SET_INFO( f8 )
 
 CPU_GET_INFO( f8 )
 {
-	f8_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	f8_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -2022,29 +2034,29 @@ CPU_GET_INFO( f8 )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 1;			break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 7;			break;
 
-	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;	break;
-	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;	break;
-	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 8;	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;	break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;	break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;	break;
+	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 8;	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;	break;
 
 	case CPUINFO_INT_SP:				info->i = cpustate->pc1;					break;
 	case CPUINFO_INT_PC:				info->i = (cpustate->pc0 - 1) & 0xffff;	break;
 	case CPUINFO_INT_PREVIOUSPC:		info->i = 0;	/* TODO??? */		break;
 
-	case CPUINFO_INT_INPUT_STATE:			info->i = cpustate->irq_request;			break;
+	case CPUINFO_INT_INPUT_STATE + F8_INPUT_LINE_INT_REQ:			info->i = cpustate->irq_request;			break;
 
 	case CPUINFO_INT_REGISTER + F8_PC0:	info->i = (cpustate->pc0 - 1) & 0xffff;	break;
 	case CPUINFO_INT_REGISTER + F8_PC1: info->i = cpustate->pc1;					break;
 	case CPUINFO_INT_REGISTER + F8_DC0: info->i = cpustate->dc0;					break;
 	case CPUINFO_INT_REGISTER + F8_DC1: info->i = cpustate->dc1;					break;
-    case CPUINFO_INT_REGISTER + F8_W: 	info->i = cpustate->w;						break;
-	case CPUINFO_INT_REGISTER + F8_A: 	info->i = cpustate->a;						break;
-	case CPUINFO_INT_REGISTER + F8_IS: 	info->i = cpustate->is;					break;
+    case CPUINFO_INT_REGISTER + F8_W:	info->i = cpustate->w;						break;
+	case CPUINFO_INT_REGISTER + F8_A:	info->i = cpustate->a;						break;
+	case CPUINFO_INT_REGISTER + F8_IS:	info->i = cpustate->is;					break;
 	case CPUINFO_INT_REGISTER + F8_J:	info->i = cpustate->r[ 9];					break;
 	case CPUINFO_INT_REGISTER + F8_HU:  info->i = cpustate->r[10];					break;
 	case CPUINFO_INT_REGISTER + F8_HL:  info->i = cpustate->r[11];					break;
@@ -2126,7 +2138,7 @@ CPU_GET_INFO( f8 )
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;				break;
 
 	/* --- the following bits of info are returned as NULL-terminated strings --- */
-	case DEVINFO_STR_NAME: 			strcpy(info->s, "F8");			break;
+	case DEVINFO_STR_NAME:			strcpy(info->s, "F8");			break;
 	case DEVINFO_STR_FAMILY:	strcpy(info->s, "Fairchild F8");	break;
 	case DEVINFO_STR_VERSION:	strcpy(info->s, "1.0");			break;
 	case DEVINFO_STR_SOURCE_FILE:		strcpy(info->s, __FILE__);		break;
@@ -2220,8 +2232,4 @@ CPU_GET_INFO( f8 )
 	return;
 }
 
-
-
-
-
-
+DEFINE_LEGACY_CPU_DEVICE(F8, f8);

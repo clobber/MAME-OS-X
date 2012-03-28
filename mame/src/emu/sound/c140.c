@@ -43,9 +43,7 @@ Unmapped registers:
 */
 
 
-#include <math.h>
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "c140.h"
 
 #define MAX_VOICE 24
@@ -107,13 +105,11 @@ struct _c140_state
 	VOICE voi[MAX_VOICE];
 };
 
-INLINE c140_state *get_safe_token(const device_config *device)
+INLINE c140_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_C140);
-	return (c140_state *)device->token;
+	assert(device->type() == C140);
+	return (c140_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -198,7 +194,7 @@ static long find_sample(c140_state *info, long adrs, long bank, int voice)
 WRITE8_DEVICE_HANDLER( c140_w )
 {
 	c140_state *info = get_safe_token(device);
-	stream_update(info->stream);
+	info->stream->update();
 
 	offset&=0x1ff;
 
@@ -244,10 +240,10 @@ WRITE8_DEVICE_HANDLER( c140_w )
 				}
 				else
 				{
-				v->sample_loop = vreg->loop_msb*256 + vreg->loop_lsb;
-				v->sample_start = vreg->start_msb*256 + vreg->start_lsb;
-				v->sample_end = vreg->end_msb*256 + vreg->end_lsb;
-			}
+					v->sample_loop = vreg->loop_msb*256 + vreg->loop_lsb;
+					v->sample_start = vreg->start_msb*256 + vreg->start_lsb;
+					v->sample_end = vreg->end_msb*256 + vreg->end_lsb;
+				}
 			}
 			else
 			{
@@ -257,7 +253,7 @@ WRITE8_DEVICE_HANDLER( c140_w )
 	}
 }
 
-void c140_set_base(const device_config *device, void *base)
+void c140_set_base(device_t *device, void *base)
 {
 	c140_state *info = get_safe_token(device);
 	info->pRom = base;
@@ -467,16 +463,16 @@ static STREAM_UPDATE( update_stereo )
 
 static DEVICE_START( c140 )
 {
-	const c140_interface *intf = (const c140_interface *)device->static_config;
+	const c140_interface *intf = (const c140_interface *)device->static_config();
 	c140_state *info = get_safe_token(device);
 
-	info->sample_rate=info->baserate=device->clock;
+	info->sample_rate=info->baserate=device->clock();
 
 	info->banking_type = intf->banking_type;
 
-	info->stream = stream_create(device,0,2,info->sample_rate,info,update_stereo);
+	info->stream = device->machine().sound().stream_alloc(*device,0,2,info->sample_rate,info,update_stereo);
 
-	info->pRom=device->region;
+	info->pRom=*device->region();
 
 	/* make decompress pcm table */		//2000.06.26 CAB
 	{
@@ -496,7 +492,7 @@ static DEVICE_START( c140 )
 	}
 
 	/* allocate a pair of buffers to mix into - 1 second's worth should be more than enough */
-	info->mixer_buffer_left = auto_alloc_array(device->machine, INT16, 2 * info->sample_rate);
+	info->mixer_buffer_left = auto_alloc_array(device->machine(), INT16, 2 * info->sample_rate);
 	info->mixer_buffer_right = info->mixer_buffer_left + info->sample_rate;
 }
 
@@ -528,3 +524,5 @@ DEVICE_GET_INFO( c140 )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(C140, c140);

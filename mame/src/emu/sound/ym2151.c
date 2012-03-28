@@ -4,10 +4,7 @@
 *
 ******************************************************************************/
 
-#include <math.h>
-
-#include "sndintrf.h"
-#include "streams.h"
+#include "emu.h"
 #include "ym2151.h"
 
 
@@ -26,7 +23,8 @@ static FILE * cymfile = NULL;
 
 
 /* struct describing a single operator */
-typedef struct{
+typedef struct
+{
 	UINT32		phase;					/* accumulated operator phase */
 	UINT32		freq;					/* operator frequency count */
 	INT32		dt1;					/* current DT1 (detune 1 phase inc/decrement) value */
@@ -80,6 +78,10 @@ typedef struct{
 
 typedef struct
 {
+	signed int chanout[8];
+	signed int m2,c1,c2; /* Phase Modulation input for operators 2,3,4 */
+	signed int mem;		/* one sample delay memory */
+
 	YM2151Operator	oper[32];			/* the 32 operators */
 
 	UINT32		pan[16];				/* channels output masks (0xffffffff = enable) */
@@ -160,10 +162,10 @@ typedef struct
 
 	UINT32		noise_tab[32];			/* 17bit Noise Generator periods */
 
-	void (*irqhandler)(const device_config *device, int irq);		/* IRQ function handler */
+	void (*irqhandler)(device_t *device, int irq);		/* IRQ function handler */
 	write8_device_func porthandler;		/* port write function handler */
 
-	const device_config *device;
+	device_t *device;
 	unsigned int clock;					/* chip clock in Hz (passed from 2151intf.c) */
 	unsigned int sampfreq;				/* sampling frequency in Hz (passed from 2151intf.c) */
 } YM2151;
@@ -478,12 +480,6 @@ static const UINT8 lfo_noise_waveform[256] = {
 
 
 
-/* these variables stay here for speedup purposes only */
-static YM2151 * PSG;
-static signed int chanout[8];
-static signed int m2,c1,c2; /* Phase Modulation input for operators 2,3,4 */
-static signed int mem;		/* one sample delay memory */
-
 
 /* save output as raw 16-bit sample */
 /* #define SAVE_SAMPLE */
@@ -694,21 +690,21 @@ static void init_chip_tables(YM2151 *chip)
 	for (i=0; i<1024; i++)
 	{
 		/* ASG 980324: changed to compute both tim_A_tab and timer_A_time */
-		pom= attotime_mul(ATTOTIME_IN_HZ(chip->clock), 64 * (1024 - i));
+		pom= attotime::from_hz(chip->clock) * (64 * (1024 - i));
 		#ifdef USE_MAME_TIMERS
 			chip->timer_A_time[i] = pom;
 		#else
-			chip->tim_A_tab[i] = attotime_to_double(pom) * (double)chip->sampfreq * mult;  /* number of samples that timer period takes (fixed point) */
+			chip->tim_A_tab[i] = pom.as_double() * (double)chip->sampfreq * mult;  /* number of samples that timer period takes (fixed point) */
 		#endif
 	}
 	for (i=0; i<256; i++)
 	{
 		/* ASG 980324: changed to compute both tim_B_tab and timer_B_time */
-		pom= attotime_mul(ATTOTIME_IN_HZ(chip->clock), 1024 * (256 - i));
+		pom= attotime::from_hz(chip->clock) * (1024 * (256 - i));
 		#ifdef USE_MAME_TIMERS
 			chip->timer_B_time[i] = pom;
 		#else
-			chip->tim_B_tab[i] = attotime_to_double(pom) * (double)chip->sampfreq * mult;  /* number of samples that timer period takes (fixed point) */
+			chip->tim_B_tab[i] = pom.as_double() * (double)chip->sampfreq * mult;  /* number of samples that timer period takes (fixed point) */
 		#endif
 	}
 
@@ -754,7 +750,7 @@ static void init_chip_tables(YM2151 *chip)
 		}														\
 }
 
-INLINE void envelope_KONKOFF(YM2151Operator * op, int v)
+INLINE void envelope_KONKOFF(YM2151 *PSG, YM2151Operator * op, int v)
 {
 	if (v&0x08)	/* M1 */
 		KEY_ON (op+0, 1)
@@ -823,12 +819,12 @@ static TIMER_CALLBACK( irqBoff_callback )
 static TIMER_CALLBACK( timer_callback_a )
 {
 	YM2151 *chip = (YM2151 *)ptr;
-	timer_adjust_oneshot(chip->timer_A, chip->timer_A_time[ chip->timer_A_index ], 0);
+	chip->timer_A->adjust(chip->timer_A_time[ chip->timer_A_index ]);
 	chip->timer_A_index_old = chip->timer_A_index;
 	if (chip->irq_enable & 0x04)
 	{
 		chip->status |= 1;
-		timer_set(machine, attotime_zero,chip,0,irqAon_callback);
+		machine.scheduler().timer_set(attotime::zero, FUNC(irqAon_callback), 0, chip);
 	}
 	if (chip->irq_enable & 0x80)
 		chip->csm_req = 2;		/* request KEY ON / KEY OFF sequence */
@@ -836,12 +832,12 @@ static TIMER_CALLBACK( timer_callback_a )
 static TIMER_CALLBACK( timer_callback_b )
 {
 	YM2151 *chip = (YM2151 *)ptr;
-	timer_adjust_oneshot(chip->timer_B, chip->timer_B_time[ chip->timer_B_index ], 0);
+	chip->timer_B->adjust(chip->timer_B_time[ chip->timer_B_index ]);
 	chip->timer_B_index_old = chip->timer_B_index;
 	if (chip->irq_enable & 0x08)
 	{
 		chip->status |= 2;
-		timer_set(machine, attotime_zero,chip,0,irqBon_callback);
+		machine.scheduler().timer_set(attotime::zero, FUNC(irqBon_callback), 0, chip);
 	}
 }
 #if 0
@@ -858,7 +854,7 @@ static TIMER_CALLBACK( timer_callback_chip_busy )
 
 
 
-INLINE void set_connect( YM2151Operator *om1, int cha, int v)
+INLINE void set_connect(YM2151 *PSG, YM2151Operator *om1, int cha, int v)
 {
 	YM2151Operator *om2 = om1+1;
 	YM2151Operator *oc1 = om1+2;
@@ -871,47 +867,47 @@ INLINE void set_connect( YM2151Operator *om1, int cha, int v)
 	{
 	case 0:
 		/* M1---C1---MEM---M2---C2---OUT */
-		om1->connect = &c1;
-		oc1->connect = &mem;
-		om2->connect = &c2;
-		om1->mem_connect = &m2;
+		om1->connect = &PSG->c1;
+		oc1->connect = &PSG->mem;
+		om2->connect = &PSG->c2;
+		om1->mem_connect = &PSG->m2;
 		break;
 
 	case 1:
 		/* M1------+-MEM---M2---C2---OUT */
 		/*      C1-+                     */
-		om1->connect = &mem;
-		oc1->connect = &mem;
-		om2->connect = &c2;
-		om1->mem_connect = &m2;
+		om1->connect = &PSG->mem;
+		oc1->connect = &PSG->mem;
+		om2->connect = &PSG->c2;
+		om1->mem_connect = &PSG->m2;
 		break;
 
 	case 2:
 		/* M1-----------------+-C2---OUT */
 		/*      C1---MEM---M2-+          */
-		om1->connect = &c2;
-		oc1->connect = &mem;
-		om2->connect = &c2;
-		om1->mem_connect = &m2;
+		om1->connect = &PSG->c2;
+		oc1->connect = &PSG->mem;
+		om2->connect = &PSG->c2;
+		om1->mem_connect = &PSG->m2;
 		break;
 
 	case 3:
 		/* M1---C1---MEM------+-C2---OUT */
 		/*                 M2-+          */
-		om1->connect = &c1;
-		oc1->connect = &mem;
-		om2->connect = &c2;
-		om1->mem_connect = &c2;
+		om1->connect = &PSG->c1;
+		oc1->connect = &PSG->mem;
+		om2->connect = &PSG->c2;
+		om1->mem_connect = &PSG->c2;
 		break;
 
 	case 4:
 		/* M1---C1-+-OUT */
 		/* M2---C2-+     */
 		/* MEM: not used */
-		om1->connect = &c1;
-		oc1->connect = &chanout[cha];
-		om2->connect = &c2;
-		om1->mem_connect = &mem;	/* store it anywhere where it will not be used */
+		om1->connect = &PSG->c1;
+		oc1->connect = &PSG->chanout[cha];
+		om2->connect = &PSG->c2;
+		om1->mem_connect = &PSG->mem;	/* store it anywhere where it will not be used */
 		break;
 
 	case 5:
@@ -919,9 +915,9 @@ INLINE void set_connect( YM2151Operator *om1, int cha, int v)
 		/* M1-+-MEM---M2-+-OUT */
 		/*    +----C2----+     */
 		om1->connect = 0;	/* special mark */
-		oc1->connect = &chanout[cha];
-		om2->connect = &chanout[cha];
-		om1->mem_connect = &m2;
+		oc1->connect = &PSG->chanout[cha];
+		om2->connect = &PSG->chanout[cha];
+		om1->mem_connect = &PSG->m2;
 		break;
 
 	case 6:
@@ -929,10 +925,10 @@ INLINE void set_connect( YM2151Operator *om1, int cha, int v)
 		/*      M2-+-OUT */
 		/*      C2-+     */
 		/* MEM: not used */
-		om1->connect = &c1;
-		oc1->connect = &chanout[cha];
-		om2->connect = &chanout[cha];
-		om1->mem_connect = &mem;	/* store it anywhere where it will not be used */
+		om1->connect = &PSG->c1;
+		oc1->connect = &PSG->chanout[cha];
+		om2->connect = &PSG->chanout[cha];
+		om1->mem_connect = &PSG->mem;	/* store it anywhere where it will not be used */
 		break;
 
 	case 7:
@@ -941,10 +937,10 @@ INLINE void set_connect( YM2151Operator *om1, int cha, int v)
 		/* M2-+     */
 		/* C2-+     */
 		/* MEM: not used*/
-		om1->connect = &chanout[cha];
-		oc1->connect = &chanout[cha];
-		om2->connect = &chanout[cha];
-		om1->mem_connect = &mem;	/* store it anywhere where it will not be used */
+		om1->connect = &PSG->chanout[cha];
+		oc1->connect = &PSG->chanout[cha];
+		om2->connect = &PSG->chanout[cha];
+		om1->mem_connect = &PSG->mem;	/* store it anywhere where it will not be used */
 		break;
 	}
 }
@@ -1053,7 +1049,7 @@ void ym2151_write_reg(void *_chip, int r, int v)
 #if 0
 	/* There is no info on what YM2151 really does when busy flag is set */
 	if ( chip->status & 0x80 ) return;
-	timer_set ( attotime_mul(ATTOTIME_IN_HZ(chip->clock), 64), chip, 0, timer_callback_chip_busy);
+	timer_set ( attotime::from_hz(chip->clock) * 64, chip, 0, timer_callback_chip_busy);
 	chip->status |= 0x80;	/* set busy flag for 64 chip clock cycles */
 #endif
 
@@ -1064,7 +1060,8 @@ void ym2151_write_reg(void *_chip, int r, int v)
 	}
 
 
-	switch(r & 0xe0){
+	switch(r & 0xe0)
+	{
 	case 0x00:
 		switch(r){
 		case 0x01:	/* LFO reset(bit 1), Test Register (other bits) */
@@ -1073,8 +1070,7 @@ void ym2151_write_reg(void *_chip, int r, int v)
 			break;
 
 		case 0x08:
-			PSG = chip; /* PSG is used in KEY_ON macro */
-			envelope_KONKOFF(&chip->oper[ (v&7)*4 ], v );
+			envelope_KONKOFF(chip, &chip->oper[ (v&7)*4 ], v );
 			break;
 
 		case 0x0f:	/* noise mode enable, noise period */
@@ -1102,7 +1098,7 @@ void ym2151_write_reg(void *_chip, int r, int v)
 			{
 #ifdef USE_MAME_TIMERS
 				chip->status &= ~1;
-				timer_set(chip->device->machine, attotime_zero,chip,0,irqAoff_callback);
+				chip->device->machine().scheduler().timer_set(attotime::zero, FUNC(irqAoff_callback), 0, chip);
 #else
 				int oldstate = chip->status & 3;
 				chip->status &= ~1;
@@ -1114,7 +1110,7 @@ void ym2151_write_reg(void *_chip, int r, int v)
 			{
 #ifdef USE_MAME_TIMERS
 				chip->status &= ~2;
-				timer_set(chip->device->machine, attotime_zero,chip,0,irqBoff_callback);
+				chip->device->machine().scheduler().timer_set(attotime::zero, FUNC(irqBoff_callback), 0, chip);
 #else
 				int oldstate = chip->status & 3;
 				chip->status &= ~2;
@@ -1122,13 +1118,14 @@ void ym2151_write_reg(void *_chip, int r, int v)
 #endif
 			}
 
-			if (v&0x02){	/* load and start timer B */
+			if (v&0x02)
+			{	/* load and start timer B */
 				#ifdef USE_MAME_TIMERS
 				/* ASG 980324: added a real timer */
 				/* start timer _only_ if it wasn't already started (it will reload time value next round) */
-					if (!timer_enable(chip->timer_B, 1))
+					if (!chip->timer_B->enable(true))
 					{
-						timer_adjust_oneshot(chip->timer_B, chip->timer_B_time[ chip->timer_B_index ], 0);
+						chip->timer_B->adjust(chip->timer_B_time[ chip->timer_B_index ]);
 						chip->timer_B_index_old = chip->timer_B_index;
 					}
 				#else
@@ -1138,22 +1135,25 @@ void ym2151_write_reg(void *_chip, int r, int v)
 						chip->tim_B_val = chip->tim_B_tab[ chip->timer_B_index ];
 					}
 				#endif
-			}else{		/* stop timer B */
+			}
+			else
+			{		/* stop timer B */
 				#ifdef USE_MAME_TIMERS
 				/* ASG 980324: added a real timer */
-					timer_enable(chip->timer_B, 0);
+					chip->timer_B->enable(false);
 				#else
 					chip->tim_B = 0;
 				#endif
 			}
 
-			if (v&0x01){	/* load and start timer A */
+			if (v&0x01)
+			{	/* load and start timer A */
 				#ifdef USE_MAME_TIMERS
 				/* ASG 980324: added a real timer */
 				/* start timer _only_ if it wasn't already started (it will reload time value next round) */
-					if (!timer_enable(chip->timer_A, 1))
+					if (!chip->timer_A->enable(true))
 					{
-						timer_adjust_oneshot(chip->timer_A, chip->timer_A_time[ chip->timer_A_index ], 0);
+						chip->timer_A->adjust(chip->timer_A_time[ chip->timer_A_index ]);
 						chip->timer_A_index_old = chip->timer_A_index;
 					}
 				#else
@@ -1163,10 +1163,12 @@ void ym2151_write_reg(void *_chip, int r, int v)
 						chip->tim_A_val = chip->tim_A_tab[ chip->timer_A_index ];
 					}
 				#endif
-			}else{		/* stop timer A */
+			}
+			else
+			{		/* stop timer A */
 				#ifdef USE_MAME_TIMERS
 				/* ASG 980324: added a real timer */
-					timer_enable(chip->timer_A, 0);
+					chip->timer_A->enable(false);
 				#else
 					chip->tim_A = 0;
 				#endif
@@ -1201,13 +1203,14 @@ void ym2151_write_reg(void *_chip, int r, int v)
 
 	case 0x20:
 		op = &chip->oper[ (r&7) * 4 ];
-		switch(r & 0x18){
+		switch(r & 0x18)
+		{
 		case 0x00:	/* RL enable, Feedback, Connection */
 			op->fb_shift = ((v>>3)&7) ? ((v>>3)&7)+6:0;
 			chip->pan[ (r&7)*2    ] = (v & 0x40) ? ~0 : 0;
 			chip->pan[ (r&7)*2 +1 ] = (v & 0x80) ? ~0 : 0;
 			chip->connect[r&7] = v&7;
-			set_connect(op, r&7, v&7);
+			set_connect(chip, op, r&7, v&7);
 			break;
 
 		case 0x08:	/* Key Code */
@@ -1378,16 +1381,15 @@ int ym2151_read_status( void *_chip )
 /*
 *   state save support for MAME
 */
-STATE_POSTLOAD( ym2151_postload )
+void ym2151_postload(YM2151 *YM2151_chip)
 {
-	YM2151 *YM2151_chip = (YM2151 *)param;
 	int j;
 
 	for (j=0; j<8; j++)
-		set_connect(&YM2151_chip->oper[j*4], j, YM2151_chip->connect[j]);
+		set_connect(YM2151_chip, &YM2151_chip->oper[j*4], j, YM2151_chip->connect[j]);
 }
 
-static void ym2151_state_save_register( YM2151 *chip, const device_config *device )
+static void ym2151_state_save_register( YM2151 *chip, device_t *device )
 {
 	int j;
 
@@ -1398,98 +1400,98 @@ static void ym2151_state_save_register( YM2151 *chip, const device_config *devic
 
 		op = &chip->oper[(j&7)*4+(j>>3)];
 
-		state_save_register_device_item(device, j, op->phase);
-		state_save_register_device_item(device, j, op->freq);
-		state_save_register_device_item(device, j, op->dt1);
-		state_save_register_device_item(device, j, op->mul);
-		state_save_register_device_item(device, j, op->dt1_i);
-		state_save_register_device_item(device, j, op->dt2);
+		device->save_item(NAME(op->phase), j);
+		device->save_item(NAME(op->freq), j);
+		device->save_item(NAME(op->dt1), j);
+		device->save_item(NAME(op->mul), j);
+		device->save_item(NAME(op->dt1_i), j);
+		device->save_item(NAME(op->dt2), j);
 		/* operators connection is saved in chip data block */
-		state_save_register_device_item(device, j, op->mem_value);
+		device->save_item(NAME(op->mem_value), j);
 
-		state_save_register_device_item(device, j, op->fb_shift);
-		state_save_register_device_item(device, j, op->fb_out_curr);
-		state_save_register_device_item(device, j, op->fb_out_prev);
-		state_save_register_device_item(device, j, op->kc);
-		state_save_register_device_item(device, j, op->kc_i);
-		state_save_register_device_item(device, j, op->pms);
-		state_save_register_device_item(device, j, op->ams);
-		state_save_register_device_item(device, j, op->AMmask);
+		device->save_item(NAME(op->fb_shift), j);
+		device->save_item(NAME(op->fb_out_curr), j);
+		device->save_item(NAME(op->fb_out_prev), j);
+		device->save_item(NAME(op->kc), j);
+		device->save_item(NAME(op->kc_i), j);
+		device->save_item(NAME(op->pms), j);
+		device->save_item(NAME(op->ams), j);
+		device->save_item(NAME(op->AMmask), j);
 
-		state_save_register_device_item(device, j, op->state);
-		state_save_register_device_item(device, j, op->eg_sh_ar);
-		state_save_register_device_item(device, j, op->eg_sel_ar);
-		state_save_register_device_item(device, j, op->tl);
-		state_save_register_device_item(device, j, op->volume);
-		state_save_register_device_item(device, j, op->eg_sh_d1r);
-		state_save_register_device_item(device, j, op->eg_sel_d1r);
-		state_save_register_device_item(device, j, op->d1l);
-		state_save_register_device_item(device, j, op->eg_sh_d2r);
-		state_save_register_device_item(device, j, op->eg_sel_d2r);
-		state_save_register_device_item(device, j, op->eg_sh_rr);
-		state_save_register_device_item(device, j, op->eg_sel_rr);
+		device->save_item(NAME(op->state), j);
+		device->save_item(NAME(op->eg_sh_ar), j);
+		device->save_item(NAME(op->eg_sel_ar), j);
+		device->save_item(NAME(op->tl), j);
+		device->save_item(NAME(op->volume), j);
+		device->save_item(NAME(op->eg_sh_d1r), j);
+		device->save_item(NAME(op->eg_sel_d1r), j);
+		device->save_item(NAME(op->d1l), j);
+		device->save_item(NAME(op->eg_sh_d2r), j);
+		device->save_item(NAME(op->eg_sel_d2r), j);
+		device->save_item(NAME(op->eg_sh_rr), j);
+		device->save_item(NAME(op->eg_sel_rr), j);
 
-		state_save_register_device_item(device, j, op->key);
-		state_save_register_device_item(device, j, op->ks);
-		state_save_register_device_item(device, j, op->ar);
-		state_save_register_device_item(device, j, op->d1r);
-		state_save_register_device_item(device, j, op->d2r);
-		state_save_register_device_item(device, j, op->rr);
+		device->save_item(NAME(op->key), j);
+		device->save_item(NAME(op->ks), j);
+		device->save_item(NAME(op->ar), j);
+		device->save_item(NAME(op->d1r), j);
+		device->save_item(NAME(op->d2r), j);
+		device->save_item(NAME(op->rr), j);
 
-		state_save_register_device_item(device, j, op->reserved0);
-		state_save_register_device_item(device, j, op->reserved1);
+		device->save_item(NAME(op->reserved0), j);
+		device->save_item(NAME(op->reserved1), j);
 	}
 
-	state_save_register_device_item_array(device, 0, chip->pan);
+	device->save_item(NAME(chip->pan));
 
-	state_save_register_device_item(device, 0, chip->eg_cnt);
-	state_save_register_device_item(device, 0, chip->eg_timer);
-	state_save_register_device_item(device, 0, chip->eg_timer_add);
-	state_save_register_device_item(device, 0, chip->eg_timer_overflow);
+	device->save_item(NAME(chip->eg_cnt));
+	device->save_item(NAME(chip->eg_timer));
+	device->save_item(NAME(chip->eg_timer_add));
+	device->save_item(NAME(chip->eg_timer_overflow));
 
-	state_save_register_device_item(device, 0, chip->lfo_phase);
-	state_save_register_device_item(device, 0, chip->lfo_timer);
-	state_save_register_device_item(device, 0, chip->lfo_timer_add);
-	state_save_register_device_item(device, 0, chip->lfo_overflow);
-	state_save_register_device_item(device, 0, chip->lfo_counter);
-	state_save_register_device_item(device, 0, chip->lfo_counter_add);
-	state_save_register_device_item(device, 0, chip->lfo_wsel);
-	state_save_register_device_item(device, 0, chip->amd);
-	state_save_register_device_item(device, 0, chip->pmd);
-	state_save_register_device_item(device, 0, chip->lfa);
-	state_save_register_device_item(device, 0, chip->lfp);
+	device->save_item(NAME(chip->lfo_phase));
+	device->save_item(NAME(chip->lfo_timer));
+	device->save_item(NAME(chip->lfo_timer_add));
+	device->save_item(NAME(chip->lfo_overflow));
+	device->save_item(NAME(chip->lfo_counter));
+	device->save_item(NAME(chip->lfo_counter_add));
+	device->save_item(NAME(chip->lfo_wsel));
+	device->save_item(NAME(chip->amd));
+	device->save_item(NAME(chip->pmd));
+	device->save_item(NAME(chip->lfa));
+	device->save_item(NAME(chip->lfp));
 
-	state_save_register_device_item(device, 0, chip->test);
-	state_save_register_device_item(device, 0, chip->ct);
+	device->save_item(NAME(chip->test));
+	device->save_item(NAME(chip->ct));
 
-	state_save_register_device_item(device, 0, chip->noise);
-	state_save_register_device_item(device, 0, chip->noise_rng);
-	state_save_register_device_item(device, 0, chip->noise_p);
-	state_save_register_device_item(device, 0, chip->noise_f);
+	device->save_item(NAME(chip->noise));
+	device->save_item(NAME(chip->noise_rng));
+	device->save_item(NAME(chip->noise_p));
+	device->save_item(NAME(chip->noise_f));
 
-	state_save_register_device_item(device, 0, chip->csm_req);
-	state_save_register_device_item(device, 0, chip->irq_enable);
-	state_save_register_device_item(device, 0, chip->status);
+	device->save_item(NAME(chip->csm_req));
+	device->save_item(NAME(chip->irq_enable));
+	device->save_item(NAME(chip->status));
 
-	state_save_register_device_item(device, 0, chip->timer_A_index);
-	state_save_register_device_item(device, 0, chip->timer_B_index);
-	state_save_register_device_item(device, 0, chip->timer_A_index_old);
-	state_save_register_device_item(device, 0, chip->timer_B_index_old);
+	device->save_item(NAME(chip->timer_A_index));
+	device->save_item(NAME(chip->timer_B_index));
+	device->save_item(NAME(chip->timer_A_index_old));
+	device->save_item(NAME(chip->timer_B_index_old));
 
 #ifdef USE_MAME_TIMERS
-	state_save_register_device_item(device, 0, chip->irqlinestate);
+	device->save_item(NAME(chip->irqlinestate));
 #endif
 
-	state_save_register_device_item_array(device, 0, chip->connect);
+	device->save_item(NAME(chip->connect));
 
-	state_save_register_postload(device->machine, ym2151_postload, chip);
+	device->machine().save().register_postload(save_prepost_delegate(FUNC(ym2151_postload), chip));
 }
 #else
-STATE_POSTLOAD( ym2151_postload )
+void ym2151_postload(YM2151 *chip)
 {
 }
 
-static void ym2151_state_save_register( YM2151 *chip, const device_config *device )
+static void ym2151_state_save_register( YM2151 *chip, device_t *device )
 {
 }
 #endif
@@ -1502,13 +1504,11 @@ static void ym2151_state_save_register( YM2151 *chip, const device_config *devic
 *   'clock' is the chip clock in Hz
 *   'rate' is sampling rate
 */
-void * ym2151_init(const device_config *device, int clock, int rate)
+void * ym2151_init(device_t *device, int clock, int rate)
 {
 	YM2151 *PSG;
 
-	PSG = (YM2151 *)malloc(sizeof(YM2151));
-	if (PSG == NULL)
-		return NULL;
+	PSG = auto_alloc(device->machine(), YM2151);
 
 	memset(PSG, 0, sizeof(YM2151));
 
@@ -1532,8 +1532,8 @@ void * ym2151_init(const device_config *device, int clock, int rate)
 
 #ifdef USE_MAME_TIMERS
 /* this must be done _before_ a call to ym2151_reset_chip() */
-	PSG->timer_A = timer_alloc(device->machine, timer_callback_a, PSG);
-	PSG->timer_B = timer_alloc(device->machine, timer_callback_b, PSG);
+	PSG->timer_A = device->machine().scheduler().timer_alloc(FUNC(timer_callback_a), PSG);
+	PSG->timer_B = device->machine().scheduler().timer_alloc(FUNC(timer_callback_b), PSG);
 #else
 	PSG->tim_A      = 0;
 	PSG->tim_B      = 0;
@@ -1545,7 +1545,7 @@ void * ym2151_init(const device_config *device, int clock, int rate)
 	{
 		cymfile = fopen("2151_.cym","wb");
 		if (cymfile)
-			timer_pulse ( device->machine, ATTOTIME_IN_HZ(110), NULL, 0, cymfile_callback); /*110 Hz pulse timer*/
+			device->machine().scheduler().timer_pulse ( attotime::from_hz(110), FUNC(cymfile_callback)); /*110 Hz pulse timer*/
 		else
 			logerror("Could not create file 2151_.cym\n");
 	}
@@ -1559,7 +1559,7 @@ void ym2151_shutdown(void *_chip)
 {
 	YM2151 *chip = (YM2151 *)_chip;
 
-	free (chip);
+	auto_free (chip->device->machine(), chip);
 
 	if (cymfile)
 		fclose (cymfile);
@@ -1616,8 +1616,8 @@ void ym2151_reset_chip(void *_chip)
 	chip->irq_enable = 0;
 #ifdef USE_MAME_TIMERS
 	/* ASG 980324 -- reset the timers before writing to the registers */
-	timer_enable(chip->timer_A, 0);
-	timer_enable(chip->timer_B, 0);
+	chip->timer_A->enable(false);
+	chip->timer_B->enable(false);
 #else
 	chip->tim_A      = 0;
 	chip->tim_B      = 0;
@@ -1684,13 +1684,13 @@ INLINE signed int op_calc1(YM2151Operator * OP, unsigned int env, signed int pm)
 
 #define volume_calc(OP) ((OP)->tl + ((UINT32)(OP)->volume) + (AM & (OP)->AMmask))
 
-INLINE void chan_calc(unsigned int chan)
+INLINE void chan_calc(YM2151 *PSG, unsigned int chan)
 {
 	YM2151Operator *op;
 	unsigned int env;
 	UINT32 AM = 0;
 
-	m2 = c1 = c2 = mem = 0;
+	PSG->m2 = PSG->c1 = PSG->c2 = PSG->mem = 0;
 	op = &PSG->oper[chan*4];	/* M1 */
 
 	*op->mem_connect = op->mem_value;	/* restore delayed sample (MEM) value to m2 or c2 */
@@ -1704,7 +1704,7 @@ INLINE void chan_calc(unsigned int chan)
 
 		if (!op->connect)
 			/* algorithm 5 */
-			mem = c1 = c2 = op->fb_out_prev;
+			PSG->mem = PSG->c1 = PSG->c2 = op->fb_out_prev;
 		else
 			/* other algorithms */
 			*op->connect = op->fb_out_prev;
@@ -1720,26 +1720,27 @@ INLINE void chan_calc(unsigned int chan)
 
 	env = volume_calc(op+1);	/* M2 */
 	if (env < ENV_QUIET)
-		*(op+1)->connect += op_calc(op+1, env, m2);
+		*(op+1)->connect += op_calc(op+1, env, PSG->m2);
 
 	env = volume_calc(op+2);	/* C1 */
 	if (env < ENV_QUIET)
-		*(op+2)->connect += op_calc(op+2, env, c1);
+		*(op+2)->connect += op_calc(op+2, env, PSG->c1);
 
 	env = volume_calc(op+3);	/* C2 */
 	if (env < ENV_QUIET)
-		chanout[chan]    += op_calc(op+3, env, c2);
+		PSG->chanout[chan]    += op_calc(op+3, env, PSG->c2);
 
 	/* M1 */
-	op->mem_value = mem;
+	op->mem_value = PSG->mem;
 }
-INLINE void chan7_calc(void)
+
+INLINE void chan7_calc(YM2151 *PSG)
 {
 	YM2151Operator *op;
 	unsigned int env;
 	UINT32 AM = 0;
 
-	m2 = c1 = c2 = mem = 0;
+	PSG->m2 = PSG->c1 = PSG->c2 = PSG->mem = 0;
 	op = &PSG->oper[7*4];		/* M1 */
 
 	*op->mem_connect = op->mem_value;	/* restore delayed sample (MEM) value to m2 or c2 */
@@ -1753,7 +1754,7 @@ INLINE void chan7_calc(void)
 
 		if (!op->connect)
 			/* algorithm 5 */
-			mem = c1 = c2 = op->fb_out_prev;
+			PSG->mem = PSG->c1 = PSG->c2 = op->fb_out_prev;
 		else
 			/* other algorithms */
 			*op->connect = op->fb_out_prev;
@@ -1769,11 +1770,11 @@ INLINE void chan7_calc(void)
 
 	env = volume_calc(op+1);	/* M2 */
 	if (env < ENV_QUIET)
-		*(op+1)->connect += op_calc(op+1, env, m2);
+		*(op+1)->connect += op_calc(op+1, env, PSG->m2);
 
 	env = volume_calc(op+2);	/* C1 */
 	if (env < ENV_QUIET)
-		*(op+2)->connect += op_calc(op+2, env, c1);
+		*(op+2)->connect += op_calc(op+2, env, PSG->c1);
 
 	env = volume_calc(op+3);	/* C2 */
 	if (PSG->noise & 0x80)
@@ -1783,15 +1784,15 @@ INLINE void chan7_calc(void)
 		noiseout = 0;
 		if (env < 0x3ff)
 			noiseout = (env ^ 0x3ff) * 2;	/* range of the YM2151 noise output is -2044 to 2040 */
-		chanout[7] += ((PSG->noise_rng&0x10000) ? noiseout: -noiseout); /* bit 16 -> output */
+		PSG->chanout[7] += ((PSG->noise_rng&0x10000) ? noiseout: -noiseout); /* bit 16 -> output */
 	}
 	else
 	{
 		if (env < ENV_QUIET)
-			chanout[7] += op_calc(op+3, env, c2);
+			PSG->chanout[7] += op_calc(op+3, env, PSG->c2);
 	}
 	/* M1 */
-	op->mem_value = mem;
+	op->mem_value = PSG->mem;
 }
 
 
@@ -2003,7 +2004,7 @@ rate 11 1         |
                                  --
 */
 
-INLINE void advance_eg(void)
+INLINE void advance_eg(YM2151 *PSG)
 {
 	YM2151Operator *op;
 	unsigned int i;
@@ -2087,7 +2088,7 @@ INLINE void advance_eg(void)
 }
 
 
-INLINE void advance(void)
+INLINE void advance(YM2151 *PSG)
 {
 	YM2151Operator *op;
 	unsigned int i;
@@ -2127,10 +2128,13 @@ INLINE void advance(void)
 		/* square */
 		/* AM: 255, 0 */
 		/* PM: 128,-128 (LFP = exactly +PMD, -PMD) */
-		if (i<128){
+		if (i<128)
+		{
 			a = 255;
 			p = 128;
-		}else{
+		}
+		else
+		{
 			a = 0;
 			p = -128;
 		}
@@ -2311,7 +2315,8 @@ INLINE signed int acc_calc(signed int value)
 	  {	signed int pom= -(chanout[j] & PSG->pan[j*2]); \
 		if (pom > 32767) pom = 32767; else if (pom < -32768) pom = -32768; \
 		fputc((unsigned short)pom&0xff,sample[j]); \
-		fputc(((unsigned short)pom>>8)&0xff,sample[j]);  }
+		fputc(((unsigned short)pom>>8)&0xff,sample[j]); \
+	  }
 	#else
 	  #define SAVE_SINGLE_CHANNEL(j)
 	#endif
@@ -2370,14 +2375,14 @@ INLINE signed int acc_calc(signed int value)
 */
 void ym2151_update_one(void *chip, SAMP **buffers, int length)
 {
+	YM2151 *PSG = (YM2151 *)chip;
+	signed int *chanout = PSG->chanout;
 	int i;
 	signed int outl,outr;
 	SAMP *bufL, *bufR;
 
 	bufL = buffers[0];
 	bufR = buffers[1];
-
-	PSG = (YM2151 *)chip;
 
 #ifdef USE_MAME_TIMERS
 		/* ASG 980324 - handled by real timers now */
@@ -2400,7 +2405,7 @@ void ym2151_update_one(void *chip, SAMP **buffers, int length)
 
 	for (i=0; i<length; i++)
 	{
-		advance_eg();
+		advance_eg(PSG);
 
 		chanout[0] = 0;
 		chanout[1] = 0;
@@ -2411,21 +2416,21 @@ void ym2151_update_one(void *chip, SAMP **buffers, int length)
 		chanout[6] = 0;
 		chanout[7] = 0;
 
-		chan_calc(0);
+		chan_calc(PSG, 0);
 		SAVE_SINGLE_CHANNEL(0)
-		chan_calc(1);
+		chan_calc(PSG, 1);
 		SAVE_SINGLE_CHANNEL(1)
-		chan_calc(2);
+		chan_calc(PSG, 2);
 		SAVE_SINGLE_CHANNEL(2)
-		chan_calc(3);
+		chan_calc(PSG, 3);
 		SAVE_SINGLE_CHANNEL(3)
-		chan_calc(4);
+		chan_calc(PSG, 4);
 		SAVE_SINGLE_CHANNEL(4)
-		chan_calc(5);
+		chan_calc(PSG, 5);
 		SAVE_SINGLE_CHANNEL(5)
-		chan_calc(6);
+		chan_calc(PSG, 6);
 		SAVE_SINGLE_CHANNEL(6)
-		chan7_calc();
+		chan7_calc(PSG);
 		SAVE_SINGLE_CHANNEL(7)
 
 		outl = chanout[0] & PSG->pan[0];
@@ -2477,11 +2482,11 @@ void ym2151_update_one(void *chip, SAMP **buffers, int length)
 			}
 		}
 #endif
-		advance();
+		advance(PSG);
 	}
 }
 
-void ym2151_set_irq_handler(void *chip, void(*handler)(const device_config *device, int irq))
+void ym2151_set_irq_handler(void *chip, void(*handler)(device_t *device, int irq))
 {
 	YM2151 *PSG = (YM2151 *)chip;
 	PSG->irqhandler = handler;

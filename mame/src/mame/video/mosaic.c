@@ -6,15 +6,8 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-
-
-UINT8 *mosaic_fgvideoram;
-UINT8 *mosaic_bgvideoram;
-
-static tilemap *bg_tilemap,*fg_tilemap;
-
-
+#include "emu.h"
+#include "includes/mosaic.h"
 
 /***************************************************************************
 
@@ -24,20 +17,22 @@ static tilemap *bg_tilemap,*fg_tilemap;
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
+	mosaic_state *state = machine.driver_data<mosaic_state>();
 	tile_index *= 2;
 	SET_TILE_INFO(
 			0,
-			mosaic_fgvideoram[tile_index] + (mosaic_fgvideoram[tile_index+1] << 8),
+			state->m_fgvideoram[tile_index] + (state->m_fgvideoram[tile_index+1] << 8),
 			0,
 			0);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
+	mosaic_state *state = machine.driver_data<mosaic_state>();
 	tile_index *= 2;
 	SET_TILE_INFO(
 			1,
-			mosaic_bgvideoram[tile_index] + (mosaic_bgvideoram[tile_index+1] << 8),
+			state->m_bgvideoram[tile_index] + (state->m_bgvideoram[tile_index+1] << 8),
 			0,
 			0);
 }
@@ -52,10 +47,12 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( mosaic )
 {
-	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,64,32);
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,     8,8,64,32);
+	mosaic_state *state = machine.driver_data<mosaic_state>();
 
-	tilemap_set_transparent_pen(fg_tilemap,0xff);
+	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+
+	state->m_fg_tilemap->set_transparent_pen(0xff);
 }
 
 
@@ -67,21 +64,27 @@ VIDEO_START( mosaic )
 
 WRITE8_HANDLER( mosaic_fgvideoram_w )
 {
-	mosaic_fgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(fg_tilemap,offset/2);
+	mosaic_state *state = space->machine().driver_data<mosaic_state>();
+
+	state->m_fgvideoram[offset] = data;
+	state->m_fg_tilemap->mark_tile_dirty(offset / 2);
 }
 
 WRITE8_HANDLER( mosaic_bgvideoram_w )
 {
-	mosaic_bgvideoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap,offset/2);
+	mosaic_state *state = space->machine().driver_data<mosaic_state>();
+
+	state->m_bgvideoram[offset] = data;
+	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
 }
 
 
 
-VIDEO_UPDATE( mosaic )
+SCREEN_UPDATE_IND16( mosaic )
 {
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
-	tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	mosaic_state *state = screen.machine().driver_data<mosaic_state>();
+
+	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }

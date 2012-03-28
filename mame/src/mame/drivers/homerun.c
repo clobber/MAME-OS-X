@@ -15,23 +15,32 @@ Todo :
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
 #include "sound/2203intf.h"
+#include "includes/homerun.h"
 
-extern int homerun_xpa,homerun_xpb,homerun_xpc;
-extern UINT8 *homerun_videoram;
 
-WRITE8_HANDLER( homerun_videoram_w );
-WRITE8_HANDLER( homerun_color_w );
-WRITE8_DEVICE_HANDLER( homerun_banking_w );
-VIDEO_START(homerun);
-VIDEO_UPDATE(homerun);
+static WRITE8_DEVICE_HANDLER(pa_w)
+{
+	homerun_state *state = device->machine().driver_data<homerun_state>();
+	state->m_xpa = data;
+}
 
-static WRITE8_DEVICE_HANDLER(pa_w){homerun_xpa=data;}
-static WRITE8_DEVICE_HANDLER(pb_w){homerun_xpb=data;}
-static WRITE8_DEVICE_HANDLER(pc_w){homerun_xpc=data;}
+static WRITE8_DEVICE_HANDLER(pb_w)
+{
+	homerun_state *state = device->machine().driver_data<homerun_state>();
+	state->m_xpb = data;
+}
+
+static WRITE8_DEVICE_HANDLER(pc_w)
+{
+	homerun_state *state = device->machine().driver_data<homerun_state>();
+	state->m_xpc = data;
+}
+
+
 
 static const ppi8255_interface ppi8255_intf =
 {
@@ -44,56 +53,23 @@ static const ppi8255_interface ppi8255_intf =
 };
 
 
-static MACHINE_RESET( homerun )
-{
-}
-
-static const gfx_layout gfxlayout =
-{
-   8,8,
-   RGN_FRAC(1,1),
-   2,
-   { 8*8,0},
-   { 0, 1, 2, 3, 4, 5, 6, 7},
-   { 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8},
-   8*8*2
-};
-
-
-
-static const gfx_layout spritelayout =
-{
-   16,16,
-   RGN_FRAC(1,1),
-   2,
-   { 8*8,0},
-   { 0, 1, 2, 3, 4, 5, 6, 7,0+8*8*2,1+8*8*2,2+8*8*2,3+8*8*2,4+8*8*2,5+8*8*2,6+8*8*2,7+8*8*2},
-   { 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 0*8+2*8*8*2,1*8+2*8*8*2,2*8+2*8*8*2,3*8+2*8*8*2,4*8+2*8*8*2,5*8+2*8*8*2,6*8+2*8*8*2,7*8+2*8*8*2},
-   8*8*2*4
-};
-
-static GFXDECODE_START( homerun )
-	GFXDECODE_ENTRY( "gfx1", 0, gfxlayout,   0, 16 )
-	GFXDECODE_ENTRY( "gfx2", 0, spritelayout,   0, 16 )
-GFXDECODE_END
-
-static ADDRESS_MAP_START( homerun_memmap, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( homerun_memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_READ(SMH_BANK(1))
-	AM_RANGE(0x8000, 0x9fff) AM_RAM_WRITE(homerun_videoram_w) AM_BASE(&homerun_videoram)
-	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0x9fff) AM_RAM_WRITE(homerun_videoram_w) AM_BASE_MEMBER(homerun_state, m_videoram)
+	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_SIZE_MEMBER(homerun_state, m_spriteram, m_spriteram_size)
 	AM_RANGE(0xb000, 0xb0ff) AM_WRITE(homerun_color_w)
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 ADDRESS_MAP_END
 
 static CUSTOM_INPUT( homerun_40_r )
 {
-	UINT8 ret = (video_screen_get_vpos(field->port->machine->primary_screen) > 116) ? 1 : 0;
+	UINT8 ret = (field.machine().primary_screen->vpos() > 116) ? 1 : 0;
 
 	return ret;
 }
 
-static ADDRESS_MAP_START( homerun_iomap, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( homerun_iomap, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_WRITENOP /* ?? */
 	AM_RANGE(0x20, 0x20) AM_WRITENOP /* ?? */
@@ -101,7 +77,7 @@ static ADDRESS_MAP_START( homerun_iomap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x40) AM_READ_PORT("IN0")
 	AM_RANGE(0x50, 0x50) AM_READ_PORT("IN2")
 	AM_RANGE(0x60, 0x60) AM_READ_PORT("IN1")
-	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 
 static const ym2203_interface ym2203_config =
@@ -184,37 +160,97 @@ static INPUT_PORTS_START( dynashot )
 INPUT_PORTS_END
 
 
-static MACHINE_DRIVER_START( homerun )
-	MDRV_CPU_ADD("maincpu", Z80, 5000000)
-	MDRV_CPU_PROGRAM_MAP(homerun_memmap)
-	MDRV_CPU_IO_MAP(homerun_iomap)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+static const gfx_layout gfxlayout =
+{
+   8,8,
+   RGN_FRAC(1,1),
+   2,
+   { 8*8,0},
+   { 0, 1, 2, 3, 4, 5, 6, 7},
+   { 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8},
+   8*8*2
+};
 
-	MDRV_MACHINE_RESET(homerun)
 
-	MDRV_PPI8255_ADD( "ppi8255", ppi8255_intf )
+
+static const gfx_layout spritelayout =
+{
+   16,16,
+   RGN_FRAC(1,1),
+   2,
+   { 8*8,0},
+   { 0, 1, 2, 3, 4, 5, 6, 7,0+8*8*2,1+8*8*2,2+8*8*2,3+8*8*2,4+8*8*2,5+8*8*2,6+8*8*2,7+8*8*2},
+   { 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 0*8+2*8*8*2,1*8+2*8*8*2,2*8+2*8*8*2,3*8+2*8*8*2,4*8+2*8*8*2,5*8+2*8*8*2,6*8+2*8*8*2,7*8+2*8*8*2},
+   8*8*2*4
+};
+
+static GFXDECODE_START( homerun )
+	GFXDECODE_ENTRY( "gfx1", 0, gfxlayout,   0, 16 )
+	GFXDECODE_ENTRY( "gfx2", 0, spritelayout,   0, 16 )
+GFXDECODE_END
+
+
+static MACHINE_START( homerun )
+{
+	homerun_state *state = machine.driver_data<homerun_state>();
+	UINT8 *ROM = machine.region("maincpu")->base();
+
+	memory_configure_bank(machine, "bank1", 0, 1, &ROM[0x00000], 0x4000);
+	memory_configure_bank(machine, "bank1", 1, 7, &ROM[0x10000], 0x4000);
+
+	state->save_item(NAME(state->m_gfx_ctrl));
+	state->save_item(NAME(state->m_gc_up));
+	state->save_item(NAME(state->m_gc_down));
+	state->save_item(NAME(state->m_xpa));
+	state->save_item(NAME(state->m_xpb));
+	state->save_item(NAME(state->m_xpc));
+}
+
+static MACHINE_RESET( homerun )
+{
+	homerun_state *state = machine.driver_data<homerun_state>();
+
+	state->m_gfx_ctrl = 0;
+	state->m_gc_up = 0;
+	state->m_gc_down = 0;
+	state->m_xpa = 0;
+	state->m_xpb = 0;
+	state->m_xpc = 0;
+}
+
+static MACHINE_CONFIG_START( homerun, homerun_state )
+
+	/* basic machine hardware */
+	MCFG_CPU_ADD("maincpu", Z80, 5000000)
+	MCFG_CPU_PROGRAM_MAP(homerun_memmap)
+	MCFG_CPU_IO_MAP(homerun_iomap)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MCFG_MACHINE_START(homerun)
+	MCFG_MACHINE_RESET(homerun)
+
+	MCFG_PPI8255_ADD( "ppi8255", ppi8255_intf )
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-25)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-25)
+	MCFG_SCREEN_UPDATE_STATIC(homerun)
 
-	MDRV_GFXDECODE(homerun)
-	MDRV_PALETTE_LENGTH(16*4)
+	MCFG_GFXDECODE(homerun)
+	MCFG_PALETTE_LENGTH(16*4)
 
-	MDRV_VIDEO_START(homerun)
-	MDRV_VIDEO_UPDATE(homerun)
+	MCFG_VIDEO_START(homerun)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 6000000/2)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("ymsnd", YM2203, 6000000/2)
+	MCFG_SOUND_CONFIG(ym2203_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*
@@ -279,5 +315,5 @@ ROM_START( dynashot )
 ROM_END
 
 
-GAME( 1988, homerun, 0, homerun, homerun, 0, ROT0, "Jaleco", "Moero Pro Yakyuu Homerun",GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND)
-GAME( 1988, dynashot, 0, homerun, dynashot, 0, ROT0, "Jaleco", "Dynamic Shooting",GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND)
+GAME( 1988, homerun,  0, homerun, homerun,  0, ROT0, "Jaleco", "Moero Pro Yakyuu Homerun", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1988, dynashot, 0, homerun, dynashot, 0, ROT0, "Jaleco", "Dynamic Shooting",         GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

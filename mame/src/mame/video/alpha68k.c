@@ -4,151 +4,148 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "includes/alpha68k.h"
 
-static tilemap *fix_tilemap;
-static int bank_base,flipscreen;
 
-extern void (*alpha68k_video_banking)(int *bank, int data);
-
-extern int alpha68k_microcontroller_id;
-
-/******************************************************************************/
-
-VIDEO_START( alpha68k_common_vh )
+void alpha68k_flipscreen_w( running_machine &machine, int flip )
 {
-    state_save_register_global(machine, flipscreen);
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_flipscreen = flip;
 }
 
-void alpha68k_flipscreen_w(int flip)
+void alpha68k_V_video_bank_w( running_machine &machine, int bank )
 {
-	flipscreen = flip;
-}
-
-void alpha68k_V_video_bank_w(int bank)
-{
-	bank_base = bank&0xf;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	state->m_bank_base = bank & 0xf;
 }
 
 WRITE16_HANDLER( alpha68k_paletteram_w )
 {
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 	int newword;
-	int r,g,b;
+	int r, g, b;
 
-	COMBINE_DATA(paletteram16 + offset);
-	newword = paletteram16[offset];
+	COMBINE_DATA(state->m_paletteram + offset);
+	newword = state->m_paletteram[offset];
 
 	r = ((newword >> 7) & 0x1e) | ((newword >> 14) & 0x01);
 	g = ((newword >> 3) & 0x1e) | ((newword >> 13) & 0x01);
 	b = ((newword << 1) & 0x1e) | ((newword >> 12) & 0x01);
 
-	palette_set_color_rgb(space->machine,offset,pal5bit(r),pal5bit(g),pal5bit(b));
+	palette_set_color_rgb(space->machine(), offset, pal5bit(r), pal5bit(g), pal5bit(b));
 }
 
 /******************************************************************************/
 
 static TILE_GET_INFO( get_tile_info )
 {
-	int tile  = videoram16[2*tile_index]   &0xff;
-	int color = videoram16[2*tile_index+1] &0x0f;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	int tile = state->m_videoram[2 * tile_index] & 0xff;
+	int color = state->m_videoram[2 * tile_index + 1] & 0x0f;
 
-	tile=tile | (bank_base<<8);
+	tile = tile | (state->m_bank_base << 8);
 
 	SET_TILE_INFO(0, tile, color, 0);
 }
 
 WRITE16_HANDLER( alpha68k_videoram_w )
 {
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
 	/* Doh. */
 	if(ACCESSING_BITS_0_7)
 		if(ACCESSING_BITS_8_15)
-			videoram16[offset] = data;
+			state->m_videoram[offset] = data;
 		else
-			videoram16[offset] = data & 0xff;
+			state->m_videoram[offset] = data & 0xff;
 	else
-		videoram16[offset] = (data >> 8) & 0xff;
+		state->m_videoram[offset] = (data >> 8) & 0xff;
 
-	tilemap_mark_tile_dirty(fix_tilemap,offset/2);
+	state->m_fix_tilemap->mark_tile_dirty(offset / 2);
 }
 
 VIDEO_START( alpha68k )
 {
-	fix_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_cols,8,8,32,32);
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
 
-	tilemap_set_transparent_pen(fix_tilemap,0);
-
-    state_save_register_global(machine, bank_base);
-
-    VIDEO_START_CALL(alpha68k_common_vh);
+	state->m_fix_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_cols, 8, 8, 32, 32);
+	state->m_fix_tilemap->set_transparent_pen(0);
 }
 
 /******************************************************************************/
 
 //AT
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int j, int s, int e)
+static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int j, int s, int e )
 {
-	int offs,mx,my,color,tile,fx,fy,i;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT16 *spriteram = state->m_spriteram;
+	int offs, mx, my, color, tile, fx, fy, i;
 
-	for (offs = s; offs < e; offs += 0x40 )
+	for (offs = s; offs < e; offs += 0x40)
 	{
-		my = spriteram16[offs+3+(j<<1)];
-		mx = spriteram16[offs+2+(j<<1)]<<1 | my>>15;
+		my = spriteram[offs + 3 + (j << 1)];
+		mx = spriteram[offs + 2 + (j << 1)] << 1 | my >> 15;
 		my = -my & 0x1ff;
 		mx = ((mx + 0x100) & 0x1ff) - 0x100;
-		if (j==0 && s==0x7c0) my++;
+		if (j == 0 && s == 0x7c0)
+			my++;
 //ZT
-		if (flipscreen) {
-			mx=240-mx;
-			my=240-my;
+		if (state->m_flipscreen)
+		{
+			mx = 240 - mx;
+			my = 240 - my;
 		}
 
-		for (i=0; i<0x40; i+=2) {
-			tile  = spriteram16[offs+1+i+(0x800*j)+0x800];
-			color = spriteram16[offs  +i+(0x800*j)+0x800]&0x7f;
+		for (i = 0; i < 0x40; i += 2)
+		{
+			tile = spriteram[offs + 1 + i + (0x800 * j) + 0x800];
+			color = spriteram[offs + i + (0x800 * j) + 0x800] & 0x7f;
 
-			fy=tile&0x8000;
-			fx=tile&0x4000;
-			tile&=0x3fff;
+			fy = tile & 0x8000;
+			fx = tile & 0x4000;
+			tile &= 0x3fff;
 
-			if (flipscreen) {
-				if (fx) fx=0; else fx=1;
-				if (fy) fy=0; else fy=1;
+			if (state->m_flipscreen)
+			{
+				if (fx) fx = 0; else fx = 1;
+				if (fy) fy = 0; else fy = 1;
 			}
 
 			if (color)
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+				drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					tile,
 					color,
 					fx,fy,
 					mx,my,0);
 
-			if (flipscreen)
-				my=(my-16)&0x1ff;
+			if (state->m_flipscreen)
+				my = (my - 16) & 0x1ff;
 			else
-				my=(my+16)&0x1ff;
+				my = (my + 16) & 0x1ff;
 		}
 	}
 }
 
 /******************************************************************************/
 
-VIDEO_UPDATE( alpha68k_II )
+SCREEN_UPDATE_IND16( alpha68k_II )
 {
-	static int last_bank=0;
+	alpha68k_state *state = screen.machine().driver_data<alpha68k_state>();
 
-	if (last_bank!=bank_base)
-		tilemap_mark_all_tiles_dirty_all(screen->machine);
-	last_bank=bank_base;
-	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (state->m_last_bank != state->m_bank_base)
+		screen.machine().tilemap().mark_all_dirty();
 
-	bitmap_fill(bitmap,cliprect,2047);
+	state->m_last_bank = state->m_bank_base;
+	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+
+	bitmap.fill(2047, cliprect);
 //AT
-	draw_sprites(screen->machine, bitmap,cliprect,0,0x07c0,0x0800);
-	draw_sprites(screen->machine, bitmap,cliprect,1,0x0000,0x0800);
-	draw_sprites(screen->machine, bitmap,cliprect,2,0x0000,0x0800);
-	draw_sprites(screen->machine, bitmap,cliprect,0,0x0000,0x07c0);
+	draw_sprites(screen.machine(), bitmap, cliprect, 0, 0x07c0, 0x0800);
+	draw_sprites(screen.machine(), bitmap, cliprect, 1, 0x0000, 0x0800);
+	draw_sprites(screen.machine(), bitmap, cliprect, 2, 0x0000, 0x0800);
+	draw_sprites(screen.machine(), bitmap, cliprect, 0, 0x0000, 0x07c0);
 //ZT
-	tilemap_draw(bitmap,cliprect,fix_tilemap,0,0);
+	state->m_fix_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
@@ -174,31 +171,31 @@ VIDEO_UPDATE( alpha68k_II )
 
 WRITE16_HANDLER( alpha68k_II_video_bank_w )
 {
-	static int buffer_28,buffer_60,buffer_68;
-
-	switch (offset) {
+	alpha68k_state *state = space->machine().driver_data<alpha68k_state>();
+	switch (offset)
+	{
 		case 0x10: /* Reset */
-			bank_base=buffer_28=buffer_60=buffer_68=0;
+			state->m_bank_base = state->m_buffer_28 = state->m_buffer_60 = state->m_buffer_68 = 0;
 			return;
 		case 0x14:
-			if (buffer_60) bank_base=1; else bank_base=0;
-			buffer_28=1;
+			if (state->m_buffer_60) state->m_bank_base=1; else state->m_bank_base=0;
+			state->m_buffer_28 = 1;
 			return;
 		case 0x18:
-			if (buffer_68) {if (buffer_60) bank_base=3; else bank_base=2; }
-			if (buffer_28) {if (buffer_60) bank_base=1; else bank_base=0; }
+			if (state->m_buffer_68) {if (state->m_buffer_60) state->m_bank_base = 3; else state->m_bank_base = 2; }
+			if (state->m_buffer_28) {if (state->m_buffer_60) state->m_bank_base = 1; else state->m_bank_base = 0; }
 			return;
 		case 0x30:
-			buffer_28=buffer_68=0; bank_base=1;
-			buffer_60=1;
+			state->m_buffer_28 = state->m_buffer_68 = 0; state->m_bank_base = 1;
+			state->m_buffer_60 = 1;
 			return;
 		case 0x34:
-			if (buffer_60) bank_base=3; else bank_base=2;
-			buffer_68=1;
+			if (state->m_buffer_60) state->m_bank_base = 3; else state->m_bank_base = 2;
+			state->m_buffer_68 = 1;
 			return;
 		case 0x38:
-			if (buffer_68) {if (buffer_60) bank_base=7; else bank_base=6; }
-			if (buffer_28) {if (buffer_60) bank_base=5; else bank_base=4; }
+			if (state->m_buffer_68) {if (state->m_buffer_60) state->m_bank_base = 7; else state->m_bank_base = 6; }
+			if (state->m_buffer_28) {if (state->m_buffer_60) state->m_bank_base = 5; else state->m_bank_base = 4; }
 			return;
 		case 0x08: /* Graphics flags?  Not related to fix chars anyway */
 		case 0x0c:
@@ -214,7 +211,8 @@ WRITE16_HANDLER( alpha68k_II_video_bank_w )
 
 WRITE16_HANDLER( alpha68k_V_video_control_w )
 {
-	switch (offset) {
+	switch (offset)
+	{
 		case 0x08: /* Graphics flags?  Not related to fix chars anyway */
 		case 0x0c:
 		case 0x28:
@@ -223,130 +221,145 @@ WRITE16_HANDLER( alpha68k_V_video_control_w )
 	}
 }
 
-static void draw_sprites_V(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int j, int s, int e, int fx_mask, int fy_mask, int sprite_mask)
+static void draw_sprites_V( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int j, int s, int e, int fx_mask, int fy_mask, int sprite_mask )
 {
-	int offs,mx,my,color,tile,fx,fy,i;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT16 *spriteram = state->m_spriteram;
+	int offs, mx, my, color, tile, fx, fy, i;
 
-	for (offs = s; offs < e; offs += 0x40 )
+	for (offs = s; offs < e; offs += 0x40)
 	{
 //AT
-		my = spriteram16[offs+3+(j<<1)];
-		mx = spriteram16[offs+2+(j<<1)]<<1 | my>>15;
+		my = spriteram[offs + 3 + (j << 1)];
+		mx = spriteram[offs + 2 + (j << 1)] << 1 | my >> 15;
 		my = -my & 0x1ff;
 		mx = ((mx + 0x100) & 0x1ff) - 0x100;
-		if (j==0 && s==0x7c0) my++;
+		if (j == 0 && s == 0x7c0)
+			my++;
 //ZT
-		if (flipscreen) {
-			mx=240-mx;
-			my=240-my;
+		if (state->m_flipscreen)
+		{
+			mx = 240 - mx;
+			my = 240 - my;
 		}
 
-		for (i=0; i<0x40; i+=2) {
-			tile  = spriteram16[offs+1+i+(0x800*j)+0x800];
-			color = spriteram16[offs  +i+(0x800*j)+0x800]&0xff;
+		for (i = 0; i < 0x40; i += 2)
+		{
+			tile = spriteram[offs + 1 + i + (0x800 * j) + 0x800];
+			color = spriteram[offs + i + (0x800 * j) + 0x800] & 0xff;
 
-			fx=tile&fx_mask;
-			fy=tile&fy_mask;
-			tile=tile&sprite_mask;
-			if (tile>0x4fff) continue;
+			fx = tile & fx_mask;
+			fy = tile & fy_mask;
+			tile = tile & sprite_mask;
+			if (tile > 0x4fff)
+				continue;
 
-			if (flipscreen) {
-				if (fx) fx=0; else fx=1;
-				if (fy) fy=0; else fy=1;
+			if (state->m_flipscreen)
+			{
+				if (fx) fx = 0; else fx = 1;
+				if (fy) fy = 0; else fy = 1;
 			}
 
 			if (color)
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+				drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
 					tile,
 					color,
 					fx,fy,
 					mx,my,0);
 
-			if (flipscreen)
-				my=(my-16)&0x1ff;
+			if (state->m_flipscreen)
+				my = (my - 16) & 0x1ff;
 			else
-				my=(my+16)&0x1ff;
+				my = (my + 16) & 0x1ff;
 		}
 	}
 }
 
-VIDEO_UPDATE( alpha68k_V )
+SCREEN_UPDATE_IND16( alpha68k_V )
 {
-	static int last_bank=0;
+	alpha68k_state *state = screen.machine().driver_data<alpha68k_state>();
+	UINT16 *spriteram = state->m_spriteram;
 
-	if (last_bank!=bank_base)
-		tilemap_mark_all_tiles_dirty_all(screen->machine);
-	last_bank=bank_base;
-	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (state->m_last_bank != state->m_bank_base)
+		screen.machine().tilemap().mark_all_dirty();
 
-	bitmap_fill(bitmap,cliprect,4095);
+	state->m_last_bank = state->m_bank_base;
+	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+
+	bitmap.fill(4095, cliprect);
 
 	/* This appears to be correct priority */
-	if (alpha68k_microcontroller_id == 0x8814) /* Sky Adventure */
+	if (state->m_microcontroller_id == 0x8814) /* Sky Adventure */
 	{
-		draw_sprites_V(screen->machine, bitmap,cliprect,0,0x07c0,0x0800,0,0x8000,0x7fff);
-		draw_sprites_V(screen->machine, bitmap,cliprect,1,0x0000,0x0800,0,0x8000,0x7fff);
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 0, 0x07c0, 0x0800, 0, 0x8000, 0x7fff);
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 1, 0x0000, 0x0800, 0, 0x8000, 0x7fff);
 		//AT: *KLUDGE* fixes priest priority in level 1(could be a game bug)
-		if (spriteram16[0x1bde]==0x24 && (spriteram16[0x1bdf]>>8)==0x3b) {
-			draw_sprites_V(screen->machine, bitmap,cliprect,2,0x03c0,0x0800,0,0x8000,0x7fff);
-			draw_sprites_V(screen->machine, bitmap,cliprect,2,0x0000,0x03c0,0,0x8000,0x7fff);
-		} else
-		draw_sprites_V(screen->machine, bitmap,cliprect,2,0x0000,0x0800,0,0x8000,0x7fff);
-		draw_sprites_V(screen->machine, bitmap,cliprect,0,0x0000,0x07c0,0,0x8000,0x7fff);
+		if (spriteram[0x1bde] == 0x24 && (spriteram[0x1bdf] >> 8) == 0x3b)
+		{
+			draw_sprites_V(screen.machine(), bitmap, cliprect, 2, 0x03c0, 0x0800, 0, 0x8000, 0x7fff);
+			draw_sprites_V(screen.machine(), bitmap, cliprect, 2, 0x0000, 0x03c0, 0, 0x8000, 0x7fff);
+		}
+		else
+			draw_sprites_V(screen.machine(), bitmap, cliprect, 2, 0x0000, 0x0800, 0, 0x8000, 0x7fff);
+
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 0, 0x0000, 0x07c0, 0, 0x8000, 0x7fff);
 	}
 	else	/* gangwars */
 	{
-		draw_sprites_V(screen->machine, bitmap,cliprect,0,0x07c0,0x0800,0x8000,0,0x7fff);
-		draw_sprites_V(screen->machine, bitmap,cliprect,1,0x0000,0x0800,0x8000,0,0x7fff);
-		draw_sprites_V(screen->machine, bitmap,cliprect,2,0x0000,0x0800,0x8000,0,0x7fff);
-		draw_sprites_V(screen->machine, bitmap,cliprect,0,0x0000,0x07c0,0x8000,0,0x7fff);
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 0, 0x07c0, 0x0800, 0x8000, 0, 0x7fff);
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 1, 0x0000, 0x0800, 0x8000, 0, 0x7fff);
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 2, 0x0000, 0x0800, 0x8000, 0, 0x7fff);
+		draw_sprites_V(screen.machine(), bitmap, cliprect, 0, 0x0000, 0x07c0, 0x8000, 0, 0x7fff);
 	}
 
-	tilemap_draw(bitmap,cliprect,fix_tilemap,0,0);
+	state->m_fix_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
-VIDEO_UPDATE( alpha68k_V_sb )
+SCREEN_UPDATE_IND16( alpha68k_V_sb )
 {
-	static int last_bank=0;
+	alpha68k_state *state = screen.machine().driver_data<alpha68k_state>();
 
-	if (last_bank!=bank_base)
-		tilemap_mark_all_tiles_dirty_all(screen->machine);
-	last_bank=bank_base;
-	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (state->m_last_bank != state->m_bank_base)
+		screen.machine().tilemap().mark_all_dirty();
 
-	bitmap_fill(bitmap,cliprect,4095);
+	state->m_last_bank = state->m_bank_base;
+	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+
+	bitmap.fill(4095, cliprect);
 
 	/* This appears to be correct priority */
-	draw_sprites_V(screen->machine,bitmap,cliprect,0,0x07c0,0x0800,0x4000,0x8000,0x3fff);
-	draw_sprites_V(screen->machine,bitmap,cliprect,1,0x0000,0x0800,0x4000,0x8000,0x3fff);
-	draw_sprites_V(screen->machine,bitmap,cliprect,2,0x0000,0x0800,0x4000,0x8000,0x3fff);
-	draw_sprites_V(screen->machine,bitmap,cliprect,0,0x0000,0x07c0,0x4000,0x8000,0x3fff);
+	draw_sprites_V(screen.machine(), bitmap, cliprect, 0, 0x07c0, 0x0800, 0x4000, 0x8000, 0x3fff);
+	draw_sprites_V(screen.machine(), bitmap, cliprect, 1, 0x0000, 0x0800, 0x4000, 0x8000, 0x3fff);
+	draw_sprites_V(screen.machine(), bitmap, cliprect, 2, 0x0000, 0x0800, 0x4000, 0x8000, 0x3fff);
+	draw_sprites_V(screen.machine(), bitmap, cliprect, 0, 0x0000, 0x07c0, 0x4000, 0x8000, 0x3fff);
 
-	tilemap_draw(bitmap,cliprect,fix_tilemap,0,0);
+	state->m_fix_tilemap->draw(bitmap, cliprect, 0, 0);
 	return 0;
 }
 
 /******************************************************************************/
 //AT
-static void draw_sprites_I(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int c, int d, int yshift)
+static void draw_sprites_I( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int c, int d, int yshift )
 {
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT16 *spriteram = state->m_spriteram;
 	int data, offs, mx, my, tile, color, fy, i;
-	UINT8 *color_prom = memory_region(machine, "user1");
-	gfx_element *gfx = machine->gfx[0];
+	UINT8 *color_prom = machine.region("user1")->base();
+	gfx_element *gfx = machine.gfx[0];
 
-	for (offs=0; offs<0x400; offs+=0x20)
+	for (offs = 0; offs < 0x400; offs += 0x20)
 	{
-		mx = spriteram16[offs+c];
-		my = (yshift-(mx>>8)) & 0xff;
+		mx = spriteram[offs + c];
+		my = (yshift - (mx >> 8)) & 0xff;
 		mx &= 0xff;
 
-		for (i=0; i<0x20; i++)
+		for (i = 0; i < 0x20; i++)
 		{
-			data = spriteram16[offs+d+i];
+			data = spriteram[offs + d + i];
 			tile = data & 0x3fff;
 			fy = data & 0x4000;
-			color = color_prom[tile<<1|data>>15];
+			color = color_prom[tile << 1 | data >> 15];
 
 			drawgfx_transpen(bitmap, cliprect, gfx, tile, color, 0, fy, mx, my, 0);
 
@@ -355,16 +368,17 @@ static void draw_sprites_I(running_machine *machine, bitmap_t *bitmap, const rec
 	}
 }
 
-VIDEO_UPDATE( alpha68k_I )
+SCREEN_UPDATE_IND16( alpha68k_I )
 {
-	int yshift = (alpha68k_microcontroller_id == 0x890a) ? 1 : 0; // The Next Space is 1 pixel off
+	alpha68k_state *state = screen.machine().driver_data<alpha68k_state>();
+	int yshift = (state->m_microcontroller_id == 0x890a) ? 1 : 0; // The Next Space is 1 pixel off
 
-	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	bitmap.fill(get_black_pen(screen.machine()), cliprect);
 
 	/* This appears to be correct priority */
-	draw_sprites_I(screen->machine, bitmap,cliprect,2,0x0800,yshift);
-	draw_sprites_I(screen->machine, bitmap,cliprect,3,0x0c00,yshift);
-	draw_sprites_I(screen->machine, bitmap,cliprect,1,0x0400,yshift);
+	draw_sprites_I(screen.machine(), bitmap, cliprect, 2, 0x0800, yshift);
+	draw_sprites_I(screen.machine(), bitmap, cliprect, 3, 0x0c00, yshift);
+	draw_sprites_I(screen.machine(), bitmap, cliprect, 1, 0x0400, yshift);
 	return 0;
 }
 //ZT
@@ -375,7 +389,7 @@ PALETTE_INIT( kyros )
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x100);
+	machine.colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -384,7 +398,7 @@ PALETTE_INIT( kyros )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -393,7 +407,7 @@ PALETTE_INIT( kyros )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = ((color_prom[i] & 0x0f) << 4) | (color_prom[i + 0x100] & 0x0f);
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
@@ -402,7 +416,7 @@ PALETTE_INIT( paddlem )
 	int i;
 
 	/* allocate the colortable */
-	machine->colortable = colortable_alloc(machine, 0x100);
+	machine.colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -411,7 +425,7 @@ PALETTE_INIT( paddlem )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -420,132 +434,141 @@ PALETTE_INIT( paddlem )
 	for (i = 0; i < 0x400; i++)
 	{
 		UINT8 ctabentry = ((color_prom[i + 0x400] & 0x0f) << 4) | (color_prom[i] & 0x0f);
-		colortable_entry_set_value(machine->colortable, i, ctabentry);
+		colortable_entry_set_value(machine.colortable, i, ctabentry);
 	}
 }
 
-void kyros_video_banking(int *bank, int data)
+static void kyros_video_banking(int *bank, int data)
 {
-	*bank = (data>>13 & 4) | (data>>10 & 3);
+	*bank = (data >> 13 & 4) | (data >> 10 & 3);
 }
 
-void jongbou_video_banking(int *bank, int data)
+static void jongbou_video_banking(int *bank, int data)
 {
-	*bank = (data>>11 & 4) | (data>>10 & 3);
+	*bank = (data >> 11 & 4) | (data >> 10 & 3);
 }
 
-static void kyros_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int c,int d)
+static void kyros_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int c, int d )
 {
-	int offs,mx,my,color,tile,i,bank,fy,fx;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT16 *spriteram = state->m_spriteram;
+	int offs, mx, my, color, tile, i, bank, fy, fx;
 	int data;
-	UINT8 *color_prom = memory_region(machine, "user1");
+	UINT8 *color_prom = machine.region("user1")->base();
 
 //AT
-	for (offs=0; offs<0x400; offs+=0x20)
+	for (offs = 0; offs < 0x400; offs += 0x20)
 	{
-		mx = spriteram16[offs+c];
-		my = -(mx>>8) & 0xff;
+		mx = spriteram[offs + c];
+		my = -(mx >> 8) & 0xff;
 		mx &= 0xff;
 
-		if (flipscreen) {
-			my=249-my;
-		}
+		if (state->m_flipscreen)
+			my = 249 - my;
 
-		for (i=0; i<0x20; i++)
+		for (i = 0; i < 0x20; i++)
 		{
-			data = spriteram16[offs+d+i];
+			data = spriteram[offs + d + i];
 			if (data!=0x20)
 			{
-				color = color_prom[(data>>1&0x1000)|(data&0xffc)|(data>>14&3)];
-				if (color!=0xff)
+				color = color_prom[(data >> 1 & 0x1000) | (data & 0xffc) | (data >> 14 & 3)];
+				if (color != 0xff)
 				{
 					fy = data & 0x1000;
 					fx = 0;
 
-					if(flipscreen)
+					if(state->m_flipscreen)
 					{
-						if (fy) fy=0; else fy=1;
+						if (fy) fy = 0; else fy = 1;
 						fx = 1;
 					}
 
-					tile = (data>>3 & 0x400) | (data & 0x3ff);
-					alpha68k_video_banking(&bank, data);
-					drawgfx_transpen(bitmap, cliprect, machine->gfx[bank], tile, color, fx, fy, mx, my, 0);
+					tile = (data >> 3 & 0x400) | (data & 0x3ff);
+					if (state->m_game_id == ALPHA68K_KYROS)
+						kyros_video_banking(&bank, data);
+					else
+						jongbou_video_banking(&bank, data);
+
+					drawgfx_transpen(bitmap, cliprect, machine.gfx[bank], tile, color, fx, fy, mx, my, 0);
 				}
 			}
 //ZT
-			if(flipscreen)
-				my=(my-8)&0xff;
+			if (state->m_flipscreen)
+				my = (my - 8) & 0xff;
 			else
-				my=(my+8)&0xff;
+				my = (my + 8) & 0xff;
 		}
 	}
 }
 
-VIDEO_UPDATE( kyros )
+SCREEN_UPDATE_IND16( kyros )
 {
-	colortable_entry_set_value(screen->machine->colortable, 0x100, *videoram16 & 0xff);
-	bitmap_fill(bitmap, cliprect, 0x100); //AT
+	alpha68k_state *state = screen.machine().driver_data<alpha68k_state>();
+	colortable_entry_set_value(screen.machine().colortable, 0x100, *state->m_videoram & 0xff);
+	bitmap.fill(0x100, cliprect); //AT
 
-	kyros_draw_sprites(screen->machine, bitmap,cliprect,2,0x0800);
-	kyros_draw_sprites(screen->machine, bitmap,cliprect,3,0x0c00);
-	kyros_draw_sprites(screen->machine, bitmap,cliprect,1,0x0400);
+	kyros_draw_sprites(screen.machine(), bitmap, cliprect, 2, 0x0800);
+	kyros_draw_sprites(screen.machine(), bitmap, cliprect, 3, 0x0c00);
+	kyros_draw_sprites(screen.machine(), bitmap, cliprect, 1, 0x0400);
 	return 0;
 }
 
 /******************************************************************************/
 
-static void sstingry_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int c,int d)
+static void sstingry_draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int c, int d )
 {
 //AT
-	int data,offs,mx,my,color,tile,i,bank,fy,fx;
+	alpha68k_state *state = machine.driver_data<alpha68k_state>();
+	UINT16 *spriteram = state->m_spriteram;
+	int data, offs, mx, my, color, tile, i, bank, fy, fx;
 
-	for (offs=0; offs<0x400; offs+=0x20)
+	for (offs = 0; offs < 0x400; offs += 0x20)
 	{
-		mx = spriteram16[offs+c];
-		my = -(mx>>8) & 0xff;
+		mx = spriteram[offs + c];
+		my = -(mx >> 8) & 0xff;
 		mx &= 0xff;
-		if (mx > 0xf8) mx -= 0x100;
+		if (mx > 0xf8)
+			mx -= 0x100;
 
-		if (flipscreen) {
-			my=249-my;
-		}
+		if (state->m_flipscreen)
+			my = 249 - my;
 
-		for (i=0; i<0x20; i++)
+		for (i = 0; i < 0x20; i++)
 		{
-			data = spriteram16[offs+d+i];
-			if (data!=0x40)
+			data = spriteram[offs + d + i];
+			if (data != 0x40)
 			{
 				fy = data & 0x1000;
 				fx = 0;
 
-				if(flipscreen)
+				if(state->m_flipscreen)
 				{
-					if (fy) fy=0; else fy=1;
+					if (fy) fy = 0; else fy = 1;
 					fx = 1;
 				}
 
-				color = (data>>7 & 0x18) | (data>>13 & 7);
+				color = (data >> 7 & 0x18) | (data >> 13 & 7);
 				tile = data & 0x3ff;
-				bank = data>>10 & 3;
-				drawgfx_transpen(bitmap, cliprect, machine->gfx[bank], tile, color, fx, fy, mx, my, 0);
+				bank = data >> 10 & 3;
+				drawgfx_transpen(bitmap, cliprect, machine.gfx[bank], tile, color, fx, fy, mx, my, 0);
 			}
 //ZT
-			if(flipscreen)
-				my=(my-8)&0xff;
+			if(state->m_flipscreen)
+				my = (my - 8) & 0xff;
 			else
-				my=(my+8)&0xff;
+				my = (my + 8) & 0xff;
 		}
 	}
 }
 
-VIDEO_UPDATE( sstingry )
+SCREEN_UPDATE_IND16( sstingry )
 {
-	colortable_entry_set_value(screen->machine->colortable, 0x100, *videoram16 & 0xff);
-	bitmap_fill(bitmap, cliprect, 0x100); //AT
+	alpha68k_state *state = screen.machine().driver_data<alpha68k_state>();
+	colortable_entry_set_value(screen.machine().colortable, 0x100, *state->m_videoram & 0xff);
+	bitmap.fill(0x100, cliprect); //AT
 
-	sstingry_draw_sprites(screen->machine, bitmap,cliprect,2,0x0800);
-	sstingry_draw_sprites(screen->machine, bitmap,cliprect,3,0x0c00);
-	sstingry_draw_sprites(screen->machine, bitmap,cliprect,1,0x0400);
+	sstingry_draw_sprites(screen.machine(), bitmap, cliprect, 2, 0x0800);
+	sstingry_draw_sprites(screen.machine(), bitmap, cliprect, 3, 0x0c00);
+	sstingry_draw_sprites(screen.machine(), bitmap, cliprect, 1, 0x0400);
 	return 0;
 }

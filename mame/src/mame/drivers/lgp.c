@@ -63,32 +63,42 @@ Dumping Notes:
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
-#include "machine/laserdsc.h"
+#include "machine/ldv1000.h"
+
+
+class lgp_state : public driver_device
+{
+public:
+	lgp_state(const machine_config &mconfig, device_type type, const char *tag)
+		: driver_device(mconfig, type, tag),
+		  m_laserdisc(*this, "laserdisc") { }
+
+	required_device<pioneer_ldv1000_device> m_laserdisc;
+	UINT8 *m_tile_ram;
+	UINT8 *m_tile_control_ram;
+	emu_timer *m_irq_timer;
+};
+
 
 /* From italiandoh's notes */
 #define CPU_PCB_CLOCK (8000000)
 #define SOUND_PCB_CLOCK (6000000)
 
-/* Misc variables */
-static const device_config *laserdisc;
-
-static UINT8 *tile_ram;
-static UINT8 *tile_control_ram;
-
 
 /* VIDEO GOODS */
-static VIDEO_UPDATE( lgp )
+static SCREEN_UPDATE_IND16( lgp )
 {
+	lgp_state *state = screen.machine().driver_data<lgp_state>();
 	int charx, chary;
 
 	/* make color 0 transparent */
-	palette_set_color(screen->machine, 0, MAKE_ARGB(0,0,0,0));
+	palette_set_color(screen.machine(), 0, MAKE_ARGB(0,0,0,0));
 
 	/* clear */
-	bitmap_fill(bitmap, cliprect, 0);
+	bitmap.fill(0, cliprect);
 
 	/* Draw tiles */
 	for (charx = 0; charx < 32; charx++)
@@ -99,8 +109,8 @@ static VIDEO_UPDATE( lgp )
 
 			/* Somewhere there's a flag that offsets the tilemap by 0x100*x */
 			/* Palette is likely set somewhere as well (tile_control_ram?) */
-			drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0],
-					tile_ram[current_screen_character],
+			drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[0],
+					state->m_tile_ram[current_screen_character],
 					0,
 					0, 0, charx*8, chary*8, 0);
 		}
@@ -114,12 +124,14 @@ static VIDEO_UPDATE( lgp )
 /* Main Z80 R/W */
 static READ8_HANDLER(ldp_read)
 {
-	return laserdisc_data_r(laserdisc);
+	lgp_state *state = space->machine().driver_data<lgp_state>();
+	return state->m_laserdisc->status_r();
 }
 
 static WRITE8_HANDLER(ldp_write)
 {
-	laserdisc_data_w(laserdisc,data);
+	lgp_state *state = space->machine().driver_data<lgp_state>();
+	state->m_laserdisc->data_w(data);
 }
 
 
@@ -127,10 +139,10 @@ static WRITE8_HANDLER(ldp_write)
 
 
 /* PROGRAM MAPS */
-static ADDRESS_MAP_START( main_program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x7fff) AM_ROM
-	AM_RANGE(0xe000,0xe3ff) AM_RAM AM_BASE(&tile_ram)
-	AM_RANGE(0xe400,0xe7ff) AM_RAM AM_BASE(&tile_control_ram)
+	AM_RANGE(0xe000,0xe3ff) AM_RAM AM_BASE_MEMBER(lgp_state, m_tile_ram)
+	AM_RANGE(0xe400,0xe7ff) AM_RAM AM_BASE_MEMBER(lgp_state, m_tile_control_ram)
 
 //  AM_RANGE(0xef00,0xef00) AM_READ_PORT("IN_TEST")
 	AM_RANGE(0xef80,0xef80) AM_READWRITE(ldp_read,ldp_write)
@@ -143,7 +155,7 @@ static ADDRESS_MAP_START( main_program_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000,0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_program_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_program_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0000,0x3fff) AM_ROM
 	AM_RANGE(0x8000,0x83ff) AM_RAM
 	AM_RANGE(0x8400,0x8407) AM_RAM		/* Needs handler!  Communications? */
@@ -152,13 +164,13 @@ ADDRESS_MAP_END
 
 
 /* IO MAPS */
-static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0xfd,0xfd) AM_READ_PORT("IN_TEST")
 //  AM_RANGE(0xfe,0xfe) AM_READ_PORT("IN_TEST")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 ADDRESS_MAP_END
 
@@ -322,54 +334,56 @@ static TIMER_CALLBACK( irq_stop )
 
 static INTERRUPT_GEN( vblank_callback_lgp )
 {
+	lgp_state *state = device->machine().driver_data<lgp_state>();
 	// NMI
-	//cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	//device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 
 	// IRQ
-	cpu_set_input_line(device, 0, ASSERT_LINE);
-	timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, irq_stop);
+	device_set_input_line(device, 0, ASSERT_LINE);
+	state->m_irq_timer->adjust(attotime::from_usec(50));
 }
 
 
 static MACHINE_START( lgp )
 {
-	laserdisc = devtag_get_device(machine, "laserdisc");
+	lgp_state *state = machine.driver_data<lgp_state>();
+	state->m_irq_timer = machine.scheduler().timer_alloc(FUNC(irq_stop));
 }
 
 
 /* DRIVER */
-static MACHINE_DRIVER_START( lgp )
+static MACHINE_CONFIG_START( lgp, lgp_state )
 	/* main cpu */
-	MDRV_CPU_ADD("maincpu", Z80, CPU_PCB_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(main_program_map)
-	MDRV_CPU_IO_MAP(main_io_map)
-	MDRV_CPU_VBLANK_INT("screen", vblank_callback_lgp)
+	MCFG_CPU_ADD("maincpu", Z80, CPU_PCB_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(main_program_map)
+	MCFG_CPU_IO_MAP(main_io_map)
+	MCFG_CPU_VBLANK_INT("screen", vblank_callback_lgp)
 
 	/* sound cpu */
-	MDRV_CPU_ADD("audiocpu", Z80, SOUND_PCB_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(sound_program_map)
-	MDRV_CPU_IO_MAP(sound_io_map)
+	MCFG_CPU_ADD("audiocpu", Z80, SOUND_PCB_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(sound_program_map)
+	MCFG_CPU_IO_MAP(sound_io_map)
 
-	MDRV_MACHINE_START(lgp)
+	MCFG_MACHINE_START(lgp)
 
-	MDRV_LASERDISC_ADD("laserdisc", PIONEER_LDV1000, "screen", "ldsound")
-	MDRV_LASERDISC_OVERLAY(lgp, 256, 256, BITMAP_FORMAT_INDEXED16)
+	MCFG_LASERDISC_LDV1000_ADD("laserdisc")
+	MCFG_LASERDISC_OVERLAY_STATIC(256, 256, lgp)
 
 	/* video hardware */
-	MDRV_LASERDISC_SCREEN_ADD_NTSC("screen", BITMAP_FORMAT_INDEXED16)
+	MCFG_LASERDISC_SCREEN_ADD_NTSC("screen", "laserdisc")
 
-	MDRV_PALETTE_LENGTH(256)
-	/* MDRV_PALETTE_INIT(lgp) */
+	MCFG_PALETTE_LENGTH(256)
+	/* MCFG_PALETTE_INIT(lgp) */
 
-	MDRV_GFXDECODE(lgp)
+	MCFG_GFXDECODE(lgp)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ldsound", LASERDISC, 0)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+	MCFG_SOUND_MODIFY("laserdisc")
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_CONFIG_END
 
 
 ROM_START( lgp )
