@@ -1003,9 +1003,9 @@ static VIDEO_UPDATE(cps3)
 			for (j=0;j<(length)*4;j+=4)
 			{
 
-				UINT32 value1 =  	(cps3_spriteram[start+j+0]);
-				UINT32 value2 =  	(cps3_spriteram[start+j+1]);
-				UINT32 value3 =  	(cps3_spriteram[start+j+2]);
+				UINT32 value1 = 	(cps3_spriteram[start+j+0]);
+				UINT32 value2 = 	(cps3_spriteram[start+j+1]);
+				UINT32 value3 = 	(cps3_spriteram[start+j+2]);
 
 
 				//UINT8* srcdata = (UINT8*)cps3_char_ram;
@@ -1926,34 +1926,34 @@ static unsigned short lastb2;
 static UINT32 ProcessByte8(running_machine *machine,UINT8 b,UINT32 dst_offset)
 {
 	UINT8* destRAM = (UINT8*)cps3_char_ram;
- 	int l=0;
+	int l=0;
 
- 	if(lastb==lastb2)	//rle
- 	{
+	if(lastb==lastb2)	//rle
+	{
 		int i;
- 		int rle=(b+1)&0xff;
+		int rle=(b+1)&0xff;
 
- 		for(i=0;i<rle;++i)
- 		{
+		for(i=0;i<rle;++i)
+		{
 			destRAM[(dst_offset&0x7fffff)^3] = lastb;
 			gfx_element_mark_dirty(machine->gfx[1], (dst_offset&0x7fffff)/0x100);
 
 			dst_offset++;
- 			++l;
- 		}
- 		lastb2=0xffff;
+			++l;
+		}
+		lastb2=0xffff;
 
- 		return l;
- 	}
- 	else
- 	{
- 		lastb2=lastb;
- 		lastb=b;
+		return l;
+	}
+	else
+	{
+		lastb2=lastb;
+		lastb=b;
 		destRAM[(dst_offset&0x7fffff)^3] = b;
 		gfx_element_mark_dirty(machine->gfx[1], (dst_offset&0x7fffff)/0x100);
- 		return 1;
- 	}
- }
+		return 1;
+	}
+}
 
 static void cps3_do_alt_char_dma( running_machine *machine, UINT32 src, UINT32 real_dest, UINT32 real_length )
 {
@@ -1968,7 +1968,7 @@ static void cps3_do_alt_char_dma( running_machine *machine, UINT32 src, UINT32 r
 	{
 		int i;
 		UINT8 ctrl=px[DMA_XOR(src)];
- 		++src;
+		++src;
 
 		for(i=0;i<8;++i)
 		{
@@ -1982,17 +1982,17 @@ static void cps3_do_alt_char_dma( running_machine *machine, UINT32 src, UINT32 r
 				ds+=ProcessByte8(machine,real_byte,ds);
 				real_byte = px[DMA_XOR((current_table_address+p*2+1))];
 				ds+=ProcessByte8(machine,real_byte,ds);
- 			}
- 			else
- 			{
- 				ds+=ProcessByte8(machine,p,ds);
- 			}
- 			++src;
- 			ctrl<<=1;
+			}
+			else
+			{
+				ds+=ProcessByte8(machine,p,ds);
+			}
+			++src;
+			ctrl<<=1;
 
 			if((ds-start)>=real_length)
 				return;
- 		}
+		}
 	}
 }
 
@@ -2139,8 +2139,8 @@ static ADDRESS_MAP_START( cps3_map, ADDRESS_SPACE_PROGRAM, 32 )
 
 	AM_RANGE(0x03000000, 0x030003ff) AM_RAM // 'FRAM' (SFIII memory test mode ONLY)
 
-//  AM_RANGE(0x04000000, 0x0407dfff) AM_RAM AM_BASE(&cps3_spriteram)//AM_WRITE(SMH_RAM) // Sprite RAM (jojoba tests this size)
-	AM_RANGE(0x04000000, 0x0407ffff) AM_RAM AM_BASE(&cps3_spriteram)//AM_WRITE(SMH_RAM) // Sprite RAM
+//  AM_RANGE(0x04000000, 0x0407dfff) AM_RAM AM_BASE(&cps3_spriteram)//AM_WRITEONLY // Sprite RAM (jojoba tests this size)
+	AM_RANGE(0x04000000, 0x0407ffff) AM_RAM AM_BASE(&cps3_spriteram)//AM_WRITEONLY // Sprite RAM
 
 	AM_RANGE(0x04080000, 0x040bffff) AM_READWRITE(cps3_colourram_r, cps3_colourram_w) AM_BASE(&cps3_colourram)  // Colour RAM (jojoba tests this size) 0x20000 colours?!
 
@@ -2151,10 +2151,10 @@ static ADDRESS_MAP_START( cps3_map, ADDRESS_SPACE_PROGRAM, 32 )
     AM_RANGE(0x040C000c, 0x040C000f) AM_READ(cps3_vbl_r)// AM_WRITENOP/
 
 	AM_RANGE(0x040C0000, 0x040C001f) AM_WRITE(cps3_unk_vidregs_w)
-	AM_RANGE(0x040C0020, 0x040C002b) AM_WRITE(SMH_RAM) AM_BASE(&tilemap20_regs_base)
-	AM_RANGE(0x040C0030, 0x040C003b) AM_WRITE(SMH_RAM) AM_BASE(&tilemap30_regs_base)
-	AM_RANGE(0x040C0040, 0x040C004b) AM_WRITE(SMH_RAM) AM_BASE(&tilemap40_regs_base)
-	AM_RANGE(0x040C0050, 0x040C005b) AM_WRITE(SMH_RAM) AM_BASE(&tilemap50_regs_base)
+	AM_RANGE(0x040C0020, 0x040C002b) AM_WRITEONLY AM_BASE(&tilemap20_regs_base)
+	AM_RANGE(0x040C0030, 0x040C003b) AM_WRITEONLY AM_BASE(&tilemap30_regs_base)
+	AM_RANGE(0x040C0040, 0x040C004b) AM_WRITEONLY AM_BASE(&tilemap40_regs_base)
+	AM_RANGE(0x040C0050, 0x040C005b) AM_WRITEONLY AM_BASE(&tilemap50_regs_base)
 
 	AM_RANGE(0x040C0060, 0x040C007f) AM_RAM AM_BASE(&cps3_fullscreenzoom)
 
@@ -2176,7 +2176,7 @@ static ADDRESS_MAP_START( cps3_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x05000000, 0x05000003) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x05000004, 0x05000007) AM_READ_PORT("EXTRA")
 
-	AM_RANGE(0x05000008, 0x0500000b) AM_WRITE( SMH_NOP ) // ?? every frame
+	AM_RANGE(0x05000008, 0x0500000b) AM_WRITENOP // ?? every frame
 
 	AM_RANGE(0x05000a00, 0x05000a1f) AM_READ( cps3_unk_io_r ) // ?? every frame
 

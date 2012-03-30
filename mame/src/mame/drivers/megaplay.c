@@ -133,7 +133,7 @@ static INPUT_PORTS_START ( megaplay )
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START("COIN")
- 	PORT_BIT ( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT ( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT ( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT ( 0x04, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT ( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
@@ -599,7 +599,7 @@ static ADDRESS_MAP_START( megaplay_bios_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x6403, 0x6403) AM_READWRITE(megaplay_bios_gamesel_r, megaplay_bios_gamesel_w)
 	AM_RANGE(0x6404, 0x6404) AM_READWRITE(megaplay_bios_6404_r, megaplay_bios_6404_w)
 	AM_RANGE(0x6600, 0x6600) AM_READWRITE(megaplay_bios_6600_r, megaplay_bios_6600_w)
-	AM_RANGE(0x6001, 0x67ff) AM_WRITE(SMH_RAM)
+	AM_RANGE(0x6001, 0x67ff) AM_WRITEONLY
 	AM_RANGE(0x6800, 0x77ff) AM_RAM AM_BASE(&ic3_ram)
 	AM_RANGE(0x8000, 0xffff) AM_READWRITE(bank_r, bank_w)
 ADDRESS_MAP_END
@@ -763,11 +763,11 @@ ROM_START( mp_twc ) /* Tecmo World Cup */
 	ROM_LOAD16_BYTE( "ep15182.ic1", 0x000001, 0x040000, CRC(eb8325c3) SHA1(bb21ac926c353e14184dd476222bc6a8714606e5) )
 	/* Game Instruction rom copied to 0x300000 - 0x310000 (odd / even bytes equal) */
 
- 	ROM_REGION( 0x8000, "user1", 0 ) /* Game Instructions */
+	ROM_REGION( 0x8000, "user1", 0 ) /* Game Instructions */
 	ROM_LOAD( "ep15175-04.ic3", 0x000000, 0x08000, CRC(faf7c030) SHA1(16ef405335b4d3ecb0b7d97b088dafc4278d4726) )
 
- 	ROM_REGION( 0x28000, "mtbios", 0 ) /* Bios */
- 	MEGAPLAY_BIOS
+	ROM_REGION( 0x28000, "mtbios", 0 ) /* Bios */
+	MEGAPLAY_BIOS
 ROM_END
 
 ROM_START( mp_sor2 ) /* Streets of Rage 2 */
@@ -892,8 +892,7 @@ static DRIVER_INIT (megaplay)
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa10000, 0xa1001f, 0, 0, megaplay_io_read, megaplay_io_write);
 
 	/* megaplay has ram shared with the bios cpu here */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "genesis_snd_z80", ADDRESS_SPACE_PROGRAM), 0x2000, 0x3fff, 0, 0, (read8_space_func)SMH_BANK(7), (write8_space_func)SMH_BANK(7));
-	memory_set_bankptr(machine, 7, &ic36_ram[0]);
+	memory_install_ram(cputag_get_address_space(machine, "genesis_snd_z80", ADDRESS_SPACE_PROGRAM), 0x2000, 0x3fff, 0, 0, &ic36_ram[0]);
 
 	/* instead of a RAM mirror the 68k sees the extra ram of the 2nd z80 too */
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa02000, 0xa03fff, 0, 0, megadriv_68k_read_z80_extra_ram, megadriv_68k_write_z80_extra_ram);

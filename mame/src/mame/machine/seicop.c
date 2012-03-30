@@ -2028,10 +2028,10 @@ static void cop2_move2_prot(const address_space *space)
 		case 0x10:	xsrc++; break; //right
 		case 0x30:	xsrc--; break; //left
 		case 0x40:  ysrc--; break; //up
-		case 0x60: 	ysrc++; break; //down
+		case 0x60:	ysrc++; break; //down
 		case 0x08:  ysrc--; xsrc++; break; //up-right
 		case 0x38:	ysrc--; xsrc--; break; //up-left
-		case 0x28: 	ysrc++; xsrc--; break; //down-left
+		case 0x28:	ysrc++; xsrc--; break; //down-left
 		case 0x18:  ysrc++; xsrc++; break; //down-right
 	}
 
@@ -2115,10 +2115,10 @@ WRITE16_HANDLER( copdxbl_0_w )
 		case (0x478/2):
 		{
 			/*
-    AM_RANGE(0x100800, 0x100fff) AM_READWRITE(SMH_RAM,legionna_background_w) AM_BASE(&legionna_back_data)
-    AM_RANGE(0x101000, 0x1017ff) AM_READWRITE(SMH_RAM,legionna_foreground_w) AM_BASE(&legionna_fore_data)
-    AM_RANGE(0x101800, 0x101fff) AM_READWRITE(SMH_RAM,legionna_midground_w) AM_BASE(&legionna_mid_data)
-    AM_RANGE(0x102000, 0x102fff) AM_READWRITE(SMH_RAM,legionna_text_w) AM_BASE(&legionna_textram)
+    AM_RANGE(0x100800, 0x100fff) AM_RAM_WRITE(legionna_background_w) AM_BASE(&legionna_back_data)
+    AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(legionna_foreground_w) AM_BASE(&legionna_fore_data)
+    AM_RANGE(0x101800, 0x101fff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
+    AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
             */
 			break;
 		}
@@ -2246,7 +2246,7 @@ INLINE void cop_ram_w(cop_state *cop, UINT16 offset, UINT16 data)
 
 INLINE UINT32 r32(offs_t address)
 {
-	return 	(memory_read_word(space, address + 0) << 0) |
+	return	(memory_read_word(space, address + 0) << 0) |
 			(memory_read_word(space, address + 2) << 16);
 }
 

@@ -107,7 +107,7 @@ Notes:
 #include "cpu/z80/z80.h"
 #include "cpu/mips/r3000.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 
 READ8_HANDLER(st0016_dma_r);
 static UINT8 *shared;
@@ -117,12 +117,12 @@ UINT32  speglsht_videoreg;
 
 static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xe87f) AM_RAM
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&shared)
@@ -211,7 +211,7 @@ static ADDRESS_MAP_START( speglsht_mem, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x01800400, 0x01800403) AM_READ_PORT("IN1")
 	AM_RANGE(0x01a00000, 0x01afffff) AM_RAM AM_BASE(&speglsht_framebuffer)
 	AM_RANGE(0x01b00000, 0x01b07fff) AM_RAM //cleared ...  video related ?
-	AM_RANGE(0x01c00000, 0x01dfffff) AM_READ(SMH_ROM) AM_WRITE(SMH_ROM) AM_REGION("user2", 0)
+	AM_RANGE(0x01c00000, 0x01dfffff) AM_ROM AM_REGION("user2", 0)
 	AM_RANGE(0x0a000000, 0x0a003fff) AM_READWRITE(shared_r, shared_w)
 	AM_RANGE(0x1eff0000, 0x1eff001f) AM_RAM
 	AM_RANGE(0x1eff003c, 0x1eff003f) AM_READNOP //interrupt related
@@ -350,7 +350,7 @@ static MACHINE_DRIVER_START( speglsht )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
+	MDRV_SOUND_ADD("stsnd", ST0016, 0)
 	MDRV_SOUND_CONFIG(st0016_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)

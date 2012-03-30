@@ -159,7 +159,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "video/taitoic.h"
 #include "audio/taitosnd.h"
 #include "sound/2151intf.h"
@@ -168,7 +168,6 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
 WRITE16_HANDLER( rastan_spritectrl_w );
 
-VIDEO_START( rastan );
 VIDEO_UPDATE( rastan );
 
 
@@ -184,7 +183,7 @@ static WRITE8_DEVICE_HANDLER( rastan_bankswitch_w )
 	if (data == 0) offs = 0x0000;
 	else offs = (data-1) * 0x4000 + 0x10000;
 
-	memory_set_bankptr(device->machine,  1, memory_region(device->machine, "audiocpu") + offs );
+	memory_set_bankptr(device->machine,  "bank1", memory_region(device->machine, "audiocpu") + offs );
 }
 
 
@@ -224,7 +223,7 @@ static WRITE8_DEVICE_HANDLER( rastan_msm5205_stop_w )
 static ADDRESS_MAP_START( rastan_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x10c000, 0x10ffff) AM_RAM
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x350008, 0x350009) AM_WRITENOP	/* 0 only (often) ? */
 	AM_RANGE(0x380000, 0x380001) AM_WRITE(rastan_spritectrl_w)	/* sprite palette bank, coin counters & lockout */
 	AM_RANGE(0x390000, 0x390001) AM_READ_PORT("P1")
@@ -236,19 +235,19 @@ static ADDRESS_MAP_START( rastan_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x3c0000, 0x3c0001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x3e0000, 0x3e0001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x3e0002, 0x3e0003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(PC080SN_word_0_r, PC080SN_word_0_w)
-	AM_RANGE(0xc20000, 0xc20003) AM_WRITE(PC080SN_yscroll_word_0_w)
-	AM_RANGE(0xc40000, 0xc40003) AM_WRITE(PC080SN_xscroll_word_0_w)
-	AM_RANGE(0xc50000, 0xc50003) AM_WRITE(PC080SN_ctrl_word_0_w)
-	AM_RANGE(0xd00000, 0xd03fff) AM_READWRITE(PC090OJ_word_0_r, PC090OJ_word_0_w)	/* sprite ram */
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("pc080sn", pc080sn_word_r, pc080sn_word_w)
+	AM_RANGE(0xc20000, 0xc20003) AM_DEVWRITE("pc080sn", pc080sn_yscroll_word_w)
+	AM_RANGE(0xc40000, 0xc40003) AM_DEVWRITE("pc080sn", pc080sn_xscroll_word_w)
+	AM_RANGE(0xc50000, 0xc50003) AM_DEVWRITE("pc080sn", pc080sn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd03fff) AM_DEVREADWRITE("pc090oj", pc090oj_word_r, pc090oj_word_w)	/* sprite ram */
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( rastan_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xb000, 0xb000) AM_WRITE(rastan_msm5205_address_w)
@@ -381,6 +380,17 @@ static MACHINE_RESET( rastan )
 }
 
 
+static const pc080sn_interface rastan_pc080sn_intf =
+{
+	0,	 /* gfxnum */
+	0, 0, 0, 0	/* x_offset, y_offset, y_invert, dblwidth */
+};
+
+static const pc090oj_interface rastan_pc090oj_intf =
+{
+	1, 0, 0, 0
+};
+
 static MACHINE_DRIVER_START( rastan )
 
 	/* basic machine hardware */
@@ -404,15 +414,17 @@ static MACHINE_DRIVER_START( rastan )
 	MDRV_GFXDECODE(rastan)
 	MDRV_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(rastan)
 	MDRV_VIDEO_UPDATE(rastan)
+
+	MDRV_PC080SN_ADD("pc080sn", rastan_pc080sn_intf)
+	MDRV_PC090OJ_ADD("pc090oj", rastan_pc090oj_intf)
 
 	MDRV_MACHINE_RESET(rastan)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_16MHz/4)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_16MHz/4)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 0.50)

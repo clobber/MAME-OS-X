@@ -68,7 +68,7 @@ static WRITE8_HANDLER(bank_w)
         case 4: bank=2; break;
         case 8: bank=3; break;
     }
-    memory_set_bankptr(space->machine,1,&RAM[bank*0x4000+0x10000]);
+    memory_set_bankptr(space->machine,"bank1",&RAM[bank*0x4000+0x10000]);
 }
 
 static TIMER_CALLBACK( subcpu_suspend )
@@ -109,8 +109,8 @@ static READ8_HANDLER( soundcpu_status_r )
 
 static ADDRESS_MAP_START( maincpu_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
     AM_RANGE(0x0000, 0x7fff) AM_ROM
-    AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-    AM_RANGE(0xc000, 0xdfff) AM_RAM AM_MIRROR(0x1800) AM_SHARE(1)
+    AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+    AM_RANGE(0xc000, 0xdfff) AM_RAM AM_MIRROR(0x1800) AM_SHARE("share1")
     AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -125,8 +125,8 @@ static ADDRESS_MAP_START( maincpu_io_map, ADDRESS_SPACE_IO, 8 )
     AM_RANGE( 0x33, 0x33) AM_READ(soundcpu_status_r)
     AM_RANGE( 0x40, 0x4f) AM_WRITE(soundlatch_w)
     AM_RANGE( 0x50, 0x50) AM_WRITE(bank_w)
-    AM_RANGE( 0x60, 0x61) AM_MIRROR(0x02) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
-   						/* not sure, but the A1 line is ignored, code @ $8b8 */
+    AM_RANGE( 0x60, 0x61) AM_MIRROR(0x02) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+						/* not sure, but the A1 line is ignored, code @ $8b8 */
     AM_RANGE( 0x70, 0x70) AM_WRITE( v9938_0_vram_w ) AM_READ( v9938_0_vram_r )
     AM_RANGE( 0x71, 0x71) AM_WRITE( v9938_0_command_w ) AM_READ( v9938_0_status_r )
     AM_RANGE( 0x72, 0x72) AM_WRITE( v9938_0_palette_w )
@@ -211,7 +211,7 @@ static READ8_HANDLER(subcpu_status_r)
 static ADDRESS_MAP_START( subcpu_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
     AM_RANGE(0x0000, 0x1fff) AM_READWRITE(subcpu_status_r,subcpu_status_w)
     AM_RANGE(0x2000, 0x77ff) AM_RAM
-    AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE(1)  /* upper 0x800 of 6264 is shared  with main cpu */
+    AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE("share1")  /* upper 0x800 of 6264 is shared  with main cpu */
     AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -322,7 +322,7 @@ static const msm5205_interface msm_interface =
 static VIDEO_START( sothello )
 {
     VIDEO_START_CALL(generic_bitmapped);
-    v9938_init (machine, 0, machine->primary_screen, tmpbitmap, MODEL_V9938, VDP_MEM, sothello_vdp_interrupt);
+    v9938_init (machine, 0, machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, VDP_MEM, sothello_vdp_interrupt);
     v9938_reset(0);
 }
 
@@ -377,7 +377,7 @@ static MACHINE_DRIVER_START( sothello )
 
     /* sound hardware */
     MDRV_SPEAKER_STANDARD_MONO("mono")
-    MDRV_SOUND_ADD("ym", YM2203, YM_CLOCK)
+    MDRV_SOUND_ADD("ymsnd", YM2203, YM_CLOCK)
     MDRV_SOUND_CONFIG(ym2203_config)
     MDRV_SOUND_ROUTE(0, "mono", 0.25)
     MDRV_SOUND_ROUTE(1, "mono", 0.25)

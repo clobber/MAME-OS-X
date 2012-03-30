@@ -13,7 +13,7 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "neogeo.h"
+#include "includes/neogeo.h"
 
 
 /* General Bootleg Functions - used by more than 1 game */
@@ -451,13 +451,13 @@ void decrypt_cthd2003( running_machine *machine )
 	memcpy(romdata, tmp, 8*128*128);
 
 	romdata = memory_region(machine, "audiocpu")+0x10000;
- 	memcpy(tmp+8*0*128, romdata+8*0*128, 8*32*128);
+	memcpy(tmp+8*0*128, romdata+8*0*128, 8*32*128);
 	memcpy(tmp+8*32*128, romdata+8*64*128, 8*32*128);
- 	memcpy(tmp+8*64*128, romdata+8*32*128, 8*32*128);
+	memcpy(tmp+8*64*128, romdata+8*32*128, 8*32*128);
 	memcpy(tmp+8*96*128, romdata+8*96*128, 8*32*128);
 	memcpy(romdata, tmp, 8*128*128);
 
- 	free(tmp);
+	free(tmp);
 
 	memcpy(romdata-0x10000,romdata,0x10000);
 
@@ -505,18 +505,18 @@ void patch_cthd2003( running_machine *machine )
 	{
 		mem16[i] -= 0x7000;
 		mem16[i+1] -= 0x0010;
- 	}
+	}
 
 	// Fix for green dots on title page
 	for (i=0xac500/2;i < 0xac520/2; i=i+1)
 	{
 		mem16[i] = 0xFFFF;
 	}
- 	// Fix for blanks as screen change level end clear
+	// Fix for blanks as screen change level end clear
 	mem16[0x991d0/2] = 0xdd03;
 	mem16[0x99306/2] = 0xdd03;
 	mem16[0x99354/2] = 0xdd03;
- 	mem16[0x9943e/2] = 0xdd03;
+	mem16[0x9943e/2] = 0xdd03;
 }
 
 
@@ -613,18 +613,18 @@ void patch_ct2k3sa( running_machine *machine )
 	{
 		mem16[i] -= 0x7000;
 		mem16[i+1] -= 0x0010;
- 	}
+	}
 
 	// Fix for green dots on title page
 	for (i=0xac500/2;i < 0xac520/2; i=i+1)
 	{
 		mem16[i] = 0xFFFF;
 	}
- 	// Fix for blanks as screen change level end clear
+	// Fix for blanks as screen change level end clear
 	mem16[0x991d0/2] = 0xdd03;
 	mem16[0x99306/2] = 0xdd03;
 	mem16[0x99354/2] = 0xdd03;
- 	mem16[0x9943e/2] = 0xdd03;
+	mem16[0x9943e/2] = 0xdd03;
 }
 
 
@@ -653,7 +653,7 @@ void decrypt_kof2k4se_68k( running_machine *machine )
 void lans2004_vx_decrypt( running_machine *machine )
 {
 	int i;
-	UINT8 *rom = memory_region( machine, "ym" );
+	UINT8 *rom = memory_region( machine, "ymsnd" );
 	for (i = 0; i < 0xA00000; i++)
 		rom[i] = BITSWAP8(rom[i], 0, 1, 5, 4, 3, 2, 6, 7);
 }
@@ -1067,8 +1067,8 @@ void samsho5b_px_decrypt( running_machine *machine )
 
 void samsho5b_vx_decrypt( running_machine *machine )
 {
-	int vx_size = memory_region_length( machine, "ym" );
-	UINT8 *rom = memory_region( machine, "ym" );
+	int vx_size = memory_region_length( machine, "ymsnd" );
+	UINT8 *rom = memory_region( machine, "ymsnd" );
 	int i;
 
 	for( i = 0; i < vx_size; i++ )

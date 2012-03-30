@@ -37,7 +37,7 @@ Thanks to Alex, Mr Mudkips, and Philip Burke for this info.
 #include "driver.h"
 #include "cpu/i386/i386.h"
 #include "video/generic.h"
-#include "naomibd.h"
+#include "includes/naomibd.h"
 
 static ADDRESS_MAP_START( xbox_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0007ffff) AM_RAM
@@ -66,7 +66,7 @@ static MACHINE_DRIVER_START( chihiro_base )
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
- 	/* video hardware */
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)

@@ -15,7 +15,7 @@
 #include "machine/6821pia.h"
 #include "sound/ay8910.h"
 #include "sound/hc55516.h"
-#include "redalert.h"
+#include "includes/redalert.h"
 
 
 
@@ -136,7 +136,7 @@ static const ay8910_interface redalert_ay8910_interface =
 static ADDRESS_MAP_START( redalert_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x0c00) AM_RAM
-	AM_RANGE(0x1000, 0x1000) AM_MIRROR(0x0ffe) AM_READNOP AM_DEVWRITE("ay", redalert_AY8910_w)
+	AM_RANGE(0x1000, 0x1000) AM_MIRROR(0x0ffe) AM_READNOP AM_DEVWRITE("aysnd", redalert_AY8910_w)
 	AM_RANGE(0x1001, 0x1001) AM_MIRROR(0x0ffe) AM_READWRITE(redalert_ay8910_latch_1_r, redalert_ay8910_latch_2_w)
 	AM_RANGE(0x2000, 0x6fff) AM_NOP
 	AM_RANGE(0x7000, 0x77ff) AM_MIRROR(0x0800) AM_ROM
@@ -193,7 +193,7 @@ static ADDRESS_MAP_START( redalert_voice_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x7fff) AM_NOP
 	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x3c00) AM_RAM
-	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x3fff) AM_READWRITE(soundlatch2_r, SMH_NOP)
+	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x3fff) AM_READ(soundlatch2_r) AM_WRITENOP
 ADDRESS_MAP_END
 
 
@@ -223,7 +223,7 @@ static MACHINE_DRIVER_START( redalert_audio_m37b )
 	MDRV_CPU_PROGRAM_MAP(redalert_audio_map)
 	MDRV_CPU_PERIODIC_INT(irq0_line_hold, REDALERT_AUDIO_CPU_IRQ_FREQ)
 
-	MDRV_SOUND_ADD("ay", AY8910, REDALERT_AY8910_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, REDALERT_AY8910_CLOCK)
 	MDRV_SOUND_CONFIG(redalert_ay8910_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 0.50)

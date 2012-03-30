@@ -195,8 +195,8 @@ psoldier dip locations still need veritication.
 
 #include "driver.h"
 #include "cpu/nec/nec.h"
-#include "m92.h"
-#include "iremipt.h"
+#include "includes/m92.h"
+#include "includes/iremipt.h"
 #include "machine/irem_cpu.h"
 #include "sound/2151intf.h"
 #include "sound/iremga20.h"
@@ -222,7 +222,7 @@ static TIMER_CALLBACK( m92_scanline_interrupt );
 static void set_m92_bank(running_machine *machine)
 {
 	UINT8 *RAM = memory_region(machine, "maincpu");
-	memory_set_bankptr(machine, 1,&RAM[bankaddress]);
+	memory_set_bankptr(machine, "bank1",&RAM[bankaddress]);
 }
 
 static STATE_POSTLOAD( m92_postload )
@@ -292,8 +292,8 @@ static WRITE16_HANDLER( m92_coincounter_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0, data & 0x01);
-		coin_counter_w(1, data & 0x02);
+		coin_counter_w(space->machine, 0, data & 0x01);
+		coin_counter_w(space->machine, 1, data & 0x02);
 		/* Bit 0x8 is Motor(?!), used in Hook, In The Hunt, UCops */
 		/* Bit 0x8 is Memcard related in RTypeLeo */
 		/* Bit 0x40 set in Blade Master test mode input check */
@@ -378,7 +378,7 @@ static ADDRESS_MAP_START( lethalth_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0x80000, 0x8ffff) AM_RAM_WRITE(m92_vram_w) AM_BASE(&m92_vram_data)
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM /* System ram */
-	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xf8800, 0xf8fff) AM_READWRITE(m92_paletteram_r, m92_paletteram_w)
 	AM_RANGE(0xf9000, 0xf900f) AM_WRITE(m92_spritecontrol_w) AM_BASE(&m92_spritecontrol)
 	AM_RANGE(0xf9800, 0xf9801) AM_WRITE(m92_videocontrol_w)
@@ -387,11 +387,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( m92_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x9ffff) AM_ROM
-	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK(1)
-	AM_RANGE(0xc0000, 0xcffff) AM_ROMBANK(2)	/* Mirror of rom:  Used by In The Hunt as protection */
+	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc0000, 0xcffff) AM_ROMBANK("bank2")	/* Mirror of rom:  Used by In The Hunt as protection */
 	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m92_vram_w) AM_BASE(&m92_vram_data)
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM /* System ram */
-	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf8000, 0xf87ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xf8800, 0xf8fff) AM_READWRITE(m92_paletteram_r, m92_paletteram_w)
 	AM_RANGE(0xf9000, 0xf900f) AM_WRITE(m92_spritecontrol_w) AM_BASE(&m92_spritecontrol)
 	AM_RANGE(0xf9800, 0xf9801) AM_WRITE(m92_videocontrol_w)
@@ -422,7 +422,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x9ff00, 0x9ffff) AM_WRITENOP /* Irq controller? */
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
 	AM_RANGE(0xa8000, 0xa803f) AM_DEVREADWRITE8("irem", irem_ga20_r, irem_ga20_w, 0x00ff)
-	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0xa8044, 0xa8045) AM_READWRITE(m92_soundlatch_r, m92_sound_irq_ack_w)
 	AM_RANGE(0xa8046, 0xa8047) AM_WRITE(m92_sound_status_w)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
@@ -949,7 +949,7 @@ static MACHINE_DRIVER_START( m92 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 14318180/4)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 14318180/4)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.40)
 	MDRV_SOUND_ROUTE(1, "mono", 0.40)
@@ -959,7 +959,7 @@ static MACHINE_DRIVER_START( m92 )
 MACHINE_DRIVER_END
 
 
-static const nec_config gunforce_config ={ 	gunforce_decryption_table, };
+static const nec_config gunforce_config ={	gunforce_decryption_table, };
 static MACHINE_DRIVER_START( gunforce )
 	MDRV_IMPORT_FROM( m92 )
 	MDRV_CPU_MODIFY("soundcpu")
@@ -2066,7 +2066,7 @@ static void init_m92(running_machine *machine, int hasbanks)
 
 		/* Mirror used by In The Hunt for protection */
 		memcpy(RAM + 0xc0000, RAM + 0x00000, 0x10000);
-		memory_set_bankptr(machine, 2, &RAM[0xc0000]);
+		memory_set_bankptr(machine, "bank2", &RAM[0xc0000]);
 	}
 
 	RAM = memory_region(machine, "soundcpu");
@@ -2145,7 +2145,7 @@ static DRIVER_INIT( lethalth )
 	m92_irq_vectorbase = 0x20;
 
 	/* NOP out the bankswitcher */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x20, 0x21, 0, 0, (write16_space_func)SMH_NOP);
+	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x20, 0x21, 0, 0);
 }
 
 static DRIVER_INIT( nbbatman )

@@ -7,7 +7,7 @@
 ******************************************************************************/
 
 #include "driver.h"
-#include "nb1413m3.h"
+#include "includes/nb1413m3.h"
 #include "includes/nbmj8991.h"
 
 
@@ -41,15 +41,15 @@ WRITE8_HANDLER( nbmj8991_palette_type1_w )
 {
 	int r, g, b;
 
-	paletteram[offset] = data;
+	space->machine->generic.paletteram.u8[offset] = data;
 
 	if (!(offset & 1)) return;
 
 	offset &= 0x1fe;
 
-	r = ((paletteram[offset + 0] & 0x0f) >> 0);
-	g = ((paletteram[offset + 1] & 0xf0) >> 4);
-	b = ((paletteram[offset + 1] & 0x0f) >> 0);
+	r = ((space->machine->generic.paletteram.u8[offset + 0] & 0x0f) >> 0);
+	g = ((space->machine->generic.paletteram.u8[offset + 1] & 0xf0) >> 4);
+	b = ((space->machine->generic.paletteram.u8[offset + 1] & 0x0f) >> 0);
 
 	palette_set_color_rgb(space->machine, (offset >> 1), pal4bit(r), pal4bit(g), pal4bit(b));
 }
@@ -58,15 +58,15 @@ WRITE8_HANDLER( nbmj8991_palette_type2_w )
 {
 	int r, g, b;
 
-	paletteram[offset] = data;
+	space->machine->generic.paletteram.u8[offset] = data;
 
 	if (!(offset & 1)) return;
 
 	offset &= 0x1fe;
 
-	r = ((paletteram[offset + 0] & 0x7c) >> 2);
-	g = (((paletteram[offset + 0] & 0x03) << 3) | ((paletteram[offset + 1] & 0xe0) >> 5));
-	b = ((paletteram[offset + 1] & 0x1f) >> 0);
+	r = ((space->machine->generic.paletteram.u8[offset + 0] & 0x7c) >> 2);
+	g = (((space->machine->generic.paletteram.u8[offset + 0] & 0x03) << 3) | ((space->machine->generic.paletteram.u8[offset + 1] & 0xe0) >> 5));
+	b = ((space->machine->generic.paletteram.u8[offset + 1] & 0x1f) >> 0);
 
 	palette_set_color_rgb(space->machine, (offset / 2), pal5bit(r), pal5bit(g), pal5bit(b));
 }
@@ -75,15 +75,15 @@ WRITE8_HANDLER( nbmj8991_palette_type3_w )
 {
 	int r, g, b;
 
-	paletteram[offset] = data;
+	space->machine->generic.paletteram.u8[offset] = data;
 
 	if (!(offset & 1)) return;
 
 	offset &= 0x1fe;
 
-	r = ((paletteram[offset + 1] & 0x0f) >> 0);
-	g = ((paletteram[offset + 0] & 0xf0) >> 4);
-	b = ((paletteram[offset + 0] & 0x0f) >> 0);
+	r = ((space->machine->generic.paletteram.u8[offset + 1] & 0x0f) >> 0);
+	g = ((space->machine->generic.paletteram.u8[offset + 0] & 0xf0) >> 4);
+	b = ((space->machine->generic.paletteram.u8[offset + 0] & 0x0f) >> 0);
 
 	palette_set_color_rgb(space->machine, (offset >> 1), pal4bit(r), pal4bit(g), pal4bit(b));
 }
@@ -118,7 +118,7 @@ WRITE8_HANDLER( nbmj8991_blitter_w )
 		case 0x20:	blitter_desty = (blitter_desty & 0xff00) | data; break;
 		case 0x30:	nbmj8991_scrollx = (nbmj8991_scrollx & 0xff00) | data; break;
 		case 0x40:	nbmj8991_scrolly = (nbmj8991_scrolly & 0xff00) | data; break;
-		case 0x50: 	blitter_destx = (blitter_destx & 0x00ff) | ((data & 0x01) << 8);
+		case 0x50:	blitter_destx = (blitter_destx & 0x00ff) | ((data & 0x01) << 8);
 					blitter_desty = (blitter_desty & 0x00ff) | ((data & 0x02) << 7);
 					nbmj8991_scrollx = (nbmj8991_scrollx & 0x00ff) | ((data & 0x04) << 6);
 					nbmj8991_scrolly = (nbmj8991_scrolly & 0x00ff) | ((data & 0x08) << 5);

@@ -449,18 +449,14 @@ static READ32_HANDLER( skns_hit_r )
 /* start old driver code */
 
 
-static TIMER_CALLBACK( interrupt_callback )
+static TIMER_DEVICE_CALLBACK( interrupt_callback )
 {
-	cputag_set_input_line(machine, "maincpu", param, HOLD_LINE);
+	cputag_set_input_line(timer->machine, "maincpu", param, HOLD_LINE);
 }
 
 static MACHINE_RESET(skns)
 {
-	timer_pulse(machine, ATTOTIME_IN_MSEC(2), NULL, 15, interrupt_callback);
-	timer_pulse(machine, ATTOTIME_IN_MSEC(8), NULL, 11, interrupt_callback);
-	timer_pulse(machine, cputag_clocks_to_attotime(machine, "maincpu", 1824), NULL, 9, interrupt_callback);
-
-	memory_set_bankptr(machine, 1,memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank1",memory_region(machine, "user1"));
 }
 
 
@@ -651,10 +647,10 @@ static WRITE32_HANDLER( skns_io_w )
 	case 2:
 		if(ACCESSING_BITS_24_31)
 		{ /* Coin Lock/Count */
-//          coin_counter_w(0, data & 0x01000000);
-//          coin_counter_w(1, data & 0x02000000);
-//          coin_lockout_w(0, ~data & 0x04000000);
-//          coin_lockout_w(1, ~data & 0x08000000); // Works in puzzloop, others behave strange.
+//          coin_counter_w(space->machine, 0, data & 0x01000000);
+//          coin_counter_w(space->machine, 1, data & 0x02000000);
+//          coin_lockout_w(space->machine, 0, ~data & 0x04000000);
+//          coin_lockout_w(space->machine, 1, ~data & 0x08000000); // Works in puzzloop, others behave strange.
 		}
 		if(ACCESSING_BITS_16_23)
 		{ /* Analogue Input Select */
@@ -772,20 +768,20 @@ static ADDRESS_MAP_START( skns_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00400004, 0x00400007) AM_READ_PORT("400004")
 	/* In between is write only */
 	AM_RANGE(0x0040000c, 0x0040000f) AM_READ_PORT("40000c")
-	AM_RANGE(0x00800000, 0x00801fff) AM_RAM AM_BASE(&generic_nvram32) AM_SIZE(&generic_nvram_size) /* 'backup' RAM */
+	AM_RANGE(0x00800000, 0x00801fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram) /* 'backup' RAM */
 	AM_RANGE(0x00c00000, 0x00c00003) AM_DEVREADWRITE8("ymz", ymz280b_r, ymz280b_w, 0xffff0000) /* ymz280_w (sound) */
 	AM_RANGE(0x01000000, 0x0100000f) AM_READWRITE(skns_msm6242_r, skns_msm6242_w)
 	AM_RANGE(0x01800000, 0x01800003) AM_WRITE(skns_hit2_w)
-	AM_RANGE(0x02000000, 0x02003fff) AM_RAM AM_BASE(&spriteram32) AM_SIZE(&spriteram_size) /* sprite ram */
+	AM_RANGE(0x02000000, 0x02003fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* sprite ram */
 	AM_RANGE(0x02100000, 0x0210003f) AM_RAM AM_BASE(&skns_spc_regs) /* sprite registers */
 	AM_RANGE(0x02400000, 0x0240007f) AM_RAM_WRITE(skns_v3_regs_w) AM_BASE(&skns_v3_regs) /* tilemap registers */
 	AM_RANGE(0x02500000, 0x02503fff) AM_RAM_WRITE(skns_tilemapA_w) AM_BASE(&skns_tilemapA_ram) /* tilemap A */
 	AM_RANGE(0x02504000, 0x02507fff) AM_RAM_WRITE(skns_tilemapB_w) AM_BASE(&skns_tilemapB_ram) /* tilemap B */
-	AM_RANGE(0x02600000, 0x02607fff) AM_RAM_WRITE(SMH_RAM) AM_BASE(&skns_v3slc_ram) /* tilemap linescroll */
+	AM_RANGE(0x02600000, 0x02607fff) AM_RAM AM_BASE(&skns_v3slc_ram) /* tilemap linescroll */
 	AM_RANGE(0x02a00000, 0x02a0001f) AM_RAM_WRITE(skns_pal_regs_w) AM_BASE(&skns_pal_regs)
 	AM_RANGE(0x02a40000, 0x02a5ffff) AM_RAM_WRITE(skns_palette_ram_w) AM_BASE(&skns_palette_ram)
 	AM_RANGE(0x02f00000, 0x02f000ff) AM_READWRITE(skns_hit_r, skns_hit_w)
-	AM_RANGE(0x04000000, 0x041fffff) AM_ROMBANK(1) /* GAME ROM */
+	AM_RANGE(0x04000000, 0x041fffff) AM_ROMBANK("bank1") /* GAME ROM */
 	AM_RANGE(0x04800000, 0x0483ffff) AM_RAM_WRITE(skns_v3t_w) AM_BASE(&skns_v3t_ram) /* tilemap b ram based tiles */
 	AM_RANGE(0x06000000, 0x060fffff) AM_RAM AM_BASE(&skns_main_ram)
 	AM_RANGE(0xc0000000, 0xc0000fff) AM_RAM AM_BASE(&skns_cache_ram) /* 'cache' RAM */
@@ -841,6 +837,13 @@ static MACHINE_DRIVER_START(skns)
 
 	MDRV_MACHINE_RESET(skns)
 	MDRV_NVRAM_HANDLER(generic_1fill)
+
+	MDRV_TIMER_ADD_PERIODIC("int15_timer", interrupt_callback, MSEC(2))
+	MDRV_TIMER_PARAM(15)
+	MDRV_TIMER_ADD_PERIODIC("int11_timer", interrupt_callback, MSEC(8))
+	MDRV_TIMER_PARAM(11)
+	MDRV_TIMER_ADD_PERIODIC("int9_timer", interrupt_callback, HZ(28638000/1824))
+	MDRV_TIMER_PARAM(9)
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
 
@@ -1115,7 +1118,7 @@ ROM_START( galpani4k )
 	/* First 0x040000 bytes (0x03ff Tiles) are RAM Based Tiles */
 	/* 0x040000 - 0x3fffff empty? */
 
-	ROM_REGION( 0x400000, "ymz", 0 ) /* Samples */
+	ROM_REGION( 0x400000, "ymz", 0 ) /* Samples */ /* Gals Panic 4 (Korea) uses different sound samples (not dumped)?? or mapped different?? */
 	ROM_LOAD( "gp430000.u4", 0x000000, 0x200000, CRC(8374663a) SHA1(095512564f4de25dc3752d9fbd254b9dabd16d1b) )
 ROM_END
 
@@ -1126,6 +1129,31 @@ ROM_START( galpanis )
 	ROM_REGION32_BE( 0x200000, "user1", 0 ) /* SH-2 Code mapped at 0x04000000 */
 	ROM_LOAD16_BYTE( "gps-e.u10", 0x000000, 0x100000, CRC(c6938c3f) SHA1(05853ee6a44a55702788a75580b04a4be45e9bcb) )
 	ROM_LOAD16_BYTE( "gps-o.u8",  0x000001, 0x100000, CRC(e764177a) SHA1(3a1333eb1022ed1a275b9c3d44b5f4ab81618fb6) )
+
+	ROM_REGION( 0x1000000, "gfx1", 0 )
+	ROM_LOAD( "gps10000.u24", 0x000000, 0x400000, CRC(a1a7acf2) SHA1(52c86ae907f0c0236808c19f652955b09e90ec5a) )
+	ROM_LOAD( "gps10100.u20", 0x400000, 0x400000, CRC(49f764b6) SHA1(9f4289858c3dac625ef623cc381a47b45aa5d8e2) )
+	ROM_LOAD( "gps10200.u17", 0x800000, 0x400000, CRC(51980272) SHA1(6c0706d913b33995579aaf0688c4bf26d6d35a78) )
+
+	ROM_REGION( 0x800000, "gfx2", 0 )
+	ROM_LOAD( "gps20000.u16", 0x000000, 0x400000, CRC(c146a09e) SHA1(5af5a7b9d9a55ec7aba3fd85a3a0211b92b1b84f) )
+	ROM_LOAD( "gps20100.u13", 0x400000, 0x400000, CRC(9dfa2dc6) SHA1(a058c42fd76c23c0e5c8c11f5617fd29e056be7d) )
+
+	ROM_REGION( 0x800000, "gfx3", ROMREGION_ERASE00 ) /* Tiles Plane B */
+	/* First 0x040000 bytes (0x03ff Tiles) are RAM Based Tiles */
+	/* 0x040000 - 0x3fffff empty? */
+
+	ROM_REGION( 0x400000, "ymz", 0 ) /* Samples */
+	ROM_LOAD( "gps30000.u4", 0x000000, 0x400000, CRC(9e4da8e3) SHA1(6506d9300a442883357003a05fd2c78d364c35bb) )
+ROM_END
+
+ROM_START( galpanisk )
+	ROM_REGION( 0x080000, "maincpu", 0 ) /* SH-2 Code */
+	ROM_LOAD       ( "sknsk1.u10",   0x000000, 0x080000, CRC(ff1c9f79) SHA1(a51e598d43e76d37da69b1f094c111273bdfc94a) ) /* Korean BIOS */
+
+	ROM_REGION32_BE( 0x200000, "user1", 0 ) /* SH-2 Code mapped at 0x04000000 */
+	ROM_LOAD16_BYTE( "gps-000-k1.u10", 0x000000, 0x100000, CRC(c9ff3d8a) SHA1(edfec265654aaa8cb307424e5b2899e708392cd0) )
+	ROM_LOAD16_BYTE( "gps-001-k1.u8",  0x000001, 0x100000, CRC(354e601d) SHA1(4d176f2337a3b0b63548b2e542f9fa87d0a1ef7b) )
 
 	ROM_REGION( 0x1000000, "gfx1", 0 )
 	ROM_LOAD( "gps10000.u24", 0x000000, 0x400000, CRC(a1a7acf2) SHA1(52c86ae907f0c0236808c19f652955b09e90ec5a) )
@@ -1296,18 +1324,18 @@ ROM_START( panicstr )
 	ROM_LOAD16_BYTE( "ps1000j0.u10", 0x000000, 0x100000, CRC(59645f89) SHA1(8da205c6e38899d6c637941700dd7eea56011c10) )
 	ROM_LOAD16_BYTE( "ps1001j0.u8",  0x000001, 0x100000, CRC(c4722be9) SHA1(7009d320a80cfa7d80efc5fc915081914bc3c827) )
 
-  	ROM_REGION( 0x800000, "gfx1", 0 )
+	ROM_REGION( 0x800000, "gfx1", 0 )
 	ROM_LOAD( "ps-10000.u24", 0x000000, 0x400000, CRC(294b2f14) SHA1(90cbd0acdaa2d89d208c28aae33ab57c03624089) )
 	ROM_LOAD( "ps110100.u20", 0x400000, 0x400000, CRC(e292f393) SHA1(b0914f7f0abf9f821f2592c289ea4e3b3e7f819a) )
 
-  	ROM_REGION( 0x400000, "gfx2", 0 )
+	ROM_REGION( 0x400000, "gfx2", 0 )
 	ROM_LOAD( "ps120000.u16", 0x000000, 0x400000, CRC(d772ac15) SHA1(6bf7b9bfccdcb7481b21fa2ab9b683d79033a192) )
 
-  	ROM_REGION( 0x400000, "gfx3", ROMREGION_ERASE00 ) /* Tiles Plane B */
+	ROM_REGION( 0x400000, "gfx3", ROMREGION_ERASE00 ) /* Tiles Plane B */
 	/* First 0x040000 bytes (0x03ff Tiles) are RAM Based Tiles */
 	/* 0x040000 - 0x3fffff empty? */
 
-  	ROM_REGION( 0x400000, "ymz", 0 ) /* Samples */
+	ROM_REGION( 0x400000, "ymz", 0 ) /* Samples */
 	ROM_LOAD( "ps-30000.u4",  0x000000, 0x400000, CRC(2262e263) SHA1(73443e5f40f5c5c9bd41c6207fa6376072f0f65e) )
 ROM_END
 
@@ -1657,9 +1685,10 @@ ROM_END
 GAME( 1996, skns,      0,        skns, skns,     0,         ROT0,  "Kaneko", "Super Kaneko Nova System BIOS", GAME_IS_BIOS_ROOT )
 
 GAME( 1996, galpani4,  skns,     skns, cyvern,   galpani4,  ROT0,  "Kaneko", "Gals Panic 4 (Japan)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1996, galpani4k, galpani4, skns, cyvern,   galpani4,  ROT0,  "Kaneko", "Gals Panic 4 (Korea)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1996, galpani4k, galpani4, skns, cyvern,   galpani4,  ROT0,  "Kaneko", "Gals Panic 4 (Korea)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND ) /* sound samples are different / missing? */
 GAME( 1996, jjparads,  skns,     skns, skns_1p,  jjparads,  ROT0,  "Electro Design", "Jan Jan Paradise", GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, galpanis,  skns,     skns, galpanis, galpanis,  ROT0,  "Kaneko", "Gals Panic S - Extra Edition (Japan)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1997, galpanisk, galpanis, skns, galpanis, galpanis,  ROT0,  "Kaneko", "Gals Panic S - Extra Edition (Korea)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, jjparad2,  skns,     skns, skns_1p,  jjparad2,  ROT0,  "Electro Design", "Jan Jan Paradise 2", GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, sengekis,  skns,     skns, skns,     sengekis,  ROT90, "Kaneko / Warashi", "Sengeki Striker (Asia)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, sengekisj, sengekis, skns, skns,     sengekij,  ROT90, "Kaneko / Warashi", "Sengeki Striker (Japan)", GAME_IMPERFECT_GRAPHICS )

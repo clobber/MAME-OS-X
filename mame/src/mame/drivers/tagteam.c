@@ -30,6 +30,9 @@ TODO:
 #include "sound/ay8910.h"
 #include "sound/dac.h"
 
+extern UINT8 *tagteam_videoram;
+extern UINT8 *tagteam_colorram;
+
 extern WRITE8_HANDLER( tagteam_videoram_w );
 extern WRITE8_HANDLER( tagteam_colorram_w );
 extern READ8_HANDLER( tagteam_mirrorvideoram_r );
@@ -59,9 +62,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0x2003, 0x2003) AM_WRITENOP /* Appears to increment when you're out of the ring */
 	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(tagteam_mirrorvideoram_r, tagteam_mirrorvideoram_w)
 	AM_RANGE(0x4400, 0x47ff) AM_READWRITE(tagteam_mirrorcolorram_r, tagteam_mirrorcolorram_w)
-	AM_RANGE(0x4800, 0x4fff) AM_READ(SMH_RAM)
-	AM_RANGE(0x4800, 0x4bff) AM_WRITE(tagteam_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4c00, 0x4fff) AM_WRITE(tagteam_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x4800, 0x4fff) AM_READONLY
+	AM_RANGE(0x4800, 0x4bff) AM_WRITE(tagteam_videoram_w) AM_BASE(&tagteam_videoram)
+	AM_RANGE(0x4c00, 0x4fff) AM_WRITE(tagteam_colorram_w) AM_BASE(&tagteam_colorram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -72,7 +75,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2004, 0x2004) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0x2005, 0x2005) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x2007, 0x2007) AM_READ(soundlatch_r)
-	AM_RANGE(0x4000, 0xffff) AM_READ(SMH_ROM)
+	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 

@@ -1,7 +1,7 @@
 /* Sega System 32 Protection related functions */
 
 #include "driver.h"
-#include "segas32.h"
+#include "includes/segas32.h"
 
 
 /******************************************************************************
@@ -323,7 +323,7 @@ READ16_HANDLER(arf_wakeup_protection_r)
  ******************************************************************************
  ******************************************************************************/
 WRITE16_HANDLER( jleague_protection_w )
-		{
+{
 	COMBINE_DATA( &system32_workram[0xf700/2 + offset ] );
 
 	switch( offset )

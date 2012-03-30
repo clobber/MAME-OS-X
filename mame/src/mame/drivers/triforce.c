@@ -399,10 +399,10 @@ Notes:
 #include "driver.h"
 #include "cpu/powerpc/ppc.h"
 #include "video/generic.h"
-#include "naomibd.h"
+#include "includes/naomibd.h"
 
 static ADDRESS_MAP_START( gc_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("maincpu", 0) AM_SHARE(2)	/* Program ROM */
+	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("maincpu", 0) AM_SHARE("share2")	/* Program ROM */
 ADDRESS_MAP_END
 
 
@@ -427,7 +427,7 @@ static MACHINE_DRIVER_START( triforce_base )
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
- 	/* video hardware */
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)

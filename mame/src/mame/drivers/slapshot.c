@@ -138,6 +138,7 @@ Region byte at offset 0x031:
 #include "audio/taitosnd.h"
 #include "sound/2610intf.h"
 #include "machine/timekpr.h"
+#include "machine/taitoio.h"
 
 
 VIDEO_EOF( taito_no_buffer );
@@ -198,14 +199,15 @@ static INTERRUPT_GEN( slapshot_interrupt )
 
 static READ16_HANDLER( slapshot_service_input_r )
 {
+	const device_config *tc0640fio = devtag_get_device(space->machine, "tc0640fio");
 	switch (offset)
 	{
 		case 0x03:
-			return ((input_port_read(space->machine, "IN1") & 0xef) |
+			return ((input_port_read(space->machine, "SYSTEM") & 0xef) |
 				  (input_port_read(space->machine, "SERVICE") & 0x10))  << 8;	/* IN3 + service switch */
 
 		default:
-			return TC0640FIO_r(space,offset) << 8;
+			return tc0640fio_r(tc0640fio, offset) << 8;
 	}
 }
 
@@ -230,7 +232,7 @@ static INT32 banknum;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine,  10, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
+	memory_set_bankptr(machine,  "bank10", memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
 }
 
 static STATE_POSTLOAD( slapshot_postload )
@@ -280,14 +282,14 @@ static READ16_HANDLER( slapshot_msb_sound_r )
 static ADDRESS_MAP_START( slapshot_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x500000, 0x50ffff) AM_RAM	/* main RAM */
-	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)	/* sprite ram */
+	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	/* sprite ram */
 	AM_RANGE(0x700000, 0x701fff) AM_RAM AM_BASE(&taito_sprite_ext) AM_SIZE(&taito_spriteext_size)	/* debugging */
-	AM_RANGE(0x800000, 0x80ffff) AM_READWRITE(TC0480SCP_word_r, TC0480SCP_word_w)	/* tilemaps */
-	AM_RANGE(0x830000, 0x83002f) AM_READWRITE(TC0480SCP_ctrl_word_r, TC0480SCP_ctrl_word_w)
+	AM_RANGE(0x800000, 0x80ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	/* tilemaps */
+	AM_RANGE(0x830000, 0x83002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_word_r, tc0480scp_ctrl_word_w)
 	AM_RANGE(0x900000, 0x907fff) AM_READWRITE(color_ram_word_r, color_ram_word_w) AM_BASE(&color_ram)	/* 8bpg palette */
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE8("mk48t08", timekeeper_r, timekeeper_w, 0xff00)	/* nvram (only low bytes used) */
-	AM_RANGE(0xb00000, 0xb0001f) AM_WRITE8(TC0360PRI_w, 0xff00)	/* priority chip */
-	AM_RANGE(0xc00000, 0xc0000f) AM_READWRITE(TC0640FIO_halfword_byteswap_r, TC0640FIO_halfword_byteswap_w)
+	AM_RANGE(0xb00000, 0xb0001f) AM_DEVWRITE8("tc0360pri", tc0360pri_w, 0xff00)	/* priority chip */
+	AM_RANGE(0xc00000, 0xc0000f) AM_DEVREADWRITE("tc0640fio", tc0640fio_halfword_byteswap_r, tc0640fio_halfword_byteswap_w)
 	AM_RANGE(0xc00020, 0xc0002f) AM_READ(slapshot_service_input_r)	/* service mirror */
 	AM_RANGE(0xd00000, 0xd00003) AM_READWRITE(slapshot_msb_sound_r, slapshot_msb_sound_w)
 ADDRESS_MAP_END
@@ -295,14 +297,14 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( opwolf3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x500000, 0x50ffff) AM_RAM	/* main RAM */
-	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)	/* sprite ram */
+	AM_RANGE(0x600000, 0x60ffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	/* sprite ram */
 	AM_RANGE(0x700000, 0x701fff) AM_RAM AM_BASE(&taito_sprite_ext) AM_SIZE(&taito_spriteext_size)	/* debugging */
-	AM_RANGE(0x800000, 0x80ffff) AM_READWRITE(TC0480SCP_word_r, TC0480SCP_word_w)	/* tilemaps */
-	AM_RANGE(0x830000, 0x83002f) AM_READWRITE(TC0480SCP_ctrl_word_r, TC0480SCP_ctrl_word_w)
+	AM_RANGE(0x800000, 0x80ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	/* tilemaps */
+	AM_RANGE(0x830000, 0x83002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_word_r, tc0480scp_ctrl_word_w)
 	AM_RANGE(0x900000, 0x907fff) AM_READWRITE(color_ram_word_r, color_ram_word_w) AM_BASE(&color_ram)	/* 8bpg palette */
 	AM_RANGE(0xa00000, 0xa03fff) AM_DEVREADWRITE8("mk48t08", timekeeper_r, timekeeper_w, 0xff00)	/* nvram (only low bytes used) */
-	AM_RANGE(0xb00000, 0xb0001f) AM_WRITE8(TC0360PRI_w, 0xff00)	/* priority chip */
-	AM_RANGE(0xc00000, 0xc0000f) AM_READWRITE(TC0640FIO_halfword_byteswap_r, TC0640FIO_halfword_byteswap_w)
+	AM_RANGE(0xb00000, 0xb0001f) AM_DEVWRITE8("tc0360pri", tc0360pri_w, 0xff00)	/* priority chip */
+	AM_RANGE(0xc00000, 0xc0000f) AM_DEVREADWRITE("tc0640fio", tc0640fio_halfword_byteswap_r, tc0640fio_halfword_byteswap_w)
 	AM_RANGE(0xc00020, 0xc0002f) AM_READ(slapshot_service_input_r)	/* service mirror */
 	AM_RANGE(0xd00000, 0xd00003) AM_READWRITE(slapshot_msb_sound_r, slapshot_msb_sound_w)
 	AM_RANGE(0xe00000, 0xe00007) AM_READWRITE(opwolf3_adc_r, opwolf3_adc_req_w)
@@ -313,11 +315,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( opwolf3_z80_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(10)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r,ym2610_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r,ym2610_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
-	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r,taitosound_slave_comm_w)
+	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP /* pan */
 	AM_RANGE(0xea00, 0xea00) AM_READNOP
 	AM_RANGE(0xee00, 0xee00) AM_WRITENOP /* ? */
@@ -332,17 +334,7 @@ ADDRESS_MAP_END
 
 /* Tags below are the ones expected by TC0640FIO_halfword_byteswap_r */
 static INPUT_PORTS_START( slapshot )
-	PORT_START("DSWA")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("DSWB")
+	PORT_START("COINS")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -352,7 +344,7 @@ static INPUT_PORTS_START( slapshot )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN0")
+	PORT_START("BUTTONS")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
@@ -362,7 +354,7 @@ static INPUT_PORTS_START( slapshot )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN1")
+	PORT_START("SYSTEM")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -372,7 +364,7 @@ static INPUT_PORTS_START( slapshot )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN2")
+	PORT_START("JOY")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
@@ -388,17 +380,7 @@ INPUT_PORTS_END
 
 /* Tags below are the ones expected by TC0640FIO_halfword_byteswap_r */
 static INPUT_PORTS_START( opwolf3 )
-	PORT_START("DSWA")      /* IN0, all bogus */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("DSWB")
+	PORT_START("COINS")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -408,7 +390,7 @@ static INPUT_PORTS_START( opwolf3 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN4 )
 
-	PORT_START("IN0")
+	PORT_START("BUTTONS")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )	PORT_NAME("1 Player Start/Button3")// also button 3
@@ -418,7 +400,7 @@ static INPUT_PORTS_START( opwolf3 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )	PORT_NAME("2 Player Start/Button3")// also button 3
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN1")
+	PORT_START("SYSTEM")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -428,7 +410,7 @@ static INPUT_PORTS_START( opwolf3 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN2")
+	PORT_START("JOY")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -438,19 +420,19 @@ static INPUT_PORTS_START( opwolf3 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("SERVICE")      /* IN5, so we can OR in service switch */
+	PORT_START("SERVICE")
 	PORT_SERVICE_NO_TOGGLE(0x10, IP_ACTIVE_LOW)
 
-	PORT_START("GUN1X")	/* IN 6, P1X */
+	PORT_START("GUN1X")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_X ) PORT_MINMAX(0x10,0xf0) PORT_SENSITIVITY(30) PORT_KEYDELTA(20) PORT_REVERSE PORT_PLAYER(1)
 
-	PORT_START("GUN1Y")	/* IN 7, P1Y */
+	PORT_START("GUN1Y")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_MINMAX(0x10,0xf0) PORT_SENSITIVITY(30) PORT_KEYDELTA(20) PORT_PLAYER(1)
 
-	PORT_START("GUN2X")	/* IN 8, P2X */
+	PORT_START("GUN2X")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_X ) PORT_MINMAX(0x10,0xf0) PORT_SENSITIVITY(30) PORT_KEYDELTA(20) PORT_REVERSE PORT_PLAYER(2)
 
-	PORT_START("GUN2Y")	/* IN 9, P2Y */
+	PORT_START("GUN2Y")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_MINMAX(0x10,0xf0) PORT_SENSITIVITY(30) PORT_KEYDELTA(20) PORT_PLAYER(2)
 INPUT_PORTS_END
 
@@ -513,6 +495,22 @@ static const ym2610_interface ym2610_config =
                  MACHINE DRIVERS
 ***********************************************************/
 
+static const tc0480scp_interface slapshot_tc0480scp_intf =
+{
+	1, 2,		/* gfxnum, txnum */
+	3,		/* pixels */
+	30, 9,		/* x_offset, y_offset */
+	-1, 1,		/* text_xoff, text_yoff */
+	0, 2,		/* flip_xoff, flip_yoff */
+	256		/* col_base */
+};
+
+static const tc0640fio_interface slapshot_io_intf =
+{
+	DEVCB_NULL, DEVCB_INPUT_PORT("COINS"),
+	DEVCB_INPUT_PORT("BUTTONS"), DEVCB_INPUT_PORT("SYSTEM"), DEVCB_INPUT_PORT("JOY")	/* port read handlers */
+};
+
 static MACHINE_DRIVER_START( slapshot )
 
 	/* basic machine hardware */
@@ -526,6 +524,8 @@ static MACHINE_DRIVER_START( slapshot )
 	MDRV_QUANTUM_TIME(HZ(600))
 
 	MDRV_MACHINE_START(slapshot)
+
+	MDRV_TC0640FIO_ADD("tc0640fio", slapshot_io_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -542,10 +542,13 @@ static MACHINE_DRIVER_START( slapshot )
 	MDRV_VIDEO_EOF(taito_no_buffer)
 	MDRV_VIDEO_UPDATE(slapshot)
 
+	MDRV_TC0480SCP_ADD("tc0480scp", slapshot_tc0480scp_intf)
+	MDRV_TC0360PRI_ADD("tc0360pri")
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610B, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610B, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -567,6 +570,8 @@ static MACHINE_DRIVER_START( opwolf3 )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0640FIO_ADD("tc0640fio", slapshot_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -582,10 +587,13 @@ static MACHINE_DRIVER_START( opwolf3 )
 	MDRV_VIDEO_EOF(taito_no_buffer)
 	MDRV_VIDEO_UPDATE(slapshot)
 
+	MDRV_TC0480SCP_ADD("tc0480scp", slapshot_tc0480scp_intf)
+	MDRV_TC0360PRI_ADD("tc0360pri")
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610B, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610B, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -618,7 +626,7 @@ ROM_START( slapshot )
 	ROM_LOAD       ( "d71-03.25", 0x300000, 0x100000, CRC(dccef9ec) SHA1(ee7a49727b822cf4c1d7acff994b77ea6191c423) )
 	ROM_FILL       (              0x200000, 0x100000, 0 )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "d71-06.37", 0x00000, 0x80000, CRC(f3324188) SHA1(70dd724441eae8614218bc7f0f51860bd2462f0c) )
 
 	/* no Delta-T samples */
@@ -653,7 +661,7 @@ ROM_START( opwolf3 )
 	ROM_LOAD       ( "d74_04.25", 0x600000, 0x200000, CRC(2f385638) SHA1(1ba2ec7d9b1c491e1cc6d7e646e09ef2bc063f25) )
 	ROM_FILL       (              0x400000, 0x200000, 0 )
 
-	ROM_REGION( 0x200000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x200000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "d74_01.37",  0x000000, 0x200000, CRC(115313e0) SHA1(51a69e7a26960b1328ccefeaec0fb26bdccc39f2) )
 
 	/* no Delta-T samples */
@@ -680,7 +688,7 @@ ROM_START( opwolf3u )
 	ROM_LOAD       ( "d74_04.25", 0x600000, 0x200000, CRC(2f385638) SHA1(1ba2ec7d9b1c491e1cc6d7e646e09ef2bc063f25) )
 	ROM_FILL       (              0x400000, 0x200000, 0 )
 
-	ROM_REGION( 0x200000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x200000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "d74_01.37",  0x000000, 0x200000, CRC(115313e0) SHA1(51a69e7a26960b1328ccefeaec0fb26bdccc39f2) )
 
 	/* no Delta-T samples */
@@ -691,25 +699,25 @@ static DRIVER_INIT( slapshot )
 {
 	UINT32 offset,i;
 	UINT8 *gfx = memory_region(machine, "gfx2");
-	int size=memory_region_length(machine, "gfx2");
+	int size = memory_region_length(machine, "gfx2");
 	int data;
 
-	offset = size/2;
-	for (i = size/2+size/4; i<size; i++)
+	offset = size / 2;
+	for (i = size / 2 + size / 4; i < size; i++)
 	{
-		int d1,d2,d3,d4;
+		int d1, d2, d3, d4;
 
 		/* Expand 2bits into 4bits format */
 		data = gfx[i];
-		d1 = (data>>0) & 3;
-		d2 = (data>>2) & 3;
-		d3 = (data>>4) & 3;
-		d4 = (data>>6) & 3;
+		d1 = (data >> 0) & 3;
+		d2 = (data >> 2) & 3;
+		d3 = (data >> 4) & 3;
+		d4 = (data >> 6) & 3;
 
-		gfx[offset] = (d1<<2) | (d2<<6);
+		gfx[offset] = (d1 << 2) | (d2 << 6);
 		offset++;
 
-		gfx[offset] = (d3<<2) | (d4<<6);
+		gfx[offset] = (d3 << 2) | (d4 << 6);
 		offset++;
 	}
 }

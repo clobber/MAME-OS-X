@@ -34,7 +34,7 @@
 
 /* Variables only used here: */
 
-static tilemap *tilemap_0a, *tilemap_0b, *tilemap_1;
+static tilemap_t *tilemap_0a, *tilemap_0b, *tilemap_1;
 
 /* Variables & functions needed by drivers: */
 
@@ -292,9 +292,10 @@ Offset:     Format:     Value:
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int i;
 
-	for (i = 0; i < spriteram_size ; i += 8)
+	for (i = 0; i < machine->generic.spriteram_size ; i += 8)
 	{
 		int y		=	 240 - spriteram[i+1];
 		int code	=	(spriteram[i+3] & 0x3f) + (spriteram[i+2] << 6);

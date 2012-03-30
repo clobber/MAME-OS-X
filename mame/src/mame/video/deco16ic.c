@@ -140,7 +140,7 @@ Rowscroll style:
 ***************************************************************************/
 
 #include "driver.h"
-#include "deco16ic.h"
+#include "includes/deco16ic.h"
 #include "ui.h"
 
 UINT16 *deco16_pf1_data,*deco16_pf2_data;
@@ -159,8 +159,8 @@ int deco16_raster_display_position;
 
 static int use_custom_pf1, use_custom_pf2, use_custom_pf3, use_custom_pf4;
 
-static tilemap *pf1_tilemap_16x16,*pf2_tilemap_16x16,*pf3_tilemap_16x16,*pf4_tilemap_16x16;
-static tilemap *pf1_tilemap_8x8,*pf2_tilemap_8x8;
+static tilemap_t *pf1_tilemap_16x16,*pf2_tilemap_16x16,*pf3_tilemap_16x16,*pf4_tilemap_16x16;
+static tilemap_t *pf1_tilemap_8x8,*pf2_tilemap_8x8;
 
 static bitmap_t *sprite_priority_bitmap;
 
@@ -175,8 +175,8 @@ static int (*deco16_bank_callback_2)(const int bank);
 static int (*deco16_bank_callback_3)(const int bank);
 static int (*deco16_bank_callback_4)(const int bank);
 static void custom_tilemap_draw(running_machine *machine,
-	bitmap_t *bitmap,tilemap *tilemap0_8x8,tilemap *tilemap0_16x16,
-	tilemap *tilemap1_8x8,tilemap *tilemap1_16x16, const UINT16 *rowscroll_ptr,const UINT16 scrollx,
+	bitmap_t *bitmap,tilemap_t *tilemap0_8x8,tilemap_t *tilemap0_16x16,
+	tilemap_t *tilemap1_8x8,tilemap_t *tilemap1_16x16, const UINT16 *rowscroll_ptr,const UINT16 scrollx,
 	const UINT16 scrolly,const UINT16 control0, const UINT16 control1,int combine_mask,int combine_shift,int trans_mask,int flags,UINT32 priority);
 static int pf12_last_small, pf12_last_big, pf34_last_big;
 
@@ -190,19 +190,19 @@ WRITE16_HANDLER( deco16_nonbuffered_palette_w )
 {
 	int r,g,b;
 
-	COMBINE_DATA(&paletteram16[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 	if (offset&1) offset--;
 
-	b = (paletteram16[offset] >> 0) & 0xff;
-	g = (paletteram16[offset+1] >> 8) & 0xff;
-	r = (paletteram16[offset+1] >> 0) & 0xff;
+	b = (space->machine->generic.paletteram.u16[offset] >> 0) & 0xff;
+	g = (space->machine->generic.paletteram.u16[offset+1] >> 8) & 0xff;
+	r = (space->machine->generic.paletteram.u16[offset+1] >> 0) & 0xff;
 
 	palette_set_color(space->machine,offset/2,MAKE_RGB(r,g,b));
 }
 
 WRITE16_HANDLER( deco16_buffered_palette_w )
 {
-	COMBINE_DATA(&paletteram16[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 	dirty_palette[offset/2]=1;
 }
 
@@ -215,9 +215,9 @@ WRITE16_HANDLER( deco16_palette_dma_w )
 		if (dirty_palette[i]) {
 			dirty_palette[i]=0;
 
-			b = (paletteram16[i*2] >> 0) & 0xff;
-			g = (paletteram16[i*2+1] >> 8) & 0xff;
-			r = (paletteram16[i*2+1] >> 0) & 0xff;
+			b = (space->machine->generic.paletteram.u16[i*2] >> 0) & 0xff;
+			g = (space->machine->generic.paletteram.u16[i*2+1] >> 8) & 0xff;
+			r = (space->machine->generic.paletteram.u16[i*2+1] >> 0) & 0xff;
 
 			palette_set_color(space->machine,i,MAKE_RGB(r,g,b));
 		}
@@ -471,7 +471,7 @@ void deco16_pf34_set_gfxbank(int small, int big)
 	deco16_pf34_16x16_gfx_bank=big;
 }
 
-tilemap *deco16_get_tilemap(int pf, int size)
+tilemap_t *deco16_get_tilemap(int pf, int size)
 {
 	switch (pf) {
 	case 0: if (size) return pf1_tilemap_8x8; return pf1_tilemap_16x16;
@@ -608,8 +608,8 @@ void deco_allocate_sprite_bitmap(running_machine *machine)
 /*****************************************************************************************/
 
 static int deco16_pf_update(
-	tilemap *tilemap_8x8,
-	tilemap *tilemap_16x16,
+	tilemap_t *tilemap_8x8,
+	tilemap_t *tilemap_16x16,
 	const UINT16 *rowscroll_ptr,
 	const UINT16 scrollx,
 	const UINT16 scrolly,
@@ -960,10 +960,10 @@ void deco16_tilemap_34_combine_draw(const device_config *screen, bitmap_t *bitma
 static void custom_tilemap_draw(
 	running_machine *machine,
 	bitmap_t *bitmap,
-	tilemap *tilemap0_8x8,
-	tilemap *tilemap0_16x16,
-	tilemap *tilemap1_8x8,
-	tilemap *tilemap1_16x16,
+	tilemap_t *tilemap0_8x8,
+	tilemap_t *tilemap0_16x16,
+	tilemap_t *tilemap1_8x8,
+	tilemap_t *tilemap1_16x16,
 	const UINT16 *rowscroll_ptr,
 	const UINT16 scrollx,
 	const UINT16 scrolly,
@@ -975,8 +975,8 @@ static void custom_tilemap_draw(
 	int flags,
 	UINT32 priority)
 {
-	tilemap *tilemap0 = (control1&0x80) ? tilemap0_8x8 : tilemap0_16x16;
-	tilemap *tilemap1 = (control1&0x80) ? tilemap1_8x8 : tilemap1_16x16;
+	tilemap_t *tilemap0 = (control1&0x80) ? tilemap0_8x8 : tilemap0_16x16;
+	tilemap_t *tilemap1 = (control1&0x80) ? tilemap1_8x8 : tilemap1_16x16;
 	const bitmap_t *src_bitmap0 = tilemap0 ? tilemap_get_pixmap(tilemap0) : NULL;
 	const bitmap_t *src_bitmap1 = tilemap1 ? tilemap_get_pixmap(tilemap1) : NULL;
 	int width_mask, height_mask, x, y, p;

@@ -56,11 +56,11 @@ In a couple of cases, due to too many older revisions, I used: parent + version 
 
 
 static bitmap_t *temp_reel_bitmap;
-static tilemap *sfbonus_tilemap;
-static tilemap *sfbonus_reel_tilemap;
-static tilemap *sfbonus_reel2_tilemap;
-static tilemap *sfbonus_reel3_tilemap;
-static tilemap *sfbonus_reel4_tilemap;
+static tilemap_t *sfbonus_tilemap;
+static tilemap_t *sfbonus_reel_tilemap;
+static tilemap_t *sfbonus_reel2_tilemap;
+static tilemap_t *sfbonus_reel3_tilemap;
+static tilemap_t *sfbonus_reel4_tilemap;
 static UINT8 *sfbonus_tilemap_ram;
 static UINT8 *sfbonus_reel_ram;
 static UINT8 *sfbonus_reel2_ram;
@@ -514,7 +514,7 @@ static WRITE8_HANDLER( sfbonus_videoram_w )
 	}
 	else
 	{
-		printf("access vram at %04x\n",offset);
+		//printf("access vram at %04x\n",offset);
 	}
 
 }
@@ -860,7 +860,7 @@ static WRITE8_HANDLER( paletteram_io_w )
 
 
 static ADDRESS_MAP_START( sfbonus_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xefff) AM_ROMBANK(1) AM_WRITE(sfbonus_videoram_w)
+	AM_RANGE(0x0000, 0xefff) AM_ROMBANK("bank1") AM_WRITE(sfbonus_videoram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 ADDRESS_MAP_END
 
@@ -871,7 +871,7 @@ static WRITE8_HANDLER( sfbonus_bank_w )
 
 	bank = data & 7;
 
-	memory_set_bankptr(space->machine, 1, &ROM[bank * 0x10000]);
+	memory_set_bankptr(space->machine, "bank1", &ROM[bank * 0x10000]);
 }
 
 
@@ -1000,7 +1000,7 @@ static MACHINE_RESET( sfbonus )
 {
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
-	memory_set_bankptr(machine, 1, &ROM[0]);
+	memory_set_bankptr(machine, "bank1", &ROM[0]);
 }
 
 static NVRAM_HANDLER( sfbonus )

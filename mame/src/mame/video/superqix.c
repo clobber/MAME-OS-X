@@ -15,7 +15,7 @@ int pbillian_show_power;
 static int gfxbank;
 static bitmap_t *fg_bitmap[2];
 static int show_bitmap;
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 static int last_power[2];
 
 
@@ -132,10 +132,10 @@ WRITE8_HANDLER( pbillian_0410_w )
      --5-----  flip screen
     */
 
-	coin_counter_w(0,data & 0x02);
-	coin_counter_w(1,data & 0x04);
+	coin_counter_w(space->machine, 0,data & 0x02);
+	coin_counter_w(space->machine, 1,data & 0x04);
 
-	memory_set_bank(space->machine, 1, (data & 0x08) >> 3);
+	memory_set_bank(space->machine, "bank1", (data & 0x08) >> 3);
 
 	interrupt_enable_w(space,0,data & 0x10);
 	flip_screen_set(space->machine, data & 0x20);
@@ -157,7 +157,7 @@ WRITE8_HANDLER( superqix_0410_w )
 	interrupt_enable_w(space,offset,data & 0x08);
 
 	/* bits 4-5 control ROM bank */
-	memory_set_bank(space->machine, 1, (data & 0x30) >> 4);
+	memory_set_bank(space->machine, "bank1", (data & 0x30) >> 4);
 }
 
 
@@ -170,9 +170,10 @@ WRITE8_HANDLER( superqix_0410_w )
 
 static void pbillian_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = 0; offs < spriteram_size; offs += 4)
+	for (offs = 0; offs < machine->generic.spriteram_size; offs += 4)
 	{
 		int attr = spriteram[offs + 3];
 		int code = ((spriteram[offs] & 0xfc) >> 2) + 64 * (attr & 0x0f);
@@ -196,9 +197,10 @@ static void pbillian_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 
 static void superqix_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = 0; offs < spriteram_size; offs += 4)
+	for (offs = 0; offs < machine->generic.spriteram_size; offs += 4)
 	{
 		int attr = spriteram[offs + 3];
 		int code = spriteram[offs] + 256 * (attr & 0x01);

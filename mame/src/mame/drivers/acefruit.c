@@ -13,6 +13,9 @@ Inputs and Dip Switches by Stephh
 
 #include "sidewndr.lh"
 
+static UINT8 *colorram;
+static UINT8 *videoram;
+
 static void acefruit_update_irq(running_machine *machine, int vpos )
 {
 	int col;
@@ -90,7 +93,7 @@ static VIDEO_UPDATE( acefruit )
 
 				for( x = 0; x < 16; x++ )
 				{
-					int sprite = ( spriteram[ ( spriteindex / 64 ) % 6 ] & 0xf ) ^ 0xf;
+					int sprite = ( screen->machine->generic.spriteram.u8[ ( spriteindex / 64 ) % 6 ] & 0xf ) ^ 0xf;
 					const UINT8 *gfxdata = gfx_element_get_data(gfx, sprite);
 
 					for( y = 0; y < 8; y++ )
@@ -255,7 +258,7 @@ static PALETTE_INIT( acefruit )
 
 static ADDRESS_MAP_START( acefruit_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE(&videoram)
 	AM_RANGE(0x4400, 0x47ff) AM_RAM_WRITE(acefruit_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("IN0")
@@ -266,7 +269,7 @@ static ADDRESS_MAP_START( acefruit_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8005, 0x8005) AM_READ_PORT("IN5")
 	AM_RANGE(0x8006, 0x8006) AM_READ_PORT("IN6")
 	AM_RANGE(0x8007, 0x8007) AM_READ_PORT("IN7")
-	AM_RANGE(0x6000, 0x6005) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x6000, 0x6005) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xa000, 0xa001) AM_WRITE(acefruit_lamp_w)
 	AM_RANGE(0xa002, 0xa003) AM_WRITE(acefruit_coin_w)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(acefruit_solenoid_w)

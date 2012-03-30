@@ -7,6 +7,16 @@
 #include "sound/discrete.h"
 
 
+typedef struct _avalnche_state avalnche_state;
+struct _avalnche_state
+{
+	/* video-related */
+	UINT8 *  videoram;
+	size_t   videoram_size;
+
+	UINT8    avalance_video_inverted;
+};
+
 /*----------- defined in audio/avalnche.c -----------*/
 
 DISCRETE_SOUND_EXTERN( avalnche );

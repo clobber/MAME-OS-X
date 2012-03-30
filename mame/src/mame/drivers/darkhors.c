@@ -60,7 +60,7 @@ To do:
 #include "machine/eeprom.h"
 #include "sound/okim6295.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 #include "cpu/z80/z80.h"
 
 #define DARKHORS_DEBUG	0
@@ -76,7 +76,7 @@ To do:
 static VIDEO_START( darkhors );
 static VIDEO_UPDATE( darkhors );
 
-static tilemap *darkhors_tmap, *darkhors_tmap2;
+static tilemap_t *darkhors_tmap, *darkhors_tmap2;
 static UINT32 *darkhors_tmapram,  *darkhors_tmapscroll;
 static UINT32 *darkhors_tmapram2, *darkhors_tmapscroll2;
 
@@ -107,8 +107,8 @@ static WRITE32_HANDLER( darkhors_tmapram2_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT32 *s		=	spriteram32;
-	UINT32 *end		=	spriteram32 + 0x02000/4;
+	UINT32 *s		=	machine->generic.spriteram.u32;
+	UINT32 *end		=	machine->generic.spriteram.u32 + 0x02000/4;
 
 	for ( ; s < end; s += 8/4 )
 	{
@@ -217,44 +217,26 @@ static const eeprom_interface eeprom_intf =
 //  "*10010xxxx"    // erase all    1 00 10xxxx
 };
 
-static NVRAM_HANDLER( darkhors )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file) eeprom_load(file);
-		else
-		{
-			// Set the EEPROM to Factory Defaults
-			eeprom_set_data(memory_region(machine, "user1"),(1<<7));
-		}
-	}
-}
-
-static WRITE32_HANDLER( darkhors_eeprom_w )
+static WRITE32_DEVICE_HANDLER( darkhors_eeprom_w )
 {
 	if (data & ~0xff000000)
-		logerror("CPU #0 PC: %06X - Unknown EEPROM bit written %08X\n",cpu_get_pc(space->cpu),data);
+		logerror("%s: Unknown EEPROM bit written %08X\n",cpuexec_describe_context(device->machine),data);
 
 	if ( ACCESSING_BITS_24_31 )
 	{
 		// latch the bit
-		eeprom_write_bit(data & 0x04000000);
+		eeprom_write_bit(device, data & 0x04000000);
 
 		// reset line asserted: reset.
-		eeprom_set_cs_line((data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom_set_cs_line(device, (data & 0x01000000) ? CLEAR_LINE : ASSERT_LINE );
 
 		// clock line asserted: write latch or select next bit to read
-		eeprom_set_clock_line((data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_set_clock_line(device, (data & 0x02000000) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
 static WRITE32_HANDLER( paletteram32_xBBBBBGGGGGRRRRR_dword_w )
 {
-	paletteram16 = (UINT16 *)paletteram32;
 	if (ACCESSING_BITS_16_31)	paletteram16_xBBBBBGGGGGRRRRR_word_w(space, offset*2, data >> 16, mem_mask >> 16);
 	if (ACCESSING_BITS_0_15)	paletteram16_xBBBBBGGGGGRRRRR_word_w(space, offset*2+1, data, mem_mask);
 }
@@ -303,7 +285,7 @@ static ADDRESS_MAP_START( darkhors_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
-	AM_RANGE(0x490040, 0x490043) AM_WRITE(darkhors_eeprom_w)
+	AM_RANGE(0x490040, 0x490043) AM_DEVWRITE("eeprom", darkhors_eeprom_w)
 	AM_RANGE(0x4e0080, 0x4e0083) AM_READ_PORT("4e0080") AM_WRITE(darkhors_unk1_w)
 
 	AM_RANGE(0x580000, 0x580003) AM_READ_PORT("580000")
@@ -311,7 +293,7 @@ static ADDRESS_MAP_START( darkhors_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x580008, 0x58000b) AM_READ(darkhors_input_sel_r)
 	AM_RANGE(0x58000c, 0x58000f) AM_WRITE(darkhors_input_sel_w)
 	AM_RANGE(0x580084, 0x580087) AM_DEVREADWRITE8( "oki", okim6295_r, okim6295_w, 0xff000000)
-	AM_RANGE(0x580200, 0x580203) AM_READ(SMH_NOP)
+	AM_RANGE(0x580200, 0x580203) AM_READNOP
 	AM_RANGE(0x580400, 0x580403) AM_READ_PORT("580400")
 	AM_RANGE(0x580420, 0x580423) AM_READ_PORT("580420")
 
@@ -319,11 +301,11 @@ static ADDRESS_MAP_START( darkhors_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x86c000, 0x86ffff) AM_RAM_WRITE(darkhors_tmapram_w) AM_BASE(&darkhors_tmapram)
 	AM_RANGE(0x870000, 0x873fff) AM_RAM_WRITE(darkhors_tmapram2_w) AM_BASE(&darkhors_tmapram2)
 	AM_RANGE(0x874000, 0x87dfff) AM_RAM
-	AM_RANGE(0x87e000, 0x87ffff) AM_RAM AM_BASE(&spriteram32)
-	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE(&paletteram32)
-	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITE(SMH_RAM)	// this should still be palette ram!
-	AM_RANGE(0x8c0120, 0x8c012f) AM_WRITE(SMH_RAM) AM_BASE(&darkhors_tmapscroll)
-	AM_RANGE(0x8c0130, 0x8c013f) AM_WRITE(SMH_RAM) AM_BASE(&darkhors_tmapscroll2)
+	AM_RANGE(0x87e000, 0x87ffff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITEONLY	// this should still be palette ram!
+	AM_RANGE(0x8c0120, 0x8c012f) AM_WRITEONLY AM_BASE(&darkhors_tmapscroll)
+	AM_RANGE(0x8c0130, 0x8c013f) AM_WRITEONLY AM_BASE(&darkhors_tmapscroll2)
 ADDRESS_MAP_END
 
 static UINT32* jclub2_tileram;
@@ -340,21 +322,21 @@ static ADDRESS_MAP_START( jclub2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x400000, 0x41ffff) AM_RAM
 
-	AM_RANGE(0x490040, 0x490043) AM_WRITE(darkhors_eeprom_w)
+	AM_RANGE(0x490040, 0x490043) AM_DEVWRITE("eeprom", darkhors_eeprom_w)
 	AM_RANGE(0x4e0080, 0x4e0083) AM_READ_PORT("4e0080") AM_WRITE(darkhors_unk1_w)
 
 	AM_RANGE(0x580000, 0x580003) AM_READ_PORT("580000")
 	AM_RANGE(0x580004, 0x580007) AM_READ_PORT("580004")
 	AM_RANGE(0x580008, 0x58000b) AM_READ(darkhors_input_sel_r)
 	AM_RANGE(0x58000c, 0x58000f) AM_WRITE(darkhors_input_sel_w)
-	AM_RANGE(0x580200, 0x580203) AM_READ(SMH_NOP)
+	AM_RANGE(0x580200, 0x580203) AM_READNOP
 	AM_RANGE(0x580400, 0x580403) AM_READ_PORT("580400")
 	AM_RANGE(0x580420, 0x580423) AM_READ_PORT("580420")
 
-	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE(&spriteram32)
+	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE_GENERIC(spriteram)
 
-	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE(&paletteram32)
-	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITE(SMH_RAM)	// this should still be palette ram!
+	AM_RANGE(0x880000, 0x89ffff) AM_WRITE(paletteram32_xBBBBBGGGGGRRRRR_dword_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x8a0000, 0x8bffff) AM_WRITEONLY	// this should still be palette ram!
 
 	AM_RANGE(0x8C0000, 0x8C01ff) AM_RAM
 	AM_RANGE(0x8E0000, 0x8E01ff) AM_RAM
@@ -415,11 +397,11 @@ static INPUT_PORTS_START( darkhors )
 	PORT_BIT( 0x00100000, IP_ACTIVE_LOW,  IPT_SERVICE  ) PORT_NAME(DEF_STR( Test )) PORT_CODE(KEYCODE_F1) // test
 	PORT_BIT( 0x00200000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )	// door 1
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )	// door 2
-	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL  ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL  ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x01000000, IP_ACTIVE_LOW,  IPT_START1   )	// start
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P1 Payout") PORT_CODE(KEYCODE_LCONTROL)	// payout
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P1 Cancel") PORT_CODE(KEYCODE_LALT)		// cancel
-	PORT_BIT( 0x08000000, IP_ACTIVE_LOW,  IPT_START2   ) 	// start p2
+	PORT_BIT( 0x08000000, IP_ACTIVE_LOW,  IPT_START2   )	// start p2
 	PORT_BIT( 0x10000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P2 Payout") PORT_CODE(KEYCODE_RCONTROL)	// payout p2
 	PORT_BIT( 0x20000000, IP_ACTIVE_LOW,  IPT_OTHER ) PORT_NAME("P2 Cancel") PORT_CODE(KEYCODE_RALT)		// cancel p2
 	PORT_BIT( 0x40000000, IP_ACTIVE_LOW,  IPT_UNKNOWN  )
@@ -644,7 +626,7 @@ static MACHINE_DRIVER_START( darkhors )
 	MDRV_CPU_PROGRAM_MAP(darkhors_map)
 	MDRV_CPU_VBLANK_INT_HACK(darkhors,3)
 
-	MDRV_NVRAM_HANDLER(darkhors)
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -672,7 +654,7 @@ MACHINE_DRIVER_END
 
 static VIDEO_START(jclub2)
 {
- 	/* find first empty slot to decode gfx */
+	/* find first empty slot to decode gfx */
 	for (jclub2_gfx_index = 0; jclub2_gfx_index < MAX_GFX_ELEMENTS; jclub2_gfx_index++)
 		if (machine->gfx[jclub2_gfx_index] == 0)
 			break;
@@ -695,7 +677,7 @@ static MACHINE_DRIVER_START( jclub2 )
 	MDRV_CPU_PROGRAM_MAP(jclub2_map)
 	MDRV_CPU_VBLANK_INT_HACK(darkhors,3)
 
-	MDRV_NVRAM_HANDLER(darkhors)
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -714,8 +696,8 @@ MACHINE_DRIVER_END
 
 static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
@@ -756,7 +738,7 @@ static MACHINE_DRIVER_START( jclub2o )
 	MDRV_CPU_PROGRAM_MAP(jclub2o_map)
 	//MDRV_CPU_VBLANK_INT_HACK(darkhors,3)
 
-	MDRV_NVRAM_HANDLER(darkhors)
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -774,7 +756,7 @@ static MACHINE_DRIVER_START( jclub2o )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
+	MDRV_SOUND_ADD("stsnd", ST0016, 0)
 	MDRV_SOUND_CONFIG(st0016_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -808,8 +790,8 @@ ROM_START( darkhors )
 	ROM_REGION( 0x80000, "oki", 0 )	// Samples
 	ROM_LOAD( "snd", 0x00000, 0x80000, CRC(7aeb12d3) SHA1(3e81725fc206baa7559da87552a0cd73b7616155) )
 
-	ROM_REGION( 0x80000, "user1", ROMREGION_BE )	// EEPROM
-	ROM_LOAD( "eeprom", 0x00000, 0x80000, CRC(45314fdb) SHA1(c4bd5508e5b51a6e0356c049f1ccf2b5d94caee9) )
+	ROM_REGION( 0x80, "eeprom", 0 )	// EEPROM
+	ROM_LOAD( "eeprom", 0x0000, 0x0080, CRC(1f434f66) SHA1(e1bee11d83fb72aed9c312bdc794d8b9a6645534) )
 ROM_END
 
 /*
@@ -877,8 +859,6 @@ ROM_START( jclub2 )
 	// data distribution would indicate this is a sound rom
 	ROM_LOAD( "m88-02.u6", 0x00000, 0x100000, CRC(0dd3436a) SHA1(809d3b7a26d36f71da04036fd8ab5d0c5089392a) )
 
-	ROM_REGION( 0x80000, "user1", ROMREGION_ERASEFF | ROMREGION_BE )	// EEPROM
-
 	ROM_REGION( 0x80000, "misc", ROMREGION_ERASEFF )
 	ROM_LOAD( "gal16v8b-m88-03.bin", 0x000, 0x117, CRC(6d9c882e) SHA1(84cb95ab540290c2f8b740668360e9c643a67dcf) )
 	ROM_LOAD( "gal16v8b-m88-04.bin", 0x000, 0x117, CRC(5e79f292) SHA1(5e44c234e2b15d486a1af71fee986892aa245b4d) )
@@ -929,8 +909,6 @@ ROM_START( jclub2o )
 	ROM_REGION( 0x90000, "st0016", 0 ) // z80 core (used for sound?)
 	ROM_LOAD( "sx006-04.u87", 0x10000, 0x80000, CRC(a87adedd) SHA1(1cd5af2d03738fff2230b46241659179467c828c) )
 	ROM_COPY( "st0016",  0x10000, 0x00000, 0x08000 )
-
-	ROM_REGION( 0x80000, "user1", ROMREGION_ERASEFF | ROMREGION_BE )	// EEPROM
 ROM_END
 
 /***************************************************************************
@@ -944,7 +922,7 @@ ROM_END
 static DRIVER_INIT( darkhors )
 {
 	UINT32 *rom    = (UINT32 *) memory_region(machine, "maincpu");
-	UINT8  *eeprom = (UINT8 *)  memory_region(machine, "user1");
+	UINT8  *eeprom = (UINT8 *)  memory_region(machine, "eeprom");
 	int i;
 
 #if 1
@@ -956,8 +934,9 @@ static DRIVER_INIT( darkhors )
 	rom[0x04600/4]	=	0x4e714eb9;
 #endif
 
-	for (i = 0; i < (1<<7); i++)
-		eeprom[i] = eeprom[i*2];
+	if (eeprom != NULL)
+		for (i = 0; i < (1<<7); i++)
+			eeprom[i] = eeprom[i*2];
 }
 
 GAME( 199?, jclub2,   0,      jclub2,  darkhors, 0,        ROT0, "Seta", "Jockey Club II (newer hardware)", GAME_NOT_WORKING | GAME_NO_SOUND )

@@ -40,8 +40,7 @@
 #include "machine/eeprom.h"
 #include "sound/namco.h"
 #include "sound/dac.h"
-#include "20pacgal.h"
-
+#include "includes/20pacgal.h"
 
 
 /*************************************
@@ -64,12 +63,13 @@
 
 static WRITE8_HANDLER( irqack_w )
 {
+	_20pacgal_state *state = (_20pacgal_state *)space->machine->driver_data;
 	int bit = data & 1;
 
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
+	cpu_interrupt_enable(state->maincpu, bit);
 
 	if (!bit)
-		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE );
+		cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
 }
 
 
@@ -94,49 +94,16 @@ static const namco_interface namco_config =
  *
  *************************************/
 
-static const eeprom_interface eeprom_intf =
+static const eeprom_interface _20pacgal_eeprom_intf =
 {
-	7,				/* address bits */
-	8,				/* data bits */
-	"*110",			/* read command */
-	"*101",			/* write command */
-	0,				/* erase command */
-	"*10000xxxxx",	/* lock command */
-	"*10011xxxxx",	/* unlock command */
+	7,                /* address bits */
+	8,                /* data bits */
+	"*110",           /* read command */
+	"*101",           /* write command */
+	0,                /* erase command */
+	"*10000xxxxx",    /* lock command */
+	"*10011xxxxx",    /* unlock command */
 };
-
-
-static NVRAM_HANDLER( eeprom )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file)
-			eeprom_load(file);
-	}
-}
-
-
-static READ8_HANDLER( eeprom_r )
-{
-	/* bit 7 is EEPROM data */
-	return eeprom_read_bit() << 7;
-}
-
-
-static WRITE8_HANDLER( eeprom_w )
-{
-	/* bit 7 is data */
-	/* bit 6 is clock (active high) */
-	/* bit 5 is cs (active low) */
-	eeprom_write_bit(data & 0x80);
-	eeprom_set_cs_line((data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
-	eeprom_set_clock_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
-}
-
 
 
 /*************************************
@@ -147,7 +114,7 @@ static WRITE8_HANDLER( eeprom_w )
 
 static WRITE8_HANDLER( _20pacgal_coin_counter_w )
 {
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine, 0, data & 1);
 }
 
 
@@ -167,7 +134,7 @@ static WRITE8_HANDLER( rom_bank_select_w )
 	if (state->game_selected == 0)
 	{
 		UINT8 *rom = memory_region(space->machine, "maincpu");
-		memcpy(rom+0x48000, rom+0x8000, 0x2000);
+		memcpy(rom + 0x48000, rom + 0x8000, 0x2000);
 	}
 }
 
@@ -205,9 +172,9 @@ static ADDRESS_MAP_START( 20pacgal_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x46000, 0x46fff) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, char_gfx_ram)
 	AM_RANGE(0x47100, 0x47100) AM_RAM	/* leftover from original Galaga code */
 	AM_RANGE(0x48000, 0x49fff) AM_ROM AM_WRITE(rom_48000_w)	/* this should be a mirror of 08000-09ffff */
-	AM_RANGE(0x4c000, 0x4dfff) AM_WRITE(SMH_RAM) AM_BASE_MEMBER(_20pacgal_state, sprite_gfx_ram)
-	AM_RANGE(0x4e000, 0x4e17f) AM_WRITE(SMH_RAM) AM_BASE_MEMBER(_20pacgal_state, sprite_ram)
-	AM_RANGE(0x4ff00, 0x4ffff) AM_WRITE(SMH_RAM) AM_BASE_MEMBER(_20pacgal_state, sprite_color_lookup)
+	AM_RANGE(0x4c000, 0x4dfff) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, sprite_gfx_ram)
+	AM_RANGE(0x4e000, 0x4e17f) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, sprite_ram)
+	AM_RANGE(0x4ff00, 0x4ffff) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, sprite_color_lookup)
 ADDRESS_MAP_END
 
 
@@ -229,11 +196,11 @@ static ADDRESS_MAP_START( 20pacgal_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x81, 0x81) AM_WRITENOP				/* ??? pulsed by the timer irq */
 	AM_RANGE(0x82, 0x82) AM_WRITE(irqack_w)
 	AM_RANGE(0x85, 0x86) AM_WRITENOP				/* stars: rng seed (lo/hi) */
-	AM_RANGE(0x87, 0x87) AM_READWRITE(eeprom_r, eeprom_w)
+	AM_RANGE(0x87, 0x87) AM_READ_PORT("EEPROMIN") AM_WRITE_PORT("EEPROMOUT")
 	AM_RANGE(0x88, 0x88) AM_WRITE(rom_bank_select_w)
 	AM_RANGE(0x89, 0x89) AM_DEVWRITE("dac", dac_signed_w)
 	AM_RANGE(0x8a, 0x8a) AM_WRITENOP				/* stars: bits 3-4 = active set; bit 5 = enable */
-	AM_RANGE(0x8b, 0x8b) AM_WRITE(SMH_RAM) AM_BASE_MEMBER(_20pacgal_state, flip)
+	AM_RANGE(0x8b, 0x8b) AM_WRITEONLY AM_BASE_MEMBER(_20pacgal_state, flip)
 	AM_RANGE(0x8f, 0x8f) AM_WRITE(_20pacgal_coin_counter_w)
 ADDRESS_MAP_END
 
@@ -275,6 +242,14 @@ static INPUT_PORTS_START( 20pacgal )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW )
+
+	PORT_START( "EEPROMIN" )
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)	/* bit 7 is EEPROM data */
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)		/* bit 5 is cs (active low) */
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)	/* bit 6 is clock (active high) */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)		/* bit 7 is data */
 INPUT_PORTS_END
 
 
@@ -284,6 +259,22 @@ INPUT_PORTS_END
  *  Machine driver
  *
  *************************************/
+
+static MACHINE_START( 20pacgal )
+{
+	_20pacgal_state *state = (_20pacgal_state *)machine->driver_data;
+
+	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->eeprom = devtag_get_device(machine, "eeprom");
+
+	state_save_register_global(machine, state->game_selected);
+}
+
+static MACHINE_RESET( 20pacgal )
+{
+	_20pacgal_state *state = (_20pacgal_state *)machine->driver_data;
+	state->game_selected = 0;
+}
 
 static MACHINE_DRIVER_START( 20pacgal )
 
@@ -295,7 +286,10 @@ static MACHINE_DRIVER_START( 20pacgal )
 	MDRV_CPU_IO_MAP(20pacgal_io_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_NVRAM_HANDLER(eeprom)
+	MDRV_MACHINE_START(20pacgal)
+	MDRV_MACHINE_RESET(20pacgal)
+
+	MDRV_EEPROM_ADD("eeprom", _20pacgal_eeprom_intf)
 
 	/* video hardware */
 	MDRV_IMPORT_FROM(20pacgal_video)

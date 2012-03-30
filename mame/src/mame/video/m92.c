@@ -45,8 +45,8 @@
 typedef struct _pf_layer_info pf_layer_info;
 struct _pf_layer_info
 {
-	tilemap *		tmap;
-	tilemap *		wide_tmap;
+	tilemap_t *		tmap;
+	tilemap_t *		wide_tmap;
 	UINT16			vram_base;
 	UINT16			control[4];
 };
@@ -128,7 +128,7 @@ WRITE16_HANDLER( m92_videocontrol_w )
 
 READ16_HANDLER( m92_paletteram_r )
 {
-	return paletteram16[offset + 0x400 * m92_palette_bank];
+	return space->machine->generic.paletteram.u16[offset + 0x400 * m92_palette_bank];
 }
 
 WRITE16_HANDLER( m92_paletteram_w )
@@ -278,10 +278,10 @@ VIDEO_START( m92 )
 		state_save_register_item_array(machine, "layer", NULL, laynum, layer->control);
 	}
 
-	paletteram16 = auto_alloc_array(machine, UINT16, 0x1000/2);
+	machine->generic.paletteram.u16 = auto_alloc_array(machine, UINT16, 0x1000/2);
 
-	memset(spriteram16,0,0x800);
-	memset(buffered_spriteram16,0,0x800);
+	memset(machine->generic.spriteram.u16,0,0x800);
+	memset(machine->generic.buffered_spriteram.u16,0,0x800);
 
 	state_save_register_global_array(machine, pf_master_control);
 
@@ -290,13 +290,14 @@ VIDEO_START( m92 )
 	state_save_register_global(machine, m92_sprite_buffer_busy);
 	state_save_register_global(machine, m92_palette_bank);
 
-	state_save_register_global_pointer(machine, paletteram16, 0x1000);
+	state_save_register_global_pointer(machine, machine->generic.paletteram.u16, 0x1000);
 }
 
 /*****************************************************************************/
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT16 *buffered_spriteram16 = machine->generic.buffered_spriteram.u16;
 	int offs,k;
 
 	for (k=0; k<8; k++)
@@ -310,7 +311,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 			if (buffered_spriteram16[offs+2] & 0x0080) pri_back=0; else pri_back=2;
 
-		 	sprite= buffered_spriteram16[offs+1];
+			sprite= buffered_spriteram16[offs+1];
 			colour = buffered_spriteram16[offs+2] & 0x007f;
 			pri_sprite= (buffered_spriteram16[offs+0] & 0xe000) >> 13;
 

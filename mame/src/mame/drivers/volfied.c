@@ -18,6 +18,8 @@ Volfied (c) 1989 Taito Corporation
 
     OSC: 32MHz, 26.686MHz & 20MHz
 
+TC0030CMD is a custom Z80 with embedded 8K ram + 8k rom (20MHz OSC is next to chip, 20MHz/4 = 5MHz(?))
+
 Stephh's notes (based on the game M68000 code and some tests) :
 
 1) 'volfied*'
@@ -48,7 +50,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "video/taitoic.h"
 #include "audio/taitosnd.h"
 #include "sound/2203intf.h"
@@ -73,9 +75,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM		/* program */
 	AM_RANGE(0x080000, 0x0fffff) AM_ROM		/* tiles   */
 	AM_RANGE(0x100000, 0x103fff) AM_RAM		/* main    */
-	AM_RANGE(0x200000, 0x203fff) AM_READWRITE(PC090OJ_word_0_r, PC090OJ_word_0_w)
+	AM_RANGE(0x200000, 0x203fff) AM_DEVREADWRITE("pc090oj", pc090oj_word_r, pc090oj_word_w)
 	AM_RANGE(0x400000, 0x47ffff) AM_READWRITE(volfied_video_ram_r, volfied_video_ram_w)
-	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(volfied_video_mask_w)
 	AM_RANGE(0x700000, 0x700001) AM_WRITE(volfied_sprite_ctrl_w)
 	AM_RANGE(0xd00000, 0xd00001) AM_READWRITE(volfied_video_ctrl_r, volfied_video_ctrl_w)
@@ -91,7 +93,7 @@ static ADDRESS_MAP_START( z80_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8800) AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0x8801, 0x8801) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x9800, 0x9800) AM_WRITENOP    /* ? */
 ADDRESS_MAP_END
 
@@ -243,6 +245,11 @@ static DRIVER_INIT( volfied )
 	volfied_cchip_init(machine);
 }
 
+static const pc090oj_interface volfied_pc090oj_intf =
+{
+	0, 0, 0, 0
+};
+
 static MACHINE_DRIVER_START( volfied )
 
 	/* basic machine hardware */
@@ -269,10 +276,12 @@ static MACHINE_DRIVER_START( volfied )
 	MDRV_VIDEO_START(volfied)
 	MDRV_VIDEO_UPDATE(volfied)
 
+	MDRV_PC090OJ_ADD("pc090oj", volfied_pc090oj_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 4000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.15)
 	MDRV_SOUND_ROUTE(1, "mono", 0.15)

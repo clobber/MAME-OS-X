@@ -324,7 +324,7 @@ static WRITE8_HANDLER( mux_ctrl_w )
 		case 0xE0:	  // End of interrupt
 		break;
 
-  }
+	}
 }
 
 static READ8_HANDLER( mux_ctrl_r )
@@ -401,7 +401,7 @@ static MACHINE_START( bfm_sys85 )
 
 static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) //8k RAM
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram) //8k RAM
 	AM_RANGE(0x2000, 0x21FF) AM_WRITE(reel34_w)			// reel 3+4 latch
 	AM_RANGE(0x2200, 0x23FF) AM_WRITE(reel12_w)			// reel 1+2 latch
 	AM_RANGE(0x2400, 0x25FF) AM_WRITE(vfd_w)			// vfd latch
@@ -414,9 +414,9 @@ static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2A01, 0x2A01) AM_READWRITE(mux_ctrl_r,mux_ctrl_w)// mux status register
 	AM_RANGE(0x2E00, 0x2E00) AM_READ(irqlatch_r)		// irq latch ( MC6850 / timer )
 
-	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0x3001, 0x3001) AM_READNOP //sound latch
-	AM_RANGE(0x3200, 0x3200) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x3200, 0x3200) AM_DEVWRITE("aysnd", ay8910_address_w)
 
 	AM_RANGE(0x3402, 0x3402) AM_DEVWRITE("acia6850_0", acia6850_ctrl_w)
 	AM_RANGE(0x3403, 0x3403) AM_DEVWRITE("acia6850_0", acia6850_data_w)
@@ -443,7 +443,7 @@ static MACHINE_DRIVER_START( bfmsys85 )
 	MDRV_ACIA6850_ADD("acia6850_0", m6809_acia_if)
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay",AY8912, MASTER_CLOCK/4)			// add AY8912 soundchip
+	MDRV_SOUND_ADD("aysnd",AY8912, MASTER_CLOCK/4)			// add AY8912 soundchip
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	MDRV_NVRAM_HANDLER(generic_0fill)					// load/save nv RAM
@@ -484,4 +484,4 @@ ROM_START( m_supcrd )
 ROM_END
 
 //    year,name,     parent, machine,  input,           init, monitor,     company,     fullname,            flags
-GAME( 1985,m_supcrd, 0, 	bfmsys85, bfmsys85,  		0,	  0,       "BFM/ELAM",   "Supercards (Dutch, Game Card 39-340-271?)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
+GAME( 1985,m_supcrd, 0, 	bfmsys85, bfmsys85, 		0,	  0,       "BFM/ELAM",   "Supercards (Dutch, Game Card 39-340-271?)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )

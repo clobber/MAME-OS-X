@@ -18,7 +18,7 @@ static UINT32 stars_scrolly;
 
 static INT32 bosco_starcontrol,bosco_starblink[2];
 
-static tilemap *bg_tilemap,*fg_tilemap;
+static tilemap_t *bg_tilemap,*fg_tilemap;
 
 #define VIDEO_RAM_SIZE 0x400
 
@@ -144,9 +144,9 @@ VIDEO_START( bosco )
 
 	tilemap_set_scrolldx(bg_tilemap,3,3);
 
-	spriteram_size = 0x0c;
-	spriteram = bosco_videoram + 0x03d4;
-	spriteram_2 = spriteram + 0x0800;
+	machine->generic.spriteram_size = 0x0c;
+	machine->generic.spriteram.u8 = bosco_videoram + 0x03d4;
+	machine->generic.spriteram2.u8 = machine->generic.spriteram.u8 + 0x0800;
 	bosco_radarx = bosco_videoram + 0x03f0;
 	bosco_radary = bosco_radarx + 0x0800;
 
@@ -213,9 +213,11 @@ WRITE8_HANDLER( bosco_starclr_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
+	UINT8 *spriteram_2 = machine->generic.spriteram2.u8;
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 2)
+	for (offs = 0;offs < machine->generic.spriteram_size;offs += 2)
 	{
 		int sx = spriteram[offs + 1] - 1;
 		int sy = 240 - spriteram_2[offs];
@@ -282,7 +284,7 @@ static void draw_stars(bitmap_t *bitmap, const rectangle *cliprect, int flip)
 
 					if (y >= cliprect->min_y && y <= cliprect->max_y)
 						*BITMAP_ADDR16(bitmap, y, x) = STARS_COLOR_BASE + star_seed_tab[star_cntr].col;
-				 }
+				}
 			}
 		}
 	}

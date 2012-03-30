@@ -10,14 +10,16 @@
 #include "includes/snk6502.h"
 
 
+UINT8 *snk6502_videoram;
+UINT8 *snk6502_colorram;
 UINT8 *snk6502_videoram2;
 UINT8 *snk6502_charram;
 
 static int charbank;
 static int backcolor;
 
-static tilemap *bg_tilemap;
-static tilemap *fg_tilemap;
+static tilemap_t *bg_tilemap;
+static tilemap_t *fg_tilemap;
 
 static rgb_t palette[64];
 
@@ -86,7 +88,7 @@ PALETTE_INIT( snk6502 )
 
 WRITE8_HANDLER( snk6502_videoram_w )
 {
-	videoram[offset] = data;
+	snk6502_videoram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
@@ -98,7 +100,7 @@ WRITE8_HANDLER( snk6502_videoram2_w )
 
 WRITE8_HANDLER( snk6502_colorram_w )
 {
-	colorram[offset] = data;
+	snk6502_colorram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
@@ -161,8 +163,8 @@ WRITE8_HANDLER( snk6502_scrolly_w )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index] + 256 * charbank;
-	int color = (colorram[tile_index] & 0x38) >> 3;
+	int code = snk6502_videoram[tile_index] + 256 * charbank;
+	int color = (snk6502_colorram[tile_index] & 0x38) >> 3;
 
 	SET_TILE_INFO(1, code, color, 0);
 }
@@ -170,7 +172,7 @@ static TILE_GET_INFO( get_bg_tile_info )
 static TILE_GET_INFO( get_fg_tile_info )
 {
 	int code = snk6502_videoram2[tile_index];
-	int color = colorram[tile_index] & 0x07;
+	int color = snk6502_colorram[tile_index] & 0x07;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -281,8 +283,8 @@ WRITE8_HANDLER( satansat_backcolor_w )
 
 static TILE_GET_INFO( satansat_get_bg_tile_info )
 {
-	int code = videoram[tile_index];
-	int color = (colorram[tile_index] & 0x0c) >> 2;
+	int code = snk6502_videoram[tile_index];
+	int color = (snk6502_colorram[tile_index] & 0x0c) >> 2;
 
 	SET_TILE_INFO(1, code, color, 0);
 }
@@ -290,7 +292,7 @@ static TILE_GET_INFO( satansat_get_bg_tile_info )
 static TILE_GET_INFO( satansat_get_fg_tile_info )
 {
 	int code = snk6502_videoram2[tile_index];
-	int color = colorram[tile_index] & 0x03;
+	int color = snk6502_colorram[tile_index] & 0x03;
 
 	SET_TILE_INFO(0, code, color, 0);
 }

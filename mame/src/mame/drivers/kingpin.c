@@ -89,7 +89,7 @@ INPUT_PORTS_END
 /* A 3.6V battery traces directly to U19, rendering it nvram */
 static ADDRESS_MAP_START( kingpin_program_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( kingpin_io_map, ADDRESS_SPACE_IO, 8 )
@@ -164,7 +164,7 @@ static MACHINE_DRIVER_START( kingpin )
 /*
     MDRV_SPEAKER_STANDARD_MONO("mono")
 
-    MDRV_SOUND_ADD("ay", AY8912, 1500000)
+    MDRV_SOUND_ADD("aysnd", AY8912, 1500000)
     MDRV_SOUND_CONFIG(ay8912_interface)
     MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 */

@@ -41,11 +41,11 @@ static READ8_HANDLER( sdpoker_rng_r )
 
 static ADDRESS_MAP_START( sdpoker_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
-	AM_RANGE(0x5000, 0x50ff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x57ff, 0x57ff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x5800, 0x58ff) AM_RAM AM_SHARE(1) AM_BASE(&col_line)
+	AM_RANGE(0x5000, 0x50ff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x57ff, 0x57ff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x5800, 0x58ff) AM_RAM AM_SHARE("share1") AM_BASE(&col_line)
 	AM_RANGE(0x6000, 0x67ff) AM_RAM //work ram
-	AM_RANGE(0x6800, 0x6bff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x6800, 0x6bff) AM_RAM AM_BASE_GENERIC(videoram)
 	AM_RANGE(0x6c00, 0x6fff) AM_RAM AM_BASE(&char_bank)
 	AM_RANGE(0x7000, 0x7bff) AM_RAM //$7600 seems watchdog
 	AM_RANGE(0x7c00, 0x7c00) AM_WRITENOP //?
@@ -58,7 +58,7 @@ static ADDRESS_MAP_START( sdpoker_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8006, 0x8006) AM_READ_PORT("IN5") //dips?
 	AM_RANGE(0x9000, 0x90ff) AM_RAM
 	AM_RANGE(0x9400, 0x9400) AM_READ(sdpoker_rng_r)
-	AM_RANGE(0x9800, 0x9801) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x9800, 0x9801) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( supdrapo )
@@ -204,7 +204,7 @@ static VIDEO_UPDATE( supdrapo )
 	{
 		for(x=0;x<32;x++)
 		{
-			int tile = videoram[count] + char_bank[count] * 0x100;
+			int tile = screen->machine->generic.videoram.u8[count] + char_bank[count] * 0x100;
 			/* Global Column Coloring, GUESS! */
 			color = col_line[(x*2)+1] ? (col_line[(x*2)+1]-1) & 0x7 : 0;
 
@@ -266,7 +266,7 @@ static MACHINE_DRIVER_START( supdrapo )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 8000000/2) /* ??? */
+	MDRV_SOUND_ADD("aysnd", AY8910, 8000000/2) /* ??? */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 

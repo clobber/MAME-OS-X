@@ -226,7 +226,7 @@ static READ8_HANDLER( wiz_protection_r )
 
 static WRITE8_HANDLER( wiz_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine, offset,data);
 }
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -236,12 +236,12 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd3ff) AM_BASE(&wiz_videoram2)					/* Fallthrough */
 	AM_RANGE(0xd400, 0xd7ff) AM_BASE(&wiz_colorram2)
 	AM_RANGE(0xd800, 0xd83f) AM_BASE(&wiz_attributesram2)
-	AM_RANGE(0xd840, 0xd85f) AM_BASE(&spriteram_2) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd840, 0xd85f) AM_BASE_GENERIC(spriteram2) AM_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xd000, 0xd85f) AM_RAM
-	AM_RANGE(0xe000, 0xe3ff) AM_BASE(&videoram) AM_SIZE(&videoram_size)	/* Fallthrough */
-	AM_RANGE(0xe400, 0xe7ff) AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xe3ff) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)	/* Fallthrough */
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xe83f) AM_BASE(&wiz_attributesram)
-	AM_RANGE(0xe840, 0xe85f) AM_BASE(&spriteram)
+	AM_RANGE(0xe840, 0xe85f) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xe000, 0xe85f) AM_RAM
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("DSW0")
 	AM_RANGE(0xf000, 0xf000) AM_RAM AM_BASE(&wiz_sprite_bank)
@@ -324,7 +324,7 @@ static INPUT_PORTS_START( stinger )
 	PORT_DIPSETTING(    0x60, "20000 90000" )
 	PORT_DIPSETTING(    0x40, "30000 80000" )
 	PORT_DIPSETTING(    0x20, "30000 90000" )
-  	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 
 	PORT_START("DSW1")
 	PORT_DIPNAME( 0x01, 0x00, "Debug Mode" )		/* See notes */
@@ -874,7 +874,7 @@ ROM_END
 
 ROM_START( wizt )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "wiz1.bin",  	  0x0000, 0x4000, CRC(5a6d3c60) SHA1(faeb7e7ddeee9638ec046655e87f866d81fdbee0) )
+	ROM_LOAD( "wiz1.bin",	  0x0000, 0x4000, CRC(5a6d3c60) SHA1(faeb7e7ddeee9638ec046655e87f866d81fdbee0) )
 	ROM_LOAD( "ic05_03.bin",  0x4000, 0x4000, CRC(7978d879) SHA1(866efdff3c111793d5a3cc2fa0b03a2b4e371c49) )
 	ROM_LOAD( "ic06_02.bin",  0x8000, 0x4000, CRC(9c406ad2) SHA1(cd82c3dc622886b6ebb30ba565f3c34d5a4e229b) )
 
@@ -1086,7 +1086,7 @@ static DRIVER_INIT( stinger )
 
 static DRIVER_INIT( scion )
 {
-	memory_install_write8_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x4001, 0, 0, (write8_space_func)SMH_NOP);
+	memory_nop_write(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x4001, 0, 0);
 }
 
 

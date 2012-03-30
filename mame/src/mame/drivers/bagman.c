@@ -166,14 +166,14 @@ static WRITE8_HANDLER( bagman_ls259_w )
 
 static WRITE8_HANDLER( bagman_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine, offset,data);
 }
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&bagman_videoram)
+	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&bagman_colorram)
 	AM_RANGE(0x9c00, 0x9fff) AM_WRITENOP	/* written to, but unused */
 	AM_RANGE(0xa000, 0xa000) AM_READ(bagman_pal16r6_r)
 	//AM_RANGE(0xa800, 0xa805) AM_READ(bagman_ls259_r) /*just for debugging purposes*/
@@ -181,7 +181,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa001, 0xa002) AM_WRITE(bagman_flipscreen_w)
 	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&bagman_video_enable)
 	AM_RANGE(0xc000, 0xffff) AM_ROM /* Super Bagman only */
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* hidden portion of color RAM */
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)	/* hidden portion of color RAM */
 									/* here only to initialize the pointer, */
 									/* writes are handled by bagman_colorram_w */
 	AM_RANGE(0xa800, 0xa805) AM_WRITE(bagman_ls259_w) /* TMS5110 driving state machine */
@@ -201,9 +201,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( pickin_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x7000, 0x77ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* hidden portion of color RAM */
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&bagman_videoram)
+	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&bagman_colorram)
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)	/* hidden portion of color RAM */
 									/* here only to initialize the pointer, */
 									/* writes are handled by bagman_colorram_w */
 	AM_RANGE(0x9c00, 0x9fff) AM_WRITENOP	/* written to, but unused */
@@ -225,8 +225,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x08, 0x09) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x08, 0x09) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("aysnd", ay8910_r)
 	//AM_RANGE(0x56, 0x56) AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -334,23 +334,23 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( squaitsa )
 	PORT_START("P1")
- 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
- 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
- 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
- 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
- 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
- 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p1 dial
- 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
- 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p1 dial
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )
 
- 	PORT_START("P2")
- 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN3 )
- 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN4 )
- 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
- 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
- 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
- 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p2 dial
- 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
+	PORT_START("P2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN3 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN4 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p2 dial
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 
 	PORT_START("DSW")
@@ -527,7 +527,7 @@ static MACHINE_DRIVER_START( bagman )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
@@ -563,7 +563,7 @@ static MACHINE_DRIVER_START( pickin )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
@@ -618,7 +618,7 @@ static MACHINE_DRIVER_START( botanic )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
@@ -629,7 +629,7 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( squaitsa )
 	MDRV_IMPORT_FROM( botanic )
-	MDRV_SOUND_MODIFY("ay")
+	MDRV_SOUND_MODIFY("aysnd")
 	MDRV_SOUND_CONFIG(ay8910_dial_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 MACHINE_DRIVER_END
@@ -962,7 +962,7 @@ GAME( 1982, bagnard,  bagman,  bagman,  bagman,  0,        ROT270, "Valadon Auto
 GAME( 1982, bagnarda, bagman,  bagman,  bagman,  bagnarda, ROT270, "Valadon Automation", "Le Bagnard (set 2)", 0 )
 GAME( 1982, bagmans,  bagman,  bagman,  bagmans, 0,        ROT270, "Valadon Automation (Stern license)", "Bagman (Stern set 1)", 0 )
 GAME( 1982, bagmans2, bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation (Stern license)", "Bagman (Stern set 2)", 0 )
-GAME( 1984, sbagman,  0, 	   bagman,  sbagman, 0,        ROT270, "Valadon Automation", "Super Bagman", 0 )
+GAME( 1984, sbagman,  0,	   bagman,  sbagman, 0,        ROT270, "Valadon Automation", "Super Bagman", 0 )
 GAME( 1984, sbagmans, sbagman, bagman,  sbagman, 0,        ROT270, "Valadon Automation (Stern license)", "Super Bagman (Stern)", 0 )
 GAME( 1983, pickin,	  0,	   pickin,  pickin,  0,        ROT270, "Valadon Automation", "Pickin'", 0 )
 GAME( 1984, botanic,  0,       botanic, botanic, 0,        ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )

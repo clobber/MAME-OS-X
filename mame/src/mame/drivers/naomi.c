@@ -1049,12 +1049,12 @@ Notes:
 #include "video/generic.h"
 #include "machine/eeprom.h"
 #include "machine/intelfsh.h"
-#include "naomibd.h"
-#include "naomi.h"
+#include "includes/naomibd.h"
+#include "includes/naomi.h"
 #include "cpu/sh4/sh4.h"
 #include "cpu/arm7/arm7core.h"
 #include "sound/aica.h"
-#include "dc.h"
+#include "includes/dc.h"
 
 #define CPU_CLOCK (200000000)
 static UINT32 *dc_sound_ram;
@@ -1135,41 +1135,18 @@ static NVRAM_HANDLER( naomi_eeproms )
 	{
 		/* JVS 'eeprom' */
 		mame_fwrite(file,maple0x86data1,0x80);
-
-		// mainboard eeprom?
-		eeprom_save(file);
 	}
 	else
 	{
-		eeprom_init(machine, &eeprom_interface_93C46);
 		if (file)
 		{
-			UINT8 tmp[0x80];
-
 			/* JVS 'eeprom' */
 			mame_fread(file,maple0x86data1,0x80);
-
-			mame_fread(file,&tmp,0x80);
-			eeprom_set_data((UINT8 *)tmp, 0x80);
-
-			// mainboard eeprom?
-            eeprom_load(file);
-
 		}
-        	else
+    	else
 		{
-		//  int a;
-
-			UINT32 length, size;
-			UINT8 *dat;
 			const UINT8* jvseeprom_default = NULL;
 			int i;
-
-			dat = (UINT8 *)eeprom_get_data_pointer(&length, &size);
-			memset(dat, 0, length * size);
-
-			// mainboard eeprom?
-			eeprom_set_data((UINT8 *)"\011\241                              0000000000000000", 48);  // 2*checksum 30*unknown 16*serial
 
 			// some games require defaults to boot (vertical, 1 player etc.)
 			for (i=0; i<ARRAY_LENGTH(jvseeprom_default_game); i++)
@@ -1197,23 +1174,23 @@ static NVRAM_HANDLER( naomi_eeproms )
 	}
 }
 
-static READ64_HANDLER( eeprom_93c46a_r )
+static READ64_DEVICE_HANDLER( eeprom_93c46a_r )
 {
 	int res;
 
 	/* bit 3 is EEPROM data */
-	res = eeprom_read_bit() << 4;
+	res = eeprom_read_bit(device) << 4;
 	return res;
 }
 
-static WRITE64_HANDLER( eeprom_93c46a_w )
+static WRITE64_DEVICE_HANDLER( eeprom_93c46a_w )
 {
 	/* bit 4 is data */
 	/* bit 2 is clock */
 	/* bit 5 is cs */
-	eeprom_write_bit(data & 0x8);
-	eeprom_set_cs_line((data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
-	eeprom_set_clock_line((data & 0x4) ? ASSERT_LINE : CLEAR_LINE);
+	eeprom_write_bit(device, data & 0x8);
+	eeprom_set_cs_line(device, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom_set_clock_line(device, (data & 0x4) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 /* Dreamcast MAP
@@ -1282,7 +1259,7 @@ static WRITE64_HANDLER( eeprom_93c46a_w )
  // SB_LMMODE1
  static WRITE64_HANDLER( ta_texture_directpath1_w )
  {
- 	int mode = pvrctrl_regs[SB_LMMODE1]&1;
+	int mode = pvrctrl_regs[SB_LMMODE1]&1;
 	if (mode&1)
 	{
 		printf("ta_texture_directpath0_w 32-bit access!\n");
@@ -1301,8 +1278,8 @@ static WRITE64_HANDLER( eeprom_93c46a_w )
 
 static ADDRESS_MAP_START( naomi_map, ADDRESS_SPACE_PROGRAM, 64 )
 	/* Area 0 */
-	AM_RANGE(0x00000000, 0x001fffff) AM_ROM AM_SHARE(3) AM_REGION("maincpu", 0) // BIOS
-	AM_RANGE(0xa0000000, 0xa01fffff) AM_ROM AM_SHARE(3)  // non cachable access to  0x00000000 - 0x001fffff
+	AM_RANGE(0x00000000, 0x001fffff) AM_ROM AM_SHARE("share3") AM_REGION("maincpu", 0) // BIOS
+	AM_RANGE(0xa0000000, 0xa01fffff) AM_ROM AM_SHARE("share3")  // non cachable access to  0x00000000 - 0x001fffff
 
 	AM_RANGE(0x00200000, 0x00207fff) AM_RAM                                             // bios uses it (battery backed ram ?)
 	AM_RANGE(0x005f6800, 0x005f69ff) AM_READWRITE( dc_sysctrl_r, dc_sysctrl_w )
@@ -1330,10 +1307,10 @@ static ADDRESS_MAP_START( naomi_map, ADDRESS_SPACE_PROGRAM, 64 )
 	AM_RANGE(0x08000000, 0x0bffffff) AM_NOP // 'Unassigned'
 
 	/* Area 3 */
-	AM_RANGE(0x0c000000, 0x0dffffff) AM_RAM AM_BASE(&naomi_ram64) AM_SHARE(4)
-	AM_RANGE(0x0e000000, 0x0fffffff) AM_RAM AM_SHARE(4)// mirror
+	AM_RANGE(0x0c000000, 0x0dffffff) AM_RAM AM_BASE(&naomi_ram64) AM_SHARE("share4")
+	AM_RANGE(0x0e000000, 0x0fffffff) AM_RAM AM_SHARE("share4")// mirror
 
-	AM_RANGE(0x8c000000, 0x8dffffff) AM_RAM AM_SHARE(4) // RAM access through cache
+	AM_RANGE(0x8c000000, 0x8dffffff) AM_RAM AM_SHARE("share4") // RAM access through cache
 
 	/* Area 4 */
 	AM_RANGE(0x10000000, 0x107fffff) AM_WRITE( ta_fifo_poly_w )
@@ -1356,7 +1333,7 @@ ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( naomi_port, ADDRESS_SPACE_IO, 64 )
-	AM_RANGE(0x00, 0x0f) AM_READWRITE(eeprom_93c46a_r, eeprom_93c46a_w)
+	AM_RANGE(0x00, 0x0f) AM_DEVREADWRITE("main_eeprom", eeprom_93c46a_r, eeprom_93c46a_w)
 ADDRESS_MAP_END
 
 /*
@@ -1405,7 +1382,7 @@ INLINE int decode_reg32_64(running_machine *machine, UINT32 offset, UINT64 mem_m
 	{
 		reg++;
 		*shift = 32;
- 	}
+	}
 
 	return reg;
 }
@@ -1477,13 +1454,13 @@ static ADDRESS_MAP_START( aw_map, ADDRESS_SPACE_PROGRAM, 64 )
 	AM_RANGE(0x08000000, 0x0bffffff) AM_NOP // 'Unassigned'
 
 	/* Area 3 */
-	AM_RANGE(0x0c000000, 0x0cffffff) AM_RAM AM_BASE(&naomi_ram64) AM_SHARE(4)
-	AM_RANGE(0x0d000000, 0x0dffffff) AM_RAM AM_SHARE(4)// extra ram on Naomi (mirror on DC)
-	AM_RANGE(0x0e000000, 0x0effffff) AM_RAM AM_SHARE(4)// mirror
-	AM_RANGE(0x0f000000, 0x0fffffff) AM_RAM AM_SHARE(4)// mirror
+	AM_RANGE(0x0c000000, 0x0cffffff) AM_RAM AM_BASE(&naomi_ram64) AM_SHARE("share4")
+	AM_RANGE(0x0d000000, 0x0dffffff) AM_RAM AM_SHARE("share4")// extra ram on Naomi (mirror on DC)
+	AM_RANGE(0x0e000000, 0x0effffff) AM_RAM AM_SHARE("share4")// mirror
+	AM_RANGE(0x0f000000, 0x0fffffff) AM_RAM AM_SHARE("share4")// mirror
 
-	AM_RANGE(0x8c000000, 0x8cffffff) AM_RAM AM_SHARE(4) // RAM access through cache
-	AM_RANGE(0x8d000000, 0x8dffffff) AM_RAM AM_SHARE(4) // RAM access through cache
+	AM_RANGE(0x8c000000, 0x8cffffff) AM_RAM AM_SHARE("share4") // RAM access through cache
+	AM_RANGE(0x8d000000, 0x8dffffff) AM_RAM AM_SHARE("share4") // RAM access through cache
 
 	/* Area 4 - half the texture memory, like dreamcast, not naomi */
 	AM_RANGE(0x10000000, 0x107fffff) AM_WRITE( ta_fifo_poly_w )
@@ -1817,6 +1794,9 @@ static MACHINE_DRIVER_START( naomi_base )
 	MDRV_MACHINE_START( dc )
 	MDRV_MACHINE_RESET( naomi )
 
+	MDRV_EEPROM_93C46_ADD("main_eeprom")
+	MDRV_EEPROM_DEFAULT_VALUE(0)
+
 	MDRV_NVRAM_HANDLER(naomi_eeproms)
 
 	/* video hardware */
@@ -1875,6 +1855,7 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( aw )
 	MDRV_IMPORT_FROM(naomi_base)
+//  MDRV_DEVICE_REMOVE("main_eeprom")
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(aw_map)
 	MDRV_NVRAM_HANDLER(aw_nvram)
@@ -1903,12 +1884,13 @@ EPR-21576  - NAOMI BOOT ROM 1998 12/18  1.00 (Japan)
 EPR-21577g - NAOMI BOOT ROM 2001 09/10  1.70 (USA)
 EPR-21577e - NAOMI BOOT ROM 2000 08/25  1.50 (USA)
 EPR-21577d - NAOMI BOOT ROM 1999 06/04  1.40 (USA)
+EPR-21578h - NAOMI BOOT ROM 2002 07/08  1.8- (Export)
+EPR-21578g - NAOMI BOOT ROM 2001 09/10  1.70 (Export)
 EPR-21578e - NAOMI BOOT ROM 2000 08/25  1.50 (Export)
 EPR-21578d - NAOMI BOOT ROM 1999 06/04  1.40 (Export)
 EPR-21578b - NAOMI BOOT ROM 1999 02/15  1.20 (Export)
 EPR-21579  - No known dump (Korea)
 EPR-21580  - No known dump (Australia)
-EPR-22851  - NAOMI BOOT ROM 1999 08/30  1.35 (Multisystem 3 screen Ferrari F355)
 
 EPR-21577e & EPR-2178e differ by 7 bytes:
 
@@ -1973,22 +1955,24 @@ Scan ROM for the text string "LOADING TEST MODE NOW" back up four (4) bytes for 
 	ROM_LOAD16_WORD_SWAP_BIOS( 4, "epr-21576b.bin",  0x000000, 0x200000, CRC(755a6e07) SHA1(7e8b8ccfc063144d89668e7224dcd8a36c54f3b3) ) \
 	ROM_SYSTEM_BIOS( 5, "bios5", "epr-21576 (Japan)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 5, "epr-21576.bin", 0x000000, 0x200000, CRC(9dad3495) SHA1(5fb66f9a2b68d120f059c72758e65d34f461044a) ) \
-	ROM_SYSTEM_BIOS( 6, "bios6", "epr-21578g (Export)" ) \
-        ROM_LOAD16_WORD_SWAP_BIOS( 6, "epr-21578g.ic27", 0x000000, 0x200000, CRC(55413214) SHA1(bd2748365a9fc1821c9369aa7155d7c41c4df43e) ) \
-	ROM_SYSTEM_BIOS( 7, "bios7", "epr-21578e (Export)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 7, "epr-21578e.bin",  0x000000, 0x200000, CRC(087f09a3) SHA1(0418eb2cf9766f0b1b874a4e92528779e22c0a4a) ) \
-	ROM_SYSTEM_BIOS( 8, "bios8", "epr-21578d (Export)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 8, "epr-21578d.bin",  0x000000, 0x200000, CRC(dfd5f42a) SHA1(614a0db4743a5e5a206190d6786ade24325afbfd) ) \
-	ROM_SYSTEM_BIOS( 9, "bios9", "epr-21578b (Export)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 9, "epr-21578b.bin",  0x000000, 0x200000, CRC(6c9aad83) SHA1(555918de76d8dbee2a97d8a95297ef694b3e803f) ) \
-	ROM_SYSTEM_BIOS( 10, "bios10", "epr-21577g (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 10, "epr-21577g.bin",  0x000000, 0x200000, CRC(25f64af7) SHA1(99f9e6cc0642319bd2da492611220540add573e8) ) \
-	ROM_SYSTEM_BIOS( 11, "bios11", "epr-21577e (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 11, "epr-21577e.bin",  0x000000, 0x200000, CRC(cf36e97b) SHA1(b085305982e7572e58b03a9d35f17ae319c3bbc6) ) \
-	ROM_SYSTEM_BIOS( 12, "bios12", "epr-21577d (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 12, "epr-21577d.bin",  0x000000, 0x200000, CRC(60ddcbbe) SHA1(58b15096d269d6df617ca1810b66b47deb184958) ) \
-	ROM_SYSTEM_BIOS( 13, "bios13", "Naomi Dev BIOS" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 13,  "dcnaodev.bios", 0x000000, 0x080000, CRC(7a50fab9) SHA1(ef79f448e0bf735d1264ad4f051d24178822110f) ) /* This one comes from a dev / beta board. The eprom was a 27C4096 */
+	ROM_SYSTEM_BIOS( 6, "bios6", "epr-21578h (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 6, "epr-21578h.ic27", 0x000000, 0x200000, CRC(7b452946) SHA1(8e9f153bbada24b37066dc45b64a7bf0d4f26a9b) ) \
+	ROM_SYSTEM_BIOS( 7, "bios7", "epr-21578g (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 7, "epr-21578g.ic27", 0x000000, 0x200000, CRC(55413214) SHA1(bd2748365a9fc1821c9369aa7155d7c41c4df43e) ) \
+	ROM_SYSTEM_BIOS( 8, "bios8", "epr-21578e (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 8, "epr-21578e.bin",  0x000000, 0x200000, CRC(087f09a3) SHA1(0418eb2cf9766f0b1b874a4e92528779e22c0a4a) ) \
+	ROM_SYSTEM_BIOS( 9, "bios9", "epr-21578d (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 9, "epr-21578d.bin",  0x000000, 0x200000, CRC(dfd5f42a) SHA1(614a0db4743a5e5a206190d6786ade24325afbfd) ) \
+	ROM_SYSTEM_BIOS( 10, "bios10", "epr-21578b (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 10, "epr-21578b.bin",  0x000000, 0x200000, CRC(6c9aad83) SHA1(555918de76d8dbee2a97d8a95297ef694b3e803f) ) \
+	ROM_SYSTEM_BIOS( 11, "bios11", "epr-21577g (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 11, "epr-21577g.bin",  0x000000, 0x200000, CRC(25f64af7) SHA1(99f9e6cc0642319bd2da492611220540add573e8) ) \
+	ROM_SYSTEM_BIOS( 12, "bios12", "epr-21577e (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 12, "epr-21577e.bin",  0x000000, 0x200000, CRC(cf36e97b) SHA1(b085305982e7572e58b03a9d35f17ae319c3bbc6) ) \
+	ROM_SYSTEM_BIOS( 13, "bios13", "epr-21577d (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 13, "epr-21577d.bin",  0x000000, 0x200000, CRC(60ddcbbe) SHA1(58b15096d269d6df617ca1810b66b47deb184958) ) \
+	ROM_SYSTEM_BIOS( 14, "bios14", "Naomi Dev BIOS" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 14,  "dcnaodev.bios", 0x000000, 0x080000, CRC(7a50fab9) SHA1(ef79f448e0bf735d1264ad4f051d24178822110f) ) /* This one comes from a dev / beta board. The eprom was a 27C4096 */
 
 // bios for House of the Dead 2
 #define HOTD2_BIOS \
@@ -2020,16 +2004,20 @@ Scan ROM for the text string "LOADING TEST MODE NOW" back up four (4) bytes for 
 	ROM_LOAD16_WORD_SWAP_BIOS( 2, "epr-21576h.bin",  0x000000, 0x200000, CRC(d4895685) SHA1(91424d481ff99a8d3f4c45cea6d3f0eada049a6d) ) \
 	ROM_SYSTEM_BIOS( 3, "bios3", "epr-21576d (Japan)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 3, "epr-21576d.bin",  0x000000, 0x200000, CRC(3b2afa7b) SHA1(d007e1d321c198a38c5baff86eb2ab84385d150a) ) \
-	ROM_SYSTEM_BIOS( 4, "bios4", "epr-21578e (Export)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 4, "epr-21578e.bin",  0x000000, 0x200000, CRC(087f09a3) SHA1(0418eb2cf9766f0b1b874a4e92528779e22c0a4a) ) \
-	ROM_SYSTEM_BIOS( 5, "bios5", "epr-21578d (Export)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 5, "epr-21578d.bin",  0x000000, 0x200000, CRC(dfd5f42a) SHA1(614a0db4743a5e5a206190d6786ade24325afbfd) ) \
-	ROM_SYSTEM_BIOS( 6, "bios6", "epr-21577g (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 6, "epr-21577g.bin",  0x000000, 0x200000, CRC(25f64af7) SHA1(99f9e6cc0642319bd2da492611220540add573e8) ) \
-	ROM_SYSTEM_BIOS( 7, "bios7", "epr-21577e (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 7, "epr-21577e.bin",  0x000000, 0x200000, CRC(cf36e97b) SHA1(b085305982e7572e58b03a9d35f17ae319c3bbc6) ) \
-	ROM_SYSTEM_BIOS( 8, "bios8", "epr-21577d (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 8, "epr-21577d.bin",  0x000000, 0x200000, CRC(60ddcbbe) SHA1(58b15096d269d6df617ca1810b66b47deb184958) ) \
+	ROM_SYSTEM_BIOS( 4, "bios4", "epr-21578h (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 4, "epr-21578h.ic27", 0x000000, 0x200000, CRC(7b452946) SHA1(8e9f153bbada24b37066dc45b64a7bf0d4f26a9b) ) \
+	ROM_SYSTEM_BIOS( 5, "bios5", "epr-21578g (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 5, "epr-21578g.ic27", 0x000000, 0x200000, CRC(55413214) SHA1(bd2748365a9fc1821c9369aa7155d7c41c4df43e) ) \
+	ROM_SYSTEM_BIOS( 6, "bios6", "epr-21578e (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 6, "epr-21578e.bin",  0x000000, 0x200000, CRC(087f09a3) SHA1(0418eb2cf9766f0b1b874a4e92528779e22c0a4a) ) \
+	ROM_SYSTEM_BIOS( 7, "bios7", "epr-21578d (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 7, "epr-21578d.bin",  0x000000, 0x200000, CRC(dfd5f42a) SHA1(614a0db4743a5e5a206190d6786ade24325afbfd) ) \
+	ROM_SYSTEM_BIOS( 8, "bios8", "epr-21577g (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 8, "epr-21577g.bin",  0x000000, 0x200000, CRC(25f64af7) SHA1(99f9e6cc0642319bd2da492611220540add573e8) ) \
+	ROM_SYSTEM_BIOS( 9, "bios9", "epr-21577e (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 9, "epr-21577e.bin",  0x000000, 0x200000, CRC(cf36e97b) SHA1(b085305982e7572e58b03a9d35f17ae319c3bbc6) ) \
+	ROM_SYSTEM_BIOS( 10, "bios10", "epr-21577d (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 10, "epr-21577d.bin",  0x000000, 0x200000, CRC(60ddcbbe) SHA1(58b15096d269d6df617ca1810b66b47deb184958) ) \
 	ROM_REGION( 0x200000, "user2", 0) \
 	ROM_LOAD16_WORD_SWAP( "fpr-23489c.ic14", 0x000000, 0x200000, CRC(bc38bea1) SHA1(b36fcc6902f397d9749e9d02de1bbb7a5e29d468) ) \
 
@@ -2043,6 +2031,7 @@ EPR-23607  - NAOMI BOOT ROM 2001 01/19  1.50 (USA)
 EPR-23607B - NAOMI BOOT ROM 2001 09/10  1.70 (USA)
 EPR-23608  - NAOMI BOOT ROM 2001 01/19  1.50 (Export)
 EPR-23608B - NAOMI BOOT ROM 2001 09/10  1.70 (Export)
+EPR-23608C - NAOMI BOOT ROM 2002 07/08  1.8- (Export)
 
 EPR-23605B, EPR-23607B & EPR-23608B all differ by 8 bytes:
 
@@ -2070,30 +2059,38 @@ Region byte encoding is as follows:
 	ROM_LOAD16_WORD_SWAP_BIOS( 2, "epr-23605a.bin",   0x000000, 0x200000, CRC(7bc3fc2d) SHA1(a4a9531a7c66ff30046908cf71f6c7b6fb59c392) ) \
 	ROM_SYSTEM_BIOS( 3, "bios3", "epr-23605 (Japan)"  ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 3, "epr-23605.bin",    0x000000, 0x200000, CRC(5731e446) SHA1(787b0844fc408cf124c12405c095c59948709ea6) ) \
-	ROM_SYSTEM_BIOS( 4, "bios4", "epr-23608b (Export)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 4, "epr-23608b.bin",   0x000000, 0x200000, CRC(a554b1e3) SHA1(343b727a3619d1c75a9b6d4cc156a9050447f155) ) \
-	ROM_SYSTEM_BIOS( 5, "bios5", "epr-23608 (Export)"  ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 5, "epr-23608.bin",    0x000000, 0x200000, CRC(929cc3a6) SHA1(47d00c818de23f733a4a33b1bbc72eb8aa729246) ) \
-	ROM_SYSTEM_BIOS( 6, "bios6", "epr-23607b (USA)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 6, "epr-23607b.bin",   0x000000, 0x200000, CRC(f308c5e9) SHA1(5470ab1cee6afecbd8ca8cf40f8fbe4ec2cb1471) ) \
-	ROM_SYSTEM_BIOS( 7, "bios7", "epr-23607 (USA)"  ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 7, "epr-23607.bin",    0x000000, 0x200000, CRC(2b55add2) SHA1(547de5f97d3183c8cd069c4fa3c09f13d8b637d9) ) \
+	ROM_SYSTEM_BIOS( 4, "bios4", "epr-23608c (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 4, "epr-23608c.bin",   0x000000, 0x200000, CRC(6ef1dd8e) SHA1(25ef957ec1c58fdaff5e89102002bca6c38832c5) ) \
+	ROM_SYSTEM_BIOS( 5, "bios5", "epr-23608b (Export)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 5, "epr-23608b.bin",   0x000000, 0x200000, CRC(a554b1e3) SHA1(343b727a3619d1c75a9b6d4cc156a9050447f155) ) \
+	ROM_SYSTEM_BIOS( 6, "bios6", "epr-23608 (Export)"  ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 6, "epr-23608.bin",    0x000000, 0x200000, CRC(929cc3a6) SHA1(47d00c818de23f733a4a33b1bbc72eb8aa729246) ) \
+	ROM_SYSTEM_BIOS( 7, "bios7", "epr-23607b (USA)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 7, "epr-23607b.bin",   0x000000, 0x200000, CRC(f308c5e9) SHA1(5470ab1cee6afecbd8ca8cf40f8fbe4ec2cb1471) ) \
+	ROM_SYSTEM_BIOS( 8, "bios8", "epr-23607 (USA)"  ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 8, "epr-23607.bin",    0x000000, 0x200000, CRC(2b55add2) SHA1(547de5f97d3183c8cd069c4fa3c09f13d8b637d9) ) \
 
 /* First half is BIOS, second half is game settings and is blanked/reprogrammed by the BIOS as necessary */
 #define AW_BIOS \
 	ROM_SYSTEM_BIOS( 0, "bios0", "Atomiswave BIOS" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 0, "bios.ic23_l",                         0x000000, 0x010000, BAD_DUMP CRC(e5693ce3) SHA1(1bde3ed87af64b0f675ebd47f12a53e1fc5709c1) ) /* Might be bad.. especially. bytes 0x0000, 0x6000, 0x8000 which gave different reads */
+	ROM_LOAD16_WORD_SWAP_BIOS( 0, "bios.ic23_l", 0x000000, 0x010000, BAD_DUMP CRC(e5693ce3) SHA1(1bde3ed87af64b0f675ebd47f12a53e1fc5709c1) ) /* Might be bad.. especially. bytes 0x0000, 0x6000, 0x8000 which gave different reads */
 
+/* default EEPROM values, same works for all games */
+#define NAOMI_DEFAULT_EEPROM \
+	ROM_REGION16_BE( 0x80, "main_eeprom", 0 ) \
+	ROM_LOAD16_WORD("eeprom-naomi-main-default.bin", 0x0000, 0x0080, CRC(fea29cbb) SHA1(4099f1747aafa07db34f6e072cd9bfaa83bae10e) )
 
 ROM_START( naomi )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
 
 ROM_START( naomigd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
@@ -2101,6 +2098,7 @@ ROM_END
 ROM_START( hod2bios )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	HOTD2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
@@ -2108,6 +2106,7 @@ ROM_END
 ROM_START( f355bios )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	F355_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
@@ -2115,12 +2114,14 @@ ROM_END
 ROM_START( airlbios )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	AIRLINE_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
 
 ROM_START( naomi2 )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8400000, "user1", ROMREGION_ERASE)
 ROM_END
@@ -2168,6 +2169,7 @@ IC12    64M     BA24    102F
 ROM_START( cspike )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x6800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23210.ic22", 0x0000000, 0x0400000, CRC(a15c54b5) SHA1(5c7872244d3d648e4c04751f120d0e9d47239921) )
@@ -2215,6 +2217,7 @@ IC13    64M     A12E    8DE4
 ROM_START( capsnk )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x7800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD( "epr-23511.ic22", 0x000000, 0x400000, CRC(3dbf8eb2) SHA1(1f7b89ba99e018cc85022fa852d56d4e345e1bd2) )
@@ -2258,6 +2261,7 @@ ROM_END
 ROM_START( capsnka )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x7800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr23511a.ic22", 0x000000, 0x400000, CRC(fe00650f) SHA1(ca8e9e9178ed2b6598bdea83be1bf0dd7aa509f9) )
@@ -2322,6 +2326,7 @@ Serial: BCHE-01A0803
 ROM_START( csmash )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x4800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23428a.ic22", 0x0000000, 0x400000, CRC(d628dbce) SHA1(91ec1296ead572a64c37f8ac2c1a96742f19d50b) )
@@ -2342,6 +2347,7 @@ ROM_END
 ROM_START( csmasho )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x4800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23428.ic22", 0x0000000, 0x400000, CRC(f8597496) SHA1(2bb9f25b63b7410934ae4b1e052e1308a5c5a57f) )
@@ -2371,6 +2377,7 @@ EXP: DEATH CRIMSON OX
 ROM_START( deathcox )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x5800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23524.ic22",0x0000000, 0x0400000, CRC(edc20e44) SHA1(6167ee86624f5b78b3ced0dd82259e83053f4f9d) )
@@ -2423,6 +2430,7 @@ IC21    64M     002C    8ECA
 ROM_START( doa2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22121.ic22",0x0000000, 0x0400000,  CRC(30f93b5e) SHA1(0e33383e7ab9a721dab4708b063598f2e9c9f2e7) ) // partially encrypted
@@ -2511,6 +2519,7 @@ Serial: BALH-13A0175
 ROM_START( doa2m )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("doa2verm.ic22", 0x0000000, 0x0400000,  CRC(94b16f08) SHA1(225cd3e5dd5f21facf0a1d5e66fa17db8497573d) )
@@ -2592,6 +2601,7 @@ Serial: BAXE-02A1386
 ROM_START( derbyoc )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x7800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22099b.ic22", 0x0000000, 0x0400000, CRC(5e708879) SHA1(fada4f4bf29fc8f77f354167f8db4f904610fe1a) )
@@ -2621,6 +2631,7 @@ EXP: DERBY OWNERS CLUB II-IN EXPORT
 ROM_START( derbyoc2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22306.ic22",  0x0000000, 0x0400000, CRC(fcac20eb) SHA1(26cec9f615cd18ce7fccfc5e273e42c58dea1995) )
@@ -2687,6 +2698,7 @@ Protection notes (same code snippet seen in Zombie Revenge):
 ROM_START( dybbnao )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21575.ic22",0x0000000, 0x0200000, CRC(ba61e248) SHA1(3cce5d8b307038515d7da7ec567bfa2e3aafc274) )
@@ -2749,6 +2761,7 @@ Serial: BBDE-01A0097
 ROM_START( dybb99 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xa000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22141b.ic22",0x0000000, 0x0200000, CRC(6d0e0785) SHA1(aa19e7bac4c266771d1e65cffa534a49d7566f51) )
@@ -2776,6 +2789,7 @@ ROM_END
 ROM_START( smlg99 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr-22059.ic22", 0x0000000, 0x200000, CRC(5784f970) SHA1(e9ec692206a95cc260521154305693f6022190bc) )
@@ -2814,6 +2828,7 @@ EXP: F355 CHALLENGE EXPORT
 ROM_START( f355 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	F355_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21902.ic22",0x0000000, 0x0400000, CRC(04e8acec) SHA1(82e20f99876b13b77c0393ef545316f9eeb2c29c) )
@@ -2839,11 +2854,12 @@ ROM_START( f355 )
 	ROM_LOAD("mpr-21899.ic19",0x9800000, 0x0800000, CRC(14a4b87d) SHA1(33177dea88c6aec31e2c16c8d0d3f29c7ea772c5) )
 	ROM_LOAD("mpr-21900.ic20",0xa000000, 0x0800000, CRC(81901130) SHA1(1573b5c4360e29ba1a4b4901af49d5399fa1e635) )
 	ROM_LOAD("mpr-21901.ic21",0xa800000, 0x0800000, BAD_DUMP CRC(55dcbd6d) SHA1(9fec353f9e58016090e177f899a799e2e8fc7c9f) ) // returns bad in Naomi test mode
-ROM_END		 					 									// ROM reads different each time and fails test mode on real h/w, need a new cart
+ROM_END																// ROM reads different each time and fails test mode on real h/w, need a new cart
 
 ROM_START( f355twin )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	F355_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr22848.ic22", 0x0000000, 0x800000, CRC(54de0bd5) SHA1(5f6be36d2d39eea681ecac14358b92eaf4bf6c1e) )
@@ -2873,6 +2889,7 @@ ROM_END
 ROM_START( f355twn2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	F355_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr23399.ic22", 0x0000000, 0x400000, CRC(36de514c) SHA1(1c32064169c233156921fdf170c1958dc0f8a750) )
@@ -2902,6 +2919,7 @@ ROM_END
 ROM_START( alpiltdx )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	AIRLINE_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD( "epr21787b.ic22", 0x0000000, 0x400000, CRC(56893156) SHA1(8e56e0633f92b1f50105421b7eb8428f51a78b27) )
@@ -2922,9 +2940,30 @@ ROM_START( alpiltdx )
 	ROM_LOAD( "airlinepdx.sf",  0x000000, 0x000084, CRC(404b2add) SHA1(540c8474806775646ace111a2993397b1419fee3) )
 ROM_END
 
+ROM_START( alpilota )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	AIRLINE_BIOS
+	NAOMI_DEFAULT_EEPROM
+
+	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
+	ROM_LOAD( "epr-21739a.ic22", 0x000000, 0x400000, CRC(08f22bab) SHA1(fedc80eef7c824381fd834cc04202383c9340c4f) )
+	ROM_LOAD( "mpr21728.ic1",  0x0800000, 0x800000, CRC(872338d4) SHA1(04857b300196c0ec51361d7cf7bb57274a15a326) )
+	ROM_LOAD( "mpr21729.ic2",  0x1000000, 0x800000, CRC(9a9b72ad) SHA1(ce96da7904dd82abaa448df45e954521dd834ed8) )
+	ROM_LOAD( "mpr21730.ic3",  0x1800000, 0x800000, CRC(93c25058) SHA1(658374bca3cf615982ebcf493eeaaa9e40e70f03) )
+	ROM_LOAD( "mpr21731.ic4",  0x2000000, 0x800000, CRC(f14e578b) SHA1(d572903f7021757aebbb903b25a11a5aaf9f7a71) )
+	ROM_LOAD( "mpr21732.ic5",  0x2800000, 0x800000, CRC(28ea4e8c) SHA1(7f87fe08819e756bb7aadca2aaacb0f6e59c13f0) )
+	ROM_LOAD( "mpr21733.ic6",  0x3000000, 0x800000, CRC(5aee9e99) SHA1(8db726a73723c931fd8a4be2dd99d7c32352ad21) )
+	ROM_LOAD( "mpr21734.ic7",  0x3800000, 0x800000, CRC(0574390d) SHA1(5988bdd089d23035ee2dd3596ea9c822455311d3) )
+	ROM_LOAD( "mpr21735.ic8",  0x4000000, 0x800000, CRC(811400b4) SHA1(5f8d8b70f499b293b2d952c754c853c53b39c438) )
+	ROM_LOAD( "mpr21736.ic9",  0x4800000, 0x800000, CRC(d74eda63) SHA1(d6794fa433cea9f06dc0a20dc9e10388162e7fd8) )
+	ROM_LOAD( "mpr21737.ic10", 0x5000000, 0x800000, CRC(260aaa98) SHA1(d1082587afe9d79f286df8b107a553ee51c27643) )
+	ROM_LOAD( "mpr21738.ic11", 0x5800000, 0x800000, CRC(95a592e8) SHA1(862dce467e8805381bab001df68262f1baf3c498) )
+ROM_END
+
 ROM_START( hotd2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	HOTD2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xa800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr-21585.ic22", 0x0000000, 0x200000, CRC(b23d1a0c) SHA1(9e77980d1aa980c879886e53cc76a16d7a9d43a1) )
@@ -2966,6 +3005,7 @@ Serial: BAJE-01A0021
 ROM_START( ggram2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x6000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21820.ic22", 0x0000000, 0x0200000, CRC(0a198278) SHA1(0df5fc8b56ddafc66d92cb3923b851a5717b551d) )
@@ -3023,6 +3063,7 @@ Serial: BCCG-21A0451
 ROM_START( gram2000 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23377.ic11",        0x0000000, 0x0400000, CRC(4ca3149c) SHA1(9d25fc659658b416202b033754669be2f3abcdbe) )
@@ -3059,6 +3100,7 @@ EXP: DISABLE
 ROM_START( ggx )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x7800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23356.ic22", 0x0000000, 0x0400000, CRC(ed2d289f) SHA1(d4f73c6cd25f320616e21f1ff0cdc0a566185dcb) )
@@ -3128,6 +3170,7 @@ IC11    64M     4F77    EEFE
 ROM_START( hmgeo )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x6000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23716a.ic22", 0x0000000, 0x0400000,  CRC(c5cb0d3b) SHA1(20de8f5ee183e996ccde77b10564a302939662db) )
@@ -3198,6 +3241,7 @@ e055c key 37ca read count 400, write 404
 ROM_START( gwing2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x5800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22270.ic22",0x0000000, 0x0200000,  CRC(876b3c97) SHA1(eb171d4a0521c3bea42b4aae3607faec63e10581) )
@@ -3256,6 +3300,7 @@ IC14    32M     81F9    DA1B
 ROM_START( suchie3 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x7800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21979.ic22",0x0000000, 0x0200000, CRC(335c9e25) SHA1(476790fdd99a8c13336e795b4a39b071ed86a97c) )
@@ -3285,6 +3330,7 @@ EXP: SHANGRI-LA
 ROM_START( shangril )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x6800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22060.ic22", 0x0000000, 0x0400000, CRC(5ae18595) SHA1(baaf8fd948b07ab9970571fecebc3c4fab5d4897) )
@@ -3316,6 +3362,7 @@ So the Naomi regular board test item is unreliable in this circumstance.
 ROM_START( mvsc2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8900000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23085a.ic11", 0x0000000, 0x0400000, CRC(5d5b7ad1) SHA1(f58c31b245fc33fa541f9f074548402a63f7c3d3) )
@@ -3351,6 +3398,7 @@ ROM_END
 ROM_START( toyfight )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22035.ic22",0x0000000, 0x0400000, CRC(dbc76493) SHA1(a9772bdb62610a39adf2b9f397781bcddda3e635) )
@@ -3376,6 +3424,7 @@ ROM_END
 ROM_START( crzytaxi )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr21684.bin",   0x0000000, 0x400000, CRC(f1de77b7) SHA1(4490b828534db6676b2d0129498fd7694eb9e5ff) )
@@ -3401,6 +3450,7 @@ ROM_END
 ROM_START( jambo )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr22826a.bin", 0x0000000, 0x400000, CRC(18f8f3bc) SHA1(417f2282c9970775e51b56d2eeb671a50ca293a7) )
@@ -3421,6 +3471,7 @@ ROM_END
 ROM_START( 18wheelr )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xa800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr22185.bin",   0x0000000, 0x400000, CRC(219b29b0) SHA1(2f32caf3906fc1408fd8126a500e74c682ff20fa) )
@@ -3459,6 +3510,25 @@ ROM_START( 18wheelr )
         ROM_LOAD( "epr-23000.ic8", 0x000000, 0x010000, CRC(e3b162f7) SHA1(52c7ad759c3c4a3148764e14d77ba5006bc8af48) )
 ROM_END
 
+/* Sega Tetris */
+ROM_START( sgtetris )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
+
+	ROM_REGION( 0x3800000, "user1", ROMREGION_ERASEFF)
+        ROM_LOAD( "epr-22909.ic22", 0x000000, 0x200000, CRC(486b2fdf) SHA1(da54fec42b7ac16f73b2b9f166b9b2ab45426fd7) )
+        ROM_LOAD( "mpr-22910.ic1", 0x0800000, 0x800000, CRC(7968b67e) SHA1(4a83c22a30b3a3ce7d7167f703a11b78d3f6cea6) )
+        ROM_LOAD( "mpr-22911.ic2", 0x1000000, 0x800000, CRC(4014aa6a) SHA1(86a9bd852c9fff70c0b902b7014c136a1d82e9a4) )
+        ROM_LOAD( "mpr-22912.ic3", 0x1800000, 0x800000, CRC(67667a56) SHA1(89f3cab6c5db2f6ecac4e6a0dee085fa39cb5cbb) )
+        ROM_LOAD( "mpr-22913.ic4", 0x2000000, 0x800000, CRC(1fbdc41a) SHA1(eb8b9577b7677b9e9aec05ae950dee516ae15bf5) )
+        ROM_LOAD( "mpr-22914.ic5", 0x2800000, 0x800000, CRC(77844b60) SHA1(65d71febb8a160d00778ac7b53e082253cad9834) )
+        ROM_LOAD( "mpr-22915.ic6", 0x3000000, 0x800000, CRC(e48148ac) SHA1(c1273353eeaf9bb6b185f133281d7d04271bc895) )
+
+	// trojaned protection data (filename is address read from)
+	ROM_REGION( 0x200000, "naomibd_prot", ROMREGION_ERASE00 )
+        ROM_LOAD( "a0cad0c0.bin", 0x000000, 0x0101b2, CRC(0db80e6d) SHA1(74f8e817e3e69c64391b2eff2c8c504dcad9f84f) )
+ROM_END
 
 /*
 
@@ -3492,6 +3562,7 @@ IC17 64M    6586    1F3F
 ROM_START( slasho )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x9000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23341.ic22", 0x0000000, 0x0400000, CRC(477fa123) SHA1(d2474766dcd0b0e5fe317a858534829eb1c26789) )
@@ -3554,6 +3625,7 @@ Serial: BCLE-01A2130
 ROM_START( pjustic )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23548a.ic22", 0x0000000, 0x0400000,  CRC(f4ccf1ec) SHA1(97485b2a4b9452ffeea2501f42d20d718410e716) )
@@ -3603,6 +3675,7 @@ prot
 ROM_START( pstone )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x4800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21597.ic22",0x0000000, 0x0200000, CRC(62c7acc0) SHA1(bb61641a7f3650757132cde379447bdc9bd91c78) )
@@ -3642,6 +3715,7 @@ Serial: BBJE-01A1613
 ROM_START( pstone2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x5000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23127.ic22", 0x0000000, 0x0400000,  CRC(185761d6) SHA1(8c91b594dd59313d249c9da7b39dee21d3c9082e) )
@@ -3724,6 +3798,7 @@ Serial (from 2 carts): BAZE-01A0288
 ROM_START( otrigger )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xa000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22163.ic22", 0x0000000, 0x0400000, CRC(3bdafb6a) SHA1(c4c5a4ba94d85c4353df22d70bb08be67e9c22c3) )
@@ -3761,6 +3836,7 @@ EXP: AH! MY GODDESS QUIZ GAME--
 ROM_START( qmegamis )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x9000200, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23227.ic11", 0x0000000, 0x0400000, CRC(3f76087e) SHA1(664d28ef95394590b186e7badaf96ddaf781c104) ) //ic 22
@@ -3818,6 +3894,7 @@ IC16    64M     A10B    DDB4
 ROM_START( samba )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22966b.ic22",0x0000000, 0x0400000, CRC(893116b8) SHA1(35cb4f40690ff21af5ab7cc5adbc53228d6fb0b3) )
@@ -3851,6 +3928,7 @@ EXP: SEGA MARINE FISHING IN EXPORT
 ROM_START( smarinef )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x6800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22221.ic22",0x0000000, 0x0400000, CRC(9d984375) SHA1(fe1185d70b4bc1529e3579fd6b2b678c7d548400) )
@@ -3880,6 +3958,7 @@ EXP: SHOOTOUT POOL PRIZE
 ROM_START( shootpl )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x2800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-a-24065.rom0.ic11",0x0000000, 0x0400000, CRC(622a9ba0) SHA1(2f4963b8447ecda78fea0107497c2811f075c07a) )
@@ -3894,6 +3973,7 @@ ROM_END
 ROM_START( shootopl )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x2800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr23844.bin", 0x000000, 0x400000, CRC(5c229638) SHA1(9185f9f2369bb2423faff4222419001ac9037d3f) )
@@ -3931,6 +4011,7 @@ Serial: BAVE-02A1305
 ROM_START( spawn )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x5800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22977b.ic22",0x0000000, 0x0400000, CRC(814ff5d1) SHA1(5a0a9e55878927f98750000eb7d9391cbecfe21d) )
@@ -3958,6 +4039,7 @@ EXP: THE TYPING OF THE DEAD
 ROM_START( totd )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23021a.ic22", 0x0000000, 0x0400000,  CRC(07d21033) SHA1(d1e619d13c1c01648eb1a6964aad1554dd16c6d5) )
@@ -4021,6 +4103,7 @@ IC21    64M AD60    2F74
 ROM_START( virnba )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23073.ic22",0x0000000, 0x0400000, CRC(ce5c3d28) SHA1(ca3eeae1cf78435787338bb7b3e71301c0f71dd9) )
@@ -4050,6 +4133,7 @@ ROM_END
 ROM_START( virnbao )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22949.ic22",0x0000000, 0x0400000, CRC(fd91447e) SHA1(0759d6517aeb684d0cb809c1ae1350615cc0aecc) )
@@ -4106,6 +4190,7 @@ IC15    32M     0DF9    FC01    MPR21928
 ROM_START( vs2_2k )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21929.ic22", 0x0000000, 0x0400000, CRC(831af08a) SHA1(af4c74623be823fd061765cede354c6a9722fd10) )
@@ -4152,6 +4237,7 @@ IC11    64M F590    D280
 ROM_START( vtennis )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x6000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22927.ic22", 0x0000000, 0x0400000,  CRC(89781723) SHA1(cf644aa66abcec6964d77485a0292f11ba80dd0d) )
@@ -4179,6 +4265,7 @@ EXP: ROYAL RUMBLE
 ROM_START( wwfroyal )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x8800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-22261.ic22", 0x0000000, 0x0400000, CRC(60e5a6cd) SHA1(d74ee8318e40190231b94030176223da8305c053) )
@@ -4240,6 +4327,7 @@ Protection notes:
 ROM_START( zombrvn )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xa000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-21707.ic22", 0x0000000, 0x0200000,  CRC(4daa11e9) SHA1(2dc219a5e0d0b41cce6d07631baff0495c479e13) )
@@ -4270,6 +4358,7 @@ ROM_END
 ROM_START( gunsur2 )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "bhf1vere.2f",  0x0000000, 0x0800000, CRC(121ea283) SHA1(e4bf2b90fa3d42727b8393ffa2c5a8863914a630) )
@@ -4292,6 +4381,7 @@ ROM_END
 ROM_START( vtenis2c )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	NAOMI_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr22327a.bin", 0x000000, 0x400000, CRC(e949004c) SHA1(54db84c3e1db30b233612f68dcd094b597deffd0) )
@@ -4459,14 +4549,15 @@ GAME( 1998, naomi,    0,        naomi,    naomi,    naomi, ROT0, "Sega",        
 /* 0010C */ GAME( 1999, vs2_2k,   naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Virtua Striker 2 Ver. 2000 (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0011C */ GAME( 1999, toyfight, naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Toy Fighter", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0015C */ GAME( 1999, vtennis,  naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Power Smash (JPN) / Virtua Tennis (USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+/* ????? */ GAME( 1999, sgtetris, naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Sega Tetris", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0016C */ GAME( 1999, derbyoc,  naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Derby Owners Club (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0017C */ GAME( 1999, otrigger, naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "OutTrigger (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0019C */ GAME( 1999, dybb99,   naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Dynamite Baseball '99 (JPN) / World Series '99 (USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 00??C */ GAME( 1999, smlg99,   naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Super Major League '99", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0020C */ GAME( 1999, samba,    naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Samba De Amigo (JPN)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0083C */ GAME( 1999, derbyoc2, naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Derby Owners Club II (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
-/* ????? */ GAME( 1999, crzytaxi, naomi,    naomi,    naomi,    naomi, ROT0, "Sega", 		"Crazy Taxi (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
-/* ????? */ GAME( 1999, jambo,    naomi,    naomi,    naomi,    naomi, ROT0, "Sega", 		"Jambo! Safari (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+/* ????? */ GAME( 1999, crzytaxi, naomi,    naomi,    naomi,    naomi, ROT0, "Sega",		"Crazy Taxi (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+/* ????? */ GAME( 1999, jambo,    naomi,    naomi,    naomi,    naomi, ROT0, "Sega",		"Jambo! Safari (JPN, USA, EXP, KOR, AUS)", GAME_UNEMULATED_PROTECTION|GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0021C */ GAME( 2000, virnba,   naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "Virtua NBA (JPN, USA, EXP, KOR, AUS)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0021C */ GAME( 2000, virnbao,  virnba,   naomi,    naomi,    naomi, ROT0, "Sega",            "Virtua NBA (JPN, USA, EXP, KOR, AUS) (original)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 /* 0026C */ GAME( 2000, totd,     naomi,    naomi,    naomi,    naomi, ROT0, "Sega",            "The Typing of the Dead (JPN, USA, EXP, KOR, AUS)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
@@ -4512,6 +4603,7 @@ GAME( 1999, f355twin, f355bios, naomi,    naomi,    0,     ROT0, "Sega",        
 GAME( 1999, f355twn2, f355bios, naomi,    naomi,    0,     ROT0, "Sega",            "Ferrari F355 Challenge 2 (Twin)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 1999, airlbios, 0,	naomi,    naomi,    0,     ROT0, "Sega",            "Naomi Airline Pilots Deluxe Bios", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT )
 GAME( 1999, alpiltdx, airlbios, naomi,    naomi,    0,     ROT0, "Sega",            "Airline Pilots Deluxe", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 1999, alpilota, alpiltdx, naomi,    naomi,    0,     ROT0, "Sega",            "Airline Pilots (Rev. A)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 
 /**********************************************
  *
@@ -4521,6 +4613,7 @@ GAME( 1999, alpiltdx, airlbios, naomi,    naomi,    0,     ROT0, "Sega",        
 
 ROM_START( gundmgd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4536,6 +4629,7 @@ ROM_END
 
 ROM_START( sfz3ugd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4550,6 +4644,7 @@ ROM_END
 
 ROM_START( cvsgd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4565,6 +4660,7 @@ ROM_END
 
 ROM_START( gundmxgd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4580,6 +4676,7 @@ ROM_END
 
 ROM_START( cvs2gd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4594,6 +4691,7 @@ ROM_END
 
 ROM_START( ikaruga )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4609,6 +4707,7 @@ ROM_END
 
 ROM_START( ggxx )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4624,6 +4723,7 @@ ROM_END
 
 ROM_START( moeru )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4639,6 +4739,7 @@ ROM_END
 
 ROM_START( chocomk )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4654,6 +4755,7 @@ ROM_END
 
 ROM_START( quizqgd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4669,6 +4771,7 @@ ROM_END
 
 ROM_START( ggxxrl )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4684,6 +4787,7 @@ ROM_END
 
 ROM_START( tetkiwam )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4699,6 +4803,7 @@ ROM_END
 
 ROM_START( shikgam2 )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4714,6 +4819,7 @@ ROM_END
 
 ROM_START( usagui )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4729,6 +4835,7 @@ ROM_END
 
 ROM_START( bdrdown )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4744,6 +4851,7 @@ ROM_END
 
 ROM_START( psyvar2 )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4759,6 +4867,7 @@ ROM_END
 
 ROM_START( cfield )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4775,6 +4884,7 @@ ROM_END
 
 ROM_START( trizeal )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4791,6 +4901,7 @@ ROM_END
 
 ROM_START( meltybld )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4806,6 +4917,7 @@ ROM_END
 
 ROM_START( senko )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4820,6 +4932,7 @@ ROM_END
 
 ROM_START( senkoo )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4835,6 +4948,7 @@ ROM_END
 
 ROM_START( ss2005 )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4850,6 +4964,7 @@ ROM_END
 
 ROM_START( radirgy )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4865,6 +4980,7 @@ ROM_END
 
 ROM_START( ggxxsla )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4880,6 +4996,7 @@ ROM_END
 
 ROM_START( kurucham )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4895,6 +5012,7 @@ ROM_END
 
 ROM_START( undefeat )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4910,6 +5028,7 @@ ROM_END
 
 ROM_START( meltyb )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4924,6 +5043,7 @@ ROM_END
 
 ROM_START( meltyba )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4939,6 +5059,7 @@ ROM_END
 
 ROM_START( trgheart )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4954,6 +5075,7 @@ ROM_END
 
 ROM_START( jingystm )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4970,6 +5092,7 @@ ROM_END
 
 ROM_START( karous )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -4985,6 +5108,7 @@ ROM_END
 
 ROM_START( takoron )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5023,6 +5147,7 @@ PIC
 
 ROM_START( confmiss )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5036,6 +5161,7 @@ ROM_END
 
 ROM_START( sprtjam )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5051,6 +5177,7 @@ ROM_END
 
 ROM_START( slashout )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5066,6 +5193,7 @@ ROM_END
 
 ROM_START( spkrbtl )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5102,6 +5230,7 @@ PIC
 
 ROM_START( monkeyba )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5143,6 +5272,7 @@ Notes:
 
 ROM_START( dygolf )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5161,6 +5291,7 @@ ROM_END
 
 ROM_START( wsbbgd )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5176,6 +5307,7 @@ ROM_END
 
 ROM_START( vtennisg )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5190,6 +5322,7 @@ ROM_END
 
 ROM_START( keyboard )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5203,6 +5336,7 @@ ROM_END
 
 ROM_START( vathlete )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5241,6 +5375,7 @@ PIC
 
 ROM_START( vtennis2 )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5254,6 +5389,7 @@ ROM_END
 
 ROM_START( lupinsho )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5267,6 +5403,7 @@ ROM_END
 
 ROM_START( luptype )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5303,6 +5440,7 @@ PIC
 */
 ROM_START( mok )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5316,6 +5454,7 @@ ROM_END
 
 ROM_START( ngdup23a )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5330,6 +5469,7 @@ ROM_END
 
 ROM_START( ngdup23c )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5345,6 +5485,7 @@ ROM_END
 
 ROM_START( puyofev )
 	NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5408,14 +5549,14 @@ GAME( 2005, ggxxsla,   naomigd,  naomigd,  naomi,    ggxxsla, ROT0,   "Arc Syste
 GAME( 2006, kurucham,  naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Able",                   "Kurukuru Chameleon (GDL-0034)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2005, undefeat,  naomigd,  naomigd,  naomi,    naomi,   ROT270, "G-Rev",                  "Under Defeat (GDL-0035)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 //GDL-0036 Trigger Heart Exelica
-//GAME( 2005, trgheart,  naomigd,  naomigd,  naomi,    naomi,   ROT270, "Warashi",                "Trigger Heart Exelica (Rev A) (GDL-0036A)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
-//GAME( 2005, jingystm,  naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Atrativa Japan",         "Jingi Storm - The Arcade (GDL-0037)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2005, trgheart,  naomigd,  naomigd,  naomi,    naomi,   ROT270, "Warashi",                "Trigger Heart Exelica (Rev A) (GDL-0036A)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2005, jingystm,  naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Atrativa Japan",         "Jingi Storm - The Arcade (GDL-0037)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 //GDL-0038 Senko No Ronde Special
-//GAME( 2006, meltyb,    naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Ecole Software",         "Melty Blood Act Cadenza Ver B (GDL-0039)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
-//GAME( 2006, meltyba,   meltyb,   naomigd,  naomi,    naomi,   ROT0,   "Ecole Software",         "Melty Blood Act Cadenza Ver B (Rev A) (GDL-0039A)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
-//GAME( 2006, karous,    naomigd,  naomigd,  naomi,    naomi,   ROT270, "Milestone",              "Karous (GDL-0040)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2006, meltyb,    naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Ecole Software",         "Melty Blood Act Cadenza Ver B (GDL-0039)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2006, meltyba,   meltyb,   naomigd,  naomi,    naomi,   ROT0,   "Ecole Software",         "Melty Blood Act Cadenza Ver B (Rev A) (GDL-0039A)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2006, karous,    naomigd,  naomigd,  naomi,    naomi,   ROT270, "Milestone",              "Karous (GDL-0040)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 //GDL-0041 Guilty Gear XX Accent Core
-//GAME( 2006, takoron,   naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Compile",                "Noukone Puzzle Takoron (GDL-0042)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2006, takoron,   naomigd,  naomigd,  naomi,    naomi,   ROT0,   "Compile",                "Noukone Puzzle Takoron (GDL-0042)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 
 
 /* GDS-xxxx (Sega first party games) */
@@ -5471,6 +5612,7 @@ GAME( 2003, puyofev,   naomigd,  naomigd,  naomi,    naomi,  ROT0, "Sega",      
 
 ROM_START( vstrik3c )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD("epr-23663.ic22", 0x0000000, 0x0400000, CRC(7007fec7) SHA1(523168f0b218d0bd5c815d65bf0caba2c8468c9d) )
@@ -5500,6 +5642,7 @@ ROM_END
 
 ROM_START( wldrider )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xa800000, "user1", ROMREGION_ERASEFF)
 	ROM_LOAD( "epr-23622.ic22", 0x0000000, 0x0400000, CRC(8acafa5b) SHA1(c92bcd40bad6ba8efd1edbfd7e439fb2b3c67fb0) )
@@ -5517,6 +5660,7 @@ ROM_END
 
 ROM_START( vf4cart )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr-23785.ic22", 0x0000000, 0x0400000, CRC(9bd98d4b) SHA1(3b0622625317cd6b2736c5b4a23484fb8bf39e4b) )
@@ -5546,6 +5690,7 @@ ROM_END
 */
 ROM_START( vf4evoct )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb000000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr-23934.ic11",  0x0000000, 0x400000, CRC(656a7d84) SHA1(e407ddc923b399de99cb06a8831ef8fb328cfe64) )
@@ -5573,6 +5718,7 @@ ROM_END
 
 ROM_START( clubkrte )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0xb800000, "user1", ROMREGION_ERASEFF)
         ROM_LOAD( "epr-23704.ic22", 0x0000000, 0x0400000, CRC(ff700a0d) SHA1(e2db0d2bd7dc88b3a487077e8ce56eb6cfd9b02d) )
@@ -5597,6 +5743,7 @@ ROM_END
 
 ROM_START( vstrik3 )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5611,6 +5758,7 @@ ROM_END
 
 ROM_START( vf4 )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5625,6 +5773,7 @@ ROM_END
 
 ROM_START( vf4b )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5639,6 +5788,7 @@ ROM_END
 
 ROM_START( vf4c )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5654,6 +5804,7 @@ ROM_END
 
 ROM_START( vf4evo )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5668,6 +5819,7 @@ ROM_END
 
 ROM_START( vf4evoa )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5682,6 +5834,7 @@ ROM_END
 
 ROM_START( initdv2j )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5694,6 +5847,7 @@ ROM_END
 
 ROM_START( vf4tuned ) // are there multiple files on this GD-ROM? it only compresses to 500 meg when the rom file is closer to half tha
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5708,6 +5862,7 @@ ROM_END
 
 ROM_START( vf4tunedd )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5723,6 +5878,7 @@ ROM_END
 
 ROM_START( vf4tuneda )
 	NAOMI2_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5763,6 +5919,7 @@ PIC
 ROM_START( beachspi )
 	NAOMI2_BIOS
 //  NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5778,6 +5935,7 @@ ROM_END
 ROM_START( initd )
 	NAOMI2_BIOS
 //  NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5793,6 +5951,7 @@ ROM_END
 ROM_START( initdexp )
 	NAOMI2_BIOS
 //  NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5806,6 +5965,7 @@ ROM_END
 ROM_START( initdv3j )
 	NAOMI2_BIOS
 //  NAOMIGD_BIOS
+	NAOMI_DEFAULT_EEPROM
 
 	ROM_REGION( 0x10000000, "user1", ROMREGION_ERASE) // allocate max size in init instead?
 
@@ -5969,7 +6129,7 @@ static DRIVER_INIT( atomiswave )
 #define AW_DRIVER_INIT(DRIVER)	\
 static DRIVER_INIT(DRIVER)	\
 {	\
-  	int i;	\
+	int i;	\
 	UINT16 *src = (UINT16 *)(memory_region(machine, "user1"));	\
 	int rom_size = memory_region_length(machine, "user1");	\
 	for(i=0; i<rom_size/2; i++)	\
@@ -6132,6 +6292,14 @@ ROM_START( kofnw )
 	ROM_LOAD( "ax2206m01.ic16", 0x6000000, 0x1000000, CRC(e53eb965) SHA1(f50cd53a5859f081d8a278d24a519c9d9b49ab96) )
 ROM_END
 
+ROM_START( kofnwj )
+	ROM_REGION( 0x200000, "maincpu", 0)
+	AW_BIOS
+
+	ROM_REGION( 0x8000000, "user1", ROMREGION_ERASE)
+        ROM_LOAD( "ax2201p01.ic18", 0x0000000, 0x0800000, CRC(ecc4a5c7) SHA1(97c2ef2be95b39bc978474a8243740df50255a8b) )
+ROM_END
+
 ROM_START( kov7sprt )
 	ROM_REGION( 0x200000, "maincpu", 0)
 	AW_BIOS
@@ -6203,10 +6371,11 @@ GAME( 2003, ggisuka,  awbios,   aw,    aw,    ggisuka,  ROT0, "Sammy / Arc Syste
 GAME( 2004, rumblef,  awbios,   aw,    aw,    rumblef,  ROT0, "Sammy / Dimps",                   "The Rumble Fish", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
 GAME( 2004, rangrmsn, awbios,   aw,    aw,    rangrmsn, ROT0, "Sammy",                           "Ranger Mission", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2004, salmankt, awbios,   aw,    aw,    salmankt, ROT0, "Sammy",                           "Salary Man Kintarou", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
-GAME( 2004, kov7sprt, awbios,   aw,    aw,    kov7sprt, ROT0, "Sammy / IGS", 			 "Knights of Valour - The Seven Spirits", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
-GAME( 2005, vfurlong, awbios,   aw,    aw,    vfurlong, ROT0, "Sammy", 			         "Net Select Keiba Victory Furlong", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2004, kov7sprt, awbios,   aw,    aw,    kov7sprt, ROT0, "Sammy / IGS",			 "Knights of Valour - The Seven Spirits", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
+GAME( 2005, vfurlong, awbios,   aw,    aw,    vfurlong, ROT0, "Sammy",			         "Net Select Keiba Victory Furlong", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2005, ngbc,     awbios,   aw,    aw,    ngbc,     ROT0, "Sammy / SNK Playmore",            "Neo-Geo Battle Coliseum", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2005, fotns,    awbios,   aw,    aw,    fotns,    ROT0, "Sega / Arc System Works",         "Fist Of The North Star", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2005, kofnw,    awbios,   aw,    aw,    kofnw,    ROT0, "Sammy / SNK Playmore",            "The King of Fighters Neowave", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 2005, kofnwj,   awbios,   aw,    aw,    kofnw,    ROT0, "Sammy / SNK Playmore",            "The King of Fighters Neowave (Japan)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2005, xtrmhunt, awbios,   aw,    aw,    xtrmhunt, ROT0, "Sammy",                           "Extreme Hunting", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
 GAME( 2006, xtrmhnt2, awbios,   aw,    aw,    xtrmhnt2, ROT0, "Sega",                            "Extreme Hunting 2", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )

@@ -13,17 +13,17 @@
 #include "video/tia.h"
 
 
-#define MASTER_CLOCK	3579575
+#define MASTER_CLOCK	XTAL_3_579545MHz
 
 
 static WRITE8_DEVICE_HANDLER( tourtabl_led_w )
 {
-	set_led_status(0, data & 0x40); /* start 1 */
-	set_led_status(1, data & 0x20); /* start 2 */
-	set_led_status(2, data & 0x10); /* start 4 */
-	set_led_status(3, data & 0x80); /* select game */
+	set_led_status(device->machine, 0, data & 0x40); /* start 1 */
+	set_led_status(device->machine, 1, data & 0x20); /* start 2 */
+	set_led_status(device->machine, 2, data & 0x10); /* start 4 */
+	set_led_status(device->machine, 3, data & 0x80); /* select game */
 
-	coin_lockout_global_w(!(data & 0x80));
+	coin_lockout_global_w(device->machine, !(data & 0x80));
 }
 
 

@@ -20,9 +20,8 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "realbrk.h"
+#include "includes/realbrk.h"
 
-//UINT16 *realbrk_vram_0, *realbrk_vram_1, *realbrk_vram_2, *realbrk_vregs;
 UINT16 *realbrk_vram_0, *realbrk_vram_1, *realbrk_vram_2, *realbrk_vregs, *realbrk_vram_0ras, *realbrk_vram_1ras;
 static bitmap_t *tmpbitmap0 = NULL;
 static bitmap_t *tmpbitmap1 = NULL;
@@ -33,8 +32,8 @@ WRITE16_HANDLER( realbrk_flipscreen_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,	data & 0x0001);
-		coin_counter_w(1,	data & 0x0004);
+		coin_counter_w(space->machine, 0,	data & 0x0001);
+		coin_counter_w(space->machine, 1,	data & 0x0004);
 
 		flip_screen_set(space->machine, 	data & 0x0080);
 	}
@@ -57,7 +56,7 @@ WRITE16_HANDLER( dai2kaku_flipscreen_w )
 
 ***************************************************************************/
 
-static tilemap	*tilemap_0,*tilemap_1,	// Backgrounds
+static tilemap_t	*tilemap_0,*tilemap_1,	// Backgrounds
 						*tilemap_2;				// Text
 
 
@@ -214,6 +213,7 @@ VIDEO_START(realbrk)
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 
 	int max_x = video_screen_get_width(machine->primary_screen);
@@ -379,6 +379,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 /* layer : 0== bghigh<spr    1== bglow<spr<bghigh     2==spr<bglow    3==boarder */
 static void dai2kaku_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect, int layer)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 
 	int max_x = video_screen_get_width(machine->primary_screen);
@@ -503,12 +504,14 @@ VIDEO_UPDATE(realbrk)
 
 #ifdef MAME_DEBUG
 if ( input_code_pressed(screen->machine, KEYCODE_Z) )
-{	int msk = 0;
+{
+	int msk = 0;
 	if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
 	if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
 	if (input_code_pressed(screen->machine, KEYCODE_E))	msk |= 4;
 	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 8;
-	if (msk != 0) layers_ctrl &= msk;	}
+	if (msk != 0) layers_ctrl &= msk;
+}
 #endif
 
 	if (disable_video)
@@ -571,12 +574,14 @@ VIDEO_UPDATE(dai2kaku)
 
 #ifdef MAME_DEBUG
 if ( input_code_pressed(screen->machine, KEYCODE_Z) )
-{	int msk = 0;
+{
+	int msk = 0;
 	if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
 	if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
 	if (input_code_pressed(screen->machine, KEYCODE_E))	msk |= 4;
 	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 8;
-	if (msk != 0) layers_ctrl &= msk;	}
+	if (msk != 0) layers_ctrl &= msk;
+}
 #endif
 
 	if (disable_video)

@@ -107,7 +107,7 @@ static WRITE8_HANDLER( igs_irqack_w )
 
 
 static UINT8   *fg_tile_ram, *fg_color_ram, *bg_tile_ram;
-static tilemap *fg_tilemap, *bg_tilemap;
+static tilemap_t *fg_tilemap, *bg_tilemap;
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
@@ -183,12 +183,12 @@ static void show_out(void)
 
 static WRITE8_HANDLER( igs_nmi_and_coins_w )
 {
-	coin_counter_w(0,		data & 0x01);	// coin_a
-	coin_counter_w(1,		data & 0x04);	// coin_c
-	coin_counter_w(2,		data & 0x08);	// key in
-	coin_counter_w(3,		data & 0x10);	// coin out mech
+	coin_counter_w(space->machine, 0,		data & 0x01);	// coin_a
+	coin_counter_w(space->machine, 1,		data & 0x04);	// coin_c
+	coin_counter_w(space->machine, 2,		data & 0x08);	// key in
+	coin_counter_w(space->machine, 3,		data & 0x10);	// coin out mech
 
-	set_led_status(6,		data & 0x20);	// led for coin out / hopper active
+	set_led_status(space->machine, 6,		data & 0x20);	// led for coin out / hopper active
 
 	nmi_enable = data & 0x80;     // nmi enable?
 #ifdef VERBOSE
@@ -299,8 +299,8 @@ static ADDRESS_MAP_START( igspoker_prg_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( igspoker_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1")			/* DSW1 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("DSW2")			/* DSW2 */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("DSW3")			/* DSW3 */
@@ -312,7 +312,7 @@ static ADDRESS_MAP_START( igspoker_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x5090, 0x5090) AM_WRITE(custom_io_w)
 	AM_RANGE(0x5091, 0x5091) AM_READ(custom_io_r) AM_WRITE( igs_lamps_w )			/* Keyboard */
 	AM_RANGE(0x50a0, 0x50a0) AM_READ_PORT("BUTTONS2")			/* Not connected */
-	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x50c0, 0x50c0) AM_READ(igs_irqack_r) AM_WRITE(igs_irqack_w)
 	AM_RANGE(0x6800, 0x6fff) AM_RAM_WRITE( bg_tile_w )  AM_BASE( &bg_tile_ram )
 	AM_RANGE(0x7000, 0x77ff) AM_RAM_WRITE( fg_tile_w )  AM_BASE( &fg_tile_ram )
@@ -907,8 +907,8 @@ INPUT_PORTS_END
 
 
 static ADDRESS_MAP_START( number10_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1")			/* DSW1 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("DSW2")			/* DSW2 */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("DSW3")			/* DSW3 */
@@ -930,8 +930,8 @@ static ADDRESS_MAP_START( number10_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( cpokerpk_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1")			/* DSW1 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("DSW2")			/* DSW2 */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("DSW3")			/* DSW3 */
@@ -1582,7 +1582,7 @@ static MACHINE_DRIVER_START( igspoker )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 MACHINE_DRIVER_END

@@ -820,7 +820,7 @@ static INTERRUPT_GEN( nmi_interrupt )
 
 static ADDRESS_MAP_START( lucky74_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* NVRAM */
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	/* NVRAM */
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(lucky74_fg_videoram_w) AM_BASE(&lucky74_fg_videoram)				/* VRAM1-1 */
 	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(lucky74_fg_colorram_w) AM_BASE(&lucky74_fg_colorram)				/* VRAM1-2 */
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lucky74_bg_videoram_w) AM_BASE(&lucky74_bg_videoram)				/* VRAM2-1 */
@@ -831,9 +831,9 @@ static ADDRESS_MAP_START( lucky74_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf100, 0xf100) AM_DEVWRITE("sn1", sn76496_w)							/* SN76489 #1 */
 	AM_RANGE(0xf200, 0xf203) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* Input Ports 2 & 4 */
 	AM_RANGE(0xf300, 0xf300) AM_DEVWRITE("sn2", sn76496_w)							/* SN76489 #2 */
-	AM_RANGE(0xf400, 0xf400) AM_DEVWRITE("ay", ay8910_address_w)						/* YM2149 control */
+	AM_RANGE(0xf400, 0xf400) AM_DEVWRITE("aysnd", ay8910_address_w)						/* YM2149 control */
 	AM_RANGE(0xf500, 0xf500) AM_DEVWRITE("sn3", sn76496_w)							/* SN76489 #3 */
-	AM_RANGE(0xf600, 0xf600) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)			/* YM2149 (Input Port 1) */
+	AM_RANGE(0xf600, 0xf600) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)			/* YM2149 (Input Port 1) */
 	AM_RANGE(0xf700, 0xf701) AM_READWRITE(usart_8251_r, usart_8251_w)						/* USART 8251 port */
 	AM_RANGE(0xf800, 0xf803) AM_READWRITE(copro_sm7831_r, copro_sm7831_w)					/* SM7831 Co-Processor */
 ADDRESS_MAP_END
@@ -1284,7 +1284,7 @@ static MACHINE_DRIVER_START( lucky74 )
 	MDRV_SOUND_ADD("sn3", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ay", AY8910, C_06B49P_CLKOUT_04)	/* 1.5 MHz. */
+	MDRV_SOUND_ADD("aysnd", AY8910, C_06B49P_CLKOUT_04)	/* 1.5 MHz. */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.00)			/* not routed to audio hardware */
 

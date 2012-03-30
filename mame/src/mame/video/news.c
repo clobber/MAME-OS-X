@@ -1,12 +1,12 @@
 #include "driver.h"
-#include "news.h"
+#include "includes/news.h"
 
 
 UINT8 *news_fgram;
 UINT8 *news_bgram;
 
 static int bgpic;
-static tilemap *fg_tilemap, *bg_tilemap;
+static tilemap_t *fg_tilemap, *bg_tilemap;
 
 
 

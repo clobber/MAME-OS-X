@@ -53,7 +53,22 @@ Dumped by Chackn
 #include "driver.h"
 #include "cpu/i8085/i8085.h"
 
-static tilemap *m14_tilemap;
+
+typedef struct _m14_state m14_state;
+struct _m14_state
+{
+	/* video-related */
+	tilemap_t  *m14_tilemap;
+	UINT8 *  video_ram;
+	UINT8 *  color_ram;
+
+	/* input-related */
+	UINT8 hop_mux;
+
+	/* devices */
+	const device_config *maincpu;
+};
+
 
 /*************************************
  *
@@ -81,8 +96,10 @@ static PALETTE_INIT( m14 )
 
 static TILE_GET_INFO( m14_get_tile_info )
 {
-	int code = videoram[tile_index];
-	int color = colorram[tile_index] & 0xf;
+	m14_state *state = (m14_state *)machine->driver_data;
+
+	int code = state->video_ram[tile_index];
+	int color = state->color_ram[tile_index] & 0x0f;
 
 	/* colorram & 0xf0 used but unknown purpose*/
 
@@ -95,26 +112,34 @@ static TILE_GET_INFO( m14_get_tile_info )
 
 static VIDEO_START( m14 )
 {
-	m14_tilemap = tilemap_create(machine, m14_get_tile_info,tilemap_scan_rows,8,8,32,32);
+	m14_state *state = (m14_state *)machine->driver_data;
+
+	state->m14_tilemap = tilemap_create(machine, m14_get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 static VIDEO_UPDATE( m14 )
 {
-	tilemap_draw(bitmap,cliprect,m14_tilemap,0,0);
+	m14_state *state = (m14_state *)screen->machine->driver_data;
+
+	tilemap_draw(bitmap, cliprect, state->m14_tilemap, 0, 0);
 	return 0;
 }
 
 
 static WRITE8_HANDLER( m14_vram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(m14_tilemap,offset);
+	m14_state *state = (m14_state *)space->machine->driver_data;
+
+	state->video_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m14_tilemap, offset);
 }
 
 static WRITE8_HANDLER( m14_cram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(m14_tilemap,offset);
+	m14_state *state = (m14_state *)space->machine->driver_data;
+
+	state->color_ram[offset] = data;
+	tilemap_mark_tile_dirty(state->m14_tilemap, offset);
 }
 
 /*************************************
@@ -122,8 +147,6 @@ static WRITE8_HANDLER( m14_cram_w )
  *  I/O
  *
  *************************************/
-
-static UINT8 hop_mux;
 
 static READ8_HANDLER( m14_rng_r )
 {
@@ -134,8 +157,15 @@ static READ8_HANDLER( m14_rng_r )
 /* Here routes the hopper & the inputs */
 static READ8_HANDLER( input_buttons_r )
 {
-	if(hop_mux) { hop_mux = 0; return 0; } //0x43 status bits
-	else        { return input_port_read(space->machine, "IN0"); }
+	m14_state *state = (m14_state *)space->machine->driver_data;
+
+	if (state->hop_mux)
+	{
+		state->hop_mux = 0;
+		return 0; //0x43 status bits
+	}
+	else
+		return input_port_read(space->machine, "IN0");
 }
 
 #if 0
@@ -151,9 +181,11 @@ static WRITE8_HANDLER( test_w )
 
 static WRITE8_HANDLER( hopper_w )
 {
+	m14_state *state = (m14_state *)space->machine->driver_data;
+
 	/* ---- x--- coin out */
 	/* ---- --x- hopper/input mux? */
-	hop_mux = data & 2;
+	state->hop_mux = data & 2;
 	//popmessage("%02x",data);
 }
 
@@ -166,8 +198,8 @@ static WRITE8_HANDLER( hopper_w )
 static ADDRESS_MAP_START( m14_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(m14_vram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(m14_cram_w) AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(m14_vram_w) AM_BASE_MEMBER(m14_state, video_ram)
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(m14_cram_w) AM_BASE_MEMBER(m14_state, color_ram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( m14_io_map, ADDRESS_SPACE_IO, 8 )
@@ -187,16 +219,18 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( left_coin_inserted )
 {
+	m14_state *state = (m14_state *)field->port->machine->driver_data;
 	/* left coin insertion causes a rst6.5 (vector 0x34) */
-	if(newval)
-		cputag_set_input_line(field->port->machine, "maincpu", I8085_RST65_LINE, HOLD_LINE);
+	if (newval)
+		cpu_set_input_line(state->maincpu, I8085_RST65_LINE, HOLD_LINE);
 }
 
 static INPUT_CHANGED( right_coin_inserted )
 {
+	m14_state *state = (m14_state *)field->port->machine->driver_data;
 	/* right coin insertion causes a rst5.5 (vector 0x2c) */
-	if(newval)
-		cputag_set_input_line(field->port->machine, "maincpu", I8085_RST55_LINE, HOLD_LINE);
+	if (newval)
+		cpu_set_input_line(state->maincpu, I8085_RST55_LINE, HOLD_LINE);
 }
 
 static INPUT_PORTS_START( m14 )
@@ -275,13 +309,36 @@ static INTERRUPT_GEN( m14_irq )
 	cpu_set_input_line(device, I8085_RST75_LINE, CLEAR_LINE);
 }
 
+static MACHINE_START( m14 )
+{
+	m14_state *state = (m14_state *)machine->driver_data;
+
+	state->maincpu = devtag_get_device(machine, "maincpu");
+
+	state_save_register_global(machine, state->hop_mux);
+}
+
+static MACHINE_RESET( m14 )
+{
+	m14_state *state = (m14_state *)machine->driver_data;
+
+	state->hop_mux = 0;
+}
+
+
 static MACHINE_DRIVER_START( m14 )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(m14_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",8085A,6000000/2) //guess: 6 Mhz internally divided by 2
 	MDRV_CPU_PROGRAM_MAP(m14_map)
 	MDRV_CPU_IO_MAP(m14_io_map)
 	MDRV_CPU_VBLANK_INT("screen",m14_irq)
+
+	MDRV_MACHINE_START(m14)
+	MDRV_MACHINE_RESET(m14)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -328,4 +385,4 @@ ROM_START( ptrmj )
 	ROM_LOAD( "mgpa10.bin",  0x0400, 0x0400, CRC(e1a4ebdc) SHA1(d9df42424ede17f0634d8d0a56c0374a33c55333) )
 ROM_END
 
-GAME( 1979, ptrmj,  0,       m14,  m14,  0, ROT0, "Irem", "PT Reach Mahjong (Japan)", GAME_NO_SOUND )
+GAME( 1979, ptrmj,  0,       m14,  m14,  0, ROT0, "Irem", "PT Reach Mahjong (Japan)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )

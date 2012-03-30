@@ -11,7 +11,7 @@
 #include "cpu/m6805/m6805.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/sn76496.h"
-#include "qix.h"
+#include "includes/qix.h"
 
 
 
@@ -266,7 +266,7 @@ WRITE_LINE_DEVICE_HANDLER( qix_vsync_changed )
 
 WRITE8_HANDLER( zookeep_bankswitch_w )
 {
-	memory_set_bank(space->machine, 1, (data >> 2) & 1);
+	memory_set_bank(space->machine, "bank1", (data >> 2) & 1);
 	/* not necessary, but technically correct */
 	qix_palettebank_w(space, offset, data);
 }
@@ -449,8 +449,8 @@ WRITE8_HANDLER( qix_68705_portB_w )
 	qix_state *state = (qix_state *)space->machine->driver_data;
 
 	state->_68705_port_out[1] = data;
-	coin_lockout_w(0, (~data >> 6) & 1);
-	coin_counter_w(0, (data >> 7) & 1);
+	coin_lockout_w(space->machine, 0, (~data >> 6) & 1);
+	coin_counter_w(space->machine, 0, (data >> 7) & 1);
 }
 
 
@@ -493,8 +493,8 @@ WRITE8_DEVICE_HANDLER( qix_pia_w )
 
 static WRITE8_DEVICE_HANDLER( qix_coinctl_w )
 {
-	coin_lockout_w(0, (~data >> 2) & 1);
-	coin_counter_w(0, (data >> 1) & 1);
+	coin_lockout_w(device->machine, 0, (~data >> 2) & 1);
+	coin_counter_w(device->machine, 0, (data >> 1) & 1);
 }
 
 

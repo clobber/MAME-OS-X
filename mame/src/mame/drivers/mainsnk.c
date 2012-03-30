@@ -109,7 +109,7 @@ cc_p14.j2 8192 0xedc6a1eb M5L2764k
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "snk.h"
+#include "includes/snk.h"
 #include "sound/ay8910.h"
 
 extern UINT8 *mainsnk_fgram;
@@ -160,7 +160,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc700, 0xc700) AM_WRITE(sound_command_w)
 	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(mainsnk_bgram_w) AM_BASE(&mainsnk_bgram)
 	AM_RANGE(0xdc00, 0xe7ff) AM_RAM
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mainsnk_fgram_w) AM_BASE(&mainsnk_fgram)	// + work RAM
 ADDRESS_MAP_END
 
@@ -400,8 +400,8 @@ static MACHINE_DRIVER_START( mainsnk )
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	MDRV_CPU_ADD("audiocpu", Z80,4000000)
- 	MDRV_CPU_PROGRAM_MAP(sound_map)
- 	MDRV_CPU_IO_MAP(sound_portmap)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_portmap)
 	MDRV_CPU_PERIODIC_INT(irq0_line_hold, 244)
 
 	/* video hardware */

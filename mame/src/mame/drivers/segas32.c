@@ -319,7 +319,7 @@ MIB.42
 #include "cpu/v60/v60.h"
 #include "cpu/nec/nec.h"
 #include "rendlay.h"
-#include "segas32.h"
+#include "includes/segas32.h"
 #include "machine/eeprom.h"
 #include "sound/2612intf.h"
 #include "sound/rf5c68.h"
@@ -371,12 +371,11 @@ UINT16 *system32_protram;
  *
  *************************************/
 
-static const UINT8 *system32_default_eeprom;
 static UINT8 *z80_shared_ram;
 
 /* V60 interrupt controller */
 static UINT8 v60_irq_control[0x10];
-static emu_timer *v60_irq_timer[2];
+static const device_config *v60_irq_timer[2];
 
 /* sound interrupt controller */
 static UINT8 sound_irq_control[4];
@@ -403,7 +402,6 @@ static void (*system32_prot_vblank)(const device_config *device);
  *************************************/
 
 static void signal_v60_irq(running_machine *machine, int data);
-static TIMER_CALLBACK( signal_v60_irq_callback );
 static void signal_sound_irq(running_machine *machine, int which);
 
 
@@ -420,8 +418,8 @@ static MACHINE_RESET( system32 )
 	memset(v60_irq_control, 0xff, sizeof(v60_irq_control));
 
 	/* allocate timers */
-	v60_irq_timer[0] = timer_alloc(machine, signal_v60_irq_callback, NULL);
-	v60_irq_timer[1] = timer_alloc(machine, signal_v60_irq_callback, NULL);
+	v60_irq_timer[0] = devtag_get_device(machine, "v60_irq0");
+	v60_irq_timer[1] = devtag_get_device(machine, "v60_irq1");
 
 	/* clear IRQ lines */
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
@@ -467,9 +465,9 @@ static void signal_v60_irq(running_machine *machine, int which)
 }
 
 
-static TIMER_CALLBACK( signal_v60_irq_callback )
+static TIMER_DEVICE_CALLBACK( signal_v60_irq_callback )
 {
-	signal_v60_irq(machine, param);
+	signal_v60_irq(timer->machine, param);
 }
 
 
@@ -509,7 +507,7 @@ static void int_control_w(const address_space *space, int offset, UINT8 data)
 			if (duration)
 			{
 				attotime period = attotime_make(0, attotime_to_attoseconds(ATTOTIME_IN_HZ(TIMER_0_CLOCK)) * duration);
-				timer_adjust_oneshot(v60_irq_timer[0], period, MAIN_IRQ_TIMER0);
+				timer_device_adjust_oneshot(v60_irq_timer[0], period, MAIN_IRQ_TIMER0);
 			}
 			break;
 
@@ -520,7 +518,7 @@ static void int_control_w(const address_space *space, int offset, UINT8 data)
 			if (duration)
 			{
 				attotime period = attotime_make(0, attotime_to_attoseconds(ATTOTIME_IN_HZ(TIMER_1_CLOCK)) * duration);
-				timer_adjust_oneshot(v60_irq_timer[1], period, MAIN_IRQ_TIMER1);
+				timer_device_adjust_oneshot(v60_irq_timer[1], period, MAIN_IRQ_TIMER1);
 			}
 			break;
 
@@ -691,14 +689,15 @@ static void common_io_chip_w(const address_space *space, int which, offs_t offse
 		case 0x06/2:
 			if (which == 0)
 			{
-				eeprom_write_bit(data & 0x80);
-				eeprom_set_cs_line((data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
-				eeprom_set_clock_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+				const device_config *device = devtag_get_device(space->machine, "eeprom");
+				eeprom_write_bit(device, data & 0x80);
+				eeprom_set_cs_line(device, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
+				eeprom_set_clock_line(device, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 			}
-/*            coin_lockout_w(1 + 2*which, data & 0x08);
-            coin_lockout_w(0 + 2*which, data & 0x04);*/
-			coin_counter_w(1 + 2*which, data & 0x02);
-			coin_counter_w(0 + 2*which, data & 0x01);
+/*            coin_lockout_w(space->machine, 1 + 2*which, data & 0x08);
+            coin_lockout_w(space->machine, 0 + 2*which, data & 0x04);*/
+			coin_counter_w(space->machine, 1 + 2*which, data & 0x02);
+			coin_counter_w(space->machine, 0 + 2*which, data & 0x01);
 			break;
 
 		/* tile banking */
@@ -708,9 +707,10 @@ static void common_io_chip_w(const address_space *space, int which, offs_t offse
 			else
 			{
 				/* multi-32 EEPROM access */
-				eeprom_write_bit(data & 0x80);
-				eeprom_set_cs_line((data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
-				eeprom_set_clock_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+				const device_config *device = devtag_get_device(space->machine, "eeprom");
+				eeprom_write_bit(device, data & 0x80);
+				eeprom_set_cs_line(device, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
+				eeprom_set_clock_line(device, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 			}
 			break;
 
@@ -1136,14 +1136,14 @@ static void ym3438_irq_handler(const device_config *device, int state)
 static WRITE8_HANDLER( sound_bank_lo_w )
 {
 	sound_bank = (sound_bank & ~0x3f) | (data & 0x3f);
-	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "soundcpu") + 0x100000 + 0x2000 * sound_bank);
+	memory_set_bankptr(space->machine, "bank1", memory_region(space->machine, "soundcpu") + 0x100000 + 0x2000 * sound_bank);
 }
 
 
 static WRITE8_HANDLER( sound_bank_hi_w )
 {
 	sound_bank = (sound_bank & 0x3f) | ((data & 0x04) << 4) | ((data & 0x03) << 7);
-	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "soundcpu") + 0x100000 + 0x2000 * sound_bank);
+	memory_set_bankptr(space->machine, "bank1", memory_region(space->machine, "soundcpu") + 0x100000 + 0x2000 * sound_bank);
 }
 
 
@@ -1175,29 +1175,6 @@ static READ8_HANDLER( sound_dummy_r )
 static WRITE8_HANDLER( sound_dummy_w )
 {
 	sound_dummy_value = data;
-}
-
-
-
-/*************************************
- *
- *  NVRAM handler
- *
- *************************************/
-
-static NVRAM_HANDLER( system32 )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C46);
-
-		if (file)
-			eeprom_load(file);
-		else if (system32_default_eeprom != NULL)
-			eeprom_set_data(system32_default_eeprom, 0x80);
-	}
 }
 
 
@@ -1258,9 +1235,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( system32_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM AM_REGION("soundcpu", 0x100000)
-	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x0ff0) AM_DEVWRITE("rf", rf5c68_w)
-	AM_RANGE(0xd000, 0xdfff) AM_DEVREADWRITE("rf", rf5c68_mem_r, rf5c68_mem_w)
+	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x0ff0) AM_DEVWRITE("rfsnd", rf5c68_w)
+	AM_RANGE(0xd000, 0xdfff) AM_DEVREADWRITE("rfsnd", rf5c68_mem_r, rf5c68_mem_w)
 	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE(&z80_shared_ram)
 ADDRESS_MAP_END
 
@@ -1279,7 +1256,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( multi32_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM AM_REGION("soundcpu", 0x100000)
-	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_DEVREADWRITE("sega", multipcm_r, multipcm_w)
 	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE(&z80_shared_ram)
 ADDRESS_MAP_END
@@ -1287,7 +1264,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( multi32_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x80, 0x83) AM_MIRROR(0x0c) AM_DEVREADWRITE("ym", ym3438_r, ym3438_w)
+	AM_RANGE(0x80, 0x83) AM_MIRROR(0x0c) AM_DEVREADWRITE("ymsnd", ym3438_r, ym3438_w)
 	AM_RANGE(0xa0, 0xaf) AM_WRITE(sound_bank_lo_w)
 	AM_RANGE(0xb0, 0xbf) AM_DEVWRITE("sega", multipcm_bank_w)
 	AM_RANGE(0xc0, 0xcf) AM_WRITE(sound_int_control_lo_w)
@@ -1358,7 +1335,7 @@ static INPUT_PORTS_START( system32_generic )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE3 )	/* sometimes mirrors SERVICE1 */
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE4 )	/* tends to also work as a test switch */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 
 	PORT_START("PORTG_A")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -1393,7 +1370,7 @@ static INPUT_PORTS_START( multi32_generic )
 
 	PORT_START("SERVICE34_B")
 	PORT_BIT( 0x7f, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 
 	PORT_START("PORTG_B")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -2188,7 +2165,11 @@ static MACHINE_DRIVER_START( system32 )
 	MDRV_CPU_IO_MAP(system32_sound_portmap)
 
 	MDRV_MACHINE_RESET(system32)
-	MDRV_NVRAM_HANDLER(system32)
+
+	MDRV_EEPROM_93C46_ADD("eeprom")
+
+	MDRV_TIMER_ADD("v60_irq0", signal_v60_irq_callback)
+	MDRV_TIMER_ADD("v60_irq1", signal_v60_irq_callback)
 
 	/* video hardware */
 	MDRV_GFXDECODE(segas32)
@@ -2215,7 +2196,7 @@ static MACHINE_DRIVER_START( system32 )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("rf", RF5C68, RFC_CLOCK/4)
+	MDRV_SOUND_ADD("rfsnd", RF5C68, RFC_CLOCK/4)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.55)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.55)
 MACHINE_DRIVER_END
@@ -2242,7 +2223,11 @@ static MACHINE_DRIVER_START( multi32 )
 	MDRV_CPU_IO_MAP(multi32_sound_portmap)
 
 	MDRV_MACHINE_RESET(system32)
-	MDRV_NVRAM_HANDLER(system32)
+
+	MDRV_EEPROM_93C46_ADD("eeprom")
+
+	MDRV_TIMER_ADD("v60_irq0", signal_v60_irq_callback)
+	MDRV_TIMER_ADD("v60_irq1", signal_v60_irq_callback)
 
 	/* video hardware */
 	MDRV_GFXDECODE(segas32)
@@ -2267,7 +2252,7 @@ static MACHINE_DRIVER_START( multi32 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3438, MASTER_CLOCK/4)
+	MDRV_SOUND_ADD("ymsnd", YM3438, MASTER_CLOCK/4)
 	MDRV_SOUND_CONFIG(ym3438_config)
 	MDRV_SOUND_ROUTE(1, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.40)
@@ -2420,6 +2405,9 @@ ROM_START( alien3 )
 	ROMX_LOAD( "15867.bin", 0x800002, 0x200000, CRC(8cf9cb11) SHA1(a77399fccee3f258a5716721edd69a33f94f8daf) , ROM_SKIP(6)|ROM_GROUPWORD )
 	ROMX_LOAD( "15869.bin", 0x800004, 0x200000, CRC(dd4b137f) SHA1(7316dce32d35bf468defae5e6ed86910a37a2457) , ROM_SKIP(6)|ROM_GROUPWORD )
 	ROMX_LOAD( "15871.bin", 0x800006, 0x200000, CRC(58eb10ae) SHA1(23f2a72dc7b2d7b5c8a979952f81608296805745) , ROM_SKIP(6)|ROM_GROUPWORD )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-alien3.bin", 0x0000, 0x0080, CRC(6e1d9df3) SHA1(2fd818bc393fb96e945fa37a63c8a3c4aff2f79f) )
 ROM_END
 
 ROM_START( alien3u )
@@ -2448,6 +2436,9 @@ ROM_START( alien3u )
 	ROMX_LOAD( "15867.bin", 0x800002, 0x200000, CRC(8cf9cb11) SHA1(a77399fccee3f258a5716721edd69a33f94f8daf) , ROM_SKIP(6)|ROM_GROUPWORD )
 	ROMX_LOAD( "15869.bin", 0x800004, 0x200000, CRC(dd4b137f) SHA1(7316dce32d35bf468defae5e6ed86910a37a2457) , ROM_SKIP(6)|ROM_GROUPWORD )
 	ROMX_LOAD( "15871.bin", 0x800006, 0x200000, CRC(58eb10ae) SHA1(23f2a72dc7b2d7b5c8a979952f81608296805745) , ROM_SKIP(6)|ROM_GROUPWORD )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-alien3.bin", 0x0000, 0x0080, CRC(6e1d9df3) SHA1(2fd818bc393fb96e945fa37a63c8a3c4aff2f79f) )
 ROM_END
 
 
@@ -3186,6 +3177,9 @@ ROM_START( radm )
 
 	ROM_REGION( 0x8000, "user2", 0 ) /* unused (cabinet motor?) */
 	ROM_LOAD( "epr-13686.bin", 0x00000, 0x8000, CRC(317a2857) SHA1(e0788dc7a7d214d9c4d26b24e44c1a0dc9ae477c) ) /* cabinet movement */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-radm.bin", 0x0000, 0x0080, CRC(b1737c06) SHA1(29448a6effeb53322a93158feb9a62bc6ad31f21) )
 ROM_END
 
 /**************************************************************************************************************************
@@ -3227,6 +3221,9 @@ ROM_START( radmu )
 
 	ROM_REGION( 0x8000, "user2", 0 ) /* unused (cabinet motor?) */
 	ROM_LOAD( "epr-13686.bin", 0x00000, 0x8000, CRC(317a2857) SHA1(e0788dc7a7d214d9c4d26b24e44c1a0dc9ae477c) ) /* cabinet movement */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-radm.bin", 0x0000, 0x0080, CRC(b1737c06) SHA1(29448a6effeb53322a93158feb9a62bc6ad31f21) )
 ROM_END
 
 
@@ -3266,6 +3263,9 @@ ROM_START( radr )
 
 	ROM_REGION( 0x8000, "user2", 0 ) /* unused */
 	ROM_LOAD( "epr14084.17", 0x00000, 0x8000, CRC(f14ed074) SHA1(e1bb23eac85e3236046527c5c7688f6f23d43aef) ) /* cabinet link */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-radr.bin", 0x0000, 0x0080, CRC(602032c6) SHA1(fecf14017e537fe870457d2a8d4f86ec6d442b90) )
 ROM_END
 
 /**************************************************************************************************************************
@@ -3302,6 +3302,9 @@ ROM_START( radru )
 
 	ROM_REGION( 0x8000, "user2", 0 ) /* unused */
 	ROM_LOAD( "epr14084.17", 0x00000, 0x8000, CRC(f14ed074) SHA1(e1bb23eac85e3236046527c5c7688f6f23d43aef) ) /* cabinet link */
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-radr.bin", 0x0000, 0x0080, CRC(602032c6) SHA1(fecf14017e537fe870457d2a8d4f86ec6d442b90) )
 ROM_END
 
 
@@ -3762,12 +3765,11 @@ ROM_END
  *
  *************************************/
 
-static void segas32_common_init(read16_space_func custom_r, write16_space_func custom_w, const UINT8 *default_eeprom)
+static void segas32_common_init(read16_space_func custom_r, write16_space_func custom_w)
 {
 	/* reset the custom handlers and other pointers */
 	custom_io_r[0] = custom_r;
 	custom_io_w[0] = custom_w;
-	system32_default_eeprom = default_eeprom;
 	system32_prot_vblank = NULL;
 }
 
@@ -3781,20 +3783,7 @@ static void segas32_common_init(read16_space_func custom_r, write16_space_func c
 
 static DRIVER_INIT( alien3 )
 {
-	/* alien 3 with the gun calibrated, it doesn't prompt you if its not */
-	static const UINT8 alien3_default_eeprom[128] =
-	{
-		0x33, 0x53, 0x41, 0x32, 0x00, 0x35, 0x00, 0x00, 0x8B, 0xE8, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00,
-		0x01, 0x01, 0x03, 0x00, 0x01, 0x08, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x8B, 0xE8, 0x00, 0x02, 0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0x03, 0x00,
-		0x01, 0x08, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-	};
-
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, alien3_default_eeprom);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 }
 
 static READ16_HANDLER( arescue_handshake_r )
@@ -3809,7 +3798,7 @@ static READ16_HANDLER( arescue_slavebusy_r )
 
 static DRIVER_INIT( arescue )
 {
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa00000, 0xa00007, 0, 0, arescue_dsp_r, arescue_dsp_w);
 
 	dual_pcb_comms = auto_alloc_array(machine, UINT16, 0x1000/2);
@@ -3823,7 +3812,7 @@ static DRIVER_INIT( arescue )
 
 static DRIVER_INIT( arabfgt )
 {
-	segas32_common_init(extra_custom_io_r, NULL, NULL);
+	segas32_common_init(extra_custom_io_r, NULL);
 
 	/* install protection handlers */
 	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa00100, 0xa0011f, 0, 0, arf_wakeup_protection_r);
@@ -3833,7 +3822,7 @@ static DRIVER_INIT( arabfgt )
 
 static DRIVER_INIT( brival )
 {
-	segas32_common_init(extra_custom_io_r, NULL, NULL);
+	segas32_common_init(extra_custom_io_r, NULL);
 
 	/* install protection handlers */
 	system32_protram = auto_alloc_array(machine, UINT16, 0x1000/2);
@@ -3844,7 +3833,7 @@ static DRIVER_INIT( brival )
 
 static DRIVER_INIT( darkedge )
 {
-	segas32_common_init(extra_custom_io_r, NULL, NULL);
+	segas32_common_init(extra_custom_io_r, NULL);
 
 	/* install protection handlers */
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa00000, 0xa7ffff, 0, 0, darkedge_protection_r, darkedge_protection_w);
@@ -3853,7 +3842,7 @@ static DRIVER_INIT( darkedge )
 
 static DRIVER_INIT( dbzvrvs )
 {
-	segas32_common_init(NULL, NULL, NULL);
+	segas32_common_init(NULL, NULL);
 
 	/* install protection handlers */
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa00000, 0xa7ffff, 0, 0, dbzvrvs_protection_r, dbzvrvs_protection_w);
@@ -3868,7 +3857,7 @@ static WRITE16_HANDLER( f1en_comms_echo_w )
 
 static DRIVER_INIT( f1en )
 {
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 
 	dual_pcb_comms = auto_alloc_array(machine, UINT16, 0x1000/2);
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x810000, 0x810fff, 0, 0, dual_pcb_comms_r, dual_pcb_comms_w);
@@ -3880,13 +3869,13 @@ static DRIVER_INIT( f1en )
 
 static DRIVER_INIT( f1lap )
 {
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 }
 
 
 static DRIVER_INIT( ga2 )
 {
-	segas32_common_init(extra_custom_io_r, NULL, NULL);
+	segas32_common_init(extra_custom_io_r, NULL);
 
 	decrypt_ga2_protrom(machine);
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa00000, 0xa00fff, 0, 0, ga2_dpram_r, ga2_dpram_w);
@@ -3895,13 +3884,13 @@ static DRIVER_INIT( ga2 )
 
 static DRIVER_INIT( harddunk )
 {
-	segas32_common_init(extra_custom_io_r, NULL, NULL);
+	segas32_common_init(extra_custom_io_r, NULL);
 }
 
 
 static DRIVER_INIT( holo )
 {
-	segas32_common_init(NULL, NULL, NULL);
+	segas32_common_init(NULL, NULL);
 }
 
 
@@ -3910,7 +3899,7 @@ static DRIVER_INIT( jpark )
 	/* Temp. Patch until we emulate the 'Drive Board', thanks to Malice */
 	UINT16 *pROM = (UINT16 *)memory_region(machine, "maincpu");
 
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 
 	pROM[0xC15A8/2] = 0xCD70;
 	pROM[0xC15AA/2] = 0xD8CD;
@@ -3919,65 +3908,39 @@ static DRIVER_INIT( jpark )
 
 static DRIVER_INIT( orunners )
 {
-	segas32_common_init(analog_custom_io_r, orunners_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, orunners_custom_io_w);
 }
 
 
 static DRIVER_INIT( radm )
 {
-	/* put radmobile in 'upright' mode since we don't emulate the motor */
-	static const UINT8 radm_default_eeprom[128] =
-	{
-		0x45, 0x53, 0x41, 0x47, 0x83, 0x01, 0x00, 0x01, 0x03, 0x93, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0xFF, 0x01, 0x01, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x60, 0x07, 0x07, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
-		0x45, 0x53, 0x41, 0x47, 0x83, 0x01, 0x00, 0x01, 0x03, 0x93, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0xFF, 0x01, 0x01, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x60, 0x07, 0x07, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00
-	};
-
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, radm_default_eeprom);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 }
 
 
 static DRIVER_INIT( radr )
 {
-	/* set rad rally to 1 coin 1 credit otherwise it'll boot into freeplay by default which isn't ideal ;-) */
-	static const UINT8 radr_default_eeprom[128] =
-	{
-		0x45, 0x53, 0x41, 0x47, 0x00, 0x03, 0x00, 0x01, 0x04, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0xFF, 0x01, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-		0x75, 0x07, 0x07, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00,
-		0x45, 0x53, 0x41, 0x47, 0x00, 0x03, 0x00, 0x01, 0x04, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x01, 0xFF, 0x01, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-		0x75, 0x07, 0x07, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00
-	};
-
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, radr_default_eeprom);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 }
 
 
 static DRIVER_INIT( scross )
 {
 	const device_config *multipcm = devtag_get_device(machine, "sega");
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 	memory_install_write8_device_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), multipcm, 0xb0, 0xbf, 0, 0, scross_bank_w);
 }
 
 
 static DRIVER_INIT( slipstrm )
 {
-	segas32_common_init(analog_custom_io_r, analog_custom_io_w, NULL);
+	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 }
 
 
 static DRIVER_INIT( sonic )
 {
-	segas32_common_init(sonic_custom_io_r, sonic_custom_io_w, NULL);
+	segas32_common_init(sonic_custom_io_r, sonic_custom_io_w);
 
 	/* install protection handlers */
 	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20E5C4, 0x20E5C5, 0, 0, sonic_level_load_protection);
@@ -3986,32 +3949,32 @@ static DRIVER_INIT( sonic )
 
 static DRIVER_INIT( sonicp )
 {
-	segas32_common_init(sonic_custom_io_r, sonic_custom_io_w, NULL);
+	segas32_common_init(sonic_custom_io_r, sonic_custom_io_w);
 }
 
 
 static DRIVER_INIT( spidman )
 {
-	segas32_common_init(extra_custom_io_r, NULL, NULL);
+	segas32_common_init(extra_custom_io_r, NULL);
 }
 
 
 static DRIVER_INIT( svf )
 {
-	segas32_common_init(NULL, NULL, NULL);
+	segas32_common_init(NULL, NULL);
 }
 
 
 static DRIVER_INIT( jleague )
 {
-	segas32_common_init(NULL, NULL, NULL);
+	segas32_common_init(NULL, NULL);
 	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20F700, 0x20F705, 0, 0, jleague_protection_w);
 }
 
 
 static DRIVER_INIT( titlef )
 {
-	segas32_common_init(NULL, NULL, NULL);
+	segas32_common_init(NULL, NULL);
 }
 
 

@@ -1,9 +1,9 @@
 #include "driver.h"
-#include "nova2001.h"
+#include "includes/nova2001.h"
 
 UINT8 *nova2001_fg_videoram, *nova2001_bg_videoram;
 
-static tilemap *bg_tilemap, *fg_tilemap;
+static tilemap_t *bg_tilemap, *fg_tilemap;
 
 
 /*************************************
@@ -259,6 +259,7 @@ WRITE8_HANDLER( pkunwar_flipscreen_w )
 
 static void nova2001_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	const gfx_element *gfx = machine->gfx[0];
 	int offs;
 
@@ -295,6 +296,7 @@ static void nova2001_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 
 static void pkunwar_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	const gfx_element *gfx = machine->gfx[0];
 	int offs;
 

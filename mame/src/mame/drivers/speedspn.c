@@ -96,7 +96,7 @@ static WRITE8_HANDLER(speedspn_banked_rom_change)
 			break;
 	}
 
-	memory_set_bankptr(space->machine, 1,&rom[addr + 0x8000]);
+	memory_set_bankptr(space->machine, "bank1",&rom[addr + 0x8000]);
 }
 
 /*** SOUND RELATED ***********************************************************/
@@ -118,13 +118,13 @@ static WRITE8_DEVICE_HANDLER( oki_banking_w )
 
 static ADDRESS_MAP_START( speedspn_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE(&paletteram)	/* RAM COLOUR */
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE_GENERIC(paletteram)	/* RAM COLOUR */
 	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(speedspn_attram_w) AM_BASE(&speedspn_attram)
 	AM_RANGE(0x9000, 0x9fff) AM_READWRITE(speedspn_vidram_r,speedspn_vidram_w)	/* RAM FIX / RAM OBJECTS (selected by bit 0 of port 17) */
 	AM_RANGE(0xa000, 0xa7ff) AM_RAM
 	AM_RANGE(0xa800, 0xafff) AM_RAM
 	AM_RANGE(0xb000, 0xbfff) AM_RAM 											/* RAM PROGRAM */
-	AM_RANGE(0xc000, 0xffff) AM_ROMBANK(1) 										/* banked ROM */
+	AM_RANGE(0xc000, 0xffff) AM_ROMBANK("bank1")										/* banked ROM */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( speedspn_io_map, ADDRESS_SPACE_IO, 8 )

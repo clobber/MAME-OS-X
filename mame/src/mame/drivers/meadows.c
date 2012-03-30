@@ -118,7 +118,7 @@
 
 #include "driver.h"
 #include "cpu/s2650/s2650.h"
-#include "meadows.h"
+#include "includes/meadows.h"
 #include "sound/dac.h"
 #include "sound/samples.h"
 
@@ -351,10 +351,10 @@ static ADDRESS_MAP_START( meadows_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0c02, 0x0c02) AM_READ(hsync_chain_r)
 	AM_RANGE(0x0c03, 0x0c03) AM_READ_PORT("DSW")
 	AM_RANGE(0x0c00, 0x0c03) AM_WRITE(meadows_audio_w)
-	AM_RANGE(0x0d00, 0x0d0f) AM_WRITE(meadows_spriteram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x0d00, 0x0d0f) AM_WRITE(meadows_spriteram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x0e00, 0x0eff) AM_RAM
 	AM_RANGE(0x1000, 0x1bff) AM_ROM
-	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(meadows_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(meadows_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( bowl3d_main_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -364,15 +364,15 @@ static ADDRESS_MAP_START( bowl3d_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0c02, 0x0c02) AM_READ(hsync_chain_r)
 	AM_RANGE(0x0c03, 0x0c03) AM_READ_PORT("DSW")
 	AM_RANGE(0x0c00, 0x0c03) AM_WRITE(meadows_audio_w)
-	AM_RANGE(0x0d00, 0x0d0f) AM_WRITE(meadows_spriteram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x0d00, 0x0d0f) AM_WRITE(meadows_spriteram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x0e00, 0x0eff) AM_RAM
 	AM_RANGE(0x1000, 0x1bff) AM_ROM
-	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(meadows_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x1c00, 0x1fff) AM_RAM_WRITE(meadows_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( minferno_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
-	AM_RANGE(0x1c00, 0x1eff) AM_RAM_WRITE(meadows_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x1c00, 0x1eff) AM_RAM_WRITE(meadows_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 	AM_RANGE(0x1f00, 0x1f00) AM_READ_PORT("JOY1")
 	AM_RANGE(0x1f01, 0x1f01) AM_READ_PORT("JOY2")
 	AM_RANGE(0x1f02, 0x1f02) AM_READ_PORT("BUTTONS")
@@ -636,7 +636,7 @@ static const samples_interface meadows_samples_interface =
 
 static const samples_interface bowl3d_samples_interface =
 {
- 	1,
+	1,
 	bowl3d_sample_names
 };
 
@@ -651,9 +651,9 @@ static const samples_interface bowl3d_samples_interface =
 static MACHINE_DRIVER_START( meadows )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", S2650, MASTER_CLOCK/8) 	/* 5MHz / 8 = 625 kHz */
+	MDRV_CPU_ADD("maincpu", S2650, MASTER_CLOCK/8)	/* 5MHz / 8 = 625 kHz */
 	MDRV_CPU_PROGRAM_MAP(meadows_main_map)
-	MDRV_CPU_VBLANK_INT("screen", meadows_interrupt) 	/* one interrupt per frame!? */
+	MDRV_CPU_VBLANK_INT("screen", meadows_interrupt)	/* one interrupt per frame!? */
 
 	MDRV_CPU_ADD("audiocpu", S2650, MASTER_CLOCK/8) 	/* 5MHz / 8 = 625 kHz */
 	MDRV_CPU_PROGRAM_MAP(audio_map)
@@ -715,9 +715,9 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( bowl3d )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", S2650, MASTER_CLOCK/8) 	/* 5MHz / 8 = 625 kHz */
+	MDRV_CPU_ADD("maincpu", S2650, MASTER_CLOCK/8)	/* 5MHz / 8 = 625 kHz */
 	MDRV_CPU_PROGRAM_MAP(bowl3d_main_map)
-	MDRV_CPU_VBLANK_INT("screen", meadows_interrupt) 	/* one interrupt per frame!? */
+	MDRV_CPU_VBLANK_INT("screen", meadows_interrupt)	/* one interrupt per frame!? */
 
 	MDRV_CPU_ADD("audiocpu", S2650, MASTER_CLOCK/8) 	/* 5MHz / 8 = 625 kHz */
 	MDRV_CPU_PROGRAM_MAP(audio_map)
@@ -749,7 +749,7 @@ static MACHINE_DRIVER_START( bowl3d )
 	MDRV_SOUND_CONFIG(meadows_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
- 	/* audio hardware */
+	/* audio hardware */
 	MDRV_SOUND_ADD("samples2", SAMPLES, 0)
 	MDRV_SOUND_CONFIG(bowl3d_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
@@ -801,7 +801,7 @@ ROM_START( bowl3d )
 	// h13 empty
 
     /* Universal Game Logic according to schematics  */
-    ROM_REGION( 0x08000, "audiocpu", 0 ) 	/* 2650 CPU at j8 */
+    ROM_REGION( 0x08000, "audiocpu", 0 )	/* 2650 CPU at j8 */
 	ROM_LOAD( "82s115.a6",    0x0000, 0x0001, NO_DUMP ) /* 82s115 eprom */
 	ROM_LOAD( "82s115.c6",    0x0000, 0x0001, NO_DUMP ) /* 82s115 eprom */
 

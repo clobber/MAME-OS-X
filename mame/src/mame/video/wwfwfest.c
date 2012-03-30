@@ -9,7 +9,7 @@
 #include "driver.h"
 #include "includes/wwfwfest.h"
 
-static tilemap *fg0_tilemap, *bg0_tilemap, *bg1_tilemap;
+static tilemap_t *fg0_tilemap, *bg0_tilemap, *bg1_tilemap;
 UINT16 wwfwfest_pri;
 UINT16 wwfwfest_bg0_scrollx, wwfwfest_bg0_scrolly, wwfwfest_bg1_scrollx, wwfwfest_bg1_scrolly;
 UINT16 *wwfwfest_fg0_videoram, *wwfwfest_bg0_videoram, *wwfwfest_bg1_videoram;
@@ -165,6 +165,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
     **- End of Comments -*/
 
+	UINT16 *buffered_spriteram16 = machine->generic.buffered_spriteram.u16;
 	const gfx_element *gfx = machine->gfx[1];
 	UINT16 *source = buffered_spriteram16;
 	UINT16 *finish = source + 0x2000/2;
@@ -204,7 +205,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 						drawgfx_transpen(bitmap,cliprect,gfx,number+count,colourbank,flipx,flipy,xpos,ypos+16*count,0);
 					}
 				} else {
-						if (flipy) {
+					if (flipy) {
 						drawgfx_transpen(bitmap,cliprect,gfx,number+count,colourbank,flipx,flipy,xpos,ypos-(16*(chain-1))+(16*count),0);
 					} else {
 						drawgfx_transpen(bitmap,cliprect,gfx,number+count,colourbank,flipx,flipy,xpos,ypos-16*count,0);

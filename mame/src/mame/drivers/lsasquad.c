@@ -158,7 +158,7 @@ static WRITE8_HANDLER( lsasquad_bankswitch_w )
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
 
 	/* bits 0-2 select ROM bank */
-	memory_set_bankptr(space->machine, 1,&ROM[0x10000 + 0x2000 * (data & 7)]);
+	memory_set_bankptr(space->machine, "bank1",&ROM[0x10000 + 0x2000 * (data & 7)]);
 
 	/* bit 3 is zeroed on startup, maybe reset sound CPU */
 
@@ -170,11 +170,11 @@ static WRITE8_HANDLER( lsasquad_bankswitch_w )
 
 static ADDRESS_MAP_START( lsasquad_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_RAM	/* SRAM */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)	/* SCREEN RAM */
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)	/* SCREEN RAM */
 	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE(&lsasquad_scrollram)	/* SCROLL RAM */
-	AM_RANGE(0xe400, 0xe5ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* OBJECT RAM */
+	AM_RANGE(0xe400, 0xe5ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	/* OBJECT RAM */
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("DSWA")
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("DSWB")
 	AM_RANGE(0xe802, 0xe802) AM_READ_PORT("DSWC")
@@ -192,8 +192,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( lsasquad_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ym", ym2203_r,ym2203_w)
-	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2203_r,ym2203_w)
+	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0xd000, 0xd000) AM_READWRITE(lsasquad_sh_sound_command_r,lsasquad_sh_result_w)
 	AM_RANGE(0xd400, 0xd400) AM_WRITE(lsasquad_sh_nmi_disable_w)
 	AM_RANGE(0xd800, 0xd800) AM_WRITE(lsasquad_sh_nmi_enable_w)
@@ -340,11 +340,11 @@ INPUT_PORTS_END
 
 static ADDRESS_MAP_START( daikaiju_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x9fff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_RAM	/* SRAM */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)	/* SCREEN RAM */
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)	/* SCREEN RAM */
 	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE(&lsasquad_scrollram)	/* SCROLL RAM */
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* OBJECT RAM */
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	/* OBJECT RAM */
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("DSWA")
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("DSWB")
 	AM_RANGE(0xe803, 0xe803) AM_READ(daikaiju_mcu_status_r)	/* COIN + 68705 status */
@@ -361,8 +361,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( daikaiju_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
-	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0xd000, 0xd000) AM_READ(daikaiju_sh_sound_command_r)
 	AM_RANGE(0xd400, 0xd400) AM_WRITENOP
 	AM_RANGE(0xd800, 0xd800) AM_READ(daikaiju_sound_status_r) AM_WRITENOP
@@ -562,10 +562,10 @@ static MACHINE_DRIVER_START( lsasquad )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 3000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 3000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.12)
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.12)
 	MDRV_SOUND_ROUTE(1, "mono", 0.12)
@@ -607,10 +607,10 @@ static MACHINE_DRIVER_START( daikaiju )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 3000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 3000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.12)
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.12)
 	MDRV_SOUND_ROUTE(1, "mono", 0.12)

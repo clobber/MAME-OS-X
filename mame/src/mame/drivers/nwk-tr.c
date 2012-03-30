@@ -217,11 +217,12 @@ Thrill Drive 713A13  -       713A14  -
 #include "cpu/powerpc/ppc.h"
 #include "cpu/sharc/sharc.h"
 #include "machine/konppc.h"
-#include "machine/konamiic.h"
 #include "machine/adc1213x.h"
 #include "sound/rf5c400.h"
 #include "video/voodoo.h"
 #include "machine/timekpr.h"
+#include "sound/k056800.h"
+#include "machine/k033906.h"
 
 static UINT8 led_reg0, led_reg1;
 
@@ -230,8 +231,8 @@ static UINT32 *work_ram;
 
 static WRITE32_HANDLER( paletteram32_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
-	data = paletteram32[offset];
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
+	data = space->machine->generic.paletteram.u32[offset];
 	palette_set_color_rgb(space->machine, offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
@@ -244,9 +245,9 @@ static WRITE32_HANDLER( paletteram32_w )
 static UINT32 *K001604_tile_ram[MAX_K001604_CHIPS];
 static UINT32 *K001604_char_ram[MAX_K001604_CHIPS];
 static int K001604_gfx_index[MAX_K001604_CHIPS][2];
-static tilemap *K001604_layer_8x8[MAX_K001604_CHIPS][2];
+static tilemap_t *K001604_layer_8x8[MAX_K001604_CHIPS][2];
 static int K001604_tilemap_offset;
-static tilemap *K001604_layer_roz[MAX_K001604_CHIPS][2];
+static tilemap_t *K001604_layer_roz[MAX_K001604_CHIPS][2];
 static int K001604_roz_size[MAX_K001604_CHIPS];
 
 static UINT32 *K001604_reg[MAX_K001604_CHIPS];
@@ -886,7 +887,7 @@ static MACHINE_START( nwktr )
 static ADDRESS_MAP_START( nwktr_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE(&work_ram)		/* Work RAM */
 	AM_RANGE(0x74000000, 0x740000ff) AM_READWRITE(K001604_reg_r, K001604_reg_w)
-	AM_RANGE(0x74010000, 0x74017fff) AM_RAM_WRITE(paletteram32_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x74010000, 0x74017fff) AM_RAM_WRITE(paletteram32_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x74020000, 0x7403ffff) AM_READWRITE(K001604_tile_r, K001604_tile_w)
 	AM_RANGE(0x74040000, 0x7407ffff) AM_READWRITE(K001604_char_r, K001604_char_w)
 	AM_RANGE(0x78000000, 0x7800ffff) AM_READWRITE(cgboard_dsp_shared_r_ppc, cgboard_dsp_shared_w_ppc)
@@ -894,14 +895,14 @@ static ADDRESS_MAP_START( nwktr_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x7d000000, 0x7d00ffff) AM_READ(sysreg_r)
 	AM_RANGE(0x7d010000, 0x7d01ffff) AM_WRITE(sysreg_w)
 	AM_RANGE(0x7d020000, 0x7d021fff) AM_DEVREADWRITE8("m48t58", timekeeper_r, timekeeper_w, 0xffffffff)	/* M48T58Y RTC/NVRAM */
-	AM_RANGE(0x7d030000, 0x7d030007) AM_READ(K056800_host_r)
-	AM_RANGE(0x7d030000, 0x7d030007) AM_WRITE(K056800_host_w)
-	AM_RANGE(0x7d030008, 0x7d03000f) AM_WRITE(K056800_host_w)
+	AM_RANGE(0x7d030000, 0x7d030007) AM_DEVREAD("k056800", k056800_host_r)
+	AM_RANGE(0x7d030000, 0x7d030007) AM_DEVWRITE("k056800", k056800_host_w)
+	AM_RANGE(0x7d030008, 0x7d03000f) AM_DEVWRITE("k056800", k056800_host_w)
 	AM_RANGE(0x7d040000, 0x7d04ffff) AM_READWRITE(lanc1_r, lanc1_w)
 	AM_RANGE(0x7d050000, 0x7d05ffff) AM_READWRITE(lanc2_r, lanc2_w)
 	AM_RANGE(0x7e000000, 0x7e7fffff) AM_ROM AM_REGION("user2", 0)	/* Data ROM */
-	AM_RANGE(0x7f000000, 0x7f1fffff) AM_ROM AM_SHARE(2)
-	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)	/* Program ROM */
+	AM_RANGE(0x7f000000, 0x7f1fffff) AM_ROM AM_SHARE("share2")
+	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")	/* Program ROM */
 ADDRESS_MAP_END
 
 /*****************************************************************************/
@@ -909,8 +910,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM		/* Work RAM */
-	AM_RANGE(0x200000, 0x200fff) AM_DEVREADWRITE("rf", rf5c400_r, rf5c400_w)		/* Ricoh RF5C400 */
-	AM_RANGE(0x300000, 0x30000f) AM_READWRITE(K056800_sound_r, K056800_sound_w)
+	AM_RANGE(0x200000, 0x200fff) AM_DEVREADWRITE("rfsnd", rf5c400_r, rf5c400_w)		/* Ricoh RF5C400 */
+	AM_RANGE(0x300000, 0x30000f) AM_DEVREADWRITE("k056800", k056800_sound_r, k056800_sound_w)
 	AM_RANGE(0x600000, 0x600001) AM_NOP
 ADDRESS_MAP_END
 
@@ -935,7 +936,7 @@ static ADDRESS_MAP_START( sharc_map, ADDRESS_SPACE_DATA, 32 )
 	AM_RANGE(0x2400000, 0x27fffff) AM_DEVREADWRITE("voodoo", nwk_voodoo_0_r, nwk_voodoo_0_w)
 	AM_RANGE(0x3400000, 0x34000ff) AM_READWRITE(cgboard_0_comm_sharc_r, cgboard_0_comm_sharc_w)
 	AM_RANGE(0x3500000, 0x35000ff) AM_READWRITE(K033906_0_r, K033906_0_w)
-	AM_RANGE(0x3600000, 0x37fffff) AM_ROMBANK(5)
+	AM_RANGE(0x3600000, 0x37fffff) AM_ROMBANK("bank5")
 ADDRESS_MAP_END
 
 /*****************************************************************************/
@@ -1029,6 +1030,23 @@ static const adc12138_interface nwktr_adc_interface = {
 	adc12138_input_callback
 };
 
+static void sound_irq_callback(running_machine *machine, int irq)
+{
+	if (irq == 0)
+		generic_pulse_irq_line(cputag_get_cpu(machine, "audiocpu"), INPUT_LINE_IRQ1);
+	else
+		generic_pulse_irq_line(cputag_get_cpu(machine, "audiocpu"), INPUT_LINE_IRQ2);
+}
+
+static const k056800_interface nwktr_k056800_interface =
+{
+	sound_irq_callback
+};
+
+static const k033906_interface nwktr_k033906_interface =
+{
+	"voodoo"
+};
 
 static MACHINE_RESET( nwktr )
 {
@@ -1059,7 +1077,9 @@ static MACHINE_DRIVER_START( nwktr )
 	MDRV_3DFX_VOODOO_TMU_MEMORY(1, 2)
 	MDRV_3DFX_VOODOO_VBLANK(voodoo_vblank_0)
 
- 	/* video hardware */
+	MDRV_K033906_ADD("k033906_1", nwktr_k033906_interface)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
@@ -1071,9 +1091,11 @@ static MACHINE_DRIVER_START( nwktr )
 	MDRV_VIDEO_START(nwktr)
 	MDRV_VIDEO_UPDATE(nwktr)
 
+	MDRV_K056800_ADD("k056800", nwktr_k056800_interface)
+
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("rf", RF5C400, 16934400)	// as per Guru readme above
+	MDRV_SOUND_ADD("rfsnd", RF5C400, 16934400)	// as per Guru readme above
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 
@@ -1084,24 +1106,13 @@ MACHINE_DRIVER_END
 
 /*****************************************************************************/
 
-static void sound_irq_callback(running_machine *machine, int irq)
-{
-	if (irq == 0)
-		generic_pulse_irq_line(cputag_get_cpu(machine, "audiocpu"), INPUT_LINE_IRQ1);
-	else
-		generic_pulse_irq_line(cputag_get_cpu(machine, "audiocpu"), INPUT_LINE_IRQ2);
-}
-
 static DRIVER_INIT(nwktr)
 {
 	init_konami_cgboard(machine, 1, CGBOARD_TYPE_NWKTR);
-	set_cgboard_texture_bank(machine, 0, 5, memory_region(machine, "user5"));
+	set_cgboard_texture_bank(machine, 0, "bank5", memory_region(machine, "user5"));
 
 	sharc_dataram = auto_alloc_array(machine, UINT32, 0x100000/4);
 	led_reg0 = led_reg1 = 0x7f;
-
-	K056800_init(machine, sound_irq_callback);
-	K033906_init(machine);
 
 	lanc2_init(machine);
 }
@@ -1124,7 +1135,7 @@ ROM_START(racingj)
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program roms */
 	ROM_LOAD16_WORD_SWAP( "676gna08.7s", 0x000000, 0x080000, CRC(8973f6f2) SHA1(f5648a7e0205f7e979ccacbb52936809ce14a184) )
 
-	ROM_REGION(0x1000000, "rf", 0) 		/* other roms (textures?) */
+	ROM_REGION(0x1000000, "rfsnd", 0)		/* other roms (textures?) */
 	ROM_LOAD( "676a09.16p",   0x000000, 0x400000, CRC(f85c8dc6) SHA1(8b302c80be309b5cc68b75945fcd7b87a56a4c9b) )
 	ROM_LOAD( "676a10.14p",   0x400000, 0x400000, CRC(7b5b7828) SHA1(aec224d62e4b1e8fdb929d7947ce70d84ba676cf) )
 
@@ -1148,7 +1159,7 @@ ROM_START(racingj2)
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program roms */
 	ROM_LOAD16_WORD_SWAP( "888a08.7s",    0x000000, 0x080000, CRC(55fbea65) SHA1(ad953f758181731efccadcabc4326e6634c359e8) )
 
-	ROM_REGION(0x1000000, "rf", 0) 		/* PCM sample roms */
+	ROM_REGION(0x1000000, "rfsnd", 0)		/* PCM sample roms */
 	ROM_LOAD( "888a09.16p",   0x000000, 0x400000, CRC(11e2fed2) SHA1(24b8a367b59fedb62c56f066342f2fa87b135fc5) )
 	ROM_LOAD( "888a10.14p",   0x400000, 0x400000, CRC(328ce610) SHA1(dbbc779a1890c53298c0db129d496df048929496) )
 
@@ -1171,7 +1182,7 @@ ROM_START(thrilld)
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program roms */
 	ROM_LOAD16_WORD_SWAP( "713a08.7s",    0x000000, 0x080000, CRC(6a72a825) SHA1(abeac99c5343efacabcb0cdff6d34f9f967024db) )
 
-	ROM_REGION(0x1000000, "rf", 0) 		/* PCM sample roms */
+	ROM_REGION(0x1000000, "rfsnd", 0)		/* PCM sample roms */
 	ROM_LOAD( "713a09.16p",   0x000000, 0x400000, CRC(058f250a) SHA1(63b8e60004ec49009633e86b4992c00083def9a8) )
 	ROM_LOAD( "713a10.14p",   0x400000, 0x400000, CRC(27f9833e) SHA1(1540f00d2571ecb81b914c553682b67fca94bbbd) )
 

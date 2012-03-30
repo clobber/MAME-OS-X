@@ -10,7 +10,7 @@
 #include "driver.h"
 #include "machine/atari_vg.h"
 #include "video/avgdvg.h"
-#include "asteroid.h"
+#include "includes/asteroid.h"
 
 UINT8 *asteroid_ram1, *asteroid_ram2;
 
@@ -75,7 +75,7 @@ READ8_HANDLER( asteroid_IN1_r )
 	if (res & bitmask)
 		res = 0x80;
 	else
-	 	res = ~0x80;
+		res = ~0x80;
 
 	return res;
 }
@@ -97,17 +97,17 @@ WRITE8_HANDLER( asteroid_bank_switch_w )
 {
 	if (data & 4)
 	{
-		memory_set_bankptr(space->machine, 1, asteroid_ram2);
-		memory_set_bankptr(space->machine, 2, asteroid_ram1);
+		memory_set_bankptr(space->machine, "bank1", asteroid_ram2);
+		memory_set_bankptr(space->machine, "bank2", asteroid_ram1);
 	}
 	else
 	{
-		memory_set_bankptr(space->machine, 1, asteroid_ram1);
-		memory_set_bankptr(space->machine, 2, asteroid_ram2);
+		memory_set_bankptr(space->machine, "bank1", asteroid_ram1);
+		memory_set_bankptr(space->machine, "bank2", asteroid_ram2);
 	}
 
-	set_led_status (0, ~data & 0x02);
-	set_led_status (1, ~data & 0x01);
+	set_led_status (space->machine, 0, ~data & 0x02);
+	set_led_status (space->machine, 1, ~data & 0x01);
 }
 
 
@@ -115,20 +115,20 @@ WRITE8_HANDLER( astdelux_bank_switch_w )
 {
 	if (data & 0x80)
 	{
-		memory_set_bankptr(space->machine, 1, asteroid_ram2);
-		memory_set_bankptr(space->machine, 2, asteroid_ram1);
+		memory_set_bankptr(space->machine, "bank1", asteroid_ram2);
+		memory_set_bankptr(space->machine, "bank2", asteroid_ram1);
 	}
 	else
 	{
-		memory_set_bankptr(space->machine, 1, asteroid_ram1);
-		memory_set_bankptr(space->machine, 2, asteroid_ram2);
+		memory_set_bankptr(space->machine, "bank1", asteroid_ram1);
+		memory_set_bankptr(space->machine, "bank2", asteroid_ram2);
 	}
 }
 
 
 WRITE8_HANDLER( astdelux_led_w )
 {
-	set_led_status(offset, (data & 0x80) ? 0 : 1);
+	set_led_status(space->machine, offset, (data & 0x80) ? 0 : 1);
 }
 
 

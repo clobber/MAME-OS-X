@@ -87,9 +87,9 @@ static UINT16 *vmetal_tlookup;
 static UINT16 *vmetal_videoregs;
 
 
-static tilemap *vmetal_texttilemap;
-static tilemap *vmetal_mid1tilemap;
-static tilemap *vmetal_mid2tilemap;
+static tilemap_t *vmetal_texttilemap;
+static tilemap_t *vmetal_mid1tilemap;
+static tilemap_t *vmetal_mid2tilemap;
 
 /* video/metro.c */
 extern UINT16 *metro_videoregs;
@@ -157,10 +157,10 @@ static WRITE8_DEVICE_HANDLER( vmetal_control_w )
 {
 	/* Lower nibble is the coin control bits shown in
        service mode, but in game mode they're different */
-	coin_counter_w(0,data & 0x04);
-	coin_counter_w(1,data & 0x08);	/* 2nd coin schute activates coin 0 counter in game mode?? */
-//  coin_lockout_w(0,data & 0x01);  /* always on in game mode?? */
-	coin_lockout_w(1,data & 0x02);	/* never activated in game mode?? */
+	coin_counter_w(device->machine, 0,data & 0x04);
+	coin_counter_w(device->machine, 1,data & 0x08);	/* 2nd coin schute activates coin 0 counter in game mode?? */
+//  coin_lockout_w(device->machine, 0,data & 0x01);  /* always on in game mode?? */
+	coin_lockout_w(device->machine, 1,data & 0x02);	/* never activated in game mode?? */
 
 	if ((data & 0x40) == 0)
 		device_reset(device);
@@ -221,14 +221,14 @@ static ADDRESS_MAP_START( varia_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE(0x160000, 0x16ffff) AM_READ(varia_crom_read) // cgrom read window ..
 
-	AM_RANGE(0x170000, 0x173fff) AM_READWRITE(SMH_RAM,paletteram16_GGGGGRRRRRBBBBBx_word_w) AM_BASE(&paletteram16	)	// Palette
-	AM_RANGE(0x174000, 0x174fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x170000, 0x173fff) AM_RAM_WRITE(paletteram16_GGGGGRRRRRBBBBBx_word_w) AM_BASE_GENERIC(paletteram)	// Palette
+	AM_RANGE(0x174000, 0x174fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x175000, 0x177fff) AM_RAM
 	AM_RANGE(0x178000, 0x1787ff) AM_RAM AM_BASE(&vmetal_tlookup)
 	AM_RANGE(0x178800, 0x1796ff) AM_RAM AM_BASE(&vmetal_videoregs)
-	AM_RANGE(0x179700, 0x179713) AM_WRITE(SMH_RAM) AM_BASE(&metro_videoregs	)	// Video Registers
+	AM_RANGE(0x179700, 0x179713) AM_WRITEONLY AM_BASE(&metro_videoregs	)	// Video Registers
 
-	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("P1_P2") AM_DEVWRITE8("es", vmetal_control_w, 0x00ff)
+	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("P1_P2") AM_DEVWRITE8("essnd", vmetal_control_w, 0x00ff)
 	AM_RANGE(0x200002, 0x200003) AM_READ_PORT("SYSTEM")
 
 	/* i have no idea whats meant to be going on here .. it seems to read one bit of the dips from some of them, protection ??? */
@@ -252,7 +252,7 @@ static ADDRESS_MAP_START( varia_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff )
 	AM_RANGE(0x400002, 0x400003) AM_DEVWRITE8("oki", okim6295_w, 0x00ff)	// Volume/channel info
-	AM_RANGE(0x500000, 0x50000d) AM_DEVWRITE8("es", vmetal_es8712_w, 0x00ff)
+	AM_RANGE(0x500000, 0x50000d) AM_DEVWRITE8("essnd", vmetal_es8712_w, 0x00ff)
 
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -450,7 +450,7 @@ static MACHINE_DRIVER_START( varia )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 
-	MDRV_SOUND_ADD("es", ES8712, 12000)
+	MDRV_SOUND_ADD("essnd", ES8712, 12000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END
@@ -471,7 +471,7 @@ ROM_START( vmetal )
 	/* Second half is junk */
 	ROM_LOAD( "8.u9", 0x00000, 0x80000, CRC(c14c001c) SHA1(bad96b5cd40d1c34ef8b702262168ecab8192fb6) )
 
-	ROM_REGION( 0x200000, "es", 0 ) /* Samples */
+	ROM_REGION( 0x200000, "essnd", 0 ) /* Samples */
 	ROM_LOAD( "7.u12", 0x00000, 0x200000, CRC(a88c52f1) SHA1(d74a5a11f84ba6b1042b33a2c156a1071b6fbfe1) )
 ROM_END
 
@@ -490,9 +490,9 @@ ROM_START( vmetaln )
 	/* Second half is junk */
 	ROM_LOAD( "8.u9", 0x00000, 0x80000, CRC(c14c001c) SHA1(bad96b5cd40d1c34ef8b702262168ecab8192fb6) )
 
-	ROM_REGION( 0x200000, "es", 0 ) /* Samples */
+	ROM_REGION( 0x200000, "essnd", 0 ) /* Samples */
 	ROM_LOAD( "7.u12", 0x00000, 0x200000, CRC(a88c52f1) SHA1(d74a5a11f84ba6b1042b33a2c156a1071b6fbfe1) )
 ROM_END
 
-GAME( 1995, vmetal,  0,      varia, varia, 0, ROT270, "Excellent Systems",                        "Varia Metal",                        GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1995, vmetaln, vmetal, varia, varia, 0, ROT270, "[Excellent Systems] New Ways Trading Co.", "Varia Metal (New Ways Trading Co.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, vmetal,  0,      varia, varia, 0, ROT270, "Excellent System",                        "Varia Metal",                        GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, vmetaln, vmetal, varia, varia, 0, ROT270, "[Excellent System] New Ways Trading Co.", "Varia Metal (New Ways Trading Co.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )

@@ -104,8 +104,8 @@ static ADDRESS_MAP_START( senjyo_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(senjyo_fgvideoram_w) AM_BASE(&senjyo_fgvideoram)
 	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(senjyo_fgcolorram_w) AM_BASE(&senjyo_fgcolorram)
-	AM_RANGE(0x9800, 0x987f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x9c00, 0x9dff) AM_RAM_WRITE(paletteram_IIBBGGRR_w) AM_BASE(&paletteram)
+	AM_RANGE(0x9800, 0x987f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x9c00, 0x9dff) AM_RAM_WRITE(paletteram_IIBBGGRR_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x9e00, 0x9e1f) AM_RAM AM_BASE(&senjyo_fgscroll)
 	AM_RANGE(0x9e20, 0x9e21) AM_RAM AM_BASE(&senjyo_scrolly3)
 /*  AM_RANGE(0x9e22, 0x9e23) height of the layer (Senjyo only, fixed at 0x380) */
@@ -184,8 +184,8 @@ static ADDRESS_MAP_START( starforb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(senjyo_fgvideoram_w) AM_BASE(&senjyo_fgvideoram)
 	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(senjyo_fgcolorram_w) AM_BASE(&senjyo_fgcolorram)
-	AM_RANGE(0x9800, 0x987f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x9c00, 0x9dff) AM_RAM_WRITE(paletteram_IIBBGGRR_w) AM_BASE(&paletteram)
+	AM_RANGE(0x9800, 0x987f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x9c00, 0x9dff) AM_RAM_WRITE(paletteram_IIBBGGRR_w) AM_BASE_GENERIC(paletteram)
 	/* The format / use of the ram here is different on the bootleg */
 	AM_RANGE(0x9e20, 0x9e21) AM_RAM AM_BASE(&senjyo_scrolly3)
 	AM_RANGE(0x9e25, 0x9e25) AM_RAM AM_BASE(&senjyo_scrollx3)
@@ -853,21 +853,21 @@ ROM_END
 
 ROM_START( baluba )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "0",   		  0x0000, 0x4000, CRC(0e2ebe32) SHA1(d5cac260b19dc4e8d2064a7e3de5d52ab0eb95d0) )
-	ROM_LOAD( "1",   		  0x4000, 0x4000, CRC(cde97076) SHA1(ef47851b2ed0d820e1564545795b707d00d5c6ce) )
+	ROM_LOAD( "0",  		  0x0000, 0x4000, CRC(0e2ebe32) SHA1(d5cac260b19dc4e8d2064a7e3de5d52ab0eb95d0) )
+	ROM_LOAD( "1",  		  0x4000, 0x4000, CRC(cde97076) SHA1(ef47851b2ed0d820e1564545795b707d00d5c6ce) )
 
 	ROM_REGION( 0x10000, "sub", 0 )     /* 64k for sound board */
-	ROM_LOAD( "2",   		  0x0000, 0x2000, CRC(441fbc64) SHA1(3853f80043e28e06a3ee399e3cd261b3ee94e0b9) )
+	ROM_LOAD( "2",  		  0x0000, 0x2000, CRC(441fbc64) SHA1(3853f80043e28e06a3ee399e3cd261b3ee94e0b9) )
 
 	ROM_REGION( 0x03000, "gfx1", 0 )
-	ROM_LOAD( "15",   		  0x00000, 0x1000, CRC(3dda0d84) SHA1(473c307c157bb229a31cd82ce4cdeca1ff604019) )	/* fg */
-	ROM_LOAD( "16",   		  0x01000, 0x1000, CRC(3ebc79d8) SHA1(a29b4e314446821cd4a2b1a9d3ff16ee3b6a8f7a) )
-	ROM_LOAD( "17",   		  0x02000, 0x1000, CRC(c4430deb) SHA1(e4c18ff2e2c82f3bce346267bc86d4160cb11995) )
+	ROM_LOAD( "15", 		  0x00000, 0x1000, CRC(3dda0d84) SHA1(473c307c157bb229a31cd82ce4cdeca1ff604019) )	/* fg */
+	ROM_LOAD( "16", 		  0x01000, 0x1000, CRC(3ebc79d8) SHA1(a29b4e314446821cd4a2b1a9d3ff16ee3b6a8f7a) )
+	ROM_LOAD( "17", 		  0x02000, 0x1000, CRC(c4430deb) SHA1(e4c18ff2e2c82f3bce346267bc86d4160cb11995) )
 
 	ROM_REGION( 0x06000, "gfx2", 0 )
 	ROM_LOAD( "9",  		  0x00000, 0x2000, CRC(90f88c43) SHA1(e4ea963d9c31e34f70aa2b710760e0a102567988) )	/* bg1 */
-	ROM_LOAD( "10",  		  0x02000, 0x2000, CRC(ab117070) SHA1(d9a8580f3b0919208801b00501579cf81665fc36) )
-	ROM_LOAD( "11",  		  0x04000, 0x2000, CRC(e13b44b0) SHA1(70f3d2465a7652405e23809c81d7ec6ec501835b) )
+	ROM_LOAD( "10", 		  0x02000, 0x2000, CRC(ab117070) SHA1(d9a8580f3b0919208801b00501579cf81665fc36) )
+	ROM_LOAD( "11", 		  0x04000, 0x2000, CRC(e13b44b0) SHA1(70f3d2465a7652405e23809c81d7ec6ec501835b) )
 
 	ROM_REGION( 0x06000, "gfx3", 0 )
 	ROM_LOAD( "12", 		  0x00000, 0x2000, CRC(a6541c8d) SHA1(d7a211c58c2067f257f5a9e343ca4bf689edd514) )	/* bg2 */

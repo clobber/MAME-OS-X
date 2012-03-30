@@ -88,8 +88,8 @@ other supported games as well.
 #include "audio/m72.h"
 #include "sound/dac.h"
 #include "sound/2151intf.h"
-#include "iremipt.h"
-#include "m72.h"
+#include "includes/iremipt.h"
+#include "includes/m72.h"
 #include "cpu/mcs51/mcs51.h"
 
 #define MASTER_CLOCK		XTAL_32MHz
@@ -110,6 +110,9 @@ static TIMER_CALLBACK( m72_scanline_interrupt );
 static MACHINE_START( m72 )
 {
 	scanline_timer = timer_alloc(machine, m72_scanline_interrupt, NULL);
+
+	state_save_register_global(machine, mcu_sample_addr);
+	state_save_register_global(machine, mcu_snd_cmd_latch);
 }
 
 static TIMER_CALLBACK( synch_callback )
@@ -124,11 +127,6 @@ static MACHINE_RESET( m72 )
 	mcu_sample_addr = 0;
 	mcu_snd_cmd_latch = 0;
 
-	MACHINE_RESET_CALL(m72_sound);
-
-	state_save_register_global(machine, mcu_sample_addr);
-	state_save_register_global(machine, mcu_snd_cmd_latch);
-
 	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
 	timer_call_after_resynch(machine,  NULL, 0, synch_callback);
 }
@@ -136,14 +134,12 @@ static MACHINE_RESET( m72 )
 static MACHINE_RESET( xmultipl )
 {
 	m72_irq_base = 0x08;
-	MACHINE_RESET_CALL(m72_sound);
 	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
 }
 
 static MACHINE_RESET( kengo )
 {
 	m72_irq_base = 0x18;
-	MACHINE_RESET_CALL(m72_sound);
 	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
 }
 
@@ -328,9 +324,9 @@ INLINE DRIVER_INIT( m72_8751 )
 	const device_config *dac = devtag_get_device(machine, "dac");
 
 	protection_ram = auto_alloc_array(machine, UINT16, 0x10000/2);
-	memory_install_read16_handler(program, 0xb0000, 0xbffff, 0, 0, (read16_space_func)SMH_BANK(1));
+	memory_install_read_bank(program, 0xb0000, 0xbffff, 0, 0, "bank1");
 	memory_install_write16_handler(program, 0xb0000, 0xb0fff, 0, 0, m72_main_mcu_w);
-	memory_set_bankptr(machine, 1, protection_ram);
+	memory_set_bankptr(machine, "bank1", protection_ram);
 
 	//memory_install_write16_handler(io, 0xc0, 0xc1, 0, 0, loht_sample_trigger_w);
 	memory_install_write16_handler(io, 0xc0, 0xc1, 0, 0, m72_main_mcu_sound_w);
@@ -620,7 +616,7 @@ static const UINT8 loht_code[CODE_LEN] =
 	0xc6,0x06,0x00,0x0b,0x49^0xff,	// mov [0b00h], byte 049h
 
 	0x68,0x00,0xd0,				    // push 0d000h // Japan set only
-	0x1f,					  	    // pop ds // Japan set only
+	0x1f,						    // pop ds // Japan set only
 	0xc6,0x06,0x70,0x16,0x57,		// mov [1670h], byte 057h // Japan set only - checks this (W) of WARNING
 
 	0xea,0x5d,0x01,0x40,0x00	// jmp  0040:$015d
@@ -701,10 +697,10 @@ static void install_protection_handler(running_machine *machine, const UINT8 *co
 	protection_ram = auto_alloc_array(machine, UINT16, 0x1000/2);
 	protection_code = code;
 	protection_crc =  crc;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb0000, 0xb0fff, 0, 0, (read16_space_func)SMH_BANK(1));
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb0000, 0xb0fff, 0, 0, "bank1");
 	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb0ffa, 0xb0ffb, 0, 0, protection_r);
 	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb0000, 0xb0fff, 0, 0, protection_w);
-	memory_set_bankptr(machine, 1, protection_ram);
+	memory_set_bankptr(machine, "bank1", protection_ram);
 }
 
 static DRIVER_INIT( bchopper )
@@ -830,13 +826,13 @@ static READ16_HANDLER( poundfor_trackball_r )
 }
 
 
-#define CPU1_MEMORY(NAME,ROMSIZE,WORKRAM) 								\
+#define CPU1_MEMORY(NAME,ROMSIZE,WORKRAM)								\
 static ADDRESS_MAP_START( NAME##_map, ADDRESS_SPACE_PROGRAM, 16 )		\
 	AM_RANGE(0x00000, ROMSIZE-1) AM_ROM									\
 	AM_RANGE(WORKRAM, WORKRAM+0x3fff) AM_RAM	/* work RAM */			\
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)	\
-	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)			\
-	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)		\
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	\
+	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)			\
+	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)		\
 	AM_RANGE(0xd0000, 0xd3fff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)		\
 	AM_RANGE(0xd8000, 0xdbfff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)		\
 	AM_RANGE(0xe0000, 0xeffff) AM_READWRITE(soundram_r, soundram_w)							\
@@ -853,10 +849,10 @@ CPU1_MEMORY( dbreed72, 0x80000, 0x90000 )
 static ADDRESS_MAP_START( dbreed_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0x88000, 0x8bfff) AM_RAM	/* work RAM */
-	AM_RANGE(0xb0ffe, 0xb0fff) AM_WRITE(SMH_RAM)	/* leftover from protection?? */
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0xb0ffe, 0xb0fff) AM_WRITEONLY	/* leftover from protection?? */
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xd0000, 0xd3fff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)
 	AM_RANGE(0xd8000, 0xdbfff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
@@ -866,11 +862,11 @@ static ADDRESS_MAP_START( rtype2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0xb0000, 0xb0001) AM_WRITE(m72_irq_line_w)
 	AM_RANGE(0xbc000, 0xbc001) AM_WRITE(m72_dmaon_w)
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xd0000, 0xd3fff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)
 	AM_RANGE(0xd4000, 0xd7fff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)
-	AM_RANGE(0xd8000, 0xd8bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0xd8000, 0xd8bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xe0000, 0xe3fff) AM_RAM	/* work RAM */
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
@@ -878,15 +874,15 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( majtitle_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0xa0000, 0xa03ff) AM_RAM AM_BASE(&majtitle_rowscrollram)
-	AM_RANGE(0xa4000, 0xa4bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0xa4000, 0xa4bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xac000, 0xaffff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)
 	AM_RANGE(0xb0000, 0xbffff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)	/* larger than the other games */
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xc8000, 0xc83ff) AM_RAM AM_BASE(&spriteram16_2)
-	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc8000, 0xc83ff) AM_RAM AM_BASE_GENERIC(spriteram2)
+	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xd0000, 0xd3fff) AM_RAM	/* work RAM */
 	AM_RANGE(0xe0000, 0xe0001) AM_WRITE(m72_irq_line_w)
-	AM_RANGE(0xe4000, 0xe4001) AM_WRITE(SMH_RAM)	/* playfield enable? 1 during screen transitions, 0 otherwise */
+	AM_RANGE(0xe4000, 0xe4001) AM_WRITEONLY	/* playfield enable? 1 during screen transitions, 0 otherwise */
 	AM_RANGE(0xec000, 0xec001) AM_WRITE(m72_dmaon_w)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
@@ -894,10 +890,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( hharry_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM	/* work RAM */
-	AM_RANGE(0xb0ffe, 0xb0fff) AM_WRITE(SMH_RAM)	/* leftover from protection?? */
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0xb0ffe, 0xb0fff) AM_WRITEONLY	/* leftover from protection?? */
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xc8000, 0xc8bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xcc000, 0xccbff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xd0000, 0xd3fff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)
 	AM_RANGE(0xd8000, 0xdbfff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
@@ -905,12 +901,12 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( hharryu_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
-	AM_RANGE(0xa0000, 0xa0bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xa8000, 0xa8bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0xa0000, 0xa0bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xa8000, 0xa8bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xb0000, 0xb0001) AM_WRITE(m72_irq_line_w)
 	AM_RANGE(0xbc000, 0xbc001) AM_WRITE(m72_dmaon_w)
-	AM_RANGE(0xb0ffe, 0xb0fff) AM_WRITE(SMH_RAM)	/* leftover from protection?? */
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xb0ffe, 0xb0fff) AM_WRITEONLY	/* leftover from protection?? */
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xd0000, 0xd3fff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)
 	AM_RANGE(0xd4000, 0xd7fff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)
 	AM_RANGE(0xe0000, 0xe3fff) AM_RAM	/* work RAM */
@@ -919,12 +915,12 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( kengo_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
-	AM_RANGE(0xa0000, 0xa0bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xa8000, 0xa8bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE(&paletteram16_2)
+	AM_RANGE(0xa0000, 0xa0bff) AM_READWRITE(m72_palette1_r, m72_palette1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xa8000, 0xa8bff) AM_READWRITE(m72_palette2_r, m72_palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xb0000, 0xb0001) AM_WRITE(m72_irq_line_w)
 	AM_RANGE(0xb4000, 0xb4001) AM_WRITENOP	/* ??? */
 	AM_RANGE(0xbc000, 0xbc001) AM_WRITE(m72_dmaon_w)
-	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xc0000, 0xc03ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x80000, 0x83fff) AM_RAM_WRITE(m72_videoram1_w) AM_BASE(&m72_videoram1)
 	AM_RANGE(0x84000, 0x87fff) AM_RAM_WRITE(m72_videoram2_w) AM_BASE(&m72_videoram2)
 	AM_RANGE(0xe0000, 0xe3fff) AM_RAM	/* work RAM */
@@ -1027,7 +1023,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rtype_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x02, 0x02) AM_READ(soundlatch_r)
 	AM_RANGE(0x06, 0x06) AM_WRITE(m72_sound_irq_ack_w)
 	AM_RANGE(0x84, 0x84) AM_READ(m72_sample_r)
@@ -1035,7 +1031,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x02, 0x02) AM_READ(soundlatch_r)
 	AM_RANGE(0x06, 0x06) AM_WRITE(m72_sound_irq_ack_w)
 	AM_RANGE(0x82, 0x82) AM_DEVWRITE("dac", m72_sample_w)
@@ -1044,7 +1040,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rtype2_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x80, 0x80) AM_READ(soundlatch_r)
 	AM_RANGE(0x80, 0x81) AM_WRITE(rtype2_sample_addr_w)
 	AM_RANGE(0x82, 0x82) AM_DEVWRITE("dac", m72_sample_w)
@@ -1055,7 +1051,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( poundfor_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x13) AM_WRITE(poundfor_sample_addr_w)
-	AM_RANGE(0x40, 0x41) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x40, 0x41) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x42, 0x42) AM_READ(soundlatch_r)
 	AM_RANGE(0x42, 0x42) AM_WRITE(m72_sound_irq_ack_w)
 ADDRESS_MAP_END
@@ -1066,7 +1062,7 @@ static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0001, 0x0001) AM_WRITE(m72_mcu_high_w)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(m72_mcu_snd_r, m72_mcu_ack_w)
 	/* shared at b0000 - b0fff on the main cpu */
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_READWRITE(m72_mcu_data_r,m72_mcu_data_w )
+	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(m72_mcu_data_r,m72_mcu_data_w )
 
 	/* Ports */
 	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P3) AM_READWRITE(m72_mcu_port_r, m72_mcu_port_w)
@@ -1796,6 +1792,9 @@ static MACHINE_DRIVER_START( rtype )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(m72)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(m72)
 	MDRV_PALETTE_LENGTH(512)
@@ -1810,7 +1809,7 @@ static MACHINE_DRIVER_START( rtype )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -1830,6 +1829,9 @@ static MACHINE_DRIVER_START( m72_base )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(m72)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(m72)
 	MDRV_PALETTE_LENGTH(512)
@@ -1844,7 +1846,7 @@ static MACHINE_DRIVER_START( m72_base )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -1890,6 +1892,9 @@ static MACHINE_DRIVER_START( dkgenm72 )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(xmultipl)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(m72)
 	MDRV_PALETTE_LENGTH(512)
@@ -1904,7 +1909,7 @@ static MACHINE_DRIVER_START( dkgenm72 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -1931,6 +1936,9 @@ static MACHINE_DRIVER_START( xmultipl )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(xmultipl)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(m72)
 	MDRV_PALETTE_LENGTH(512)
@@ -1945,7 +1953,7 @@ static MACHINE_DRIVER_START( xmultipl )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -1972,6 +1980,9 @@ static MACHINE_DRIVER_START( dbreed )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(xmultipl)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(rtype2)
 	MDRV_PALETTE_LENGTH(512)
@@ -1986,7 +1997,7 @@ static MACHINE_DRIVER_START( dbreed )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2012,6 +2023,9 @@ static MACHINE_DRIVER_START( dbreed72 )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(xmultipl)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(m72)
 	MDRV_PALETTE_LENGTH(512)
@@ -2026,7 +2040,7 @@ static MACHINE_DRIVER_START( dbreed72 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2053,6 +2067,9 @@ static MACHINE_DRIVER_START( rtype2 )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(m72)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(rtype2)
 	MDRV_PALETTE_LENGTH(512)
@@ -2067,7 +2084,7 @@ static MACHINE_DRIVER_START( rtype2 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2093,6 +2110,9 @@ static MACHINE_DRIVER_START( majtitle )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(m72)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(majtitle)
 	MDRV_PALETTE_LENGTH(512)
@@ -2107,7 +2127,7 @@ static MACHINE_DRIVER_START( majtitle )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2133,6 +2153,9 @@ static MACHINE_DRIVER_START( hharry )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(xmultipl)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(rtype2)
 	MDRV_PALETTE_LENGTH(512)
@@ -2147,7 +2170,7 @@ static MACHINE_DRIVER_START( hharry )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2174,6 +2197,9 @@ static MACHINE_DRIVER_START( hharryu )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(xmultipl)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(rtype2)
 	MDRV_PALETTE_LENGTH(512)
@@ -2188,7 +2214,7 @@ static MACHINE_DRIVER_START( hharryu )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2215,6 +2241,9 @@ static MACHINE_DRIVER_START( poundfor )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(m72)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(rtype2)
 	MDRV_PALETTE_LENGTH(512)
@@ -2229,7 +2258,7 @@ static MACHINE_DRIVER_START( poundfor )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -2255,6 +2284,9 @@ static MACHINE_DRIVER_START( cosmccop )
 	MDRV_MACHINE_START(m72)
 	MDRV_MACHINE_RESET(kengo)
 
+	MDRV_SOUND_START(m72)
+	MDRV_SOUND_RESET(m72)
+
 	/* video hardware */
 	MDRV_GFXDECODE(rtype2)
 	MDRV_PALETTE_LENGTH(512)
@@ -2269,7 +2301,7 @@ static MACHINE_DRIVER_START( cosmccop )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -3030,12 +3062,12 @@ ROM_END
 
 ROM_START( rtype2 )
 	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "ic54.8d",      0x00001, 0x20000, CRC(d8ece6f4) SHA1(f7bb246fe8b75af24716d419bb3c6e7d9cd0971e) )
-	ROM_LOAD16_BYTE( "ic60.9d",      0x00000, 0x20000, CRC(32cfb2e4) SHA1(d4b44a40e2933040eddb2b09de7bfe28d76c5f25) )
-	ROM_LOAD16_BYTE( "ic53.8b",      0x40001, 0x20000, CRC(4f6e9b15) SHA1(ef733c2615951f54691877ad3e84d08107723324) )
-	ROM_RELOAD(                      0xc0001, 0x20000 )
-	ROM_LOAD16_BYTE( "ic59.9b",      0x40000, 0x20000, CRC(0fd123bf) SHA1(1133163f6716e9a4bbb437b3a471477d0bd97051) )
-	ROM_RELOAD(                      0xc0000, 0x20000 )
+	ROM_LOAD16_BYTE( "rt2-a-h0-d.54", 0x00001, 0x20000, CRC(d8ece6f4) SHA1(f7bb246fe8b75af24716d419bb3c6e7d9cd0971e) )
+	ROM_LOAD16_BYTE( "rt2-a-l0-d.60", 0x00000, 0x20000, CRC(32cfb2e4) SHA1(d4b44a40e2933040eddb2b09de7bfe28d76c5f25) )
+	ROM_LOAD16_BYTE( "rt2-a-h1-d.53", 0x40001, 0x20000, CRC(4f6e9b15) SHA1(ef733c2615951f54691877ad3e84d08107723324) )
+	ROM_RELOAD(                       0xc0001, 0x20000 )
+	ROM_LOAD16_BYTE( "rt2-a-l1-d.59", 0x40000, 0x20000, CRC(0fd123bf) SHA1(1133163f6716e9a4bbb437b3a471477d0bd97051) )
+	ROM_RELOAD(                       0xc0000, 0x20000 )
 
 	ROM_REGION( 0x10000, "soundcpu", 0 )
 	ROM_LOAD( "ic17.4f",      0x0000, 0x10000, CRC(73ffecb4) SHA1(4795bf0d6263060c3d3759b659bdb189a4087600) )
@@ -3091,6 +3123,39 @@ ROM_START( rtype2j )
 	ROM_REGION( 0x20000, "samples", 0 )	/* samples */
 	ROM_LOAD( "ic14.4c",      0x00000, 0x20000, CRC(637172d5) SHA1(9dd0dc409306287238826bf301e2a7a12d6cd9ce) )
 ROM_END
+
+ROM_START( rtype2jc )
+	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "rt2-a-h0-c.54",  0x00001, 0x20000, CRC(ef9a9990) SHA1(fdf8fb7cb2b16f3cc58592da5c696ccff85f87e0) )
+	ROM_LOAD16_BYTE( "rt2-a-l0-c.60",  0x00000, 0x20000, CRC(d8b9da64) SHA1(ce19fc95d0adefa57c2161d7b0d756ecf799c707) )
+	ROM_LOAD16_BYTE( "rt2-a-h1-c.53",  0x40001, 0x20000, CRC(1b1870f4) SHA1(9a98b146980a87d088b7157da7a64c99902ddd54) )
+	ROM_RELOAD(                        0xc0001, 0x20000 )
+	ROM_LOAD16_BYTE( "rt2-a-l1-c.59",  0x40000, 0x20000, CRC(60fdff35) SHA1(9c89682deebfa88864b5af9cf0f05944d5c2212f) )
+	ROM_RELOAD(                        0xc0000, 0x20000 )
+
+	ROM_REGION( 0x10000, "soundcpu", 0 )
+	ROM_LOAD( "ic17.4f",      0x0000, 0x10000, CRC(73ffecb4) SHA1(4795bf0d6263060c3d3759b659bdb189a4087600) )
+
+	ROM_REGION( 0x080000, "gfx1", 0 )
+	ROM_LOAD( "ic31.6l",      0x00000, 0x20000, CRC(2cd8f913) SHA1(a53752b35da95b420dd29a09176d265d292b3938) )	/* sprites */
+	ROM_LOAD( "ic21.4l",      0x20000, 0x20000, CRC(5033066d) SHA1(e125127f0610c63f9e59a585db547be5d49ed863) )
+	ROM_LOAD( "ic32.6m",      0x40000, 0x20000, CRC(ec3a0450) SHA1(632bdd397f1bc67f6970faf7d09ab8d911e105fe) )
+	ROM_LOAD( "ic22.4m",      0x60000, 0x20000, CRC(db6176fc) SHA1(1eaf72af0322490c98461aded202288e387caac1) )
+
+	ROM_REGION( 0x100000, "gfx2", 0 )
+	ROM_LOAD( "ic50.7s",      0x00000, 0x20000, CRC(f3f8736e) SHA1(37872b30459ad05b2981d4ac84983f3b52d0d2d6) )	/* tiles */
+	ROM_LOAD( "ic51.7u",      0x20000, 0x20000, CRC(b4c543af) SHA1(56042eba711160fc701021c8787414dcaddcdecb) )
+	ROM_LOAD( "ic56.8s",      0x40000, 0x20000, CRC(4cb80d66) SHA1(31c5496c14b277e428a2f22195fe1742d6a577d4) )
+	ROM_LOAD( "ic57.8u",      0x60000, 0x20000, CRC(bee128e0) SHA1(b149dae5f8f67a329d6df033fadf50ad75c0a57a) )
+	ROM_LOAD( "ic65.9r",      0x80000, 0x20000, CRC(2dc9c71a) SHA1(124e89c17f3af034d5a387ff3eab906d289c27f7) )
+	ROM_LOAD( "ic66.9u",      0xa0000, 0x20000, CRC(7533c428) SHA1(ba435cfb6c3c49fcc4d716dcecf8f17545b8eec6) )
+	ROM_LOAD( "ic63.9m",      0xc0000, 0x20000, CRC(a6ad67f2) SHA1(b005b037ce8b3c932089982ecfbccdc922278fe3) )
+	ROM_LOAD( "ic64.9p",      0xe0000, 0x20000, CRC(3686d555) SHA1(d03754d9b8a6a3bfd4a85eeddacc35a36af197bd) )
+
+	ROM_REGION( 0x20000, "samples", 0 )	/* samples */
+	ROM_LOAD( "ic14.4c",      0x00000, 0x20000, CRC(637172d5) SHA1(9dd0dc409306287238826bf301e2a7a12d6cd9ce) )
+ROM_END
+
 
 ROM_START( majtitle )
 	ROM_REGION( 0x100000, "maincpu", 0 )
@@ -3491,17 +3556,18 @@ GAME( 1987, bchopper,    0,        m72,      bchopper, bchopper, ROT0,   "Irem",
 GAME( 1987, mrheli,      bchopper, m72,      bchopper, mrheli,   ROT0,   "Irem", "Mr. HELI no Dai-Bouken", GAME_NO_COCKTAIL )
 GAME( 1988, nspirit,     0,        m72,      nspirit,  nspirit,  ROT0,   "Irem", "Ninja Spirit", GAME_NO_COCKTAIL )
 GAME( 1988, nspiritj,    nspirit,  m72_8751, nspirit,  m72_8751, ROT0,   "Irem", "Saigo no Nindou (Japan)", GAME_NO_COCKTAIL ) /* some corruption on warning screen (layer enable?) */
-GAME( 1988, imgfight,    0,        m72,      imgfight, imgfight, ROT270, "Irem", "Image Fight (revision A, Japan)", 0 )
+GAME( 1988, imgfight,    0,        m72,      imgfight, imgfight, ROT270, "Irem", "Image Fight (Japan, revision A)", 0 )
 GAME( 1988, imgfighto,   imgfight, m72,      imgfight, imgfight, ROT270, "Irem", "Image Fight (Japan)", 0 )
 GAME( 1989, loht,        0,        m72,      loht,     loht,     ROT0,   "Irem", "Legend of Hero Tonma", GAME_NO_COCKTAIL )
 GAME( 1989, lohtj,       loht,     m72,      loht,     loht,     ROT0,   "Irem", "Legend of Hero Tonma (Japan)", GAME_NO_COCKTAIL )
 GAME( 1989, lohtb,       loht,     m72,      loht,     0,        ROT0,   "Irem", "Legend of Hero Tonma (bootleg, set 1)", GAME_NOT_WORKING| GAME_NO_COCKTAIL )
 GAME( 1989, lohtb2,      loht,     m72_8751, loht,     m72_8751, ROT0,   "Irem", "Legend of Hero Tonma (bootleg, set 2)", GAME_NO_COCKTAIL )
 GAME( 1989, xmultipl,    0,        xmultipl, xmultipl, xmultipl, ROT0,   "Irem", "X Multiply (Japan)", GAME_NO_COCKTAIL )
-GAME( 1989, dbreed,      0,        dbreed,   dbreed,   0,        ROT0,   "Irem", "Dragon Breed (M81 pcb version)", GAME_NO_COCKTAIL )
-GAME( 1989, dbreedm72,   dbreed,   dbreed72, dbreed,   dbreed72, ROT0,   "Irem", "Dragon Breed (M72 pcb version)", GAME_NO_COCKTAIL )
+GAME( 1989, dbreed,      0,        dbreed,   dbreed,   0,        ROT0,   "Irem", "Dragon Breed (M81 PCB version)", GAME_NO_COCKTAIL )
+GAME( 1989, dbreedm72,   dbreed,   dbreed72, dbreed,   dbreed72, ROT0,   "Irem", "Dragon Breed (M72 PCB version)", GAME_NO_COCKTAIL )
 GAME( 1989, rtype2,      0,        rtype2,   rtype2,   0,        ROT0,   "Irem", "R-Type II", GAME_NO_COCKTAIL )
 GAME( 1989, rtype2j,     rtype2,   rtype2,   rtype2,   0,        ROT0,   "Irem", "R-Type II (Japan)", GAME_NO_COCKTAIL )
+GAME( 1989, rtype2jc,    rtype2,   rtype2,   rtype2,   0,        ROT0,   "Irem", "R-Type II (Japan, revision C)", GAME_NO_COCKTAIL )
 GAME( 1990, majtitle,    0,        majtitle, rtype2,   0,        ROT0,   "Irem", "Major Title (World)", GAME_NO_COCKTAIL )
 GAME( 1990, majtitlej,   majtitle, majtitle, rtype2,   0,        ROT0,   "Irem", "Major Title (Japan)", GAME_NO_COCKTAIL )
 GAME( 1990, hharry,      0,        hharry,   hharry,   0,        ROT0,   "Irem", "Hammerin' Harry (World)", GAME_NO_COCKTAIL )

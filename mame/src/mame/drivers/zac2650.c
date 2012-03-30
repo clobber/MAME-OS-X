@@ -10,7 +10,6 @@
 
 #include "driver.h"
 #include "cpu/s2650/s2650.h"
-#include "video/s2636.h"
 
 #include "tinv2650.lh"
 
@@ -26,7 +25,7 @@ VIDEO_UPDATE( tinvader );
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x17ff) AM_ROM
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(tinvader_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(tinvader_videoram_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0x1c00, 0x1cff) AM_RAM
 	AM_RANGE(0x1d00, 0x1dff) AM_RAM
 	AM_RANGE(0x1e80, 0x1e80) AM_READWRITE(tinvader_port_0_r, tinvader_sound_w)
@@ -228,14 +227,14 @@ static const gfx_layout s2636_character =
 	1,
 	{ 0 },
 	{ STEP8(0,1) },
-   	{ STEP8(0,8), STEP2(8*8,8) },
+	{ STEP8(0,8), STEP2(8*8,8) },
 	8*8
 };
 
 static GFXDECODE_START( tinvader )
 	GFXDECODE_SCALE( "gfx1", 0, tinvader_character,   0, 2, 3, 3 )
-  	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 4, 3 )	/* dynamic */
-  	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 8, 6 )	/* dynamic */
+	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 4, 3 )	/* dynamic */
+	GFXDECODE_SCALE( NULL,   0x1F00, s2636_character, 0, 2, 8, 6 )	/* dynamic */
 GFXDECODE_END
 
 static MACHINE_DRIVER_START( tinvader )

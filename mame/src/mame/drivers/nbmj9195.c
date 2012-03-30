@@ -22,7 +22,7 @@ Notes:
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "machine/z80ctc.h"
-#include "nb1413m3.h"		// needed for mahjong input controller
+#include "includes/nb1413m3.h"		// needed for mahjong input controller
 #include "sound/3812intf.h"
 #include "sound/dac.h"
 #include "cpu/z80/z80daisy.h"
@@ -63,7 +63,7 @@ static WRITE8_HANDLER( nbmj9195_soundbank_w )
 {
 	UINT8 *SNDROM = memory_region(space->machine, "audiocpu");
 
-	memory_set_bankptr(space->machine, 1, &SNDROM[0x08000 + (0x8000 * (data & 0x03))]);
+	memory_set_bankptr(space->machine, "bank1", &SNDROM[0x08000 + (0x8000 * (data & 0x03))]);
 }
 
 static READ8_HANDLER( nbmj9195_sound_r )
@@ -337,7 +337,7 @@ static WRITE8_HANDLER( tmpz84c011_pio_w )
 	if ((!strcmp(space->machine->gamedrv->name, "imekura")) ||
 		(!strcmp(space->machine->gamedrv->name, "mscoutm")) ||
 		(!strcmp(space->machine->gamedrv->name, "mjegolf")))
-		{
+	{
 
 		switch (offset)
 		{
@@ -994,7 +994,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sailorws_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sailorws_sound_io_map, ADDRESS_SPACE_IO, 8 )
@@ -1010,7 +1010,7 @@ static ADDRESS_MAP_START( sailorws_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x56, 0x56) AM_READWRITE(tmpz84c011_1_dir_pc_r,tmpz84c011_1_dir_pc_w)
 	AM_RANGE(0x34, 0x34) AM_READWRITE(tmpz84c011_1_dir_pd_r,tmpz84c011_1_dir_pd_w)
 	AM_RANGE(0x44, 0x44) AM_READWRITE(tmpz84c011_1_dir_pe_r,tmpz84c011_1_dir_pe_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ym", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ymsnd", ym3812_w)
 ADDRESS_MAP_END
 
 /********************************************************************************
@@ -2947,7 +2947,7 @@ static MACHINE_DRIVER_START( NBMJDRV1 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
 	MDRV_SOUND_ADD("dac1", DAC, 0)

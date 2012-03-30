@@ -55,12 +55,12 @@ struct _i8279_state
 	UINT8		inhibit;
 	UINT8		clear;
 	UINT8		ram[16];
-	UINT8 		read_sensor;
-	UINT8 		write_display;
-	UINT8 		sense_address;
-	UINT8 		sense_auto_inc;
-	UINT8 		disp_address;
-	UINT8 		disp_auto_inc;
+	UINT8		read_sensor;
+	UINT8		write_display;
+	UINT8		sense_address;
+	UINT8		sense_auto_inc;
+	UINT8		disp_address;
+	UINT8		disp_auto_inc;
 };
 
 static i8279_state i8279[2];
@@ -155,7 +155,7 @@ static READ8_HANDLER( m1_8279_r )
 		{
 			result = input_port_read(space->machine,portnames[chip->sense_address]);
 //          break
-   		}
+		}
 		if ( chip->sense_auto_inc )
 		{
 			chip->sense_address = (chip->sense_address + 1 ) & 7;
@@ -239,7 +239,7 @@ static WRITE8_HANDLER( m1_8279_w )
 			/* command 2: read FIFO/sensor RAM */
 			case 0x40:
 		        chip->sense_address = data & 0x07;
-   			    chip->sense_auto_inc = data & 0x10;
+			    chip->sense_auto_inc = data & 0x10;
         		chip->read_sensor = 1;
 				break;
 			/* command 3: read display RAM */
@@ -285,7 +285,7 @@ static WRITE8_HANDLER( m1_8279_w )
     chip->ram[chip->disp_address] = data;
     if ( chip->disp_auto_inc )
 	chip->disp_address ++;
- 	}
+	}
 }
 
 static READ8_HANDLER( m1_8279_2_r )
@@ -397,7 +397,7 @@ static WRITE8_HANDLER( m1_8279_2_w )
 			/* command 2: read FIFO/sensor RAM */
 			case 0x40:
 		        chip->sense_address = data & 0x07;
-   			    chip->sense_auto_inc = data & 0x10;
+			    chip->sense_auto_inc = data & 0x10;
         		chip->read_sensor = 1;
 				break;
 			/* command 3: read display RAM */
@@ -435,7 +435,7 @@ static WRITE8_HANDLER( m1_8279_2_w )
     chip->ram[chip->disp_address] = data;
     if ( chip->disp_auto_inc )
 	chip->disp_address ++;
- 	}
+	}
 
 }
 
@@ -743,12 +743,12 @@ static WRITE8_HANDLER( m1_latch_w )
 		case 6: // Srsel
 		SRSEL = (data & 1);
 		break;
-		}
+	}
 }
 
 
 static ADDRESS_MAP_START( m1_memmap, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(reel12_w)
 	AM_RANGE(0x2010, 0x2010) AM_WRITE(reel34_w)
@@ -760,15 +760,15 @@ static ADDRESS_MAP_START( m1_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x2070, 0x207f) AM_DEVREADWRITE( "duart68681", duart68681_r, duart68681_w )
 
-	AM_RANGE(0x2090, 0x2091) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x20B0, 0x20B0) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x2090, 0x2091) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x20B0, 0x20B0) AM_DEVREAD("aysnd", ay8910_r)
 
 	AM_RANGE(0x20A0, 0x20A3) AM_DEVWRITE("pia", pia6821_w)
 	AM_RANGE(0x20A0, 0x20A3) AM_DEVREAD("pia", pia6821_r)
 
 	AM_RANGE(0x20C0, 0x20C7) AM_WRITE(m1_latch_w)
 
-	AM_RANGE(0x2400, 0x2401) AM_DEVWRITE( "ym", ym2413_w )
+	AM_RANGE(0x2400, 0x2401) AM_DEVWRITE( "ymsnd", ym2413_w )
 
 	AM_RANGE(0x2800, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -804,11 +804,11 @@ static MACHINE_DRIVER_START( m1 )
 	MDRV_PIA6821_ADD("pia", m1_pia_intf)
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay",AY8913, M1_MASTER_CLOCK)
+	MDRV_SOUND_ADD("aysnd",AY8913, M1_MASTER_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("ym", YM2413, M1_MASTER_CLOCK/4)
+	MDRV_SOUND_ADD("ymsnd", YM2413, M1_MASTER_CLOCK/4)
 
 	MDRV_SOUND_ADD("msm6376", OKIM6376, M1_MASTER_CLOCK/4) //?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)

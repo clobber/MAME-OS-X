@@ -1,7 +1,7 @@
 #include "driver.h"
 
-static tilemap *tx_tilemap;
-static tilemap *bg_tilemap;
+static tilemap_t *tx_tilemap;
+static tilemap_t *bg_tilemap;
 UINT8 *mainsnk_fgram;
 UINT8 *mainsnk_bgram;
 
@@ -94,7 +94,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 {
 	const gfx_element *gfx = machine->gfx[1];
 	const UINT8 *source, *finish;
-	source =  spriteram;
+	source =  machine->generic.spriteram.u8;
 	finish =  source + 25*4;
 
 	while( source<finish )

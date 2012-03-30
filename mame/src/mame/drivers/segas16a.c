@@ -147,7 +147,7 @@ Tetris         -         -         -         -         EPR12169  EPR12170  -    
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/mcs51/mcs51.h"
-#include "system16.h"
+#include "includes/system16.h"
 #include "machine/8255ppi.h"
 #include "machine/fd1089.h"
 #include "machine/i8243.h"
@@ -371,10 +371,10 @@ static WRITE8_DEVICE_HANDLER( video_control_w )
 		cpu_set_input_line(mcu, MCS51_INT1_LINE, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
 
 	segaic16_set_display_enable(device->machine, data & 0x10);
-	set_led_status(1, data & 0x08);
-	set_led_status(0, data & 0x04);
-	coin_counter_w(1, data & 0x02);
-	coin_counter_w(0, data & 0x01);
+	set_led_status(device->machine, 1, data & 0x08);
+	set_led_status(device->machine, 0, data & 0x04);
+	coin_counter_w(device->machine, 1, data & 0x02);
+	coin_counter_w(device->machine, 0, data & 0x01);
 }
 
 
@@ -979,7 +979,7 @@ static ADDRESS_MAP_START( system16a_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x400000, 0x407fff) AM_MIRROR(0xb88000) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x410000, 0x410fff) AM_MIRROR(0xb8f000) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
 	AM_RANGE(0x440000, 0x4407ff) AM_MIRROR(0x3bf800) AM_RAM AM_BASE(&segaic16_spriteram_0)
-	AM_RANGE(0x840000, 0x840fff) AM_MIRROR(0x3bf000) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x840000, 0x840fff) AM_MIRROR(0x3bf000) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
 	AM_RANGE(0xc40000, 0xc43fff) AM_MIRROR(0x39c000) AM_READWRITE(misc_io_r, misc_io_w)
 	AM_RANGE(0xc60000, 0xc6ffff) AM_READ(watchdog_reset16_r)
 	AM_RANGE(0xc70000, 0xc73fff) AM_MIRROR(0x38c000) AM_RAM AM_BASE(&workram)
@@ -1003,7 +1003,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x80, 0x80) AM_MIRROR(0x3f) AM_WRITE(n7751_command_w)
 	AM_RANGE(0xc0, 0xc0) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
@@ -1950,7 +1950,7 @@ static MACHINE_DRIVER_START( system16a )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.43)
 
@@ -1964,7 +1964,7 @@ static MACHINE_DRIVER_START( system16a_no7751 )
 	MDRV_DEVICE_REMOVE("n7751")
 	MDRV_DEVICE_REMOVE("dac")
 
-	MDRV_SOUND_REPLACE("ym", YM2151, 4000000)
+	MDRV_SOUND_REPLACE("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

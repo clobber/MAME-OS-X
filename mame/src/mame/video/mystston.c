@@ -14,7 +14,7 @@
 
 #include "driver.h"
 #include "video/resnet.h"
-#include "mystston.h"
+#include "includes/mystston.h"
 
 
 
@@ -25,7 +25,7 @@
  *************************************/
 
 #define PIXEL_CLOCK		(MYSTSTON_MASTER_CLOCK / 2)
-#define HTOTAL			(0x140)
+#define HTOTAL			(0x180)
 #define HBEND			(0x000)
 #define HBSTART			(0x100)
 #define VTOTAL			(0x110)	 /* counts from 0x08-0xff, then from 0xe8-0xff */
@@ -134,8 +134,8 @@ WRITE8_HANDLER( mystston_video_control_w )
 	/* D3 - unused */
 
 	/* D4-D5 - coin counters in flipped order */
-	coin_counter_w(0, data & 0x20);
-	coin_counter_w(1, data & 0x10);
+	coin_counter_w(space->machine, 0, data & 0x20);
+	coin_counter_w(space->machine, 1, data & 0x10);
 
 	/* D6 - unused */
 	/* D7 - screen flip */

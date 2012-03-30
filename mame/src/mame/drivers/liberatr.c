@@ -138,7 +138,7 @@
 #include "deprecat.h"
 #include "machine/atari_vg.h"
 #include "sound/pokey.h"
-#include "liberatr.h"
+#include "includes/liberatr.h"
 
 #define MASTER_CLOCK 20000000 /* 20Mhz Main Clock Xtal */
 
@@ -155,13 +155,13 @@ static UINT8 ctrld;
 
 static WRITE8_HANDLER( liberatr_led_w )
 {
-	set_led_status(offset, ~data & 0x10);
+	set_led_status(space->machine, offset, ~data & 0x10);
 }
 
 
 static WRITE8_HANDLER( liberatr_coin_counter_w )
 {
-	coin_counter_w(offset ^ 0x01, data & 0x10);
+	coin_counter_w(space->machine, offset ^ 0x01, data & 0x10);
 }
 
 
@@ -212,20 +212,20 @@ static ADDRESS_MAP_START( liberatr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_RAM AM_BASE(&liberatr_x)
 	AM_RANGE(0x0001, 0x0001) AM_RAM AM_BASE(&liberatr_y)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(liberatr_bitmap_xy_r, liberatr_bitmap_xy_w)
-	AM_RANGE(0x0000, 0x3fff) AM_RAM_WRITE(liberatr_bitmap_w) AM_BASE(&liberatr_bitmapram) 	/* overlapping for my convenience */
+	AM_RANGE(0x0000, 0x3fff) AM_RAM_WRITE(liberatr_bitmap_w) AM_BASE(&liberatr_bitmapram)	/* overlapping for my convenience */
 	AM_RANGE(0x4000, 0x403f) AM_DEVREAD("earom", atari_vg_earom_r)
 	AM_RANGE(0x5000, 0x5000) AM_READ(liberatr_input_port_0_r)
 	AM_RANGE(0x5001, 0x5001) AM_READ_PORT("IN1")
-	AM_RANGE(0x6000, 0x600f) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_base_ram)
-	AM_RANGE(0x6200, 0x621f) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_colorram)
+	AM_RANGE(0x6000, 0x600f) AM_WRITEONLY AM_BASE(&liberatr_base_ram)
+	AM_RANGE(0x6200, 0x621f) AM_WRITEONLY AM_BASE(&liberatr_colorram)
 	AM_RANGE(0x6400, 0x6400) AM_WRITENOP
 	AM_RANGE(0x6600, 0x6600) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
-	AM_RANGE(0x6800, 0x6800) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_planet_frame)
+	AM_RANGE(0x6800, 0x6800) AM_WRITEONLY AM_BASE(&liberatr_planet_frame)
 	AM_RANGE(0x6a00, 0x6a00) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x6c00, 0x6c01) AM_WRITE(liberatr_led_w)
 	AM_RANGE(0x6c04, 0x6c04) AM_WRITE(liberatr_trackball_reset_w)
 	AM_RANGE(0x6c05, 0x6c06) AM_WRITE(liberatr_coin_counter_w)
-	AM_RANGE(0x6c07, 0x6c07) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_planet_select)
+	AM_RANGE(0x6c07, 0x6c07) AM_WRITEONLY AM_BASE(&liberatr_planet_select)
 	AM_RANGE(0x6e00, 0x6e3f) AM_DEVWRITE("earom", atari_vg_earom_w)
 	AM_RANGE(0x7000, 0x701f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
 	AM_RANGE(0x7800, 0x781f) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
@@ -245,20 +245,20 @@ static ADDRESS_MAP_START( liberat2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_RAM AM_BASE(&liberatr_x)
 	AM_RANGE(0x0001, 0x0001) AM_RAM AM_BASE(&liberatr_y)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(liberatr_bitmap_xy_r, liberatr_bitmap_xy_w)
-	AM_RANGE(0x0000, 0x3fff) AM_RAM_WRITE(liberatr_bitmap_w) AM_BASE(&liberatr_bitmapram) 	/* overlapping for my convenience */
+	AM_RANGE(0x0000, 0x3fff) AM_RAM_WRITE(liberatr_bitmap_w) AM_BASE(&liberatr_bitmapram)	/* overlapping for my convenience */
 	AM_RANGE(0x4000, 0x4000) AM_READ(liberatr_input_port_0_r)
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("IN1")
-	AM_RANGE(0x4000, 0x400f) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_base_ram)
-	AM_RANGE(0x4200, 0x421f) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_colorram)
+	AM_RANGE(0x4000, 0x400f) AM_WRITEONLY AM_BASE(&liberatr_base_ram)
+	AM_RANGE(0x4200, 0x421f) AM_WRITEONLY AM_BASE(&liberatr_colorram)
 	AM_RANGE(0x4400, 0x4400) AM_WRITENOP
 	AM_RANGE(0x4600, 0x4600) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
 	AM_RANGE(0x4800, 0x483f) AM_DEVREAD("earom", atari_vg_earom_r)
-	AM_RANGE(0x4800, 0x4800) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_planet_frame)
+	AM_RANGE(0x4800, 0x4800) AM_WRITEONLY AM_BASE(&liberatr_planet_frame)
 	AM_RANGE(0x4a00, 0x4a00) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x4c00, 0x4c01) AM_WRITE(liberatr_led_w)
 	AM_RANGE(0x4c04, 0x4c04) AM_WRITE(liberatr_trackball_reset_w)
 	AM_RANGE(0x4c05, 0x4c06) AM_WRITE(liberatr_coin_counter_w)
-	AM_RANGE(0x4c07, 0x4c07) AM_WRITE(SMH_RAM) AM_BASE(&liberatr_planet_select)
+	AM_RANGE(0x4c07, 0x4c07) AM_WRITEONLY AM_BASE(&liberatr_planet_select)
 	AM_RANGE(0x4e00, 0x4e3f) AM_DEVWRITE("earom", atari_vg_earom_w)
 	AM_RANGE(0x5000, 0x501f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
 	AM_RANGE(0x5800, 0x581f) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
@@ -455,7 +455,7 @@ ROM_START( liberatr )
 	ROM_LOAD_NIB_HIGH( "136012.126",   0x0000, 0x0100, CRC(2e670aa6) SHA1(a6bcc49d0948d2dfe497c5e3ad4a834fa78f779a) )
 
 	ROM_REGION( 0x200, "proms", 0 )
-    ROM_LOAD( "136012.021",   0x0000, 0x0100, CRC(ffdcd7bc) SHA1(2ce733203d628e299ec4fb93db8be1598b49142c) ) 	/* write protect PROM */
+    ROM_LOAD( "136012.021",   0x0000, 0x0100, CRC(ffdcd7bc) SHA1(2ce733203d628e299ec4fb93db8be1598b49142c) )	/* write protect PROM */
     ROM_LOAD( "136012.022",   0x0100, 0x0100, CRC(3353edce) SHA1(915308b11096fc1d02acf9b4af806a2a935dd748) )	/* sync PROM */
 ROM_END
 
@@ -485,7 +485,7 @@ ROM_START( liberatr2 )
 	ROM_LOAD_NIB_HIGH( "136012.126",   0x0000, 0x0100, CRC(2e670aa6) SHA1(a6bcc49d0948d2dfe497c5e3ad4a834fa78f779a) )
 
 	ROM_REGION( 0x200, "proms", 0 )
-    ROM_LOAD( "136012.021",   0x0000, 0x0100, CRC(ffdcd7bc) SHA1(2ce733203d628e299ec4fb93db8be1598b49142c) ) 	/* write protect PROM */
+    ROM_LOAD( "136012.021",   0x0000, 0x0100, CRC(ffdcd7bc) SHA1(2ce733203d628e299ec4fb93db8be1598b49142c) )	/* write protect PROM */
     ROM_LOAD( "136012.022",   0x0100, 0x0100, CRC(3353edce) SHA1(915308b11096fc1d02acf9b4af806a2a935dd748) )	/* sync PROM */
 ROM_END
 

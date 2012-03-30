@@ -9,7 +9,7 @@
 #include "cpu/adsp2100/adsp2100.h"
 #include "audio/williams.h"
 #include "video/poly.h"
-#include "midvunit.h"
+#include "includes/midvunit.h"
 
 
 #define WATCH_RENDER		(0)
@@ -41,7 +41,7 @@ typedef struct _poly_extra_data poly_extra_data;
 struct _poly_extra_data
 {
 	UINT8 *		texbase;
-	UINT16 		pixdata;
+	UINT16		pixdata;
 	UINT8		dither;
 };
 
@@ -509,8 +509,8 @@ WRITE32_HANDLER( midvunit_paletteram_w )
 {
 	int newword;
 
-	COMBINE_DATA(&paletteram32[offset]);
-	newword = paletteram32[offset];
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
+	newword = space->machine->generic.paletteram.u32[offset];
 	palette_set_color_rgb(space->machine, offset, pal5bit(newword >> 10), pal5bit(newword >> 5), pal5bit(newword >> 0));
 }
 

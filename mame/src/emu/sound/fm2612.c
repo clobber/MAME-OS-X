@@ -648,8 +648,8 @@ typedef struct
 #if FM_BUSY_FLAG_SUPPORT
 	TIME_TYPE	busy_expiry_time;	/* expiry time of the busy status */
 #endif
-	UINT32 		clock;				/* master clock  (Hz)   */
-	UINT32 		rate;				/* sampling rate (Hz)   */
+	UINT32		clock;				/* master clock  (Hz)   */
+	UINT32		rate;				/* sampling rate (Hz)   */
 	UINT16		address;			/* address register     */
 	UINT8		status;				/* status flag          */
 	UINT32		mode;				/* mode  CSM / 3SLOT    */
@@ -1442,7 +1442,7 @@ static void update_ssg_eg_channel(FM_SLOT *SLOT)
 			{
 				/* set inversion flag */
 			        if (SLOT->ssg & 0x02)
-			 	       SLOT->ssgn = 4;
+				       SLOT->ssgn = 4;
 
 				/* force attenuation level during decay phases */
 				if ((SLOT->state != EG_ATT) && !(SLOT->ssgn ^ (SLOT->ssg & 0x04)))
@@ -1777,7 +1777,6 @@ static int init_tables(void)
 			for (i=0; i<13; i++)
 				logerror(", [%02i] %4x", i*2, tl_tab[ x*2 /*+1*/ + i*2*TL_RES_LEN ]);
 			logerror("\n");
-		}
 	#endif
 	}
 	/*logerror("FM.C: TL_TAB_LEN = %i elements (%i bytes)\n",TL_TAB_LEN, (int)sizeof(tl_tab));*/
@@ -2011,7 +2010,7 @@ static void OPNWriteMode(FM_OPN *OPN, int r, int v)
 		}
 		else
 		{
-	     		OPN->lfo_inc = 0;
+	    		OPN->lfo_inc = 0;
 		}
 		break;
 	case 0x24:	/* timer A High 8*/

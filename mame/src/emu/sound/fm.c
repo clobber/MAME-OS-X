@@ -1567,7 +1567,6 @@ static int init_tables(void)
 			for (i=0; i<13; i++)
 				logerror(", [%02i] %4x", i*2, tl_tab[ x*2 /*+1*/ + i*2*TL_RES_LEN ]);
 			logerror("\n");
-		}
 	#endif
 	}
 	/*logerror("FM.C: TL_TAB_LEN = %i elements (%i bytes)\n",TL_TAB_LEN, (int)sizeof(tl_tab));*/
@@ -2420,10 +2419,10 @@ typedef struct
 	const UINT8	*pcmbuf;			/* pcm rom buffer       */
 	UINT32		pcm_size;			/* size of pcm rom      */
 	UINT8		adpcmTL;			/* adpcmA total level   */
-	ADPCM_CH 	adpcm[6];			/* adpcm channels       */
+	ADPCM_CH	adpcm[6];			/* adpcm channels       */
 	UINT32		adpcmreg[0x30];		/* registers            */
 	UINT8		adpcm_arrivedEndAddress;
-	YM_DELTAT 	deltaT;				/* Delta-T ADPCM unit   */
+	YM_DELTAT	deltaT;				/* Delta-T ADPCM unit   */
 
     UINT8		flagmask;			/* YM2608 only */
     UINT8		irqmask;			/* YM2608 only */
@@ -3673,7 +3672,7 @@ int ym2608_write(void *chip, int a,UINT8 v)
 		case 0x20:	/* Mode Register */
 			switch(addr)
 			{
-			case 0x29: 	/* SCH,xx,xxx,EN_ZERO,EN_BRDY,EN_EOS,EN_TB,EN_TA */
+			case 0x29:	/* SCH,xx,xxx,EN_ZERO,EN_BRDY,EN_EOS,EN_TB,EN_TA */
 				YM2608IRQMaskWrite(OPN, F2608, v);
 				break;
 			default:

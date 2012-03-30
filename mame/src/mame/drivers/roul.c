@@ -138,8 +138,8 @@ static WRITE8_HANDLER( blitter_cmd_w )
 
 static WRITE8_HANDLER( sound_latch_w )
 {
- 	soundlatch_w(space, 0, data & 0xff);
- 	cputag_set_input_line(space->machine, "soundcpu", 0, HOLD_LINE);
+	soundlatch_w(space, 0, data & 0xff);
+	cputag_set_input_line(space->machine, "soundcpu", 0, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( ball_w )
@@ -153,7 +153,7 @@ static WRITE8_HANDLER( ball_w )
 
 static ADDRESS_MAP_START( roul_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( roul_cpu_io_map, ADDRESS_SPACE_IO, 8 )
@@ -175,7 +175,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_cpu_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 static VIDEO_START(roul)
@@ -255,7 +255,7 @@ static MACHINE_DRIVER_START( roul )
 
 	MDRV_PALETTE_INIT(roul)
 
- 	/* video hardware */
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -269,7 +269,7 @@ static MACHINE_DRIVER_START( roul )
 	MDRV_VIDEO_UPDATE(roul)
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, 1000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

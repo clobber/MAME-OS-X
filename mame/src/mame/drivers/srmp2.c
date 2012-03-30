@@ -52,36 +52,12 @@ Note:
 
 
 #include "driver.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "sound/ay8910.h"
 #include "sound/msm5205.h"
-
-
-/***************************************************************************
-
-  Variables
-
-***************************************************************************/
-
-PALETTE_INIT( srmp2 );
-VIDEO_UPDATE( srmp2 );
-PALETTE_INIT( srmp3 );
-VIDEO_UPDATE( srmp3 );
-VIDEO_UPDATE( mjyuugi );
-
-
-extern int srmp2_color_bank;
-extern int srmp3_gfx_bank;
-extern int mjyuugi_gfx_bank;
-
-static int srmp2_adpcm_bank;
-static int srmp2_adpcm_data;
-static UINT32 srmp2_adpcm_sptr;
-static UINT32 srmp2_adpcm_eptr;
-
-static int srmp2_port_select;
+#include "includes/srmp2.h"
 
 
 /***************************************************************************
@@ -133,12 +109,16 @@ static DRIVER_INIT( srmp3 )
 
 static MACHINE_RESET( srmp2 )
 {
-	srmp2_port_select = 0;
+	srmp2_state *state = (srmp2_state *)machine->driver_data;
+
+	state->port_select = 0;
 }
 
 static MACHINE_RESET( srmp3 )
 {
-	srmp2_port_select = 0;
+	srmp2_state *state = (srmp2_state *)machine->driver_data;
+
+	state->port_select = 0;
 }
 
 
@@ -157,10 +137,12 @@ static WRITE16_HANDLER( srmp2_flags_w )
     x--- ---- : Palette Bank
 */
 
-	coin_counter_w( 0, ((data & 0x01) >> 0) );
-	coin_lockout_w( 0, (((~data) & 0x10) >> 4) );
-	srmp2_adpcm_bank = ( (data & 0x20) >> 5 );
-	srmp2_color_bank = ( (data & 0x80) >> 7 );
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
+
+	coin_counter_w( space->machine, 0, ((data & 0x01) >> 0) );
+	coin_lockout_w( space->machine, 0, (((~data) & 0x10) >> 4) );
+	state->adpcm_bank = ( (data & 0x20) >> 5 );
+	state->color_bank = ( (data & 0x80) >> 7 );
 }
 
 
@@ -171,8 +153,8 @@ static WRITE16_HANDLER( mjyuugi_flags_w )
     ---x ---- : Coin Lock Out
 */
 
-	coin_counter_w( 0, ((data & 0x01) >> 0) );
-	coin_lockout_w( 0, (((~data) & 0x10) >> 4) );
+	coin_counter_w( space->machine, 0, ((data & 0x01) >> 0) );
+	coin_lockout_w( space->machine, 0, (((~data) & 0x10) >> 4) );
 }
 
 
@@ -182,8 +164,11 @@ static WRITE16_HANDLER( mjyuugi_adpcm_bank_w )
     ---- xxxx : ADPCM Bank
     --xx ---- : GFX Bank
 */
-	srmp2_adpcm_bank = (data & 0x0f);
-	mjyuugi_gfx_bank = ((data >> 4) & 0x03);
+
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
+
+	state->adpcm_bank = (data & 0x0f);
+	state->gfx_bank = ((data >> 4) & 0x03);
 }
 
 
@@ -196,17 +181,18 @@ static WRITE16_DEVICE_HANDLER( srmp2_adpcm_code_w )
       table and plays the ADPCM for itself.
 */
 
+	srmp2_state *state = (srmp2_state *)device->machine->driver_data;
 	UINT8 *ROM = memory_region(device->machine, "adpcm");
 
-	srmp2_adpcm_sptr = (ROM[((srmp2_adpcm_bank * 0x10000) + (data << 2) + 0)] << 8);
-	srmp2_adpcm_eptr = (ROM[((srmp2_adpcm_bank * 0x10000) + (data << 2) + 1)] << 8);
-	srmp2_adpcm_eptr  = (srmp2_adpcm_eptr - 1) & 0x0ffff;
+	state->adpcm_sptr = (ROM[((state->adpcm_bank * 0x10000) + (data << 2) + 0)] << 8);
+	state->adpcm_eptr = (ROM[((state->adpcm_bank * 0x10000) + (data << 2) + 1)] << 8);
+	state->adpcm_eptr  = (state->adpcm_eptr - 1) & 0x0ffff;
 
-	srmp2_adpcm_sptr += (srmp2_adpcm_bank * 0x10000);
-	srmp2_adpcm_eptr += (srmp2_adpcm_bank * 0x10000);
+	state->adpcm_sptr += (state->adpcm_bank * 0x10000);
+	state->adpcm_eptr += (state->adpcm_bank * 0x10000);
 
 	msm5205_reset_w(device, 0);
-	srmp2_adpcm_data = -1;
+	state->adpcm_data = -1;
 }
 
 
@@ -219,46 +205,48 @@ static WRITE8_DEVICE_HANDLER( srmp3_adpcm_code_w )
       table and plays the ADPCM for itself.
 */
 
+	srmp2_state *state = (srmp2_state *)device->machine->driver_data;
 	UINT8 *ROM = memory_region(device->machine, "adpcm");
 
-	srmp2_adpcm_sptr = (ROM[((srmp2_adpcm_bank * 0x10000) + (data << 2) + 0)] << 8);
-	srmp2_adpcm_eptr = (ROM[((srmp2_adpcm_bank * 0x10000) + (data << 2) + 1)] << 8);
-	srmp2_adpcm_eptr  = (srmp2_adpcm_eptr - 1) & 0x0ffff;
+	state->adpcm_sptr = (ROM[((state->adpcm_bank * 0x10000) + (data << 2) + 0)] << 8);
+	state->adpcm_eptr = (ROM[((state->adpcm_bank * 0x10000) + (data << 2) + 1)] << 8);
+	state->adpcm_eptr  = (state->adpcm_eptr - 1) & 0x0ffff;
 
-	srmp2_adpcm_sptr += (srmp2_adpcm_bank * 0x10000);
-	srmp2_adpcm_eptr += (srmp2_adpcm_bank * 0x10000);
+	state->adpcm_sptr += (state->adpcm_bank * 0x10000);
+	state->adpcm_eptr += (state->adpcm_bank * 0x10000);
 
 	msm5205_reset_w(device, 0);
-	srmp2_adpcm_data = -1;
+	state->adpcm_data = -1;
 }
 
 
 static void srmp2_adpcm_int(const device_config *device)
 {
+	srmp2_state *state = (srmp2_state *)device->machine->driver_data;
 	UINT8 *ROM = memory_region(device->machine, "adpcm");
 
-	if (srmp2_adpcm_sptr)
+	if (state->adpcm_sptr)
 	{
-		if (srmp2_adpcm_data == -1)
+		if (state->adpcm_data == -1)
 		{
-			srmp2_adpcm_data = ROM[srmp2_adpcm_sptr];
+			state->adpcm_data = ROM[state->adpcm_sptr];
 
-			if (srmp2_adpcm_sptr >= srmp2_adpcm_eptr)
+			if (state->adpcm_sptr >= state->adpcm_eptr)
 			{
 				msm5205_reset_w(device, 1);
-				srmp2_adpcm_data = 0;
-				srmp2_adpcm_sptr = 0;
+				state->adpcm_data = 0;
+				state->adpcm_sptr = 0;
 			}
 			else
 			{
-				msm5205_data_w(device, ((srmp2_adpcm_data >> 4) & 0x0f));
+				msm5205_data_w(device, ((state->adpcm_data >> 4) & 0x0f));
 			}
 		}
 		else
 		{
-			msm5205_data_w(device, ((srmp2_adpcm_data >> 0) & 0x0f));
-			srmp2_adpcm_sptr++;
-			srmp2_adpcm_data = -1;
+			msm5205_data_w(device, ((state->adpcm_data >> 0) & 0x0f));
+			state->adpcm_sptr++;
+			state->adpcm_data = -1;
 		}
 	}
 	else
@@ -286,6 +274,8 @@ static READ16_HANDLER( srmp2_input_1_r )
     ---x xxxx : Key code
     --x- ---- : Player 1 and 2 side flag
 */
+
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
 	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3" };
 
 	if (!ACCESSING_BITS_0_7)
@@ -293,7 +283,7 @@ static READ16_HANDLER( srmp2_input_1_r )
 		return 0xffff;
 	}
 
-	if (srmp2_port_select != 2)			/* Panel keys */
+	if (state->port_select != 2)			/* Panel keys */
 	{
 		int i, j, t;
 
@@ -333,27 +323,17 @@ static READ16_HANDLER( srmp2_input_2_r )
 
 static WRITE16_HANDLER( srmp2_input_1_w )
 {
-	if (data != 0x0000)
-	{
-		srmp2_port_select = 1;
-	}
-	else
-	{
-		srmp2_port_select = 0;
-	}
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
+
+	state->port_select = (data != 0x0000) ? 1 : 0;
 }
 
 
 static WRITE16_HANDLER( srmp2_input_2_w )
 {
-	if (data == 0x0000)
-	{
-		srmp2_port_select = 2;
-	}
-	else
-	{
-		srmp2_port_select = 0;
-	}
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
+
+	state->port_select = (data == 0x0000) ? 2 : 0;
 }
 
 
@@ -364,15 +344,16 @@ static WRITE8_HANDLER( srmp3_rombank_w )
     xxx- ---- : ADPCM ROM bank
 */
 
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
 	int addr;
 
-	srmp2_adpcm_bank = ((data & 0xe0) >> 5);
+	state->adpcm_bank = ((data & 0xe0) >> 5);
 
 	if (data & 0x1f) addr = ((0x10000 + (0x2000 * (data & 0x0f))) - 0x8000);
 	else addr = 0x10000;
 
-	memory_set_bankptr(space->machine, 1, &ROM[addr]);
+	memory_set_bankptr(space->machine, "bank1", &ROM[addr]);
 }
 
 /**************************************************************************
@@ -384,9 +365,9 @@ static WRITE8_HANDLER( srmp3_rombank_w )
 
 static ADDRESS_MAP_START( srmp2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x140000, 0x143fff) AM_RAM AM_BASE(&spriteram16_2)		/* Sprites Code + X + Attr */
-	AM_RANGE(0x180000, 0x180609) AM_RAM AM_BASE(&spriteram16)		/* Sprites Y */
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x140000, 0x143fff) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram2.u16)		/* Sprites Code + X + Attr */
+	AM_RANGE(0x180000, 0x180609) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram1.u16)		/* Sprites Y */
 	AM_RANGE(0x1c0000, 0x1c0001) AM_WRITENOP						/* ??? */
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(srmp2_flags_w)			/* ADPCM bank, Color bank, etc. */
 	AM_RANGE(0x900000, 0x900001) AM_READ_PORT("SYSTEM")				/* Coinage */
@@ -399,8 +380,8 @@ static ADDRESS_MAP_START( srmp2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc00000, 0xc00001) AM_WRITENOP						/* ??? */
 	AM_RANGE(0xd00000, 0xd00001) AM_WRITENOP						/* ??? */
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP						/* ??? */
-	AM_RANGE(0xf00000, 0xf00001) AM_DEVREAD8("ay", ay8910_r, 0x00ff)
-	AM_RANGE(0xf00000, 0xf00003) AM_DEVWRITE8("ay", ay8910_address_data_w, 0x00ff)
+	AM_RANGE(0xf00000, 0xf00001) AM_DEVREAD8("aysnd", ay8910_r, 0x00ff)
+	AM_RANGE(0xf00000, 0xf00003) AM_DEVWRITE8("aysnd", ay8910_address_data_w, 0x00ff)
 ADDRESS_MAP_END
 
 
@@ -414,20 +395,20 @@ static ADDRESS_MAP_START( mjyuugi_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x300000, 0x300001) AM_READNOP							/* ??? */
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("DSW3-1")				/* DSW 3-1 */
 	AM_RANGE(0x500010, 0x500011) AM_READ_PORT("DSW3-2")				/* DSW 3-2 */
-	AM_RANGE(0x700000, 0x7003ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x700000, 0x7003ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x800000, 0x800001) AM_READNOP				/* ??? */
 	AM_RANGE(0x900000, 0x900001) AM_READWRITE(srmp2_input_1_r,srmp2_input_1_w)		/* I/O port 1 */
 	AM_RANGE(0x900002, 0x900003) AM_READWRITE(srmp2_input_2_r,srmp2_input_2_w)		/* I/O port 2 */
 	AM_RANGE(0xa00000, 0xa00001) AM_READ(srmp2_cchip_status_0_r)	/* custom chip status ??? */
 	AM_RANGE(0xa00000, 0xa00001) AM_DEVWRITE("msm", srmp2_adpcm_code_w)			/* ADPCM number */
 	AM_RANGE(0xa00002, 0xa00003) AM_READ(srmp2_cchip_status_1_r)	/* custom chip status ??? */
-	AM_RANGE(0xb00000, 0xb00001) AM_DEVREAD8("ay", ay8910_r, 0x00ff)
-	AM_RANGE(0xb00000, 0xb00003) AM_DEVWRITE8("ay", ay8910_address_data_w, 0x00ff)
+	AM_RANGE(0xb00000, 0xb00001) AM_DEVREAD8("aysnd", ay8910_r, 0x00ff)
+	AM_RANGE(0xb00000, 0xb00003) AM_DEVWRITE8("aysnd", ay8910_address_data_w, 0x00ff)
 	AM_RANGE(0xc00000, 0xc00001) AM_WRITENOP					/* ??? */
-	AM_RANGE(0xd00000, 0xd00609) AM_RAM AM_BASE(&spriteram16)	/* Sprites Y */
+	AM_RANGE(0xd00000, 0xd00609) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram1.u16)	/* Sprites Y */
 	AM_RANGE(0xd02000, 0xd023ff) AM_RAM							/* ??? only writes $00fa */
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM	AM_BASE(&spriteram16_2)	/* Sprites Code + X + Attr */
-	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram2.u16)	/* Sprites Code + X + Attr */
+	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 
@@ -448,9 +429,10 @@ static WRITE8_HANDLER( srmp3_input_1_w )
     ---- -x-- : Player 2 side flag ?
 */
 
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
 	logerror("PC:%04X DATA:%02X  srmp3_input_1_w\n", cpu_get_pc(space->cpu), data);
 
-	srmp2_port_select = 0;
+	state->port_select = 0;
 
 	{
 		static int qqq01 = 0;
@@ -469,12 +451,13 @@ static WRITE8_HANDLER( srmp3_input_1_w )
 
 static WRITE8_HANDLER( srmp3_input_2_w )
 {
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
 
 	/* Key matrix reading related ? */
 
 	logerror("PC:%04X DATA:%02X  srmp3_input_2_w\n", cpu_get_pc(space->cpu), data);
 
-	srmp2_port_select = 1;
+	state->port_select = 1;
 
 }
 
@@ -532,21 +515,23 @@ static WRITE8_HANDLER( srmp3_flags_w )
     xx-- ---- : GFX Bank
 */
 
-	coin_counter_w( 0, ((data & 0x01) >> 0) );
-	coin_lockout_w( 0, (((~data) & 0x10) >> 4) );
-	srmp3_gfx_bank = (data >> 6) & 0x03;
+	srmp2_state *state = (srmp2_state *)space->machine->driver_data;
+
+	coin_counter_w( space->machine, 0, ((data & 0x01) >> 0) );
+	coin_lockout_w( space->machine, 0, (((~data) & 0x10) >> 4) );
+	state->gfx_bank = (data >> 6) & 0x03;
 }
 
 
 static ADDRESS_MAP_START( srmp3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK(1)							/* rom bank */
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* work ram */
+	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")							/* rom bank */
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	/* work ram */
 	AM_RANGE(0xa800, 0xa800) AM_WRITENOP							/* flag ? */
-	AM_RANGE(0xb000, 0xb303) AM_RAM AM_BASE(&spriteram)				/* Sprites Y */
+	AM_RANGE(0xb000, 0xb303) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram1.u8)				/* Sprites Y */
 	AM_RANGE(0xb800, 0xb800) AM_WRITENOP							/* flag ? */
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&spriteram_2)			/* Sprites Code + X + Attr */
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE(&spriteram_3)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram2.u8)			/* Sprites Code + X + Attr */
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_MEMBER(srmp2_state,spriteram3.u8)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( srmp3_io_map, ADDRESS_SPACE_IO, 8 )
@@ -558,8 +543,8 @@ static ADDRESS_MAP_START( srmp3_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xa1, 0xa1) AM_READ(srmp3_cchip_status_0_r)				/* custom chip status ??? */
 	AM_RANGE(0xc0, 0xc0) AM_READWRITE(srmp3_input_r, srmp3_input_1_w)	/* key matrix | I/O ??? */
 	AM_RANGE(0xc1, 0xc1) AM_READWRITE(srmp3_cchip_status_1_r, srmp3_input_2_w)	/* custom chip status ??? | I/O ??? */
-	AM_RANGE(0xe0, 0xe1) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xe2, 0xe2) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xe0, 0xe1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xe2, 0xe2) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -1024,6 +1009,8 @@ GFXDECODE_END
 
 static MACHINE_DRIVER_START( srmp2 )
 
+	MDRV_DRIVER_DATA(srmp2_state)
+
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,16000000/2)				/* 8.00 MHz */
 	MDRV_CPU_PROGRAM_MAP(srmp2_map)
@@ -1049,7 +1036,7 @@ static MACHINE_DRIVER_START( srmp2 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 20000000/16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 20000000/16)
 	MDRV_SOUND_CONFIG(srmp2_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
@@ -1060,6 +1047,8 @@ MACHINE_DRIVER_END
 
 
 static MACHINE_DRIVER_START( srmp3 )
+
+	MDRV_DRIVER_DATA(srmp2_state)
 
 	/* basic machine hardware */
 
@@ -1089,7 +1078,7 @@ static MACHINE_DRIVER_START( srmp3 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 16000000/16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 16000000/16)
 	MDRV_SOUND_CONFIG(srmp2_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
@@ -1100,6 +1089,8 @@ MACHINE_DRIVER_END
 
 
 static MACHINE_DRIVER_START( mjyuugi )
+
+	MDRV_DRIVER_DATA(srmp2_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,16000000/2)				/* 8.00 MHz */
@@ -1125,7 +1116,7 @@ static MACHINE_DRIVER_START( mjyuugi )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 16000000/16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 16000000/16)
 	MDRV_SOUND_CONFIG(srmp2_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 

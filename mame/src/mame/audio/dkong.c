@@ -100,8 +100,8 @@
 
 /* Resistors */
 
-#define DK_R1 		RES_K(47)
-#define DK_R2 		RES_K(47)
+#define DK_R1		RES_K(47)
+#define DK_R2		RES_K(47)
 #define DK_R3		RES_K(5.1)
 #define DK_R4		RES_K(2)
 #define DK_R5		750
@@ -109,8 +109,8 @@
 #define DK_R7		RES_K(10)
 #define DK_R8		RES_K(100)
 #define DK_R9		RES_K(10)
-#define DK_R10 		RES_K(10)
-#define DK_R14 		RES_K(47)
+#define DK_R10		RES_K(10)
+#define DK_R14		RES_K(47)
 
 #define DK_R15		RES_K(5.6)
 #define DK_R16		RES_K(5.6)
@@ -119,15 +119,15 @@
 #define DK_R20		RES_K(10)
 #define DK_R21		RES_K(5.6)
 #define DK_R22		RES_K(5.6)
-#define DK_R24 		RES_K(47)
+#define DK_R24		RES_K(47)
 #define DK_R25		RES_K(5.1)
 #define DK_R26		RES_K(2)
 #define DK_R27		150
 #define DK_R28		RES_K(4.7)
 #define DK_R29		RES_K(10)
 #define DK_R30		RES_K(100)
-#define DK_R31 		RES_K(10)
-#define DK_R32 		RES_K(10)
+#define DK_R31		RES_K(10)
+#define DK_R32		RES_K(10)
 #define DK_R35		RES_K(1)
 #define DK_R36		RES_K(1)
 #define DK_R38		RES_K(18)
@@ -451,7 +451,7 @@ static DISCRETE_SOUND_START(dkong2b)
 
 	DISCRETE_TASK_START(1)
 	/* Mixing - DAC */
-	DISCRETE_ADJUSTMENT_TAG(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
+	DISCRETE_ADJUSTMENT(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
 
 	/* Buffer DAC first to input stream 0 */
 	DISCRETE_INPUT_BUFFER(DS_DAC, 0)
@@ -647,7 +647,7 @@ static DISCRETE_SOUND_START(radarscp)
 	//DISCRETE_INPUT_DATA(DS_DAC)
 
 	/* Mixing - DAC */
-	DISCRETE_ADJUSTMENT_TAG(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
+	DISCRETE_ADJUSTMENT(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
 
 	/************************************************/
 	/* SIGNALS                                      */
@@ -894,8 +894,8 @@ DISCRETE_TASK_START(1)
 	DISCRETE_LOGIC_INVERT(DS_SOUND7,DS_SOUND7_INV)
 	DISCRETE_COUNTER(NODE_100, 1, 0, NODE_118, 0, 0xFFFF, DISC_COUNT_UP, 0, DISC_CLK_BY_COUNT)
 
-	DISCRETE_BIT_DECODE(NODE_101, NODE_100,  6, 1) 	/*LS157 2A */
-	DISCRETE_BIT_DECODE(NODE_102, NODE_100,  3, 1) 	/*LS157 2B */
+	DISCRETE_BIT_DECODE(NODE_101, NODE_100,  6, 1)	/*LS157 2A */
+	DISCRETE_BIT_DECODE(NODE_102, NODE_100,  3, 1)	/*LS157 2B */
 	DISCRETE_BIT_DECODE(NODE_103, NODE_100, 12, 1)  /*LS157 3A */
 	DISCRETE_BIT_DECODE(NODE_104, NODE_100, 11, 1)  /*LS157 3B */
 
@@ -1068,7 +1068,6 @@ static SOUND_START( dkong)
 	dkong_state *state = (dkong_state *)machine->driver_data;
 
 	state->snd_rom = memory_region(machine, "soundcpu");
-	state->dev_vp2 = devtag_get_device(machine, "virtual_p2");
 }
 
 

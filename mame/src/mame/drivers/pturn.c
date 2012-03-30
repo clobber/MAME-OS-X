@@ -79,7 +79,7 @@ ROMS: All ROM labels say only "PROM" and a number.
 #include "deprecat.h"
 #include "sound/ay8910.h"
 
-static tilemap *pturn_fgmap,*pturn_bgmap;
+static tilemap_t *pturn_fgmap,*pturn_bgmap;
 static int bgbank=0;
 static int fgbank=0;
 static int bgpalette=0;
@@ -98,7 +98,7 @@ static const UINT8 tile_lookup[0x10]=
 static TILE_GET_INFO( get_pturn_tile_info )
 {
 	int tileno;
-	tileno = videoram[tile_index];
+	tileno = machine->generic.videoram.u8[tile_index];
 
 	tileno=tile_lookup[tileno>>4]|(tileno&0xf)|(fgbank<<8);
 
@@ -129,6 +129,7 @@ static VIDEO_START(pturn)
 
 static VIDEO_UPDATE(pturn)
 {
+	UINT8 *spriteram = screen->machine->generic.spriteram.u8;
 	int offs;
 	int sx, sy;
 	int flipx, flipy;
@@ -183,7 +184,7 @@ READ8_HANDLER (pturn_protection2_r)
 
 static WRITE8_HANDLER( pturn_videoram_w )
 {
-	videoram[offset]=data;
+	space->machine->generic.videoram.u8[offset]=data;
 	tilemap_mark_tile_dirty(pturn_fgmap,offset);
 }
 
@@ -279,11 +280,11 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0xdfe0, 0xdfe0) AM_NOP
 
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(pturn_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(pturn_videoram_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xe400, 0xe400) AM_WRITE(fgpalette_w)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(sound_w)
 
-	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 
 	AM_RANGE(0xf400, 0xf400) AM_WRITE(bg_scrollx_w)
 
@@ -506,7 +507,7 @@ ROM_START( pturn )
 	ROM_LOAD( "prom16.16p", 0x004000, 0x02000, CRC(94814c5d) SHA1(e4ab6c0ae94184d5270cadb887f56e3550b6d9f2) )
 
 	ROM_REGION( 0x0300, "proms", 0 )
-  	ROM_LOAD( "prom_red.3p", 0x0000, 0x0100, CRC(505fd8c2) SHA1(f2660fe512c76412a7b9f4be21fe549dd59fbda0) )
+	ROM_LOAD( "prom_red.3p", 0x0000, 0x0100, CRC(505fd8c2) SHA1(f2660fe512c76412a7b9f4be21fe549dd59fbda0) )
 	ROM_LOAD( "prom_grn.4p", 0x0100, 0x0100, CRC(6a00199d) SHA1(ff0ac7ae83d970778a756f7445afed3785fc1150) )
 	ROM_LOAD( "prom_blu.4r", 0x0200, 0x0100, CRC(7b4c5788) SHA1(ca02b12c19be7981daa070533455bd4d227d56cd) )
 

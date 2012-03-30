@@ -6,7 +6,7 @@ Atari Poolshark Driver
 
 #include "driver.h"
 #include "cpu/m6800/m6800.h"
-#include "poolshrk.h"
+#include "includes/poolshrk.h"
 #include "sound/discrete.h"
 
 
@@ -55,9 +55,9 @@ static WRITE8_HANDLER( poolshrk_da_latch_w )
 static WRITE8_HANDLER( poolshrk_led_w )
 {
 	if (offset & 2)
-		set_led_status(0, offset & 1);
+		set_led_status(space->machine, 0, offset & 1);
 	if (offset & 4)
-		set_led_status(1, offset & 1);
+		set_led_status(space->machine, 1, offset & 1);
 }
 
 
@@ -101,9 +101,9 @@ static READ8_HANDLER( poolshrk_irq_reset_r )
 static ADDRESS_MAP_START( poolshrk_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x00ff) AM_MIRROR(0x2300) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_MIRROR(0x2000) AM_WRITE(SMH_RAM) AM_BASE(&poolshrk_playfield_ram)
-	AM_RANGE(0x0800, 0x080f) AM_MIRROR(0x23f0) AM_WRITE(SMH_RAM) AM_BASE(&poolshrk_hpos_ram)
-	AM_RANGE(0x0c00, 0x0c0f) AM_MIRROR(0x23f0) AM_WRITE(SMH_RAM) AM_BASE(&poolshrk_vpos_ram)
+	AM_RANGE(0x0400, 0x07ff) AM_MIRROR(0x2000) AM_WRITEONLY AM_BASE(&poolshrk_playfield_ram)
+	AM_RANGE(0x0800, 0x080f) AM_MIRROR(0x23f0) AM_WRITEONLY AM_BASE(&poolshrk_hpos_ram)
+	AM_RANGE(0x0c00, 0x0c0f) AM_MIRROR(0x23f0) AM_WRITEONLY AM_BASE(&poolshrk_vpos_ram)
 	AM_RANGE(0x1000, 0x13ff) AM_MIRROR(0x2000) AM_READWRITE(poolshrk_input_r, poolshrk_watchdog_w)
 	AM_RANGE(0x1400, 0x17ff) AM_MIRROR(0x2000) AM_DEVWRITE("discrete", poolshrk_scratch_sound_w)
 	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x2000) AM_DEVWRITE("discrete", poolshrk_score_sound_w)

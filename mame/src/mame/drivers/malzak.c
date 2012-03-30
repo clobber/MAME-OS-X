@@ -63,37 +63,17 @@
 */
 
 #include "driver.h"
-#include "video/s2636.h"
 #include "cpu/s2650/s2650.h"
 #include "sound/sn76477.h"
-
-#define SAA5050_VBLANK 2500
-
-static int malzak_bank1;
-
-extern int malzak_x;
-extern int malzak_y;
-
-extern UINT8 *saa5050_vidram;  /* Video RAM for SAA 5050 */
-extern UINT8 *malzak_s2636_0_ram;
-extern UINT8 *malzak_s2636_1_ram;
-
-// in video/malzak.c
-VIDEO_START( malzak );
-VIDEO_UPDATE( malzak );
-WRITE8_HANDLER( malzak_playfield_w );
+#include "video/s2636.h"
+#include "video/saa5050.h"
+#include "includes/malzak.h"
 
 
 static READ8_HANDLER( fake_VRLE_r )
 {
-	return (malzak_s2636_0_ram[0xcb] & 0x3f) + (video_screen_get_vblank(space->machine->primary_screen)*0x40);
-}
-
-static READ8_HANDLER( bank_r )
-{
-	UINT8* bank = memory_region(space->machine, "user2");
-
-	return bank[offset + (malzak_bank1 * 0x0400)];
+	malzak_state *state = (malzak_state *)space->machine->driver_data;
+	return (s2636_work_ram_r(state->s2636_0, 0xcb) & 0x3f) + (video_screen_get_vblank(space->machine->primary_screen) * 0x40);
 }
 
 static READ8_HANDLER( s2636_portA_r )
@@ -101,7 +81,7 @@ static READ8_HANDLER( s2636_portA_r )
 	// POT switch position, read from port A of the first S2636
 	// Not sure of the correct values to return, but these should
 	// do based on the game code.
-	switch(input_port_read(space->machine, "POT"))
+	switch (input_port_read(space->machine, "POT"))
 	{
 		case 0:  // Normal play
 			return 0xf0;
@@ -119,17 +99,17 @@ static READ8_HANDLER( s2636_portA_r )
 static ADDRESS_MAP_START( malzak_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
-	AM_RANGE(0x0c00, 0x0fff) AM_READ(bank_r)
+	AM_RANGE(0x0c00, 0x0fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x1000, 0x10ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x1100, 0x11ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x1200, 0x12ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x1300, 0x13ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x14cb, 0x14cb) AM_MIRROR(0x6000) AM_READ(fake_VRLE_r)
-	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&malzak_s2636_0_ram)
-	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&malzak_s2636_1_ram)
+	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_0", s2636_work_ram_r, s2636_work_ram_w)
+	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_1", s2636_work_ram_r, s2636_work_ram_w)
 	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_RAM_WRITE(malzak_playfield_w)
 	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_RAM
-	AM_RANGE(0x1800, 0x1fff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&saa5050_vidram)
+	AM_RANGE(0x1800, 0x1fff) AM_MIRROR(0x6000) AM_DEVREADWRITE("saa5050", saa5050_videoram_r, saa5050_videoram_w)
 	AM_RANGE(0x2000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_ROM
@@ -139,18 +119,18 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( malzak2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
-	AM_RANGE(0x0c00, 0x0fff) AM_READ(bank_r)
+	AM_RANGE(0x0c00, 0x0fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x1000, 0x10ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x1100, 0x11ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x1200, 0x12ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x1300, 0x13ff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x14cb, 0x14cb) AM_MIRROR(0x6000) AM_READ(fake_VRLE_r)
 	AM_RANGE(0x14cc, 0x14cc) AM_MIRROR(0x6000) AM_READ(s2636_portA_r)
-	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&malzak_s2636_0_ram)
-	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&malzak_s2636_1_ram)
+	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_0", s2636_work_ram_r, s2636_work_ram_w)
+	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_1", s2636_work_ram_r, s2636_work_ram_w)
 	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_RAM_WRITE(malzak_playfield_w)
-	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x1800, 0x1fff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&saa5050_vidram)
+	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x1800, 0x1fff) AM_MIRROR(0x6000) AM_DEVREADWRITE("saa5050", saa5050_videoram_r, saa5050_videoram_w)
 	AM_RANGE(0x2000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_ROM
@@ -172,44 +152,44 @@ static WRITE8_HANDLER( port40_w )
 //  Bit 6 is used only in Malzak II, and is set high after checking
 //        the selected version
 //  logerror("S2650 [0x%04x]: port 0x40 write: 0x%02x\n", cpu_get_pc(cputag_get_cpu(space->machine, "maincpu")), data);
-	if(data & 0x40)
-		malzak_bank1 = 1;
-	else
-		malzak_bank1 = 0;
+	memory_set_bank(space->machine, "bank1", (data & 0x40) >> 6);
 }
 
 static WRITE8_HANDLER( port60_w )
 {
-	malzak_x = data;
-//  logerror("I/O: port 0x60 write 0x%02x\n",data);
+	malzak_state *state = (malzak_state *)space->machine->driver_data;
+	state->malzak_x = data;
+	//  logerror("I/O: port 0x60 write 0x%02x\n", data);
 }
 
 static WRITE8_HANDLER( portc0_w )
 {
-	malzak_y = data;
-//  logerror("I/O: port 0xc0 write 0x%02x\n",data);
+	malzak_state *state = (malzak_state *)space->machine->driver_data;
+	state->malzak_y = data;
+	//  logerror("I/O: port 0xc0 write 0x%02x\n", data);
 }
 
 static READ8_HANDLER( collision_r )
 {
-	// High 4 bits seem to refer to the row affected.
-	static int counter;
+	malzak_state *state = (malzak_state *)space->machine->driver_data;
 
-	if(++counter > 15)
-		counter = 0;
-//  logerror("I/O port 0x00 read\n");
-	return 0xd0 + counter;
+	// High 4 bits seem to refer to the row affected.
+	if(++state->collision_counter > 15)
+		state->collision_counter = 0;
+
+	//  logerror("I/O port 0x00 read\n");
+	return 0xd0 + state->collision_counter;
 }
 
 static ADDRESS_MAP_START( malzak_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ(collision_r) // returns where a collision can occur.
 	AM_RANGE(0x40, 0x40) AM_WRITE(port40_w)  // possibly sound codes for dual SN76477s
 	AM_RANGE(0x60, 0x60) AM_WRITE(port60_w)  // possibly playfield scroll X offset
-    AM_RANGE(0x80, 0x80) AM_READ_PORT("IN0")  //controls
+	AM_RANGE(0x80, 0x80) AM_READ_PORT("IN0")  //controls
 	AM_RANGE(0xa0, 0xa0) AM_WRITENOP  // echoes I/O port read from port 0x80
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(portc0_w)  // possibly playfield row selection for writing and/or collisions
 	AM_RANGE(S2650_DATA_PORT, S2650_DATA_PORT) AM_READ(s2650_data_r)  // read upon death
-    AM_RANGE(S2650_SENSE_PORT, S2650_SENSE_PORT) AM_READ_PORT("SENSE")
+	AM_RANGE(S2650_SENSE_PORT, S2650_SENSE_PORT) AM_READ_PORT("SENSE")
 ADDRESS_MAP_END
 
 
@@ -228,10 +208,10 @@ static INPUT_PORTS_START( malzak )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT  )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP    )
 
-    PORT_START("POT")
-    /* No POT switch on Malzak as far as I know */
+	PORT_START("POT")
+	/* No POT switch on Malzak as far as I know */
 
-	PORT_START("SENSE")		/* SENSE */
+	PORT_START("SENSE")
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
 
 INPUT_PORTS_END
@@ -251,14 +231,14 @@ static INPUT_PORTS_START( malzak2 )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT  )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP    )
 
-    PORT_START("POT")		/* Fake DIP switch to handle the POT switch */
+	PORT_START("POT")		/* Fake DIP switch to handle the POT switch */
 	PORT_DIPNAME( 0x03, 0x00, "POT switch position" )
 	PORT_DIPSETTING( 0x00, "1" )  // Normal play
 	PORT_DIPSETTING( 0x01, "2" )
 	PORT_DIPSETTING( 0x02, "3" )
 	PORT_DIPSETTING( 0x03, "4" )  // Change settings
 
-	PORT_START("SENSE")		/* SENSE */
+	PORT_START("SENSE")
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
 
 INPUT_PORTS_END
@@ -327,7 +307,7 @@ static PALETTE_INIT( malzak )
 {
 	int i;
 
-	for (i = 0; i < 8*8; i++)
+	for (i = 0; i < 8 * 8; i++)
 	{
 		palette_set_color_rgb(machine, i * 2 + 0, pal1bit(i >> 3), pal1bit(i >> 4), pal1bit(i >> 5));
 		palette_set_color_rgb(machine, i * 2 + 1, pal1bit(i >> 0), pal1bit(i >> 1), pal1bit(i >> 2));
@@ -363,12 +343,66 @@ static const sn76477_interface sn76477_intf =
 };
 
 
+static const s2636_interface malzac_s2636_0_config =
+{
+	"screen",
+	0x100,
+	0, -16	/* -8, -16 */
+};
+
+static const s2636_interface malzac_s2636_1_config =
+{
+	"screen",
+	0x100,
+	0, -16	/* -9, -16 */
+};
+
+static const saa5050_interface malzac_saa5050_intf =
+{
+	"screen",
+	1,	/* starting gfxnum */
+	42, 24, 64,  /* x, y, size */
+      1 	/* rev y order */
+};
+
+
+static MACHINE_START( malzak )
+{
+	malzak_state *state = (malzak_state *)machine->driver_data;
+
+	memory_configure_bank(machine, "bank1", 0, 2, memory_region(machine, "user2"), 0x400);
+
+	state->s2636_0 = devtag_get_device(machine, "s2636_0");
+	state->s2636_1 = devtag_get_device(machine, "s2636_1");
+	state->saa5050 = devtag_get_device(machine, "saa5050");
+
+	state_save_register_global_array(machine, state->playfield_code);
+	state_save_register_global(machine, state->malzak_x);
+	state_save_register_global(machine, state->malzak_y);
+}
+
+static MACHINE_RESET( malzak )
+{
+	malzak_state *state = (malzak_state *)machine->driver_data;
+
+	memset(state->playfield_code, 0, 256);
+
+	state->malzak_x = 0;
+	state->malzak_y = 0;
+}
+
 static MACHINE_DRIVER_START( malzak )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(malzak_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", S2650, 3800000/4)
 	MDRV_CPU_PROGRAM_MAP(malzak_map)
 	MDRV_CPU_IO_MAP(malzak_io_map)
+
+	MDRV_MACHINE_START(malzak)
+	MDRV_MACHINE_RESET(malzak)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -382,9 +416,10 @@ static MACHINE_DRIVER_START( malzak )
 	MDRV_PALETTE_LENGTH(128)
 	MDRV_PALETTE_INIT(malzak)
 
-//  MDRV_MACHINE_RESET(malzak)
+	MDRV_S2636_ADD("s2636_0", malzac_s2636_0_config)
+	MDRV_S2636_ADD("s2636_1", malzac_s2636_1_config)
 
-	MDRV_VIDEO_START(malzak)
+	MDRV_SAA5050_ADD("saa5050", malzac_saa5050_intf)
 	MDRV_VIDEO_UPDATE(malzak)
 
 	/* sound hardware */
@@ -454,5 +489,5 @@ ROM_START( malzak2 )
 ROM_END
 
 
-GAME( 19??, malzak,   0,       malzak,  malzak,  0,        ROT0, "Kitronix", "Malzak", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 19??, malzak2, malzak,   malzak2, malzak2, 0,        ROT0, "Kitronix", "Malzak II", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 19??, malzak,   0,       malzak,  malzak,  0,        ROT0, "Kitronix", "Malzak", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 19??, malzak2, malzak,   malzak2, malzak2, 0,        ROT0, "Kitronix", "Malzak II", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )

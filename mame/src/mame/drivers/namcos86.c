@@ -209,7 +209,7 @@ static WRITE8_HANDLER( bankswitch1_w )
 	/* with bankswitch1_ext_w() in wndrmomo */
 	if (memory_region(space->machine, "user1")) return;
 
-	memory_set_bankptr(space->machine, 1,base + ((data & 0x03) * 0x2000));
+	memory_set_bankptr(space->machine, "bank1",base + ((data & 0x03) * 0x2000));
 }
 
 static WRITE8_HANDLER( bankswitch1_ext_w )
@@ -218,14 +218,14 @@ static WRITE8_HANDLER( bankswitch1_ext_w )
 
 	if (base == 0) return;
 
-	memory_set_bankptr(space->machine, 1,base + ((data & 0x1f) * 0x2000));
+	memory_set_bankptr(space->machine, "bank1",base + ((data & 0x1f) * 0x2000));
 }
 
 static WRITE8_HANDLER( bankswitch2_w )
 {
 	UINT8 *base = memory_region(space->machine, "cpu2") + 0x10000;
 
-	memory_set_bankptr(space->machine, 2,base + ((data & 0x03) * 0x2000));
+	memory_set_bankptr(space->machine, "bank2",base + ((data & 0x03) * 0x2000));
 }
 
 /* Stubs to pass the correct Dip Switch setup to the MCU */
@@ -300,15 +300,15 @@ static WRITE8_HANDLER( watchdog2_w )
 
 static WRITE8_HANDLER( namcos86_coin_w )
 {
-	coin_lockout_global_w(data & 1);
-	coin_counter_w(0,~data & 2);
-	coin_counter_w(1,~data & 4);
+	coin_lockout_global_w(space->machine, data & 1);
+	coin_counter_w(space->machine, 0,~data & 2);
+	coin_counter_w(space->machine, 1,~data & 4);
 }
 
 static WRITE8_HANDLER( namcos86_led_w )
 {
-	set_led_status(0,data & 0x08);
-	set_led_status(1,data & 0x10);
+	set_led_status(space->machine, 0,data & 0x08);
+	set_led_status(space->machine, 1,data & 0x10);
 }
 
 
@@ -347,7 +347,7 @@ static MACHINE_RESET( namco86 )
 {
 	UINT8 *base = memory_region(machine, "cpu1") + 0x10000;
 
-	memory_set_bankptr(machine, 1,base);
+	memory_set_bankptr(machine, "bank1",base);
 }
 
 
@@ -360,7 +360,7 @@ static ADDRESS_MAP_START( cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x4000, 0x5fff) AM_READWRITE(rthunder_spriteram_r,rthunder_spriteram_w)
 
-	AM_RANGE(0x6000, 0x7fff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 
 	/* ROM & Voice expansion board - only some games have it */
@@ -387,14 +387,13 @@ static ADDRESS_MAP_START( NAME##_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )							\
 	AM_RANGE(ADDR_SPRITE+0x0000, ADDR_SPRITE+0x1fff) AM_READWRITE(rthunder_spriteram_r,rthunder_spriteram_w) AM_BASE(&rthunder_spriteram)	\
 	AM_RANGE(ADDR_VIDEO1+0x0000, ADDR_VIDEO1+0x1fff) AM_READWRITE(rthunder_videoram1_r,rthunder_videoram1_w)	\
 	AM_RANGE(ADDR_VIDEO2+0x0000, ADDR_VIDEO2+0x1fff) AM_READWRITE(rthunder_videoram2_r,rthunder_videoram2_w)	\
-	AM_RANGE(ADDR_ROM+0x0000, ADDR_ROM+0x1fff) AM_READ(SMH_BANK(2))								\
+	AM_RANGE(ADDR_ROM+0x0000, ADDR_ROM+0x1fff) AM_ROMBANK("bank2")								\
 	AM_RANGE(0x8000, 0xffff) AM_ROM																\
 /*  { ADDR_BANK+0x00, ADDR_BANK+0x02 } layer 2 scroll registers would be here */				\
 	AM_RANGE(ADDR_BANK+0x03, ADDR_BANK+0x03) AM_WRITE(bankswitch2_w)							\
 /*  { ADDR_BANK+0x04, ADDR_BANK+0x06 } layer 3 scroll registers would be here */				\
 	AM_RANGE(ADDR_WDOG, ADDR_WDOG) AM_WRITE(watchdog2_w)										\
 	AM_RANGE(ADDR_INT, ADDR_INT) AM_WRITE(int_ack2_w)	/* IRQ acknowledge */					\
-	AM_RANGE(0x8000, 0xffff) AM_WRITE(SMH_ROM)													\
 ADDRESS_MAP_END
 
 #define UNUSED 0x4000
@@ -414,7 +413,7 @@ static ADDRESS_MAP_START( NAME##_mcu_map, ADDRESS_SPACE_PROGRAM, 8 )					\
 	AM_RANGE(0x0080, 0x00ff) AM_RAM														\
 	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) /* PSG device, shared RAM */	\
 	AM_RANGE(0x1400, 0x1fff) AM_RAM														\
-	AM_RANGE(ADDR_INPUT+0x00, ADDR_INPUT+0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)	\
+	AM_RANGE(ADDR_INPUT+0x00, ADDR_INPUT+0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)	\
 	AM_RANGE(ADDR_INPUT+0x20, ADDR_INPUT+0x20) AM_READ_PORT("IN0")						\
 	AM_RANGE(ADDR_INPUT+0x21, ADDR_INPUT+0x21) AM_READ_PORT("IN1")						\
 	AM_RANGE(ADDR_INPUT+0x30, ADDR_INPUT+0x30) AM_READ(dsw0_r)							\
@@ -1053,7 +1052,7 @@ static MACHINE_DRIVER_START( hopmappy )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579580)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579580)
 	MDRV_SOUND_ROUTE(0, "mono", 0.0)
 	MDRV_SOUND_ROUTE(1, "mono", 0.60)	/* only right channel is connected */
 

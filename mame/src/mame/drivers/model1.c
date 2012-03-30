@@ -627,8 +627,7 @@ Notes:
 #include "driver.h"
 #include "cpu/v60/v60.h"
 #include "deprecat.h"
-#include "machine/eeprom.h"
-#include "system16.h"
+#include "includes/system16.h"
 #include "video/segaic24.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/mb86233/mb86233.h"
@@ -671,7 +670,7 @@ static WRITE16_HANDLER( bank_w )
 	if(ACCESSING_BITS_0_7) {
 		switch(data & 0xf) {
 		case 0x1: // 100000-1fffff data roms banking
-			memory_set_bankptr(space->machine, 1, memory_region(space->machine, "maincpu") + 0x1000000 + 0x100000*((data >> 4) & 0xf));
+			memory_set_bankptr(space->machine, "bank1", memory_region(space->machine, "maincpu") + 0x1000000 + 0x100000*((data >> 4) & 0xf));
 			logerror("BANK %x\n", 0x1000000 + 0x100000*((data >> 4) & 0xf));
 			break;
 		case 0x2: // 200000-2fffff data roms banking (unused, all known games have only one bank)
@@ -737,7 +736,7 @@ static INTERRUPT_GEN(model1_interrupt)
 
 static MACHINE_RESET(model1)
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x1000000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "maincpu") + 0x1000000);
 	irq_init(machine);
 	model1_tgp_reset(machine, !strcmp(machine->gamedrv->name, "swa") || !strcmp(machine->gamedrv->name, "wingwar") || !strcmp(machine->gamedrv->name, "wingwara"));
 	if (!strcmp(machine->gamedrv->name, "swa"))
@@ -756,7 +755,7 @@ static MACHINE_RESET(model1)
 
 static MACHINE_RESET(model1_vr)
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x1000000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "maincpu") + 0x1000000);
 	irq_init(machine);
 	model1_vr_tgp_reset(machine);
 	model1_sound_irq = 3;
@@ -798,9 +797,9 @@ static WRITE16_HANDLER(md0_w)
 
 static WRITE16_HANDLER(p_w)
 {
-	UINT16 old = paletteram16[offset];
+	UINT16 old = space->machine->generic.paletteram.u16[offset];
 	paletteram16_xBBBBBGGGGGRRRRR_word_w(space, offset, data, mem_mask);
-	if(0 && paletteram16[offset] != old)
+	if(0 && space->machine->generic.paletteram.u16[offset] != old)
 		logerror("XVIDEO: p_w %x, %04x @ %04x (%x)\n", offset, data, mem_mask, cpu_get_pc(space->cpu));
 }
 
@@ -864,7 +863,7 @@ static WRITE16_HANDLER( snd_latch_to_68k_w )
 
 static ADDRESS_MAP_START( model1_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x1fffff) AM_ROMBANK(1)
+	AM_RANGE(0x100000, 0x1fffff) AM_ROMBANK("bank1")
 	AM_RANGE(0x200000, 0x2fffff) AM_ROM
 
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(mr2_w) AM_BASE(&mr2)
@@ -881,14 +880,14 @@ static ADDRESS_MAP_START( model1_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x770000, 0x770001) AM_WRITENOP		// Video synchronization switch
 	AM_RANGE(0x780000, 0x7fffff) AM_READWRITE(sys24_char_r, sys24_char_w)
 
-	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(p_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(p_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x910000, 0x91bfff) AM_RAM  AM_BASE(&model1_color_xlat)
 
 	AM_RANGE(0xc00000, 0xc0003f) AM_READ(io_r) AM_WRITENOP
 
 	AM_RANGE(0xc00040, 0xc00043) AM_READWRITE(network_ctl_r, network_ctl_w)
 
-	AM_RANGE(0xc00200, 0xc002ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xc00200, 0xc002ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0xc40000, 0xc40001) AM_WRITE(snd_latch_to_68k_w)
 	AM_RANGE(0xc40002, 0xc40003) AM_READ(snd_68k_ready_r)
@@ -912,7 +911,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( model1_vr_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x1fffff) AM_ROMBANK(1)
+	AM_RANGE(0x100000, 0x1fffff) AM_ROMBANK("bank1")
 	AM_RANGE(0x200000, 0x2fffff) AM_ROM
 
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(mr2_w) AM_BASE(&mr2)
@@ -929,14 +928,14 @@ static ADDRESS_MAP_START( model1_vr_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x770000, 0x770001) AM_WRITENOP		// Video synchronization switch
 	AM_RANGE(0x780000, 0x7fffff) AM_READWRITE(sys24_char_r, sys24_char_w)
 
-	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(p_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(p_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x910000, 0x91bfff) AM_RAM  AM_BASE(&model1_color_xlat)
 
 	AM_RANGE(0xc00000, 0xc0003f) AM_READ(io_r) AM_WRITENOP
 
 	AM_RANGE(0xc00040, 0xc00043) AM_READWRITE(network_ctl_r, network_ctl_w)
 
-	AM_RANGE(0xc00200, 0xc002ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xc00200, 0xc002ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0xc40000, 0xc40001) AM_WRITE(snd_latch_to_68k_w)
 	AM_RANGE(0xc40002, 0xc40003) AM_READ(snd_68k_ready_r)
@@ -997,7 +996,7 @@ static ADDRESS_MAP_START( model1_snd, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc50000, 0xc50001) AM_DEVWRITE( "sega1", m1_snd_mpcm_bnk_w )
 	AM_RANGE(0xc60000, 0xc60007) AM_DEVREADWRITE8( "sega2", multipcm_r, multipcm_w, 0x00ff )
 	AM_RANGE(0xc70000, 0xc70001) AM_DEVWRITE( "sega2", m1_snd_mpcm_bnk_w )
-	AM_RANGE(0xd00000, 0xd00007) AM_DEVREADWRITE8( "ym", ym3438_r, ym3438_w, 0x00ff )
+	AM_RANGE(0xd00000, 0xd00007) AM_DEVREADWRITE8( "ymsnd", ym3438_r, ym3438_w, 0x00ff )
 	AM_RANGE(0xf00000, 0xf0ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1457,6 +1456,7 @@ static MACHINE_DRIVER_START( model1 )
 	MDRV_CPU_ADD("audiocpu", M68000, 10000000)	// verified on real h/w
 	MDRV_CPU_PROGRAM_MAP(model1_snd)
 
+	MDRV_MACHINE_START(model1)
 	MDRV_MACHINE_RESET(model1)
 	MDRV_NVRAM_HANDLER(generic_0fill)
 
@@ -1474,7 +1474,7 @@ static MACHINE_DRIVER_START( model1 )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3438, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM3438, 8000000)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 
@@ -1500,6 +1500,7 @@ static MACHINE_DRIVER_START( model1_vr )
 	MDRV_CPU_CONFIG(model1_vr_tgp_config)
 	MDRV_CPU_PROGRAM_MAP(model1_vr_tgp_map)
 
+	MDRV_MACHINE_START(model1)
 	MDRV_MACHINE_RESET(model1_vr)
 	MDRV_NVRAM_HANDLER(generic_0fill)
 
@@ -1517,7 +1518,7 @@ static MACHINE_DRIVER_START( model1_vr )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3438, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM3438, 8000000)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 

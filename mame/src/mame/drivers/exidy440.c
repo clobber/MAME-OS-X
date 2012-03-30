@@ -216,7 +216,7 @@
 
 #include "driver.h"
 #include "cpu/m6809/m6809.h"
-#include "exidy440.h"
+#include "includes/exidy440.h"
 
 
 /* constants */
@@ -312,12 +312,12 @@ void exidy440_bank_select(running_machine *machine, UINT8 bank)
 		if (bank == 0 && exidy440_bank != 0)
 			memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, showdown_bank0_r);
 		else if (bank != 0 && exidy440_bank == 0)
-			memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, (read8_space_func)SMH_BANK(1));
+			memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x7fff, 0, 0, "bank1");
 	}
 
 	/* select the bank and update the bank pointer */
 	exidy440_bank = bank;
-	memory_set_bankptr(machine, 1, &memory_region(machine, "maincpu")[0x10000 + exidy440_bank * 0x4000]);
+	memory_set_bankptr(machine, "bank1", &memory_region(machine, "maincpu")[0x10000 + exidy440_bank * 0x4000]);
 }
 
 
@@ -388,7 +388,7 @@ static WRITE8_HANDLER( exidy440_input_port_3_w )
 
 static WRITE8_HANDLER( exidy440_coin_counter_w )
 {
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine, 0, data & 1);
 }
 
 
@@ -469,7 +469,7 @@ static MACHINE_RESET( exidy440 )
 
 static ADDRESS_MAP_START( exidy440_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&exidy440_imageram)
-	AM_RANGE(0x2000, 0x209f) AM_RAM_WRITE(exidy440_spriteram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x2000, 0x209f) AM_RAM_WRITE(exidy440_spriteram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x20a0, 0x29ff) AM_RAM
 	AM_RANGE(0x2a00, 0x2aff) AM_READWRITE(exidy440_videoram_r, exidy440_videoram_w)
 	AM_RANGE(0x2b00, 0x2b00) AM_READ(exidy440_vertical_pos_r)
@@ -479,13 +479,13 @@ static ADDRESS_MAP_START( exidy440_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2c00, 0x2dff) AM_READWRITE(exidy440_paletteram_r, exidy440_paletteram_w)
 	AM_RANGE(0x2e00, 0x2e1f) AM_RAM_WRITE(sound_command_w)
 	AM_RANGE(0x2e20, 0x2e3f) AM_READWRITE(exidy440_input_port_3_r, exidy440_input_port_3_w)
-	AM_RANGE(0x2e40, 0x2e5f) AM_READWRITE(SMH_NOP, exidy440_coin_counter_w)	/* read: clear coin counters I/O2 */
+	AM_RANGE(0x2e40, 0x2e5f) AM_READNOP AM_WRITE(exidy440_coin_counter_w)	/* read: clear coin counters I/O2 */
 	AM_RANGE(0x2e60, 0x2e7f) AM_READ_PORT("IN1") AM_WRITENOP
 	AM_RANGE(0x2e80, 0x2e9f) AM_READ_PORT("IN2") AM_WRITENOP
-	AM_RANGE(0x2ea0, 0x2ebf) AM_READWRITE(sound_command_ack_r, SMH_NOP)
+	AM_RANGE(0x2ea0, 0x2ebf) AM_READ(sound_command_ack_r) AM_WRITENOP
 	AM_RANGE(0x2ec0, 0x2eff) AM_NOP
 	AM_RANGE(0x3000, 0x3fff) AM_RAM
-	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(SMH_BANK(1), bankram_w)
+	AM_RANGE(0x4000, 0x7fff) AM_READ_BANK("bank1") AM_WRITE(bankram_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -534,7 +534,7 @@ static INPUT_PORTS_START( crossbow )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(firq_beam_r, NULL)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(firq_vblank_r, NULL)
 
-	PORT_START("IN1") 		/* audio board dips */
+	PORT_START("IN1")		/* audio board dips */
 	COINAGE
 	PORT_BIT( 0x70, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Free_Play ) )
@@ -616,7 +616,7 @@ static INPUT_PORTS_START( combat )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(firq_beam_r, NULL)
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(firq_vblank_r, NULL)
 
-	PORT_START("IN1") 		/* audio board dips */
+	PORT_START("IN1")		/* audio board dips */
 	COINAGE
 	PORT_BIT( 0x70, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Free_Play ) )
@@ -1204,11 +1204,11 @@ ROM_START( combat )
 	ROM_LOAD( "2l", 		 0x02000, 0x2000, CRC(6b733306) SHA1(a41cc2e646392d71642abe2ab8d72f2d56214c02) )
 	ROM_LOAD( "2m", 		 0x04000, 0x2000, CRC(dc074733) SHA1(29a036d4057b813f584373493cb5b69b711840ae) )
 	ROM_LOAD( "2n", 		 0x06000, 0x2000, CRC(7985867f) SHA1(8d86777b7afa8a6c1a36e598a83feeb28536f02e) )
-	ROM_LOAD( "2p",  		 0x08000, 0x2000, CRC(88684dcf) SHA1(fa006db1d70d2b557ab867ad766e27374e252f8c) )
+	ROM_LOAD( "2p", 		 0x08000, 0x2000, CRC(88684dcf) SHA1(fa006db1d70d2b557ab867ad766e27374e252f8c) )
 	ROM_LOAD( "2r", 		 0x0a000, 0x2000, CRC(5857321e) SHA1(9726ce74b0e0b3e7fa44002d42342c5f2be00c22) )
 	ROM_LOAD( "2s", 		 0x0c000, 0x2000, CRC(371e5235) SHA1(6cfa5ba2715a33c61fadc3d5b9347c26bb3279dd) )
-	ROM_LOAD( "2t",  		 0x0e000, 0x2000, CRC(7ae65f05) SHA1(404bcfe629aecf1e0835d7feeaff8654829fd10f) )
-	ROM_LOAD( "1k",   	 0x10000, 0x2000, CRC(f748ea87) SHA1(4d90f44edb01d65c28c9742c50b4cbe6e26aced3) )
+	ROM_LOAD( "2t", 		 0x0e000, 0x2000, CRC(7ae65f05) SHA1(404bcfe629aecf1e0835d7feeaff8654829fd10f) )
+	ROM_LOAD( "1k", 	 0x10000, 0x2000, CRC(f748ea87) SHA1(4d90f44edb01d65c28c9742c50b4cbe6e26aced3) )
 	ROM_LOAD( "xba-1.2s", 0x16000, 0x2000, CRC(14dd8993) SHA1(066e163fca6d8f696d98d78b41b54a8d06eaba47) )	/* from Crossbow */
 	ROM_LOAD( "xba-1.1n", 0x18000, 0x2000, CRC(2e855698) SHA1(fa4c3ec03fdd1c569c0ca2418899ffa81b5259ec) )	/* from Crossbow */
 	ROM_LOAD( "xba-1.1p", 0x1a000, 0x2000, CRC(788bfac6) SHA1(8cec8ea7a876939719e9901b00055fc90615f237) )	/* from Crossbow */
@@ -1265,11 +1265,11 @@ ROM_START( catch22 )
 	ROM_LOAD( "2l", 		 0x02000, 0x2000, CRC(6b733306) SHA1(a41cc2e646392d71642abe2ab8d72f2d56214c02) )
 	ROM_LOAD( "2m", 		 0x04000, 0x2000, CRC(dc074733) SHA1(29a036d4057b813f584373493cb5b69b711840ae) )
 	ROM_LOAD( "2n", 		 0x06000, 0x2000, CRC(7985867f) SHA1(8d86777b7afa8a6c1a36e598a83feeb28536f02e) )
-	ROM_LOAD( "2p",  		 0x08000, 0x2000, CRC(88684dcf) SHA1(fa006db1d70d2b557ab867ad766e27374e252f8c) )
+	ROM_LOAD( "2p", 		 0x08000, 0x2000, CRC(88684dcf) SHA1(fa006db1d70d2b557ab867ad766e27374e252f8c) )
 	ROM_LOAD( "2r", 		 0x0a000, 0x2000, CRC(5857321e) SHA1(9726ce74b0e0b3e7fa44002d42342c5f2be00c22) )
 	ROM_LOAD( "2s", 		 0x0c000, 0x2000, CRC(371e5235) SHA1(6cfa5ba2715a33c61fadc3d5b9347c26bb3279dd) )
-	ROM_LOAD( "2t",  		 0x0e000, 0x2000, CRC(7ae65f05) SHA1(404bcfe629aecf1e0835d7feeaff8654829fd10f) )
-	ROM_LOAD( "1k",   	 0x10000, 0x2000, CRC(f748ea87) SHA1(4d90f44edb01d65c28c9742c50b4cbe6e26aced3) )
+	ROM_LOAD( "2t", 		 0x0e000, 0x2000, CRC(7ae65f05) SHA1(404bcfe629aecf1e0835d7feeaff8654829fd10f) )
+	ROM_LOAD( "1k", 	 0x10000, 0x2000, CRC(f748ea87) SHA1(4d90f44edb01d65c28c9742c50b4cbe6e26aced3) )
 	ROM_LOAD( "xba-1.2s", 0x16000, 0x2000, CRC(14dd8993) SHA1(066e163fca6d8f696d98d78b41b54a8d06eaba47) )	/* from Crossbow */
 	ROM_LOAD( "xba-1.1n", 0x18000, 0x2000, CRC(2e855698) SHA1(fa4c3ec03fdd1c569c0ca2418899ffa81b5259ec) )	/* from Crossbow */
 	ROM_LOAD( "xba-1.1p", 0x1a000, 0x2000, CRC(788bfac6) SHA1(8cec8ea7a876939719e9901b00055fc90615f237) )	/* from Crossbow */
@@ -1375,7 +1375,7 @@ ROM_START( claypign )
 	ROM_LOAD( "claypige.n2",   0x06000, 0x2000, CRC(9e381cb5) SHA1(aeedb0030baa8a7f9396b917f0452a3edcd725c2) )
 	ROM_LOAD( "xba-1.2l",   	0x08000, 0x2000, CRC(2c24cb35) SHA1(4ea16998f477d6429a92ca05ef74daa21315e695) )		/* from Crossbow */
 	ROM_LOAD( "xba-1.2k",		0x0a000, 0x2000, CRC(b6e57685) SHA1(ee690cb966af126bfb0bafa804e0ad5490cab1db) )		/* from Crossbow */
-	ROM_LOAD( "xba-1.1m",  		0x0c000, 0x2000, CRC(18d097ac) SHA1(c3546c5a21458e7117d36f2e477d3d5db7827487) )		/* from Crossbow */
+	ROM_LOAD( "xba-1.1m",		0x0c000, 0x2000, CRC(18d097ac) SHA1(c3546c5a21458e7117d36f2e477d3d5db7827487) )		/* from Crossbow */
 	ROM_LOAD( "xba-1.1t",   	0x0e000, 0x2000, CRC(5f41c282) SHA1(670b94534051ce5c6f0c8e0ff5ad7ab78c95be19) )		/* from Crossbow */
 	ROM_LOAD( "claypige.k1",   0x10000, 0x2000, CRC(07f12d18) SHA1(57041cd31abfd94f8c5ad172aeafef5302484973) )
 	ROM_LOAD( "claypige.l1",   0x12000, 0x2000, CRC(f448eb4f) SHA1(40e2116dcff76a58bc460c4725bfd463d4dda227) )
@@ -1947,8 +1947,8 @@ static DRIVER_INIT( topsecex )
 
 	/* extra input ports and scrolling */
 	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2ec5, 0x2ec5, 0, 0, topsecex_input_port_5_r);
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2ec6, 0x2ec6, 0, 0, "AN0");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2ec7, 0x2ec7, 0, 0, "IN4");
+	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2ec6, 0x2ec6, 0, 0, "AN0");
+	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2ec7, 0x2ec7, 0, 0, "IN4");
 
 	topsecex_yscroll = memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x2ec1, 0x2ec1, 0, 0, topsecex_yscroll_w);
 }

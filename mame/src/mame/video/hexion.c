@@ -3,7 +3,7 @@
 
 static UINT8 *vram[2],*unkram;
 static int bankctrl,rambank,pmcbank,gfxrom_select;
-static tilemap *bg_tilemap[2];
+static tilemap_t *bg_tilemap[2];
 
 
 
@@ -68,7 +68,7 @@ WRITE8_HANDLER( hexion_bankswitch_w )
 	UINT8 *rom = memory_region(space->machine, "maincpu") + 0x10000;
 
 	/* bits 0-3 select ROM bank */
-	memory_set_bankptr(space->machine, 1,rom + 0x2000 * (data & 0x0f));
+	memory_set_bankptr(space->machine, "bank1",rom + 0x2000 * (data & 0x0f));
 
 	/* does bit 6 trigger the 052591? */
 	if (data & 0x40)

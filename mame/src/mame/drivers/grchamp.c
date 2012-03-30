@@ -44,7 +44,7 @@
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "grchamp.h"
+#include "includes/grchamp.h"
 
 #include "grchamp.lh"
 
@@ -79,7 +79,7 @@
 static MACHINE_RESET( grchamp )
 {
 	/* if the coin system is 1 way, lock Coin B (Page 40) */
-	coin_lockout_w(1, (input_port_read(machine, "DSWB") & 0x10) ? 1 : 0);
+	coin_lockout_w(machine, 1, (input_port_read(machine, "DSWB") & 0x10) ? 1 : 0);
 }
 
 
@@ -168,7 +168,7 @@ static WRITE8_HANDLER( cpu0_outputs_w )
 			/* bit 4:   coin lockout */
 			/* bit 5:   Game Over lamp */
 			/* bit 6-7: n/c */
-			coin_lockout_global_w((data >> 4) & 1);
+			coin_lockout_global_w(space->machine, (data >> 4) & 1);
 			output_set_value("led0", (~data >> 5) & 1);
 			break;
 

@@ -10,15 +10,17 @@ driver by Nicola Salmoria
 
 #include "driver.h"
 #include "cpu/konami/konami.h" /* for the callback and the firq irq definition */
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "sound/2151intf.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
 
 /* prototypes */
 static MACHINE_RESET( surpratk );
 static KONAMI_SETLINES_CALLBACK( surpratk_banking );
-VIDEO_START( surpratk );
 VIDEO_UPDATE( surpratk );
+
+extern void surpratk_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
+extern void surpratk_sprite_callback(running_machine *machine, int *code,int *color,int *priority_mask);
 
 
 static int videobank;
@@ -26,26 +28,30 @@ static UINT8 *ram;
 
 static INTERRUPT_GEN( surpratk_interrupt )
 {
-	if (K052109_is_IRQ_enabled()) cpu_set_input_line(device,0,HOLD_LINE);
+	const device_config *k052109 = devtag_get_device(device->machine, "k052109");
+	if (k052109_is_irq_enabled(k052109))
+		cpu_set_input_line(device,0,HOLD_LINE);
 }
 
 static READ8_HANDLER( bankedram_r )
 {
+	const device_config *k053244 = devtag_get_device(space->machine, "k053244");
 	if (videobank & 0x02)
 	{
 		if (videobank & 0x04)
-			return paletteram[offset + 0x0800];
+			return space->machine->generic.paletteram.u8[offset + 0x0800];
 		else
-			return paletteram[offset];
+			return space->machine->generic.paletteram.u8[offset];
 	}
 	else if (videobank & 0x01)
-		return K053245_r(space,offset);
+		return k053245_r(k053244, offset);
 	else
 		return ram[offset];
 }
 
 static WRITE8_HANDLER( bankedram_w )
 {
+	const device_config *k053244 = devtag_get_device(space->machine, "k053244");
 	if (videobank & 0x02)
 	{
 		if (videobank & 0x04)
@@ -54,7 +60,7 @@ static WRITE8_HANDLER( bankedram_w )
 			paletteram_xBBBBBGGGGGRRRRR_be_w(space,offset,data);
 	}
 	else if (videobank & 0x01)
-		K053245_w(space,offset,data);
+		k053245_w(k053244, offset, data);
 	else
 		ram[offset] = data;
 }
@@ -70,14 +76,15 @@ logerror("%04x: videobank = %02x\n",cpu_get_pc(space->cpu),data);
 
 static WRITE8_HANDLER( surpratk_5fc0_w )
 {
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
 	if ((data & 0xf4) != 0x10) logerror("%04x: 3fc0 = %02x\n",cpu_get_pc(space->cpu),data);
 
 	/* bit 0/1 = coin counters */
-	coin_counter_w(0,data & 0x01);
-	coin_counter_w(1,data & 0x02);
+	coin_counter_w(space->machine, 0,data & 0x01);
+	coin_counter_w(space->machine, 1,data & 0x02);
 
 	/* bit 3 = enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line( ( data & 0x08 ) ? ASSERT_LINE : CLEAR_LINE );
+	k052109_set_rmrd_line(k052109, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* other bits unknown */
 }
@@ -88,18 +95,18 @@ static WRITE8_HANDLER( surpratk_5fc0_w )
 static ADDRESS_MAP_START( surpratk_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE(&ram)
 	AM_RANGE(0x0800, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK(1)					/* banked ROM */
+	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank1")					/* banked ROM */
 	AM_RANGE(0x5f8c, 0x5f8c) AM_READ_PORT("P1")
 	AM_RANGE(0x5f8d, 0x5f8d) AM_READ_PORT("P2")
 	AM_RANGE(0x5f8e, 0x5f8e) AM_READ_PORT("DSW3")
 	AM_RANGE(0x5f8f, 0x5f8f) AM_READ_PORT("DSW1")
 	AM_RANGE(0x5f90, 0x5f90) AM_READ_PORT("DSW2")
-	AM_RANGE(0x5fa0, 0x5faf) AM_READWRITE(K053244_r, K053244_w)
-	AM_RANGE(0x5fb0, 0x5fbf) AM_WRITE(K053251_w)
+	AM_RANGE(0x5fa0, 0x5faf) AM_DEVREADWRITE("k053244", k053244_r, k053244_w)
+	AM_RANGE(0x5fb0, 0x5fbf) AM_DEVWRITE("k053251", k053251_w)
 	AM_RANGE(0x5fc0, 0x5fc0) AM_READWRITE(watchdog_reset_r, surpratk_5fc0_w)
-	AM_RANGE(0x5fd0, 0x5fd1) AM_DEVWRITE("ym", ym2151_w)
+	AM_RANGE(0x5fd0, 0x5fd1) AM_DEVWRITE("ymsnd", ym2151_w)
 	AM_RANGE(0x5fc4, 0x5fc4) AM_WRITE(surpratk_videobank_w)
-	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(K052109_r, K052109_w)
+	AM_RANGE(0x4000, 0x7fff) AM_DEVREADWRITE("k052109", k052109_r, k052109_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM					/* ROM */
 ADDRESS_MAP_END
 
@@ -175,6 +182,23 @@ static const ym2151_interface ym2151_config =
 
 
 
+static const k052109_interface surpratk_k052109_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	surpratk_tile_callback
+};
+
+static const k05324x_interface surpratk_k05324x_intf =
+{
+	"gfx2", 1,
+	NORMAL_PLANE_ORDER,
+	0, 0,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	surpratk_sprite_callback
+};
+
 static MACHINE_DRIVER_START( surpratk )
 
 	/* basic machine hardware */
@@ -196,13 +220,16 @@ static MACHINE_DRIVER_START( surpratk )
 
 	MDRV_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(surpratk)
 	MDRV_VIDEO_UPDATE(surpratk)
+
+	MDRV_K052109_ADD("k052109", surpratk_k052109_intf)
+	MDRV_K053244_ADD("k053244", surpratk_k05324x_intf)
+	MDRV_K053251_ADD("k053251")
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -275,23 +302,17 @@ logerror("%04x: setlines %02x\n",cpu_get_pc(device),lines);
 
 	offs = 0x10000 + ((lines & 0x1f) * 0x2000);
 	if (offs >= 0x48000) offs -= 0x40000;
-	memory_set_bankptr(device->machine, 1,&RAM[offs]);
+	memory_set_bankptr(device->machine, "bank1",&RAM[offs]);
 }
 
 static MACHINE_RESET( surpratk )
 {
 	konami_configure_set_lines(cputag_get_cpu(machine, "maincpu"), surpratk_banking);
 
-	paletteram = &memory_region(machine, "maincpu")[0x48000];
-}
-
-static DRIVER_INIT( surpratk )
-{
-	konami_rom_deinterleave_2(machine, "gfx1");
-	konami_rom_deinterleave_2(machine, "gfx2");
+	machine->generic.paletteram.u8 = &memory_region(machine, "maincpu")[0x48000];
 }
 
 
-GAME( 1990, suratk,  0,      surpratk, surpratk, surpratk, ROT0, "Konami", "Surprise Attack (World ver. K)", 0 )
-GAME( 1990, suratka, suratk, surpratk, surpratk, surpratk, ROT0, "Konami", "Surprise Attack (Asia ver. L)", 0 )
-GAME( 1990, suratkj, suratk, surpratk, surpratk, surpratk, ROT0, "Konami", "Surprise Attack (Japan ver. M)", 0 )
+GAME( 1990, suratk,  0,      surpratk, surpratk, 0, ROT0, "Konami", "Surprise Attack (World ver. K)", 0 )
+GAME( 1990, suratka, suratk, surpratk, surpratk, 0, ROT0, "Konami", "Surprise Attack (Asia ver. L)", 0 )
+GAME( 1990, suratkj, suratk, surpratk, surpratk, 0, ROT0, "Konami", "Surprise Attack (Japan ver. M)", 0 )

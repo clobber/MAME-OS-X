@@ -232,9 +232,9 @@ static WRITE32_HANDLER(Banksw_w)
 {
 	Bank=(data>>1)&7;
 	if(Bank<=2)
-		memory_set_bankptr(space->machine, 1,memory_region(space->machine, "user1")+Bank*0x1000000);
+		memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "user1")+Bank*0x1000000);
 	else
-		memory_set_bankptr(space->machine, 1,memory_region(space->machine, "user2"));
+		memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "user2"));
 }
 
 static TIMER_CALLBACK( Timercb )
@@ -423,7 +423,7 @@ static ADDRESS_MAP_START( crystal_mem, ADDRESS_SPACE_PROGRAM, 32 )
 
 	AM_RANGE(0x01200000, 0x0120000f) AM_READ(Input_r)
 	AM_RANGE(0x01280000, 0x01280003) AM_WRITE(Banksw_w)
-	AM_RANGE(0x01400000, 0x0140ffff) AM_RAM AM_BASE(&generic_nvram32) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x01400000, 0x0140ffff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0x01801400, 0x01801403) AM_READ(Timer0_r) AM_WRITE(Timer0_w)
 	AM_RANGE(0x01801408, 0x0180140b) AM_READ(Timer1_r) AM_WRITE(Timer1_w)
@@ -446,7 +446,7 @@ static ADDRESS_MAP_START( crystal_mem, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x04800000, 0x04800fff) AM_DEVREADWRITE("vrender", vr0_snd_read, vr0_snd_write)
 
 	AM_RANGE(0x05000000, 0x05000003) AM_READ(FlashCmd_r) AM_WRITE(FlashCmd_w)
-	AM_RANGE(0x05000000, 0x05ffffff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0x05000000, 0x05ffffff) AM_ROMBANK("bank1")
 
 	AM_RANGE(0x44414F4C, 0x44414F7F) AM_RAM AM_BASE(&ResetPatch)
 
@@ -521,7 +521,7 @@ static MACHINE_RESET(crystal)
 	IntHigh = 0;
 	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), icallback);
 	Bank = 0;
-	memory_set_bankptr(machine, 1, memory_region(machine, "user1") + 0);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1") + 0);
 	FlashCmd = 0xff;
 	OldPort4 = 0;
 
@@ -740,7 +740,7 @@ static const vr0_interface vr0_config =
 static MACHINE_DRIVER_START( crystal )
 	MDRV_CPU_ADD("maincpu", SE3208, 43000000)
 	MDRV_CPU_PROGRAM_MAP(crystal_mem)
- 	MDRV_CPU_VBLANK_INT("screen", crystal_interrupt)
+	MDRV_CPU_VBLANK_INT("screen", crystal_interrupt)
 
 	MDRV_MACHINE_START(crystal)
 	MDRV_MACHINE_RESET(crystal)

@@ -71,7 +71,7 @@ struct _cheat_region_map
 {
 	UINT64		offset;
 	UINT64		endoffset;
-	UINT8		share;
+	const char *share;
 	UINT8		disabled;
 };
 
@@ -289,7 +289,7 @@ void debug_command_init(running_machine *machine)
 	debug_console_register_command(machine, "comadd",	CMDFLAG_NONE, 0, 1, 2, execute_comment);
 	debug_console_register_command(machine, "//",        CMDFLAG_NONE, 0, 1, 2, execute_comment);
 	debug_console_register_command(machine, "comdelete",	CMDFLAG_NONE, 0, 1, 1, execute_comment_del);
-	debug_console_register_command(machine, "comsave", 	CMDFLAG_NONE, 0, 0, 0, execute_comment_save);
+	debug_console_register_command(machine, "comsave",	CMDFLAG_NONE, 0, 0, 0, execute_comment_save);
 
 	debug_console_register_command(machine, "bpset",     CMDFLAG_NONE, 0, 1, 3, execute_bpset);
 	debug_console_register_command(machine, "bp",        CMDFLAG_NONE, 0, 1, 3, execute_bpset);
@@ -542,7 +542,7 @@ int debug_command_parameter_cpu(running_machine *machine, const char *param, con
 	}
 
 	/* if we got a valid one, return */
-	*result = device_list_find_by_index(machine->config->devicelist, CPU, cpunum);
+	*result = device_list_find_by_index(&machine->config->devicelist, CPU, cpunum);
 	if (*result != NULL)
 		return TRUE;
 
@@ -1786,13 +1786,14 @@ static void execute_cheatinit(running_machine *machine, int ref, int params, con
 			cheat_region[region_count].offset = memory_address_to_byte(space, entry->addrstart) & space->bytemask;
 			cheat_region[region_count].endoffset = memory_address_to_byte(space, entry->addrend) & space->bytemask;
 			cheat_region[region_count].share = entry->share;
-			cheat_region[region_count].disabled = (entry->write.shandler8 == SMH_RAM) ? FALSE : TRUE;
+			cheat_region[region_count].disabled = (entry->write.type == AMH_RAM) ? FALSE : TRUE;
 
 			/* disable double share regions */
-			if (entry->share != 0)
+			if (entry->share != NULL)
 				for (i = 0; i < region_count; i++)
-					if (cheat_region[i].share == entry->share)
-						cheat_region[region_count].disabled = TRUE;
+					if (cheat_region[i].share != NULL)
+						if (strcmp(cheat_region[i].share, entry->share)==0)
+							cheat_region[region_count].disabled = TRUE;
 
 			region_count++;
 		}
@@ -1808,7 +1809,7 @@ static void execute_cheatinit(running_machine *machine, int ref, int params, con
 		/* force region to the specified range */
 		cheat_region[region_count].offset = memory_address_to_byte(space, offset) & space->bytemask;;
 		cheat_region[region_count].endoffset = memory_address_to_byte(space, offset + length - 1) & space->bytemask;;
-		cheat_region[region_count].share = 0;
+		cheat_region[region_count].share = NULL;
 		cheat_region[region_count].disabled = FALSE;
 		region_count++;
 	}
@@ -2512,7 +2513,7 @@ static void execute_snap(running_machine *machine, int ref, int params, const ch
 		int scrnum = (params > 1) ? atoi(param[1]) : 0;
 		astring *fname;
 
-		const device_config *screen = device_list_find_by_index(machine->config->devicelist, VIDEO_SCREEN, scrnum);
+		const device_config *screen = device_list_find_by_index(&machine->config->devicelist, VIDEO_SCREEN, scrnum);
 
 		if ((screen == NULL) || !render_is_live_screen(screen))
 		{

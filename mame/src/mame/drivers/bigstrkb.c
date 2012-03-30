@@ -63,7 +63,7 @@ static ADDRESS_MAP_START( bigstrkb_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0ec000, 0x0effff) AM_RAM_WRITE(bsb_videoram_w) AM_BASE(&bsb_videoram)
 
 	AM_RANGE(0x0f0000, 0x0f7fff) AM_RAM
-	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0f8800, 0x0fffff) AM_RAM
 
 	AM_RANGE(0x1f0000, 0x1f7fff) AM_RAM
@@ -225,7 +225,7 @@ static MACHINE_DRIVER_START( bigstrkb )
 	MDRV_VIDEO_UPDATE(bigstrkb)
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-//  MDRV_SOUND_ADD("ym", YM2151, ym2151_config)
+//  MDRV_SOUND_ADD("ymsnd", YM2151, ym2151_config)
 
 	MDRV_SOUND_ADD("oki1", OKIM6295, 4000000)
 	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)

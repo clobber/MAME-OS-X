@@ -120,29 +120,15 @@ Notes:
 #include "deprecat.h"
 #include "sound/2203intf.h"
 #include "sound/okim6295.h"
+#include "includes/lastduel.h"
 
-WRITE16_HANDLER( lastduel_vram_w );
-WRITE16_HANDLER( lastduel_flip_w );
-WRITE16_HANDLER( lastduel_scroll1_w );
-WRITE16_HANDLER( lastduel_scroll2_w );
-WRITE16_HANDLER( madgear_scroll1_w );
-WRITE16_HANDLER( madgear_scroll2_w );
-WRITE16_HANDLER( lastduel_scroll_w );
-WRITE16_HANDLER( lastduel_palette_word_w );
-VIDEO_START( lastduel );
-VIDEO_START( madgear );
-VIDEO_UPDATE( lastduel );
-VIDEO_UPDATE( madgear );
-VIDEO_EOF( lastduel );
-
-extern UINT16 *lastduel_vram,*lastduel_scroll2,*lastduel_scroll1;
 
 /******************************************************************************/
 
 static WRITE16_HANDLER( lastduel_sound_w )
 {
 	if (ACCESSING_BITS_0_7)
-		soundlatch_w(space,0,data & 0xff);
+		soundlatch_w(space, 0, data & 0xff);
 }
 
 /******************************************************************************/
@@ -150,31 +136,31 @@ static WRITE16_HANDLER( lastduel_sound_w )
 static ADDRESS_MAP_START( lastduel_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0xfc0000, 0xfc0003) AM_WRITENOP /* Written rarely */
-	AM_RANGE(0xfc0800, 0xfc0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xfc0800, 0xfc0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xfc4000, 0xfc4001) AM_READ_PORT("P1_P2") AM_WRITE(lastduel_flip_w)
 	AM_RANGE(0xfc4002, 0xfc4003) AM_READ_PORT("SYSTEM") AM_WRITE(lastduel_sound_w)
 	AM_RANGE(0xfc4004, 0xfc4005) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfc4006, 0xfc4007) AM_READ_PORT("DSW2")
 	AM_RANGE(0xfc8000, 0xfc800f) AM_WRITE(lastduel_scroll_w)
-	AM_RANGE(0xfcc000, 0xfcdfff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE(&lastduel_vram)
-	AM_RANGE(0xfd0000, 0xfd3fff) AM_RAM_WRITE(lastduel_scroll1_w) AM_BASE(&lastduel_scroll1)
-	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(lastduel_scroll2_w) AM_BASE(&lastduel_scroll2)
-	AM_RANGE(0xfd8000, 0xfd87ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xfcc000, 0xfcdfff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE_MEMBER(lastduel_state, vram)
+	AM_RANGE(0xfd0000, 0xfd3fff) AM_RAM_WRITE(lastduel_scroll1_w) AM_BASE_MEMBER(lastduel_state, scroll1)
+	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(lastduel_scroll2_w) AM_BASE_MEMBER(lastduel_state, scroll2)
+	AM_RANGE(0xfd8000, 0xfd87ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE_MEMBER(lastduel_state, paletteram)
 	AM_RANGE(0xfe0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( madgear_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0xfc1800, 0xfc1fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xfc1800, 0xfc1fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xfc4000, 0xfc4001) AM_READ_PORT("DSW1") AM_WRITE(lastduel_flip_w)
 	AM_RANGE(0xfc4002, 0xfc4003) AM_READ_PORT("DSW2") AM_WRITE(lastduel_sound_w)
 	AM_RANGE(0xfc4004, 0xfc4005) AM_READ_PORT("P1_P2")
 	AM_RANGE(0xfc4006, 0xfc4007) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0xfc8000, 0xfc9fff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE(&lastduel_vram)
-	AM_RANGE(0xfcc000, 0xfcc7ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xfc8000, 0xfc9fff) AM_RAM_WRITE(lastduel_vram_w) AM_BASE_MEMBER(lastduel_state, vram)
+	AM_RANGE(0xfcc000, 0xfcc7ff) AM_RAM_WRITE(lastduel_palette_word_w) AM_BASE_MEMBER(lastduel_state, paletteram)
 	AM_RANGE(0xfd0000, 0xfd000f) AM_WRITE(lastduel_scroll_w)
-	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(madgear_scroll1_w) AM_BASE(&lastduel_scroll1)
-	AM_RANGE(0xfd8000, 0xfdffff) AM_RAM_WRITE(madgear_scroll2_w) AM_BASE(&lastduel_scroll2)
+	AM_RANGE(0xfd4000, 0xfd7fff) AM_RAM_WRITE(madgear_scroll1_w) AM_BASE_MEMBER(lastduel_state, scroll1)
+	AM_RANGE(0xfd8000, 0xfdffff) AM_RAM_WRITE(madgear_scroll2_w) AM_BASE_MEMBER(lastduel_state, scroll2)
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -190,16 +176,12 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( mg_bankswitch_w )
 {
-	int bankaddress;
-	UINT8 *RAM = memory_region(space->machine, "audiocpu");
-
-	bankaddress = 0x10000 + (data & 0x01) * 0x4000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bank(space->machine, "bank1", data & 0x01);
 }
 
 static ADDRESS_MAP_START( madgear_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xcfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xcfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
 	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ym1", ym2203_r,ym2203_w)
 	AM_RANGE(0xf002, 0xf003) AM_DEVREADWRITE("ym2", ym2203_r,ym2203_w)
@@ -207,187 +189,6 @@ static ADDRESS_MAP_START( madgear_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf006, 0xf006) AM_READ(soundlatch_r)
 	AM_RANGE(0xf00a, 0xf00a) AM_WRITE(mg_bankswitch_w)
 ADDRESS_MAP_END
-
-/******************************************************************************/
-
-static const gfx_layout sprite_layout =
-{
-	16,16,
-	RGN_FRAC(1,4),
-	4,
-	{ RGN_FRAC(0,4), RGN_FRAC(1,4), RGN_FRAC(2,4), RGN_FRAC(3,4) },
-	{ 0, 1, 2, 3, 4, 5, 6, 7,
-			16*8+0, 16*8+1, 16*8+2, 16*8+3, 16*8+4, 16*8+5, 16*8+6, 16*8+7 },
-	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8,
-			8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
-	32*8
-};
-
-static const gfx_layout text_layout =
-{
-	8,8,
-	RGN_FRAC(1,1),
-	2,
-	{ 4, 0 },
-	{ 0, 1, 2, 3, 8+0, 8+1, 8+2, 8+3 },
-	{ 0*16, 1*16, 2*16, 3*16, 4*16, 5*16, 6*16, 7*16 },
-	16*8
-};
-
-static const gfx_layout madgear_tile =
-{
-	16,16,
-	RGN_FRAC(1,1),
-	4,
-	{ 3*4, 2*4, 1*4, 0*4 },
-	{ 0, 1, 2, 3, 16+0, 16+1, 16+2, 16+3,
-			32*16+0, 32*16+1, 32*16+2, 32*16+3, 32*16+16+0, 32*16+16+1, 32*16+16+2, 32*16+16+3 },
-	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32,
-			8*32, 9*32, 10*32, 11*32, 12*32, 13*32, 14*32, 15*32 },
-	64*16
-};
-
-static const gfx_layout madgear_tile2 =
-{
-	16,16,
-	RGN_FRAC(1,1),
-	4,
-	{ 1*4, 3*4, 0*4, 2*4 },
-	{ 0, 1, 2, 3, 16+0, 16+1, 16+2, 16+3,
-			32*16+0, 32*16+1, 32*16+2, 32*16+3, 32*16+16+0, 32*16+16+1, 32*16+16+2, 32*16+16+3 },
-	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32,
-			8*32, 9*32, 10*32, 11*32, 12*32, 13*32, 14*32, 15*32 },
-	64*16
-};
-
-static GFXDECODE_START( lastduel )
-	GFXDECODE_ENTRY( "gfx1", 0,sprite_layout, 0x200, 16 )	/* colors 0x200-0x2ff */
-	GFXDECODE_ENTRY( "gfx2", 0,text_layout,   0x300, 16 )	/* colors 0x300-0x33f */
-	GFXDECODE_ENTRY( "gfx3", 0,madgear_tile,  0x000, 16 )	/* colors 0x000-0x0ff */
-	GFXDECODE_ENTRY( "gfx4", 0,madgear_tile,  0x100, 16 )	/* colors 0x100-0x1ff */
-GFXDECODE_END
-
-static GFXDECODE_START( madgear )
-	GFXDECODE_ENTRY( "gfx1", 0,sprite_layout, 0x200, 16 )	/* colors 0x200-0x2ff */
-	GFXDECODE_ENTRY( "gfx2", 0,text_layout,   0x300, 16 )	/* colors 0x300-0x33f */
-	GFXDECODE_ENTRY( "gfx3", 0,madgear_tile,  0x000, 16 )	/* colors 0x000-0x0ff */
-	GFXDECODE_ENTRY( "gfx4", 0,madgear_tile2, 0x100, 16 )	/* colors 0x100-0x1ff */
-GFXDECODE_END
-
-/******************************************************************************/
-
-/* handler called by the 2203 emulator when the internal timers cause an IRQ */
-static void irqhandler(const device_config *device, int irq)
-{
-	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
-}
-
-static const ym2203_interface ym2203_config =
-{
-	{
-			AY8910_LEGACY_OUTPUT,
-			AY8910_DEFAULT_LOADS,
-			DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	},
-	irqhandler
-};
-
-static INTERRUPT_GEN( lastduel_interrupt )
-{
-	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line(device, 2, HOLD_LINE); /* VBL */
-	else
-		cpu_set_input_line(device, 4, HOLD_LINE); /* Controls */
-}
-
-static INTERRUPT_GEN( madgear_interrupt )
-{
-	if (cpu_getiloops(device) == 0)
-		cpu_set_input_line(device, 5, HOLD_LINE); /* VBL */
-	else
-		cpu_set_input_line(device, 6, HOLD_LINE); /* Controls */
-}
-
-static MACHINE_DRIVER_START( lastduel )
-
-	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000) /* Could be 8 MHz */
-	MDRV_CPU_PROGRAM_MAP(lastduel_map)
-	MDRV_CPU_VBLANK_INT_HACK(lastduel_interrupt,3)	/* 1 for vbl, 2 for control reads?? */
-
-	MDRV_CPU_ADD("audiocpu", Z80, 3579545) /* Accurate */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-
-	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK | VIDEO_BUFFERS_SPRITERAM)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 1*8, 31*8-1 )
-
-	MDRV_GFXDECODE(lastduel)
-	MDRV_PALETTE_LENGTH(1024)
-
-	MDRV_VIDEO_START(lastduel)
-	MDRV_VIDEO_EOF(lastduel)
-	MDRV_VIDEO_UPDATE(lastduel)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("ym1", YM2203, 3579545)
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-
-	MDRV_SOUND_ADD("ym2", YM2203, 3579545)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
-
-
-static MACHINE_DRIVER_START( madgear )
-
-	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000) /* Accurate */
-	MDRV_CPU_PROGRAM_MAP(madgear_map)
-	MDRV_CPU_VBLANK_INT_HACK(madgear_interrupt,3)	/* 1 for vbl, 2 for control reads?? */
-
-	MDRV_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(madgear_sound_map)
-
-	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK | VIDEO_BUFFERS_SPRITERAM)
-
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(64*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 1*8, 31*8-1 )
-
-	MDRV_GFXDECODE(madgear)
-	MDRV_PALETTE_LENGTH(1024)
-
-	MDRV_VIDEO_START(madgear)
-	MDRV_VIDEO_EOF(lastduel)
-	MDRV_VIDEO_UPDATE(madgear)
-
-	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
-
-	MDRV_SOUND_ADD("ym1", YM2203, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(ym2203_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-
-	MDRV_SOUND_ADD("ym2", YM2203, XTAL_3_579545MHz) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_10MHz/10)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.98)
-MACHINE_DRIVER_END
 
 /******************************************************************************/
 
@@ -572,6 +373,230 @@ INPUT_PORTS_END
 
 /******************************************************************************/
 
+static const gfx_layout sprite_layout =
+{
+	16,16,
+	RGN_FRAC(1,4),
+	4,
+	{ RGN_FRAC(0,4), RGN_FRAC(1,4), RGN_FRAC(2,4), RGN_FRAC(3,4) },
+	{ 0, 1, 2, 3, 4, 5, 6, 7,
+			16*8+0, 16*8+1, 16*8+2, 16*8+3, 16*8+4, 16*8+5, 16*8+6, 16*8+7 },
+	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8,
+			8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
+	32*8
+};
+
+static const gfx_layout text_layout =
+{
+	8,8,
+	RGN_FRAC(1,1),
+	2,
+	{ 4, 0 },
+	{ 0, 1, 2, 3, 8+0, 8+1, 8+2, 8+3 },
+	{ 0*16, 1*16, 2*16, 3*16, 4*16, 5*16, 6*16, 7*16 },
+	16*8
+};
+
+static const gfx_layout madgear_tile =
+{
+	16,16,
+	RGN_FRAC(1,1),
+	4,
+	{ 3*4, 2*4, 1*4, 0*4 },
+	{ 0, 1, 2, 3, 16+0, 16+1, 16+2, 16+3,
+			32*16+0, 32*16+1, 32*16+2, 32*16+3, 32*16+16+0, 32*16+16+1, 32*16+16+2, 32*16+16+3 },
+	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32,
+			8*32, 9*32, 10*32, 11*32, 12*32, 13*32, 14*32, 15*32 },
+	64*16
+};
+
+static const gfx_layout madgear_tile2 =
+{
+	16,16,
+	RGN_FRAC(1,1),
+	4,
+	{ 1*4, 3*4, 0*4, 2*4 },
+	{ 0, 1, 2, 3, 16+0, 16+1, 16+2, 16+3,
+			32*16+0, 32*16+1, 32*16+2, 32*16+3, 32*16+16+0, 32*16+16+1, 32*16+16+2, 32*16+16+3 },
+	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32,
+			8*32, 9*32, 10*32, 11*32, 12*32, 13*32, 14*32, 15*32 },
+	64*16
+};
+
+static GFXDECODE_START( lastduel )
+	GFXDECODE_ENTRY( "gfx1", 0, sprite_layout, 0x200, 16 )	/* colors 0x200-0x2ff */
+	GFXDECODE_ENTRY( "gfx2", 0, text_layout,   0x300, 16 )	/* colors 0x300-0x33f */
+	GFXDECODE_ENTRY( "gfx3", 0, madgear_tile,  0x000, 16 )	/* colors 0x000-0x0ff */
+	GFXDECODE_ENTRY( "gfx4", 0, madgear_tile,  0x100, 16 )	/* colors 0x100-0x1ff */
+GFXDECODE_END
+
+static GFXDECODE_START( madgear )
+	GFXDECODE_ENTRY( "gfx1", 0, sprite_layout, 0x200, 16 )	/* colors 0x200-0x2ff */
+	GFXDECODE_ENTRY( "gfx2", 0, text_layout,   0x300, 16 )	/* colors 0x300-0x33f */
+	GFXDECODE_ENTRY( "gfx3", 0, madgear_tile,  0x000, 16 )	/* colors 0x000-0x0ff */
+	GFXDECODE_ENTRY( "gfx4", 0, madgear_tile2, 0x100, 16 )	/* colors 0x100-0x1ff */
+GFXDECODE_END
+
+/******************************************************************************/
+
+/* handler called by the 2203 emulator when the internal timers cause an IRQ */
+static void irqhandler( const device_config *device, int irq )
+{
+	lastduel_state *state = (lastduel_state *)device->machine->driver_data;
+	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+}
+
+static const ym2203_interface ym2203_config =
+{
+	{
+		AY8910_LEGACY_OUTPUT,
+		AY8910_DEFAULT_LOADS,
+		DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
+	},
+	irqhandler
+};
+
+static INTERRUPT_GEN( lastduel_interrupt )
+{
+	if (cpu_getiloops(device) == 0)
+		cpu_set_input_line(device, 2, HOLD_LINE); /* VBL */
+	else
+		cpu_set_input_line(device, 4, HOLD_LINE); /* Controls */
+}
+
+static INTERRUPT_GEN( madgear_interrupt )
+{
+	if (cpu_getiloops(device) == 0)
+		cpu_set_input_line(device, 5, HOLD_LINE); /* VBL */
+	else
+		cpu_set_input_line(device, 6, HOLD_LINE); /* Controls */
+}
+
+static MACHINE_START( lastduel )
+{
+	lastduel_state *state = (lastduel_state *)machine->driver_data;
+
+	state->audiocpu = devtag_get_device(machine, "audiocpu");
+
+	state_save_register_global(machine, state->tilemap_priority);
+	state_save_register_global_array(machine, state->scroll);
+}
+
+static MACHINE_START( madgear )
+{
+	UINT8 *ROM = memory_region(machine, "audiocpu");
+
+	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x4000);
+
+	MACHINE_START_CALL(lastduel);
+}
+
+static MACHINE_RESET( lastduel )
+{
+	lastduel_state *state = (lastduel_state *)machine->driver_data;
+	int i;
+
+	state->tilemap_priority = 0;
+
+	for (i = 0; i < 8; i++)
+		state->scroll[i] = 0;
+}
+
+static MACHINE_DRIVER_START( lastduel )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(lastduel_state)
+
+	/* basic machine hardware */
+	MDRV_CPU_ADD("maincpu", M68000, 10000000) /* Could be 8 MHz */
+	MDRV_CPU_PROGRAM_MAP(lastduel_map)
+	MDRV_CPU_VBLANK_INT_HACK(lastduel_interrupt,3)	/* 1 for vbl, 2 for control reads?? */
+
+	MDRV_CPU_ADD("audiocpu", Z80, 3579545) /* Accurate */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+
+	MDRV_MACHINE_START(lastduel)
+	MDRV_MACHINE_RESET(lastduel)
+
+	/* video hardware */
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK | VIDEO_BUFFERS_SPRITERAM)
+
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 1*8, 31*8-1 )
+
+	MDRV_GFXDECODE(lastduel)
+	MDRV_PALETTE_LENGTH(1024)
+
+	MDRV_VIDEO_START(lastduel)
+	MDRV_VIDEO_EOF(lastduel)
+	MDRV_VIDEO_UPDATE(lastduel)
+
+	/* sound hardware */
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+
+	MDRV_SOUND_ADD("ym1", YM2203, 3579545)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+
+	MDRV_SOUND_ADD("ym2", YM2203, 3579545)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( madgear )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(lastduel_state)
+
+	/* basic machine hardware */
+	MDRV_CPU_ADD("maincpu", M68000, 10000000) /* Accurate */
+	MDRV_CPU_PROGRAM_MAP(madgear_map)
+	MDRV_CPU_VBLANK_INT_HACK(madgear_interrupt,3)	/* 1 for vbl, 2 for control reads?? */
+
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz) /* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(madgear_sound_map)
+
+	MDRV_MACHINE_START(madgear)
+	MDRV_MACHINE_RESET(lastduel)
+
+	/* video hardware */
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK | VIDEO_BUFFERS_SPRITERAM)
+
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(8*8, (64-8)*8-1, 1*8, 31*8-1 )
+
+	MDRV_GFXDECODE(madgear)
+	MDRV_PALETTE_LENGTH(1024)
+
+	MDRV_VIDEO_START(madgear)
+	MDRV_VIDEO_EOF(lastduel)
+	MDRV_VIDEO_UPDATE(madgear)
+
+	/* sound hardware */
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+
+	MDRV_SOUND_ADD("ym1", YM2203, XTAL_3_579545MHz) /* verified on pcb */
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+
+	MDRV_SOUND_ADD("ym2", YM2203, XTAL_3_579545MHz) /* verified on pcb */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+
+	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_10MHz/10)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.98)
+MACHINE_DRIVER_END
+
+/******************************************************************************/
+
 ROM_START( lastduel )
 	ROM_REGION( 0x60000, "maincpu", 0 )	/* 68000 code */
 	ROM_LOAD16_BYTE( "ldu_06b.13k",   0x00000, 0x20000, CRC(0e71acaf) SHA1(e804c77bfd768ae2fc1917bcec1fd0ec7418b780) )
@@ -604,10 +629,40 @@ ROM_END
 
 ROM_START( lastduelo )
 	ROM_REGION( 0x60000, "maincpu", 0 )	/* 68000 code */
-	ROM_LOAD16_BYTE( "ldu-06.13k",  0x00000, 0x20000, CRC(4228a00b) SHA1(8c23f74f682ba2074da9f3306600c881ce41e50f) )
-	ROM_LOAD16_BYTE( "ldu-05.12k",  0x00001, 0x20000, CRC(7260434f) SHA1(55eeb12977efb3c6afd86d68612782ba526c9055) )
-	ROM_LOAD16_BYTE( "ldu-04.11k",  0x40000, 0x10000, CRC(429fb964) SHA1(78769b05e62c190d846dd08214427d1abbbe2bba) )
-	ROM_LOAD16_BYTE( "ldu-03.9k",   0x40001, 0x10000, CRC(5aa4df72) SHA1(9e7315b793f09c8b422bad1ce776588e3a48d80c) )
+	ROM_LOAD16_BYTE( "ldu_06.13k",  0x00000, 0x20000, CRC(4228a00b) SHA1(8c23f74f682ba2074da9f3306600c881ce41e50f) )
+	ROM_LOAD16_BYTE( "ldu_05.12k",  0x00001, 0x20000, CRC(7260434f) SHA1(55eeb12977efb3c6afd86d68612782ba526c9055) )
+	ROM_LOAD16_BYTE( "ldu_04.11k",  0x40000, 0x10000, CRC(429fb964) SHA1(78769b05e62c190d846dd08214427d1abbbe2bba) )
+	ROM_LOAD16_BYTE( "ldu_03.9k",   0x40001, 0x10000, CRC(5aa4df72) SHA1(9e7315b793f09c8b422bad1ce776588e3a48d80c) )
+
+	ROM_REGION( 0x10000 , "audiocpu", 0 ) /* audio CPU */
+	ROM_LOAD( "ld_02.16h",    0x0000, 0x10000, CRC(91834d0c) SHA1(aaa63b8470fc19b82c25028ab27675a7837ab9a1) )
+
+	ROM_REGION( 0x80000, "gfx1", 0 )
+	ROM_LOAD( "ld-11.12b",    0x000000, 0x20000, CRC(49d4dbbd) SHA1(e58ebda9e9ad37a6990f2aca2a312d55cdaca979) ) /* sprites */
+	ROM_LOAD( "ld-09.12a",    0x020000, 0x20000, CRC(6efadb74) SHA1(b00ddd33c08557940610570b1fd8c9a84dcaf063) )
+	ROM_LOAD( "ld-12.17b",    0x040000, 0x20000, CRC(313e5338) SHA1(beceeb5ae9de6a41d3fde06767b8a23fc9f42259) )
+	ROM_LOAD( "ld-10.17a",    0x060000, 0x20000, CRC(b8d3b2e3) SHA1(a08ef780c798b59bb1e1582d82317421a3353887) )
+
+	ROM_REGION( 0x08000, "gfx2", 0 )
+	ROM_LOAD( "ld_01.12f",    0x000000, 0x08000, CRC(ad3c6f87) SHA1(1a5ef003c0eb641484921dc0c11450c53ee315f5) ) /* 8x8 text */
+
+	ROM_REGION( 0x40000, "gfx3", 0 )
+	ROM_LOAD16_BYTE( "ld-15.6p",     0x000001, 0x20000, CRC(d977a175) SHA1(e3cb482ede10d2204f8352b10623e442a4ae99d2) ) /* tiles */
+	ROM_LOAD16_BYTE( "ld-13.6m",     0x000000, 0x20000, CRC(bc25729f) SHA1(7a6e8a4158bf4c804e87b11c15deb6d0f09fa538) )
+
+	ROM_REGION( 0x80000, "gfx4", 0 )
+	ROM_LOAD( "ld-14.15n",    0x000000, 0x80000, CRC(d0653739) SHA1(8278e8601e82470d785a8ffef48a1b5f70bc2a9b) ) /* tiles */
+
+	ROM_REGION( 0x0100, "proms", 0 )
+	ROM_LOAD( "ld.3d",        0x0000, 0x0100, CRC(729a1ddc) SHA1(eb1d48785a0f187a4cb9c164e6c82481268b3174) ) /* priority (not used) BPROM type 63S141 or compatible like 82S129A */
+ROM_END
+
+ROM_START( lastduelj )
+	ROM_REGION( 0x60000, "maincpu", 0 )	/* 68000 code */
+	ROM_LOAD16_BYTE( "ld_06.13k",  0x00000, 0x20000, CRC(58a9e12b) SHA1(bd0b8226271ef0aaff381604455866e0d42fd791) )
+	ROM_LOAD16_BYTE( "ld_05.12k",  0x00001, 0x20000, CRC(14685d78) SHA1(6f6c2431366868df268857d65f6f1325f6c91b89) )
+	ROM_LOAD16_BYTE( "ld_04.11k",  0x40000, 0x10000, CRC(aa4bf001) SHA1(3f14b174016c6fa4c82011d3d0f1c957096d6d93) )
+	ROM_LOAD16_BYTE( "ld_03.9k",   0x40001, 0x10000, CRC(bbaac8ab) SHA1(3c5773e39e7a96ef62da7b846ce4099222b3e66b) )
 
 	ROM_REGION( 0x10000 , "audiocpu", 0 ) /* audio CPU */
 	ROM_LOAD( "ld_02.16h",    0x0000, 0x10000, CRC(91834d0c) SHA1(aaa63b8470fc19b82c25028ab27675a7837ab9a1) )
@@ -825,10 +880,11 @@ ROM_END
 
 /******************************************************************************/
 
-GAME( 1988, lastduel,  0,        lastduel, lastduel, 0, ROT270, "Capcom", "Last Duel (US New Ver.)", 0 )
-GAME( 1988, lastduelo, lastduel, lastduel, lastduel, 0, ROT270, "Capcom", "Last Duel (US Old Ver.)", 0 )
-GAME( 1988, lastduelb, lastduel, lastduel, lastduel, 0, ROT270, "bootleg", "Last Duel (bootleg)", 0 )
-GAME( 1989, madgear,   0,        madgear,  madgear,  0, ROT270, "Capcom", "Mad Gear (US)", 0 )
-GAME( 1989, madgearj,  madgear,  madgear,  madgear,  0, ROT270, "Capcom", "Mad Gear (Japan)", 0 )
-GAME( 1988, ledstorm,  madgear,  madgear,  madgear,  0, ROT270, "Capcom", "Led Storm (US)", 0 )
-GAME( 1988, ledstorm2, madgear,  madgear,  madgear,  0, ROT270, "Capcom", "Led Storm Rally 2011 (US)", GAME_IMPERFECT_GRAPHICS ) /* game still has wrong sprite issues */
+GAME( 1988, lastduel,  0,        lastduel, lastduel, 0, ROT270, "Capcom",  "Last Duel (US New Ver.)", GAME_SUPPORTS_SAVE )
+GAME( 1988, lastduelo, lastduel, lastduel, lastduel, 0, ROT270, "Capcom",  "Last Duel (US Old Ver.)", GAME_SUPPORTS_SAVE )
+GAME( 1988, lastduelj, lastduel, lastduel, lastduel, 0, ROT270, "Capcom",  "Last Duel (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1988, lastduelb, lastduel, lastduel, lastduel, 0, ROT270, "bootleg", "Last Duel (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1989, madgear,   0,        madgear,  madgear,  0, ROT270, "Capcom",  "Mad Gear (US)", GAME_SUPPORTS_SAVE )
+GAME( 1989, madgearj,  madgear,  madgear,  madgear,  0, ROT270, "Capcom",  "Mad Gear (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1988, ledstorm,  madgear,  madgear,  madgear,  0, ROT270, "Capcom",  "Led Storm (US)", GAME_SUPPORTS_SAVE )
+GAME( 1988, ledstorm2, madgear,  madgear,  madgear,  0, ROT270, "Capcom",  "Led Storm Rally 2011 (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) /* game still has wrong sprite issues */

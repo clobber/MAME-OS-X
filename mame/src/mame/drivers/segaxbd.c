@@ -233,7 +233,7 @@ Notes:
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "system16.h"
+#include "includes/system16.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/segaic16.h"
 #include "sound/2151intf.h"
@@ -650,7 +650,7 @@ static WRITE16_HANDLER( aburner2_iochip_0_D_w )
 
 	output_set_lamp_value(2, (data >> 1) & 0x01);	/* altitude warning lamp */
 	output_set_led_value(0, (data >> 2) & 0x01);	/* start lamp */
-	coin_counter_w(0, (data >> 4) & 0x01);
+	coin_counter_w(space->machine, 0, (data >> 4) & 0x01);
 	output_set_lamp_value(0, (data >> 5) & 0x01);	/* lock on lamp */
 	output_set_lamp_value(1, (data >> 6) & 0x01);	/* danger lamp */
 	sound_global_enable(space->machine, (data >> 7) & 0x01);
@@ -726,8 +726,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x3fffff)
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x083fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE(1) AM_BASE(&backupram1)
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE(2) AM_BASE(&backupram2)
+	AM_RANGE(0x080000, 0x083fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share1") AM_BASE(&backupram1)
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share2") AM_BASE(&backupram2)
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x0d0000, 0x0d0fff) AM_MIRROR(0x00f000) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
 	AM_RANGE(0x0e0000, 0x0e0007) AM_MIRROR(0x003ff8) AM_READWRITE(segaic16_multiply_0_r, segaic16_multiply_0_w)
@@ -735,22 +735,22 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0e8000, 0x0e801f) AM_MIRROR(0x003fe0) AM_READWRITE(segaic16_compare_timer_0_r, segaic16_compare_timer_0_w)
 	AM_RANGE(0x100000, 0x100fff) AM_MIRROR(0x00f000) AM_RAM AM_BASE(&segaic16_spriteram_0)
 	AM_RANGE(0x110000, 0x11ffff) AM_WRITE(segaic16_sprites_draw_0_w)
-	AM_RANGE(0x120000, 0x123fff) AM_MIRROR(0x00c000) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x120000, 0x123fff) AM_MIRROR(0x00c000) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
 	AM_RANGE(0x130000, 0x13ffff) AM_READWRITE(adc_r, adc_w)
 	AM_RANGE(0x140000, 0x14000f) AM_MIRROR(0x00fff0) AM_READWRITE(iochip_0_r, iochip_0_w)
 	AM_RANGE(0x150000, 0x15000f) AM_MIRROR(0x00fff0) AM_READWRITE(iochip_1_r, iochip_1_w)
 	AM_RANGE(0x160000, 0x16ffff) AM_WRITE(iocontrol_w)
 	AM_RANGE(0x200000, 0x27ffff) AM_ROM AM_REGION("sub", 0x00000)
-	AM_RANGE(0x280000, 0x283fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE(3)
-	AM_RANGE(0x2a0000, 0x2a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE(4)
+	AM_RANGE(0x280000, 0x283fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share3")
+	AM_RANGE(0x2a0000, 0x2a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share4")
 	AM_RANGE(0x2e0000, 0x2e0007) AM_MIRROR(0x003ff8) AM_READWRITE(segaic16_multiply_1_r, segaic16_multiply_1_w)
 	AM_RANGE(0x2e4000, 0x2e401f) AM_MIRROR(0x003fe0) AM_READWRITE(segaic16_divide_1_r, segaic16_divide_1_w)
 	AM_RANGE(0x2e8000, 0x2e800f) AM_MIRROR(0x003ff0) AM_READWRITE(segaic16_compare_timer_1_r, segaic16_compare_timer_1_w)
-	AM_RANGE(0x2ec000, 0x2ecfff) AM_MIRROR(0x001000) AM_RAM AM_SHARE(5) AM_BASE(&segaic16_roadram_0)
+	AM_RANGE(0x2ec000, 0x2ecfff) AM_MIRROR(0x001000) AM_RAM AM_SHARE("share5") AM_BASE(&segaic16_roadram_0)
 	AM_RANGE(0x2ee000, 0x2effff) AM_READWRITE(segaic16_road_control_0_r, segaic16_road_control_0_w)
 //  AM_RANGE(0x2f0000, 0x2f3fff) AM_READWRITE(excs_r, excs_w)
-	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x3fc000, 0x3fffff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x3fc000, 0x3fffff) AM_RAM AM_SHARE("share2")
 ADDRESS_MAP_END
 
 
@@ -765,12 +765,12 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xfffff)
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x083fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE(3)
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE(4)
+	AM_RANGE(0x080000, 0x083fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share3")
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share4")
 	AM_RANGE(0x0e0000, 0x0e0007) AM_MIRROR(0x003ff8) AM_READWRITE(segaic16_multiply_1_r, segaic16_multiply_1_w)
 	AM_RANGE(0x0e4000, 0x0e401f) AM_MIRROR(0x003fe0) AM_READWRITE(segaic16_divide_1_r, segaic16_divide_1_w)
 	AM_RANGE(0x0e8000, 0x0e800f) AM_MIRROR(0x003ff0) AM_READWRITE(segaic16_compare_timer_1_r, segaic16_compare_timer_1_w)
-	AM_RANGE(0x0ec000, 0x0ecfff) AM_MIRROR(0x001000) AM_RAM AM_SHARE(5)
+	AM_RANGE(0x0ec000, 0x0ecfff) AM_MIRROR(0x001000) AM_RAM AM_SHARE("share5")
 	AM_RANGE(0x0ee000, 0x0effff) AM_READWRITE(segaic16_road_control_0_r, segaic16_road_control_0_w)
 //  AM_RANGE(0x0f0000, 0x0f3fff) AM_READWRITE(excs_r, excs_w)
 ADDRESS_MAP_END
@@ -793,7 +793,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
@@ -1366,7 +1366,7 @@ static MACHINE_DRIVER_START( xboard )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK/4)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK/4)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.43)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.43)

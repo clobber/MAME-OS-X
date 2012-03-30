@@ -16,7 +16,7 @@
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "crbaloon.h"
+#include "includes/crbaloon.h"
 
 
 static UINT8 *pc3092_data;
@@ -160,7 +160,7 @@ static READ8_HANDLER( pc3259_r )
 static WRITE8_HANDLER( port_sound_w )
 {
 	const device_config *discrete = devtag_get_device(space->machine, "discrete");
-	const device_config *sn = devtag_get_device(space->machine, "sn");
+	const device_config *sn = devtag_get_device(space->machine, "snsnd");
 
 	/* D0 - interrupt enable - also goes to PC3259 as /HTCTRL */
 	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), (data & 0x01) ? TRUE : FALSE);
@@ -223,7 +223,7 @@ static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
 
 	AM_RANGE(0x00, 0x00) AM_WRITENOP	/* not connected */
 	AM_RANGE(0x01, 0x01) AM_WRITENOP /* watchdog */
-	AM_RANGE(0x02, 0x04) AM_WRITE(SMH_RAM) AM_BASE(&crbaloon_spriteram)
+	AM_RANGE(0x02, 0x04) AM_WRITEONLY AM_BASE(&crbaloon_spriteram)
 	AM_RANGE(0x05, 0x05) AM_DEVWRITE("discrete", crbaloon_audio_set_music_freq)
 	AM_RANGE(0x06, 0x06) AM_WRITE(port_sound_w)
 	AM_RANGE(0x07, 0x0b) AM_WRITE(pc3092_w) AM_BASE(&pc3092_data)

@@ -9,6 +9,7 @@
   - American Horseshoes
   - Play Girls
   - Play Girls 2
+  - LA Girl
   - Cuby Bop
 
   Dual processor games (1 main TC0090LVC (z80 core), 1 sound z80)
@@ -51,7 +52,7 @@ puzznici note
 
 #include "driver.h"
 #include "deprecat.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "cpu/z80/z80.h"
 #include "audio/taitosnd.h"
 #include "sound/2203intf.h"
@@ -59,6 +60,8 @@ puzznici note
 #include "sound/msm5205.h"
 #include "includes/taito_l.h"
 
+
+static const char * const bankname[] = { "bank2", "bank3", "bank4", "bank5" };
 
 static const struct
 {
@@ -133,13 +136,16 @@ logerror("%s:Large palette ? %03x\n", cpuexec_describe_context(machine), addr);
 	}
 }
 
-static void machine_init(running_machine *machine)
+static MACHINE_START( taito_l )
 {
-	int i;
-
 	taitol_rambanks = auto_alloc_array(machine, UINT8, 0x1000*12);
 	palette_ram = auto_alloc_array(machine, UINT8, 0x1000);
 	empty_ram = auto_alloc_array(machine, UINT8, 0x1000);
+}
+
+static void machine_reset(running_machine *machine)
+{
+	int i;
 
 	for(i=0;i<3;i++)
 		irq_adr_table[i] = 0;
@@ -151,10 +157,10 @@ static void machine_init(running_machine *machine)
 		cur_rambank[i] = 0x80;
 		current_base[i] = palette_ram;
 		current_notifier[i] = palette_notifier;
-		memory_set_bankptr(machine, 2+i, current_base[i]);
+		memory_set_bankptr(machine, bankname[i], current_base[i]);
 	}
 	cur_rombank = cur_rombank2 = 0;
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x10000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "maincpu") + 0x10000);
 
 	gfx_element_set_source(machine->gfx[2], taitol_rambanks);
 
@@ -175,7 +181,7 @@ static void machine_init(running_machine *machine)
 
 static MACHINE_RESET( fhawk )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = NULL;
 	porte1_tag = NULL;
 	portf0_tag = NULL;
@@ -184,7 +190,7 @@ static MACHINE_RESET( fhawk )
 
 static MACHINE_RESET( raimais )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = NULL;
 	porte1_tag = NULL;
 	portf0_tag = NULL;
@@ -193,7 +199,7 @@ static MACHINE_RESET( raimais )
 
 static MACHINE_RESET( champwr )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = NULL;
 	porte1_tag = NULL;
 	portf0_tag = NULL;
@@ -203,7 +209,7 @@ static MACHINE_RESET( champwr )
 
 static MACHINE_RESET( kurikint )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = NULL;
 	porte1_tag = NULL;
 	portf0_tag = NULL;
@@ -212,7 +218,7 @@ static MACHINE_RESET( kurikint )
 
 static MACHINE_RESET( evilston )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = NULL;
 	porte1_tag = NULL;
 	portf0_tag = NULL;
@@ -221,7 +227,7 @@ static MACHINE_RESET( evilston )
 
 static MACHINE_RESET( puzznic )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = "DSWA";
 	porte1_tag = "DSWB";
 	portf0_tag = "IN0";
@@ -230,7 +236,7 @@ static MACHINE_RESET( puzznic )
 
 static MACHINE_RESET( plotting )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = "DSWA";
 	porte1_tag = "DSWB";
 	portf0_tag = "IN0";
@@ -239,7 +245,7 @@ static MACHINE_RESET( plotting )
 
 static MACHINE_RESET( palamed )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = "DSWA";
 	porte1_tag = NULL;
 	portf0_tag = "DSWB";
@@ -248,7 +254,7 @@ static MACHINE_RESET( palamed )
 
 static MACHINE_RESET( cachat )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = "DSWA";
 	porte1_tag = NULL;
 	portf0_tag = "DSWB";
@@ -257,7 +263,7 @@ static MACHINE_RESET( cachat )
 
 static MACHINE_RESET( horshoes )
 {
-	machine_init(machine);
+	machine_reset(machine);
 	porte0_tag = "DSWA";
 	porte1_tag = "DSWB";
 	portf0_tag = "IN0";
@@ -335,7 +341,7 @@ static WRITE8_HANDLER( rombankswitch_w )
 
 //      logerror("robs %d, %02x (%04x)\n", offset, data, cpu_get_pc(space->cpu));
 		cur_rombank = data;
-		memory_set_bankptr(space->machine, 1, memory_region(space->machine, "maincpu")+0x10000+0x2000*cur_rombank);
+		memory_set_bankptr(space->machine, "bank1", memory_region(space->machine, "maincpu")+0x10000+0x2000*cur_rombank);
 	}
 }
 
@@ -354,7 +360,7 @@ static WRITE8_HANDLER( rombank2switch_w )
 //      logerror("robs2 %02x (%04x)\n", data, cpu_get_pc(space->cpu));
 
 		cur_rombank2 = data;
-		memory_set_bankptr(space->machine, 6, memory_region(space->machine, "slave")+0x10000+0x4000*cur_rombank2);
+		memory_set_bankptr(space->machine, "bank6", memory_region(space->machine, "slave")+0x10000+0x4000*cur_rombank2);
 	}
 }
 
@@ -391,7 +397,7 @@ logerror("unknown rambankswitch %d, %02x (%04x)\n", offset, data, cpu_get_pc(spa
 			current_notifier[offset] = 0;
 			current_base[offset] = empty_ram;
 		}
-		memory_set_bankptr(space->machine, 2+offset, current_base[offset]);
+		memory_set_bankptr(space->machine, bankname[offset], current_base[offset]);
 	}
 }
 
@@ -442,10 +448,10 @@ static WRITE8_HANDLER( bank3_w )
 
 static WRITE8_HANDLER( control2_w )
 {
-	coin_lockout_w(0,~data & 0x01);
-	coin_lockout_w(1,~data & 0x02);
-	coin_counter_w(0,data & 0x04);
-	coin_counter_w(1,data & 0x08);
+	coin_lockout_w(space->machine, 0,~data & 0x01);
+	coin_lockout_w(space->machine, 1,~data & 0x02);
+	coin_counter_w(space->machine, 0,data & 0x04);
+	coin_counter_w(space->machine, 1,data & 0x08);
 }
 
 static READ8_DEVICE_HANDLER( portA_r )
@@ -639,11 +645,11 @@ static READ8_HANDLER( horshoes_trackx_hi_r )
 
 #define COMMON_BANKS_MAP \
 	AM_RANGE(0x0000, 0x5fff) AM_ROM			\
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1) 			\
-	AM_RANGE(0xc000, 0xcfff) AM_ROMBANK(2) AM_WRITE(bank0_w) \
-	AM_RANGE(0xd000, 0xdfff) AM_ROMBANK(3) AM_WRITE(bank1_w) \
-	AM_RANGE(0xe000, 0xefff) AM_ROMBANK(4) AM_WRITE(bank2_w) \
-	AM_RANGE(0xf000, 0xfdff) AM_ROMBANK(5) AM_WRITE(bank3_w) \
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")			\
+	AM_RANGE(0xc000, 0xcfff) AM_ROMBANK("bank2") AM_WRITE(bank0_w) \
+	AM_RANGE(0xd000, 0xdfff) AM_ROMBANK("bank3") AM_WRITE(bank1_w) \
+	AM_RANGE(0xe000, 0xefff) AM_ROMBANK("bank4") AM_WRITE(bank2_w) \
+	AM_RANGE(0xf000, 0xfdff) AM_ROMBANK("bank5") AM_WRITE(bank3_w) \
 	AM_RANGE(0xfe00, 0xfe03) AM_READWRITE(taitol_bankc_r, taitol_bankc_w)		\
 	AM_RANGE(0xfe04, 0xfe04) AM_READWRITE(taitol_control_r, taitol_control_w)	\
 	AM_RANGE(0xff00, 0xff02) AM_READWRITE(irq_adr_r, irq_adr_w)			\
@@ -652,7 +658,7 @@ static READ8_HANDLER( horshoes_trackx_hi_r )
 	AM_RANGE(0xff08, 0xff08) AM_READWRITE(rombankswitch_r, rombankswitch_w)
 
 #define COMMON_SINGLE_MAP \
-	AM_RANGE(0xa000, 0xa003) AM_DEVREADWRITE("ym", extport_select_and_ym2203_r, ym2203_w)	\
+	AM_RANGE(0xa000, 0xa003) AM_DEVREADWRITE("ymsnd", extport_select_and_ym2203_r, ym2203_w)	\
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
 
 
@@ -665,7 +671,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( fhawk_2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(6)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank6")
 	AM_RANGE(0xc000, 0xc000) AM_WRITE(rombank2switch_w)
 	AM_RANGE(0xc800, 0xc800) AM_READNOP AM_WRITE(taitosound_port_w)
 	AM_RANGE(0xc801, 0xc801) AM_READWRITE(taitosound_comm_r, taitosound_comm_w)
@@ -681,11 +687,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( fhawk_3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(7)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank7")
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
 	AM_RANGE(0xe000, 0xe000) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe001, 0xe001) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
-	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 
 
@@ -711,14 +717,14 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 	UINT8 *RAM = memory_region(space->machine, "audiocpu");
 	int banknum = (data - 1) & 3;
 
-	memory_set_bankptr (space->machine, 7, &RAM [0x10000 + (banknum * 0x4000)]);
+	memory_set_bankptr (space->machine, "bank7", &RAM [0x10000 + (banknum * 0x4000)]);
 }
 
 static ADDRESS_MAP_START( raimais_3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(7)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank7")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP /* pan */
@@ -737,7 +743,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( champwr_2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(6)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank6")
 	AM_RANGE(0xc000, 0xdfff) AM_READWRITE(shared_r, shared_w)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("DSWA") AM_WRITENOP	// Watchdog
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("DSWB")
@@ -753,9 +759,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( champwr_3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(7)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank7")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xa000, 0xa000) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xb000, 0xb000) AM_WRITE(champwr_msm5205_hi_w)
@@ -778,7 +784,7 @@ static ADDRESS_MAP_START( kurikint_2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0xe000, 0xe7ff) AM_READWRITE(shared_r, shared_w)
-	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 #if 0
 	AM_RANGE(0xc000, 0xc000) AM_WRITE(rombank2switch_w)
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("DSWA")
@@ -886,8 +892,8 @@ static ADDRESS_MAP_START( evilston_2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0xe000, 0xe7ff) AM_READWRITE(shared_r, shared_w)
-	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(7)
+	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank7")
 ADDRESS_MAP_END
 
 
@@ -1013,7 +1019,7 @@ static INPUT_PORTS_START( champwr )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
- 	PORT_START("IN0")
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
@@ -1889,7 +1895,7 @@ static WRITE8_DEVICE_HANDLER( portA_w )
 
 		cur_bank = data & 0x03;
 		bankaddress = 0x10000 + (cur_bank-1) * 0x4000;
-		memory_set_bankptr(device->machine, 7, &RAM[bankaddress]);
+		memory_set_bankptr(device->machine, "bank7", &RAM[bankaddress]);
 		//logerror ("YM2203 bank change val=%02x  pc=%04x\n", cur_bank, cpu_get_pc(space->cpu) );
 	}
 }
@@ -1949,19 +1955,20 @@ static const ym2203_interface ym2203_interface_single =
 static MACHINE_DRIVER_START( fhawk )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 13330560/2) 	/* verified freq on pin122 of TC0090LVC cpu */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_13_33056MHz/2)	/* verified freq on pin122 of TC0090LVC cpu */
 	MDRV_CPU_PROGRAM_MAP(fhawk_map)
 	MDRV_CPU_VBLANK_INT_HACK(vbl_interrupt,3)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 4000000)	/* verified on pcb */
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_12MHz/3)		/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(fhawk_3_map)
 
-	MDRV_CPU_ADD("slave", Z80, 12000000/3) 	/* verified on pcb */
+	MDRV_CPU_ADD("slave", Z80, XTAL_12MHz/3)		/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(fhawk_2_map)
 	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,3) /* fixes slow down problems */
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
+	MDRV_MACHINE_START(taito_l)
 	MDRV_MACHINE_RESET(fhawk)
 
 	/* video hardware */
@@ -1982,7 +1989,7 @@ static MACHINE_DRIVER_START( fhawk )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4)		/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2203_interface_triple)
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
@@ -2007,14 +2014,14 @@ static MACHINE_DRIVER_START( champwr )
 	MDRV_MACHINE_RESET(champwr)
 
 	/* sound hardware */
-	MDRV_SOUND_MODIFY("ym")
+	MDRV_SOUND_MODIFY("ymsnd")
 	MDRV_SOUND_CONFIG(ym2203_interface_champwr)
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
 	MDRV_SOUND_ROUTE(2, "mono", 0.20)
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_ADD("msm", MSM5205, XTAL_384kHz)
 	MDRV_SOUND_CONFIG(msm5205_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_DRIVER_END
@@ -2037,7 +2044,7 @@ static MACHINE_DRIVER_START( raimais )
 	MDRV_MACHINE_RESET(raimais)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("ym", YM2610, 8000000) /* verified on pcb (8Mhz OSC is also for the 2nd z80) */
+	MDRV_SOUND_REPLACE("ymsnd", YM2610, XTAL_8MHz)		/* verified on pcb (8Mhz OSC is also for the 2nd z80) */
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2048,16 +2055,17 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( kurikint )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 13330560/2) 	/* verified freq on pin122 of TC0090LVC cpu */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_13_33056MHz/2)	/* verified freq on pin122 of TC0090LVC cpu */
 	MDRV_CPU_PROGRAM_MAP(kurikint_map)
 	MDRV_CPU_VBLANK_INT_HACK(vbl_interrupt,3)
 
-	MDRV_CPU_ADD("audiocpu",  Z80, 12000000/3) 	/* verified on pcb */
+	MDRV_CPU_ADD("audiocpu",  Z80, XTAL_12MHz/3)		/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(kurikint_2_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
+	MDRV_MACHINE_START(taito_l)
 	MDRV_MACHINE_RESET(kurikint)
 
 	/* video hardware */
@@ -2078,7 +2086,7 @@ static MACHINE_DRIVER_START( kurikint )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4)		/* verified on pcb */
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
 	MDRV_SOUND_ROUTE(2, "mono", 0.20)
@@ -2099,10 +2107,11 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( plotting )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 13330560/2) 	/* verified freq on pin122 of TC0090LVC cpu */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_13_33056MHz/2)	/* verified freq on pin122 of TC0090LVC cpu */
 	MDRV_CPU_PROGRAM_MAP(plotting_map)
 	MDRV_CPU_VBLANK_INT_HACK(vbl_interrupt,3)
 
+	MDRV_MACHINE_START(taito_l)
 	MDRV_MACHINE_RESET(plotting)
 
 	/* video hardware */
@@ -2123,7 +2132,7 @@ static MACHINE_DRIVER_START( plotting )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3330000) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_13_33056MHz/4)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2203_interface_single)
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
@@ -2188,16 +2197,17 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( evilston )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 13330560/2) 	/* not verfied */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_13_33056MHz/2)	/* not verified */
 	MDRV_CPU_PROGRAM_MAP(evilston_map)
 	MDRV_CPU_VBLANK_INT_HACK(vbl_interrupt,3)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 12000000/3) 	/* not verified */
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_12MHz/3)		/* not verified */
 	MDRV_CPU_PROGRAM_MAP(evilston_2_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
+	MDRV_MACHINE_START(taito_l)
 	MDRV_MACHINE_RESET(evilston)
 
 	/* video hardware */
@@ -2218,14 +2228,26 @@ static MACHINE_DRIVER_START( evilston )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 12000000/4) /* not verified */
+	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4)		/* not verified */
 	MDRV_SOUND_ROUTE(0, "mono", 0.00)
 	MDRV_SOUND_ROUTE(1, "mono", 0.00)
 	MDRV_SOUND_ROUTE(2, "mono", 0.00)
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 MACHINE_DRIVER_END
 
+static MACHINE_DRIVER_START( lagirl )
 
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(plotting)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(cachat_map)
+	MDRV_CPU_REPLACE("maincpu", Z80, XTAL_27_2109MHz/4)
+
+	/* sound hardware */
+	MDRV_SOUND_REPLACE("ymsnd", YM2203, XTAL_27_2109MHz/8)
+
+	MDRV_MACHINE_RESET(cachat)
+MACHINE_DRIVER_END
 
 
 ROM_START( raimais )
@@ -2245,7 +2267,7 @@ ROM_START( raimais )
 	ROM_LOAD( "b36-01.bin",   0x00000, 0x80000, CRC(89355cb2) SHA1(433e929fe8b488af84e88486d9679468a3d9677a) )
 	ROM_LOAD( "b36-02.bin",   0x80000, 0x80000, CRC(e71da5db) SHA1(aa47ae02c359264c0a1f09ecc583eefd1ef1dfa4) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b36-03.bin",   0x00000, 0x80000, CRC(96166516) SHA1(a6748218188cbd1b037f6c0845416665c0d55a7b) )
 ROM_END
 
@@ -2266,7 +2288,7 @@ ROM_START( raimaisj )
 	ROM_LOAD( "b36-01.bin",   0x00000, 0x80000, CRC(89355cb2) SHA1(433e929fe8b488af84e88486d9679468a3d9677a) )
 	ROM_LOAD( "b36-02.bin",   0x80000, 0x80000, CRC(e71da5db) SHA1(aa47ae02c359264c0a1f09ecc583eefd1ef1dfa4) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b36-03.bin",   0x00000, 0x80000, CRC(96166516) SHA1(a6748218188cbd1b037f6c0845416665c0d55a7b) )
 ROM_END
 
@@ -2287,7 +2309,7 @@ ROM_START( raimaisjo )
 	ROM_LOAD( "b36-01.bin",   0x00000, 0x80000, CRC(89355cb2) SHA1(433e929fe8b488af84e88486d9679468a3d9677a) )
 	ROM_LOAD( "b36-02.bin",   0x80000, 0x80000, CRC(e71da5db) SHA1(aa47ae02c359264c0a1f09ecc583eefd1ef1dfa4) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b36-03.bin",   0x00000, 0x80000, CRC(96166516) SHA1(a6748218188cbd1b037f6c0845416665c0d55a7b) )
 ROM_END
 
@@ -2672,7 +2694,7 @@ ROM_START( cachat )
 	ROM_LOAD( "pal20l8b-c63-01.14", 0x0000, 0x0144, CRC(14a7dd2a) SHA1(2a39ca6069bdac553d73c34db6f50f880559113c) )
 ROM_END
 
-ROM_START( tubeit )
+ROM_START( tubeit ) /* Title changed. Year, copyright and manufacture removed */
 	ROM_REGION( 0x30000, "maincpu", 0 )
 	ROM_LOAD( "t-i_02.6", 0x00000, 0x20000, CRC(54730669) SHA1(a44ebd31a8588a133a7552a39fa8d52ba1985e45) )
 	ROM_RELOAD(           0x10000, 0x20000 )
@@ -2731,6 +2753,54 @@ ROM_START( evilston )
 	ROM_LOAD( "c67-02.ic5",  0x80000, 0x80000, CRC(eb4f895c) SHA1(2c902572fe5a5d4442e4dd29e8a85cb40c384140) )
 ROM_END
 
+/*
+
+LA Girl
+Clearly a bootleg / hack of Play Girls by Hot-B, reportedly by Ta Ta Electronics, 1993
+
+PCB Layout
+----------
+
+|------------------------------------------|
+|VOL 4558 YM3014                 ROM4      |
+|UPC1241              2018            ROM5 |
+|     YM2203             TPC1020           |
+|            DSW1(8)                       |
+|            DSW2(8)                       |
+|                         6264    ROM3     |
+|J                                ROM2     |
+|A  27.2109MHz                             |
+|M                                         |
+|M                                PAL      |
+|A                                PAL      |
+|        6264            TPC1020  PAL      |
+|            ROM1                          |
+|                                  6264    |
+|                                  6264    |
+|              PAL       TPC1020           |
+|        Z80B                              |
+|                 44256           44256    |
+|PAL              44256           44256    |
+|------------------------------------------|
+Notes:
+      Z80 - clock 6.802725MHz [27.2109/4]
+   YM2203 - clocks 3.4013625 [27/2109/8] & 1.1337875 [27.2109/24]
+    VSync - 55.8268Hz  \ possibly sync/PCB fault, had to adjust
+    HSync - 14.7739kHz / h/v syncs on monitor to get a stable picture
+
+*/
+
+ROM_START( lagirl )
+	ROM_REGION( 0x50000, "maincpu", 0 )
+	ROM_LOAD( "rom1",  0x00000, 0x40000, CRC(ba1acfdb) SHA1(ff1093c2d0887287ce451417bd373e00f2881ce7) )
+	ROM_RELOAD(           0x10000, 0x40000 )
+
+	ROM_REGION( 0x80000, "gfx1", 0 )
+	ROM_LOAD16_BYTE( "rom2",   0x40001, 0x20000, CRC(4c739a30) SHA1(4426f51aac9bb39f5d1a7616d183ff6c76749dc2) )
+	ROM_LOAD16_BYTE( "rom3",   0x40000, 0x20000, CRC(4cf22a4b) SHA1(1c933ccbb6a5b8a6795385d7970db5f7138e572e) )
+	ROM_LOAD16_BYTE( "rom4",   0x00001, 0x20000, CRC(7dcd6696) SHA1(8f3b1fe669520142668af6dc2d04f13767048989) )
+	ROM_LOAD16_BYTE( "rom5",   0x00000, 0x20000, CRC(b1782816) SHA1(352663974886e1e4358e55b87c8bf0cdb979f177) )
+ROM_END
 
 
 
@@ -2791,7 +2861,8 @@ GAME( 1993, cachat,    0,        cachat,   cachat,   0,        ROT0,   "Taito Co
 GAME( 1993, tubeit,    cachat,   cachat,   tubeit,   0,        ROT0,   "Taito Corporation", "Tube-It", 0 )  // No (c) message
 GAME( 199?, cubybop,   0,        cachat,   cubybop,  0,        ROT0,   "Taito Corporation", "Cuby Bop (Location Test)", 0 ) // No (c) message
 
-GAME( 1992, plgirls,   0,        cachat,   plgirls,  0,        ROT270, "Hot-B.", "Play Girls", 0 )
-GAME( 1993, plgirls2,  0,        cachat,   plgirls2, 0,        ROT270, "Hot-B.", "Play Girls 2", 0 )
+GAME( 1992, plgirls,   0,        cachat,   plgirls,  0,        ROT270, "Hot-B.",  "Play Girls", 0 )
+GAME( 1992, lagirl,    plgirls,  cachat,   plgirls,  0,        ROT270, "bootleg", "LA Girl", 0 ) /* bootleg hardware with changed title & backgrounds */
+GAME( 1993, plgirls2,  0,        cachat,   plgirls2, 0,        ROT270, "Hot-B.",  "Play Girls 2", 0 )
 
 GAME( 1990, evilston,  0,        evilston, evilston, evilston, ROT270, "Spacy Industrial, Ltd.", "Evil Stone", 0 )

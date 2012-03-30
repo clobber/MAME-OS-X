@@ -76,7 +76,7 @@ struct _object_entry
 	object_entry *		globalprev;
 	objtype_entry *		type;
 	void *				object;
-	size_t 				size;
+	size_t				size;
 	const char *		file;
 	int					line;
 };
@@ -99,7 +99,7 @@ struct _object_pool
 	object_entry *		freelist;
 	object_entry_block *blocklist;
 	objtype_entry *		typelist;
-	void 				(*fail)(const char *message);
+	void				(*fail)(const char *message);
 };
 
 
@@ -138,8 +138,8 @@ INLINE int hash_object(void *object)
 
 
 /*-------------------------------------------------
-    hash_object - compute the hash for a given
-    object
+    get_object_type - return the type entry for
+    a given object type
 -------------------------------------------------*/
 
 INLINE objtype_entry *get_object_type(object_pool *pool, object_type type)

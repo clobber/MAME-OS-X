@@ -173,10 +173,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( thief_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_WRITE(thief_blit_w)
-	AM_RANGE(0x0000, 0x7fff) AM_READ(SMH_ROM)
-	AM_RANGE(0x0001, 0x7fff) AM_WRITE(SMH_ROM)
+	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM		/* 2114 */
-	AM_RANGE(0xa000, 0xafff) AM_READ(SMH_ROM)		/* NATO Defense diagnostic ROM */
+	AM_RANGE(0xa000, 0xafff) AM_ROM		/* NATO Defense diagnostic ROM */
 	AM_RANGE(0xc000, 0xdfff) AM_READWRITE(thief_videoram_r, thief_videoram_w)	/* 4116 */
 	AM_RANGE(0xe000, 0xe008) AM_READWRITE(thief_coprocessor_r, thief_coprocessor_w)
 	AM_RANGE(0xe010, 0xe02f) AM_ROM
@@ -190,7 +189,7 @@ static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog */
 	AM_RANGE(0x10, 0x10) AM_WRITE(thief_video_control_w)
 	AM_RANGE(0x30, 0x30) AM_WRITE(thief_input_select_w) /* 8255 */
-	AM_RANGE(0x31, 0x31) AM_READ(thief_io_r) 	/* 8255 */
+	AM_RANGE(0x31, 0x31) AM_READ(thief_io_r)	/* 8255 */
 	AM_RANGE(0x33, 0x33) AM_DEVWRITE("samples", tape_control_w)
 	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x41, 0x41) AM_DEVREAD("ay1", ay8910_r)

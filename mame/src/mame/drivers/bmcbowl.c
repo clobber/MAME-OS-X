@@ -112,6 +112,7 @@ Main board:
 
 static UINT16 *bmcbowl_vid1;
 static UINT16 *bmcbowl_vid2;
+static UINT8 *bmc_colorram;
 
 static UINT8 *stats_ram;
 static size_t	stats_ram_size;
@@ -197,14 +198,14 @@ static READ16_HANDLER( bmc_protection_r )
 
 static WRITE16_HANDLER( bmc_RAMDAC_offset_w )
 {
-		clr_offset=data*3;
+	clr_offset=data*3;
 }
 
 static WRITE16_HANDLER( bmc_RAMDAC_color_w )
 {
-		colorram[clr_offset]=data;
-		palette_set_color_rgb(space->machine,clr_offset/3,pal6bit(colorram[(clr_offset/3)*3]),pal6bit(colorram[(clr_offset/3)*3+1]),pal6bit(colorram[(clr_offset/3)*3+2]));
-		clr_offset=(clr_offset+1)%768;
+	bmc_colorram[clr_offset]=data;
+	palette_set_color_rgb(space->machine,clr_offset/3,pal6bit(bmc_colorram[(clr_offset/3)*3]),pal6bit(bmc_colorram[(clr_offset/3)*3+1]),pal6bit(bmc_colorram[(clr_offset/3)*3+2]));
+	clr_offset=(clr_offset+1)%768;
 }
 
 static WRITE16_HANDLER( scroll_w )
@@ -338,8 +339,8 @@ static ADDRESS_MAP_START( bmcbowl_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x092000, 0x09201f) AM_READWRITE(bmcbowl_via_r, bmcbowl_via_w)
 
 	AM_RANGE(0x093000, 0x093003) AM_WRITENOP  // related to music
-	AM_RANGE(0x092800, 0x092803) AM_DEVWRITE8("ay", ay8910_data_address_w, 0xff00)
-	AM_RANGE(0x092802, 0x092803) AM_DEVREAD8("ay", ay8910_r, 0xff00)
+	AM_RANGE(0x092800, 0x092803) AM_DEVWRITE8("aysnd", ay8910_data_address_w, 0xff00)
+	AM_RANGE(0x092802, 0x092803) AM_DEVREAD8("aysnd", ay8910_r, 0xff00)
 	AM_RANGE(0x093802, 0x093803) AM_READ_PORT("IN0")
 	AM_RANGE(0x095000, 0x095fff) AM_RAM AM_BASE((UINT16 **)&stats_ram) AM_SIZE(&stats_ram_size) /* 8 bit */
 	AM_RANGE(0x097000, 0x097001) AM_READNOP
@@ -517,7 +518,7 @@ static MACHINE_DRIVER_START( bmcbowl )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ay", AY8910, 3579545/2)
+	MDRV_SOUND_ADD("aysnd", AY8910, 3579545/2)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
@@ -551,7 +552,7 @@ ROM_END
 
 static DRIVER_INIT(bmcbowl)
 {
-	colorram = auto_alloc_array(machine, UINT8, 768);
+	bmc_colorram = auto_alloc_array(machine, UINT8, 768);
 }
 
 GAME( 1994, bmcbowl,    0, bmcbowl,    bmcbowl,    bmcbowl, ROT0,  "BMC", "BMC Bowling", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )

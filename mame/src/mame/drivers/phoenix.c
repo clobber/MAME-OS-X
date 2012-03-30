@@ -34,40 +34,40 @@ Pleiads:
 #include "sound/tms36xx.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/ay8910.h"
-#include "phoenix.h"
+#include "includes/phoenix.h"
 
 
 static ADDRESS_MAP_START( phoenix_memory_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x4fff) AM_READWRITE(SMH_BANK(1), phoenix_videoram_w)	/* 2 pages selected by bit 0 of the video register */
+	AM_RANGE(0x4000, 0x4fff) AM_READ_BANK("bank1") AM_WRITE(phoenix_videoram_w)	/* 2 pages selected by bit 0 of the video register */
 	AM_RANGE(0x5000, 0x53ff) AM_WRITE(phoenix_videoreg_w)
 	AM_RANGE(0x5800, 0x5bff) AM_WRITE(phoenix_scroll_w)
 	AM_RANGE(0x6000, 0x63ff) AM_DEVWRITE("discrete", phoenix_sound_control_a_w)
 	AM_RANGE(0x6800, 0x6bff) AM_DEVWRITE("discrete", phoenix_sound_control_b_w)
-	AM_RANGE(0x7000, 0x73ff) AM_READ_PORT("IN0")	 						/* IN0 or IN1 */
-	AM_RANGE(0x7800, 0x7bff) AM_READ_PORT("DSW0")	 						/* DSW */
+	AM_RANGE(0x7000, 0x73ff) AM_READ_PORT("IN0")							/* IN0 or IN1 */
+	AM_RANGE(0x7800, 0x7bff) AM_READ_PORT("DSW0")							/* DSW */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( pleiads_memory_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x4fff) AM_READWRITE(SMH_BANK(1), phoenix_videoram_w)	/* 2 pages selected by bit 0 of the video register */
+	AM_RANGE(0x4000, 0x4fff) AM_READ_BANK("bank1") AM_WRITE(phoenix_videoram_w)	/* 2 pages selected by bit 0 of the video register */
 	AM_RANGE(0x5000, 0x53ff) AM_WRITE(pleiads_videoreg_w)
 	AM_RANGE(0x5800, 0x5bff) AM_WRITE(phoenix_scroll_w)
 	AM_RANGE(0x6000, 0x63ff) AM_WRITE(pleiads_sound_control_a_w)
 	AM_RANGE(0x6800, 0x6bff) AM_WRITE(pleiads_sound_control_b_w)
-	AM_RANGE(0x7000, 0x73ff) AM_READ_PORT("IN0")	 						/* IN0 or IN1 + protection */
-	AM_RANGE(0x7800, 0x7bff) AM_READ_PORT("DSW0") 							/* DSW */
+	AM_RANGE(0x7000, 0x73ff) AM_READ_PORT("IN0")							/* IN0 or IN1 + protection */
+	AM_RANGE(0x7800, 0x7bff) AM_READ_PORT("DSW0")							/* DSW */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( survival_memory_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x4fff) AM_READWRITE(SMH_BANK(1), phoenix_videoram_w)	/* 2 pages selected by bit 0 of the video register */
+	AM_RANGE(0x4000, 0x4fff) AM_READ_BANK("bank1") AM_WRITE(phoenix_videoram_w)	/* 2 pages selected by bit 0 of the video register */
 	AM_RANGE(0x5000, 0x53ff) AM_WRITE(phoenix_videoreg_w)
 	AM_RANGE(0x5800, 0x5bff) AM_WRITE(phoenix_scroll_w)
-	AM_RANGE(0x6800, 0x68ff) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x6900, 0x69ff) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
+	AM_RANGE(0x6800, 0x68ff) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x6900, 0x69ff) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
 	AM_RANGE(0x7000, 0x73ff) AM_READ(survival_input_port_0_r)				/* IN0 or IN1 */
-	AM_RANGE(0x7800, 0x7bff) AM_READ_PORT("DSW0") 							/* DSW */
+	AM_RANGE(0x7800, 0x7bff) AM_READ_PORT("DSW0")							/* DSW */
 ADDRESS_MAP_END
 
 
@@ -445,7 +445,7 @@ static const ay8910_interface survival_ay8910_interface =
 
 static MACHINE_RESET( phoenix )
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x4000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "maincpu") + 0x4000);
 }
 
 
@@ -550,7 +550,7 @@ static MACHINE_DRIVER_START( survival )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	/* FIXME: check clock */
-	MDRV_SOUND_ADD("ay", AY8910, 11000000/4)
+	MDRV_SOUND_ADD("aysnd", AY8910, 11000000/4)
 	MDRV_SOUND_CONFIG(survival_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -1058,7 +1058,7 @@ ROM_END
 static DRIVER_INIT( condor )
 {
 	/* additional inputs for coinage */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x5000, 0, 0, "DSW1");
+	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x5000, 0, 0, "DSW1");
 }
 
 

@@ -11,11 +11,12 @@
 
 UINT8 *slapfight_videoram;
 UINT8 *slapfight_colorram;
-size_t slapfight_videoram_size;
+UINT8 *slapfight_fixvideoram;
+UINT8 *slapfight_fixcolorram;
 UINT8 *slapfight_scrollx_lo,*slapfight_scrollx_hi,*slapfight_scrolly;
 static int flipscreen, slapfight_palette_bank = 0;
 
-static tilemap *pf1_tilemap,*fix_tilemap;
+static tilemap_t *pf1_tilemap,*fix_tilemap;
 
 
 
@@ -30,8 +31,8 @@ static TILE_GET_INFO( get_pf_tile_info )	/* For Performan only */
 {
 	int tile,color;
 
-	tile=videoram[tile_index] + ((colorram[tile_index] & 0x03) << 8);
-	color=(colorram[tile_index] >> 3) & 0x0f;
+	tile=slapfight_videoram[tile_index] + ((slapfight_colorram[tile_index] & 0x03) << 8);
+	color=(slapfight_colorram[tile_index] >> 3) & 0x0f;
 	SET_TILE_INFO(
 			0,
 			tile,
@@ -43,8 +44,8 @@ static TILE_GET_INFO( get_pf1_tile_info )
 {
 	int tile,color;
 
-	tile=videoram[tile_index] + ((colorram[tile_index] & 0x0f) << 8);
-	color=(colorram[tile_index] & 0xf0) >> 4;
+	tile=slapfight_videoram[tile_index] + ((slapfight_colorram[tile_index] & 0x0f) << 8);
+	color=(slapfight_colorram[tile_index] & 0xf0) >> 4;
 
 	SET_TILE_INFO(
 			1,
@@ -57,8 +58,8 @@ static TILE_GET_INFO( get_fix_tile_info )
 {
 	int tile,color;
 
-	tile=slapfight_videoram[tile_index] + ((slapfight_colorram[tile_index] & 0x03) << 8);
-	color=(slapfight_colorram[tile_index] & 0xfc) >> 2;
+	tile=slapfight_fixvideoram[tile_index] + ((slapfight_fixcolorram[tile_index] & 0x03) << 8);
+	color=(slapfight_fixcolorram[tile_index] & 0xfc) >> 2;
 
 	SET_TILE_INFO(
 			0,
@@ -98,25 +99,25 @@ VIDEO_START( slapfight )
 
 WRITE8_HANDLER( slapfight_videoram_w )
 {
-	videoram[offset]=data;
+	slapfight_videoram[offset]=data;
 	tilemap_mark_tile_dirty(pf1_tilemap,offset);
 }
 
 WRITE8_HANDLER( slapfight_colorram_w )
 {
-	colorram[offset]=data;
+	slapfight_colorram[offset]=data;
 	tilemap_mark_tile_dirty(pf1_tilemap,offset);
 }
 
 WRITE8_HANDLER( slapfight_fixram_w )
 {
-	slapfight_videoram[offset]=data;
+	slapfight_fixvideoram[offset]=data;
 	tilemap_mark_tile_dirty(fix_tilemap,offset);
 }
 
 WRITE8_HANDLER( slapfight_fixcol_w )
 {
-	slapfight_colorram[offset]=data;
+	slapfight_fixcolorram[offset]=data;
 	tilemap_mark_tile_dirty(fix_tilemap,offset);
 }
 
@@ -140,7 +141,7 @@ static void slapfght_log_vram(running_machine *machine)
 		int i;
 		for (i=0; i<0x800; i++)
 		{
-			logerror("Offset:%03x   TileRAM:%02x   AttribRAM:%02x   SpriteRAM:%02x\n",i, videoram[i],colorram[i],spriteram[i]);
+			logerror("Offset:%03x   TileRAM:%02x   AttribRAM:%02x   SpriteRAM:%02x\n",i, slapfight_videoram[i],slapfight_colorram[i],machine->generic.spriteram.u8[i]);
 		}
 	}
 #endif
@@ -153,9 +154,10 @@ static void slapfght_log_vram(running_machine *machine)
 ***************************************************************************/
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int priority_to_display )
 {
+	UINT8 *buffered_spriteram = machine->generic.buffered_spriteram.u8;
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size;offs += 4)
 	{
 		int sx, sy;
 
@@ -206,6 +208,7 @@ VIDEO_UPDATE( perfrman )
 
 VIDEO_UPDATE( slapfight )
 {
+	UINT8 *buffered_spriteram = screen->machine->generic.buffered_spriteram.u8;
 	int offs;
 
 	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
@@ -225,7 +228,7 @@ VIDEO_UPDATE( slapfight )
 	tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 
 	/* Draw the sprites */
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0;offs < screen->machine->generic.spriteram_size;offs += 4)
 	{
 		if (flipscreen)
 			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[2],

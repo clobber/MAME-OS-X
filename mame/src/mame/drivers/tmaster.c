@@ -105,7 +105,7 @@ To Do:
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
 #include "sound/okim6295.h"
-#include "machine/eepromdev.h"
+#include "machine/eeprom.h"
 #include "machine/microtch.h"
 #include "machine/68681.h"
 
@@ -337,7 +337,7 @@ static void tmaster_draw(running_machine *machine)
 	bitmap_t *bitmap;
 
 	buffer	=	(tmaster_regs[0x02/2] >> 8) & 3;	// 1 bit per layer, selects the currently displayed buffer
- 	sw		=	 tmaster_regs[0x04/2];
+	sw		=	 tmaster_regs[0x04/2];
 	sx		=	 tmaster_regs[0x06/2];
 	sh		=	 tmaster_regs[0x08/2] + 1;
 	sy		=	 tmaster_regs[0x0a/2];
@@ -475,7 +475,7 @@ static READ16_HANDLER( tmaster_coins_r )
 static ADDRESS_MAP_START( tmaster_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x000000, 0x1fffff ) AM_ROM
 	AM_RANGE( 0x200000, 0x27ffff ) AM_RAM
-	AM_RANGE( 0x280000, 0x28ffef ) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE( 0x280000, 0x28ffef ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE( 0x28fff0, 0x28ffff ) AM_READWRITE( rtc_r, rtc_w )
 
 	AM_RANGE( 0x300010, 0x300011 ) AM_READ( tmaster_coins_r )
@@ -491,7 +491,7 @@ static ADDRESS_MAP_START( tmaster_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE( 0x580000, 0x580001 ) AM_WRITENOP // often
 
-	AM_RANGE( 0x600000, 0x601fff ) AM_READWRITE( SMH_RAM, paletteram16_xBBBBBGGGGGRRRRR_word_w ) AM_BASE(&paletteram16)
+	AM_RANGE( 0x600000, 0x601fff ) AM_RAM_WRITE( paletteram16_xBBBBBGGGGGRRRRR_word_w ) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE( 0x800000, 0x800001 ) AM_DEVREADWRITE8( "oki", okim6295_r, okim6295_w, 0x00ff )
 
@@ -505,11 +505,11 @@ ADDRESS_MAP_END
 
 // ROM/RAM Banking
 
-#define GALGAMES_BANK_000000_R	1
-#define GALGAMES_BANK_000000_W	2
-#define GALGAMES_BANK_200000_R	3
-#define GALGAMES_BANK_200000_W	4
-#define GALGAMES_BANK_240000_R	5
+#define GALGAMES_BANK_000000_R	"000000_r"
+#define GALGAMES_BANK_000000_W	"000000_w"
+#define GALGAMES_BANK_200000_R	"200000_r"
+#define GALGAMES_BANK_200000_W	"200000_w"
+#define GALGAMES_BANK_240000_R	"240000_r"
 
 #define GALGAMES_RAM	0
 #define GALGAMES_ROM0	1
@@ -547,7 +547,7 @@ static READ16_HANDLER( galgames_eeprom_r )
 {
 	const device_config *eeprom = devtag_get_device(space->machine, galgames_eeprom_names[galgames_cart]);
 
-	return eepromdev_read_bit(eeprom) ? 0x80 : 0x00;
+	return eeprom_read_bit(eeprom) ? 0x80 : 0x00;
 }
 
 static WRITE16_HANDLER( galgames_eeprom_w )
@@ -560,10 +560,10 @@ static WRITE16_HANDLER( galgames_eeprom_w )
 		const device_config *eeprom = devtag_get_device(space->machine, galgames_eeprom_names[galgames_cart]);
 
 		// latch the bit
-		eepromdev_write_bit(eeprom, data & 0x0001);
+		eeprom_write_bit(eeprom, data & 0x0001);
 
 		// clock line asserted: write latch or select next bit to read
-		eepromdev_set_clock_line(eeprom, (data & 0x0002) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_set_clock_line(eeprom, (data & 0x0002) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
@@ -633,7 +633,7 @@ static WRITE16_HANDLER( galgames_cart_sel_w )
 		{
 			case 0x07:		// 7 resets the eeprom
 				for (i = 0; i < 5; i++)
-					eepromdev_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[i]), ASSERT_LINE);
+					eeprom_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[i]), ASSERT_LINE);
 				break;
 
 			case 0x00:
@@ -641,12 +641,12 @@ static WRITE16_HANDLER( galgames_cart_sel_w )
 			case 0x02:
 			case 0x03:
 			case 0x04:
-				eepromdev_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[data & 0xff]), CLEAR_LINE);
+				eeprom_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[data & 0xff]), CLEAR_LINE);
 				galgames_update_rombank(space->machine, data & 0xff);
 				break;
 
 			default:
-				eepromdev_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[0]), CLEAR_LINE);
+				eeprom_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[0]), CLEAR_LINE);
 				galgames_update_rombank(space->machine, 0);
 				logerror("%06x: unknown cart sel = %04x\n", cpu_get_pc(space->cpu), data);
 				break;
@@ -697,18 +697,18 @@ static READ16_HANDLER( dummy_read_01 )
 
 static ADDRESS_MAP_START( galgames_map, ADDRESS_SPACE_PROGRAM, 16 )
 
-	AM_RANGE( 0x000000, 0x03ffff ) AM_READWRITE(SMH_BANK(GALGAMES_BANK_000000_R), SMH_BANK(GALGAMES_BANK_000000_W)) AM_BASE( &galgames_ram )
+	AM_RANGE( 0x000000, 0x03ffff ) AM_READ_BANK(GALGAMES_BANK_000000_R) AM_WRITE_BANK(GALGAMES_BANK_000000_W) AM_BASE( &galgames_ram )
 	AM_RANGE( 0x040000, 0x1fffff ) AM_ROM AM_REGION( "maincpu", 0x40000 )
-	AM_RANGE( 0x200000, 0x23ffff ) AM_READWRITE(SMH_BANK(GALGAMES_BANK_200000_R), SMH_BANK(GALGAMES_BANK_200000_W))
-	AM_RANGE( 0x240000, 0x3fffff ) AM_READ(SMH_BANK(GALGAMES_BANK_240000_R))
+	AM_RANGE( 0x200000, 0x23ffff ) AM_READ_BANK(GALGAMES_BANK_200000_R) AM_WRITE_BANK(GALGAMES_BANK_200000_W)
+	AM_RANGE( 0x240000, 0x3fffff ) AM_READ_BANK(GALGAMES_BANK_240000_R)
 
 	AM_RANGE( 0x400000, 0x400011 ) AM_WRITE( tmaster_blitter_w ) AM_BASE( &tmaster_regs )
 	AM_RANGE( 0x400012, 0x400013 ) AM_WRITE( tmaster_addr_w )
 	AM_RANGE( 0x400014, 0x400015 ) AM_WRITE( tmaster_color_w )
 	AM_RANGE( 0x400020, 0x400021 ) AM_READ ( tmaster_blitter_r )
 
-	AM_RANGE( 0x600000, 0x600001 ) AM_READWRITE( dummy_read_01, SMH_NOP )
-	AM_RANGE( 0x700000, 0x700001 ) AM_READWRITE( dummy_read_01, SMH_NOP )
+	AM_RANGE( 0x600000, 0x600001 ) AM_READ( dummy_read_01 ) AM_WRITENOP
+	AM_RANGE( 0x700000, 0x700001 ) AM_READ( dummy_read_01 ) AM_WRITENOP
 	AM_RANGE( 0x800020, 0x80003f ) AM_NOP	// ?
 	AM_RANGE( 0x900000, 0x900001 ) AM_WRITE( watchdog_reset16_w )
 
@@ -719,7 +719,7 @@ static ADDRESS_MAP_START( galgames_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0xc00002, 0xc00003 ) AM_WRITE( galgames_palette_data_w )
 
 	AM_RANGE( 0xd00000, 0xd00001 ) AM_READ_PORT("TRACKBALL_1_X")
-	AM_RANGE( 0xd00000, 0xd00001 ) AM_WRITE( SMH_NOP )
+	AM_RANGE( 0xd00000, 0xd00001 ) AM_WRITENOP
 	AM_RANGE( 0xd00002, 0xd00003 ) AM_READ_PORT("TRACKBALL_1_Y")
 	AM_RANGE( 0xd00004, 0xd00005 ) AM_READ_PORT("TRACKBALL_2_X")
 	AM_RANGE( 0xd00006, 0xd00007 ) AM_READ_PORT("TRACKBALL_2_Y")
@@ -766,8 +766,8 @@ static INPUT_PORTS_START( tmaster )
 	PORT_INCLUDE( microtouch )
 
 	PORT_START("COIN")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 ) 	// "M. Coin 1 Input"
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 ) 	// "M. Coin 2 Input"
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )	// "M. Coin 1 Input"
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )	// "M. Coin 2 Input"
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BILL1 ) PORT_IMPULSE(2)	// "DBV Input"
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -939,19 +939,17 @@ static MACHINE_RESET( galgames )
 	device_reset(cputag_get_cpu(machine, "maincpu"));
 }
 
-static UINT8 *galgames_eeprom_data = NULL;
-
 static MACHINE_DRIVER_START( galgames )
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz / 2)
 	MDRV_CPU_PROGRAM_MAP(galgames_map)
 	MDRV_CPU_VBLANK_INT_HACK(galgames_interrupt, 1+20)	// ??
 
 	// 5 EEPROMs on the motherboard (for BIOS + 4 Carts)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_BIOS,  galgames_eeprom_interface, 0, galgames_eeprom_data)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART1, galgames_eeprom_interface, 0, galgames_eeprom_data)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART2, galgames_eeprom_interface, 0, galgames_eeprom_data)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART3, galgames_eeprom_interface, 0, galgames_eeprom_data)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART4, galgames_eeprom_interface, 0, galgames_eeprom_data)
+	MDRV_EEPROM_ADD(GALGAMES_EEPROM_BIOS,  galgames_eeprom_interface)
+	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART1, galgames_eeprom_interface)
+	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART2, galgames_eeprom_interface)
+	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART3, galgames_eeprom_interface)
+	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART4, galgames_eeprom_interface)
 
 	MDRV_MACHINE_RESET( galgames )
 

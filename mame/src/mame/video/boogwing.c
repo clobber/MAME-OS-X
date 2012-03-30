@@ -1,5 +1,5 @@
 #include "driver.h"
-#include "deco16ic.h"
+#include "includes/deco16ic.h"
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect, UINT16* spriteram_base, int gfx_region)
 {
@@ -194,8 +194,8 @@ VIDEO_UPDATE(boogwing)
 		deco16_tilemap_2_draw(screen,bitmap,cliprect,0,32);
 	}
 
-	draw_sprites(screen->machine, bitmap, cliprect, buffered_spriteram16, 3);
-	draw_sprites(screen->machine, bitmap, cliprect, buffered_spriteram16_2, 4);
+	draw_sprites(screen->machine, bitmap, cliprect, screen->machine->generic.buffered_spriteram.u16, 3);
+	draw_sprites(screen->machine, bitmap, cliprect, screen->machine->generic.buffered_spriteram2.u16, 4);
 
 	deco16_tilemap_1_draw(screen,bitmap,cliprect,0,0);
 	return 0;

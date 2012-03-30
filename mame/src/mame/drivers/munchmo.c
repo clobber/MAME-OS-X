@@ -72,12 +72,12 @@ static WRITE8_HANDLER( sound_nmi_ack_w )
 
 
 static ADDRESS_MAP_START( mnchmobl_map, ADDRESS_SPACE_PROGRAM, 8 )
- 	AM_RANGE(0x0000, 0x3fff) AM_ROM
+	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
 	AM_RANGE(0xa000, 0xa3ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&mnchmobl_sprite_xpos)
 	AM_RANGE(0xa800, 0xabff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&mnchmobl_sprite_tile)
 	AM_RANGE(0xb000, 0xb3ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&mnchmobl_sprite_attr)
-	AM_RANGE(0xb800, 0xb8ff) AM_MIRROR(0x0100) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0xb800, 0xb8ff) AM_MIRROR(0x0100) AM_RAM AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xbaba, 0xbaba) AM_WRITENOP /* ? */
 	AM_RANGE(0xbc00, 0xbc7f) AM_RAM AM_BASE(&mnchmobl_status_vram)
 	AM_RANGE(0xbe00, 0xbe00) AM_WRITE(mnchmobl_soundlatch_w)
@@ -89,7 +89,7 @@ static ADDRESS_MAP_START( mnchmobl_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xbe31, 0xbe31) AM_WRITENOP /* ? */
 	AM_RANGE(0xbe41, 0xbe41) AM_WRITE(mnchmobl_flipscreen_w)
 	AM_RANGE(0xbe61, 0xbe61) AM_WRITE(mnchmobl_nmi_enable_w) /* ENI 1-10C */
-	AM_RANGE(0xbf00, 0xbf07) AM_WRITE(SMH_RAM) AM_BASE(&mnchmobl_vreg) /* MY0 1-8C */
+	AM_RANGE(0xbf00, 0xbf07) AM_WRITEONLY AM_BASE(&mnchmobl_vreg) /* MY0 1-8C */
 	AM_RANGE(0xbf01, 0xbf01) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xbf02, 0xbf02) AM_READ_PORT("P1")
 	AM_RANGE(0xbf03, 0xbf03) AM_READ_PORT("P2")

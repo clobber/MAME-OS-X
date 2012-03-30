@@ -81,7 +81,7 @@
 #include "streams.h"
 #include "cpu/i86/i86.h"
 #include "cpu/z80/z80.h"
-#include "leland.h"
+#include "includes/leland.h"
 #include "sound/2151intf.h"
 
 
@@ -518,7 +518,7 @@ static DEVICE_START( common_sh_start )
 	int i;
 
 	/* determine which sound hardware is installed */
-	has_ym2151 = (devtag_get_device(device->machine, "ym") != NULL);
+	has_ym2151 = (devtag_get_device(device->machine, "ymsnd") != NULL);
 
 	/* allocate separate streams for the DMA and non-DMA DACs */
 	dma_stream = stream_create(device, 0, 1, OUTPUT_RATE, (void *)dmaspace, leland_80186_dma_update);
@@ -605,7 +605,7 @@ static void leland_80186_reset(void)
 
 	/* reset the interrupt state */
 	i80186.intr.priority_mask	= 0x0007;
-	i80186.intr.timer 			= 0x000f;
+	i80186.intr.timer			= 0x000f;
 	i80186.intr.dma[0]			= 0x000f;
 	i80186.intr.dma[1]			= 0x000f;
 	i80186.intr.ext[0]			= 0x000f;
@@ -2043,7 +2043,7 @@ static READ16_HANDLER( peripheral_r )
 			if (!has_ym2151)
 				return pit8254_r(space, offset | 0x40, mem_mask);
 			else
-				return ym2151_r(devtag_get_device(space->machine, "ym"), offset);
+				return ym2151_r(devtag_get_device(space->machine, "ymsnd"), offset);
 
 		case 4:
 			if (is_redline)
@@ -2079,7 +2079,7 @@ static WRITE16_HANDLER( peripheral_w )
 			if (!has_ym2151)
 				pit8254_w(space, offset | 0x40, data, mem_mask);
 			else
-				ym2151_w(devtag_get_device(space->machine, "ym"), offset, data);
+				ym2151_w(devtag_get_device(space->machine, "ymsnd"), offset, data);
 			break;
 
 		case 4:
@@ -2110,7 +2110,7 @@ static WRITE16_HANDLER( peripheral_w )
 WRITE8_HANDLER( ataxx_80186_control_w )
 {
 	/* compute the bit-shuffled variants of the bits and then write them */
-	int modified = 	((data & 0x01) << 7) |
+	int modified =	((data & 0x01) << 7) |
 					((data & 0x02) << 5) |
 					((data & 0x04) << 3) |
 					((data & 0x08) << 1);

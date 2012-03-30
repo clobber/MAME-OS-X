@@ -16,7 +16,7 @@
 #include "cpu/e132xs/e132xs.h"
 #include "deprecat.h"
 #include "machine/at28c16.h"
-#include "eolithsp.h"
+#include "includes/eolithsp.h"
 
 static UINT32 *vega_vram;
 static UINT8 vega_vbuffer = 0;
@@ -61,9 +61,9 @@ static WRITE32_HANDLER( vega_palette_w )
 {
 	UINT16 paldata;
 
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
 
-	paldata = paletteram32[offset] & 0x7fff;
+	paldata = space->machine->generic.paletteram.u32[offset] & 0x7fff;
 	palette_set_color_rgb(space->machine, offset, pal5bit(paldata >> 10), pal5bit(paldata >> 5), pal5bit(paldata >> 0));
 }
 
@@ -85,14 +85,14 @@ static ADDRESS_MAP_START( vega_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_RAM
 	AM_RANGE(0x80000000, 0x80013fff) AM_READWRITE(vega_vram_r, vega_vram_w)
 	AM_RANGE(0xfc000000, 0xfc0000ff) AM_DEVREADWRITE8("at28c16", at28c16_r, at28c16_w, 0x000000ff)
-	AM_RANGE(0xfc200000, 0xfc2003ff) AM_RAM_WRITE(vega_palette_w) AM_BASE(&paletteram32)
+	AM_RANGE(0xfc200000, 0xfc2003ff) AM_RAM_WRITE(vega_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfc400000, 0xfc40005b) AM_WRITENOP // crt registers ?
 	AM_RANGE(0xfc600000, 0xfc600003) AM_WRITENOP // soundlatch
 	AM_RANGE(0xfca00000, 0xfca00003) AM_WRITE(vega_misc_w)
 	AM_RANGE(0xfcc00000, 0xfcc00003) AM_READ(vegaeo_custom_read)
 	AM_RANGE(0xfce00000, 0xfce00003) AM_READ_PORT("P1_P2")
 	AM_RANGE(0xfd000000, 0xfeffffff) AM_ROM AM_REGION("user1", 0)
-	AM_RANGE(0xfff80000, 0xffffffff) AM_ROM AM_REGION("cpu", 0)
+	AM_RANGE(0xfff80000, 0xffffffff) AM_ROM AM_REGION("maincpu", 0)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( crazywar )
@@ -163,7 +163,7 @@ static VIDEO_UPDATE( vega )
 
 
 static MACHINE_DRIVER_START( vega )
-	MDRV_CPU_ADD("cpu", GMS30C2132, 55000000)	/* 55 MHz */
+	MDRV_CPU_ADD("maincpu", GMS30C2132, 55000000)	/* 55 MHz */
 	MDRV_CPU_PROGRAM_MAP(vega_map)
 	MDRV_CPU_VBLANK_INT_HACK(eolith_speedup,262)
 
@@ -233,7 +233,7 @@ Notes:
 
 
 ROM_START( crazywar )
-	ROM_REGION( 0x80000, "cpu", 0 ) /* Hyperstone CPU Code */
+	ROM_REGION( 0x80000, "maincpu", 0 ) /* Hyperstone CPU Code */
 	ROM_LOAD( "u7",         0x00000, 0x80000, CRC(697c2505) SHA1(c787007f05d2ddf1706e15e9d9ef9b2479708f12) )
 
 	ROM_REGION32_BE( 0x2000000, "user1", ROMREGION_ERASE00 ) /* Game Data - banked ROM, swapping necessary */

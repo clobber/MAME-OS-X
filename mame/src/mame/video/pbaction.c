@@ -8,21 +8,22 @@
 
 #include "driver.h"
 
+UINT8 *pbaction_videoram, *pbaction_colorram;
 UINT8 *pbaction_videoram2, *pbaction_colorram2;
 
 static int scroll;
 
-static tilemap *bg_tilemap, *fg_tilemap;
+static tilemap_t *bg_tilemap, *fg_tilemap;
 
 WRITE8_HANDLER( pbaction_videoram_w )
 {
-	videoram[offset] = data;
+	pbaction_videoram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( pbaction_colorram_w )
 {
-	colorram[offset] = data;
+	pbaction_colorram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
@@ -53,8 +54,8 @@ WRITE8_HANDLER( pbaction_flipscreen_w )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] + 0x10 * (attr & 0x70);
+	int attr = pbaction_colorram[tile_index];
+	int code = pbaction_videoram[tile_index] + 0x10 * (attr & 0x70);
 	int color = attr & 0x07;
 	int flags = (attr & 0x80) ? TILE_FLIPY : 0;
 
@@ -84,9 +85,10 @@ VIDEO_START( pbaction )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		int sx,sy,flipx,flipy;
 

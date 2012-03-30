@@ -5,15 +5,15 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "suprridr.h"
+#include "includes/suprridr.h"
 
 
 UINT8 *suprridr_bgram;
 UINT8 *suprridr_fgram;
 
-static tilemap *fg_tilemap;
-static tilemap *bg_tilemap;
-static tilemap *bg_tilemap_noscroll;
+static tilemap_t *fg_tilemap;
+static tilemap_t *bg_tilemap;
+static tilemap_t *bg_tilemap_noscroll;
 static UINT8 flipx, flipy;
 
 
@@ -167,6 +167,7 @@ WRITE8_HANDLER( suprridr_fgram_w )
 
 VIDEO_UPDATE( suprridr )
 {
+	UINT8 *spriteram = screen->machine->generic.spriteram.u8;
 	rectangle subclip;
 	int i;
 	const rectangle *visarea = video_screen_get_visible_area(screen);

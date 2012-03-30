@@ -1,17 +1,18 @@
 #include "driver.h"
-
-static tilemap *bg_tilemap;
+#include "includes/higemaru.h"
 
 WRITE8_HANDLER( higemaru_videoram_w )
 {
-	videoram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	higemaru_state *state = (higemaru_state *)space->machine->driver_data;
+	state->videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( higemaru_colorram_w )
 {
-	colorram[offset] = data;
-	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	higemaru_state *state = (higemaru_state *)space->machine->driver_data;
+	state->colorram[offset] = data;
+	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 }
 
 /***************************************************************************
@@ -19,6 +20,7 @@ WRITE8_HANDLER( higemaru_colorram_w )
   Convert the color PROMs into a more useable format.
 
 ***************************************************************************/
+
 PALETTE_INIT( higemaru )
 {
 	int i;
@@ -73,38 +75,44 @@ PALETTE_INIT( higemaru )
 
 WRITE8_HANDLER( higemaru_c800_w )
 {
-	if (data & 0x7c) logerror("c800 = %02x\n",data);
+	higemaru_state *state = (higemaru_state *)space->machine->driver_data;
+	if (data & 0x7c)
+		logerror("c800 = %02x\n",data);
 
 	/* bits 0 and 1 are coin counters */
-	coin_counter_w(0,data & 2);
-	coin_counter_w(1,data & 1);
+	coin_counter_w(space->machine, 0,data & 2);
+	coin_counter_w(space->machine, 1,data & 1);
 
 	/* bit 7 flips screen */
 	if (flip_screen_get(space->machine) != (data & 0x80))
 	{
 		flip_screen_set(space->machine, data & 0x80);
-		tilemap_mark_all_tiles_dirty(bg_tilemap);
+		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index] + ((colorram[tile_index] & 0x80) << 1);
-	int color = colorram[tile_index] & 0x1f;
+	higemaru_state *state = (higemaru_state *)machine->driver_data;
+	int code = state->videoram[tile_index] + ((state->colorram[tile_index] & 0x80) << 1);
+	int color = state->colorram[tile_index] & 0x1f;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
 
 VIDEO_START( higemaru )
 {
-	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	higemaru_state *state = (higemaru_state *)machine->driver_data;
+	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
+static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	higemaru_state *state = (higemaru_state *)machine->driver_data;
+	UINT8 *spriteram = state->spriteram;
 	int offs;
 
-	for (offs = spriteram_size - 16;offs >= 0;offs -= 16)
+	for (offs = state->spriteram_size - 16; offs >= 0; offs -= 16)
 	{
 		int code,col,sx,sy,flipx,flipy;
 
@@ -139,7 +147,8 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 VIDEO_UPDATE( higemaru )
 {
-	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	higemaru_state *state = (higemaru_state *)screen->machine->driver_data;
+	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
 	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

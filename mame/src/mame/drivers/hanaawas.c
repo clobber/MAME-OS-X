@@ -28,24 +28,15 @@
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-
-
-extern WRITE8_HANDLER( hanaawas_videoram_w );
-extern WRITE8_HANDLER( hanaawas_colorram_w );
-extern WRITE8_DEVICE_HANDLER( hanaawas_portB_w );
-
-extern PALETTE_INIT( hanaawas );
-extern VIDEO_START( hanaawas );
-extern VIDEO_UPDATE( hanaawas );
-
-static int mux;
+#include "includes/hanaawas.h"
 
 static READ8_HANDLER( hanaawas_input_port_0_r )
 {
-	int i,ordinal = 0;
+	hanaawas_state *state = (hanaawas_state *)space->machine->driver_data;
+	int i, ordinal = 0;
 	UINT16 buttons = 0;
 
-	switch( mux )
+	switch (state->mux)
 	{
 	case 1: /* start buttons */
 		buttons = input_port_read(space->machine, "START");
@@ -75,15 +66,16 @@ static READ8_HANDLER( hanaawas_input_port_0_r )
 
 static WRITE8_HANDLER( hanaawas_inputs_mux_w )
 {
-	mux = data;
+	hanaawas_state *state = (hanaawas_state *)space->machine->driver_data;
+	state->mux = data;
 }
 
 static ADDRESS_MAP_START( hanaawas_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(hanaawas_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(hanaawas_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(hanaawas_videoram_w) AM_BASE_MEMBER(hanaawas_state, videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(hanaawas_colorram_w) AM_BASE_MEMBER(hanaawas_state, colorram)
 	AM_RANGE(0x8800, 0x8bff) AM_RAM
 ADDRESS_MAP_END
 
@@ -92,8 +84,8 @@ static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(hanaawas_input_port_0_r, hanaawas_inputs_mux_w)
 	AM_RANGE(0x01, 0x01) AM_READNOP /* it must return 0 */
-	AM_RANGE(0x10, 0x10) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x10, 0x10) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x10, 0x11) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( hanaawas )
@@ -192,13 +184,33 @@ static const ay8910_interface ay8910_config =
 };
 
 
+static MACHINE_START( hanaawas )
+{
+	hanaawas_state *state = (hanaawas_state *)machine->driver_data;
+
+	state_save_register_global(machine, state->mux);
+}
+
+static MACHINE_RESET( hanaawas )
+{
+	hanaawas_state *state = (hanaawas_state *)machine->driver_data;
+
+	state->mux = 0;
+}
+
 static MACHINE_DRIVER_START( hanaawas )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(hanaawas_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,18432000/6)	/* 3.072 MHz ??? */
 	MDRV_CPU_PROGRAM_MAP(hanaawas_map)
 	MDRV_CPU_IO_MAP(io_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MDRV_MACHINE_START(hanaawas)
+	MDRV_MACHINE_RESET(hanaawas)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -218,7 +230,7 @@ static MACHINE_DRIVER_START( hanaawas )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 18432000/12)
+	MDRV_SOUND_ADD("aysnd", AY8910, 18432000/12)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -232,10 +244,10 @@ MACHINE_DRIVER_END
 
 ROM_START( hanaawas )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "1.1e",    	0x0000, 0x2000, CRC(618dc1e3) SHA1(31817f256512352db0d27322998d9dcf95a993cf) )
-	ROM_LOAD( "2.3e",    	0x2000, 0x1000, CRC(5091b67f) SHA1(5a66740b8829b9b4d3aea274f9ff36e0b9e8c151) )
-	ROM_LOAD( "3.4e",    	0x4000, 0x1000, CRC(dcb65067) SHA1(37964ff4016bd927b9f13b4358b831bb667f993b) )
-	ROM_LOAD( "4.6e",    	0x6000, 0x1000, CRC(24bee0dc) SHA1(a4237ad3611c923b563923462e79b0b3f66cc721) )
+	ROM_LOAD( "1.1e",   	0x0000, 0x2000, CRC(618dc1e3) SHA1(31817f256512352db0d27322998d9dcf95a993cf) )
+	ROM_LOAD( "2.3e",   	0x2000, 0x1000, CRC(5091b67f) SHA1(5a66740b8829b9b4d3aea274f9ff36e0b9e8c151) )
+	ROM_LOAD( "3.4e",   	0x4000, 0x1000, CRC(dcb65067) SHA1(37964ff4016bd927b9f13b4358b831bb667f993b) )
+	ROM_LOAD( "4.6e",   	0x6000, 0x1000, CRC(24bee0dc) SHA1(a4237ad3611c923b563923462e79b0b3f66cc721) )
 
 	ROM_REGION( 0x4000, "gfx1", 0 )
 	ROM_LOAD( "5.9a",		0x0000, 0x1000, CRC(304ae219) SHA1(c1eac4973a6aec9fd8e848c206870667a8bb0922) )
@@ -250,4 +262,4 @@ ROM_START( hanaawas )
 ROM_END
 
 
-GAME( 1982, hanaawas, 0, hanaawas, hanaawas, 0, ROT0, "Setakikaku, Ltd.", "Hana Awase", 0 )
+GAME( 1982, hanaawas, 0, hanaawas, hanaawas, 0, ROT0, "Setakikaku, Ltd.", "Hana Awase", GAME_SUPPORTS_SAVE )

@@ -227,7 +227,7 @@ static WRITE8_HANDLER ( speakres_out2_w )
 
 static ADDRESS_MAP_START( route16_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-  /*AM_RANGE(0x3000, 0x3001) AM_READWRITE(SMH_NOP, SMH_NOP)   protection device */
+  /*AM_RANGE(0x3000, 0x3001) AM_NOP   protection device */
 	AM_RANGE(0x4000, 0x43ff) AM_READWRITE(sharedram_r, route16_sharedram_w) AM_BASE(&sharedram)
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1") AM_WRITE(route16_out1_w)
@@ -242,7 +242,7 @@ static ADDRESS_MAP_START( routex_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4800, 0x4800) AM_READ_PORT("DSW") AM_WRITE(route16_out0_w)
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1") AM_WRITE(route16_out1_w)
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2")
- 	AM_RANGE(0x6400, 0x6400) AM_READ(routex_prot_read)
+	AM_RANGE(0x6400, 0x6400) AM_READ(routex_prot_read)
 	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&route16_videoram1) AM_SIZE(&route16_videoram_size)
 ADDRESS_MAP_END
 
@@ -574,7 +574,7 @@ static const ay8910_interface stratvox_ay8910_interface =
 	AY8910_DEFAULT_LOADS,
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_DEVICE_HANDLER("sn", stratvox_sn76477_w),  /* SN76477 commands (not used in Route 16?) */
+	DEVCB_DEVICE_HANDLER("snsnd", stratvox_sn76477_w),  /* SN76477 commands (not used in Route 16?) */
 	DEVCB_NULL
 };
 
@@ -662,7 +662,7 @@ static MACHINE_DRIVER_START( stratvox )
 	MDRV_SOUND_CONFIG(stratvox_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn", SN76477, 0)
+	MDRV_SOUND_ADD("snsnd", SN76477, 0)
 	MDRV_SOUND_CONFIG(sn76477_intf)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 

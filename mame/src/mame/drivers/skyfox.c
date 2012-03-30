@@ -50,7 +50,7 @@ VIDEO_UPDATE( skyfox );
 static ADDRESS_MAP_START( skyfox_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM							// ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM							// RAM
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	// Sprites
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// Sprites
 	AM_RANGE(0xd400, 0xdfff) AM_RAM							// RAM?
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("INPUTS")			// Input Ports
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("DSW0")			//
@@ -161,7 +161,7 @@ static INPUT_PORTS_START( skyfox )
 	PORT_DIPSETTING(    0x04, "5" )
 //  PORT_DIPSETTING(    0x05, "5" )
 //  PORT_DIPSETTING(    0x06, "5" )
-	PORT_DIPSETTING( 	0x07, "Infinite (Cheat)")
+	PORT_DIPSETTING(	0x07, "Infinite (Cheat)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )

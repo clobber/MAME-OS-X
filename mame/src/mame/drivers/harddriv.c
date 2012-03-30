@@ -172,6 +172,7 @@ Atari, 1990
 PCB Layouts
 -----------
 
+
 Driver Sound
 A046491
 |------------------------------------------------------------------------------------------------------|
@@ -187,18 +188,133 @@ A046491
 |               |  8  |   6264                   CY7C168                         SOCKET     136052-1124.55A
 |      16MHz    |  0  |                                        |---|                                   |
 |               |  0  |   136077-1032-70N        CY7C168       |TMS|             SOCKET     136052-1123.65A
-|               |  0  |                                        |   |                                   |
+|      LED      |  0  |                                        |   |                                   |
 |               |     |   6264                   CY7C168       |320|
 |               |     |                                        |C10|                                   |
-|               |     |                                   20MHz|   |                                   |
+|               |     |            LED                    20MHz|   |                                   |
 |               |-----|                                        |   |            95C           95A      |
 |                                                              |---|          GAL16V8       GAL16V8    |
 |                                                                           (136052-1140) (136052-1139)|
 |                                                                                                      |
 |                                                                                                      |
-|                                                                                                      |
+|        LED                                                                                           |
 |  J2                                  J5                  TL084     TL084     TL084                   |
 |------------------------------------------------------------------------------------------------------|
+Notes:
+      68000 clock input - 8.000MHz [16/2]
+
+
+DSK
+A047724-01
+|-----------------------------------------------|
+|  (SLAPSTICK?)       |---------------------|   |
+|  DIP20_SOCKET       |---------------------|   |
+|                                            LED|
+|                     40B            60B        |
+|                  GAL20V8A       GAL20V8A      |
+|                136077-1025     136077-1026    |
+|MK48Z02B.10C  MK48Z02B.30C                     |
+|                                               |
+|                                               |
+|62256       62256                      62256   |
+|                                               |
+|                                               |
+|136078-1031.10E         |-----------|  62256   |
+|         136078-1030.30E|           |          |
+|                        |137661-100 |          |
+|SOCKET      SOCKET      |           |  62256   |
+|                        |           |          |
+|          |-------|     |           |          |
+|          |137665-|     |-----------|  62256   |
+|          |1020   |                            |
+|          |LC9040 |        40MHz               |
+|          |-------|                            |
+|  LED        20MHz                             |
+|-----------------------------------------------|
+
+
+
+ADSP II
+A047046-01
+|------------------------------------------------------------------------------------------------------|
+|                     |---------------------|                                                          |
+|CY7C168   CY7C168    |---------------------|                  CY7C168           6264       6264       |
+|                                                                                                      |
+|CY7C168   CY7C168        LED                                  CY7C168                                 |
+|                                                                                                      |
+|CY7C168   CY7C168                                             CY7C168                                 |
+|                                                                                                      |
+|                                                              CY7C168                                 |
+|                                    32MHz                                                             |
+|CY7C168   CY7C168                  |-------|                  CY7C168                                 |
+|                                   | ADSP  |                                                          |
+|CY7C168   CY7C168                  | 2100  |                  CY7C168                                 |
+|                                   |       |                                                          |
+|CY7C168   CY7C168                  |-------|                  CY7C168                                 |
+|                                                                                                      |
+|                                                              CY7C168                                 |
+|136077-2022.10H                                                                 6264       6264       |
+|      136077-2021.9/10H                                                                               |
+|                 SOCKET                                                                               |
+|136077-2024.10K                                                                                       |
+|      136077-2023.9/10K                                                                               |
+|                 SOCKET                                                                               |
+|                                          LED  LED                                                    |
+|------------------------------------------------------------------------------------------------------|
+
+
+
+MULTISYNC
+A046901
+|------------------------------------------------------------------------------------------------------|
+|                     |---------------------|     136078-4001.210R           136078-4009.210V          |
+|                     |---------------------|        136078-4003.210S           136078-1011.210W       |
+|                                                      136078-4005.210T           136078-1013.210X     |
+| 68681       6264  6264  MK48Z02B.210E                  136078-4007.210U           136078-4015.210Y   |
+|  3.6864MHz                        (SLAPSTICK)                                                        |
+|                                   (DIP20)       136078-4002.200R           136078-4010.200V          |
+|J2                                 137412-117       136078-4004.200S           136078-1012.200W       |
+|             6264  6264  MK48T02B.200E                136078-4006.200T           136078-1014.200X     |
+|                                                        136078-4008.200U           136078-4016.200Y   |
+|J3                                                                                                    |
+|                                                                      136068-1168.195U                |
+|                                                                        (82S123 PROM)                 |
+|                  |----------------------------|                                           J13        |
+|                  |                            |                                                      |
+|J6                |           68010            |                                                      |
+|                  |                            |                                                      |
+|                  |----------------------------|                                                      |
+|                                                                     |-------|                  32MHZ |
+|J5                            32MHz                                  |TMS    |                        |
+|                                                              48MHz  |34010  |                        |
+|                                                                     |       |                   LED  |
+|                                                                     |-------|                        |
+|                                                                                                      |
+|                                                                                                      |
+|J4          DSW(8)                                                   |-------|                        |
+|                                                                     |SCX    |                        |
+|      LED LED                                                        |6218UTP|                        |
+|                                                                     |       |                        |
+|                                   |-------|                         |-------|                        |
+|J15                                |       |                                                          |
+|                                   |       |                                                          |
+|               J12  LED            |       |             42C4064  42C4064  42C4064  42C4064           |
+|                                   |-------|                                                          |
+|J14                            (EMPTY PLCC68 SOCKET)     42C4064  42C4064  42C4064  42C4064           |
+|                                                                                                      |
+|                                                         42C4064  42C4064  42C4064  42C4064           |
+|       ADC0809                 |--EMPTY_SOCKETS--|                                                    |
+|J9                             DIP20        DIP20        42C4064  42C4064  42C4064  42C4064           |
+|               J1                                                                                     |
+|                               DIP20        DIP20                  CY2149   CY2149   CY2149           |
+|      LED                                                                                             |
+|                               DIP20        DIP20                  CY2149   CY2149   CY2149           |
+|J8               LED  LED                                                                             |
+|                 LED  LED      DIP20        DIP20                                  J10                |
+|------------------------------------------------------------------------------------------------------|
+Notes:
+      68010 clock input - 8.000MHz [32/4]
+      34010 clock input - 48.000MHz
 
 ****************************************************************************/
 
@@ -212,7 +328,7 @@ A046491
 #include "machine/atarigen.h"
 #include "machine/asic65.h"
 #include "audio/atarijsa.h"
-#include "harddriv.h"
+#include "includes/harddriv.h"
 #include "sound/dac.h"
 
 /* from slapstic.c */
@@ -306,7 +422,7 @@ static ADDRESS_MAP_START( driver_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc00000, 0xc03fff) AM_READWRITE(hd68k_gsp_io_r, hd68k_gsp_io_w)
 	AM_RANGE(0xc04000, 0xc07fff) AM_READWRITE(hd68k_msp_io_r, hd68k_msp_io_w)
 	AM_RANGE(0xff0000, 0xff001f) AM_READWRITE(hd68k_duart_r, hd68k_duart_w)
-	AM_RANGE(0xff4000, 0xff4fff) AM_READWRITE(hd68k_zram_r, hd68k_zram_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
+	AM_RANGE(0xff4000, 0xff4fff) AM_READWRITE(hd68k_zram_r, hd68k_zram_w) AM_BASE_SIZE_MEMBER(harddriv_state, atarigen.eeprom, atarigen.eeprom_size)
 	AM_RANGE(0xff8000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -316,20 +432,20 @@ static ADDRESS_MAP_START( driver_gsp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x0000200f) AM_NOP					/* hit during self-test */
 	AM_RANGE(0x02000000, 0x0207ffff) AM_READWRITE(hdgsp_vram_2bpp_r, hdgsp_vram_1bpp_w)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, hdgsp_io_w)
-	AM_RANGE(0xf4000000, 0xf40000ff) AM_READWRITE(hdgsp_control_lo_r, hdgsp_control_lo_w) AM_BASE(&hdgsp_control_lo)
-	AM_RANGE(0xf4800000, 0xf48000ff) AM_READWRITE(hdgsp_control_hi_r, hdgsp_control_hi_w) AM_BASE(&hdgsp_control_hi)
-	AM_RANGE(0xf5000000, 0xf5000fff) AM_READWRITE(hdgsp_paletteram_lo_r, hdgsp_paletteram_lo_w) AM_BASE(&hdgsp_paletteram_lo)
-	AM_RANGE(0xf5800000, 0xf5800fff) AM_READWRITE(hdgsp_paletteram_hi_r, hdgsp_paletteram_hi_w) AM_BASE(&hdgsp_paletteram_hi)
-	AM_RANGE(0xff800000, 0xffffffff) AM_RAM AM_BASE((UINT16 **)&hdgsp_vram) AM_SIZE(&hdgsp_vram_size)
+	AM_RANGE(0xf4000000, 0xf40000ff) AM_READWRITE(hdgsp_control_lo_r, hdgsp_control_lo_w) AM_BASE_MEMBER(harddriv_state, gsp_control_lo)
+	AM_RANGE(0xf4800000, 0xf48000ff) AM_READWRITE(hdgsp_control_hi_r, hdgsp_control_hi_w) AM_BASE_MEMBER(harddriv_state, gsp_control_hi)
+	AM_RANGE(0xf5000000, 0xf5000fff) AM_READWRITE(hdgsp_paletteram_lo_r, hdgsp_paletteram_lo_w) AM_BASE_MEMBER(harddriv_state, gsp_paletteram_lo)
+	AM_RANGE(0xf5800000, 0xf5800fff) AM_READWRITE(hdgsp_paletteram_hi_r, hdgsp_paletteram_hi_w) AM_BASE_MEMBER(harddriv_state, gsp_paletteram_hi)
+	AM_RANGE(0xff800000, 0xffffffff) AM_RAM AM_BASE_SIZE_MEMBER(harddriv_state, gsp_vram, gsp_vram_size)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( driver_msp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00000000, 0x000fffff) AM_RAM AM_SHARE(1) AM_BASE(&hdmsp_ram)
-	AM_RANGE(0x00700000, 0x007fffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x00000000, 0x000fffff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(harddriv_state, msp_ram)
+	AM_RANGE(0x00700000, 0x007fffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
-	AM_RANGE(0xfff00000, 0xffffffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xfff00000, 0xffffffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -354,7 +470,7 @@ static ADDRESS_MAP_START( multisync_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc00000, 0xc03fff) AM_READWRITE(hd68k_gsp_io_r, hd68k_gsp_io_w)
 	AM_RANGE(0xc04000, 0xc07fff) AM_READWRITE(hd68k_msp_io_r, hd68k_msp_io_w)
 	AM_RANGE(0xff0000, 0xff001f) AM_READWRITE(hd68k_duart_r, hd68k_duart_w)
-	AM_RANGE(0xff4000, 0xff4fff) AM_READWRITE(hd68k_zram_r, hd68k_zram_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
+	AM_RANGE(0xff4000, 0xff4fff) AM_READWRITE(hd68k_zram_r, hd68k_zram_w) AM_BASE_SIZE_MEMBER(harddriv_state, atarigen.eeprom, atarigen.eeprom_size)
 	AM_RANGE(0xff8000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -364,11 +480,11 @@ static ADDRESS_MAP_START( multisync_gsp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x0000200f) AM_NOP					/* hit during self-test */
 	AM_RANGE(0x02000000, 0x020fffff) AM_READWRITE(hdgsp_vram_2bpp_r, hdgsp_vram_2bpp_w)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, hdgsp_io_w)
-	AM_RANGE(0xf4000000, 0xf40000ff) AM_READWRITE(hdgsp_control_lo_r, hdgsp_control_lo_w) AM_BASE(&hdgsp_control_lo)
-	AM_RANGE(0xf4800000, 0xf48000ff) AM_READWRITE(hdgsp_control_hi_r, hdgsp_control_hi_w) AM_BASE(&hdgsp_control_hi)
-	AM_RANGE(0xf5000000, 0xf5000fff) AM_READWRITE(hdgsp_paletteram_lo_r, hdgsp_paletteram_lo_w) AM_BASE(&hdgsp_paletteram_lo)
-	AM_RANGE(0xf5800000, 0xf5800fff) AM_READWRITE(hdgsp_paletteram_hi_r, hdgsp_paletteram_hi_w) AM_BASE(&hdgsp_paletteram_hi)
-	AM_RANGE(0xff800000, 0xffbfffff) AM_MIRROR(0x0400000) AM_RAM AM_BASE((UINT16 **)&hdgsp_vram) AM_SIZE(&hdgsp_vram_size)
+	AM_RANGE(0xf4000000, 0xf40000ff) AM_READWRITE(hdgsp_control_lo_r, hdgsp_control_lo_w) AM_BASE_MEMBER(harddriv_state, gsp_control_lo)
+	AM_RANGE(0xf4800000, 0xf48000ff) AM_READWRITE(hdgsp_control_hi_r, hdgsp_control_hi_w) AM_BASE_MEMBER(harddriv_state, gsp_control_hi)
+	AM_RANGE(0xf5000000, 0xf5000fff) AM_READWRITE(hdgsp_paletteram_lo_r, hdgsp_paletteram_lo_w) AM_BASE_MEMBER(harddriv_state, gsp_paletteram_lo)
+	AM_RANGE(0xf5800000, 0xf5800fff) AM_READWRITE(hdgsp_paletteram_hi_r, hdgsp_paletteram_hi_w) AM_BASE_MEMBER(harddriv_state, gsp_paletteram_hi)
+	AM_RANGE(0xff800000, 0xffbfffff) AM_MIRROR(0x0400000) AM_RAM AM_BASE_SIZE_MEMBER(harddriv_state, gsp_vram, gsp_vram_size)
 ADDRESS_MAP_END
 
 
@@ -392,7 +508,7 @@ static ADDRESS_MAP_START( multisync2_68k_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc00000, 0xc03fff) AM_READWRITE(hd68k_gsp_io_r, hd68k_gsp_io_w)
 	AM_RANGE(0xc04000, 0xc07fff) AM_READWRITE(hd68k_msp_io_r, hd68k_msp_io_w)
 	AM_RANGE(0xfc0000, 0xfc001f) AM_READWRITE(hd68k_duart_r, hd68k_duart_w)
-	AM_RANGE(0xfd0000, 0xfd0fff) AM_MIRROR(0x004000) AM_READWRITE(hd68k_zram_r, hd68k_zram_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
+	AM_RANGE(0xfd0000, 0xfd0fff) AM_MIRROR(0x004000) AM_READWRITE(hd68k_zram_r, hd68k_zram_w) AM_BASE_SIZE_MEMBER(harddriv_state, atarigen.eeprom, atarigen.eeprom_size)
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -403,11 +519,11 @@ static ADDRESS_MAP_START( multisync2_gsp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x0000200f) AM_NOP					/* hit during self-test */
 	AM_RANGE(0x02000000, 0x020fffff) AM_READWRITE(hdgsp_vram_2bpp_r, hdgsp_vram_2bpp_w)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, hdgsp_io_w)
-	AM_RANGE(0xf4000000, 0xf40000ff) AM_READWRITE(hdgsp_control_lo_r, hdgsp_control_lo_w) AM_BASE(&hdgsp_control_lo)
-	AM_RANGE(0xf4800000, 0xf48000ff) AM_READWRITE(hdgsp_control_hi_r, hdgsp_control_hi_w) AM_BASE(&hdgsp_control_hi)
-	AM_RANGE(0xf5000000, 0xf5000fff) AM_READWRITE(hdgsp_paletteram_lo_r, hdgsp_paletteram_lo_w) AM_BASE(&hdgsp_paletteram_lo)
-	AM_RANGE(0xf5800000, 0xf5800fff) AM_READWRITE(hdgsp_paletteram_hi_r, hdgsp_paletteram_hi_w) AM_BASE(&hdgsp_paletteram_hi)
-	AM_RANGE(0xff800000, 0xffffffff) AM_RAM AM_BASE((UINT16 **)&hdgsp_vram) AM_SIZE(&hdgsp_vram_size)
+	AM_RANGE(0xf4000000, 0xf40000ff) AM_READWRITE(hdgsp_control_lo_r, hdgsp_control_lo_w) AM_BASE_MEMBER(harddriv_state, gsp_control_lo)
+	AM_RANGE(0xf4800000, 0xf48000ff) AM_READWRITE(hdgsp_control_hi_r, hdgsp_control_hi_w) AM_BASE_MEMBER(harddriv_state, gsp_control_hi)
+	AM_RANGE(0xf5000000, 0xf5000fff) AM_READWRITE(hdgsp_paletteram_lo_r, hdgsp_paletteram_lo_w) AM_BASE_MEMBER(harddriv_state, gsp_paletteram_lo)
+	AM_RANGE(0xf5800000, 0xf5800fff) AM_READWRITE(hdgsp_paletteram_hi_r, hdgsp_paletteram_hi_w) AM_BASE_MEMBER(harddriv_state, gsp_paletteram_hi)
+	AM_RANGE(0xff800000, 0xffffffff) AM_RAM AM_BASE_SIZE_MEMBER(harddriv_state, gsp_vram, gsp_vram_size)
 ADDRESS_MAP_END
 
 
@@ -420,13 +536,13 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( adsp_program_map, ADDRESS_SPACE_PROGRAM, 32 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&hdadsp_pgm_memory)
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_MEMBER(harddriv_state, adsp_pgm_memory)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( adsp_data_map, ADDRESS_SPACE_DATA, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&hdadsp_data_memory)
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_MEMBER(harddriv_state, adsp_data_memory)
 	AM_RANGE(0x2000, 0x2fff) AM_READWRITE(hdadsp_special_r, hdadsp_special_w)
 ADDRESS_MAP_END
 
@@ -440,13 +556,13 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( ds3_program_map, ADDRESS_SPACE_PROGRAM, 32 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x0000, 0x3fff) AM_RAM AM_BASE(&hdadsp_pgm_memory)
+	AM_RANGE(0x0000, 0x3fff) AM_RAM AM_BASE_MEMBER(harddriv_state, adsp_pgm_memory)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( ds3_data_map, ADDRESS_SPACE_DATA, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&hdadsp_data_memory)
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_MEMBER(harddriv_state, adsp_data_memory)
 	AM_RANGE(0x3800, 0x3bff) AM_RAM						/* internal RAM */
 	AM_RANGE(0x3fe0, 0x3fff) AM_READWRITE(hdds3_control_r, hdds3_control_w)	/* adsp control regs */
 	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(hdds3_special_r, hdds3_special_w)
@@ -543,7 +659,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( driversnd_dsp_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x000, 0xfff) AM_RAM AM_BASE(&hdsnddsp_ram)
+	AM_RANGE(0x000, 0xfff) AM_RAM AM_BASE_MEMBER(harddriv_state, sounddsp_ram)
 ADDRESS_MAP_END
 
 
@@ -1004,6 +1120,7 @@ INPUT_PORTS_END
 
 /* Driver board without MSP (used by Race Drivin' cockpit) */
 static MACHINE_DRIVER_START( driver_nomsp )
+	MDRV_DRIVER_DATA(harddriv_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68010, 32000000/4)
@@ -1020,6 +1137,8 @@ static MACHINE_DRIVER_START( driver_nomsp )
 	MDRV_MACHINE_START(harddriv)
 	MDRV_MACHINE_RESET(harddriv)
 	MDRV_NVRAM_HANDLER(atarigen)
+
+	MDRV_TIMER_ADD("duart_timer", hd68k_duart_callback)
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -3256,6 +3375,148 @@ ROM_START( strtdriv )
 	ROM_LOAD( "136077-1017.12t", 0x000000, 0x010000, CRC(e93129a3) SHA1(1221b08c8efbfd8cf6bfbfd956545f10bef48663) )
 ROM_END
 
+/*
+
+5/2/2003
+
+The following roms (type 27C512) were dumped and verified from an Atari Race Drivin
+Panorama v2.1 boardset by Mickey Johnson (mickster (at) derbyworks.com) and Dave France
+(dfrance (at) revealed.net).  Any questions regarding the hardware, please contact Mickey.
+
+The Multisync PCB (A046901), used by the side monitor, uses the 137412-117 slapstic.
+The boardset is low rez, and is more similar to STUN Runner than the regular Race
+Drivin's hardware.
+
+The Multisync PCB (A045988), used by the main (center) monitor, uses the 137412-115
+slapstic.
+
+The ADSP board was silkscreened "ADSP II A047046-01", but had a factory sticker stamped
+"ADSP II Panorama A047046-04".
+
+As far as I know, the DSK and Sound PCBs are identical with Race Drivin.  The side
+Multisync PCB sets do not have a DSK or Sound PCB since they are for display only.
+
+All the linking between the PCBs is via the Serial A on all three boardsets.  We
+have brought these ROMs up in MAME as Race Drivin.  It will pass the self-test, but
+game will come up with "DIVIDE BY ZERO ERR".  Hitting F2 (Self Test) will display
+"Hard Drivin / Race Drivin / Panorama Self Test P2.1" in the Test Menu.
+
+Filename    Location    Label           Board
+--------------  --------------  ----------------------  -----------------------------
+088-1022    9H      136088-1022 CS 0022 ADSP II A047046-01
+088-1018    9/10H       136088-1018 CS 6518 "
+088-1020    10H     136088-1020 CS BC20 "
+088-1021    9K      136088-1021 CS A121 "
+088-1017    9/10K       136088-1017 CS 4B17 "
+088-1019    10K     136088-1019 CS 6219 "
+
+088-2015    210Y        136088-2015 CS DF15 Multisync PCB A046901
+088-2013    210X        136088-2013 CS DA13 "
+088-2011    210W        136088-2011 CS 6E11 "
+088-2009    210V        136088-2009 CS 1F09 "
+088-2007    210U        136088-2007 CS 2F07 "
+088-2005    210T        136088-2005C CS D305    "
+088-2003    210S        136088-2003C CS 2303    "
+088-2001    210R        136088-2001 CS DE01 "
+088-2016    200Y        136088-2016 CS 0D16 "
+088-2014    200X        136088-2014 CS EB14 "
+088-2012    200W        136088-2012 CS 2912 "
+088-2010    200V        136088-2010 CS FF10 "
+088-2008    200U        136088-2008 CS BA08 "
+088-2006    200T        136088-2006C CS D406    "
+088-2004    200S        136088-2004C CS 4504    "
+088-2002    200R        136088-2002 CS A502 "
+
+088-1015    210Y        136088-1015 CS E215 Multisync PCB A045988
+088-1013    210X        136088-1013 CS 8F13 "
+088-1011    210W        136088-1011 CS 5111 "
+088-1009    210V        136088-1009 CS EE09 "
+088-1007    210U        136088-1007 CS 4D07 "
+088-1005    210T        136088-1005B CS 3905    "
+088-1003    210S        136088-1003B CS 7403    "
+088-1001    210R        136088-1001 CS 6701 "
+088-1016    200Y        136088-1016 CS 3C16 "
+088-1014    200X        136088-1014 CS 9C14 "
+088-1012    200W        136088-1012 CS C312 "
+088-1010    200V        136088-1010 CS 9410 "
+088-1008    200U        136088-1008 CS 3408 "
+088-1006    200T        136088-1006B CS A006    "
+088-1004    200S        136088-1004B CS A904    "
+088-1002    200R        136088-1002 CS FB02 "
+
+*/
+
+ROM_START( racedrivpan )
+	ROM_REGION( 0x200000, "maincpu", 0 )		/* 2MB for 68000 code */
+	// Multisync PBB A045988 - Central Monitor
+	// boots with 'PROGRAM OK' when using standard Hard Drivin' board type (needs 137412-115 slapstic)
+	ROM_LOAD16_BYTE( "088-1002.bin", 0x000000, 0x010000, CRC(49a97391) SHA1(dbe4086cd87669a02d2a2133d0d9e2895946b383) )
+	ROM_LOAD16_BYTE( "088-1001.bin", 0x000001, 0x010000, CRC(4473accc) SHA1(099bda6cfe31d4e53cbe74046679ddf8b874982d) )
+	ROM_LOAD16_BYTE( "088-1004.bin", 0x020000, 0x010000, CRC(33b84ca6) SHA1(9e3cafadfb23bfc4a44e503043cc05db27d939a9) )
+	ROM_LOAD16_BYTE( "088-1003.bin", 0x020001, 0x010000, CRC(e617e6e2) SHA1(1bd308eff51588edfde21f3df1e84d3223d5d57a) )
+	ROM_LOAD16_BYTE( "088-1006.bin", 0x040000, 0x010000, CRC(1caeb314) SHA1(ebcf3e4cc13155206102bfada9422d4e318697e0) )
+	ROM_LOAD16_BYTE( "088-1005.bin", 0x040001, 0x010000, CRC(f23a73b8) SHA1(8e060077c971309dcc620402ee456ee66e59bfae) )
+	ROM_LOAD16_BYTE( "088-1008.bin", 0x060000, 0x010000, CRC(b0d60278) SHA1(d35ed22d3cbc725bbe023ae415a417f1c6532d30) )
+	ROM_LOAD16_BYTE( "088-1007.bin", 0x060001, 0x010000, CRC(c4fc82dc) SHA1(67575f533a658dd06fa6a143a654e9777f2e19ab) )
+	ROM_LOAD16_BYTE( "088-1010.bin", 0x080000, 0x010000, CRC(1b64bce1) SHA1(80edf1a77aee32f675c2a99769b1a390214ec075) )
+	ROM_LOAD16_BYTE( "088-1009.bin", 0x080001, 0x010000, CRC(413f4110) SHA1(6f71a5e46c29b4c51f3624484cdaed16babe3cd5) )
+	ROM_LOAD16_BYTE( "088-1012.bin", 0x0a0000, 0x010000, CRC(9a78b952) SHA1(53270d4d8c28579ebda477a63c034f6d1b9e5a58) ) // == 136091-0012.200w (strtdriv) / 136077-1012.200w
+	ROM_LOAD16_BYTE( "088-1011.bin", 0x0a0001, 0x010000, CRC(c5cd5491) SHA1(ede5a3bb888342032d6758b0fb149451b6543d8b) ) // == 136091-0011.210w (strtdriv) / 136077-1011.210w
+	ROM_LOAD16_BYTE( "088-1014.bin", 0x0c0000, 0x010000, CRC(5b721420) SHA1(cba03943d56eb1d747e48fbe2856c64d2129be3b) ) // == 136091-0014.200x (strtdriv)
+	ROM_LOAD16_BYTE( "088-1013.bin", 0x0c0001, 0x010000, CRC(c503b019) SHA1(e35779c0792bb2258dd0830c00a7d2722a0b115e) ) // == 136091-0013.210x (strtdriv)
+	ROM_LOAD16_BYTE( "088-1016.bin", 0x0e0000, 0x010000, CRC(e83a9c99) SHA1(1d4093902133bb6da981f294e6947544c3564393) ) // == 136077-1016.200y
+	ROM_LOAD16_BYTE( "088-1015.bin", 0x0e0001, 0x010000, CRC(725806f3) SHA1(0fa4601465dc94f27c71db789ad625bbcd254169) ) // == 136077-4015.210y
+
+	// Multisync PCB (A046901) - Side Monitor
+	// these will boot with 'PROGRAM OK' and display an empty side view, if you use the 'compact' type board driver
+	//  there should be one board for each side.  (needs 137412-117 slapstic)
+	ROM_REGION( 0x200000, "sidecpu", 0 )		/* 2MB for 68000 code */
+	ROM_LOAD16_BYTE( "088-2002.bin", 0x000000, 0x010000, CRC(77724070) SHA1(5862f30f7e2ab9c0beb06cf5599bcb1ff97f3a47) )
+	ROM_LOAD16_BYTE( "088-2001.bin", 0x000001, 0x010000, CRC(16ab2fff) SHA1(bf6dcefc98e1fe27bef0ddacc265d8782c486c83) )
+	ROM_LOAD16_BYTE( "088-2004.bin", 0x020000, 0x010000, CRC(dccdb16b) SHA1(330cf39bcbdb9c73da48b4e947086a7988e37496) )
+	ROM_LOAD16_BYTE( "088-2003.bin", 0x020001, 0x010000, CRC(132ef986) SHA1(106f1a23ac200a868959181fa1c47419806e8366) )
+	ROM_LOAD16_BYTE( "088-2006.bin", 0x040000, 0x010000, CRC(de3a0c24) SHA1(1121b8a16ac11b2480f1c4336a5aa3271364f80e))
+	ROM_LOAD16_BYTE( "088-2005.bin", 0x040001, 0x010000, CRC(96ad705f) SHA1(cc0bc7fdd2a5f91a5929b889607dcf7ad015bb95) )
+	ROM_LOAD16_BYTE( "088-2008.bin", 0x060000, 0x010000, CRC(452d991c) SHA1(42dad0a93839a900c3571ce9e252e1c991a1da56) )
+	ROM_LOAD16_BYTE( "088-2007.bin", 0x060001, 0x010000, CRC(d6f526d3) SHA1(8406917c91c1d3690379cb0bca5809d1db27abec) )
+	ROM_LOAD16_BYTE( "088-2010.bin", 0x080000, 0x010000, CRC(775bca3d) SHA1(926b460faeb2aa46899432b3a9973381ffd7781d) )
+	ROM_LOAD16_BYTE( "088-2009.bin", 0x080001, 0x010000, CRC(6aedccc5) SHA1(9189881802969ecdde2fd41a20ff6ea0471ce2c0) )
+	ROM_LOAD16_BYTE( "088-2012.bin", 0x0a0000, 0x010000, CRC(bacf08c0) SHA1(2f7ddaf4ef350ee3e6ab886759d88c03aa94784b) )
+	ROM_LOAD16_BYTE( "088-2011.bin", 0x0a0001, 0x010000, CRC(1e0c2f71) SHA1(bcdd9089442934df78109df7c0dcf170873cf992) )
+	ROM_LOAD16_BYTE( "088-2014.bin", 0x0c0000, 0x010000, CRC(3512537c) SHA1(896975ef2685358bd98f7a9b45dda11e8bfa3a13) )
+	ROM_LOAD16_BYTE( "088-2013.bin", 0x0c0001, 0x010000, CRC(8d7c4e80) SHA1(eda8d02e51b18234fc0912eaca8171d75ae643c7) )
+	ROM_LOAD16_BYTE( "088-2016.bin", 0x0e0000, 0x010000, CRC(6a42b7e2) SHA1(2e0ff4b7e391106a976cb872f6311f6d35dca5b0) )
+	ROM_LOAD16_BYTE( "088-2015.bin", 0x0e0001, 0x010000, CRC(334e2a3b) SHA1(a19bfa7652845b9453c722091c773819ba248569) )
+
+	ROM_REGION16_BE( 0x60000, "user1", 0 )	/* 384k for ADSP object ROM */
+	ROM_LOAD16_BYTE( "136077-1021.10h", 0x000000, 0x010000, CRC(9831fe73) SHA1(5215ee89a0014399b7d829e443b16590a4679844) )
+	ROM_LOAD16_BYTE( "136077-1023.10k", 0x000001, 0x010000, CRC(74bf0e0e) SHA1(a3d91ecf13c3619e073324517a4a5afaae831982) )
+	ROM_LOAD16_BYTE( "136077-1022.10j", 0x020000, 0x010000, CRC(c0393c31) SHA1(31726c01eb0d4650936908c90d45161197b7efba) )
+	ROM_LOAD16_BYTE( "136077-1024.10l", 0x020001, 0x010000, CRC(1e2fb25f) SHA1(4940091bbad6144bce091d2737191d266d4b0310) )
+
+	/* ----------------------- */
+
+	/* None of this stuff was in the zip, is it meant to be the same as Race Drivin' Compact, Race' Drivin, or Hard Drivin? */
+	ROM_REGION( 0x2000, "asic65", 0 )	/* ASIC65 TMS32015 code */
+	ROM_LOAD( "136077-1027.30j", 0x00000, 0x02000, NO_DUMP )
+
+	ROM_REGION( 0x20000, "soundcpu", 0 )		/* 2*64k for audio 68000 code */
+	ROM_LOAD16_BYTE( "136077-1032.70n", 0x000000, 0x008000, CRC(fbc903a6) SHA1(047240a5192918ced52d90b0555ba2e19a26329e) )
+	ROM_LOAD16_BYTE( "136077-1033.45n", 0x000001, 0x008000, CRC(e032ca7c) SHA1(a80c980c8e58cf8cada72140e42a3cd1ea987b3d) )
+
+
+	ROM_REGION16_BE( 0x51000, "user3", 0 )	/* 256k for DSK ROMs + 64k for RAM + 4k for ZRAM */
+	ROM_LOAD16_BYTE( "136078-1030.30e", 0x000000, 0x010000, CRC(d355a1c2) SHA1(6b0fb52dbecbe574959739f49c3c0fccdd5cebdb) )
+	ROM_LOAD16_BYTE( "136078-1031.10e", 0x000001, 0x010000, CRC(18fd5f44) SHA1(1c3bd780b72cfa61bcbd82683da18b4ee8d03a6d) )
+
+	ROM_REGION( 0x50000, "serialroms", 0 )		/* 10*128k for audio serial ROMs */
+	ROM_LOAD( "136052-1123.65a", 0x000000, 0x010000, CRC(a88411dc) SHA1(1fd53c7eadffa163d5423df2f8338757e58d5f2e) )
+	ROM_LOAD( "136052-1124.55a", 0x010000, 0x010000, CRC(071a4309) SHA1(c623bd51d6a4a56503fbf138138854d6a30b11d6) )
+	ROM_LOAD( "136052-3125.45a", 0x020000, 0x010000, CRC(856548ff) SHA1(e8a17b274185c5e4ecf5f9f1c211e18b3ef2456d) )
+	ROM_LOAD( "136052-1126.30a", 0x030000, 0x010000, CRC(f46ef09c) SHA1(ba62f73ee3b33d8f26b430ffa468f8792dca23de) )
+	ROM_LOAD( "136077-1017.45c", 0x040000, 0x010000, CRC(e93129a3) SHA1(1221b08c8efbfd8cf6bfbfd956545f10bef48663) )
+ROM_END
+
 
 ROM_START( hdrivair )
 	ROM_REGION( 0x200000, "maincpu", 0 )		/* 2MB for 68000 code */
@@ -3371,14 +3632,15 @@ ROM_END
 /* COMMON INIT: find all the CPUs */
 static void find_cpus(running_machine *machine)
 {
-	hdcpu_main = cputag_get_cpu(machine, "maincpu");
-	hdcpu_gsp = cputag_get_cpu(machine, "gsp");
-	hdcpu_msp = cputag_get_cpu(machine, "msp");
-	hdcpu_adsp = cputag_get_cpu(machine, "adsp");
-	hdcpu_sound = cputag_get_cpu(machine, "soundcpu");
-	hdcpu_sounddsp = cputag_get_cpu(machine, "sounddsp");
-	hdcpu_jsa = cputag_get_cpu(machine, "jsa");
-	hdcpu_dsp32 = cputag_get_cpu(machine, "dsp32");
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+	state->maincpu = cputag_get_cpu(machine, "maincpu");
+	state->gsp = cputag_get_cpu(machine, "gsp");
+	state->msp = cputag_get_cpu(machine, "msp");
+	state->adsp = cputag_get_cpu(machine, "adsp");
+	state->soundcpu = cputag_get_cpu(machine, "soundcpu");
+	state->sounddsp = cputag_get_cpu(machine, "sounddsp");
+	state->jsacpu = cputag_get_cpu(machine, "jsa");
+	state->dsp32 = cputag_get_cpu(machine, "dsp32");
 }
 
 
@@ -3393,31 +3655,35 @@ static const UINT16 default_eeprom[] =
 /* COMMON INIT: initialize the original "driver" main board */
 static void init_driver(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* assume we're first to be called */
 	find_cpus(machine);
 
 	/* note that we're not multisync and set the default EEPROM data */
-	hdgsp_multisync = 0;
-	atarigen_eeprom_default = default_eeprom;
+	state->gsp_multisync = FALSE;
+	state->atarigen.eeprom_default = default_eeprom;
 }
 
 
 /* COMMON INIT: initialize the later "multisync" main board */
 static void init_multisync(running_machine *machine, int compact_inputs)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* assume we're first to be called */
 	find_cpus(machine);
 
 	/* note that we're multisync and set the default EEPROM data */
-	hdgsp_multisync = 1;
-	atarigen_eeprom_default = default_eeprom;
+	state->gsp_multisync = TRUE;
+	state->atarigen.eeprom_default = default_eeprom;
 
 	/* install handlers for the compact driving games' inputs */
 	if (compact_inputs)
 	{
-		memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x400000, 0x400001, 0, 0, hdc68k_wheel_r);
-		memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x408000, 0x408001, 0, 0, hdc68k_wheel_edge_reset_w);
-		memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hdc68k_port1_r);
+		memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x400000, 0x400001, 0, 0, hdc68k_wheel_r);
+		memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x408000, 0x408001, 0, 0, hdc68k_wheel_edge_reset_w);
+		memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hdc68k_port1_r);
 	}
 }
 
@@ -3425,48 +3691,52 @@ static void init_multisync(running_machine *machine, int compact_inputs)
 /* COMMON INIT: initialize the ADSP/ADSP2 board */
 static void init_adsp(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* install ADSP program RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x800000, 0x807fff, 0, 0, hd68k_adsp_program_r, hd68k_adsp_program_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x800000, 0x807fff, 0, 0, hd68k_adsp_program_r, hd68k_adsp_program_w);
 
 	/* install ADSP data RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x808000, 0x80bfff, 0, 0, hd68k_adsp_data_r, hd68k_adsp_data_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x808000, 0x80bfff, 0, 0, hd68k_adsp_data_r, hd68k_adsp_data_w);
 
 	/* install ADSP serial buffer RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x810000, 0x813fff, 0, 0, hd68k_adsp_buffer_r, hd68k_adsp_buffer_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x810000, 0x813fff, 0, 0, hd68k_adsp_buffer_r, hd68k_adsp_buffer_w);
 
 	/* install ADSP control locations */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x818000, 0x81801f, 0, 0, hd68k_adsp_control_w);
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x818060, 0x81807f, 0, 0, hd68k_adsp_irq_clear_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x838000, 0x83ffff, 0, 0, hd68k_adsp_irq_state_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x818000, 0x81801f, 0, 0, hd68k_adsp_control_w);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x818060, 0x81807f, 0, 0, hd68k_adsp_irq_clear_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x838000, 0x83ffff, 0, 0, hd68k_adsp_irq_state_r);
 }
 
 
 /* COMMON INIT: initialize the DS3 board */
 static void init_ds3(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* install ADSP program RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x800000, 0x807fff, 0, 0, hd68k_ds3_program_r, hd68k_ds3_program_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x800000, 0x807fff, 0, 0, hd68k_ds3_program_r, hd68k_ds3_program_w);
 
 	/* install ADSP data RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x808000, 0x80bfff, 0, 0, hd68k_adsp_data_r, hd68k_adsp_data_w);
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x80c000, 0x80dfff, 0, 0, hdds3_special_r, hdds3_special_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x808000, 0x80bfff, 0, 0, hd68k_adsp_data_r, hd68k_adsp_data_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x80c000, 0x80dfff, 0, 0, hdds3_special_r, hdds3_special_w);
 
 	/* install ADSP control locations */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x820000, 0x8207ff, 0, 0, hd68k_ds3_gdata_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x820800, 0x820fff, 0, 0, hd68k_ds3_girq_state_r);
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x820000, 0x8207ff, 0, 0, hd68k_ds3_gdata_w);
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x821000, 0x8217ff, 0, 0, hd68k_adsp_irq_clear_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x822000, 0x8227ff, 0, 0, hd68k_ds3_sdata_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x822800, 0x822fff, 0, 0, hd68k_ds3_sirq_state_r);
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x822000, 0x8227ff, 0, 0, hd68k_ds3_sdata_w);
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x823800, 0x823fff, 0, 0, hd68k_ds3_control_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x820000, 0x8207ff, 0, 0, hd68k_ds3_gdata_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x820800, 0x820fff, 0, 0, hd68k_ds3_girq_state_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x820000, 0x8207ff, 0, 0, hd68k_ds3_gdata_w);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x821000, 0x8217ff, 0, 0, hd68k_adsp_irq_clear_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x822000, 0x8227ff, 0, 0, hd68k_ds3_sdata_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x822800, 0x822fff, 0, 0, hd68k_ds3_sirq_state_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x822000, 0x8227ff, 0, 0, hd68k_ds3_sdata_w);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x823800, 0x823fff, 0, 0, hd68k_ds3_control_w);
 
 	/* if we have a sound DSP, boot it */
-	if (hdcpu_sound != NULL && cpu_get_type(hdcpu_sound) == CPU_ADSP2105)
-		adsp2105_load_boot_data((UINT8 *)(hdcpu_sound->region + 0x10000), (UINT32 *)hdcpu_sound->region);
+	if (state->soundcpu != NULL && cpu_get_type(state->soundcpu) == CPU_ADSP2105)
+		adsp2105_load_boot_data((UINT8 *)(state->soundcpu->region + 0x10000), (UINT32 *)state->soundcpu->region);
 
-	if (hdcpu_sounddsp != NULL && cpu_get_type(hdcpu_sounddsp) == CPU_ADSP2105)
-		adsp2105_load_boot_data((UINT8 *)(hdcpu_sounddsp->region + 0x10000), (UINT32 *)hdcpu_sounddsp->region);
+	if (state->sounddsp != NULL && cpu_get_type(state->sounddsp) == CPU_ADSP2105)
+		adsp2105_load_boot_data((UINT8 *)(state->sounddsp->region + 0x10000), (UINT32 *)state->sounddsp->region);
 
 /*
 
@@ -3540,30 +3810,31 @@ static void init_ds3(running_machine *machine)
 /* COMMON INIT: initialize the DSK add-on board */
 static void init_dsk(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
 	UINT8 *usr3 = memory_region(machine, "user3");
 
 	/* install ASIC61 */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x85c000, 0x85c7ff, 0, 0, hd68k_dsk_dsp32_r, hd68k_dsk_dsp32_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x85c000, 0x85c7ff, 0, 0, hd68k_dsk_dsp32_r, hd68k_dsk_dsp32_w);
 
 	/* install control registers */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x85c800, 0x85c81f, 0, 0, hd68k_dsk_control_w);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x85c800, 0x85c81f, 0, 0, hd68k_dsk_control_w);
 
 	/* install extra RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x900000, 0x90ffff, 0, 0, hd68k_dsk_ram_r, hd68k_dsk_ram_w);
-	hddsk_ram = (UINT16 *)(usr3 + 0x40000);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x900000, 0x90ffff, 0, 0, hd68k_dsk_ram_r, hd68k_dsk_ram_w);
+	state->dsk_ram = (UINT16 *)(usr3 + 0x40000);
 
 	/* install extra ZRAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x910000, 0x910fff, 0, 0, hd68k_dsk_zram_r, hd68k_dsk_zram_w);
-	hddsk_zram = (UINT16 *)(usr3 + 0x50000);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x910000, 0x910fff, 0, 0, hd68k_dsk_zram_r, hd68k_dsk_zram_w);
+	state->dsk_zram = (UINT16 *)(usr3 + 0x50000);
 
 	/* install ASIC65 */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x914000, 0x917fff, 0, 0, asic65_data_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x914000, 0x917fff, 0, 0, asic65_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x918000, 0x91bfff, 0, 0, asic65_io_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x914000, 0x917fff, 0, 0, asic65_data_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x914000, 0x917fff, 0, 0, asic65_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x918000, 0x91bfff, 0, 0, asic65_io_r);
 
 	/* install extra ROM */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x940000, 0x9fffff, 0, 0, hd68k_dsk_small_rom_r);
-	hddsk_rom = (UINT16 *)(usr3 + 0x00000);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x940000, 0x9fffff, 0, 0, hd68k_dsk_small_rom_r);
+	state->dsk_rom = (UINT16 *)(usr3 + 0x00000);
 
 	/* set up the ASIC65 */
 	asic65_config(machine, ASIC65_STANDARD);
@@ -3573,26 +3844,27 @@ static void init_dsk(running_machine *machine)
 /* COMMON INIT: initialize the DSK II add-on board */
 static void init_dsk2(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
 	UINT8 *usr3 = memory_region(machine, "user3");
 
 	/* install ASIC65 */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x824000, 0x824003, 0, 0, asic65_data_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x824000, 0x824003, 0, 0, asic65_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x825000, 0x825001, 0, 0, asic65_io_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x824000, 0x824003, 0, 0, asic65_data_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x824000, 0x824003, 0, 0, asic65_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x825000, 0x825001, 0, 0, asic65_io_r);
 
 	/* install ASIC61 */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x827000, 0x8277ff, 0, 0, hd68k_dsk_dsp32_r, hd68k_dsk_dsp32_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x827000, 0x8277ff, 0, 0, hd68k_dsk_dsp32_r, hd68k_dsk_dsp32_w);
 
 	/* install control registers */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x827800, 0x82781f, 0, 0, hd68k_dsk_control_w);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x827800, 0x82781f, 0, 0, hd68k_dsk_control_w);
 
 	/* install extra RAM */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x880000, 0x8bffff, 0, 0, hd68k_dsk_ram_r, hd68k_dsk_ram_w);
-	hddsk_ram = (UINT16 *)(usr3 + 0x100000);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x880000, 0x8bffff, 0, 0, hd68k_dsk_ram_r, hd68k_dsk_ram_w);
+	state->dsk_ram = (UINT16 *)(usr3 + 0x100000);
 
 	/* install extra ROM */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x900000, 0x9fffff, 0, 0, hd68k_dsk_rom_r);
-	hddsk_rom = (UINT16 *)(usr3 + 0x000000);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x900000, 0x9fffff, 0, 0, hd68k_dsk_rom_r);
+	state->dsk_rom = (UINT16 *)(usr3 + 0x000000);
 
 	/* set up the ASIC65 */
 	asic65_config(machine, ASIC65_STANDARD);
@@ -3602,28 +3874,32 @@ static void init_dsk2(running_machine *machine)
 /* COMMON INIT: initialize the DSPCOM add-on board */
 static void init_dspcom(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* install ASIC65 */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x900000, 0x900003, 0, 0, asic65_data_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x900000, 0x900003, 0, 0, asic65_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x901000, 0x910001, 0, 0, asic65_io_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x900000, 0x900003, 0, 0, asic65_data_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x900000, 0x900003, 0, 0, asic65_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x901000, 0x910001, 0, 0, asic65_io_r);
 
 	/* set up the ASIC65 */
 	asic65_config(machine, ASIC65_STEELTAL);
 
 	/* install DSPCOM control */
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x904000, 0x90401f, 0, 0, hddspcom_control_w);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x904000, 0x90401f, 0, 0, hddspcom_control_w);
 }
 
 
 /* COMMON INIT: initialize the original "driver" sound board */
 static void init_driver_sound(running_machine *machine)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	hdsnd_init(machine);
 
 	/* install sound handlers */
-	memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x840000, 0x840001, 0, 0, hd68k_snd_data_r, hd68k_snd_data_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x844000, 0x844001, 0, 0, hd68k_snd_status_r);
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x84c000, 0x84c001, 0, 0, hd68k_snd_reset_w);
+	memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x840000, 0x840001, 0, 0, hd68k_snd_data_r, hd68k_snd_data_w);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x844000, 0x844001, 0, 0, hd68k_snd_status_r);
+	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x84c000, 0x84c001, 0, 0, hd68k_snd_reset_w);
 }
 
 
@@ -3637,73 +3913,78 @@ static void init_driver_sound(running_machine *machine)
 
 static DRIVER_INIT( harddriv )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_driver(machine);
 	init_adsp(machine);
 	init_driver_sound(machine);
 
 	/* set up gsp speedup handler */
-	hdgsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup1_w);
-	hdgsp_speedup_addr[1] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfffcfc00, 0xfffcfc0f, 0, 0, hdgsp_speedup2_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup_r);
-	hdgsp_speedup_pc = 0xffc00f10;
+	state->gsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup1_w);
+	state->gsp_speedup_addr[1] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfffcfc00, 0xfffcfc0f, 0, 0, hdgsp_speedup2_w);
+	memory_install_read16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup_r);
+	state->gsp_speedup_pc = 0xffc00f10;
 
 	/* set up msp speedup handler */
-	hdmsp_speedup_addr = memory_install_write16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_r);
-	hdmsp_speedup_pc = 0x00723b00;
+	state->msp_speedup_addr = memory_install_write16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_w);
+	memory_install_read16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_r);
+	state->msp_speedup_pc = 0x00723b00;
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
 }
 
 
 static DRIVER_INIT( harddrvc )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 1);
 	init_adsp(machine);
 	init_driver_sound(machine);
 
 	/* set up gsp speedup handler */
-	hdgsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup1_w);
-	hdgsp_speedup_addr[1] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfffcfc00, 0xfffcfc0f, 0, 0, hdgsp_speedup2_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup_r);
-	hdgsp_speedup_pc = 0xfff40ff0;
+	state->gsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup1_w);
+	state->gsp_speedup_addr[1] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfffcfc00, 0xfffcfc0f, 0, 0, hdgsp_speedup2_w);
+	memory_install_read16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup_r);
+	state->gsp_speedup_pc = 0xfff40ff0;
 
 	/* set up msp speedup handler */
-	hdmsp_speedup_addr = memory_install_write16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_r);
-	hdmsp_speedup_pc = 0x00723b00;
+	state->msp_speedup_addr = memory_install_write16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_w);
+	memory_install_read16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x00751b00, 0x00751b0f, 0, 0, hdmsp_speedup_r);
+	state->msp_speedup_pc = 0x00723b00;
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
 }
 
 
 static DRIVER_INIT( stunrun )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 0);
 	init_adsp(machine);
 	atarijsa_init(machine, "IN0", 0x0020);
 
 	/* set up gsp speedup handler */
-	hdgsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup1_w);
-	hdgsp_speedup_addr[1] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfffcfc00, 0xfffcfc0f, 0, 0, hdgsp_speedup2_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup_r);
-	hdgsp_speedup_pc = 0xfff41070;
+	state->gsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup1_w);
+	state->gsp_speedup_addr[1] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfffcfc00, 0xfffcfc0f, 0, 0, hdgsp_speedup2_w);
+	memory_install_read16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff9fc00, 0xfff9fc0f, 0, 0, hdgsp_speedup_r);
+	state->gsp_speedup_pc = 0xfff41070;
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
 }
 
 
-static UINT32 *rddsp32_speedup;
-static offs_t rddsp32_speedup_pc;
 static READ32_HANDLER( rddsp32_speedup_r )
 {
-	if (cpu_get_pc(space->cpu) == rddsp32_speedup_pc && (*rddsp32_speedup >> 16) == 0)
+	harddriv_state *state = (harddriv_state *)space->machine->driver_data;
+	if (cpu_get_pc(space->cpu) == state->rddsp32_speedup_pc && (*state->rddsp32_speedup >> 16) == 0)
 	{
 		UINT32 r14 = cpu_get_reg(space->cpu, DSP32_R14);
 		UINT32 r1 = memory_read_word(space, r14 - 0x14);
@@ -3716,14 +3997,16 @@ static READ32_HANDLER( rddsp32_speedup_r )
 			cpu_adjust_icount(space->cpu, -cycles_to_burn);
 			memory_write_word(space, r14 - 0x14, r1 + cycles_to_burn / 17);
 		}
-		msp_speedup_count[0]++;
+		state->msp_speedup_count[0]++;
 	}
-	return *rddsp32_speedup;
+	return *state->rddsp32_speedup;
 }
 
 
 static DRIVER_INIT( racedriv )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_driver(machine);
 	init_adsp(machine);
@@ -3732,23 +4015,25 @@ static DRIVER_INIT( racedriv )
 
 	/* set up the slapstic */
 	slapstic_init(machine, 117);
-	hd68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, rd68k_slapstic_r, rd68k_slapstic_w);
+	state->m68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, rd68k_slapstic_r, rd68k_slapstic_w);
 
 	/* synchronization */
-	rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613c00, 0x613c03, 0, 0, rddsp32_sync0_w);
-	rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613e00, 0x613e03, 0, 0, rddsp32_sync1_w);
+	state->rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613c00, 0x613c03, 0, 0, rddsp32_sync0_w);
+	state->rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613e00, 0x613e03, 0, 0, rddsp32_sync1_w);
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
 
 	/* set up dsp32 speedup handlers */
-	rddsp32_speedup = memory_install_read32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613e04, 0x613e07, 0, 0, rddsp32_speedup_r);
-	rddsp32_speedup_pc = 0x6054b0;
+	state->rddsp32_speedup = memory_install_read32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613e04, 0x613e07, 0, 0, rddsp32_speedup_r);
+	state->rddsp32_speedup_pc = 0x6054b0;
 }
 
 
 static void racedrvc_init_common(running_machine *machine, offs_t gsp_protection)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 1);
 	init_adsp(machine);
@@ -3757,30 +4042,31 @@ static void racedrvc_init_common(running_machine *machine, offs_t gsp_protection
 
 	/* set up the slapstic */
 	slapstic_init(machine, 117);
-	hd68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, rd68k_slapstic_r, rd68k_slapstic_w);
+	state->m68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, rd68k_slapstic_r, rd68k_slapstic_w);
 
 	/* synchronization */
-	rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613c00, 0x613c03, 0, 0, rddsp32_sync0_w);
-	rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613e00, 0x613e03, 0, 0, rddsp32_sync1_w);
+	state->rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613c00, 0x613c03, 0, 0, rddsp32_sync0_w);
+	state->rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613e00, 0x613e03, 0, 0, rddsp32_sync1_w);
 
 	/* set up protection hacks */
-	hdgsp_protection = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), gsp_protection, gsp_protection + 0x0f, 0, 0, hdgsp_protection_w);
+	state->gsp_protection = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), gsp_protection, gsp_protection + 0x0f, 0, 0, hdgsp_protection_w);
 
 	/* set up gsp speedup handler */
-	hdgsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff76f60, 0xfff76f6f, 0, 0, rdgsp_speedup1_w);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff76f60, 0xfff76f6f, 0, 0, rdgsp_speedup1_r);
-	hdgsp_speedup_pc = 0xfff43a00;
+	state->gsp_speedup_addr[0] = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff76f60, 0xfff76f6f, 0, 0, rdgsp_speedup1_w);
+	memory_install_read16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff76f60, 0xfff76f6f, 0, 0, rdgsp_speedup1_r);
+	state->gsp_speedup_pc = 0xfff43a00;
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
 
 	/* set up dsp32 speedup handlers */
-	rddsp32_speedup = memory_install_read32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613e04, 0x613e07, 0, 0, rddsp32_speedup_r);
-	rddsp32_speedup_pc = 0x6054b0;
+	state->rddsp32_speedup = memory_install_read32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613e04, 0x613e07, 0, 0, rddsp32_speedup_r);
+	state->rddsp32_speedup_pc = 0x6054b0;
 }
 
 static DRIVER_INIT( racedrvc ) { racedrvc_init_common(machine, 0xfff95cd0); }
 static DRIVER_INIT( racedrc1 ) { racedrvc_init_common(machine, 0xfff7ecd0); }
+
 
 
 static READ16_HANDLER( steeltal_dummy_r )
@@ -3792,43 +4078,45 @@ static READ16_HANDLER( steeltal_dummy_r )
 
 static void steeltal_init_common(running_machine *machine, offs_t ds3_transfer_pc, int proto_sloop)
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 0);
 	init_ds3(machine);
 	init_dspcom(machine);
 	atarijsa_init(machine, "IN0", 0x0020);
 
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x908000, 0x908001, 0, 0, steeltal_dummy_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x908000, 0x908001, 0, 0, steeltal_dummy_r);
 
 	/* set up the SLOOP */
 	if (!proto_sloop)
 	{
-		hd68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, st68k_sloop_r, st68k_sloop_w);
-		st68k_sloop_alt_base = memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0x4e000, 0x4ffff, 0, 0, st68k_sloop_alt_r);
+		state->m68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, st68k_sloop_r, st68k_sloop_w);
+		state->m68k_sloop_alt_base = memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x4e000, 0x4ffff, 0, 0, st68k_sloop_alt_r);
 	}
 	else
-		hd68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, st68k_protosloop_r, st68k_protosloop_w);
+		state->m68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, st68k_protosloop_r, st68k_protosloop_w);
 
 	/* synchronization */
-	stmsp_sync[0] = &hdmsp_ram[TOWORD(0x80010)];
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x80010, 0x8007f, 0, 0, stmsp_sync0_w);
-	stmsp_sync[1] = &hdmsp_ram[TOWORD(0x99680)];
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x99680, 0x9968f, 0, 0, stmsp_sync1_w);
-	stmsp_sync[2] = &hdmsp_ram[TOWORD(0x99d30)];
-	memory_install_write16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x99d30, 0x99d4f, 0, 0, stmsp_sync2_w);
+	state->stmsp_sync[0] = &state->msp_ram[TOWORD(0x80010)];
+	memory_install_write16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x80010, 0x8007f, 0, 0, stmsp_sync0_w);
+	state->stmsp_sync[1] = &state->msp_ram[TOWORD(0x99680)];
+	memory_install_write16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x99680, 0x9968f, 0, 0, stmsp_sync1_w);
+	state->stmsp_sync[2] = &state->msp_ram[TOWORD(0x99d30)];
+	memory_install_write16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x99d30, 0x99d4f, 0, 0, stmsp_sync2_w);
 
 	/* set up protection hacks */
-	hdgsp_protection = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff965d0, 0xfff965df, 0, 0, hdgsp_protection_w);
+	state->gsp_protection = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff965d0, 0xfff965df, 0, 0, hdgsp_protection_w);
 
 	/* set up msp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_msp, ADDRESS_SPACE_PROGRAM), 0x80020, 0x8002f, 0, 0, stmsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->msp, ADDRESS_SPACE_PROGRAM), 0x80020, 0x8002f, 0, 0, stmsp_speedup_r);
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1f99, 0x1f99, 0, 0, hdds3_speedup_r);
-	hdds3_speedup_addr = &hdadsp_data_memory[0x1f99];
-	hdds3_speedup_pc = 0xff;
-	hdds3_transfer_pc = ds3_transfer_pc;
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1f99, 0x1f99, 0, 0, hdds3_speedup_r);
+	state->ds3_speedup_addr = &state->adsp_data_memory[0x1f99];
+	state->ds3_speedup_pc = 0xff;
+	state->ds3_transfer_pc = ds3_transfer_pc;
 }
 
 
@@ -3839,6 +4127,8 @@ static DRIVER_INIT( steeltap ) { steeltal_init_common(machine, 0x52290, 1); }
 
 static DRIVER_INIT( strtdriv )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 1);
 	init_ds3(machine);
@@ -3846,73 +4136,77 @@ static DRIVER_INIT( strtdriv )
 
 	/* set up the slapstic */
 	slapstic_init(machine, 117);
-	hd68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, rd68k_slapstic_r, rd68k_slapstic_w);
+	state->m68k_slapstic_base = memory_install_readwrite16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xe0000, 0xfffff, 0, 0, rd68k_slapstic_r, rd68k_slapstic_w);
 
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hda68k_port1_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hda68k_port1_r);
 
 	/* synchronization */
-	rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613c00, 0x613c03, 0, 0, rddsp32_sync0_w);
-	rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x613e00, 0x613e03, 0, 0, rddsp32_sync1_w);
+	state->rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613c00, 0x613c03, 0, 0, rddsp32_sync0_w);
+	state->rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x613e00, 0x613e03, 0, 0, rddsp32_sync1_w);
 
 	/* set up protection hacks */
-	hdgsp_protection = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff960a0, 0xfff960af, 0, 0, hdgsp_protection_w);
+	state->gsp_protection = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff960a0, 0xfff960af, 0, 0, hdgsp_protection_w);
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1f99, 0x1f99, 0, 0, hdds3_speedup_r);
-	hdds3_speedup_addr = &hdadsp_data_memory[0x1f99];
-	hdds3_speedup_pc = 0xff;
-	hdds3_transfer_pc = 0x43672;
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1f99, 0x1f99, 0, 0, hdds3_speedup_r);
+	state->ds3_speedup_addr = &state->adsp_data_memory[0x1f99];
+	state->ds3_speedup_pc = 0xff;
+	state->ds3_transfer_pc = 0x43672;
 }
 
 
 static DRIVER_INIT( hdrivair )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 1);
 	init_ds3(machine);
 	init_dsk2(machine);
 
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hda68k_port1_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hda68k_port1_r);
 
 	/* synchronization */
-	rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x21fe00, 0x21fe03, 0, 0, rddsp32_sync0_w);
-	rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x21ff00, 0x21ff03, 0, 0, rddsp32_sync1_w);
+	state->rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x21fe00, 0x21fe03, 0, 0, rddsp32_sync0_w);
+	state->rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x21ff00, 0x21ff03, 0, 0, rddsp32_sync1_w);
 
 	/* set up protection hacks */
-	hdgsp_protection = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff943f0, 0xfff943ff, 0, 0, hdgsp_protection_w);
+	state->gsp_protection = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff943f0, 0xfff943ff, 0, 0, hdgsp_protection_w);
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1f99, 0x1f99, 0, 0, hdds3_speedup_r);
-	hdds3_speedup_addr = &hdadsp_data_memory[0x1f99];
-	hdds3_speedup_pc = 0x2da;
-	hdds3_transfer_pc = 0x407b8;
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1f99, 0x1f99, 0, 0, hdds3_speedup_r);
+	state->ds3_speedup_addr = &state->adsp_data_memory[0x1f99];
+	state->ds3_speedup_pc = 0x2da;
+	state->ds3_transfer_pc = 0x407b8;
 }
 
 
 static DRIVER_INIT( hdrivaip )
 {
+	harddriv_state *state = (harddriv_state *)machine->driver_data;
+
 	/* initialize the boards */
 	init_multisync(machine, 1);
 	init_ds3(machine);
 	init_dsk2(machine);
 
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_main, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hda68k_port1_r);
+	memory_install_read16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0xa80000, 0xafffff, 0, 0, hda68k_port1_r);
 
 	/* synchronization */
-	rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x21fe00, 0x21fe03, 0, 0, rddsp32_sync0_w);
-	rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(hdcpu_dsp32, ADDRESS_SPACE_PROGRAM), 0x21ff00, 0x21ff03, 0, 0, rddsp32_sync1_w);
+	state->rddsp32_sync[0] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x21fe00, 0x21fe03, 0, 0, rddsp32_sync0_w);
+	state->rddsp32_sync[1] = memory_install_write32_handler(cpu_get_address_space(state->dsp32, ADDRESS_SPACE_PROGRAM), 0x21ff00, 0x21ff03, 0, 0, rddsp32_sync1_w);
 
 	/* set up protection hacks */
-	hdgsp_protection = memory_install_write16_handler(cpu_get_address_space(hdcpu_gsp, ADDRESS_SPACE_PROGRAM), 0xfff916c0, 0xfff916cf, 0, 0, hdgsp_protection_w);
+	state->gsp_protection = memory_install_write16_handler(cpu_get_address_space(state->gsp, ADDRESS_SPACE_PROGRAM), 0xfff916c0, 0xfff916cf, 0, 0, hdgsp_protection_w);
 
 	/* set up adsp speedup handlers */
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
-	memory_install_read16_handler(cpu_get_address_space(hdcpu_adsp, ADDRESS_SPACE_DATA), 0x1f9a, 0x1f9a, 0, 0, hdds3_speedup_r);
-	hdds3_speedup_addr = &hdadsp_data_memory[0x1f9a];
-	hdds3_speedup_pc = 0x2d9;
-	hdds3_transfer_pc = 0X407da;
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1fff, 0x1fff, 0, 0, hdadsp_speedup_r);
+	memory_install_read16_handler(cpu_get_address_space(state->adsp, ADDRESS_SPACE_DATA), 0x1f9a, 0x1f9a, 0, 0, hdds3_speedup_r);
+	state->ds3_speedup_addr = &state->adsp_data_memory[0x1f9a];
+	state->ds3_speedup_pc = 0x2d9;
+	state->ds3_transfer_pc = 0X407da;
 }
 
 
@@ -3972,6 +4266,8 @@ GAME( 1990, racedrivcb4, racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Ga
 GAME( 1990, racedrivcg4, racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, German, rev 4)", 0 )
 GAME( 1990, racedrivc2,  racedriv, racedrvc, racedrvc, racedrc1, ROT0, "Atari Games", "Race Drivin' (compact, rev 2)", 0 )
 GAME( 1990, racedrivc1,  racedriv, racedrvc, racedrvc, racedrc1, ROT0, "Atari Games", "Race Drivin' (compact, rev 1)", 0 )
+
+GAME( 1990, racedrivpan, racedriv, racedriv, racedriv, racedriv, ROT0, "Atari Games", "Race Drivin' Panorama (prototype, rev 2.1)", GAME_NOT_WORKING )
 
 GAME( 1991, steeltal,  0,        steeltal, steeltal, steeltal, ROT0, "Atari Games", "Steel Talons (rev 2)", 0 )
 GAME( 1991, steeltalg, steeltal, steeltal, steeltal, steeltal, ROT0, "Atari Games", "Steel Talons (German, rev 2)", 0 )

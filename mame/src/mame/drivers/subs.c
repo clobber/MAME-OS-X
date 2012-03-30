@@ -20,7 +20,7 @@
 #include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "deprecat.h"
-#include "subs.h"
+#include "includes/subs.h"
 #include "sound/discrete.h"
 #include "rendlay.h"
 
@@ -63,9 +63,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x006a, 0x006b) AM_DEVWRITE("discrete", subs_crash_w)
 	AM_RANGE(0x006c, 0x006d) AM_WRITE(subs_invert1_w)
 	AM_RANGE(0x006e, 0x006f) AM_WRITE(subs_invert2_w)
-	AM_RANGE(0x0090, 0x009f) AM_BASE(&spriteram)
+	AM_RANGE(0x0090, 0x009f) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
-	AM_RANGE(0x0800, 0x0bff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x0800, 0x0bff) AM_RAM AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -79,21 +79,21 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( subs )
 	PORT_START("DSW") /* OPTIONS */
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )  PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, "Credit/Time" )
+	PORT_DIPNAME( 0x02, 0x00, "Credit/Time" )  PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x00, "Each Coin Buys Time" )
 	PORT_DIPSETTING(    0x02, "Fixed Time" )
-	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Language ) )
+	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Language ) )  PORT_DIPLOCATION("SW1:3,4")
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Spanish) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( German) )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Free_Play ) )  PORT_DIPLOCATION("SW1:5")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0xe0, 0x40, "Game Length" )
+	PORT_DIPNAME( 0xe0, 0x40, "Game Length" )  PORT_DIPLOCATION("SW1:6,7,8")
 	PORT_DIPSETTING(    0x00, "0:30 Minutes" )
 	PORT_DIPSETTING(    0x20, "1:00 Minutes" )
 	PORT_DIPSETTING(    0x40, "1:30 Minutes" )
@@ -164,8 +164,8 @@ static const gfx_layout motion_layout =
 
 
 static GFXDECODE_START( subs )
-	GFXDECODE_ENTRY( "gfx1", 0, playfield_layout, 0, 2 ) 	/* playfield graphics */
-	GFXDECODE_ENTRY( "gfx2", 0, motion_layout,    0, 2 ) 	/* motion graphics */
+	GFXDECODE_ENTRY( "gfx1", 0, playfield_layout, 0, 2 )	/* playfield graphics */
+	GFXDECODE_ENTRY( "gfx2", 0, motion_layout,    0, 2 )	/* motion graphics */
 GFXDECODE_END
 
 

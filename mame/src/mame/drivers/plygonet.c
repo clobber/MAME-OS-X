@@ -80,7 +80,7 @@
 */
 
 #include "driver.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "cpu/dsp56k/dsp56k.h"
@@ -94,8 +94,6 @@ READ32_HANDLER( polygonet_ttl_ram_r );
 WRITE32_HANDLER( polygonet_ttl_ram_w );
 READ32_HANDLER( polygonet_roz_ram_r );
 WRITE32_HANDLER( polygonet_roz_ram_w );
-
-static int init_eeprom_count;
 
 /* 68k-side shared ram */
 static UINT32* shared_ram;
@@ -121,34 +119,16 @@ static const eeprom_interface eeprom_intf =
 	"0100110000000" /* unlock command */
 };
 
-static NVRAM_HANDLER( polygonet )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file)
-		{
-			init_eeprom_count = 0;
-			eeprom_load(file);
-		}
-		else
-			init_eeprom_count = 10;
-	}
-}
-
-static READ32_HANDLER( polygonet_eeprom_r )
+static READ32_DEVICE_HANDLER( polygonet_eeprom_r )
 {
 	if (ACCESSING_BITS_0_15)
 	{
-		return 0x0200 | (eeprom_read_bit()<<8);
+		return 0x0200 | (eeprom_read_bit(device) << 8);
 	}
 	else
 	{
-		UINT8 lowInputBits = input_port_read(space->machine, "IN1");
-		UINT8 highInputBits = input_port_read(space->machine, "IN0");
+		UINT8 lowInputBits = input_port_read(device->machine, "IN1");
+		UINT8 highInputBits = input_port_read(device->machine, "IN0");
 		return ((highInputBits << 24) | (lowInputBits << 16));
 	}
 
@@ -161,9 +141,7 @@ static WRITE32_HANDLER( polygonet_eeprom_w )
 {
 	if (ACCESSING_BITS_24_31)
 	{
-		eeprom_write_bit((data & 0x01000000) ? ASSERT_LINE : CLEAR_LINE);
-		eeprom_set_cs_line((data & 0x02000000) ? CLEAR_LINE : ASSERT_LINE);
-		eeprom_set_clock_line((data & 0x04000000) ? ASSERT_LINE : CLEAR_LINE);
+		input_port_write(space->machine, "EEPROMOUT", data, 0xffffffff);
 		return;
 	}
 
@@ -331,11 +309,11 @@ static WRITE32_HANDLER( plygonet_palette_w )
 {
 	int r,g,b;
 
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
 
- 	r = (paletteram32[offset] >>16) & 0xff;
-	g = (paletteram32[offset] >> 8) & 0xff;
-	b = (paletteram32[offset] >> 0) & 0xff;
+	r = (space->machine->generic.paletteram.u32[offset] >>16) & 0xff;
+	g = (space->machine->generic.paletteram.u32[offset] >> 8) & 0xff;
+	b = (space->machine->generic.paletteram.u32[offset] >> 0) & 0xff;
 
 	palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
 }
@@ -541,10 +519,10 @@ static WRITE16_HANDLER( dsp56k_ram_bank04_write )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
-	AM_RANGE(0x200000, 0x21ffff) AM_RAM_WRITE(plygonet_palette_w) AM_BASE(&paletteram32)
-	AM_RANGE(0x400000, 0x40001f) AM_RAM AM_BASE((UINT32**)&K053936_0_ctrl)
+	AM_RANGE(0x200000, 0x21ffff) AM_RAM_WRITE(plygonet_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x400000, 0x40001f) AM_DEVREADWRITE16("k053936", k053936_ctrl_r, k053936_ctrl_w, 0xffffffff)
 	AM_RANGE(0x440000, 0x440fff) AM_READWRITE(polygonet_roz_ram_r, polygonet_roz_ram_w)
-	AM_RANGE(0x480000, 0x4bffff) AM_READ(polygonet_eeprom_r)
+	AM_RANGE(0x480000, 0x4bffff) AM_DEVREAD("eeprom", polygonet_eeprom_r)
 	AM_RANGE(0x4C0000, 0x4fffff) AM_WRITE(polygonet_eeprom_w)
 	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(shared_ram_write) AM_BASE(&shared_ram)
 	AM_RANGE(0x504000, 0x504003) AM_WRITE(dsp_w_lines)
@@ -585,7 +563,7 @@ static int cur_sound_region;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine, 2, memory_region(machine, "soundcpu") + 0x10000 + cur_sound_region*0x4000);
+	memory_set_bankptr(machine, "bank2", memory_region(machine, "soundcpu") + 0x10000 + cur_sound_region*0x4000);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
@@ -600,8 +578,8 @@ static INTERRUPT_GEN(audio_interrupt)
 }
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_READ(SMH_ROM)
-	AM_RANGE(0x8000, 0xbfff) AM_READ(SMH_BANK(2))
+	AM_RANGE(0x0000, 0x7fff) AM_ROM
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
 	AM_RANGE(0x0000, 0xbfff) AM_WRITENOP
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 	AM_RANGE(0xe000, 0xe22f) AM_DEVREADWRITE("konami1", k054539_r, k054539_w)
@@ -628,7 +606,7 @@ static const gfx_layout bglayout =
 	4,
 	{ 0, 1, 2, 3 },
 	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64,
- 	  8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
+	  8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
 	{ 0*4, 1*4, 2*4, 3*4, 4*4, 5*4, 6*4, 7*4, 8*4,
 	  9*4, 10*4, 11*4, 12*4, 13*4, 14*4, 15*4 },
 
@@ -652,6 +630,11 @@ static MACHINE_START(polygonet)
 	//cputag_set_input_line(machine, "dsp", DSP56K_IRQ_MODB, CLEAR_LINE);
 }
 
+static const k053936_interface polygonet_k053936_intf =
+{
+	0, 0, 0	/* wrap, xoff, yoff */
+};
+
 static MACHINE_DRIVER_START( plygonet )
 	MDRV_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz (xtal is 32.0 MHz) */
 	MDRV_CPU_PROGRAM_MAP(main_map)
@@ -668,7 +651,8 @@ static MACHINE_DRIVER_START( plygonet )
 	MDRV_MACHINE_START(polygonet)
 
 	MDRV_GFXDECODE(plygonet)
-	MDRV_NVRAM_HANDLER(polygonet)
+
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
 
 	/* TODO: TEMPORARY!  UNTIL A MORE LOCALIZED SYNC CAN BE MADE */
 	MDRV_QUANTUM_TIME(HZ(1200000))
@@ -685,6 +669,8 @@ static MACHINE_DRIVER_START( plygonet )
 
 	MDRV_VIDEO_START(polygonet)
 	MDRV_VIDEO_UPDATE(polygonet)
+
+	MDRV_K053936_ADD("k053936", polygonet_k053936_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
@@ -722,6 +708,11 @@ static INPUT_PORTS_START( polygonet )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( polynetw )
@@ -744,6 +735,11 @@ static INPUT_PORTS_START( polynetw )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN ) PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
 INPUT_PORTS_END
 
 
@@ -763,6 +759,14 @@ static DRIVER_INIT(polygonet)
 
 	/* The dsp56k occasionally executes out of mapped memory */
 	dsp56k_update_handler = memory_set_direct_update_handler(cputag_get_address_space(machine, "dsp", ADDRESS_SPACE_PROGRAM), plygonet_dsp56k_direct_handler);
+
+    /* save states */
+	state_save_register_global_pointer(machine, dsp56k_bank00_ram,    2 * 8 * dsp56k_bank00_size);
+	state_save_register_global_pointer(machine, dsp56k_bank01_ram,    2 * 8 * dsp56k_bank01_size);
+	state_save_register_global_pointer(machine, dsp56k_bank02_ram,    2 * 8 * dsp56k_bank02_size);
+	state_save_register_global_pointer(machine, dsp56k_shared_ram_16, 2 * 8 * dsp56k_shared_ram_16_size);
+	state_save_register_global_pointer(machine, dsp56k_bank04_ram,    2 * 8 * dsp56k_bank04_size);
+	state_save_register_global(machine, cur_sound_region);
 }
 
 
@@ -785,7 +789,7 @@ ROM_START( plygonet )
 	ROM_LOAD( "305b06.18g", 0x000000, 0x20000, CRC(decd6e42) SHA1(4c23dcb1d68132d3381007096e014ee4b6007086) )
 
 	/* '936 tiles */
- 	ROM_REGION( 0x40000, "gfx2", 0 )
+	ROM_REGION( 0x40000, "gfx2", 0 )
 	ROM_LOAD( "305b07.20d", 0x000000, 0x40000, CRC(e4320bc3) SHA1(b0bb2dac40d42f97da94516d4ebe29b1c3d77c37) )
 
 	/* sound data */
@@ -811,7 +815,7 @@ ROM_START( polynetw )
 	ROM_LOAD( "305a06.18g", 0x000000, 0x020000, CRC(4b9b7e9c) SHA1(8c3c0f1ec7e26fd9552f6da1e6bdd7ff4453ba57) )
 
 	/* '936 tiles */
- 	ROM_REGION( 0x40000, "gfx2", 0 )
+	ROM_REGION( 0x40000, "gfx2", 0 )
 	ROM_LOAD( "305a07.20d", 0x000000, 0x020000, CRC(0959283b) SHA1(482caf96e8e430b87810508b1a1420cd3b58f203) )
 
 	/* sound data */
@@ -821,6 +825,6 @@ ROM_START( polynetw )
 ROM_END
 
 /*          ROM       parent   machine   inp        init */
-GAME( 1993, plygonet, 0,       plygonet, polygonet, polygonet, ROT90, "Konami", "Polygonet Commanders (ver UAA)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 1993, polynetw, 0,       plygonet, polynetw,  polygonet, ROT90, "Konami", "Poly-Net Warriors (ver JAA)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1993, plygonet, 0,       plygonet, polygonet, polygonet, ROT90, "Konami", "Polygonet Commanders (ver UAA)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1993, polynetw, 0,       plygonet, polynetw,  polygonet, ROT90, "Konami", "Poly-Net Warriors (ver JAA)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 

@@ -5,14 +5,14 @@
 ****************************************************************************/
 
 #include "driver.h"
-#include "meadows.h"
+#include "includes/meadows.h"
 
 /* some constants to make life easier */
 #define SPR_ADJUST_X    -18
 #define SPR_ADJUST_Y    -14
 
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 
 
 /*************************************
@@ -23,7 +23,7 @@ static tilemap *bg_tilemap;
 
 static TILE_GET_INFO( get_tile_info )
 {
-	SET_TILE_INFO(0, videoram[tile_index] & 0x7f, 0, 0);
+	SET_TILE_INFO(0, machine->generic.videoram.u8[tile_index] & 0x7f, 0, 0);
 }
 
 
@@ -49,7 +49,7 @@ VIDEO_START( meadows )
 
 WRITE8_HANDLER( meadows_videoram_w )
 {
-	videoram[offset] = data;
+	space->machine->generic.videoram.u8[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
@@ -64,7 +64,7 @@ WRITE8_HANDLER( meadows_videoram_w )
 WRITE8_HANDLER( meadows_spriteram_w )
 {
 	video_screen_update_now(space->machine->primary_screen);
-	spriteram[offset] = data;
+	space->machine->generic.spriteram.u8[offset] = data;
 }
 
 
@@ -77,13 +77,14 @@ WRITE8_HANDLER( meadows_spriteram_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *clip)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int i;
 
 	for (i = 0; i < 4; i++)
 	{
 		int x = spriteram[i+0] + SPR_ADJUST_X;
 		int y = spriteram[i+4] + SPR_ADJUST_Y;
-		int code = spriteram[i+8] & 0x0f; 		/* bit #0 .. #3 select sprite */
+		int code = spriteram[i+8] & 0x0f;		/* bit #0 .. #3 select sprite */
 /*      int bank = (spriteram[i+8] >> 4) & 1;      bit #4 selects prom ???    */
 		int bank = i;							/* that fixes it for now :-/ */
 		int flip = spriteram[i+8] >> 5;			/* bit #5 flip vertical flag */

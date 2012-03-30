@@ -207,7 +207,7 @@
 #include "machine/mathbox.h"
 #include "machine/atari_vg.h"
 #include "rendlay.h"
-#include "bzone.h"
+#include "includes/bzone.h"
 
 #include "sound/pokey.h"
 
@@ -268,7 +268,7 @@ static CUSTOM_INPUT( clock_r )
 
 static WRITE8_HANDLER( bzone_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine, offset,data);
 }
 
 
@@ -351,7 +351,7 @@ ADDRESS_MAP_END
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )\
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )\
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Diagnostic Step") PORT_CODE(KEYCODE_F1)\
- 	/* bit 6 is the VG HALT bit. We set it to "low" */\
+	/* bit 6 is the VG HALT bit. We set it to "low" */\
 	/* per default (busy vector processor). */\
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)\
 	/* bit 7 is tied to a 3kHz clock */\
@@ -379,7 +379,7 @@ ADDRESS_MAP_END
 	PORT_DIPSETTING(	0x00, DEF_STR( English ))\
 	PORT_DIPSETTING(	0x40, DEF_STR( German ))\
 	PORT_DIPSETTING(	0x80, DEF_STR( French ))\
-  	PORT_DIPSETTING(	0xc0, DEF_STR( Spanish ))
+	PORT_DIPSETTING(	0xc0, DEF_STR( Spanish ))
 
 #define BZONEDSW1\
 	PORT_START("DSW1")\
@@ -401,7 +401,7 @@ ADDRESS_MAP_END
 	PORT_DIPSETTING(	0x20, "3 credits/2 coins" )\
 	PORT_DIPSETTING(	0x40, "5 credits/4 coins" )\
 	PORT_DIPSETTING(	0x60, "6 credits/4 coins" )\
-  	PORT_DIPSETTING(	0x80, "6 credits/5 coins" )
+	PORT_DIPSETTING(	0x80, "6 credits/5 coins" )
 
 #define BZONEADJ \
 	PORT_START("R11") \
@@ -413,9 +413,9 @@ static INPUT_PORTS_START( bzone )
 	BZONEDSW1
 
 	PORT_START("IN3")
-  	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_DOWN ) PORT_2WAY
-  	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_UP ) PORT_2WAY
-  	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICKLEFT_DOWN ) PORT_2WAY
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_DOWN ) PORT_2WAY
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_UP ) PORT_2WAY
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICKLEFT_DOWN ) PORT_2WAY
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICKLEFT_UP ) PORT_2WAY
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_START1 )
@@ -800,13 +800,12 @@ static WRITE8_HANDLER( analog_select_w )
 
 static DRIVER_INIT( bradley )
 {
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x400, 0x7ff, 0, 0, (read8_space_func)SMH_BANK(1), (write8_space_func)SMH_BANK(1));
-	memory_set_bankptr(machine, 1, auto_alloc_array(machine, UINT8, 0x400));
-
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1808, 0x1808, 0, 0, "1808");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1809, 0x1809, 0, 0, "1809");
-	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x180a, 0x180a, 0, 0, analog_data_r);
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1848, 0x1850, 0, 0, analog_select_w);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	memory_install_ram(space, 0x400, 0x7ff, 0, 0, NULL);
+	memory_install_read_port(space, 0x1808, 0x1808, 0, 0, "1808");
+	memory_install_read_port(space, 0x1809, 0x1809, 0, 0, "1809");
+	memory_install_read8_handler(space, 0x180a, 0x180a, 0, 0, analog_data_r);
+	memory_install_write8_handler(space, 0x1848, 0x1850, 0, 0, analog_select_w);
 }
 
 

@@ -45,53 +45,48 @@ The 2 ay-8910 read ports are responsible for reading the sound commands.
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
+#include "includes/jack.h"
 
 
-extern WRITE8_HANDLER( jack_videoram_w );
-extern WRITE8_HANDLER( jack_colorram_w );
-extern WRITE8_HANDLER( jack_paletteram_w );
-extern READ8_HANDLER( jack_flipscreen_r );
-extern WRITE8_HANDLER( jack_flipscreen_w );
-
-extern VIDEO_START( jack );
-extern VIDEO_UPDATE( jack );
-
-extern PALETTE_INIT( joinem );
-extern VIDEO_START( joinem );
-extern VIDEO_UPDATE( joinem );
-
-static int timer_rate;
+/*************************************
+ *
+ *  Memory handlers
+ *
+ *************************************/
 
 static READ8_DEVICE_HANDLER( timer_r )
 {
+	jack_state *state = (jack_state *)device->machine->driver_data;
+
 	/* wrong! there should be no need for timer_rate, the same function */
 	/* should work for both games */
-	return cputag_get_total_cycles(device->machine, "audiocpu") / timer_rate;
+	return cpu_get_total_cycles(state->audiocpu) / state->timer_rate;
 }
 
 
 static WRITE8_HANDLER( jack_sh_command_w )
 {
+	jack_state *state = (jack_state *)space->machine->driver_data;
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
+	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
 }
 
 
 /* these handlers are guessed, because otherwise you can't enter test mode */
 
-static int joinem_snd_bit = 0;
-
 static WRITE8_HANDLER( joinem_misc_w )
 {
+	jack_state *state = (jack_state *)space->machine->driver_data;
 	flip_screen_set(space->machine, data & 0x80);
-	joinem_snd_bit = data & 1;
+	state->joinem_snd_bit = data & 1;
 }
 
 static CUSTOM_INPUT( sound_check_r )
 {
+	jack_state *state = (jack_state *)field->port->machine->driver_data;
 	UINT8 ret = 0;
 
-	if((input_port_read(field->port->machine, "IN2") & 0x80) && !joinem_snd_bit)
+	if ((input_port_read(field->port->machine, "IN2") & 0x80) && !state->joinem_snd_bit)
 		ret = 1;
 
 	return ret;
@@ -101,22 +96,20 @@ static CUSTOM_INPUT( sound_check_r )
     Super Triv questions read handler
 */
 
-static int question_address = 0;
-static int question_rom = 0;
-static int remap_address[16];
-
 static READ8_HANDLER( striv_question_r )
 {
+	jack_state *state = (jack_state *)space->machine->driver_data;
+
 	// Set-up the remap table for every 16 bytes
-	if((offset & 0xc00) == 0x800)
+	if ((offset & 0xc00) == 0x800)
 	{
-		remap_address[offset & 0x0f] = (offset & 0xf0) >> 4;
+		state->remap_address[offset & 0x0f] = (offset & 0xf0) >> 4;
 	}
 	// Select which rom to read and the high 5 bits of address
-	else if((offset & 0xc00) == 0xc00)
+	else if ((offset & 0xc00) == 0xc00)
 	{
-		question_rom = offset & 7;
-		question_address = (offset & 0xf8) << 7;
+		state->question_rom = offset & 7;
+		state->question_address = (offset & 0xf8) << 7;
 	}
 	// Read the actual byte from question roms
 	else
@@ -124,13 +117,13 @@ static READ8_HANDLER( striv_question_r )
 		UINT8 *ROM = memory_region(space->machine, "user1");
 		int real_address;
 
-		real_address = question_address | (offset & 0x3f0) | remap_address[offset & 0x0f];
+		real_address = state->question_address | (offset & 0x3f0) | state->remap_address[offset & 0x0f];
 
 		// Check if it wants to read from the upper 8 roms or not
-		if(offset & 0x400)
-			real_address |= 0x8000 * (question_rom + 8);
+		if (offset & 0x400)
+			real_address |= 0x8000 * (state->question_rom + 8);
 		else
-			real_address |= 0x8000 * question_rom;
+			real_address |= 0x8000 * state->question_rom;
 
 		return ROM[real_address];
 	}
@@ -138,10 +131,16 @@ static READ8_HANDLER( striv_question_r )
 	return 0; // the value read from the configuration reads is discarded
 }
 
+/*************************************
+ *
+ *  Address maps
+ *
+ *************************************/
+
 static ADDRESS_MAP_START( jack_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x5fff) AM_RAM
-	AM_RANGE(0xb000, 0xb07f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xb000, 0xb07f) AM_RAM AM_BASE_SIZE_MEMBER(jack_state, spriteram, spriteram_size)
 	AM_RANGE(0xb400, 0xb400) AM_WRITE(jack_sh_command_w)
 	AM_RANGE(0xb500, 0xb500) AM_READ_PORT("DSW1")
 	AM_RANGE(0xb501, 0xb501) AM_READ_PORT("DSW2")
@@ -150,16 +149,16 @@ static ADDRESS_MAP_START( jack_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb504, 0xb504) AM_READ_PORT("IN2")
 	AM_RANGE(0xb505, 0xb505) AM_READ_PORT("IN3")
 	AM_RANGE(0xb506, 0xb507) AM_READWRITE(jack_flipscreen_r, jack_flipscreen_w)
-	AM_RANGE(0xb600, 0xb61f) AM_WRITE(jack_paletteram_w) AM_BASE(&paletteram)
-	AM_RANGE(0xb800, 0xbbff) AM_RAM_WRITE(jack_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xbc00, 0xbfff) AM_RAM_WRITE(jack_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xb600, 0xb61f) AM_WRITE(jack_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xb800, 0xbbff) AM_RAM_WRITE(jack_videoram_w) AM_BASE_MEMBER(jack_state, videoram)
+	AM_RANGE(0xbc00, 0xbfff) AM_RAM_WRITE(jack_colorram_w) AM_BASE_MEMBER(jack_state, colorram)
 	AM_RANGE(0xc000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( joinem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0xb000, 0xb0ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xb000, 0xb0ff) AM_RAM AM_BASE_SIZE_MEMBER(jack_state, spriteram, spriteram_size)
 	AM_RANGE(0xb400, 0xb400) AM_WRITE(jack_sh_command_w)
 	AM_RANGE(0xb500, 0xb500) AM_READ_PORT("DSW1")
 	AM_RANGE(0xb501, 0xb501) AM_READ_PORT("DSW2")
@@ -168,8 +167,8 @@ static ADDRESS_MAP_START( joinem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb504, 0xb504) AM_READ_PORT("IN2")
 	AM_RANGE(0xb506, 0xb507) AM_READWRITE(jack_flipscreen_r, jack_flipscreen_w)
 	AM_RANGE(0xb700, 0xb700) AM_WRITE(joinem_misc_w)
-	AM_RANGE(0xb800, 0xbbff) AM_RAM_WRITE(jack_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xbc00, 0xbfff) AM_RAM_WRITE(jack_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xb800, 0xbbff) AM_RAM_WRITE(jack_videoram_w) AM_BASE_MEMBER(jack_state, videoram)
+	AM_RANGE(0xbc00, 0xbfff) AM_RAM_WRITE(jack_colorram_w) AM_BASE_MEMBER(jack_state, colorram)
 ADDRESS_MAP_END
 
 
@@ -181,10 +180,16 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0x80, 0x80) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0x80, 0x80) AM_DEVWRITE("aysnd", ay8910_address_w)
 ADDRESS_MAP_END
 
+
+/*************************************
+ *
+ *  Input ports
+ *
+ *************************************/
 
 static INPUT_PORTS_START( jack )
 	PORT_START("DSW1")
@@ -798,6 +803,12 @@ static INPUT_PORTS_START( striv )
 INPUT_PORTS_END
 
 
+/*************************************
+ *
+ *  Graphics definitions
+ *
+ *************************************/
+
 static const gfx_layout charlayout =
 {
 	8,8,	/* 8*8 characters */
@@ -837,7 +848,41 @@ static const ay8910_interface ay8910_config =
 };
 
 
+/*************************************
+ *
+ *  Machine driver
+ *
+ *************************************/
+
+static MACHINE_START( jack )
+{
+	jack_state *state = (jack_state *)machine->driver_data;
+
+	state->audiocpu = devtag_get_device(machine, "audiocpu");
+
+	state_save_register_global(machine, state->joinem_snd_bit);
+	state_save_register_global(machine, state->question_address);
+	state_save_register_global(machine, state->question_rom);
+	state_save_register_global_array(machine, state->remap_address);
+}
+
+static MACHINE_RESET( jack )
+{
+	jack_state *state = (jack_state *)machine->driver_data;
+	int i;
+
+	state->joinem_snd_bit = 0;
+	state->question_address = 0;
+	state->question_rom = 0;
+
+	for (i = 0; i < 16; i++)
+		state->remap_address[i] = 0;
+}
+
 static MACHINE_DRIVER_START( jack )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(jack_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 18000000/6)	/* 3 MHz */
@@ -847,6 +892,9 @@ static MACHINE_DRIVER_START( jack )
 	MDRV_CPU_ADD("audiocpu", Z80,18000000/12)	/* 1.5 MHz */
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 	MDRV_CPU_IO_MAP(sound_io_map)
+
+	MDRV_MACHINE_START(jack)
+	MDRV_MACHINE_RESET(jack)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -865,7 +913,7 @@ static MACHINE_DRIVER_START( jack )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 18000000/12)
+	MDRV_SOUND_ADD("aysnd", AY8910, 18000000/12)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -880,11 +928,11 @@ MACHINE_DRIVER_END
 
 static INTERRUPT_GEN( joinem_interrupts )
 {
-	if(cpu_getiloops(device) > 0)
+	if (cpu_getiloops(device) > 0)
 		cpu_set_input_line(device, 0, HOLD_LINE);
 	else
 	{
-		if(!(input_port_read(device->machine, "IN2") & 0x80))
+		if (!(input_port_read(device->machine, "IN2") & 0x80))
 			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
@@ -928,11 +976,11 @@ static MACHINE_DRIVER_START( loverboy )
 	MDRV_VIDEO_UPDATE(joinem)
 MACHINE_DRIVER_END
 
-/***************************************************************************
-
-  Game driver(s)
-
-***************************************************************************/
+/*************************************
+ *
+ *  ROM definition(s)
+ *
+ *************************************/
 
 ROM_START( jack )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -1107,22 +1155,22 @@ ROM_END
 
 ROM_START( sucasino )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "1",       	  0x0000, 0x1000, CRC(e116e979) SHA1(99b0c783ace93e643738a1a924cafb690d2c1127) )
+	ROM_LOAD( "1",      	  0x0000, 0x1000, CRC(e116e979) SHA1(99b0c783ace93e643738a1a924cafb690d2c1127) )
 	ROM_LOAD( "2",      	  0x1000, 0x1000, CRC(2a2635f5) SHA1(e3b70942adc4eab81000287c8da67d3732ddda70) )
-	ROM_LOAD( "3",       	  0x2000, 0x1000, CRC(69864d90) SHA1(244eaf4079b90f367c671e00e8081d885f26e26d) )
-	ROM_LOAD( "4",       	  0x3000, 0x1000, CRC(174c9373) SHA1(070175bf1b7b14f34549d03a8288c8ff1f2f4eaa) )
-	ROM_LOAD( "5",       	  0xc000, 0x1000, CRC(115bcb1e) SHA1(9b50e1dcb77db1b60ab5fd7d9843261e25580647) )
-	ROM_LOAD( "6",       	  0xd000, 0x1000, CRC(434caa17) SHA1(2f537063db14cfdfb771dece2ea33841c874c708) )
-	ROM_LOAD( "7",       	  0xe000, 0x1000, CRC(67c68b82) SHA1(b5d3977bf1f1337a96ae7bb60fe11e6ca9e87485) )
-	ROM_LOAD( "8",       	  0xf000, 0x1000, CRC(f5b63006) SHA1(a069fb9b9b6d47ac3f0fbbd9b2c89da31d6b1202) )
+	ROM_LOAD( "3",      	  0x2000, 0x1000, CRC(69864d90) SHA1(244eaf4079b90f367c671e00e8081d885f26e26d) )
+	ROM_LOAD( "4",      	  0x3000, 0x1000, CRC(174c9373) SHA1(070175bf1b7b14f34549d03a8288c8ff1f2f4eaa) )
+	ROM_LOAD( "5",      	  0xc000, 0x1000, CRC(115bcb1e) SHA1(9b50e1dcb77db1b60ab5fd7d9843261e25580647) )
+	ROM_LOAD( "6",      	  0xd000, 0x1000, CRC(434caa17) SHA1(2f537063db14cfdfb771dece2ea33841c874c708) )
+	ROM_LOAD( "7",      	  0xe000, 0x1000, CRC(67c68b82) SHA1(b5d3977bf1f1337a96ae7bb60fe11e6ca9e87485) )
+	ROM_LOAD( "8",      	  0xf000, 0x1000, CRC(f5b63006) SHA1(a069fb9b9b6d47ac3f0fbbd9b2c89da31d6b1202) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "9",       	  0x0000, 0x1000, CRC(67cf8aec) SHA1(95be671d5f7526610b175fc4121459e0ffc3649b) )
+	ROM_LOAD( "9",      	  0x0000, 0x1000, CRC(67cf8aec) SHA1(95be671d5f7526610b175fc4121459e0ffc3649b) )
 
 	ROM_REGION( 0x4000, "gfx1", 0 )
-	ROM_LOAD( "11",      	  0x0000, 0x1000, CRC(f92c4c5b) SHA1(a415c8f55d1792e79d05ece223ef423f8578f896) )
+	ROM_LOAD( "11",     	  0x0000, 0x1000, CRC(f92c4c5b) SHA1(a415c8f55d1792e79d05ece223ef423f8578f896) )
 	/* 1000-1fff empty */
-	ROM_LOAD( "10",      	  0x2000, 0x1000, CRC(3b0783ce) SHA1(880f258351a8b0d76abe433cc77d95b991ae1adc) )
+	ROM_LOAD( "10",     	  0x2000, 0x1000, CRC(3b0783ce) SHA1(880f258351a8b0d76abe433cc77d95b991ae1adc) )
 	/* 3000-3fff empty */
 ROM_END
 
@@ -1317,7 +1365,13 @@ ROM_START( striv )
 ROM_END
 
 
-static void treahunt_decode(running_machine *machine)
+/*************************************
+ *
+ *  Driver initialization
+ *
+ *************************************/
+
+static void treahunt_decode( running_machine *machine )
 {
 	int A;
 	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
@@ -1364,22 +1418,27 @@ static void treahunt_decode(running_machine *machine)
 
 static DRIVER_INIT( jack )
 {
-	timer_rate = 128;
+	jack_state *state = (jack_state *)machine->driver_data;
+	state->timer_rate = 128;
 }
 
 static DRIVER_INIT( treahunt )
 {
-	timer_rate = 128;
+	jack_state *state = (jack_state *)machine->driver_data;
+	state->timer_rate = 128;
 	treahunt_decode(machine);
 }
 
 static DRIVER_INIT( zzyzzyxx )
 {
-	timer_rate = 16;
+	jack_state *state = (jack_state *)machine->driver_data;
+	state->timer_rate = 16;
 }
 
 static DRIVER_INIT( loverboy )
 {
+	jack_state *state = (jack_state *)machine->driver_data;
+
 	/* this doesn't make sense.. the startup code, and irq0 have jumps to 0..
        I replace the startup jump with another jump to what appears to be
        the start of the game code.
@@ -1389,32 +1448,33 @@ static DRIVER_INIT( loverboy )
 	ROM[0x13] = 0x01;
 	ROM[0x12] = 0x9d;
 
-	timer_rate = 16;
+	state->timer_rate = 16;
 }
 
 
 static DRIVER_INIT( striv )
 {
+	jack_state *state = (jack_state *)machine->driver_data;
 	UINT8 *ROM = memory_region(machine, "maincpu");
 	UINT8 data;
 	int A;
 
 	/* decrypt program rom */
 	/* thanks to David Widel to have helped with the decryption */
-	for( A = 0; A < 0x4000; A++ )
+	for (A = 0; A < 0x4000; A++)
 	{
 		data = ROM[A];
 
-		if(A & 0x1000)
+		if (A & 0x1000)
 		{
-			if(A & 4)
+			if (A & 4)
 				ROM[A] = BITSWAP8(data,7,2,5,1,3,6,4,0) ^ 1;
 			else
 				ROM[A] = BITSWAP8(data,0,2,5,1,3,6,4,7) ^ 0x81;
 		}
 		else
 		{
-			if(A & 4)
+			if (A & 4)
 				ROM[A] = BITSWAP8(data,7,2,5,1,3,6,4,0) ^ 1;
 			else
 				ROM[A] = BITSWAP8(data,0,2,5,1,3,6,4,7);
@@ -1425,23 +1485,28 @@ static DRIVER_INIT( striv )
 	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xcfff, 0, 0, striv_question_r);
 
 	// Nop out unused sprites writes
-	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb000, 0xb0ff, 0, 0, (write8_space_func)SMH_NOP);
+	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb000, 0xb0ff, 0, 0);
 
-	timer_rate = 128;
+	state->timer_rate = 128;
 }
 
-GAME( 1982, jack,     0,        jack,    jack,     jack,     ROT90, "Cinematronics", "Jack the Giantkiller (set 1)", 0 )
-GAME( 1982, jack2,    jack,     jack,    jack2,    jack,     ROT90, "Cinematronics", "Jack the Giantkiller (set 2)", 0 )
-GAME( 1982, jack3,    jack,     jack,    jack3,    jack,     ROT90, "Cinematronics", "Jack the Giantkiller (set 3)", 0 )
-GAME( 1982, treahunt, jack,     jack,    treahunt, treahunt, ROT90, "Hara Industries", "Treasure Hunt (bootleg?)", 0 )
-GAME( 1982, zzyzzyxx, 0,        jack,    zzyzzyxx, zzyzzyxx, ROT90, "Cinematronics + Advanced Microcomputer Systems", "Zzyzzyxx (set 1)", 0 )
-GAME( 1982, zzyzzyxx2,zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90, "Cinematronics + Advanced Microcomputer Systems", "Zzyzzyxx (set 2)", 0 )
-GAME( 1982, brix,     zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90, "Cinematronics + Advanced Microcomputer Systems", "Brix", 0 )
-GAME( 1984, freeze,   0,        jack,    freeze,   jack,     ROT90, "Cinematronics", "Freeze", 0 )
-GAME( 1984, sucasino, 0,        jack,    sucasino, jack,     ROT90, "Data Amusement", "Super Casino", 0 )
-GAME( 1981, tripool,  0,        tripool, tripool,  jack,     ROT90, "Noma (Casino Tech license)", "Tri-Pool (Casino Tech)", 0 )
-GAME( 1981, tripoola, tripool,  tripool, tripool,  jack,     ROT90, "Noma (Costal Games license)", "Tri-Pool (Costal Games)", 0 )
-GAME( 1986, joinem,   0,        joinem,  joinem,   zzyzzyxx, ROT90, "Global Corporation", "Joinem", 0 )
-GAME( 1983, loverboy, 0,        loverboy,loverboy, loverboy, ROT90, "G.T Enterprise Inc", "Lover Boy", 0 )
-GAME( 1985, striv,    0,        jack,    striv,    striv,    ROT270,"Hara Industries", "Super Triv", GAME_IMPERFECT_SOUND )
+/*************************************
+ *
+ *  Game driver(s)
+ *
+ *************************************/
 
+GAME( 1982, jack,     0,        jack,    jack,     jack,     ROT90,  "Cinematronics",               "Jack the Giantkiller (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1982, jack2,    jack,     jack,    jack2,    jack,     ROT90,  "Cinematronics",               "Jack the Giantkiller (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1982, jack3,    jack,     jack,    jack3,    jack,     ROT90,  "Cinematronics",               "Jack the Giantkiller (set 3)", GAME_SUPPORTS_SAVE )
+GAME( 1982, treahunt, jack,     jack,    treahunt, treahunt, ROT90,  "Hara Industries",             "Treasure Hunt (bootleg?)", GAME_SUPPORTS_SAVE )
+GAME( 1982, zzyzzyxx, 0,        jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics + Advanced Microcomputer Systems", "Zzyzzyxx (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1982, zzyzzyxx2,zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics + Advanced Microcomputer Systems", "Zzyzzyxx (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1982, brix,     zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics + Advanced Microcomputer Systems", "Brix", GAME_SUPPORTS_SAVE )
+GAME( 1984, freeze,   0,        jack,    freeze,   jack,     ROT90,  "Cinematronics",               "Freeze", GAME_SUPPORTS_SAVE )
+GAME( 1984, sucasino, 0,        jack,    sucasino, jack,     ROT90,  "Data Amusement",              "Super Casino", GAME_SUPPORTS_SAVE )
+GAME( 1981, tripool,  0,        tripool, tripool,  jack,     ROT90,  "Noma (Casino Tech license)",  "Tri-Pool (Casino Tech)", GAME_SUPPORTS_SAVE )
+GAME( 1981, tripoola, tripool,  tripool, tripool,  jack,     ROT90,  "Noma (Costal Games license)", "Tri-Pool (Costal Games)", GAME_SUPPORTS_SAVE )
+GAME( 1986, joinem,   0,        joinem,  joinem,   zzyzzyxx, ROT90,  "Global Corporation",          "Joinem", GAME_SUPPORTS_SAVE )
+GAME( 1983, loverboy, 0,        loverboy,loverboy, loverboy, ROT90,  "G.T Enterprise Inc",          "Lover Boy", GAME_SUPPORTS_SAVE )
+GAME( 1985, striv,    0,        jack,    striv,    striv,    ROT270, "Hara Industries",             "Super Triv", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

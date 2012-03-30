@@ -34,7 +34,9 @@ TODO:
 #include "sound/msm5205.h"
 
 static int gfxbank;
-static tilemap *bg_tilemap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *bg_tilemap;
 
 static WRITE8_HANDLER( rmhaihai_videoram_w )
 {
@@ -147,8 +149,8 @@ static WRITE8_HANDLER( ctrl_w )
 
 	// (data & 0x02) is switched on and off in service mode
 
-	coin_lockout_w(0, ~data & 0x04);
-	coin_counter_w(0, data & 0x08);
+	coin_lockout_w(space->machine, 0, ~data & 0x04);
+	coin_counter_w(space->machine, 0, data & 0x08);
 
 	// (data & 0x10) is medal in service mode
 
@@ -160,8 +162,8 @@ static WRITE8_HANDLER( themj_rombank_w )
 	UINT8 *rom = memory_region(space->machine, "maincpu") + 0x10000;
 	int bank = data & 0x03;
 logerror("banksw %d\n",bank);
-	memory_set_bankptr(space->machine, 1, rom + bank*0x4000);
-	memory_set_bankptr(space->machine, 2, rom + bank*0x4000 + 0x2000);
+	memory_set_bankptr(space->machine, "bank1", rom + bank*0x4000);
+	memory_set_bankptr(space->machine, "bank2", rom + bank*0x4000 + 0x2000);
 }
 
 static MACHINE_RESET( themj )
@@ -184,10 +186,10 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rmhaihai_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_READ(samples_r)
-	AM_RANGE(0x8000, 0x8000) AM_READWRITE(keyboard_r, SMH_NOP)	// ??
-	AM_RANGE(0x8001, 0x8001) AM_READWRITE(SMH_NOP, keyboard_w)	// ??
-	AM_RANGE(0x8020, 0x8020) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x8020, 0x8021) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x8000, 0x8000) AM_READ(keyboard_r) AM_WRITENOP	// ??
+	AM_RANGE(0x8001, 0x8001) AM_READNOP AM_WRITE(keyboard_w)	// ??
+	AM_RANGE(0x8020, 0x8020) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x8020, 0x8021) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x8040, 0x8040) AM_DEVWRITE("msm", adpcm_w)
 	AM_RANGE(0x8060, 0x8060) AM_WRITE(ctrl_w)
 	AM_RANGE(0x8080, 0x8080) AM_WRITENOP	// ??
@@ -197,20 +199,20 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( themj_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xa7ff) AM_RAM
 	AM_RANGE(0xa800, 0xafff) AM_RAM_WRITE(rmhaihai_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0xb000, 0xb7ff) AM_RAM_WRITE(rmhaihai_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK(2)
+	AM_RANGE(0xc000, 0xdfff) AM_ROMBANK("bank2")
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( themj_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_READ(samples_r)
-	AM_RANGE(0x8000, 0x8000) AM_READWRITE(keyboard_r, SMH_NOP)	// ??
-	AM_RANGE(0x8001, 0x8001) AM_READWRITE(SMH_NOP, keyboard_w)	// ??
-	AM_RANGE(0x8020, 0x8020) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x8020, 0x8021) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x8000, 0x8000) AM_READ(keyboard_r) AM_WRITENOP	// ??
+	AM_RANGE(0x8001, 0x8001) AM_READNOP AM_WRITE(keyboard_w)	// ??
+	AM_RANGE(0x8020, 0x8020) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x8020, 0x8021) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x8040, 0x8040) AM_DEVWRITE("msm", adpcm_w)
 	AM_RANGE(0x8060, 0x8060) AM_WRITE(ctrl_w)
 	AM_RANGE(0x8080, 0x8080) AM_WRITENOP	// ??
@@ -461,7 +463,7 @@ static MACHINE_DRIVER_START( rmhaihai )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 20000000/16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 20000000/16)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 

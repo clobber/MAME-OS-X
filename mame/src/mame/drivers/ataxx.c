@@ -29,7 +29,7 @@
 #include "cpu/i86/i86.h"
 #include "machine/eeprom.h"
 #include "cpu/z80/z80.h"
-#include "leland.h"
+#include "includes/leland.h"
 #include "sound/2151intf.h"
 
 
@@ -46,11 +46,11 @@
 
 static ADDRESS_MAP_START( master_map_program, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK(1)
-	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK(2)
+	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK("bank1")
+	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank2")
 	AM_RANGE(0xa000, 0xdfff) AM_WRITE(ataxx_battery_ram_w)
 	AM_RANGE(0xe000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xffff) AM_READWRITE(ataxx_paletteram_and_misc_r, ataxx_paletteram_and_misc_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf800, 0xffff) AM_READWRITE(ataxx_paletteram_and_misc_r, ataxx_paletteram_and_misc_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 
@@ -60,7 +60,7 @@ static ADDRESS_MAP_START( master_map_io, ADDRESS_SPACE_IO, 8 )
     AM_RANGE(0x05, 0x05) AM_WRITE(leland_80186_command_hi_w)
     AM_RANGE(0x06, 0x06) AM_WRITE(leland_80186_command_lo_w)
     AM_RANGE(0x0c, 0x0c) AM_WRITE(ataxx_80186_control_w)
-    AM_RANGE(0x20, 0x20) AM_READWRITE(ataxx_eeprom_r, ataxx_eeprom_w)
+    AM_RANGE(0x20, 0x20) AM_DEVREADWRITE("eeprom", ataxx_eeprom_r, ataxx_eeprom_w)
     AM_RANGE(0xd0, 0xef) AM_READWRITE(ataxx_mvram_port_r, ataxx_mvram_port_w)
     AM_RANGE(0xf0, 0xff) AM_READWRITE(ataxx_master_input_r, ataxx_master_output_w)
 ADDRESS_MAP_END
@@ -76,7 +76,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( slave_map_program, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK(3)
+	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK("bank3")
 	AM_RANGE(0xa000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xfffc, 0xfffd) AM_WRITE(leland_slave_video_addr_w)
@@ -99,8 +99,7 @@ ADDRESS_MAP_END
  *************************************/
 
 /* Helps document the input ports. */
-#define IPT_SLAVEHALT 	IPT_SPECIAL
-#define IPT_eeprom_DATA	IPT_SPECIAL
+#define IPT_SLAVEHALT	IPT_SPECIAL
 
 
 static INPUT_PORTS_START( ataxx )
@@ -120,7 +119,7 @@ static INPUT_PORTS_START( ataxx )
 	PORT_BIT( 0xfc, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN2")		/* 0x20 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_eeprom_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("AN0")		/* 0x00 - analog X */
@@ -151,7 +150,7 @@ static INPUT_PORTS_START( wsf )
 	PORT_BIT( 0xfc, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN2")		/* 0x20 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_eeprom_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW )
 	PORT_BIT( 0xf8, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -203,7 +202,7 @@ static INPUT_PORTS_START( indyheat )
 	PORT_BIT( 0xfc, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN2")		/* 0x20 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_eeprom_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("AN0")		/* Analog wheel 1 */
@@ -249,7 +248,7 @@ static INPUT_PORTS_START( brutforc )
 	PORT_BIT( 0xfc, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("IN2")		/* 0x20 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_eeprom_DATA )
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("P1")		/* 0x0E */
@@ -287,6 +286,26 @@ INPUT_PORTS_END
 
 /*************************************
  *
+ *  EEPROM interface
+ *
+ *************************************/
+
+static const eeprom_interface eeprom_intf =
+{
+	7,
+	16,
+	"000001100",
+	"000001010",
+	0,
+	"0000010000000000",
+	"0000010011000000",
+	1
+};
+
+
+
+/*************************************
+ *
  *  Machine driver
  *
  *************************************/
@@ -308,7 +327,9 @@ static MACHINE_DRIVER_START( ataxx )
 
 	MDRV_MACHINE_START(ataxx)
 	MDRV_MACHINE_RESET(ataxx)
-	MDRV_NVRAM_HANDLER(ataxx)
+
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
+	MDRV_NVRAM_HANDLER(leland)
 
 	/* video hardware */
 	MDRV_IMPORT_FROM(ataxx_video)
@@ -327,7 +348,7 @@ static MACHINE_DRIVER_START( wsf )
 	MDRV_IMPORT_FROM(ataxx)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("ym", YM2151, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_ROUTE(0, "mono", 0.40)
 	MDRV_SOUND_ROUTE(1, "mono", 0.40)
 MACHINE_DRIVER_END
@@ -368,6 +389,9 @@ ROM_START( ataxx )
 
 	ROM_REGION( 0x00001, "user1", ROMREGION_ERASEFF ) /* X-ROM (data used by main processor) */
     /* Empty / not used */
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-ataxx.bin", 0x0000, 0x0100, CRC(989cdb8c) SHA1(13b30a328e71a195960e98e50d1657a8b6860dcf) )
 ROM_END
 
 
@@ -399,6 +423,9 @@ ROM_START( ataxxa )
 
 	ROM_REGION( 0x00001, "user1", ROMREGION_ERASEFF ) /* X-ROM (data used by main processor) */
     /* Empty / not used */
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-ataxx.bin", 0x0000, 0x0100, CRC(989cdb8c) SHA1(13b30a328e71a195960e98e50d1657a8b6860dcf) )
 ROM_END
 
 
@@ -430,6 +457,9 @@ ROM_START( ataxxj )
 
 	ROM_REGION( 0x00001, "user1", ROMREGION_ERASEFF ) /* X-ROM (data used by main processor) */
     /* Empty / not used */
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-ataxxj.bin", 0x0000, 0x0100, CRC(8df1dee1) SHA1(876c5d5d506c31fdf4c3e611a1869b50ceadc6fd) )
 ROM_END
 
 
@@ -471,6 +501,9 @@ ROM_START( wsf )
 
 	ROM_REGION( 0x20000, "dac", 0 ) /* externally clocked DAC data */
 	ROM_LOAD( "30021-01.u8",   0x00000, 0x20000, CRC(bb91dc10) SHA1(a7d8676867b5cfe1049040e593985af57ef04334) )
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-wsf.bin", 0x0000, 0x0100, CRC(5bd0633d) SHA1(4917a0b0be82dc1bd4cfdb5bfb509f0472f1014f) )
 ROM_END
 
 
@@ -519,6 +552,9 @@ ROM_START( indyheat )
 	ROM_REGION( 0x40000, "dac", 0 ) /* externally clocked DAC data */
 	ROM_LOAD( "u8_27c.010",  0x00000, 0x20000, CRC(9f16e5b6) SHA1(0ea814db7f647f39d11dcde793a17831fca3bddd) )
 	ROM_LOAD( "u9_27c.010",  0x20000, 0x20000, CRC(0dc8f488) SHA1(2ff0f45f17b8a182afdaa5603e7a1af70e6336b7) )
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-indyheat.bin", 0x0000, 0x0100, CRC(896f7257) SHA1(bd1f116c2650576da73f0ca647a7f872c890dfe5) )
 ROM_END
 
 
@@ -567,6 +603,9 @@ ROM_START( brutforc )
 	ROM_LOAD( "u9",  0x20000, 0x20000, CRC(3195b305) SHA1(7c795a7973e0b8dbeb882777d4bee2accc46cea0) )
 	ROM_LOAD( "u10", 0x40000, 0x20000, CRC(1dc5f375) SHA1(9dd389c30d87fcb02c6a15b67b4b6ea5b555a762) )
 	ROM_LOAD( "u11", 0x60000, 0x20000, CRC(5ed4877f) SHA1(eab9e949b1afd1fa21d87af5abcb1a8dc9bcf0d8) )
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-brutforc.bin", 0x0000, 0x0100, CRC(508809af) SHA1(17352c0922631fca2ca2bbca4c50b3e0277caaf9) )
 ROM_END
 
 
@@ -621,6 +660,9 @@ ROM_START( asylum )
 	ROM_LOAD( "asy-65.9",  0x20000, 0x20000, CRC(c92ff376) SHA1(0189519101e3b0b464f0bd3af8352c002e45f937) )
 	ROM_LOAD( "asy-65.10", 0x40000, 0x20000, CRC(744dbf25) SHA1(03ea3d6eef94005ec0fbbaf43b59e3063830452e) )
 	ROM_LOAD( "asy-65.11", 0x60000, 0x20000, CRC(4b185d22) SHA1(d59a72d8c6532875f6e31939c5f846da64ba1bdd) )
+
+	ROM_REGION16_BE( 0x100, "eeprom", 0 )
+	ROM_LOAD16_WORD( "eeprom-asylum.bin", 0x0000, 0x0100, CRC(9a9a361b) SHA1(35daf1677ba18c09d2f9e33e75cf3f8d6a01e7c8) )
 ROM_END
 
 
@@ -633,20 +675,6 @@ ROM_END
 
 static DRIVER_INIT( ataxx )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 ataxx_eeprom_data[] =
-	{
-		0x09,0x0101,
-		0x0a,0x0104,
-		0x0b,0x0401,
-		0x0c,0x0101,
-		0x0d,0x0004,
-		0x13,0x0100,
-		0x14,0x5a04,
-		0xffff
-	};
-	ataxx_init_eeprom(machine, 0x00, ataxx_eeprom_data, 0x00);
-
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
 
@@ -657,19 +685,6 @@ static DRIVER_INIT( ataxx )
 
 static DRIVER_INIT( ataxxj )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 ataxxj_eeprom_data[] =
-	{
-		0x09,0x0101,
-		0x0a,0x0104,
-		0x0b,0x0001,
-		0x0c,0x0101,
-		0x13,0xff00,
-		0x3f,0x3c0c,
-		0xffff
-	};
-	ataxx_init_eeprom(machine, 0x00, ataxxj_eeprom_data, 0x00);
-
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
 
@@ -680,53 +695,27 @@ static DRIVER_INIT( ataxxj )
 
 static DRIVER_INIT( wsf )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 wsf_eeprom_data[] =
-	{
-		0x04,0x0101,
-		0x0b,0x04ff,
-		0x0d,0x0500,
-		0x26,0x26ac,
-		0x27,0xff0a,
-		0x28,0xff00,
-		0xffff
-	};
-	ataxx_init_eeprom(machine, 0x00, wsf_eeprom_data, 0x00);
-
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P1_P2");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P3_P4");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "BUTTONS");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P1_P2");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P3_P4");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "BUTTONS");
 }
 
 
 static DRIVER_INIT( indyheat )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 indyheat_eeprom_data[] =
-	{
-		0x2c,0x0100,
-		0x2d,0x0401,
-		0x2e,0x05ff,
-		0x2f,0x4b4b,
-		0x30,0xfa4b,
-		0x31,0xfafa,
-		0xffff
-	};
-	ataxx_init_eeprom(machine, 0x00, indyheat_eeprom_data, 0x00);
-
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
 
 	/* set up additional input ports */
 	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x00, 0x02, 0, 0, indyheat_wheel_r);
 	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x08, 0x0b, 0, 0, indyheat_analog_r);
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P1");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P2");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "P3");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P1");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P2");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "P3");
 
 	/* set up additional output ports */
 	memory_install_write8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x08, 0x0b, 0, 0, indyheat_analog_w);
@@ -735,55 +724,28 @@ static DRIVER_INIT( indyheat )
 
 static DRIVER_INIT( brutforc )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 brutforc_eeprom_data[] =
-	{
-		0x27,0x0303,
-		0x28,0x0003,
-		0x30,0x01ff,
-		0x31,0x0100,
-		0x35,0x0404,
-		0x36,0x0104,
-		0xffff
-	};
-	ataxx_init_eeprom(machine, 0x00, brutforc_eeprom_data, 0x00);
-
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P2");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P1");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "P3");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P2");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P1");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "P3");
 }
 
 
 static DRIVER_INIT( asylum )
 {
-	/* initialize the default EEPROM state */
-	static const UINT16 asylum_eeprom_data[] =
-	{
-		0x02,0x0101,
-		0x03,0x0101,
-		0x04,0x0101,
-		0x05,0xffff,
-		0x06,0x0403,
-		0x07,0x0400,
-		0xffff
-	};
-	ataxx_init_eeprom(machine, 0x00, asylum_eeprom_data, 0x00);
-
 	leland_rotate_memory(machine, "master");
 	leland_rotate_memory(machine, "slave");
 
 	/* asylum appears to have some extra RAM for the slave CPU */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "slave", ADDRESS_SPACE_PROGRAM), 0xf000, 0xfffb, 0, 0, (read8_space_func)SMH_BANK(4), (write8_space_func)SMH_BANK(4));
-	memory_set_bankptr(machine, 4, auto_alloc_array(machine, UINT8, 0x1000));
+	memory_install_ram(cputag_get_address_space(machine, "slave", ADDRESS_SPACE_PROGRAM), 0xf000, 0xfffb, 0, 0, NULL);
 
 	/* set up additional input ports */
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P2");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P1");
-	memory_install_read_port_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "P3");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0d, 0x0d, 0, 0, "P2");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0e, 0x0e, 0, 0, "P1");
+	memory_install_read_port(cputag_get_address_space(machine, "master", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, "P3");
 }
 
 

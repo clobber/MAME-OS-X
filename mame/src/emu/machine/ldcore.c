@@ -1120,7 +1120,7 @@ static void configuration_save(running_machine *machine, int config_type, xml_da
 		return;
 
 	/* iterate over disc devices */
-	for (device = device_list_first(machine->config->devicelist, LASERDISC); device != NULL; device = device_list_next(device, LASERDISC))
+	for (device = device_list_first(&machine->config->devicelist, LASERDISC); device != NULL; device = device_list_next(device, LASERDISC))
 	{
 		laserdisc_config *origconfig = (laserdisc_config *)device->inline_config;
 		laserdisc_state *ld = get_safe_token(device);
@@ -1210,7 +1210,7 @@ void laserdisc_overlay_enable(const device_config *device, int enable)
 
 VIDEO_UPDATE( laserdisc )
 {
-	const device_config *laserdisc = device_list_first(screen->machine->config->devicelist, LASERDISC);
+	const device_config *laserdisc = device_list_first(&screen->machine->config->devicelist, LASERDISC);
 	if (laserdisc != NULL)
 	{
 		const rectangle *visarea = video_screen_get_visible_area(screen);
@@ -1658,7 +1658,7 @@ DEVICE_GET_INFO( laserdisc )
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:					info->start = DEVICE_START_NAME(laserdisc); 		break;
-		case DEVINFO_FCT_STOP:					info->stop = DEVICE_STOP_NAME(laserdisc); 			break;
+		case DEVINFO_FCT_STOP:					info->stop = DEVICE_STOP_NAME(laserdisc);			break;
 		case DEVINFO_FCT_RESET:					info->reset = DEVICE_RESET_NAME(laserdisc);			break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */

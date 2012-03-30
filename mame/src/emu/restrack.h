@@ -24,7 +24,6 @@
 #define OBJTYPE_ASTRING					OBJECT_TYPE('a','s','t','r')
 #define OBJTYPE_BITMAP					OBJECT_TYPE('b','i','t','m')
 #define OBJTYPE_TIMER					OBJECT_TYPE('t','i','m','r')
-#define OBJTYPE_STATEREG				OBJECT_TYPE('s','t','a','t')
 
 
 
@@ -62,7 +61,7 @@ INLINE int get_resource_tag(void)
 #define alloc_or_die(t)					((t *)malloc_or_die_file_line(sizeof(t), __FILE__, __LINE__))
 #define alloc_clear_or_die(t)			((t *)memset(malloc_or_die_file_line(sizeof(t), __FILE__, __LINE__), 0, sizeof(t)))
 #define alloc_array_or_die(t, c)		((t *)malloc_or_die_file_line((c) * sizeof(t), __FILE__, __LINE__))
-#define alloc_array_clear_or_die(t, c) 	((t *)memset(malloc_or_die_file_line((c) * sizeof(t), __FILE__, __LINE__), 0, (c) * sizeof(t)))
+#define alloc_array_clear_or_die(t, c)	((t *)memset(malloc_or_die_file_line((c) * sizeof(t), __FILE__, __LINE__), 0, (c) * sizeof(t)))
 void *malloc_or_die_file_line(size_t size, const char *file, int line) ATTR_MALLOC;
 
 

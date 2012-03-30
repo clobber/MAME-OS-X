@@ -46,7 +46,7 @@ TODO:
 #include "sound/ay8910.h"
 
 static UINT8 *sc0_vram,*sc0_attr;
-static tilemap *sc0_tilemap;
+static tilemap_t *sc0_tilemap;
 
 static TILE_GET_INFO( get_sc0_tile_info )
 {
@@ -109,11 +109,11 @@ static READ8_HANDLER( vvillage_rng_r )
 
 static WRITE8_HANDLER( vvillage_output_w )
 {
-	coin_counter_w(0,data & 1);
-	coin_counter_w(1,data & 1);
+	coin_counter_w(space->machine, 0,data & 1);
+	coin_counter_w(space->machine, 1,data & 1);
 	// data & 4 payout counter
-	coin_lockout_w(0,data & 0x20);
-	coin_lockout_w(1,data & 0x20);
+	coin_lockout_w(space->machine, 0,data & 0x20);
+	coin_lockout_w(space->machine, 1,data & 0x20);
 }
 
 static WRITE8_HANDLER( vvillage_lamps_w )
@@ -125,25 +125,25 @@ static WRITE8_HANDLER( vvillage_lamps_w )
     ---- --x- lamp button 2
     ---- ---x lamp button 1
     */
-	set_led_status(0, data & 0x01);
-	set_led_status(1, data & 0x02);
-	set_led_status(2, data & 0x04);
-	set_led_status(3, data & 0x08);
-	set_led_status(4, data & 0x10);
+	set_led_status(space->machine, 0, data & 0x01);
+	set_led_status(space->machine, 1, data & 0x02);
+	set_led_status(space->machine, 2, data & 0x04);
+	set_led_status(space->machine, 3, data & 0x08);
+	set_led_status(space->machine, 4, data & 0x10);
 }
 
 static ADDRESS_MAP_START( vvillage_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xa000, 0xa000) AM_READ(vvillage_rng_r) //accessed by caswin only
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE(&sc0_vram)
 	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(sc0_attr_w) AM_BASE(&sc0_attr)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( vvillage_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x01,0x01) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x02,0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x01,0x01) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x02,0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x10,0x10) AM_READ_PORT("IN0")
 	AM_RANGE(0x11,0x11) AM_READ_PORT("IN1")
 	AM_RANGE(0x10,0x10) AM_WRITE(vvillage_scroll_w)
@@ -300,7 +300,7 @@ static MACHINE_DRIVER_START( vvillage )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 4000000 / 4)
+	MDRV_SOUND_ADD("aysnd", AY8910, 4000000 / 4)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 MACHINE_DRIVER_END

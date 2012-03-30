@@ -159,8 +159,8 @@ static VIDEO_UPDATE( shougi )
 //      if (flipscreen[0]) sx = 31 - sx;
 //      if (flipscreen[1]) sy = 31 - sy;
 
-		data1 = videoram[offs];				/* color */
-		data2 = videoram[0x4000 + offs];	/* pixel data */
+		data1 = screen->machine->generic.videoram.u8[offs];				/* color */
+		data2 = screen->machine->generic.videoram.u8[0x4000 + offs];	/* pixel data */
 
 		for (x=0; x<4; x++) /*4 pixels per byte (2 bitplanes in 2 nibbles: 1st=bits 7-4, 2nd=bits 3-0)*/
 		{
@@ -278,12 +278,12 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x5000, 0x5000) AM_READ_PORT("P1")
 	AM_RANGE(0x5800, 0x5800) AM_READ_PORT("P2") AM_WRITE(shougi_watchdog_reset_w)	/* game won't boot if watchdog doesn't work */
-	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x6800, 0x6800) AM_DEVWRITE("ay", ay8910_data_w)
-	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE(1) /* 2114 x 2 (0x400 x 4bit each) */
-	AM_RANGE(0x7800, 0x7bff) AM_RAM AM_SHARE(2) /* 2114 x 2 (0x400 x 4bit each) */
+	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x6800, 0x6800) AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1") /* 2114 x 2 (0x400 x 4bit each) */
+	AM_RANGE(0x7800, 0x7bff) AM_RAM AM_SHARE("share2") /* 2114 x 2 (0x400 x 4bit each) */
 
-	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)	/* 4116 x 16 (32K) */
+	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)	/* 4116 x 16 (32K) */
 ADDRESS_MAP_END
 
 /* sub */
@@ -304,11 +304,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE(2) /* 2114 x 2 (0x400 x 4bit each) */
+	AM_RANGE(0x6000, 0x63ff) AM_RAM AM_SHARE("share2") /* 2114 x 2 (0x400 x 4bit each) */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -407,7 +407,7 @@ static MACHINE_DRIVER_START( shougi )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 10000000/8)
+	MDRV_SOUND_ADD("aysnd", AY8910, 10000000/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END
 

@@ -36,7 +36,7 @@ SPOT TABLE test
 #include "driver.h"
 #include "eminline.h"
 #include "video/rgbutil.h"
-#include "namcos22.h"
+#include "includes/namcos22.h"
 #include "video/poly.h"
 
 // uncomment this line to render everything as quads
@@ -837,16 +837,7 @@ MallocSceneNode( running_machine *machine )
    }
    else
    {
-#define SCENE_NODE_POOL_SIZE 64
-		struct SceneNode *pSceneNodePool = auto_alloc_array(machine, struct SceneNode, SCENE_NODE_POOL_SIZE);
-		{
-			int i;
-			for( i=0; i<SCENE_NODE_POOL_SIZE; i++ )
-			{
-				FreeSceneNode( &pSceneNodePool[i] );
-			}
-			return MallocSceneNode(machine);
-		}
+	  node = alloc_or_die(struct SceneNode);
    }
    memset( node, 0, sizeof(*node) );
    return node;
@@ -905,7 +896,7 @@ static void RenderSprite(running_machine *machine, bitmap_t *bitmap, struct Scen
    for( row=0; row<node->data.sprite.numrows; row++ )
    {
       for( col=0; col<node->data.sprite.numcols; col++ )
-   	{
+	{
          int code = tile;
          if( node->data.sprite.linkType == 0xff )
          {
@@ -913,7 +904,7 @@ static void RenderSprite(running_machine *machine, bitmap_t *bitmap, struct Scen
          }
          else
          {
-            code += nthword( &spriteram32[0x800/4], i+node->data.sprite.linkType*4 );
+            code += nthword( &machine->generic.spriteram.u32[0x800/4], i+node->data.sprite.linkType*4 );
          }
          poly3d_Draw3dSprite(
                bitmap,
@@ -927,9 +918,9 @@ static void RenderSprite(running_machine *machine, bitmap_t *bitmap, struct Scen
                node->data.sprite.translucency,
                node->data.sprite.cz,
                node->data.sprite.pri );
-      	i++;
+    	i++;
       } /* next col */
-	} /* next row */
+   } /* next row */
 } /* RenderSprite */
 
 static void RenderSceneHelper(running_machine *machine, bitmap_t *bitmap, struct SceneNode *node )
@@ -1123,7 +1114,7 @@ PatchTexture( void )
 
 		default:
 			break;
-   }
+	}
 } /* PatchTexture */
 
 void
@@ -1225,18 +1216,18 @@ Prepare3dTexture( running_machine *machine, void *pTilemapROM, void *pTextureROM
     { /* following setup is Namco System 22 specific */
 	      const UINT8 *pPackedTileAttr = 0x200000 + (UINT8 *)pTilemapROM;
 	      UINT8 *pUnpackedTileAttr = auto_alloc_array(machine, UINT8, 0x080000*2);
-      	{
-       	   InitXYAttrToPixel();
-   	      mpTextureTileMapAttr = pUnpackedTileAttr;
-   	      for( i=0; i<0x80000; i++ )
-   	      {
-   	         *pUnpackedTileAttr++ = (*pPackedTileAttr)>>4;
-   	         *pUnpackedTileAttr++ = (*pPackedTileAttr)&0xf;
-   	         pPackedTileAttr++;
-   	   }
-   	   mpTextureTileMap16 = (UINT16 *)pTilemapROM;
+    	{
+    	   InitXYAttrToPixel();
+	      mpTextureTileMapAttr = pUnpackedTileAttr;
+	      for( i=0; i<0x80000; i++ )
+	      {
+	         *pUnpackedTileAttr++ = (*pPackedTileAttr)>>4;
+	         *pUnpackedTileAttr++ = (*pPackedTileAttr)&0xf;
+	         pPackedTileAttr++;
+	   }
+	   mpTextureTileMap16 = (UINT16 *)pTilemapROM;
          mpTextureTileData = (UINT8 *)pTextureROM;
-   	   PatchTexture();
+	   PatchTexture();
       }
    }
 } /* Prepare3dTexture */
@@ -1415,6 +1406,7 @@ DrawSprites( running_machine *machine, bitmap_t *bitmap, const rectangle *clipre
         0x9a0004:   palette, C381 ZC (depth cueing)
         ...
     */
+	UINT32 *spriteram32 = machine->generic.spriteram.u32;
 	int num_sprites = ((spriteram32[0x04/4]>>16)&0x3ff)+1;
 	const UINT32 *pSource = &spriteram32[0x4000/4];
 	const UINT32 *pPal = &spriteram32[0x20000/4];
@@ -1484,9 +1476,9 @@ static void UpdatePaletteS(running_machine *machine) /* for Super System22 - app
 			for( j=0; j<4; j++ )
 			{
 				int which = i*4+j;
-				int r = nthbyte(paletteram32,which+0x00000);
-				int g = nthbyte(paletteram32,which+0x08000);
-				int b = nthbyte(paletteram32,which+0x10000);
+				int r = nthbyte(machine->generic.paletteram.u32,which+0x00000);
+				int g = nthbyte(machine->generic.paletteram.u32,which+0x08000);
+				int b = nthbyte(machine->generic.paletteram.u32,which+0x10000);
 				palette_set_color( machine,which,MAKE_RGB(r,g,b) );
 			}
 			dirtypal[i] = 0;
@@ -1504,9 +1496,9 @@ static void UpdatePalette(running_machine *machine) /* for System22 - ignore gam
 			for( j=0; j<4; j++ )
 			{
 				int which = i*4+j;
-				int r = nthbyte(paletteram32,which+0x00000);
-				int g = nthbyte(paletteram32,which+0x08000);
-				int b = nthbyte(paletteram32,which+0x10000);
+				int r = nthbyte(machine->generic.paletteram.u32,which+0x00000);
+				int g = nthbyte(machine->generic.paletteram.u32,which+0x08000);
+				int b = nthbyte(machine->generic.paletteram.u32,which+0x10000);
 				palette_set_color( machine,which,MAKE_RGB(r,g,b) );
 			}
 			dirtypal[i] = 0;
@@ -1514,7 +1506,7 @@ static void UpdatePalette(running_machine *machine) /* for System22 - ignore gam
 	}
 } /* UpdatePalette */
 
-static tilemap *bgtilemap;
+static tilemap_t *bgtilemap;
 
 static TILE_GET_INFO( TextTilemapGetInfo )
 {
@@ -2190,12 +2182,12 @@ WRITE32_HANDLER( namcos22_gamma_w )
 
 READ32_HANDLER( namcos22_paletteram_r )
 {
-	return paletteram32[offset];
+	return space->machine->generic.paletteram.u32[offset];
 }
 
 WRITE32_HANDLER( namcos22_paletteram_w )
 {
-	COMBINE_DATA( &paletteram32[offset] );
+	COMBINE_DATA( &space->machine->generic.paletteram.u32[offset] );
 	dirtypal[offset&(0x7fff/4)] = 1;
 }
 
@@ -2207,6 +2199,13 @@ static void namcos22_reset(running_machine *machine)
 
 static void namcos22_exit(running_machine *machine)
 {
+	while (mpFreeSceneNode != NULL)
+	{
+		struct SceneNode *node = mpFreeSceneNode;
+		mpFreeSceneNode = node->nextInBucket;
+		free(node);
+	}
+
 	poly_free(poly);
 }
 

@@ -56,7 +56,9 @@ $7004 writes, related to $7000 reads
 #include "deprecat.h"
 #include "sound/ay8910.h"
 
-static tilemap *bg_tilemap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *bg_tilemap;
 
 static PALETTE_INIT( olibochu )
 {
@@ -136,11 +138,13 @@ static VIDEO_START( olibochu )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
+	UINT8 *spriteram_2 = machine->generic.spriteram2.u8;
 	int offs;
 
 	/* 16x16 sprites */
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size;offs += 4)
 	{
 		int attr = spriteram[offs+1];
 		int code = spriteram[offs];
@@ -167,7 +171,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 	/* 8x8 sprites */
 
-	for (offs = 0;offs < spriteram_2_size;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram2_size;offs += 4)
 	{
 		int attr = spriteram_2[offs+1];
 		int code = spriteram_2[offs];
@@ -230,8 +234,8 @@ static ADDRESS_MAP_START( olibochu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa005, 0xa005) AM_READ_PORT("DSW2")
 	AM_RANGE(0xa800, 0xa801) AM_WRITE(sound_command_w)
 	AM_RANGE(0xa802, 0xa802) AM_WRITE(olibochu_flipscreen_w)	/* bit 6 = enable sound? */
-	AM_RANGE(0xf400, 0xf41f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xf440, 0xf47f) AM_RAM AM_BASE(&spriteram_2) AM_SIZE(&spriteram_2_size)
+	AM_RANGE(0xf400, 0xf41f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf440, 0xf47f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -239,7 +243,7 @@ static ADDRESS_MAP_START( olibochu_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x6000, 0x63ff) AM_RAM
 	AM_RANGE(0x7000, 0x7000) AM_READ(soundlatch_r)	/* likely ay8910 input port, not direct */
-	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x7004, 0x7004) AM_WRITENOP //sound filter?
 	AM_RANGE(0x7006, 0x7006) AM_WRITENOP //irq ack?
 ADDRESS_MAP_END
@@ -424,7 +428,7 @@ static MACHINE_DRIVER_START( olibochu )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 2000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 

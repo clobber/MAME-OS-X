@@ -97,9 +97,9 @@ Todo:
 #include "driver.h"
 #include "includes/dec0.h"
 
-static tilemap *pf1_tilemap_0,*pf1_tilemap_1,*pf1_tilemap_2;
-static tilemap *pf2_tilemap_0,*pf2_tilemap_1,*pf2_tilemap_2;
-static tilemap *pf3_tilemap_0,*pf3_tilemap_1,*pf3_tilemap_2;
+static tilemap_t *pf1_tilemap_0,*pf1_tilemap_1,*pf1_tilemap_2;
+static tilemap_t *pf2_tilemap_0,*pf2_tilemap_1,*pf2_tilemap_2;
+static tilemap_t *pf3_tilemap_0,*pf3_tilemap_1,*pf3_tilemap_2;
 
 UINT16 *dec0_pf1_data,*dec0_pf2_data,*dec0_pf3_data;
 UINT16 *dec0_pf1_rowscroll,*dec0_pf2_rowscroll,*dec0_pf3_rowscroll;
@@ -117,7 +117,7 @@ static UINT16 dec0_pri;
 
 WRITE16_HANDLER( dec0_update_sprites_w )
 {
-	memcpy(dec0_spriteram,spriteram16,0x800);
+	memcpy(dec0_spriteram,space->machine->generic.spriteram.u16,0x800);
 }
 
 /******************************************************************************/
@@ -126,22 +126,22 @@ static void update_24bitcol(running_machine *machine, int offset)
 {
 	int r,g,b;
 
-	r = (paletteram16[offset] >> 0) & 0xff;
-	g = (paletteram16[offset] >> 8) & 0xff;
-	b = (paletteram16_2[offset] >> 0) & 0xff;
+	r = (machine->generic.paletteram.u16[offset] >> 0) & 0xff;
+	g = (machine->generic.paletteram.u16[offset] >> 8) & 0xff;
+	b = (machine->generic.paletteram2.u16[offset] >> 0) & 0xff;
 
 	palette_set_color(machine,offset,MAKE_RGB(r,g,b));
 }
 
 WRITE16_HANDLER( dec0_paletteram_rg_w )
 {
-	COMBINE_DATA(&paletteram16[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 	update_24bitcol(space->machine, offset);
 }
 
 WRITE16_HANDLER( dec0_paletteram_b_w )
 {
-	COMBINE_DATA(&paletteram16_2[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram2.u16[offset]);
 	update_24bitcol(space->machine, offset);
 }
 
@@ -217,7 +217,7 @@ static void draw_sprites(running_machine* machine, bitmap_t *bitmap,const rectan
 static void custom_tilemap_draw(running_machine *machine,
 								bitmap_t *bitmap,
 								const rectangle *cliprect,
-								tilemap *tilemap_ptr,
+								tilemap_t *tilemap_ptr,
 								const UINT16 *rowscroll_ptr,
 								const UINT16 *colscroll_ptr,
 								const UINT16 *control0,
@@ -229,13 +229,16 @@ static void custom_tilemap_draw(running_machine *machine,
 	int column_offset=0, src_x=0, src_y=0;
 	UINT32 scrollx=control1[0];
 	UINT32 scrolly=control1[1];
-	int width_mask = src_bitmap->width - 1;
-	int height_mask = src_bitmap->height - 1;
+	int width_mask;
+	int height_mask;
 	int row_scroll_enabled = (rowscroll_ptr && (control0[0]&0x4));
 	int col_scroll_enabled = (colscroll_ptr && (control0[0]&0x8));
 
 	if (!src_bitmap)
 		return;
+
+	width_mask = src_bitmap->width - 1;
+	height_mask = src_bitmap->height - 1;
 
 	/* Column scroll & row scroll may per applied per pixel, there are
     shift registers for each which control the granularity of the row/col
@@ -596,7 +599,7 @@ WRITE16_HANDLER( dec0_pf3_data_w )
 
 WRITE16_HANDLER( dec0_priority_w )
 {
-  	COMBINE_DATA(&dec0_pri);
+	COMBINE_DATA(&dec0_pri);
 }
 
 WRITE8_HANDLER( dec0_pf3_control_8bit_w )
@@ -705,7 +708,7 @@ VIDEO_START( dec0_nodma )
 	pf3_tilemap_1 = tilemap_create(machine, get_pf3_tile_info,tile_shape1_scan,    16,16, 32, 32);
 	pf3_tilemap_2 = tilemap_create(machine, get_pf3_tile_info,tile_shape2_scan,    16,16, 16, 64);
 
-	dec0_spriteram=spriteram16;
+	dec0_spriteram=machine->generic.spriteram.u16;
 }
 
 VIDEO_START( dec0 )

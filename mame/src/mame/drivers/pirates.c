@@ -115,24 +115,16 @@ static const eeprom_interface eeprom_intf =
 	"*10011xxxx"	/* unlock command */
 };
 
-static NVRAM_HANDLER( pirates )
-{
-	if (read_or_write) eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-		if (file) eeprom_load(file);
-	}
-}
-
 static WRITE16_HANDLER( pirates_out_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
+		const device_config *eeprom = devtag_get_device(space->machine, "eeprom");
+
 		/* bits 0-2 control EEPROM */
-		eeprom_write_bit(data & 0x04);
-		eeprom_set_cs_line((data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
-		eeprom_set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
+		eeprom_write_bit(eeprom, data & 0x04);
+		eeprom_set_cs_line(eeprom, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_set_clock_line(eeprom, (data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
 
 		/* bit 6 selects oki bank */
 		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), (data & 0x40) ? 0x40000 : 0x00000);
@@ -146,6 +138,7 @@ static WRITE16_HANDLER( pirates_out_w )
 static CUSTOM_INPUT( prot_r )
 {
 //  static int prot = 0xa3;
+//  offs_t pc;
 	int bit;
 
 //  logerror("%s: IN1_r\n",cpuexec_describe_context(field->port->machine));
@@ -155,16 +148,17 @@ static CUSTOM_INPUT( prot_r )
        602e and 62a6 */
 	/* For Genix, see 6576 for setting values and 67c2,d3b4 and dbc2 for tests. */
 
-	if (cpu_get_pc(cputag_get_cpu(field->port->machine, "main")) == 0x6134)
+	pc = cpu_get_pc(cputag_get_cpu(field->port->machine, "main"));
+	if (pc == 0x6134)
 	{
 		bit = prot & 1;
 		prot = (prot >> 1) | (bit << 7);
 	}
-	else if (cputag_get_cpu(field->port->machine, "main")) == 0x6020)
+	else if (pc == 0x6020)
 		bit = 0;
-	else if (cputag_get_cpu(field->port->machine, "main")) == 0x6168)
+	else if (pc == 0x6168)
 		bit = 0;
-	else if (cputag_get_cpu(field->port->machine, "main")) == 0x61cc)
+	else if (pc == 0x61cc)
 		bit = 1;
 	else
 #endif
@@ -187,7 +181,7 @@ static ADDRESS_MAP_START( pirates_map, ADDRESS_SPACE_PROGRAM, 16 )
 //  AM_RANGE(0x500800, 0x50080f) AM_WRITENOP
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(pirates_out_w)
 	AM_RANGE(0x700000, 0x700001) AM_WRITEONLY AM_BASE(&pirates_scroll)	// scroll reg
-	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x900000, 0x90017f) AM_RAM  // more of tilemaps ?
 	AM_RANGE(0x900180, 0x90137f) AM_RAM_WRITE(pirates_tx_tileram_w) AM_BASE(&pirates_tx_tileram)
 	AM_RANGE(0x901380, 0x902a7f) AM_RAM_WRITE(pirates_fg_tileram_w) AM_BASE(&pirates_fg_tileram)
@@ -224,7 +218,7 @@ static INPUT_PORTS_START( pirates )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_SERVICE_NO_TOGGLE( 0x0008, IP_ACTIVE_LOW )
-	PORT_BIT( 0x0010, IP_ACTIVE_HIGH,IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	// EEPROM data
+	PORT_BIT( 0x0010, IP_ACTIVE_HIGH,IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)	// EEPROM data
 	PORT_BIT( 0x0020, IP_ACTIVE_HIGH, IPT_UNKNOWN )		// seems checked in "test mode"
 	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_UNKNOWN )		// seems checked in "test mode"
 	PORT_BIT( 0x0080, IP_ACTIVE_HIGH,IPT_SPECIAL ) PORT_CUSTOM(prot_r, NULL)		// protection
@@ -280,7 +274,7 @@ static MACHINE_DRIVER_START( pirates )
 	MDRV_CPU_PROGRAM_MAP(pirates_map)
 	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MDRV_NVRAM_HANDLER(pirates)
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
 
 	MDRV_GFXDECODE(pirates)
 

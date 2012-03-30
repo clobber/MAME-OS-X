@@ -1,4 +1,4 @@
-	/***************************************************************************
+/***************************************************************************
 
     Sega Y-board hardware
 
@@ -24,7 +24,7 @@ Known games currently not dumped:
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "system16.h"
+#include "includes/system16.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/segaic16.h"
 #include "sound/2151intf.h"
@@ -55,7 +55,7 @@ static UINT8 timer_irq_state;
 
 static UINT16 *backupram;
 
-static emu_timer *interrupt_timer;
+static const device_config *interrupt_timer;
 
 
 
@@ -133,7 +133,7 @@ static void update_main_irqs(running_machine *machine)
 
 static int irq2_scanline = 170;
 
-static TIMER_CALLBACK( scanline_callback )
+static TIMER_DEVICE_CALLBACK( scanline_callback )
 {
 	int scanline = param;
 
@@ -166,10 +166,10 @@ static TIMER_CALLBACK( scanline_callback )
 	}
 
 	/* update IRQs on the main CPU */
-	update_main_irqs(machine);
+	update_main_irqs(timer->machine);
 
 	/* come back at the next appropriate scanline */
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
+	timer_device_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(timer->machine->primary_screen, scanline, 0), scanline);
 
 #if TWEAK_IRQ2_SCANLINE
 	if (scanline == 223)
@@ -177,10 +177,10 @@ static TIMER_CALLBACK( scanline_callback )
 		int old = irq2_scanline;
 
 		/* Q = -10 scanlines, W = -1 scanline, E = +1 scanline, R = +10 scanlines */
-		if (input_code_pressed(machine, KEYCODE_Q)) { while (input_code_pressed(machine, KEYCODE_Q)) ; irq2_scanline -= 10; }
-		if (input_code_pressed(machine, KEYCODE_W)) { while (input_code_pressed(machine, KEYCODE_W)) ; irq2_scanline -= 1; }
-		if (input_code_pressed(machine, KEYCODE_E)) { while (input_code_pressed(machine, KEYCODE_E)) ; irq2_scanline += 1; }
-		if (input_code_pressed(machine, KEYCODE_R)) { while (input_code_pressed(machine, KEYCODE_R)) ; irq2_scanline += 10; }
+		if (input_code_pressed(timer->machine, KEYCODE_Q)) { while (input_code_pressed(timer->machine, KEYCODE_Q)) ; irq2_scanline -= 10; }
+		if (input_code_pressed(timer->machine, KEYCODE_W)) { while (input_code_pressed(timer->machine, KEYCODE_W)) ; irq2_scanline -= 1; }
+		if (input_code_pressed(timer->machine, KEYCODE_E)) { while (input_code_pressed(timer->machine, KEYCODE_E)) ; irq2_scanline += 1; }
+		if (input_code_pressed(timer->machine, KEYCODE_R)) { while (input_code_pressed(timer->machine, KEYCODE_R)) ; irq2_scanline += 10; }
 		if (old != irq2_scanline)
 			popmessage("scanline = %d", irq2_scanline);
 	}
@@ -188,15 +188,19 @@ static TIMER_CALLBACK( scanline_callback )
 }
 
 
-static MACHINE_RESET( yboard )
+static MACHINE_START( yboard )
 {
-    interrupt_timer = timer_alloc(machine, scanline_callback, NULL);
-    timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, 223, 0), 223);
-
 	state_save_register_global_array(machine, misc_io_data);
 	state_save_register_global_array(machine, analog_data);
 	state_save_register_global(machine, vblank_irq_state);
 	state_save_register_global(machine, timer_irq_state);
+}
+
+
+static MACHINE_RESET( yboard )
+{
+    interrupt_timer = devtag_get_device(machine, "int_timer");
+    timer_device_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, 223, 0), 223);
 }
 
 
@@ -401,7 +405,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x082000, 0x083fff) AM_WRITE(sound_data_w)
 	AM_RANGE(0x084000, 0x08401f) AM_MIRROR(0x001fe0) AM_READWRITE(segaic16_divide_0_r, segaic16_divide_0_w)
 //  AM_RANGE(0x086000, 0x087fff) /DEA0
-	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x100000, 0x10001f) AM_READWRITE(io_chip_r, io_chip_w)
 	AM_RANGE(0x100040, 0x100047) AM_READWRITE(analog_r, analog_w)
 	AM_RANGE(0x1f0000, 0x1fffff) AM_RAM
@@ -421,7 +425,7 @@ static ADDRESS_MAP_START( subx_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080007) AM_MIRROR(0x001ff8) AM_READWRITE(segaic16_multiply_1_r, segaic16_multiply_1_w)
 	AM_RANGE(0x084000, 0x08401f) AM_MIRROR(0x001fe0) AM_READWRITE(segaic16_divide_1_r, segaic16_divide_1_w)
-	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x180000, 0x18ffff) AM_RAM AM_BASE(&segaic16_spriteram_1)
 	AM_RANGE(0x1f8000, 0x1fbfff) AM_RAM
 	AM_RANGE(0x1fc000, 0x1fffff) AM_RAM AM_BASE(&backupram)
@@ -434,10 +438,10 @@ static ADDRESS_MAP_START( suby_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080007) AM_MIRROR(0x001ff8) AM_READWRITE(segaic16_multiply_2_r, segaic16_multiply_2_w)
 	AM_RANGE(0x084000, 0x08401f) AM_MIRROR(0x001fe0) AM_READWRITE(segaic16_divide_2_r, segaic16_divide_2_w)
-	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x180000, 0x1807ff) AM_MIRROR(0x007800) AM_RAM AM_BASE(&segaic16_rotateram_0)
 	AM_RANGE(0x188000, 0x188fff) AM_MIRROR(0x007000) AM_RAM AM_BASE(&segaic16_spriteram_0)
-	AM_RANGE(0x190000, 0x193fff) AM_MIRROR(0x004000) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x190000, 0x193fff) AM_MIRROR(0x004000) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
 	AM_RANGE(0x198000, 0x19ffff) AM_READ(segaic16_rotate_control_0_r)
 	AM_RANGE(0x1f0000, 0x1fffff) AM_RAM
 ADDRESS_MAP_END
@@ -460,7 +464,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
@@ -980,9 +984,12 @@ static MACHINE_DRIVER_START( yboard )
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 	MDRV_CPU_IO_MAP(sound_portmap)
 
+	MDRV_MACHINE_START(yboard)
 	MDRV_MACHINE_RESET(yboard)
 	MDRV_NVRAM_HANDLER(yboard)
 	MDRV_QUANTUM_TIME(HZ(6000))
+
+    MDRV_TIMER_ADD("int_timer", scanline_callback)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -999,7 +1006,7 @@ static MACHINE_DRIVER_START( yboard )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK/8)
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK/8)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.43)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.43)

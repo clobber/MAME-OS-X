@@ -48,7 +48,7 @@ PROMs : NEC B406 (1kx4) x2
 static int bgmap = 0;
 
 static int sbw_system = 0;
-static tilemap *sb_tilemap;
+static tilemap_t *sb_tilemap;
 static UINT32 color_prom_address = 0;
 static UINT8 pix_sh = 0;
 static UINT8 pix[2] = {0, 0};
@@ -61,7 +61,7 @@ static TILE_GET_INFO( get_sb_tile_info )
 	SET_TILE_INFO(0, tileno, 0, 0);
 }
 
-static void plot_pixel_sbw(int x, int y, int col, int flip)
+static void plot_pixel_sbw(bitmap_t *tmpbitmap, int x, int y, int col, int flip)
 {
 	if (flip)
 	{
@@ -76,19 +76,19 @@ static WRITE8_HANDLER( sbw_videoram_w )
 	int flip = flip_screen_get(space->machine);
 	int x,y,i,v1,v2;
 
-	videoram[offset] = data;
+	space->machine->generic.videoram.u8[offset] = data;
 
 	offset &= 0x1fff;
 
 	y = offset / 32;
 	x = (offset % 32) * 8;
 
-	v1 = videoram[offset];
-	v2 = videoram[offset+0x2000];
+	v1 = space->machine->generic.videoram.u8[offset];
+	v2 = space->machine->generic.videoram.u8[offset+0x2000];
 
 	for(i = 0; i < 8; i++)
 	{
-		plot_pixel_sbw(x++, y, color_prom_address | ( ((v1&1)*0x20) | ((v2&1)*0x40) ), flip);
+		plot_pixel_sbw(space->machine->generic.tmpbitmap, x++, y, color_prom_address | ( ((v1&1)*0x20) | ((v2&1)*0x40) ), flip);
 		v1 >>= 1;
 		v2 >>= 1;
 	}
@@ -98,13 +98,13 @@ static VIDEO_UPDATE(sbowling)
 {
 	bitmap_fill(bitmap,cliprect,0x18);
 	tilemap_draw(bitmap,cliprect,sb_tilemap,0,0);
-	copybitmap_trans(bitmap,tmpbitmap,0,0,0,0,cliprect, color_prom_address);
+	copybitmap_trans(bitmap,screen->machine->generic.tmpbitmap,0,0,0,0,cliprect, color_prom_address);
 	return 0;
 }
 
 static VIDEO_START(sbowling)
 {
-	tmpbitmap = auto_bitmap_alloc(machine,32*8,32*8,video_screen_get_format(machine->primary_screen));
+	machine->generic.tmpbitmap = auto_bitmap_alloc(machine,32*8,32*8,video_screen_get_format(machine->primary_screen));
 	sb_tilemap = tilemap_create(machine, get_sb_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
@@ -154,8 +154,8 @@ static WRITE8_HANDLER (system_w)
 	if((sbw_system^data)&1)
 	{
 		int offs;
-		for (offs = 0;offs < videoram_size; offs++)
-			sbw_videoram_w(space, offs, videoram[offs]);
+		for (offs = 0;offs < space->machine->generic.videoram_size; offs++)
+			sbw_videoram_w(space, offs, space->machine->generic.videoram.u8[offs]);
 	}
 	sbw_system = data;
 }
@@ -186,9 +186,9 @@ static READ8_HANDLER (controls_r)
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAM_WRITE(sbw_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xf800, 0xf801) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xf801, 0xf801) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM_WRITE(sbw_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
+	AM_RANGE(0xf800, 0xf801) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xf801, 0xf801) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xfc00, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -206,11 +206,22 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( sbowling )
 	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_COIN1   )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH,	IPT_TILT )
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN2 )
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH,	IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_START1 )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_START2 )
 
@@ -221,54 +232,57 @@ static INPUT_PORTS_START( sbowling )
 	PORT_BIT( 0xff, 0, IPT_TRACKBALL_X ) PORT_SENSITIVITY(30) PORT_KEYDELTA(30) PORT_REVERSE
 
 	PORT_START("DSW0")	/* coin slots: A 4 LSB, B 4 MSB */
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0f, 0x00, DEF_STR( Coin_A ) )  PORT_DIPLOCATION("SW1:!1,!2,!3,!4")
+	PORT_DIPSETTING(    0x0f, DEF_STR( 9C_1C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 8C_1C ) )
+	PORT_DIPSETTING(    0x0d, DEF_STR( 7C_1C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0x0b, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0x0a, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x09, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x05, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 1C_8C ) )
+
+	PORT_DIPNAME( 0xf0, 0x00, DEF_STR( Coin_B ) )  PORT_DIPLOCATION("SW1:!5,!6,!7,!8")
+	PORT_DIPSETTING(    0xf0, DEF_STR( 9C_1C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 8C_1C ) )
+	PORT_DIPSETTING(    0xd0, DEF_STR( 7C_1C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(    0xb0, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x90, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x50, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x60, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING(    0x70, DEF_STR( 1C_8C ) )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )  PORT_DIPLOCATION("SW2:!1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "Year Display" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x00, "SW2:!2" )
+	PORT_DIPNAME( 0x04, 0x00, "Year Display" )  PORT_DIPLOCATION("SW2:!3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x00, "Ball Controll Check" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x00, "SW2:!4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x00, "SW2:!5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x00, "SW2:!6" )
+	PORT_DIPNAME( 0x40, 0x00, "Ball Control Check" )  PORT_DIPLOCATION("SW2:!7")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, "Video Test" )
+	PORT_DIPNAME( 0x80, 0x00, "Video Test" )  PORT_DIPLOCATION("SW2:!8")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -330,7 +344,7 @@ static PALETTE_INIT( sbowling )
 
 static MACHINE_DRIVER_START( sbowling )
 
-	MDRV_CPU_ADD("maincpu", 8080, 19968000/10 )
+	MDRV_CPU_ADD("maincpu", 8080, XTAL_19_968MHz/10)	/* ? */
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_IO_MAP(port_map)
 	MDRV_CPU_VBLANK_INT_HACK(sbw_interrupt, 2)
@@ -351,8 +365,8 @@ static MACHINE_DRIVER_START( sbowling )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 19968000 / 16)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.12)
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_19_968MHz/16)	/* ? */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 MACHINE_DRIVER_END
 
 ROM_START( sbowling )

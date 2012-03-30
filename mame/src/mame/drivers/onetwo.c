@@ -44,7 +44,7 @@ Note: this is quite clearly a 'Korean bootleg' of Shisensho - Joshiryo-Hen / Mat
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
 
-static tilemap *fg_tilemap;
+static tilemap_t *fg_tilemap;
 static UINT8 *fgram;
 
 #define MASTER_CLOCK	(XTAL_4MHz)
@@ -69,14 +69,14 @@ static WRITE8_HANDLER( onetwo_cpubank_w )
 {
 	UINT8 *RAM = memory_region(space->machine, "maincpu") + 0x10000;
 
-	memory_set_bankptr(space->machine, 1, &RAM[data * 0x4000]);
+	memory_set_bankptr(space->machine, "bank1", &RAM[data * 0x4000]);
 }
 
 static WRITE8_HANDLER( onetwo_coin_counters_w )
 {
 	watchdog_reset(space->machine);
-	coin_counter_w(0, data & 0x02);
-	coin_counter_w(1, data & 0x04);
+	coin_counter_w(space->machine, 0, data & 0x02);
+	coin_counter_w(space->machine, 1, data & 0x04);
 }
 
 static WRITE8_HANDLER( onetwo_soundlatch_w )
@@ -88,21 +88,21 @@ static WRITE8_HANDLER( onetwo_soundlatch_w )
 static void setColor(running_machine *machine, int offset)
 {
 		int r, g, b;
-		r = paletteram[offset] & 0x1f;
-		g = paletteram_2[offset] & 0x1f;
-		b = ((paletteram[offset] & 0x60) >> 2) | ((paletteram_2[offset] & 0xe0) >> 5);
+		r = machine->generic.paletteram.u8[offset] & 0x1f;
+		g = machine->generic.paletteram2.u8[offset] & 0x1f;
+		b = ((machine->generic.paletteram.u8[offset] & 0x60) >> 2) | ((machine->generic.paletteram2.u8[offset] & 0xe0) >> 5);
 		palette_set_color_rgb(machine, offset, pal5bit(r), pal5bit(g), pal5bit(b));
 }
 
 static WRITE8_HANDLER(palette1_w)
 {
-	paletteram[offset] = data;
+	space->machine->generic.paletteram.u8[offset] = data;
 	setColor(space->machine, offset);
 }
 
 static WRITE8_HANDLER(palette2_w)
 {
-	paletteram_2[offset] = data;
+	space->machine->generic.paletteram2.u8[offset] = data;
 	setColor(space->machine, offset);
 }
 
@@ -110,9 +110,9 @@ static WRITE8_HANDLER(palette2_w)
 
 static ADDRESS_MAP_START( main_cpu, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM AM_REGION("maincpu", 0x10000)
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc800, 0xc87f) AM_RAM_WRITE(palette1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xc900, 0xc97f) AM_RAM_WRITE(palette2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc800, 0xc87f) AM_RAM_WRITE(palette1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xc900, 0xc97f) AM_RAM_WRITE(palette2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(onetwo_fgram_w) AM_BASE(&fgram)
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
@@ -136,8 +136,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_cpu_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ym", ym3812_status_port_r, ym3812_control_port_w)
-	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ym", ym3812_write_port_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ymsnd", ym3812_status_port_r, ym3812_control_port_w)
+	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ymsnd", ym3812_write_port_w)
 	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(soundlatch_clear_w)
 ADDRESS_MAP_END
@@ -171,7 +171,7 @@ static INPUT_PORTS_START( onetwo )
 	PORT_DIPSETTING(    0x60, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x50, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
- 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) ) PORT_CONDITION("DSW2",0x04,PORTCOND_NOTEQUALS,0x04) PORT_DIPLOCATION("SW1:5,6")
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) ) PORT_CONDITION("DSW2",0x04,PORTCOND_NOTEQUALS,0x04) PORT_DIPLOCATION("SW1:5,6")
 	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
@@ -304,7 +304,7 @@ static MACHINE_DRIVER_START( onetwo )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, MASTER_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM3812, MASTER_CLOCK)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 

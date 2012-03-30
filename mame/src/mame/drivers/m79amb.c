@@ -55,7 +55,7 @@ and two large (paddles pretending to be) guns.
 */
 
 #include "driver.h"
-#include "m79amb.h"
+#include "includes/m79amb.h"
 #include "cpu/i8085/i8085.h"
 
 static UINT8 *ramtek_videoram;
@@ -152,7 +152,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0x5fff) AM_RAM_WRITE(ramtek_videoram_w) AM_BASE(&ramtek_videoram)
 	AM_RANGE(0x6000, 0x63ff) AM_RAM					/* ?? */
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("8000") AM_DEVWRITE("discrete", m79amb_8000_w)
-	AM_RANGE(0x8001, 0x8001) AM_WRITE(SMH_RAM) AM_BASE(&mask)
+	AM_RANGE(0x8001, 0x8001) AM_WRITEONLY AM_BASE(&mask)
 	AM_RANGE(0x8002, 0x8002) AM_READ_PORT("8002") AM_WRITE(m79amb_8002_w)
 	AM_RANGE(0x8003, 0x8003) AM_DEVWRITE("discrete", m79amb_8003_w)
 	AM_RANGE(0x8004, 0x8004) AM_READ(gray5bit_controller0_r)
@@ -224,7 +224,7 @@ static DRIVER_INIT( m79amb )
 	int i,j;
 
 	/* PROM data is active low */
- 	for (i = 0;i < 0x2000;i++)
+	for (i = 0;i < 0x2000;i++)
 		rom[i] = ~rom[i];
 
 	/* gun positions */

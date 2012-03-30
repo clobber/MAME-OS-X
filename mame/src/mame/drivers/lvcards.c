@@ -77,6 +77,8 @@ TODO:
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
+extern UINT8 *lvcards_videoram;
+extern UINT8 *lvcards_colorram;
 extern WRITE8_HANDLER( lvcards_videoram_w );
 extern WRITE8_HANDLER( lvcards_colorram_w );
 
@@ -156,9 +158,9 @@ static READ8_HANDLER( payout_r )
 
 static ADDRESS_MAP_START( ponttehk_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&lvcards_videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&lvcards_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP // lamps
 	AM_RANGE(0xa002, 0xa002) AM_READ(payout_r) AM_WRITE(control_port_2a_w)//AM_WRITENOP // ???
@@ -166,9 +168,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( lvcards_map, ADDRESS_SPACE_PROGRAM, 8  )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&lvcards_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&lvcards_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP
 	AM_RANGE(0xa002, 0xa002) AM_READ_PORT("IN2") AM_WRITENOP
@@ -177,15 +179,15 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( lvcards_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( lvpoker_map, ADDRESS_SPACE_PROGRAM, 8  )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(lvcards_videoram_w) AM_BASE(&lvcards_videoram)
+	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(lvcards_colorram_w) AM_BASE(&lvcards_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa001, 0xa001) AM_READ_PORT("IN1") AM_WRITENOP // lamps
 	AM_RANGE(0xa002, 0xa002) AM_READ(payout_r) AM_WRITE(control_port_2_w)
@@ -277,7 +279,7 @@ static INPUT_PORTS_START( lvcards )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( lvpoker )
-  	PORT_START("IN0")
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Analyzer") PORT_TOGGLE
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_CODE(KEYCODE_MINUS) PORT_NAME("Memory Reset")
@@ -327,7 +329,7 @@ static INPUT_PORTS_START( lvpoker )
 	PORT_DIPSETTING(    0x00, "Credit In/Coin Out")
 	PORT_DIPSETTING(    0x20, "Credit In/Credit Out")
 	PORT_DIPSETTING(    0x40, "Coin In/Coin Out")
-  	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out") Again, clearly no Coin in, Credit out
+	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out") Again, clearly no Coin in, Credit out
 	PORT_DIPNAME( 0x80, 0x80, "Memory Reset Switch" )
 	PORT_DIPSETTING(    0x80, "Disabled" )
 	PORT_DIPSETTING(    0x00, "Enabled" )
@@ -405,7 +407,7 @@ static INPUT_PORTS_START( ponttehk )
 	PORT_DIPSETTING(    0x00, "Credit In/Coin Out" )
 	PORT_DIPSETTING(    0x20, "Coin In/Coin Out" )
 	PORT_DIPSETTING(    0x40, "Credit In/Credit Out" )
-  	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out" ) Again, clearly no Coin in, Credit out
+	//PORT_DIPSETTING(    0x60, "Credit In/Coin Out" ) Again, clearly no Coin in, Credit out
 	PORT_DIPNAME( 0x80, 0x80, "Reset All Switch" )
 	PORT_DIPSETTING(    0x80, "Disabled" )
 	PORT_DIPSETTING(    0x00, "Enabled" )
@@ -470,7 +472,7 @@ static const ay8910_interface lcay8910_interface =
 
 static MACHINE_DRIVER_START( lvcards )
 	// basic machine hardware
- 	MDRV_CPU_ADD("maincpu",Z80, 18432000/6)	// 3.072 MHz ?
+	MDRV_CPU_ADD("maincpu",Z80, 18432000/6)	// 3.072 MHz ?
 
 	MDRV_CPU_PROGRAM_MAP(lvcards_map)
 	MDRV_CPU_IO_MAP(lvcards_io_map)
@@ -495,7 +497,7 @@ static MACHINE_DRIVER_START( lvcards )
 	// sound hardware
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 18432000/12)
+	MDRV_SOUND_ADD("aysnd", AY8910, 18432000/12)
 	MDRV_SOUND_CONFIG(lcay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_DRIVER_END
@@ -505,7 +507,7 @@ static MACHINE_DRIVER_START( lvpoker )
 
 	// basic machine hardware
 	MDRV_NVRAM_HANDLER(generic_1fill)
- 	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(lvpoker_map)
 	MDRV_MACHINE_START(lvpoker)
 	MDRV_MACHINE_RESET(lvpoker)
@@ -516,7 +518,7 @@ static MACHINE_DRIVER_START( ponttehk )
 
 	// basic machine hardware
 	MDRV_NVRAM_HANDLER(generic_1fill)
- 	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ponttehk_map)
 	MDRV_MACHINE_RESET(lvpoker)
 
@@ -585,6 +587,6 @@ ROM_START( ponttehk )
 	ROM_LOAD( "pon24s10.001", 0x0200, 0x0100, CRC(c64ecee8) SHA1(80c9ec21e135235f7f2d41ce7900cf3904123823) )  /* blue component */
 ROM_END
 
-GAME( 1985, lvcards,  		0, lvcards,  lvcards,  0, ROT0, "Tehkan", "Lovely Cards", 0 )
+GAME( 1985, lvcards,		0, lvcards,  lvcards,  0, ROT0, "Tehkan", "Lovely Cards", 0 )
 GAME( 1985, lvpoker,  lvcards, lvpoker,  lvpoker,  0, ROT0, "Tehkan", "Lovely Poker [BET]", 0 )
 GAME( 1985, ponttehk,		0, ponttehk, ponttehk, 0, ROT0, "Tehkan", "Pontoon (Tehkan)", 0 )

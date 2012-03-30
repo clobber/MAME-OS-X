@@ -1,5 +1,5 @@
 #include "driver.h"
-#include "ninjakd2.h"
+#include "includes/ninjakd2.h"
 
 UINT8* ninjakd2_bg_videoram;
 UINT8* ninjakd2_fg_videoram;
@@ -11,11 +11,11 @@ static bitmap_t *sp_bitmap;
 // in robokid and omegaf big sprites are laid out differently in ROM
 static int robokid_sprites;
 
-static tilemap* fg_tilemap;
-static tilemap* bg_tilemap;
-static tilemap* bg0_tilemap;
-static tilemap* bg1_tilemap;
-static tilemap* bg2_tilemap;
+static tilemap_t* fg_tilemap;
+static tilemap_t* bg_tilemap;
+static tilemap_t* bg0_tilemap;
+static tilemap_t* bg1_tilemap;
+static tilemap_t* bg2_tilemap;
 
 static int bank_mask;
 static int robokid_bg0_bank = 0;
@@ -302,7 +302,7 @@ WRITE8_HANDLER( robokid_bg2_videoram_w )
 
 
 
-static void bg_ctrl(int offset, int data, tilemap* tilemap)
+static void bg_ctrl(int offset, int data, tilemap_t* tilemap)
 {
 	int scrollx = tilemap_get_scrollx(tilemap, 0);
 	int scrolly = tilemap_get_scrolly(tilemap, 0);
@@ -361,7 +361,7 @@ static void draw_sprites(running_machine* machine, bitmap_t* bitmap)
 	int const big_xshift = robokid_sprites ? 1 : 0;
 	int const big_yshift = robokid_sprites ? 0 : 1;
 
-	UINT8* sprptr = &spriteram[11];
+	UINT8* sprptr = &machine->generic.spriteram.u8[11];
 	int sprites_drawn = 0;
 
 	// the sprite generator draws exactly 96 16x16 sprites per frame. When big

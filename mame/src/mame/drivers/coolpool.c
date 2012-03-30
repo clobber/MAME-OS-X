@@ -54,18 +54,6 @@ static const UINT16 nvram_unlock_seq[] =
 #define NVRAM_UNLOCK_SEQ_LEN (ARRAY_LENGTH(nvram_unlock_seq))
 static UINT16 nvram_write_seq[NVRAM_UNLOCK_SEQ_LEN];
 static UINT8 nvram_write_enable;
-static emu_timer *nvram_write_timer;
-
-
-
-/*************************************
- *
- *  Prototypes
- *
- *************************************/
-
-static TIMER_CALLBACK( nvram_write_timeout );
-
 
 
 
@@ -148,7 +136,6 @@ static void coolpool_from_shiftreg(const address_space *space, UINT32 address, U
 static MACHINE_RESET( amerdart )
 {
 	nvram_write_enable = 0;
-	nvram_write_timer = timer_alloc(machine, nvram_write_timeout, NULL);
 }
 
 
@@ -156,7 +143,6 @@ static MACHINE_RESET( coolpool )
 {
 	tlc34076_reset(6);
 	nvram_write_enable = 0;
-	nvram_write_timer = timer_alloc(machine, nvram_write_timeout, NULL);
 }
 
 
@@ -167,7 +153,7 @@ static MACHINE_RESET( coolpool )
  *
  *************************************/
 
-static TIMER_CALLBACK( nvram_write_timeout )
+static TIMER_DEVICE_CALLBACK( nvram_write_timeout )
 {
 	nvram_write_enable = 0;
 }
@@ -183,7 +169,7 @@ static WRITE16_HANDLER( nvram_thrash_w )
 	if (!memcmp(nvram_unlock_seq, nvram_write_seq, sizeof(nvram_unlock_seq)))
 	{
 		nvram_write_enable = 1;
-		timer_adjust_oneshot(nvram_write_timer, ATTOTIME_IN_MSEC(1000), 0);
+		timer_device_adjust_oneshot(devtag_get_device(space->machine, "nvram_timer"), ATTOTIME_IN_MSEC(1000), 0);
 	}
 }
 
@@ -194,7 +180,7 @@ static WRITE16_HANDLER( nvram_data_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		if (nvram_write_enable)
-			generic_nvram16[offset] = data & 0xff;
+			space->machine->generic.nvram.u16[offset] = data & 0xff;
 	}
 }
 
@@ -217,8 +203,8 @@ static WRITE16_HANDLER( amerdart_misc_w )
 {
 	logerror("%08x:IOP_reset_w %04x\n",cpu_get_pc(space->cpu),data);
 
-	coin_counter_w(0, ~data & 0x0001);
-	coin_counter_w(1, ~data & 0x0002);
+	coin_counter_w(space->machine, 0, ~data & 0x0001);
+	coin_counter_w(space->machine, 1, ~data & 0x0002);
 
 	cputag_set_input_line(space->machine, "dsp", INPUT_LINE_RESET, (data & 0x0400) ? ASSERT_LINE : CLEAR_LINE);
 
@@ -294,8 +280,8 @@ static WRITE16_HANDLER( coolpool_misc_w )
 {
 	logerror("%08x:IOP_reset_w %04x\n",cpu_get_pc(space->cpu),data);
 
-	coin_counter_w(0, ~data & 0x0001);
-	coin_counter_w(1, ~data & 0x0002);
+	coin_counter_w(space->machine, 0, ~data & 0x0001);
+	coin_counter_w(space->machine, 1, ~data & 0x0002);
 
 	cputag_set_input_line(space->machine, "dsp", INPUT_LINE_RESET, (data & 0x0400) ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -489,7 +475,7 @@ static ADDRESS_MAP_START( amerdart_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_RAM AM_BASE(&vram_base)
 	AM_RANGE(0x04000000, 0x0400000f) AM_WRITE(amerdart_misc_w)
 	AM_RANGE(0x05000000, 0x0500000f) AM_READWRITE(coolpool_iop_r, amerdart_iop_w)
-	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xffb00000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -501,7 +487,7 @@ static ADDRESS_MAP_START( coolpool_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x02000000, 0x020000ff) AM_READWRITE(coolpool_iop_r, coolpool_iop_w)
 	AM_RANGE(0x03000000, 0x0300000f) AM_WRITE(coolpool_misc_w)
 	AM_RANGE(0x03000000, 0x03ffffff) AM_ROM AM_REGION("gfx1", 0)
-	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -512,7 +498,7 @@ static ADDRESS_MAP_START( nballsht_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x02000000, 0x020000ff) AM_READWRITE(coolpool_iop_r, coolpool_iop_w)
 	AM_RANGE(0x03000000, 0x0300000f) AM_WRITE(coolpool_misc_w)
 	AM_RANGE(0x04000000, 0x040000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)	// IMSG176P-40
-	AM_RANGE(0x06000000, 0x0601ffff) AM_MIRROR(0x00020000) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x06000000, 0x0601ffff) AM_MIRROR(0x00020000) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xff000000, 0xff7fffff) AM_ROM AM_REGION("gfx1", 0)
 	AM_RANGE(0xffc00000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
@@ -695,6 +681,8 @@ static MACHINE_DRIVER_START( amerdart )
 	MDRV_MACHINE_RESET(amerdart)
 	MDRV_NVRAM_HANDLER(generic_0fill)
 
+	MDRV_TIMER_ADD("nvram_timer", nvram_write_timeout)
+
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(tms340x0)
 
@@ -723,6 +711,8 @@ static MACHINE_DRIVER_START( coolpool )
 
 	MDRV_MACHINE_RESET(coolpool)
 	MDRV_NVRAM_HANDLER(generic_0fill)
+
+	MDRV_TIMER_ADD("nvram_timer", nvram_write_timeout)
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(tms340x0)

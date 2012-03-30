@@ -123,7 +123,7 @@ RAM         RW      0f0000-0f3fff       0e0000-0effff?      <
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
-#include "megasys1.h"
+#include "includes/megasys1.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
@@ -180,7 +180,7 @@ static ADDRESS_MAP_START( megasys1A_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x080006, 0x080007) AM_READ_PORT("DSW")
 	AM_RANGE(0x080008, 0x080009) AM_READ(soundlatch2_word_r)	/* from sound cpu */
 	AM_RANGE(0x084000, 0x0843ff) AM_RAM_WRITE(megasys1_vregs_A_w) AM_BASE(&megasys1_vregs)
-	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x088000, 0x0887ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x08e000, 0x08ffff) AM_RAM AM_BASE(&megasys1_objectram)
 	AM_RANGE(0x090000, 0x093fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
 	AM_RANGE(0x094000, 0x097fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
@@ -255,7 +255,7 @@ static ADDRESS_MAP_START( megasys1B_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x044000, 0x0443ff) AM_RAM_WRITE(megasys1_vregs_A_w) AM_BASE(&megasys1_vregs)
-	AM_RANGE(0x048000, 0x0487ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x048000, 0x0487ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x04e000, 0x04ffff) AM_RAM AM_BASE(&megasys1_objectram)
 	AM_RANGE(0x050000, 0x053fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
 	AM_RANGE(0x054000, 0x057fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
@@ -282,7 +282,7 @@ static ADDRESS_MAP_START( megasys1C_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0e0000, 0x0e3fff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
 	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
 	AM_RANGE(0x0f0000, 0x0f3fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])
-	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0f8000, 0x0f87ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0d8000, 0x0d8001) AM_READWRITE(ip_select_r,ip_select_w)
 	AM_RANGE(0x1f0000, 0x1fffff) AM_RAM AM_BASE(&megasys1_ram)
 ADDRESS_MAP_END
@@ -303,7 +303,7 @@ static ADDRESS_MAP_START( megasys1D_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0ca000, 0x0cbfff) AM_RAM AM_BASE(&megasys1_objectram)
 	AM_RANGE(0x0d0000, 0x0d3fff) AM_RAM_WRITE(megasys1_scrollram_1_w) AM_BASE(&megasys1_scrollram[1])
 	AM_RANGE(0x0d4000, 0x0d7fff) AM_RAM_WRITE(megasys1_scrollram_2_w) AM_BASE(&megasys1_scrollram[2])
-	AM_RANGE(0x0d8000, 0x0d87ff) AM_MIRROR(0x3000) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0d8000, 0x0d87ff) AM_MIRROR(0x3000) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("DSW")
 	AM_RANGE(0x0e8000, 0x0ebfff) AM_RAM_WRITE(megasys1_scrollram_0_w) AM_BASE(&megasys1_scrollram[0])
 	AM_RANGE(0x0f0000, 0x0f0001) AM_READ_PORT("SYSTEM")
@@ -394,7 +394,7 @@ static ADDRESS_MAP_START( megasys1A_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x040001) AM_READ(soundlatch_word_r)
 	AM_RANGE(0x060000, 0x060001) AM_WRITE(soundlatch2_word_w)	// to main cpu
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r,ym2151_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r,ym2151_w, 0x00ff)
 	AM_RANGE(0x0a0000, 0x0a0001) AM_DEVREAD8("oki1", oki_status_r, 0x00ff)
 	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVWRITE8("oki1", okim6295_w, 0x00ff)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_DEVREAD8("oki2", oki_status_r, 0x00ff)
@@ -412,7 +412,7 @@ static ADDRESS_MAP_START( megasys1B_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x040000, 0x040001) AM_READWRITE(soundlatch_word_r,soundlatch2_word_w)	/* from/to main cpu */
 	AM_RANGE(0x060000, 0x060001) AM_READWRITE(soundlatch_word_r,soundlatch2_word_w)	/* from/to main cpu */
-	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ym", ym2151_r,ym2151_w, 0x00ff)
+	AM_RANGE(0x080000, 0x080003) AM_DEVREADWRITE8("ymsnd", ym2151_r,ym2151_w, 0x00ff)
 	AM_RANGE(0x0a0000, 0x0a0001) AM_DEVREAD8("oki1", oki_status_r, 0x00ff)
 	AM_RANGE(0x0a0000, 0x0a0003) AM_DEVWRITE8("oki1", okim6295_w, 0x00ff)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_DEVREAD8("oki2", oki_status_r, 0x00ff)
@@ -436,7 +436,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( z80_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 
 
@@ -1487,7 +1487,7 @@ static MACHINE_DRIVER_START( system_A )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CPU_CLOCK/2) /* 3.5MHz (7MHz / 2) verified */
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CPU_CLOCK/2) /* 3.5MHz (7MHz / 2) verified */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
@@ -1655,7 +1655,7 @@ static MACHINE_DRIVER_START( system_Z )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 1500000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 1500000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -3519,7 +3519,7 @@ void phantasm_rom_decode(running_machine *machine, const char *region)
 		else if	(i < 0x10000/2)	{ y = BITSWAP_2; }
 		else if	(i < 0x18000/2)	{ if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
 		else if	(i < 0x20000/2)	{ y = BITSWAP_1; }
-		else 					{ y = BITSWAP_2; }
+		else					{ y = BITSWAP_2; }
 
 #undef	BITSWAP_0
 #undef	BITSWAP_1
@@ -3554,7 +3554,7 @@ void astyanax_rom_decode(running_machine *machine, const char *region)
 		else if	(i < 0x10000/2)	{ y = BITSWAP_2; }
 		else if	(i < 0x18000/2)	{ if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
 		else if	(i < 0x20000/2)	{ y = BITSWAP_1; }
-		else 					{ y = BITSWAP_2; }
+		else					{ y = BITSWAP_2; }
 
 #undef	BITSWAP_0
 #undef	BITSWAP_1
@@ -3587,7 +3587,7 @@ void rodland_rom_decode(running_machine *machine, const char *region)
 		else if	(i < 0x10000/2)	{	if ( (i | (0x248/2)) != i ) {y = BITSWAP_2;} else {y = BITSWAP_3;} }
 		else if	(i < 0x18000/2)	{	if ( (i | (0x248/2)) != i ) {y = BITSWAP_0;} else {y = BITSWAP_1;} }
 		else if	(i < 0x20000/2)	{ y = BITSWAP_1; }
-		else 					{ y = BITSWAP_3; }
+		else					{ y = BITSWAP_3; }
 
 #undef	BITSWAP_0
 #undef	BITSWAP_1
@@ -3830,11 +3830,11 @@ static DRIVER_INIT( rodlandj )
 
 static READ16_HANDLER( soldamj_spriteram16_r )
 {
-	return spriteram16[offset];
+	return space->machine->generic.spriteram.u16[offset];
 }
 static WRITE16_HANDLER( soldamj_spriteram16_w )
 {
-	if (offset < 0x800/2)	COMBINE_DATA(&spriteram16[offset]);
+	if (offset < 0x800/2)	COMBINE_DATA(&space->machine->generic.spriteram.u16[offset]);
 }
 
 static DRIVER_INIT( soldamj )

@@ -19,7 +19,7 @@ Magic Sticks:
 #include "sound/okim6295.h"
 #include "includes/playmark.h"
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 static UINT16 *magicstk_videoram;
 static int magicstk_tilebank;
 
@@ -40,36 +40,15 @@ static const eeprom_interface eeprom_intf =
 	5				/* reset_delay (otherwise wbeachvl will hang when saving settings) */
 };
 
-static NVRAM_HANDLER( magicstk )
-{
-	if (read_or_write)
-	{
-		eeprom_save(file);
-	}
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file)
-			eeprom_load(file);
-		else
-		{
-			UINT8 init[128];
-			memset(init,0,128);
-			eeprom_set_data(init,128);
-		}
-	}
-}
-
-static WRITE16_HANDLER( magicstk_coin_eeprom_w )
+static WRITE16_DEVICE_HANDLER( magicstk_coin_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,data & 0x20);
+		coin_counter_w(device->machine, 0,data & 0x20);
 
-		eeprom_set_cs_line((data & 8) ? CLEAR_LINE : ASSERT_LINE);
-		eeprom_write_bit(data & 2);
-		eeprom_set_clock_line((data & 4) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_set_cs_line(device, (data & 8) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_write_bit(device, data & 2);
+		eeprom_set_clock_line(device, (data & 4) ? CLEAR_LINE : ASSERT_LINE);
 	}
 }
 
@@ -101,26 +80,26 @@ static WRITE16_DEVICE_HANDLER( oki_banking )
 
 static ADDRESS_MAP_START( magicstk_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x094000, 0x094001) AM_WRITENOP
 	AM_RANGE(0x094002, 0x094003) AM_WRITENOP
 	AM_RANGE(0x094004, 0x094005) AM_WRITE(tile_banking_w)
 	AM_RANGE(0x098180, 0x09917f) AM_RAM_WRITE(magicstk_bgvideoram_w) AM_BASE(&magicstk_videoram)
 	AM_RANGE(0x0c2010, 0x0c2011) AM_READ_PORT("IN0")
 	AM_RANGE(0x0c2012, 0x0c2013) AM_READ_PORT("IN1")
-	AM_RANGE(0x0c2014, 0x0c2015) AM_READ_PORT("IN2") AM_WRITE(magicstk_coin_eeprom_w)
+	AM_RANGE(0x0c2014, 0x0c2015) AM_READ_PORT("IN2") AM_DEVWRITE("eeprom", magicstk_coin_eeprom_w)
 	AM_RANGE(0x0c2016, 0x0c2017) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0c2018, 0x0c2019) AM_READ_PORT("DSW2")
 	AM_RANGE(0x0c201c, 0x0c201d) AM_DEVWRITE("oki", oki_banking)
 	AM_RANGE(0x0c201e, 0x0c201f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0x0c4000, 0x0c4001) AM_WRITENOP
 	AM_RANGE(0x0e0000, 0x0fffff) AM_RAM
-	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( powerbal_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x094000, 0x094001) AM_WRITENOP
 	AM_RANGE(0x094002, 0x094003) AM_WRITENOP
 	AM_RANGE(0x094004, 0x094005) AM_WRITE(tile_banking_w)
@@ -135,7 +114,7 @@ static ADDRESS_MAP_START( powerbal_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0c201e, 0x0c201f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0x0c4000, 0x0c4001) AM_WRITENOP
 	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM
-	AM_RANGE(0x101000, 0x101fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x101000, 0x101fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x102000, 0x10200d) AM_WRITENOP // not used scroll regs?
 	AM_RANGE(0x103000, 0x103fff) AM_RAM
 ADDRESS_MAP_END
@@ -245,7 +224,7 @@ static INPUT_PORTS_START( magicstk )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	/* EEPROM data */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)	/* EEPROM data */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -342,7 +321,7 @@ static INPUT_PORTS_START( hotminda )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	/* EEPROM data */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)	/* EEPROM data */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -412,10 +391,11 @@ static TILE_GET_INFO( powerbal_get_bg_tile_info )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 	int height = machine->gfx[0]->height;
 
-	for (offs = 4;offs < spriteram_size/2;offs += 4)
+	for (offs = 4;offs < machine->generic.spriteram_size/2;offs += 4)
 	{
 		int sx,sy,code,color,flipx;
 
@@ -517,7 +497,8 @@ static MACHINE_DRIVER_START( magicstk )
 	MDRV_CPU_PROGRAM_MAP(magicstk_main_map)
 	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MDRV_NVRAM_HANDLER(magicstk)
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
+	MDRV_EEPROM_DEFAULT_VALUE(0)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)

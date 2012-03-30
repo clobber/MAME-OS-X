@@ -23,8 +23,10 @@
 #include "cardline.lh"
 
 static int cardline_video;
+static UINT8 *videoram;
+static UINT8 *colorram;
 
-#define DRAW_TILE(offset, transparency) drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0],\
+#define DRAW_TILE(machine, offset, transparency) drawgfx_transpen(bitmap, cliprect, machine->gfx[0],\
 					(videoram[index+offset] | (colorram[index+offset]<<8))&0x3fff,\
 					(colorram[index+offset]&0x80)>>7,\
 					0,0,\
@@ -42,14 +44,14 @@ static VIDEO_UPDATE( cardline )
 			int index=y*64+x;
 			if(cardline_video&1)
 			{
-				DRAW_TILE(0,0);
-				DRAW_TILE(0x800,1);
+				DRAW_TILE(screen->machine,0,0);
+				DRAW_TILE(screen->machine,0x800,1);
 			}
 
 			if(cardline_video&2)
 			{
-				DRAW_TILE(0x1000,0);
-				DRAW_TILE(0x1800,1);
+				DRAW_TILE(screen->machine,0x1000,0);
+				DRAW_TILE(screen->machine,0x1800,1);
 			}
 		}
 	}

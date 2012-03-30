@@ -30,13 +30,13 @@ x
 
 
 static UINT8 *attr_ram1, *attr_ram2, *attr_ram3;
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 
 static UINT8 question_adr[4];
 
 static WRITE8_HANDLER( quizmstr_bg_w )
 {
-	videoram[offset] = data;
+	space->machine->generic.videoram.u8[offset] = data;
 
 	if(offset >= 0x0240)
 		tilemap_mark_tile_dirty(bg_tilemap,offset - 0x0240);
@@ -83,7 +83,7 @@ static WRITE8_HANDLER( quizmstr_attr1_w )
 	if(offset >= 0x0240)
 	{
 		// the later games also use attr3 for something..
-		UINT32 	paldata = (attr_ram1[offset] & 0x7f) | ((attr_ram2[offset] & 0x7f) << 7);
+		UINT32	paldata = (attr_ram1[offset] & 0x7f) | ((attr_ram2[offset] & 0x7f) << 7);
 		tilemap_mark_tile_dirty(bg_tilemap, offset - 0x0240);
 
 		coinmstr_set_pal(space->machine, paldata, offset - 0x240);
@@ -98,7 +98,7 @@ static WRITE8_HANDLER( quizmstr_attr2_w )
 	if(offset >= 0x0240)
 	{
 		// the later games also use attr3 for something..
-		UINT32 	paldata = (attr_ram1[offset] & 0x7f) | ((attr_ram2[offset] & 0x7f) << 7);
+		UINT32	paldata = (attr_ram1[offset] & 0x7f) | ((attr_ram2[offset] & 0x7f) << 7);
 		tilemap_mark_tile_dirty(bg_tilemap, offset - 0x0240);
 
 		coinmstr_set_pal(space->machine, paldata, offset - 0x240);
@@ -184,7 +184,7 @@ static READ8_HANDLER( ff_r )
 static ADDRESS_MAP_START( coinmstr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(quizmstr_bg_w) AM_BASE(&videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(quizmstr_bg_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(quizmstr_attr1_w) AM_BASE(&attr_ram1)
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(quizmstr_attr2_w) AM_BASE(&attr_ram2)
 	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(quizmstr_attr3_w) AM_BASE(&attr_ram3)
@@ -197,8 +197,8 @@ static ADDRESS_MAP_START( quizmstr_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(question_r)
 	AM_RANGE(0x00, 0x03) AM_WRITE(question_w)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x41, 0x41) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x41, 0x41) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x48, 0x4b) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
 	AM_RANGE(0x50, 0x53) AM_READNOP
 	AM_RANGE(0x50, 0x53) AM_WRITENOP
@@ -215,8 +215,8 @@ static ADDRESS_MAP_START( trailblz_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x03) AM_WRITE(question_w)
 	AM_RANGE(0x40, 0x40) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x41, 0x41) AM_DEVWRITE("crtc", mc6845_register_w)
-	AM_RANGE(0x48, 0x49) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x49, 0x49) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x48, 0x49) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x49, 0x49) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w) //?
 	AM_RANGE(0x60, 0x63) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
 	AM_RANGE(0x70, 0x73) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
@@ -239,8 +239,8 @@ static ADDRESS_MAP_START( supnudg2_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x68, 0x69) AM_READNOP
 	AM_RANGE(0x68, 0x6b) AM_WRITENOP
 	AM_RANGE(0x6b, 0x6b) AM_READNOP
-	AM_RANGE(0x78, 0x79) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x79, 0x79) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x78, 0x79) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x79, 0x79) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xc1) AM_READNOP
 	AM_RANGE(0xc0, 0xc3) AM_WRITENOP
 ADDRESS_MAP_END
@@ -249,8 +249,8 @@ static ADDRESS_MAP_START( pokeroul_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x40) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x41, 0x41) AM_DEVWRITE("crtc", mc6845_register_w)
-	AM_RANGE(0x48, 0x49) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x49, 0x49) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x48, 0x49) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x49, 0x49) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x58, 0x5b) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w) /* confirmed */
 	AM_RANGE(0x68, 0x6b) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w) /* confirmed */
 	AM_RANGE(0x78, 0x7b) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w) /* confirmed */
@@ -261,11 +261,11 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( quizmstr )
 	PORT_START("PIA0.A")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
- 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1) PORT_NAME("Bookkeeping") PORT_TOGGLE /* Button 2 for second page, Button 3 erases data */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1) PORT_NAME("Bookkeeping") PORT_TOGGLE /* Button 2 for second page, Button 3 erases data */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN3 )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 )
- 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE) PORT_TOGGLE
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE) PORT_TOGGLE
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 )
 
@@ -356,8 +356,8 @@ static INPUT_PORTS_START( quizmstr )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	/* If 0x40 is HIGH the DIP Test Mode does work but bookkeeping shows always 0's */
 	/* If 0x40 is LOW Bookkeeping does work, but the second page (selected categories) is missing */
- 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
- 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("PIA2.B")
 	PORT_DIPNAME( 0x01, 0x01, "PIA2.B" )
@@ -878,7 +878,7 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int tile = videoram[tile_index + 0x0240];
+	int tile = machine->generic.videoram.u8[tile_index + 0x0240];
 	int color = tile_index;
 
 	tile |= (attr_ram1[tile_index + 0x0240] & 0x80) << 1;
@@ -981,7 +981,7 @@ static const mc6845_interface h46505_intf =
 
 
 static MACHINE_DRIVER_START( coinmstr )
-	MDRV_CPU_ADD("cpu",Z80,8000000) // ?
+	MDRV_CPU_ADD("maincpu",Z80,8000000) // ?
 	MDRV_CPU_PROGRAM_MAP(coinmstr_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
@@ -1008,32 +1008,32 @@ static MACHINE_DRIVER_START( coinmstr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8912_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( quizmstr )
 	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_IO_MAP(quizmstr_io_map)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( trailblz )
 	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_IO_MAP(trailblz_io_map)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( supnudg2 )
 	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_IO_MAP(supnudg2_io_map)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( pokeroul )
 	MDRV_IMPORT_FROM(coinmstr)
-	MDRV_CPU_MODIFY("cpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_IO_MAP(pokeroul_io_map)
 MACHINE_DRIVER_END
 
@@ -1080,7 +1080,7 @@ CN1/2 is connector for top ROM board                    * - unpopulated socket
 */
 
 ROM_START( quizmstr )
-	ROM_REGION( 0x10000, "cpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "nm_qm4_11.ic9", 0x0000, 0x4000, CRC(3a233bf0) SHA1(7b91b6f19093e67dd5513a000138421d4ef6f0af) )
 	ROM_LOAD( "np_qm4_21.ic6", 0x4000, 0x4000, CRC(a1cd39e4) SHA1(420b0726577471c762ae470bc2138c035f295ad9) )
 	/* 0x8000 - 0xbfff empty */
@@ -1114,7 +1114,7 @@ ROM_END
 
 
 ROM_START( trailblz )
-	ROM_REGION( 0x10000, "cpu", ROMREGION_ERASEFF )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASEFF )
 	ROM_LOAD( "1-4.09",       0x0000, 0x4000, CRC(7c34749c) SHA1(3847188a734b32979f376f51f74dff050b610dfb) )
 	ROM_LOAD( "2-4.06",       0x4000, 0x4000, CRC(81a9809b) SHA1(4d2bfd5223713a9e2e15130a3176118d400ee63e) )
 	/* 0x8000 - 0xbfff empty */
@@ -1129,7 +1129,7 @@ ROM_END
 
 
 ROM_START( supnudg2 )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "u3.bin",       0x0000, 0x8000, CRC(ed04e2cc) SHA1(7d90a588cca2d113487710e897771f9d99e37e62) )
 	ROM_LOAD( "u4.bin",       0x8000, 0x8000, CRC(0551e859) SHA1(b71640097cc75b78f3013f0e77de328bf1a205b1) )
 
@@ -1182,7 +1182,7 @@ ROM_END
 */
 
 ROM_START( pokeroul )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "poker1.ic3",   0x0000, 0x8000, CRC(bfe78d09) SHA1(7cc0f57714ff808a41ce20027a283e5dff60f752) )
 	ROM_LOAD( "poker2.ic4",   0x8000, 0x8000, CRC(34c1b55c) SHA1(fa562d230a57dce3fff176c21c86b461a02749f6) )
 

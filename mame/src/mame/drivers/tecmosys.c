@@ -184,7 +184,7 @@ ae500w07.ad1 - M6295 Samples (23c4001)
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "machine/eeprom.h"
-#include "tecmosys.h"
+#include "includes/tecmosys.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/262intf.h"
@@ -213,7 +213,7 @@ static bitmap_t *tmp_tilemap_composebitmap;
 static bitmap_t *tmp_tilemap_renderbitmap;
 
 
-static tilemap *bg0tilemap;
+static tilemap_t *bg0tilemap;
 static TILE_GET_INFO( get_bg0tile_info )
 {
 
@@ -230,7 +230,7 @@ static WRITE16_HANDLER( bg0_tilemap_w )
 	tilemap_mark_tile_dirty(bg0tilemap,offset/2);
 }
 
-static tilemap *bg1tilemap;
+static tilemap_t *bg1tilemap;
 static TILE_GET_INFO( get_bg1tile_info )
 {
 
@@ -247,7 +247,7 @@ static WRITE16_HANDLER( bg1_tilemap_w )
 	tilemap_mark_tile_dirty(bg1tilemap,offset/2);
 }
 
-static tilemap *bg2tilemap;
+static tilemap_t *bg2tilemap;
 static TILE_GET_INFO( get_bg2tile_info )
 {
 
@@ -264,7 +264,7 @@ static WRITE16_HANDLER( bg2_tilemap_w )
 	tilemap_mark_tile_dirty(bg2tilemap,offset/2);
 }
 
-static tilemap *txt_tilemap;
+static tilemap_t *txt_tilemap;
 static TILE_GET_INFO( get_tile_info )
 {
 
@@ -359,19 +359,19 @@ static READ16_HANDLER( unk880000_r )
 }
 
 
-static READ16_HANDLER( eeprom_r )
+static READ16_DEVICE_HANDLER( eeprom_r )
 {
-	 return ((eeprom_read_bit() & 0x01) << 11);
+	 return ((eeprom_read_bit(device) & 0x01) << 11);
 }
 
 
-static WRITE16_HANDLER( eeprom_w )
+static WRITE16_DEVICE_HANDLER( eeprom_w )
 {
 	if ( ACCESSING_BITS_8_15 )
 	{
-		eeprom_write_bit(data & 0x0800);
-		eeprom_set_cs_line((data & 0x0200) ? CLEAR_LINE : ASSERT_LINE );
-		eeprom_set_clock_line((data & 0x0400) ? CLEAR_LINE: ASSERT_LINE );
+		eeprom_write_bit(device, data & 0x0800);
+		eeprom_set_cs_line(device, (data & 0x0200) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom_set_clock_line(device, (data & 0x0400) ? CLEAR_LINE: ASSERT_LINE );
 	}
 }
 
@@ -423,23 +423,23 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(fg_tilemap_w) AM_BASE(&fgtilemap_ram) // fix ram
 	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE(&tecmosys_spriteram) // obj ram
 	AM_RANGE(0x880000, 0x88000b) AM_READ(unk880000_r)
-	AM_RANGE(0x900000, 0x907fff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE(&paletteram16) // AM_WRITE(SMH_RAM) // obj pal
+	AM_RANGE(0x900000, 0x907fff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram) // AM_WRITEONLY // obj pal
 
-	//AM_RANGE(0x980000, 0x9807ff) AM_WRITE(SMH_RAM) // bg pal
-	//AM_RANGE(0x980800, 0x980fff) AM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE(&paletteram16) // fix pal
+	//AM_RANGE(0x980000, 0x9807ff) AM_WRITEONLY // bg pal
+	//AM_RANGE(0x980800, 0x980fff) AM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram) // fix pal
 	// the two above are as tested by the game code, I've only rolled them into one below to get colours to show right.
 	AM_RANGE(0x980000, 0x980fff) AM_RAM_WRITE(tilemap_paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE(&tilemap_paletteram16)
 
 	AM_RANGE(0x880000, 0x88002f) AM_WRITE( unk880000_w ) AM_BASE(&tecmosys_880000regs)	// 10 byte dta@88000c, 880022=watchdog?
-	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(eeprom_w	)
-	AM_RANGE(0xa80000, 0xa80005) AM_WRITE(SMH_RAM	) AM_BASE(&tecmosys_a80000regs)	// a80000-3 scroll? a80004 inverted ? 3 : 0
-	AM_RANGE(0xb00000, 0xb00005) AM_WRITE(SMH_RAM	) AM_BASE(&tecmosys_b00000regs)	// b00000-3 scrool?, b00004 inverted ? 3 : 0
+	AM_RANGE(0xa00000, 0xa00001) AM_DEVWRITE("eeprom", eeprom_w	)
+	AM_RANGE(0xa80000, 0xa80005) AM_WRITEONLY AM_BASE(&tecmosys_a80000regs)	// a80000-3 scroll? a80004 inverted ? 3 : 0
+	AM_RANGE(0xb00000, 0xb00005) AM_WRITEONLY AM_BASE(&tecmosys_b00000regs)	// b00000-3 scrool?, b00004 inverted ? 3 : 0
 	AM_RANGE(0xb80000, 0xb80001) AM_READWRITE(tecmosys_prot_status_r, tecmosys_prot_status_w)
-	AM_RANGE(0xc00000, 0xc00005) AM_WRITE(SMH_RAM	) AM_BASE(&tecmosys_c00000regs)	// c00000-3 scroll? c00004 inverted ? 13 : 10
-	AM_RANGE(0xc80000, 0xc80005) AM_WRITE(SMH_RAM	) AM_BASE(&tecmosys_c80000regs)	// c80000-3 scrool? c80004 inverted ? 3 : 0
+	AM_RANGE(0xc00000, 0xc00005) AM_WRITEONLY AM_BASE(&tecmosys_c00000regs)	// c00000-3 scroll? c00004 inverted ? 13 : 10
+	AM_RANGE(0xc80000, 0xc80005) AM_WRITEONLY AM_BASE(&tecmosys_c80000regs)	// c80000-3 scrool? c80004 inverted ? 3 : 0
 	AM_RANGE(0xd00000, 0xd00001) AM_READ_PORT("P1")
 	AM_RANGE(0xd00002, 0xd00003) AM_READ_PORT("P2")
-	AM_RANGE(0xd80000, 0xd80001) AM_READ(eeprom_r)
+	AM_RANGE(0xd80000, 0xd80001) AM_DEVREAD("eeprom", eeprom_r)
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITE( sound_w )
 	AM_RANGE(0xe80000, 0xe80001) AM_WRITE(tecmosys_prot_data_w)
 	AM_RANGE(0xf00000, 0xf00001) AM_READ(sound_r)
@@ -524,7 +524,7 @@ GFXDECODE_END
 
 static WRITE8_HANDLER( deroon_bankswitch_w )
 {
-	memory_set_bankptr(space->machine,  1, memory_region(space->machine, "audiocpu") + ((data-2) & 0x0f) * 0x4000 + 0x10000 );
+	memory_set_bankptr(space->machine,  "bank1", memory_region(space->machine, "audiocpu") + ((data-2) & 0x0f) * 0x4000 + 0x10000 );
 }
 
 static WRITE8_HANDLER( tecmosys_oki_bank_w )
@@ -539,7 +539,7 @@ static WRITE8_HANDLER( tecmosys_oki_bank_w )
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xe000, 0xf7ff) AM_RAM
 ADDRESS_MAP_END
 
@@ -729,7 +729,7 @@ static void tecmosys_do_final_mix(running_machine *machine, bitmap_t* bitmap)
 
 			if (srcptr2[x]&0x3fff)
 			{
-				penvalue2 = paletteram16[srcptr2[x]&0x3fff];
+				penvalue2 = machine->generic.paletteram.u16[srcptr2[x]&0x3fff];
 				colour2 = paldata[srcptr2[x]&0x3fff];
 			}
 			else
@@ -888,7 +888,7 @@ static MACHINE_DRIVER_START( deroon )
 
 	MDRV_GFXDECODE(tecmosys)
 
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 

@@ -120,7 +120,7 @@ void seibu_sound_decrypt(running_machine *machine,const char *cpu,int length)
 	}
 
 	if (length > 0x10000)
-		memory_configure_bank_decrypted(machine, 1, 0, (length - 0x10000) / 0x8000, decrypt + 0x10000, 0x8000);
+		memory_configure_bank_decrypted(machine, "bank1", 0, (length - 0x10000) / 0x8000, decrypt + 0x10000, 0x8000);
 }
 
 
@@ -337,7 +337,7 @@ MACHINE_RESET( seibu_sound )
 	sound_cpu=cputag_get_cpu(machine, "audiocpu");
 	update_irq_lines(machine, VECTOR_INIT);
 	if (romlength > 0x10000)
-		memory_configure_bank(machine, 1, 0, (romlength - 0x10000) / 0x8000, rom + 0x10000, 0x8000);
+		memory_configure_bank(machine, "bank1", 0, (romlength - 0x10000) / 0x8000, rom + 0x10000, 0x8000);
 }
 
 /***************************************************************************/
@@ -347,13 +347,13 @@ static int main2sub_pending,sub2main_pending;
 
 WRITE8_HANDLER( seibu_bank_w )
 {
-	memory_set_bank(space->machine, 1, data & 1);
+	memory_set_bank(space->machine, "bank1", data & 1);
 }
 
 WRITE8_HANDLER( seibu_coin_w )
 {
-	coin_counter_w(0,data & 1);
-	coin_counter_w(1,data & 2);
+	coin_counter_w(space->machine, 0,data & 1);
+	coin_counter_w(space->machine, 1,data & 2);
 }
 
 READ8_HANDLER( seibu_soundlatch_r )
@@ -475,14 +475,14 @@ ADDRESS_MAP_START( seibu_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4002, 0x4002) AM_WRITE(seibu_rst10_ack_w)
 	AM_RANGE(0x4003, 0x4003) AM_WRITE(seibu_rst18_ack_w)
 	AM_RANGE(0x4007, 0x4007) AM_WRITE(seibu_bank_w)
-	AM_RANGE(0x4008, 0x4009) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x4008, 0x4009) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x4010, 0x4011) AM_READ(seibu_soundlatch_r)
 	AM_RANGE(0x4012, 0x4012) AM_READ(seibu_main_data_pending_r)
 	AM_RANGE(0x4013, 0x4013) AM_READ_PORT("COIN")
 	AM_RANGE(0x4018, 0x4019) AM_WRITE(seibu_main_data_w)
 	AM_RANGE(0x401b, 0x401b) AM_WRITE(seibu_coin_w)
 	AM_RANGE(0x6000, 0x6000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 
@@ -494,14 +494,14 @@ ADDRESS_MAP_START( seibu2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4002, 0x4002) AM_WRITE(seibu_rst10_ack_w)
 	AM_RANGE(0x4003, 0x4003) AM_WRITE(seibu_rst18_ack_w)
 	AM_RANGE(0x4007, 0x4007) AM_WRITE(seibu_bank_w)
-	AM_RANGE(0x4008, 0x4009) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x4008, 0x4009) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x4010, 0x4011) AM_READ(seibu_soundlatch_r)
 	AM_RANGE(0x4012, 0x4012) AM_READ(seibu_main_data_pending_r)
 	AM_RANGE(0x4013, 0x4013) AM_READ_PORT("COIN")
 	AM_RANGE(0x4018, 0x4019) AM_WRITE(seibu_main_data_w)
 	AM_RANGE(0x401b, 0x401b) AM_WRITE(seibu_coin_w)
 	AM_RANGE(0x6000, 0x6000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 ADDRESS_MAP_START( seibu2_raiden2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -512,7 +512,7 @@ ADDRESS_MAP_START( seibu2_raiden2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4002, 0x4002) AM_WRITE(seibu_rst10_ack_w)
 	AM_RANGE(0x4003, 0x4003) AM_WRITE(seibu_rst18_ack_w)
 	AM_RANGE(0x4007, 0x4007) AM_WRITE(seibu_bank_w)
-	AM_RANGE(0x4008, 0x4009) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x4008, 0x4009) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x4010, 0x4011) AM_READ(seibu_soundlatch_r)
 	AM_RANGE(0x4012, 0x4012) AM_READ(seibu_main_data_pending_r)
 	AM_RANGE(0x4013, 0x4013) AM_READ_PORT("COIN")
@@ -520,7 +520,7 @@ ADDRESS_MAP_START( seibu2_raiden2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x401b, 0x401b) AM_WRITE(seibu_coin_w)
 	AM_RANGE(0x6000, 0x6000) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
 	AM_RANGE(0x6002, 0x6002) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 
@@ -539,7 +539,7 @@ ADDRESS_MAP_START( seibu3_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4018, 0x4019) AM_WRITE(seibu_main_data_w)
 	AM_RANGE(0x401b, 0x401b) AM_WRITE(seibu_coin_w)
 	AM_RANGE(0x6008, 0x6009) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 ADDRESS_MAP_START( seibu3_adpcm_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -561,5 +561,5 @@ ADDRESS_MAP_START( seibu3_adpcm_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x6005, 0x6006) AM_DEVWRITE("adpcm2", seibu_adpcm_adr_w)
 	AM_RANGE(0x6008, 0x6009) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
 	AM_RANGE(0x601a, 0x601a) AM_DEVWRITE("adpcm2", seibu_adpcm_ctl_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END

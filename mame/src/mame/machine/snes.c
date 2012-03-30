@@ -36,6 +36,8 @@ static emu_timer *snes_scanline_timer;
 static emu_timer *snes_hblank_timer;
 static emu_timer *snes_nmi_timer;
 static emu_timer *snes_hirq_timer;
+static emu_timer *snes_div_timer;
+static emu_timer *snes_mult_timer;
 static UINT16 hblank_offset;
 UINT16 snes_htmult;	/* in 512 wide, we run HTOTAL double and halve it on latching */
 UINT8 snes_has_addon_chip;
@@ -176,7 +178,7 @@ static TIMER_CALLBACK( snes_scanline_tick )
 				timer_adjust_oneshot(snes_hirq_timer, video_screen_get_time_until_pos(machine->primary_screen, snes_ppu.beam.current_vert, pixel*snes_htmult), 0);
 			}
 		}
-   	}
+	}
 
 	/* Start of VBlank */
 	if( snes_ppu.beam.current_vert == snes_ppu.beam.last_visible_line )
@@ -291,6 +293,36 @@ static TIMER_CALLBACK( snes_hblank_tick )
 	}
 
 	timer_adjust_oneshot(snes_scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, nextscan, 0), 0);
+}
+
+
+static TIMER_CALLBACK(snes_div_callback)
+{
+	UINT16 value, dividend, remainder;
+	dividend = remainder = 0;
+	value = (snes_ram[WRDIVH] << 8) + snes_ram[WRDIVL];
+	if( snes_ram[WRDVDD] > 0 )
+	{
+		dividend = value / snes_ram[WRDVDD];
+		remainder = value % snes_ram[WRDVDD];
+	}
+	else
+	{
+		dividend = 0xffff;
+		remainder = value;
+	}
+	snes_ram[RDDIVL] = dividend & 0xff;
+	snes_ram[RDDIVH] = (dividend >> 8) & 0xff;
+	snes_ram[RDMPYL] = remainder & 0xff;
+	snes_ram[RDMPYH] = (remainder >> 8) & 0xff;
+}
+
+
+static TIMER_CALLBACK(snes_mult_callback)
+{
+	UINT32 c = snes_ram[WRMPYA] * snes_ram[WRMPYB];
+	snes_ram[RDMPYL] = c & 0xff;
+	snes_ram[RDMPYH] = (c >> 8) & 0xff;
 }
 
 
@@ -677,7 +709,7 @@ READ8_HANDLER( snes_r_io )
 //          return (snes_ram[offset] & 0xdf) | (snes_open_bus_r(space,0) & 0x20);
 		case BBAD0: case A1T0L: case A1T0H: case A1B0: case DAS0L:
 		case DAS0H: case DSAB0: case A2A0L: case A2A0H: case NTRL0:
-	 	case BBAD1: case A1T1L: case A1T1H: case A1B1: case DAS1L:
+		case BBAD1: case A1T1L: case A1T1H: case A1B1: case DAS1L:
 		case DAS1H: case DSAB1: case A2A1L: case A2A1H: case NTRL1:
 		case BBAD2: case A1T2L: case A1T2H: case A1B2: case DAS2L:
 		case DAS2H: case DSAB2: case A2A2L: case A2A2H: case NTRL2:
@@ -1291,34 +1323,14 @@ WRITE8_HANDLER( snes_w_io )
 		case WRMPYA:	/* Multiplier A */
 			break;
 		case WRMPYB:	/* Multiplier B */
-			{
-				UINT32 c = snes_ram[WRMPYA] * data;
-				snes_ram[RDMPYL] = c & 0xff;
-				snes_ram[RDMPYH] = (c >> 8) & 0xff;
-			} break;
+			timer_adjust_oneshot(snes_mult_timer, cputag_clocks_to_attotime(space->machine, "maincpu", 8), 0);
+			break;
 		case WRDIVL:	/* Dividend (low) */
 		case WRDIVH:	/* Dividend (high) */
 			break;
 		case WRDVDD:	/* Divisor */
-			{
-				UINT16 value, dividend, remainder;
-				dividend = remainder = 0;
-				value = (snes_ram[WRDIVH] << 8) + snes_ram[WRDIVL];
-				if( data > 0 )
-				{
-					dividend = value / data;
-					remainder = value % data;
-				}
-				else
-				{
-					dividend = 0xffff;
-					remainder = value;
-				}
-				snes_ram[RDDIVL] = dividend & 0xff;
-				snes_ram[RDDIVH] = (dividend >> 8) & 0xff;
-				snes_ram[RDMPYL] = remainder & 0xff;
-				snes_ram[RDMPYH] = (remainder >> 8) & 0xff;
-			} break;
+			timer_adjust_oneshot(snes_div_timer, cputag_clocks_to_attotime(space->machine, "maincpu", 8), 0);
+			break;
 		case HTIMEL:	/* H-Count timer settings (low)  */
 		case HTIMEH:	/* H-Count timer settings (high) */
 		case VTIMEL:	/* V-Count timer settings (low)  */
@@ -1972,6 +1984,29 @@ WRITE8_HANDLER( snes_w_bank7 )
 
 *************************************/
 
+static void snes_init_timers(running_machine *machine)
+{
+	/* init timers and stop them */
+	snes_scanline_timer = timer_alloc(machine, snes_scanline_tick, NULL);
+	timer_adjust_oneshot(snes_scanline_timer, attotime_never, 0);
+	snes_hblank_timer = timer_alloc(machine, snes_hblank_tick, NULL);
+	timer_adjust_oneshot(snes_hblank_timer, attotime_never, 0);
+	snes_nmi_timer = timer_alloc(machine, snes_nmi_tick, NULL);
+	timer_adjust_oneshot(snes_nmi_timer, attotime_never, 0);
+	snes_hirq_timer = timer_alloc(machine, snes_hirq_tick_callback, NULL);
+	timer_adjust_oneshot(snes_hirq_timer, attotime_never, 0);
+	snes_div_timer = timer_alloc(machine, snes_div_callback, NULL);
+	timer_adjust_oneshot(snes_div_timer, attotime_never, 0);
+	snes_mult_timer = timer_alloc(machine, snes_mult_callback, NULL);
+	timer_adjust_oneshot(snes_mult_timer, attotime_never, 0);
+
+	// SNES hcounter has a 0-339 range.  hblank starts at counter 260.
+	// clayfighter sets an HIRQ at 260, apparently it wants it to be before hdma kicks off, so we'll delay 2 pixels.
+	hblank_offset = 268;
+	timer_adjust_oneshot(snes_hblank_timer, video_screen_get_time_until_pos(machine->primary_screen, ((snes_ram[STAT78] & 0x10) == SNES_NTSC) ? SNES_VTOTAL_NTSC-1 : SNES_VTOTAL_PAL-1, hblank_offset), 0);
+
+}
+
 static void snes_init_ram(running_machine *machine)
 {
 	const address_space *cpu0space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
@@ -2019,21 +2054,6 @@ static void snes_init_ram(running_machine *machine)
 	// set up some known register power-up defaults
 	snes_ram[WRIO] = 0xff;
 	snes_ram[VMAIN] = 0x80;
-
-	/* init timers and stop them */
-	snes_scanline_timer = timer_alloc(machine, snes_scanline_tick, NULL);
-	timer_adjust_oneshot(snes_scanline_timer, attotime_never, 0);
-	snes_hblank_timer = timer_alloc(machine, snes_hblank_tick, NULL);
-	timer_adjust_oneshot(snes_hblank_timer, attotime_never, 0);
-	snes_nmi_timer = timer_alloc(machine, snes_nmi_tick, NULL);
-	timer_adjust_oneshot(snes_nmi_timer, attotime_never, 0);
-	snes_hirq_timer = timer_alloc(machine, snes_hirq_tick_callback, NULL);
-	timer_adjust_oneshot(snes_hirq_timer, attotime_never, 0);
-
-	// SNES hcounter has a 0-339 range.  hblank starts at counter 260.
-	// clayfighter sets an HIRQ at 260, apparently it wants it to be before hdma kicks off, so we'll delay 2 pixels.
-	hblank_offset = 268;
-	timer_adjust_oneshot(snes_hblank_timer, video_screen_get_time_until_pos(machine->primary_screen, ((snes_ram[STAT78] & 0x10) == SNES_NTSC) ? SNES_VTOTAL_NTSC-1 : SNES_VTOTAL_PAL-1, hblank_offset), 0);
 
 	switch (snes_has_addon_chip)
 	{
@@ -2143,6 +2163,8 @@ MACHINE_START( snes )
 			st010_init(machine);
 			break;
 	}
+
+	snes_init_timers(machine);
 }
 
 MACHINE_RESET( snes )

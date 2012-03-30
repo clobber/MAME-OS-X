@@ -44,7 +44,7 @@
 #include "machine/8255ppi.h"
 #include "sound/ay8910.h"
 #include "rendlay.h"
-#include "tx1.h"
+#include "includes/tx1.h"
 
 #include "tx1.lh"
 #include "buggyboy.lh"
@@ -415,16 +415,16 @@ static READ8_HANDLER( ts_r )
 
 static WRITE8_DEVICE_HANDLER( tx1_coin_cnt_w )
 {
-	coin_counter_w(0, data & 0x80);
-	coin_counter_w(1, data & 0x40);
-//  coin_counter_w(2, data & 0x40);
+	coin_counter_w(device->machine, 0, data & 0x80);
+	coin_counter_w(device->machine, 1, data & 0x40);
+//  coin_counter_w(device->machine, 2, data & 0x40);
 }
 
 static WRITE8_DEVICE_HANDLER( bb_coin_cnt_w )
 {
-	coin_counter_w(0, data & 0x01);
-	coin_counter_w(1, data & 0x02);
-//  coin_counter_w(2, data & 0x04);
+	coin_counter_w(device->machine, 0, data & 0x01);
+	coin_counter_w(device->machine, 1, data & 0x02);
+//  coin_counter_w(device->machine, 2, data & 0x04);
 }
 
 static WRITE8_HANDLER( tx1_ppi_latch_w )
@@ -508,10 +508,10 @@ static const ppi8255_interface tx1_ppi8255_intf =
 static ADDRESS_MAP_START( tx1_main, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x00fff) AM_MIRROR(0x1000) AM_RAM
 	AM_RANGE(0x02000, 0x02fff) AM_MIRROR(0x1000) AM_RAM
-	AM_RANGE(0x04000, 0x04fff) AM_MIRROR(0x1000) AM_RAM	AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x04000, 0x04fff) AM_MIRROR(0x1000) AM_RAM	AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x06000, 0x06fff) AM_READWRITE(tx1_crtc_r, tx1_crtc_w)
 	AM_RANGE(0x08000, 0x09fff) AM_RAM AM_BASE(&tx1_vram)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE(1) AM_BASE(&tx1_rcram)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE(&tx1_rcram)
 	AM_RANGE(0x0b000, 0x0b001) AM_READWRITE(dipswitches_r, z80_busreq_w)
 	AM_RANGE(0x0c000, 0x0c001) AM_WRITE(tx1_scolst_w)
 	AM_RANGE(0x0d000, 0x0d003) AM_WRITE(tx1_slincs_w)
@@ -524,7 +524,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( tx1_math, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_BASE(&tx1_math_ram)
 	AM_RANGE(0x00800, 0x00fff) AM_READWRITE(tx1_spcs_ram_r, tx1_spcs_ram_w)
-	AM_RANGE(0x01000, 0x01fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x01000, 0x01fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x02000, 0x022ff) AM_RAM AM_BASE(&tx1_objram) AM_SIZE(&tx1_objram_size)
 	AM_RANGE(0x02400, 0x027ff) AM_WRITE(tx1_bankcs_w)
 	AM_RANGE(0x02800, 0x02bff) AM_WRITE(halt_math_w)
@@ -548,7 +548,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tx1_sound_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
 
@@ -559,10 +559,10 @@ ADDRESS_MAP_END
  *************************************/
 
 static ADDRESS_MAP_START( buggyboy_main, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000, 0x03fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x00000, 0x03fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x04000, 0x04fff) AM_READWRITE(tx1_crtc_r, tx1_crtc_w)
 	AM_RANGE(0x08000, 0x09fff) AM_RAM AM_BASE(&buggyboy_vram)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE(1) AM_BASE(&buggyboy_rcram) AM_SIZE(&buggyboy_rcram_size)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE(&buggyboy_rcram) AM_SIZE(&buggyboy_rcram_size)
 	AM_RANGE(0x0b000, 0x0b001) AM_READWRITE(dipswitches_r, z80_busreq_w)
 	AM_RANGE(0x0c000, 0x0c001) AM_WRITE(buggyboy_scolst_w)
 	AM_RANGE(0x0d000, 0x0d003) AM_WRITE(buggyboy_slincs_w)
@@ -574,10 +574,10 @@ static ADDRESS_MAP_START( buggyboy_main, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( buggybjr_main, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x00000, 0x03fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x00000, 0x03fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x04000, 0x04fff) AM_READWRITE(tx1_crtc_r, tx1_crtc_w)
 	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_BASE(&buggyboy_vram)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE(1) AM_BASE(&buggyboy_rcram) AM_SIZE(&buggyboy_rcram_size)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1") AM_BASE(&buggyboy_rcram) AM_SIZE(&buggyboy_rcram_size)
 	AM_RANGE(0x0b000, 0x0b001) AM_READWRITE(dipswitches_r, z80_busreq_w)
 	AM_RANGE(0x0c000, 0x0c001) AM_WRITE(buggyboy_scolst_w)
 	AM_RANGE(0x0d000, 0x0d003) AM_WRITE(buggyboy_slincs_w)
@@ -591,7 +591,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( buggyboy_math, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_BASE(&tx1_math_ram)
 	AM_RANGE(0x00800, 0x00fff) AM_READWRITE(buggyboy_spcs_ram_r, buggyboy_spcs_ram_w)
-	AM_RANGE(0x01000, 0x01fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x01000, 0x01fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x02000, 0x022ff) AM_RAM AM_BASE(&buggyboy_objram) AM_SIZE(&buggyboy_objram_size)
 	AM_RANGE(0x02400, 0x024ff) AM_WRITE(buggyboy_gas_w)
 	AM_RANGE(0x03000, 0x03fff) AM_READWRITE(buggyboy_math_r, buggyboy_math_w)
@@ -742,7 +742,7 @@ static MACHINE_DRIVER_START( tx1 )
 	MDRV_SPEAKER_STANDARD_STEREO("frontleft", "frontright")
 //  MDRV_SPEAKER_STANDARD_STEREO("rearleft", "rearright")
 
-	MDRV_SOUND_ADD("ay", AY8910, TX1_PIXEL_CLOCK / 8)
+	MDRV_SOUND_ADD("aysnd", AY8910, TX1_PIXEL_CLOCK / 8)
 	MDRV_SOUND_CONFIG(tx1_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "frontleft", 0.1)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "frontright", 0.1)

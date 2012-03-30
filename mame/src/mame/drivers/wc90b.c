@@ -119,7 +119,7 @@ static WRITE8_HANDLER( wc90b_bankswitch_w )
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
 
 	bankaddress = 0x10000 + ((data & 0xf8) << 8);
-	memory_set_bankptr(space->machine, 1,&ROM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank1",&ROM[bankaddress]);
 }
 
 static WRITE8_HANDLER( wc90b_bankswitch1_w )
@@ -128,7 +128,7 @@ static WRITE8_HANDLER( wc90b_bankswitch1_w )
 	UINT8 *ROM = memory_region(space->machine, "sub");
 
 	bankaddress = 0x10000 + ((data & 0xf8) << 8);
-	memory_set_bankptr(space->machine, 2,&ROM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank2",&ROM[bankaddress]);
 }
 
 static WRITE8_HANDLER( wc90b_sound_command_w )
@@ -144,7 +144,7 @@ static WRITE8_DEVICE_HANDLER( adpcm_control_w )
 
 	/* the code writes either 2 or 3 in the bottom two bits */
 	bankaddress = 0x10000 + (data & 0x01) * 0x4000;
-	memory_set_bankptr(device->machine, 3,&ROM[bankaddress]);
+	memory_set_bankptr(device->machine, "bank3",&ROM[bankaddress]);
 
 	msm5205_reset_w(device,data & 0x08);
 }
@@ -161,8 +161,8 @@ static ADDRESS_MAP_START( wc90b_map1, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa000, 0xafff) AM_RAM_WRITE(wc90b_fgvideoram_w) AM_BASE(&wc90b_fgvideoram)
 	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(wc90b_bgvideoram_w) AM_BASE(&wc90b_bgvideoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(wc90b_txvideoram_w) AM_BASE(&wc90b_txvideoram)
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(1)
-	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank1")
+	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITE(wc90b_bankswitch_w)
 	AM_RANGE(0xfd00, 0xfd00) AM_WRITE(wc90b_sound_command_w)
 	AM_RANGE(0xfd04, 0xfd04) AM_WRITEONLY AM_BASE(&wc90b_scroll1y)
@@ -179,21 +179,21 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( wc90b_map2, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_be_w) AM_BASE(&paletteram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_be_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe800, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(2)
-	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank2")
+	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITE(wc90b_bankswitch1_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_cpu, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(3)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("msm", adpcm_control_w)
 	AM_RANGE(0xe400, 0xe400) AM_WRITE(adpcm_data_w)
-	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xe800, 0xe801) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf800) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -317,7 +317,7 @@ static const gfx_layout spritelayout =
 };
 
 static GFXDECODE_START( wc90b )
-	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout,      	1*16*16, 16*16 )
+	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout,   	1*16*16, 16*16 )
 	GFXDECODE_ENTRY( "gfx2", 0x00000, tilelayout,			2*16*16, 16*16 )
 	GFXDECODE_ENTRY( "gfx2", 0x02000, tilelayout,			2*16*16, 16*16 )
 	GFXDECODE_ENTRY( "gfx2", 0x04000, tilelayout,			2*16*16, 16*16 )
@@ -408,7 +408,7 @@ static MACHINE_DRIVER_START( wc90b )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, YM2203_CLOCK)
+	MDRV_SOUND_ADD("ymsnd", YM2203, YM2203_CLOCK)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 

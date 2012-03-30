@@ -155,7 +155,7 @@ static chd_file *get_disc(const device_config *device)
 static void process_commands(const device_config *laserdisc)
 {
 	input_port_value controls = input_port_read(laserdisc->machine, "controls");
- 	int number;
+	int number;
 
 	/* step backwards */
 	if (!(last_controls & 0x01) && (controls & 0x01))
@@ -227,7 +227,7 @@ static void process_commands(const device_config *laserdisc)
 
 static TIMER_CALLBACK( vsync_update )
 {
-	const device_config *laserdisc = device_list_first(machine->config->devicelist, LASERDISC);
+	const device_config *laserdisc = device_list_first(&machine->config->devicelist, LASERDISC);
 	int vblank_scanline;
 	attotime target;
 
@@ -250,7 +250,7 @@ static MACHINE_START( ldplayer )
 
 static TIMER_CALLBACK( autoplay )
 {
-	const device_config *laserdisc = device_list_first(machine->config->devicelist, LASERDISC);
+	const device_config *laserdisc = device_list_first(&machine->config->devicelist, LASERDISC);
 
 	/* start playing */
 	(*execute_command)(laserdisc, CMD_PLAY);
@@ -302,7 +302,7 @@ static TIMER_CALLBACK( pr8210_bit_callback )
 	if (bitsleft != 0)
 	{
 		/* assert the line and set a timer for deassertion */
-	   	laserdisc_line_w(laserdisc, LASERDISC_LINE_CONTROL, ASSERT_LINE);
+		laserdisc_line_w(laserdisc, LASERDISC_LINE_CONTROL, ASSERT_LINE);
 		timer_set(machine, ATTOTIME_IN_USEC(250), ptr, 0, pr8210_bit_off_callback);
 
 		/* space 0 bits apart by 1msec, and 1 bits by 2msec */
@@ -323,7 +323,7 @@ static TIMER_CALLBACK( pr8210_bit_callback )
 
 static MACHINE_START( pr8210 )
 {
-	const device_config *laserdisc = device_list_first(machine->config->devicelist, LASERDISC);
+	const device_config *laserdisc = device_list_first(&machine->config->devicelist, LASERDISC);
 	MACHINE_START_CALL(ldplayer);
 	pr8210_bit_timer = timer_alloc(machine, pr8210_bit_callback, (void *)laserdisc);
 }

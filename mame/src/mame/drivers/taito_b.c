@@ -169,20 +169,21 @@ Notes:
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "cpu/m68000/m68000.h"
-#include "video/taitoic.h"
 #include "machine/eeprom.h"
 #include "machine/mb87078.h"
+#include "machine/taitoio.h"
 #include "audio/taitosnd.h"
 #include "sound/2203intf.h"
 #include "sound/2610intf.h"
 #include "sound/okim6295.h"
+#include "video/taitoic.h"
 #include "includes/taito_b.h"
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bank(space->machine, 1, (data - 1) & 3);
+	memory_set_bank(space->machine, "bank1", (data - 1) & 3);
 }
 
 static TIMER_CALLBACK( rsaga2_interrupt2  )
@@ -337,17 +338,18 @@ static READ16_HANDLER( trackx2_lo_r )
 
 static WRITE16_HANDLER( gain_control_w )
 {
+	const device_config *mb87078 = devtag_get_device(space->machine, "mb87078");
 	if (ACCESSING_BITS_8_15)
 	{
-		if (offset==0)
+		if (offset == 0)
 		{
-			MB87078_data_w(space->machine, 0, data>>8, 0);
-            //logerror("MB87078 dsel=0 data=%4x\n",data);
+			mb87078_data_w(mb87078, data >> 8, 0);
+    	      //logerror("MB87078 dsel=0 data=%4x\n", data);
 		}
 		else
 		{
-			MB87078_data_w(space->machine, 0, data>>8, 1);
-            //logerror("MB87078 dsel=1 data=%4x\n",data);
+			mb87078_data_w(mb87078, data >> 8, 1);
+	           //logerror("MB87078 dsel=1 data=%4x\n", data);
 		}
 	}
 }
@@ -358,7 +360,7 @@ static WRITE16_HANDLER( gain_control_w )
 
 ***************************************************************************/
 
-static const eeprom_interface eeprom_intf =
+static const eeprom_interface taitob_eeprom_intf =
 {
 	6,				/* address bits */
 	16,				/* data bits */
@@ -366,32 +368,8 @@ static const eeprom_interface eeprom_intf =
 	"0101",			/* write command */
 	"0111",			/* erase command */
 	"0100000000",	/*  lock command */
-	"0100110000" 	/* unlock command*/
+	"0100110000"	/* unlock command*/
 };
-
-static NVRAM_HANDLER( taito_b )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-		if (file)
-		{
-			eeprom_load(file);
-		}
-	}
-}
-
-static READ16_HANDLER( eeprom_r )
-{
-	int res;
-
-	res = (eeprom_read_bit() & 0x01);
-	res |= input_port_read(space->machine, "DSWB") & 0xfe;	/* coin inputs */
-
-	return res;
-}
 
 static UINT16 eep_latch = 0;
 
@@ -404,8 +382,8 @@ static WRITE16_HANDLER( eeprom_w )
 {
 	COMBINE_DATA(&eep_latch);
 
-    if (ACCESSING_BITS_8_15)
-    {
+	if (ACCESSING_BITS_8_15)
+	{
 		data >>= 8; /*M68k byte write*/
 
 		/* bit 0 - Unused */
@@ -418,9 +396,7 @@ static WRITE16_HANDLER( eeprom_w )
 		/* bit 7 - set all the time (Chip Select?) */
 
 		/* EEPROM */
-		eeprom_write_bit(data & 0x04);
-		eeprom_set_clock_line((data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
-		eeprom_set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
 	}
 }
 
@@ -446,53 +422,65 @@ static WRITE16_HANDLER( player_34_coin_ctrl_w )
 	COMBINE_DATA(&coin_word);
 
 	/* coin counters and lockout */
-	coin_lockout_w(2,~data & 0x0100);
-	coin_lockout_w(3,~data & 0x0200);
-	coin_counter_w(2, data & 0x0400);
-	coin_counter_w(3, data & 0x0800);
+	coin_lockout_w(space->machine, 2,~data & 0x0100);
+	coin_lockout_w(space->machine, 3,~data & 0x0200);
+	coin_counter_w(space->machine, 2, data & 0x0400);
+	coin_counter_w(space->machine, 3, data & 0x0800);
 }
 
 static READ16_HANDLER( pbobble_input_bypass_r )
 {
+	const device_config *tc0640fio = devtag_get_device(space->machine, "tc0640fio");
 	switch (offset)
 	{
 		case 0x01:
-			return eeprom_r(space, 0, mem_mask) << 8;
+			return input_port_read(space->machine, "COIN") << 8;
 
 		default:
-			return TC0640FIO_r(space, offset) << 8;
+			return tc0640fio_r(tc0640fio, offset) << 8;
+	}
+}
+
+static WRITE16_HANDLER( spacedxo_tc0220ioc_w )
+{
+	const device_config *tc0220ioc = devtag_get_device(space->machine, "tc0220ioc");
+	if (ACCESSING_BITS_0_7)
+		tc0220ioc_w(tc0220ioc, offset, data & 0xff);
+	else
+	{
+		/* spacedxo also writes here - bug? */
+		tc0220ioc_w(tc0220ioc, offset, (data >> 8) & 0xff);
 	}
 }
 
 
-
 #define TC0180VCU_MEMRW( ADDR )											\
-	AM_RANGE(ADDR+0x00000, ADDR+0x0ffff) AM_READWRITE(TC0180VCU_word_r, TC0180VCU_word_w) AM_BASE(&TC0180VCU_ram)	\
-	AM_RANGE(ADDR+0x10000, ADDR+0x1197f) AM_RAM AM_BASE(&taitob_spriteram)		\
-	AM_RANGE(ADDR+0x11980, ADDR+0x137ff) AM_RAM							\
-	AM_RANGE(ADDR+0x13800, ADDR+0x13fff) AM_RAM AM_BASE(&taitob_scroll)			\
-	AM_RANGE(ADDR+0x18000, ADDR+0x1801f) AM_READWRITE(taitob_v_control_r, taitob_v_control_w)					\
-	AM_RANGE(ADDR+0x40000, ADDR+0x7ffff) AM_READWRITE(TC0180VCU_framebuffer_word_r, TC0180VCU_framebuffer_word_w)
+	AM_RANGE(ADDR+0x00000, ADDR+0x0ffff) AM_DEVREADWRITE("tc0180vcu", tc0180vcu_word_r, tc0180vcu_word_w)	\
+	AM_RANGE(ADDR+0x10000, ADDR+0x1197f) AM_RAM AM_BASE(&taitob_spriteram)	\
+	AM_RANGE(ADDR+0x11980, ADDR+0x137ff) AM_RAM					\
+	AM_RANGE(ADDR+0x13800, ADDR+0x13fff) AM_DEVREADWRITE("tc0180vcu", tc0180vcu_scroll_r, tc0180vcu_scroll_w)	\
+	AM_RANGE(ADDR+0x18000, ADDR+0x1801f) AM_DEVREADWRITE("tc0180vcu", tc0180vcu_ctrl_r, tc0180vcu_ctrl_w)		\
+	AM_RANGE(ADDR+0x40000, ADDR+0x7ffff) AM_READWRITE(tc0180vcu_framebuffer_word_r, tc0180vcu_framebuffer_word_w)
 
 
 static ADDRESS_MAP_START( rastsag2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x600000, 0x607fff) AM_RAM	/* Main RAM */ /*ashura up to 603fff only*/
 	TC0180VCU_MEMRW( 0x400000 )
 	AM_RANGE(0x800000, 0x800001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x800002, 0x800003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
-	AM_RANGE(0xa00000, 0xa0000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
+	AM_RANGE(0xa00000, 0xa0000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( crimec_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
+	AM_RANGE(0x200000, 0x20000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	TC0180VCU_MEMRW( 0x400000 )
 	AM_RANGE(0x600000, 0x600001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x600002, 0x600003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xa00000, 0xa0ffff) AM_RAM	/* Main RAM */
 ADDRESS_MAP_END
 
@@ -502,17 +490,17 @@ static ADDRESS_MAP_START( tetrist_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200000, 0x200001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x600000, 0x60000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
+	AM_RANGE(0x600000, 0x60000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	AM_RANGE(0x800000, 0x807fff) AM_RAM	/* Main RAM */
-	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tetrista_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x600000, 0x600001) AM_READWRITE8(TC0220IOC_portreg_r, TC0220IOC_portreg_w, 0xff00)
-	AM_RANGE(0x600002, 0x600003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0xff00)
+	AM_RANGE(0x600000, 0x600001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0xff00)
+	AM_RANGE(0x600002, 0x600003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	AM_RANGE(0x800000, 0x803fff) AM_RAM	/* Main RAM */
 	AM_RANGE(0xa00000, 0xa00001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0xa00002, 0xa00003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
@@ -522,12 +510,12 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( hitice_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x600000, 0x60000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
+	AM_RANGE(0x600000, 0x60000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	AM_RANGE(0x610000, 0x610001) AM_READ_PORT("P3_P4")
 	AM_RANGE(0x700000, 0x700001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x700002, 0x700003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 	AM_RANGE(0x800000, 0x803fff) AM_RAM	/* Main RAM */
-	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xb00000, 0xb7ffff) AM_RAM_WRITE(hitice_pixelram_w) AM_BASE(&taitob_pixelram)
 //  { 0xbffff0, 0xbffff1, ???
 	AM_RANGE(0xbffff2, 0xbffff5) AM_WRITE(hitice_pixel_scroll_w)
@@ -540,7 +528,7 @@ static ADDRESS_MAP_START( rambo3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200000, 0x200001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x600000, 0x60000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
+	AM_RANGE(0x600000, 0x60000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	AM_RANGE(0x600010, 0x600011) AM_READ(tracky1_lo_r) /*player 1*/
 	AM_RANGE(0x600012, 0x600013) AM_READ(tracky1_hi_r)
 	AM_RANGE(0x600014, 0x600015) AM_READ(trackx1_lo_r)
@@ -550,22 +538,22 @@ static ADDRESS_MAP_START( rambo3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x60001c, 0x60001d) AM_READ(trackx2_lo_r)
 	AM_RANGE(0x60001e, 0x60001f) AM_READ(trackx2_hi_r)
 	AM_RANGE(0x800000, 0x803fff) AM_RAM	/* Main RAM */
-	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( pbobble_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x500000, 0x50000f) AM_READWRITE(pbobble_input_bypass_r, TC0640FIO_halfword_byteswap_w)
-	AM_RANGE(0x500024, 0x500025) AM_READ_PORT("IN3")		/* shown in service mode, game omits to read it */
+	AM_RANGE(0x500000, 0x50000f) AM_READ(pbobble_input_bypass_r) AM_DEVWRITE("tc0640fio", tc0640fio_halfword_byteswap_w)
+	AM_RANGE(0x500024, 0x500025) AM_READ_PORT("P3_P4_A")		/* shown in service mode, game omits to read it */
 	AM_RANGE(0x500026, 0x500027) AM_READWRITE(eep_latch_r, eeprom_w)
 	AM_RANGE(0x500028, 0x500029) AM_WRITE(player_34_coin_ctrl_w)	/* simply locks coins 3&4 out */
-	AM_RANGE(0x50002e, 0x50002f) AM_READ_PORT("IN4")		/* shown in service mode, game omits to read it */
+	AM_RANGE(0x50002e, 0x50002f) AM_READ_PORT("P3_P4_B")		/* shown in service mode, game omits to read it */
 	AM_RANGE(0x600000, 0x600003) AM_WRITE(gain_control_w)
 	AM_RANGE(0x700000, 0x700001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x700002, 0x700003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x900000, 0x90ffff) AM_RAM	/* Main RAM */
 ADDRESS_MAP_END
 
@@ -573,28 +561,28 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( spacedx_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x500000, 0x50000f) AM_READWRITE(pbobble_input_bypass_r, TC0640FIO_halfword_byteswap_w)
-	AM_RANGE(0x500024, 0x500025) AM_READ_PORT("IN3")
+	AM_RANGE(0x500000, 0x50000f) AM_READ(pbobble_input_bypass_r) AM_DEVWRITE("tc0640fio", tc0640fio_halfword_byteswap_w)
+	AM_RANGE(0x500024, 0x500025) AM_READ_PORT("P3_P4_A")
 	AM_RANGE(0x500026, 0x500027) AM_READWRITE(eep_latch_r, eeprom_w)
 	AM_RANGE(0x500028, 0x500029) AM_WRITE(player_34_coin_ctrl_w)	/* simply locks coins 3&4 out */
-	AM_RANGE(0x50002e, 0x50002f) AM_READ_PORT("IN4")
+	AM_RANGE(0x50002e, 0x50002f) AM_READ_PORT("P3_P4_B")
 	AM_RANGE(0x600000, 0x600003) AM_WRITE(gain_control_w)
 	AM_RANGE(0x700000, 0x700001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x700002, 0x700003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x900000, 0x90ffff) AM_RAM	/* Main RAM */
 ADDRESS_MAP_END
-
 
 static ADDRESS_MAP_START( spacedxo_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x100002, 0x100003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x200000, 0x20000f) AM_DEVREAD8("tc0220ioc", tc0220ioc_r, 0x00ff) AM_WRITE(spacedxo_tc0220ioc_w)
 	AM_RANGE(0x210000, 0x210001) AM_READ_PORT("IN3")
 	AM_RANGE(0x220000, 0x220001) AM_READ_PORT("IN4")
 	AM_RANGE(0x230000, 0x230001) AM_READ_PORT("IN5")
-	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x302000, 0x303fff) AM_READONLY
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM	/* Main RAM */
 	TC0180VCU_MEMRW( 0x500000 )
 ADDRESS_MAP_END
@@ -602,16 +590,16 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( qzshowby_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE(pbobble_input_bypass_r, TC0640FIO_halfword_byteswap_w)
-	AM_RANGE(0x200024, 0x200025) AM_READ_PORT("IN3")	/* player 3,4 start */
+	AM_RANGE(0x200000, 0x20000f) AM_READ(pbobble_input_bypass_r) AM_DEVWRITE("tc0640fio", tc0640fio_halfword_byteswap_w)
+	AM_RANGE(0x200024, 0x200025) AM_READ_PORT("P3_P4_A")	/* player 3,4 start */
 	AM_RANGE(0x200026, 0x200027) AM_WRITE(eeprom_w)
 	AM_RANGE(0x200028, 0x200029) AM_READWRITE(player_34_coin_ctrl_r, player_34_coin_ctrl_w)
-	AM_RANGE(0x20002e, 0x20002f) AM_READ_PORT("IN4")	/* player 3,4 buttons */
+	AM_RANGE(0x20002e, 0x20002f) AM_READ_PORT("P3_P4_B")	/* player 3,4 buttons */
 	TC0180VCU_MEMRW( 0x400000 )
 	AM_RANGE(0x600000, 0x600001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x600002, 0x600003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 	AM_RANGE(0x700000, 0x700003) AM_WRITE(gain_control_w)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x900000, 0x90ffff) AM_RAM	/* Main RAM */
 ADDRESS_MAP_END
 
@@ -621,8 +609,8 @@ static ADDRESS_MAP_START( viofight_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200000, 0x200001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x800000, 0x80000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
+	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x800000, 0x80000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	AM_RANGE(0xa00000, 0xa03fff) AM_RAM	/* Main RAM */
 ADDRESS_MAP_END
 
@@ -631,9 +619,9 @@ static ADDRESS_MAP_START( masterw_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x203fff) AM_RAM	/* Main RAM */
 	TC0180VCU_MEMRW( 0x400000 )
-	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x800000, 0x800001) AM_READWRITE8(TC0220IOC_portreg_r, TC0220IOC_portreg_w, 0xff00)
-	AM_RANGE(0x800002, 0x800003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0xff00)
+	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x800000, 0x800001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0xff00)
+	AM_RANGE(0x800002, 0x800003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
 	AM_RANGE(0xa00000, 0xa00001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0xa00002, 0xa00003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 ADDRESS_MAP_END
@@ -645,13 +633,13 @@ static ADDRESS_MAP_START( silentd_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100002, 0x100003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 //  AM_RANGE(0x10001a, 0x10001b) AM_READNOP // ??? read at $1e344
 //  AM_RANGE(0x10001c, 0x10001d) AM_READNOP // ??? read at $1e356
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x200000, 0x20000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x210000, 0x210001) AM_READ_PORT("IN3")
 	AM_RANGE(0x220000, 0x220001) AM_READ_PORT("IN4")
 	AM_RANGE(0x230000, 0x230001) AM_READ_PORT("IN5")
 	AM_RANGE(0x240000, 0x240001) AM_WRITENOP // ???
 //  AM_RANGE(0x240000, 0x240001) AM_READNOP /* read 4 times at init */
-	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x400000, 0x403fff) AM_RAM	/* Main RAM */
 	TC0180VCU_MEMRW( 0x500000 )
 ADDRESS_MAP_END
@@ -661,9 +649,9 @@ static ADDRESS_MAP_START( selfeena_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM	/* Main RAM */
 	TC0180VCU_MEMRW( 0x200000 )
-	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x400000, 0x40000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00)
-	AM_RANGE(0x410000, 0x41000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0xff00) /* mirror address - seems to be only used for coin control */
+	AM_RANGE(0x300000, 0x301fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBRGBx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x400000, 0x40000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00)
+	AM_RANGE(0x410000, 0x41000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0xff00) /* mirror address - seems to be only used for coin control */
 	AM_RANGE(0x500000, 0x500001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x500002, 0x500003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 ADDRESS_MAP_END
@@ -672,8 +660,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sbm_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM	/* Main RAM */
-	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x300000, 0x30000f) AM_READWRITE(TC0510NIO_halfword_wordswap_r, TC0510NIO_halfword_wordswap_w)
+	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x300000, 0x30000f) AM_DEVREADWRITE("tc0510nio", tc0510nio_halfword_wordswap_r, tc0510nio_halfword_wordswap_w)
 	AM_RANGE(0x320000, 0x320001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x320002, 0x320003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0xff00)
 	TC0180VCU_MEMRW( 0x900000 )
@@ -683,18 +671,18 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( masterw_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP /* pan */
@@ -707,9 +695,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( viofight_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xb000, 0xb001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)		/* yes, both addresses for the same chip */
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
@@ -1215,7 +1203,7 @@ static INPUT_PORTS_START( hitice )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
 
-	PORT_START("P3_P4")      /* IN5 IN6 */
+	PORT_START("P3_P4")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(3)
@@ -1351,9 +1339,8 @@ INPUT_PORTS_END
 
 /* Helps document the input ports. */
 
-/* Tags below are the ones expected by TC0640FIO_r */
 static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
-	PORT_START("DSWA")
+	PORT_START("SERVICE")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
@@ -1363,8 +1350,8 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW ) /*ok*/
 
-	PORT_START("DSWB")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("COIN")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -1373,7 +1360,7 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_IMPULSE(2) /*ok*/
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_IMPULSE(2) /*ok*/
 
-	PORT_START("IN0")
+	PORT_START("START")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE2 )
@@ -1383,7 +1370,7 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START3 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START4 )
 
-	PORT_START("IN1")
+	PORT_START("P1_P2_A")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
@@ -1393,7 +1380,7 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 
-	PORT_START("IN2")
+	PORT_START("P1_P2_B")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
@@ -1403,7 +1390,7 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
 
-	PORT_START("IN3")
+	PORT_START("P3_P4_A")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(3)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(3)
@@ -1413,7 +1400,7 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(4)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 
-	PORT_START("IN4")
+	PORT_START("P3_P4_B")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(3)
@@ -1422,6 +1409,11 @@ static INPUT_PORTS_START( pbobble )	/* Missing P3&4 controls ! */
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(4)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(4)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(4)
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( spacedxo )
@@ -1509,9 +1501,8 @@ static INPUT_PORTS_START( spacedxo )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
-/* Tags below are the ones expected by TC0640FIO_r */
 static INPUT_PORTS_START( qzshowby )
-	PORT_START("DSWA")
+	PORT_START("SERVICE")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
@@ -1521,8 +1512,8 @@ static INPUT_PORTS_START( qzshowby )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN ) /*unused in test mode*/
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW ) /*ok*/
 
-	PORT_START("DSWB")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_START("COIN")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -1531,7 +1522,7 @@ static INPUT_PORTS_START( qzshowby )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_IMPULSE(2) /*ok*/
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_IMPULSE(2) /*ok*/
 
-	PORT_START("IN0")      /* IN0 */ /*all OK*/
+	PORT_START("START")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE2 )
@@ -1541,17 +1532,17 @@ static INPUT_PORTS_START( qzshowby )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START3 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START4 )
 
-	PORT_START("IN1")		/* IN 1 */ /*all OK*/
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN  ) /* IPT_START1 in test mode */
+	PORT_START("P1_P2_A")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* IPT_START1 in test mode */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN  ) /* IPT_START2 in test mode */
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* IPT_START2 in test mode */
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN2")      /* IN2 */ /*all OK*/
+	PORT_START("P1_P2_B")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
@@ -1561,7 +1552,7 @@ static INPUT_PORTS_START( qzshowby )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 
-	PORT_START("IN3")
+	PORT_START("P3_P4_A")
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNKNOWN  ) /* IPT_START3 in test mode */
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -1571,7 +1562,7 @@ static INPUT_PORTS_START( qzshowby )
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN4")
+	PORT_START("P3_P4_B")
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(3)
 	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(3)
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(3)
@@ -1580,6 +1571,11 @@ static INPUT_PORTS_START( qzshowby )
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(4)
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(4)
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(4)
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( viofight )
@@ -1930,7 +1926,7 @@ static INPUT_PORTS_START( ryujin )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( sbm )
-	PORT_START("DSWA") /* DSW A *///+-ok
+	PORT_START("DSWA") //+-ok
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ))
 	PORT_DIPSETTING(    0x00, DEF_STR( On ))
@@ -1953,7 +1949,7 @@ static INPUT_PORTS_START( sbm )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
-	PORT_START("DSWB") /* DSW B */ //+-ok
+	PORT_START("DSWB") //+-ok
 	TAITO_DIFFICULTY
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
@@ -1974,7 +1970,7 @@ static INPUT_PORTS_START( sbm )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
-	PORT_START("IN0")
+	PORT_START("JOY")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)//sound select UP
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)//sound select DOWN
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)//ok (object test)
@@ -1984,7 +1980,7 @@ static INPUT_PORTS_START( sbm )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)//BEN IN (ticket dispenser)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)//LADY ????
 
-	PORT_START("IN1")
+	PORT_START("START")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )//select; ok (1P in object test)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )//start ; ok (2P in object test)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -1994,7 +1990,7 @@ static INPUT_PORTS_START( sbm )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN2")
+	PORT_START("PHOTOSENSOR")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_TILT )       //ok
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE1 )	//ok
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_IMPULSE(2)   //ok
@@ -2003,7 +1999,7 @@ static INPUT_PORTS_START( sbm )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_NAME("Pad Photosensor 1")//PHOTO 1 (punching pad photosensor 1)
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH,IPT_BUTTON2 ) PORT_PLAYER(1) PORT_NAME("Pad Photosensor 2")//PHOTO 2 (punching pad photosensor 2)
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH,IPT_BUTTON3 ) PORT_PLAYER(1) PORT_NAME("Pad Photosensor 3")//PHOTO 3 (punching pad photosensor 3)
- 	/*To simulate a punch:
+	/*To simulate a punch:
         - wait for "READY GO!" message,
         - press button1 + button 2 (LCTRL + ALT) (you'll hear a "punching" sound),
         - THEN  press button 3 (SPACE)
@@ -2107,35 +2103,64 @@ static const ym2203_interface ym2203_config =
     Both ym2610 and ym2610b generate 3 (PSG like) + 2 (fm left,right) channels.
     I use mixer_set_volume() to emulate the effect.
 */
-static void mb87078_gain_changed(running_machine *machine, int channel, int percent)
+static void mb87078_gain_changed( running_machine *machine, int channel, int percent )
 {
-	if (channel==1)
+	if (channel == 1)
 	{
-		const device_config *ym = devtag_get_device(machine, "ym");
+		const device_config *ym = devtag_get_device(machine, "ymsnd");
 		sound_set_output_gain(ym, 0, percent / 100.0);
 		sound_set_output_gain(ym, 1, percent / 100.0);
 		sound_set_output_gain(ym, 2, percent / 100.0);
-		//popmessage("MB87078 gain ch#%i percent=%i",channel,percent);
+		//popmessage("MB87078 gain ch#%i percent=%i", channel, percent);
 	}
 }
 
-static const struct MB87078interface mb87078_interface =
+static const mb87078_interface taitob_mb87078_intf =
 {
 	mb87078_gain_changed	/*callback function for gain change*/
 };
 
-
-static MACHINE_RESET( mb87078 )
+static const tc0220ioc_interface taitob_io_intf =
 {
-	MB87078_start(machine, 0, &mb87078_interface); /*chip #0*/
-/*
-    {
-        int i;
-        for (i=0; i<6; i++)
-            logerror("SOUND Chan#%i name=%s\n", i, mixer_get_name(i) );
-    }
-*/
-}
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
+static const tc0640fio_interface pbobble_io_intf =
+{
+	DEVCB_INPUT_PORT("SERVICE"), DEVCB_INPUT_PORT("COIN"),
+	DEVCB_INPUT_PORT("START"), DEVCB_INPUT_PORT("P1_P2_A"), DEVCB_INPUT_PORT("P1_P2_B")	/* port read handlers */
+};
+
+static const tc0510nio_interface sbm_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("JOY"), DEVCB_INPUT_PORT("START"), DEVCB_INPUT_PORT("PHOTOSENSOR")	/* port read handlers */
+};
+
+/* this is the basic layout used in: Nastar, Ashura Blaster, Hit the Ice, Rambo3, Tetris */
+static const tc0180vcu_interface color0_tc0180vcu_intf =
+{
+	0xc0,		/* background */
+	0x80,		/* foreground */
+	0x00		/* text       */
+};
+
+/* this is the reversed layout used in: Crime City, Puzzle Bobble */
+static const tc0180vcu_interface color1_tc0180vcu_intf =
+{
+	0x00,		/* background */
+	0x40,		/* foreground */
+	0xc0		/* text       */
+};
+
+/* this is used in: rambo3a, masterw, silentd, selfeena, ryujin */
+static const tc0180vcu_interface color2_tc0180vcu_intf =
+{
+	0x30,		/* background */
+	0x20,		/* foreground */
+	0x00		/* text       */
+};
 
 
 static MACHINE_DRIVER_START( rastsag2 )
@@ -2149,6 +2174,8 @@ static MACHINE_DRIVER_START( rastsag2 )
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 
 	MDRV_QUANTUM_TIME(HZ(600))
+
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -2165,10 +2192,12 @@ static MACHINE_DRIVER_START( rastsag2 )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color0_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2188,6 +2217,8 @@ static MACHINE_DRIVER_START( ashura )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2203,10 +2234,12 @@ static MACHINE_DRIVER_START( ashura )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color0_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2226,6 +2259,8 @@ static MACHINE_DRIVER_START( crimec )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2241,10 +2276,12 @@ static MACHINE_DRIVER_START( crimec )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color1_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2264,6 +2301,8 @@ static MACHINE_DRIVER_START( tetrist )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2279,10 +2318,12 @@ static MACHINE_DRIVER_START( tetrist )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color0_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2301,6 +2342,8 @@ static MACHINE_DRIVER_START( tetrista )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2316,10 +2359,12 @@ static MACHINE_DRIVER_START( tetrista )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 0.25)
@@ -2339,6 +2384,8 @@ static MACHINE_DRIVER_START( hitice )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2355,10 +2402,12 @@ static MACHINE_DRIVER_START( hitice )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color0_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 0.25)
@@ -2383,6 +2432,8 @@ static MACHINE_DRIVER_START( rambo3 )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2398,10 +2449,12 @@ static MACHINE_DRIVER_START( rambo3 )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color0_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, XTAL_16MHz/2)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2610, XTAL_16MHz/2)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2421,6 +2474,8 @@ static MACHINE_DRIVER_START( rambo3a )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2436,16 +2491,17 @@ static MACHINE_DRIVER_START( rambo3a )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, XTAL_16MHz/2)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2610, XTAL_16MHz/2)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 MACHINE_DRIVER_END
-
 
 static MACHINE_DRIVER_START( pbobble )
 
@@ -2459,8 +2515,11 @@ static MACHINE_DRIVER_START( pbobble )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
-	MDRV_MACHINE_RESET(mb87078)
-	MDRV_NVRAM_HANDLER(taito_b)
+	MDRV_EEPROM_ADD("eeprom", taitob_eeprom_intf)
+
+	MDRV_TC0640FIO_ADD("tc0640fio", pbobble_io_intf)
+
+	MDRV_MB87078_ADD("mb87078", taitob_mb87078_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -2477,10 +2536,12 @@ static MACHINE_DRIVER_START( pbobble )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color1_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610B, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610B, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2500,8 +2561,11 @@ static MACHINE_DRIVER_START( spacedx )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
-	MDRV_MACHINE_RESET(mb87078)
-	MDRV_NVRAM_HANDLER(taito_b)
+	MDRV_EEPROM_ADD("eeprom", taitob_eeprom_intf)
+
+	MDRV_TC0640FIO_ADD("tc0640fio", pbobble_io_intf)
+
+	MDRV_MB87078_ADD("mb87078", taitob_mb87078_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -2518,10 +2582,12 @@ static MACHINE_DRIVER_START( spacedx )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color1_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2541,6 +2607,8 @@ static MACHINE_DRIVER_START( spacedxo )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2556,10 +2624,12 @@ static MACHINE_DRIVER_START( spacedxo )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2579,8 +2649,11 @@ static MACHINE_DRIVER_START( qzshowby )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
-	MDRV_MACHINE_RESET(mb87078)
-	MDRV_NVRAM_HANDLER(taito_b)
+	MDRV_EEPROM_ADD("eeprom", taitob_eeprom_intf)
+
+	MDRV_TC0640FIO_ADD("tc0640fio", pbobble_io_intf)
+
+	MDRV_MB87078_ADD("mb87078", taitob_mb87078_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -2597,10 +2670,12 @@ static MACHINE_DRIVER_START( qzshowby )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color1_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610B, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610B, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2620,6 +2695,8 @@ static MACHINE_DRIVER_START( viofight )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2635,10 +2712,12 @@ static MACHINE_DRIVER_START( viofight )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 0.25)
@@ -2662,6 +2741,8 @@ static MACHINE_DRIVER_START( masterw )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2677,10 +2758,12 @@ static MACHINE_DRIVER_START( masterw )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 0.25)
@@ -2701,6 +2784,8 @@ static MACHINE_DRIVER_START( silentd )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2716,10 +2801,12 @@ static MACHINE_DRIVER_START( silentd )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2739,6 +2826,8 @@ static MACHINE_DRIVER_START( selfeena )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2754,10 +2843,12 @@ static MACHINE_DRIVER_START( selfeena )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2786,6 +2877,8 @@ static MACHINE_DRIVER_START( ryujin )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitob_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2801,10 +2894,12 @@ static MACHINE_DRIVER_START( ryujin )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color2_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2831,6 +2926,8 @@ static MACHINE_DRIVER_START( sbm )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0510NIO_ADD("tc0510nio", sbm_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2846,10 +2943,12 @@ static MACHINE_DRIVER_START( sbm )
 	MDRV_VIDEO_EOF(taitob)
 	MDRV_VIDEO_UPDATE(taitob)
 
+	MDRV_TC0180VCU_ADD("tc0180vcu", color0_tc0180vcu_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610B, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610B, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -2877,10 +2976,10 @@ ROM_START( rastsag2 )
 	ROM_LOAD( "b81-03.14", 0x000000, 0x080000, CRC(551b75e6) SHA1(5b8388ee2c6262f359c9e6d04c951ea8dc3901c9) )
 	ROM_LOAD( "b81-04.15", 0x080000, 0x080000, CRC(cf734e12) SHA1(4201a74468058761454515738fbf3a7b22a66e00) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b81-02.2", 0x00000, 0x80000, CRC(20ec3b86) SHA1(fcdcc7f0a09feb824d8d73b1af0aae7ec30fd1ed) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "b81-01.1", 0x00000, 0x80000, CRC(b33f796b) SHA1(6cdb32f56283acdf20eb46a1e658e3bd7c97978c) )
 ROM_END
 
@@ -2899,10 +2998,10 @@ ROM_START( nastarw )
 	ROM_LOAD( "b81-03.14", 0x000000, 0x080000, CRC(551b75e6) SHA1(5b8388ee2c6262f359c9e6d04c951ea8dc3901c9) )
 	ROM_LOAD( "b81-04.15", 0x080000, 0x080000, CRC(cf734e12) SHA1(4201a74468058761454515738fbf3a7b22a66e00) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b81-02.2", 0x00000, 0x80000, CRC(20ec3b86) SHA1(fcdcc7f0a09feb824d8d73b1af0aae7ec30fd1ed) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "b81-01.1", 0x00000, 0x80000, CRC(b33f796b) SHA1(6cdb32f56283acdf20eb46a1e658e3bd7c97978c) )
 ROM_END
 
@@ -2921,10 +3020,10 @@ ROM_START( nastar )
 	ROM_LOAD( "b81-03.14", 0x000000, 0x080000, CRC(551b75e6) SHA1(5b8388ee2c6262f359c9e6d04c951ea8dc3901c9) )
 	ROM_LOAD( "b81-04.15", 0x080000, 0x080000, CRC(cf734e12) SHA1(4201a74468058761454515738fbf3a7b22a66e00) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b81-02.2", 0x00000, 0x80000, CRC(20ec3b86) SHA1(fcdcc7f0a09feb824d8d73b1af0aae7ec30fd1ed) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "b81-01.1", 0x00000, 0x80000, CRC(b33f796b) SHA1(6cdb32f56283acdf20eb46a1e658e3bd7c97978c) )
 
 	ROM_REGION( 0x0400, "plds", 0 )
@@ -2947,7 +3046,7 @@ ROM_START( crimec )
 	ROM_LOAD( "b99-02.18", 0x000000, 0x080000, CRC(2a5d4a26) SHA1(94bdfca9365970a80a639027b195b71cebc5ab9c) )
 	ROM_LOAD( "b99-01.19", 0x080000, 0x080000, CRC(a19e373a) SHA1(2208c9142473dc2218fd8b97fd6d0c861aeba011) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b99-03.37", 0x000000, 0x080000, CRC(dda10df7) SHA1(ffbe1423794035e6f049fddb096b7282610b7cee) )
 ROM_END
 
@@ -2966,7 +3065,7 @@ ROM_START( crimecu )
 	ROM_LOAD( "b99-02.18", 0x000000, 0x080000, CRC(2a5d4a26) SHA1(94bdfca9365970a80a639027b195b71cebc5ab9c) )
 	ROM_LOAD( "b99-01.19", 0x080000, 0x080000, CRC(a19e373a) SHA1(2208c9142473dc2218fd8b97fd6d0c861aeba011) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b99-03.37", 0x000000, 0x080000, CRC(dda10df7) SHA1(ffbe1423794035e6f049fddb096b7282610b7cee) )
 ROM_END
 
@@ -2985,7 +3084,7 @@ ROM_START( crimecj )
 	ROM_LOAD( "b99-02.18", 0x000000, 0x080000, CRC(2a5d4a26) SHA1(94bdfca9365970a80a639027b195b71cebc5ab9c) )
 	ROM_LOAD( "b99-01.19", 0x080000, 0x080000, CRC(a19e373a) SHA1(2208c9142473dc2218fd8b97fd6d0c861aeba011) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "b99-03.37", 0x000000, 0x080000, CRC(dda10df7) SHA1(ffbe1423794035e6f049fddb096b7282610b7cee) )
 ROM_END
 
@@ -3004,7 +3103,7 @@ ROM_START( ashura )
 	ROM_LOAD( "c43-02",  0x00000, 0x80000, CRC(105722ae) SHA1(1de5d396d2a4d5948544082c471a15ca1b8e756c) )
 	ROM_LOAD( "c43-03",  0x80000, 0x80000, CRC(426606ba) SHA1(961ec0a9dc18044adae433337bfa89d951c5207c) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "c43-01",  0x00000, 0x80000, CRC(db953f37) SHA1(252591b676366d4828acb20c77aa9960ad9b367e) )
 ROM_END
 
@@ -3023,7 +3122,7 @@ ROM_START( ashuraj )
 	ROM_LOAD( "c43-02",  0x00000, 0x80000, CRC(105722ae) SHA1(1de5d396d2a4d5948544082c471a15ca1b8e756c) )
 	ROM_LOAD( "c43-03",  0x80000, 0x80000, CRC(426606ba) SHA1(961ec0a9dc18044adae433337bfa89d951c5207c) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "c43-01",  0x00000, 0x80000, CRC(db953f37) SHA1(252591b676366d4828acb20c77aa9960ad9b367e) )
 ROM_END
 
@@ -3042,7 +3141,7 @@ ROM_START( ashurau )
 	ROM_LOAD( "c43-02",  0x00000, 0x80000, CRC(105722ae) SHA1(1de5d396d2a4d5948544082c471a15ca1b8e756c) )
 	ROM_LOAD( "c43-03",  0x80000, 0x80000, CRC(426606ba) SHA1(961ec0a9dc18044adae433337bfa89d951c5207c) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "c43-01",  0x00000, 0x80000, CRC(db953f37) SHA1(252591b676366d4828acb20c77aa9960ad9b367e) )
 ROM_END
 
@@ -3060,10 +3159,10 @@ ROM_START( tetrist )
 	ROM_REGION( 0x100000, "gfx1", ROMREGION_ERASE00 )
 	/* empty (uses only pixel layer) */
 
-	ROM_REGION( 0x80000, "ym", ROMREGION_ERASE00 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", ROMREGION_ERASE00 )	/* adpcm samples */
 	/* empty */
 
-	ROM_REGION( 0x80000, "ym.deltat", ROMREGION_ERASE00 )	/* DELTA-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", ROMREGION_ERASE00 )	/* DELTA-T samples */
 	/* empty */
 ROM_END
 
@@ -3176,7 +3275,7 @@ ROM_START( rambo3 )
 	ROM_LOAD( "r3-ch2lh.rom", 0x1c0000, 0x020000, CRC(df3bc48f) SHA1(6747a453da4bca0b837f4ef1f1bbe871f15332ed) )
 	ROM_LOAD( "r3-ch2hh.rom", 0x1e0000, 0x020000, CRC(bf37dfac) SHA1(27e825bd0a4d7ae65714fefeb6fedac501984ba9) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "r3-a1.rom", 0x00000, 0x20000, CRC(4396fa19) SHA1(cb6d983f210249676c500723041d74fa3fdc517d) )
 	ROM_LOAD( "r3-a2.rom", 0x20000, 0x20000, CRC(41fe53a8) SHA1(1723046111d0115d3f64c3111c50d51306e88ad0) )
 	ROM_LOAD( "r3-a3.rom", 0x40000, 0x20000, CRC(e89249ba) SHA1(cd94492a0643e9e1e25b121160914822a6a7723e) )
@@ -3200,7 +3299,7 @@ ROM_START( rambo3a )
 	ROM_LOAD( "ramb3-01.bin",  0x100000, 0x80000, CRC(c55fcf54) SHA1(6a26ed2541be9e3341f20e74cc49b5366ce7d424) )
 	ROM_LOAD( "ramb3-02.bin",  0x180000, 0x80000, CRC(9dd014c6) SHA1(0f046d9de57db0272810adde7d49cc348b78f1f7) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "ramb3-05.bin", 0x00000, 0x80000, CRC(0179dc40) SHA1(89feb708618ae7fa96883473d5c7a09dcc6f452a) )
 ROM_END
 
@@ -3221,7 +3320,7 @@ ROM_START( rambo3ae )
 	ROM_LOAD( "ramb3-01.bin",  0x100000, 0x80000, CRC(c55fcf54) SHA1(6a26ed2541be9e3341f20e74cc49b5366ce7d424) )
 	ROM_LOAD( "ramb3-02.bin",  0x180000, 0x80000, CRC(9dd014c6) SHA1(0f046d9de57db0272810adde7d49cc348b78f1f7) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "ramb3-05.bin", 0x00000, 0x80000, CRC(0179dc40) SHA1(89feb708618ae7fa96883473d5c7a09dcc6f452a) )
 ROM_END
 
@@ -3238,7 +3337,7 @@ ROM_START( pbobble )
 	ROM_LOAD( "pb-ic14.bin", 0x00000, 0x80000, CRC(55f90ea4) SHA1(793c79e5b72171124368ad09dd31235252c541f5) )
 	ROM_LOAD( "pb-ic9.bin",  0x80000, 0x80000, CRC(3253aac9) SHA1(916d85aa96e2914630833292a0655b0389b4a39b) )
 
-	ROM_REGION( 0x100000, "ym", 0 )
+	ROM_REGION( 0x100000, "ymsnd", 0 )
 	ROM_LOAD( "pb-ic15.bin", 0x000000, 0x100000, CRC(0840cbc4) SHA1(1adbd7aef44fa80832f63dfb8efdf69fd7256a57) )
 ROM_END
 
@@ -3255,7 +3354,7 @@ ROM_START( spacedx )
 	ROM_LOAD( "d89-02.14", 0x00000, 0x80000, CRC(c36544b9) SHA1(6bd5257dfb27532621b75f43e31aa351ad2192a2) )
 	ROM_LOAD( "d89-01.9",  0x80000, 0x80000, CRC(fffa0660) SHA1(de1abe1b1e9d14405b5663103ea4a6119fce7cc5) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* adpcm samples */
 	ROM_LOAD( "d89-03.15", 0x00000, 0x80000, CRC(218f31a4) SHA1(9f52b9fa8f02003888180524a6e9ee7c9230f55d) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -3281,7 +3380,7 @@ ROM_START( spacedxj )
 	ROM_LOAD( "d89-02.14", 0x00000, 0x80000, CRC(c36544b9) SHA1(6bd5257dfb27532621b75f43e31aa351ad2192a2) )
 	ROM_LOAD( "d89-01.9" , 0x80000, 0x80000, CRC(fffa0660) SHA1(de1abe1b1e9d14405b5663103ea4a6119fce7cc5) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* adpcm samples */
 	ROM_LOAD( "d89-03.15", 0x00000, 0x80000, CRC(218f31a4) SHA1(9f52b9fa8f02003888180524a6e9ee7c9230f55d) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -3307,7 +3406,7 @@ ROM_START( spacedxo )
 	ROM_LOAD( "d89-12.bin",0x00000, 0x80000, CRC(53df86f1) SHA1(f03d77dd54eb455462133a29dd8fec007abedcfd) )
 	ROM_LOAD( "d89-13.bin",0x80000, 0x80000, CRC(c44c1352) SHA1(78a04fe0ade6e8f9e6bbda7652a54a79b6208fdd) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* adpcm samples */
 	ROM_LOAD( "d89-03.15", 0x00000, 0x80000, CRC(218f31a4) SHA1(9f52b9fa8f02003888180524a6e9ee7c9230f55d) )
 ROM_END
 
@@ -3324,7 +3423,7 @@ ROM_START( qzshowby )
 	ROM_LOAD( "d72-03.bin", 0x000000, 0x200000, CRC(1de257d0) SHA1(df03b1fb5cd69e2d2eb2088f96f26b0ea9756fb7) )
 	ROM_LOAD( "d72-02.bin", 0x200000, 0x200000, CRC(bf0da640) SHA1(2b2493904ed0b94dc12b56dae71cc5c25701aef9) )
 
-	ROM_REGION( 0x200000, "ym", 0 )
+	ROM_REGION( 0x200000, "ymsnd", 0 )
 	ROM_LOAD( "d72-01.bin", 0x00000, 0x200000, CRC(b82b8830) SHA1(4b2dca16fe072a5ee51de5cf40637e3f1b39f695) )
 ROM_END
 
@@ -3468,10 +3567,10 @@ ROM_START( silentd )
 	ROM_LOAD( "east-03.ic39", 0x200000, 0x100000, CRC(1b9b2846) SHA1(d9c87e130bc3baa949d8a8738daad648fcf284df) )
 	ROM_LOAD( "east-05.ic40", 0x300000, 0x100000, CRC(e02472c5) SHA1(35572610f6823ec980a928a75abd689197ebe207) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "east-01.ic1", 0x00000, 0x80000, CRC(b41fff1a) SHA1(54920d13fa2b3000eedab9d0050a299ae743c663) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "east-02.ic3", 0x00000, 0x80000, CRC(e0de5c39) SHA1(75d0e193d882e67921c216c3293454e34304d25e) )
 ROM_END
 
@@ -3492,10 +3591,10 @@ ROM_START( silentdj )
 	ROM_LOAD( "east-03.ic39", 0x200000, 0x100000, CRC(1b9b2846) SHA1(d9c87e130bc3baa949d8a8738daad648fcf284df) )
 	ROM_LOAD( "east-05.ic40", 0x300000, 0x100000, CRC(e02472c5) SHA1(35572610f6823ec980a928a75abd689197ebe207) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "east-01.ic1", 0x00000, 0x80000, CRC(b41fff1a) SHA1(54920d13fa2b3000eedab9d0050a299ae743c663) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "east-02.ic3", 0x00000, 0x80000, CRC(e0de5c39) SHA1(75d0e193d882e67921c216c3293454e34304d25e) )
 ROM_END
 
@@ -3516,10 +3615,10 @@ ROM_START( silentdu )
 	ROM_LOAD( "east-03.ic39", 0x200000, 0x100000, CRC(1b9b2846) SHA1(d9c87e130bc3baa949d8a8738daad648fcf284df) )
 	ROM_LOAD( "east-05.ic40", 0x300000, 0x100000, CRC(e02472c5) SHA1(35572610f6823ec980a928a75abd689197ebe207) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "east-01.ic1", 0x00000, 0x80000, CRC(b41fff1a) SHA1(54920d13fa2b3000eedab9d0050a299ae743c663) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "east-02.ic3", 0x00000, 0x80000, CRC(e0de5c39) SHA1(75d0e193d882e67921c216c3293454e34304d25e) )
 ROM_END
 
@@ -3536,7 +3635,7 @@ ROM_START( selfeena )
 	ROM_LOAD( "se-04.2",  0x000000, 0x80000, CRC(920ad100) SHA1(69cd2af6218db90632f09a131d2956ab69034643) )
 	ROM_LOAD( "se-05.1",  0x080000, 0x80000, CRC(d297c995) SHA1(e5ad5a8ce222621c9156c2949916bee6b3099c4e) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* adpcm samples */
 	ROM_LOAD( "se-06.11", 0x00000, 0x80000, CRC(80d5e772) SHA1(bee4982a3d65210ff86495e36a0b656934b00c7d) )
 ROM_END
 
@@ -3555,7 +3654,7 @@ ROM_START( ryujin )
 	ROM_LOAD( "ryujin07.2", 0x000000, 0x100000, CRC(34f50980) SHA1(432384bd283389bca17611602eb310726c9d78a4) )
 	ROM_LOAD( "ryujin06.1", 0x100000, 0x100000, CRC(1b85ff34) SHA1(5ad259e6f7aa4a0c08975da73bf41400495f2e61) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* adpcm samples */
 	ROM_LOAD( "ryujin08.11", 0x00000, 0x80000, CRC(480d040d) SHA1(50add2f304ef34f7f45f25a2a2cf0568d58259ad) )
 ROM_END
 
@@ -3580,13 +3679,13 @@ ROM_START( sbm )
 	ROM_LOAD16_BYTE( "c69-14.ic3", 0x300001, 0x020000, CRC(0ed0272a) SHA1(03b15654213ff71ffc96d3a87657bdeb724e9269) )
 	/* 340000-3fffff empty */
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* adpcm samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* adpcm samples */
 	ROM_LOAD( "c69-03.36", 0x00000, 0x80000, CRC(63e6b6e7) SHA1(72574ca7505eee15fabc4996f253505d9dd65898) )
 ROM_END
 
 static DRIVER_INIT( taito_b )
 {
-	memory_configure_bank(machine, 1, 0, 4, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
+	memory_configure_bank(machine, "bank1", 0, 4, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
 }
 
 GAME( 1989, masterw,  0,       masterw,  masterw,  taito_b, ROT270, "Taito Corporation Japan", "Master of Weapon (World)", GAME_SUPPORTS_SAVE )
@@ -3618,9 +3717,9 @@ GAME( 1992, silentdu, silentd, silentd,  silentdj, taito_b, ROT0,   "Taito Ameri
 GAME( 1993, ryujin,   0,       ryujin,   ryujin,   taito_b, ROT270, "Taito Corporation", "Ryu Jin (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1993, qzshowby, 0,       qzshowby, qzshowby, taito_b, ROT0,   "Taito Corporation", "Quiz Sekai wa SHOW by shobai (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1994, pbobble,  0,       pbobble,  pbobble,  taito_b, ROT0,   "Taito Corporation", "Puzzle Bobble (Japan, B-System)", GAME_SUPPORTS_SAVE )
-GAME( 1994, spacedx,  0,       spacedx,  pbobble,  taito_b, ROT0,   "Taito Corporation", "Space Invaders DX (US) v2.1", GAME_SUPPORTS_SAVE )
-GAME( 1994, spacedxj, spacedx, spacedx,  pbobble,  taito_b, ROT0,   "Taito Corporation", "Space Invaders DX (Japan) v2.1", GAME_SUPPORTS_SAVE )
-GAME( 1994, spacedxo, spacedx, spacedxo, spacedxo, taito_b, ROT0,   "Taito Corporation", "Space Invaders DX (Japan) v2.0", GAME_SUPPORTS_SAVE )
+GAME( 1994, spacedx,  0,       spacedx,  pbobble,  taito_b, ROT0,   "Taito Corporation", "Space Invaders DX (US, v2.1)", GAME_SUPPORTS_SAVE )
+GAME( 1994, spacedxj, spacedx, spacedx,  pbobble,  taito_b, ROT0,   "Taito Corporation", "Space Invaders DX (Japan, v2.1)", GAME_SUPPORTS_SAVE )
+GAME( 1994, spacedxo, spacedx, spacedxo, spacedxo, taito_b, ROT0,   "Taito Corporation", "Space Invaders DX (Japan, v2.0)", GAME_SUPPORTS_SAVE )
 /*
     Sonic Blast Man is a ticket dispensing game.
     (Japanese version however does not dispense them, only US does - try the "sbm_patch" in the machine_config).

@@ -61,24 +61,24 @@ static WRITE8_HANDLER(sangho_ram_w)
 
 static ADDRESS_MAP_START( pzlestar_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_WRITE(sangho_ram_w)
-	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK(1)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(2)
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(3)
-	AM_RANGE(0xc000, 0xffff) AM_ROMBANK(4)
+	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank2")
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank3")
+	AM_RANGE(0xc000, 0xffff) AM_ROMBANK("bank4")
 ADDRESS_MAP_END
 
 /* Wrong ! */
 static WRITE8_HANDLER(pzlestar_bank_w)
 {
-	memory_set_bankptr(space->machine, 2,&memory_region(space->machine, "user1")[0x20000+ ( ((0x8000*data)^0x10000))  ]);
-	memory_set_bankptr(space->machine, 3,&memory_region(space->machine, "user1")[  0x18000  ]);
+	memory_set_bankptr(space->machine, "bank2",&memory_region(space->machine, "user1")[0x20000+ ( ((0x8000*data)^0x10000))  ]);
+	memory_set_bankptr(space->machine, "bank3",&memory_region(space->machine, "user1")[  0x18000  ]);
 }
 
 /* Puzzle Star Ports */
 
 static ADDRESS_MAP_START( pzlestar_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE( 0x7c, 0x7d) AM_DEVWRITE( "ym", ym2413_w )
+	AM_RANGE( 0x7c, 0x7d) AM_DEVWRITE( "ymsnd", ym2413_w )
 	AM_RANGE( 0x91, 0x91) AM_WRITE( pzlestar_bank_w )
 	AM_RANGE( 0x98, 0x98) AM_READWRITE( v9938_0_vram_r, v9938_0_vram_w )
 	AM_RANGE( 0x99, 0x99) AM_READWRITE( v9938_0_status_r, v9938_0_command_w )
@@ -93,7 +93,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sexyboom_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE( 0x7c, 0x7d) AM_DEVWRITE( "ym", ym2413_w )
+	AM_RANGE( 0x7c, 0x7d) AM_DEVWRITE( "ymsnd", ym2413_w )
 	AM_RANGE( 0xa0, 0xa0) AM_READ_PORT("P1")
 	AM_RANGE( 0xa1, 0xa1) AM_READ_PORT("P2")
 	AM_RANGE( 0xf0, 0xf0) AM_READWRITE( v9938_0_vram_r,v9938_0_vram_w )
@@ -166,10 +166,10 @@ INPUT_PORTS_END
 
 static void sangho_common_machine_reset(running_machine *machine)
 {
-	memory_set_bankptr(machine, 1,&sangho_ram[0]);
-	memory_set_bankptr(machine, 2,&sangho_ram[0x4000]);
-	memory_set_bankptr(machine, 3,&sangho_ram[0x8000]);
-	memory_set_bankptr(machine, 4,&sangho_ram[0xc000]);
+	memory_set_bankptr(machine, "bank1",&sangho_ram[0]);
+	memory_set_bankptr(machine, "bank2",&sangho_ram[0x4000]);
+	memory_set_bankptr(machine, "bank3",&sangho_ram[0x8000]);
+	memory_set_bankptr(machine, "bank4",&sangho_ram[0xc000]);
 	v9938_reset(0);
 }
 
@@ -213,7 +213,7 @@ static INTERRUPT_GEN( sangho_interrupt )
 static VIDEO_START( sangho )
 {
 	VIDEO_START_CALL(generic_bitmapped);
-	v9938_init (machine, 0, machine->primary_screen, tmpbitmap, MODEL_V9938, 0x20000, msx_vdp_interrupt);
+	v9938_init (machine, 0, machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, 0x20000, msx_vdp_interrupt);
 }
 
 static MACHINE_DRIVER_START(pzlestar)
@@ -243,7 +243,7 @@ static MACHINE_DRIVER_START(pzlestar)
 
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, 3580000)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3580000)
 
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -275,7 +275,7 @@ static MACHINE_DRIVER_START(sexyboom )
 	MDRV_VIDEO_UPDATE( generic_bitmapped )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, 3580000)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3580000)
 
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END

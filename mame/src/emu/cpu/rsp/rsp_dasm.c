@@ -275,7 +275,7 @@ offs_t rsp_dasm_one(char *buffer, offs_t pc, UINT32 op)
 						print("jalr   %s, %s", reg[rs], reg[rd]);
 					}
 					flags = DASMFLAG_STEP_OVER | DASMFLAG_STEP_OVER_EXTRA(1);
- 					break;
+					break;
 				}
 				case 0x0d:	print("break"); flags = DASMFLAG_STEP_OVER;	break;
 				case 0x20:	print("add    %s, %s, %s", reg[rd], reg[rs], reg[rt]); break;
@@ -348,6 +348,7 @@ offs_t rsp_dasm_one(char *buffer, offs_t pc, UINT32 op)
 
 CPU_DISASSEMBLE( rsp )
 {
-	UINT32 op = LITTLE_ENDIANIZE_INT32(*(UINT32 *)opram);
+	UINT32 op = *(UINT32 *)opram;
+	op = LITTLE_ENDIANIZE_INT32(op);
 	return rsp_dasm_one(buffer, pc, op);
 }

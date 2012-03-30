@@ -73,7 +73,7 @@ static UINT8 sound_latch;
 
 static WRITE8_HANDLER( shangkid_maincpu_bank_w )
 {
-	memory_set_bank(space->machine, 1, data & 1);
+	memory_set_bank(space->machine, "bank1", data & 1);
 }
 
 static WRITE8_HANDLER( shangkid_bbx_enable_w )
@@ -117,7 +117,7 @@ static WRITE8_DEVICE_HANDLER( shangkid_ay8910_porta_w )
 			cputag_set_input_line(device->machine, "audiocpu", 0, HOLD_LINE );
 	}
 	else
-		memory_set_bank(device->machine, 2, data ? 0 : 1);
+		memory_set_bank(device->machine, "bank2", data ? 0 : 1);
 }
 
 static WRITE8_DEVICE_HANDLER( ay8910_portb_w )
@@ -144,8 +144,8 @@ static DRIVER_INIT( shangkid )
 	shangkid_gfx_type = 1;
 
 	/* set up banking */
-	memory_configure_bank(machine, 1, 0, 2, memory_region(machine, "maincpu") + 0x8000, 0x8000);
-	memory_configure_bank(machine, 2, 0, 2, memory_region(machine, "audiocpu") + 0x0000, 0x10000);
+	memory_configure_bank(machine, "bank1", 0, 2, memory_region(machine, "maincpu") + 0x8000, 0x8000);
+	memory_configure_bank(machine, "bank2", 0, 2, memory_region(machine, "audiocpu") + 0x0000, 0x10000);
 }
 
 /***************************************************************************************/
@@ -159,8 +159,8 @@ static MACHINE_RESET( shangkid )
 {
 	cputag_set_input_line(machine, "bbx", INPUT_LINE_HALT, 1 );
 
-	memory_set_bank(machine, 1, 0);
-	memory_set_bank(machine, 2, 0);
+	memory_set_bank(machine, "bank1", 0);
+	memory_set_bank(machine, "bank2", 0);
 }
 
 /***************************************************************************************/
@@ -256,15 +256,15 @@ static ADDRESS_MAP_START( chinhero_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb801, 0xb801) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xb802, 0xb802) AM_READ_PORT("P2")
 	AM_RANGE(0xb803, 0xb803) AM_READ_PORT("P1")
-	AM_RANGE(0xc000, 0xc002) AM_WRITE(SMH_RAM) AM_BASE(&shangkid_videoreg)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_BASE(&videoram) AM_SHARE(1)
-	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE(2)
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SHARE(3)
+	AM_RANGE(0xc000, 0xc002) AM_WRITEONLY AM_BASE(&shangkid_videoreg)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_BASE_GENERIC(videoram) AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share3")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( shangkid_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xa000) AM_WRITENOP /* ? */
 	AM_RANGE(0xb000, 0xb000) AM_WRITE(shangkid_bbx_enable_w)
 	AM_RANGE(0xb001, 0xb001) AM_WRITE(shangkid_sound_enable_w)
@@ -277,10 +277,10 @@ static ADDRESS_MAP_START( shangkid_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb801, 0xb801) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xb802, 0xb802) AM_READ_PORT("P2")
 	AM_RANGE(0xb803, 0xb803) AM_READ_PORT("P1")
-	AM_RANGE(0xc000, 0xc002) AM_WRITE(SMH_RAM) AM_BASE(&shangkid_videoreg)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_BASE(&videoram) AM_SHARE(1)
-	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE(2)
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SHARE(3)
+	AM_RANGE(0xc000, 0xc002) AM_WRITEONLY AM_BASE(&shangkid_videoreg)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_BASE_GENERIC(videoram) AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share3")
 ADDRESS_MAP_END
 
 /***************************************************************************************/
@@ -298,9 +298,9 @@ static ADDRESS_MAP_START( chinhero_bbx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb801, 0xb801) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xb802, 0xb802) AM_READ_PORT("P2")
 	AM_RANGE(0xb803, 0xb803) AM_READ_PORT("P1")
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_SHARE(1)
-	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE(2)
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_SHARE(3)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_SHARE("share3")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( shangkid_bbx_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -317,19 +317,19 @@ static ADDRESS_MAP_START( shangkid_bbx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb801, 0xb801) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xb802, 0xb802) AM_READ_PORT("P2")
 	AM_RANGE(0xb803, 0xb803) AM_READ_PORT("P1")
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_SHARE(1)
-	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE(2)
-	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_SHARE(3)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(shangkid_videoram_w) AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xfdff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xfe00, 0xffff) AM_RAM AM_SHARE("share3")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( chinhero_bbx_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( shangkid_bbx_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 /***************************************************************************************/
@@ -340,7 +340,7 @@ static ADDRESS_MAP_START( chinhero_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( shangkid_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xdfff) AM_ROMBANK(2) /* sample player writes to ROM area */
+	AM_RANGE(0x0000, 0xdfff) AM_ROMBANK("bank2") /* sample player writes to ROM area */
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
@@ -414,7 +414,7 @@ static MACHINE_DRIVER_START( chinhero )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_18_432MHz/12) /* verified on pcb */
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_18_432MHz/12) /* verified on pcb */
 	MDRV_SOUND_CONFIG(chinhero_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 MACHINE_DRIVER_END
@@ -439,7 +439,7 @@ static MACHINE_DRIVER_START( shangkid )
 	/* video hardware */
 	MDRV_GFXDECODE(shangkid)
 
-	MDRV_SOUND_MODIFY("ay")
+	MDRV_SOUND_MODIFY("aysnd")
 	MDRV_SOUND_CONFIG(shangkid_ay8910_interface)
 MACHINE_DRIVER_END
 
@@ -447,7 +447,7 @@ MACHINE_DRIVER_END
 
 static ADDRESS_MAP_START( dynamski_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE(&videoram) /* tilemap */
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_GENERIC(videoram) /* tilemap */
 	AM_RANGE(0xc800, 0xcbff) AM_RAM
 	AM_RANGE(0xd000, 0xd3ff) AM_RAM
 	AM_RANGE(0xd800, 0xdbff) AM_RAM
@@ -463,7 +463,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( dynamski_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	/* ports are reversed */
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
 static MACHINE_DRIVER_START( dynamski )
@@ -491,7 +491,7 @@ static MACHINE_DRIVER_START( dynamski )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 2000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 MACHINE_DRIVER_END
 

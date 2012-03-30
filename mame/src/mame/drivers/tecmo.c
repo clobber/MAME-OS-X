@@ -75,7 +75,7 @@ static WRITE8_HANDLER( tecmo_bankswitch_w )
 
 
 	bankaddress = 0x10000 + ((data & 0xf8) << 8);
-	memory_set_bankptr(space->machine, 1, &RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank1", &RAM[bankaddress]);
 }
 
 static WRITE8_HANDLER( tecmo_sound_command_w )
@@ -152,9 +152,9 @@ static ADDRESS_MAP_START( rygar_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(tecmo_txvideoram_w) AM_BASE(&tecmo_txvideoram)
 	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(tecmo_fgvideoram_w) AM_BASE(&tecmo_fgvideoram)
 	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(tecmo_bgvideoram_w) AM_BASE(&tecmo_bgvideoram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(1)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank1")
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("JOY1")
 	AM_RANGE(0xf801, 0xf801) AM_READ_PORT("BUTTONS1")
 	AM_RANGE(0xf802, 0xf802) AM_READ_PORT("JOY2")
@@ -180,9 +180,9 @@ static ADDRESS_MAP_START( gemini_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(tecmo_txvideoram_w) AM_BASE(&tecmo_txvideoram)
 	AM_RANGE(0xd800, 0xdbff) AM_RAM_WRITE(tecmo_fgvideoram_w) AM_BASE(&tecmo_fgvideoram)
 	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(tecmo_bgvideoram_w) AM_BASE(&tecmo_bgvideoram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(1)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank1")
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("JOY1")
 	AM_RANGE(0xf801, 0xf801) AM_READ_PORT("BUTTONS1")
 	AM_RANGE(0xf802, 0xf802) AM_READ_PORT("JOY2")
@@ -208,9 +208,9 @@ static ADDRESS_MAP_START( silkworm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(tecmo_fgvideoram_w) AM_BASE(&tecmo_fgvideoram)
 	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(tecmo_txvideoram_w) AM_BASE(&tecmo_txvideoram)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(1)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank1")
 	AM_RANGE(0xf800, 0xf800) AM_READ_PORT("JOY1")
 	AM_RANGE(0xf801, 0xf801) AM_READ_PORT("BUTTONS1")
 	AM_RANGE(0xf802, 0xf802) AM_READ_PORT("JOY2")
@@ -234,7 +234,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( rygar_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("ym", ym3812_w)
+	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("ymsnd", ym3812_w)
 	AM_RANGE(0xc000, 0xc000) AM_READ(soundlatch_r) AM_DEVWRITE("msm", tecmo_adpcm_start_w)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(tecmo_adpcm_end_w)
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("msm", tecmo_adpcm_vol_w)
@@ -246,7 +246,7 @@ static ADDRESS_MAP_START( tecmo_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 												/* writes code to this area */
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("ym", ym3812_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("ymsnd", ym3812_w)
 	AM_RANGE(0xc000, 0xc000) AM_READ(soundlatch_r) AM_DEVWRITE("msm", tecmo_adpcm_start_w)
 	AM_RANGE(0xc400, 0xc400) AM_WRITE(tecmo_adpcm_end_w)
 	AM_RANGE(0xc800, 0xc800) AM_DEVWRITE("msm", tecmo_adpcm_vol_w)
@@ -704,7 +704,7 @@ static MACHINE_DRIVER_START( rygar )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, XTAL_4MHz) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_4MHz) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
@@ -763,7 +763,7 @@ static MACHINE_DRIVER_START( backfirt )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, XTAL_4MHz) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_4MHz) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
@@ -813,7 +813,7 @@ ROM_END
 
 ROM_START( rygar2 )
 	ROM_REGION( 0x18000, "maincpu", 0 )
-	ROM_LOAD( "5p.bin",   	  0x00000, 0x08000, CRC(151ffc0b) SHA1(0eb877f2c68d3d1f52d7b12d0a8ad08c9932c054) ) /* code */
+	ROM_LOAD( "5p.bin", 	  0x00000, 0x08000, CRC(151ffc0b) SHA1(0eb877f2c68d3d1f52d7b12d0a8ad08c9932c054) ) /* code */
 	ROM_LOAD( "cpu_5m.bin",   0x08000, 0x04000, CRC(7ac5191b) SHA1(305f39d974f906f9bc24e9fe2ca58e647925ab63) ) /* code */
 	ROM_LOAD( "cpu_5j.bin",   0x10000, 0x08000, CRC(ed76d606) SHA1(39c8a07e9a1f218ad088d00a2c9dfc993efafb6b) ) /* banked at f000-f7ff */
 
@@ -1088,9 +1088,9 @@ static DRIVER_INIT( backfirt )
 	tecmo_video_type = 2;
 
 	/* no MSM */
-	memory_install_write8_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xc000, 0, 0, (write8_space_func)SMH_NOP);
-	memory_install_write8_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), 0xd000, 0xd000, 0, 0, (write8_space_func)SMH_NOP);
-	memory_install_write8_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xe000, 0, 0, (write8_space_func)SMH_NOP);
+	memory_nop_write(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xc000, 0, 0);
+	memory_nop_write(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), 0xd000, 0xd000, 0, 0);
+	memory_nop_write(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xe000, 0, 0);
 
 
 }

@@ -225,7 +225,7 @@ Stephh's notes (based on the games M68000 code and some tests) :
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
 
-static tilemap *fg_tilemap,*bg_tilemap;
+static tilemap_t *fg_tilemap,*bg_tilemap;
 static UINT16 *nmg5_bitmap;
 static UINT16 *fg_videoram,*bg_videoram,*scroll_ram;
 static UINT8 prot_val, input_data, priority_reg, gfx_bank;
@@ -292,8 +292,8 @@ static WRITE8_DEVICE_HANDLER( oki_banking_w )
 static ADDRESS_MAP_START( nmg5_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x120000, 0x12ffff) AM_RAM
-	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x180000, 0x180001) AM_WRITE(nmg5_soundlatch_w)
 	AM_RANGE(0x180002, 0x180003) AM_WRITENOP
 	AM_RANGE(0x180004, 0x180005) AM_READWRITE(prot_r, prot_w)
@@ -302,7 +302,7 @@ static ADDRESS_MAP_START( nmg5_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x18000a, 0x18000b) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x18000c, 0x18000d) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x18000e, 0x18000f) AM_WRITE(priority_reg_w)
-	AM_RANGE(0x300002, 0x300009) AM_WRITE(SMH_RAM) AM_BASE(&scroll_ram)
+	AM_RANGE(0x300002, 0x300009) AM_WRITEONLY AM_BASE(&scroll_ram)
 	AM_RANGE(0x30000a, 0x30000f) AM_WRITENOP
 	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(bg_videoram_w) AM_BASE(&bg_videoram)
 	AM_RANGE(0x322000, 0x323fff) AM_RAM_WRITE(fg_videoram_w) AM_BASE(&fg_videoram)
@@ -312,8 +312,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( pclubys_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM
-	AM_RANGE(0x440000, 0x4407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x460000, 0x4607ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x440000, 0x4407ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x460000, 0x4607ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x480000, 0x480001) AM_WRITE(nmg5_soundlatch_w)
 	AM_RANGE(0x480002, 0x480003) AM_WRITENOP
 	AM_RANGE(0x480004, 0x480005) AM_READWRITE(prot_r, prot_w)
@@ -322,7 +322,7 @@ static ADDRESS_MAP_START( pclubys_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x48000a, 0x48000b) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x48000c, 0x48000d) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x48000e, 0x48000f) AM_WRITE(priority_reg_w)
-	AM_RANGE(0x500002, 0x500009) AM_WRITE(SMH_RAM) AM_BASE(&scroll_ram)
+	AM_RANGE(0x500002, 0x500009) AM_WRITEONLY AM_BASE(&scroll_ram)
 	AM_RANGE(0x520000, 0x521fff) AM_RAM_WRITE(bg_videoram_w) AM_BASE(&bg_videoram)
 	AM_RANGE(0x522000, 0x523fff) AM_RAM_WRITE(fg_videoram_w) AM_BASE(&fg_videoram)
 	AM_RANGE(0x800000, 0x80ffff) AM_RAM AM_BASE(&nmg5_bitmap)
@@ -347,7 +347,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("oki", oki_banking_w)
-	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x18, 0x18) AM_READ(soundlatch_r)
 	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 ADDRESS_MAP_END
@@ -807,9 +807,10 @@ static VIDEO_START( nmg5 )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 
-	for (offs = 0;offs < spriteram_size/2;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size/2;offs += 4)
 	{
 		int sx,sy,code,color,flipx,flipy,height,y;
 
@@ -1009,7 +1010,7 @@ static MACHINE_DRIVER_START( nmg5 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 4000000) /* 4MHz */
+	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000) /* 4MHz */
 	MDRV_SOUND_CONFIG(ym3812_intf)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 

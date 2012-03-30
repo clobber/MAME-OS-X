@@ -564,8 +564,8 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	dkong_state *state = (dkong_state *)machine->driver_data;
 	int offs;
 	int scanline_vf;	/* buffering scanline including flip */
-	int scanline_vfc;  		/* line buffering scanline including flip - this is the cached scanline_vf*/
-	int scanline; 		/* current scanline */
+	int scanline_vfc;		/* line buffering scanline including flip - this is the cached scanline_vf*/
+	int scanline;		/* current scanline */
 	int add_y;
 	int add_x;
 	int num_sprt;
@@ -694,7 +694,7 @@ INLINE double CD4049(running_machine *machine, double x)
 	dkong_state *state = (dkong_state *)machine->driver_data;
 
 	if (x>0)
-	 	return exp(-state->cd4049_a * pow(x,state->cd4049_b));
+		return exp(-state->cd4049_a * pow(x,state->cd4049_b));
 	else
 		return 1.0;
 }
@@ -714,8 +714,6 @@ INLINE double CD4049(running_machine *machine, double x)
 static void radarscp_step(running_machine *machine, int line_cnt)
 {
 	dkong_state *state = (dkong_state *)machine->driver_data;
-	const device_config *dev6h = devtag_get_device(machine, "ls259.6h");
-	const device_config *devvp2 = devtag_get_device(machine, "virtual_p2");
 
 	/* Condensator is illegible in schematics for TRS2 board.
      * TRS1 board states 3.3u.
@@ -744,7 +742,7 @@ static void radarscp_step(running_machine *machine, int line_cnt)
 		state->sig30Hz = (1-state->sig30Hz);
 
 	/* Now mix with SND02 (sound 2) line - on 74ls259, bit2 */
-	state->rflip_sig = latch8_bit2_r(dev6h, 0) & state->sig30Hz;
+	state->rflip_sig = latch8_bit2_r(state->dev_6h, 0) & state->sig30Hz;
 
 	sig = state->rflip_sig ^ ((line_cnt & 0x80)>>7);
 
@@ -778,7 +776,7 @@ static void radarscp_step(running_machine *machine, int line_cnt)
      *
      * Mixed with ANS line (bit 5) from Port B of 8039
      */
-	if (state->grid_on && latch8_bit5_r(devvp2, 0))
+	if (state->grid_on && latch8_bit5_r(state->dev_vp2, 0))
 	{
 		diff = (0.0 - cv3);
 		diff = diff - diff*exp(0.0 - (1.0/RC32 * dt) );
@@ -813,8 +811,8 @@ static void radarscp_draw_background(running_machine *machine, dkong_state *stat
 {
 	const UINT8 	*htable = NULL;
 	int 			x,y;
-	UINT8 			draw_ok;
-	UINT16 			*pixel;
+	UINT8			draw_ok;
+	UINT16			*pixel;
 
 	if (state->hardware_type == HARDWARE_TRS01)
 		htable = state->gfx4;
@@ -843,7 +841,7 @@ static void radarscp_scanline(running_machine *machine, int scanline)
 	const UINT8 *table = state->gfx3;
 	int 		table_len = state->gfx3_len;
 	int 			x,y,offset;
-	UINT16 			*pixel;
+	UINT16			*pixel;
 	static int		counter=0;
 	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
 
@@ -896,7 +894,7 @@ static void check_palette(running_machine *machine)
 	const input_port_config *port;
 	int newset;
 
-	port = input_port_by_tag(machine->portconfig, "VIDHW");
+	port = input_port_by_tag(&machine->portlist, "VIDHW");
 	if (port != NULL)
 	{
 		newset = input_port_read_direct(port);

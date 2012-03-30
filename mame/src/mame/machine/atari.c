@@ -101,25 +101,19 @@ const pia6821_interface atarixl_pia_interface =
 
 void a600xl_mmu(running_machine *machine, UINT8 new_mmu)
 {
-	read8_space_func rbank2;
-	write8_space_func wbank2;
-
 	/* check if self-test ROM changed */
 	if ( new_mmu & 0x80 )
 	{
 		logerror("%s MMU SELFTEST RAM\n", machine->gamedrv->name);
-		rbank2 = (read8_space_func)SMH_NOP;
-		wbank2 = (write8_space_func)SMH_NOP;
+		memory_nop_readwrite(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x57ff, 0, 0);
 	}
 	else
 	{
 		logerror("%s MMU SELFTEST ROM\n", machine->gamedrv->name);
-		rbank2 = (read8_space_func)SMH_BANK(2);
-		wbank2 = (write8_space_func)SMH_UNMAP;
+		memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x57ff, 0, 0, "bank2");
+		memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x57ff, 0, 0);
+		memory_set_bankptr(machine, "bank2", memory_region(machine, "maincpu") + 0x5000);
 	}
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x57ff, 0, 0, rbank2, wbank2);
-	if (rbank2 == (read8_space_func)SMH_BANK(2))
-		memory_set_bankptr(machine, 2, memory_region(machine, "maincpu") + 0x5000);
 }
 
 
@@ -167,8 +161,10 @@ void a800_handle_keyboard(running_machine *machine)
 {
 	const device_config *pokey = devtag_get_device(machine, "pokey");
 	int atari_code, count, ipt, i;
-	static const char *const tag[] = { "keyboard_0", "keyboard_1", "keyboard_2", "keyboard_3",
-										"keyboard_4", "keyboard_5", "keyboard_6", "keyboard_7" };
+	static const char *const tag[] = {
+		"keyboard_0", "keyboard_1", "keyboard_2", "keyboard_3",
+		"keyboard_4", "keyboard_5", "keyboard_6", "keyboard_7"
+	};
 
 	/* check keyboard */
 	for( i = 0; i < 8; i++ )
@@ -346,7 +342,7 @@ void atari_machine_start(running_machine *machine)
 
 	/* GTIA */
 	memset(&gtia_intf, 0, sizeof(gtia_intf));
-	if (input_port_by_tag(machine->portconfig, "console") != NULL)
+	if (input_port_by_tag(&machine->portlist, "console") != NULL)
 		gtia_intf.console_read = console_read;
 	if (devtag_get_device(machine, "dac") != NULL)
 		gtia_intf.console_write = console_write;

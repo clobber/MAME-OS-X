@@ -149,9 +149,9 @@ static READ8_HANDLER( mrflea_interrupt_type_r )
 static ADDRESS_MAP_START( mrflea_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(mrflea_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xe83f) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE(&paletteram)
-	AM_RANGE(0xec00, 0xecff) AM_RAM_WRITE(mrflea_spriteram_w) AM_BASE(&spriteram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(mrflea_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0xe800, 0xe83f) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xec00, 0xecff) AM_RAM_WRITE(mrflea_spriteram_w) AM_BASE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mrflea_master_io_map, ADDRESS_SPACE_IO, 8 )
@@ -190,7 +190,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mrflea_slave_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog */
-	AM_RANGE(0x10, 0x10) AM_READWRITE(mrflea_interrupt_type_r, SMH_NOP) /* ? / irq ACK */
+	AM_RANGE(0x10, 0x10) AM_READ(mrflea_interrupt_type_r) AM_WRITENOP /* ? / irq ACK */
 	AM_RANGE(0x11, 0x11) AM_WRITENOP /* 0x83,0x00,0xfc */
 	AM_RANGE(0x20, 0x20) AM_READ(mrflea_io_r)
 	AM_RANGE(0x21, 0x21) AM_WRITE(mrflea_main_w)

@@ -127,7 +127,7 @@ static WRITE8_HANDLER( supertnk_bankswitch_0_w )
 
 	bank_address = 0x10000 + (supertnk_rom_bank * 0x1000);
 
-	memory_set_bankptr(space->machine, 1, &memory_region(space->machine, "maincpu")[bank_address]);
+	memory_set_bankptr(space->machine, "bank1", &memory_region(space->machine, "maincpu")[bank_address]);
 }
 
 
@@ -139,7 +139,7 @@ static WRITE8_HANDLER( supertnk_bankswitch_1_w )
 
 	bank_address = 0x10000 + (supertnk_rom_bank * 0x1000);
 
-	memory_set_bankptr(space->machine, 1, &memory_region(space->machine, "maincpu")[bank_address]);
+	memory_set_bankptr(space->machine, "bank1", &memory_region(space->machine, "maincpu")[bank_address]);
 }
 
 
@@ -292,11 +292,11 @@ static MACHINE_RESET( supertnk )
 
 static ADDRESS_MAP_START( supertnk_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
-	AM_RANGE(0x0800, 0x17ff) AM_ROMBANK(1)
+	AM_RANGE(0x0800, 0x17ff) AM_ROMBANK("bank1")
 	AM_RANGE(0x1800, 0x1bff) AM_RAM
 	AM_RANGE(0x1efc, 0x1efc) AM_READ_PORT("JOYS")
 	AM_RANGE(0x1efd, 0x1efd) AM_READ_PORT("INPUTS")
-	AM_RANGE(0x1efe, 0x1eff) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x1efe, 0x1eff) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x1efe, 0x1efe) AM_READ_PORT("DSW")
 	AM_RANGE(0x1eff, 0x1eff) AM_READ_PORT("UNK")
 	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(supertnk_videoram_r, supertnk_videoram_w) AM_SIZE(&supertnk_videoram_size)
@@ -366,7 +366,7 @@ static INPUT_PORTS_START( supertnk )
 	PORT_DIPSETTING(	0x00, "at 15,000 points" )
 	PORT_DIPSETTING(	0x10, "at 10,000 points" )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )
-	PORT_DIPSETTING( 	0x00, "3" )
+	PORT_DIPSETTING(	0x00, "3" )
 	PORT_DIPSETTING(	0x20, "5" )
 	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
@@ -434,7 +434,7 @@ static MACHINE_DRIVER_START( supertnk )
 	/* audio hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 2000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 
@@ -461,7 +461,7 @@ ROM_START( supertnk )
 	ROM_REGION( 0x0060, "proms", 0 )
 	 /* color PROM */
 	ROM_LOAD( "supertnk.clr",  0x0000, 0x0020, CRC(9ae1faee) SHA1(19de4bb8bc389d98c8f8e35c755fad96e1a6a0cd) )
- 	/* unknown - sync? */
+	/* unknown - sync? */
 	ROM_LOAD( "supertnk.s",	   0x0020, 0x0020, CRC(91722fcf) SHA1(f77386014b459cc151d2990ac823b91c04e8d319) )
 	/* unknown - sync? */
 	ROM_LOAD( "supertnk.t",	   0x0040, 0x0020, CRC(154390bd) SHA1(4dc0fd7bd8999d2670c8d93aaada835d2a84d4db) )

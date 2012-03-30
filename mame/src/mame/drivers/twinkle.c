@@ -241,25 +241,6 @@ static UINT8 twinkle_spu_shared[0x400];	// SPU/PSX shared dual-ported RAM
 
 /* RTC */
 
-static UINT8 xram[ 4096 ];
-
-static NVRAM_HANDLER(twinkle)
-{
-	if (read_or_write)
-	{
-		rtc65271_file_save(file);
-	}
-	else
-	{
-		if (file != NULL)
-		{
-			rtc65271_file_load(machine, file);
-		}
-	}
-
-	NVRAM_HANDLER_CALL(i2cmem_0);
-}
-
 static UINT32 twinkle_unknown;
 
 static WRITE32_HANDLER( twinkle_unknown_w )
@@ -641,7 +622,7 @@ static READ32_HANDLER(shared_psx_r)
 }
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x003fffff) AM_RAM	AM_SHARE(1) AM_BASE(&g_p_n_psxram) AM_SIZE(&g_n_psxramsize) /* ram */
+	AM_RANGE(0x00000000, 0x003fffff) AM_RAM	AM_SHARE("share1") AM_BASE(&g_p_n_psxram) AM_SIZE(&g_n_psxramsize) /* ram */
 	AM_RANGE(0x1f000000, 0x1f0007ff) AM_READWRITE(shared_psx_r, shared_psx_w)
 	AM_RANGE(0x1f200000, 0x1f20001f) AM_READWRITE(am53cf96_r, am53cf96_w)
 	AM_RANGE(0x1f20a01c, 0x1f20a01f) AM_WRITENOP /* scsi? */
@@ -657,8 +638,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x1f260000, 0x1f260003) AM_WRITE(serial_w)
 	AM_RANGE(0x1f270000, 0x1f270003) AM_WRITE(security_w)
 	AM_RANGE(0x1f280000, 0x1f280003) AM_READ(security_r)
-	AM_RANGE(0x1f290000, 0x1f29007f) AM_READWRITE8(rtc65271_rtc_r, rtc65271_rtc_w, 0x00ff00ff)
-	AM_RANGE(0x1f2a0000, 0x1f2a007f) AM_READWRITE8(rtc65271_xram_r, rtc65271_xram_w, 0x00ff00ff)
+	AM_RANGE(0x1f290000, 0x1f29007f) AM_DEVREADWRITE8("rtc", rtc65271_rtc_r, rtc65271_rtc_w, 0x00ff00ff)
+	AM_RANGE(0x1f2a0000, 0x1f2a007f) AM_DEVREADWRITE8("rtc", rtc65271_xram_r, rtc65271_xram_w, 0x00ff00ff)
 	AM_RANGE(0x1f2b0000, 0x1f2b00ff) AM_WRITE(twinkle_output_w)
 	AM_RANGE(0x1f800000, 0x1f8003ff) AM_RAM /* scratchpad */
 	AM_RANGE(0x1f801000, 0x1f801007) AM_WRITENOP
@@ -677,11 +658,11 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x1f801c00, 0x1f801dff) AM_DEVREADWRITE("spu", psx_spu_r, psx_spu_w)
 	AM_RANGE(0x1f802020, 0x1f802033) AM_RAM /* ?? */
 	AM_RANGE(0x1f802040, 0x1f802043) AM_WRITENOP
-	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_ROM AM_SHARE(2) AM_REGION("user1", 0) /* bios */
-	AM_RANGE(0x80000000, 0x803fffff) AM_RAM AM_SHARE(1) /* ram mirror */
-	AM_RANGE(0x9fc00000, 0x9fc7ffff) AM_ROM AM_SHARE(2) /* bios mirror */
-	AM_RANGE(0xa0000000, 0xa03fffff) AM_RAM AM_SHARE(1) /* ram mirror */
-	AM_RANGE(0xbfc00000, 0xbfc7ffff) AM_ROM AM_SHARE(2) /* bios mirror */
+	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_ROM AM_SHARE("share2") AM_REGION("user1", 0) /* bios */
+	AM_RANGE(0x80000000, 0x803fffff) AM_RAM AM_SHARE("share1") /* ram mirror */
+	AM_RANGE(0x9fc00000, 0x9fc7ffff) AM_ROM AM_SHARE("share2") /* bios mirror */
+	AM_RANGE(0xa0000000, 0xa03fffff) AM_RAM AM_SHARE("share1") /* ram mirror */
+	AM_RANGE(0xbfc00000, 0xbfc7ffff) AM_ROM AM_SHARE("share2") /* bios mirror */
 	AM_RANGE(0xfffe0130, 0xfffe0133) AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -747,14 +728,14 @@ static WRITE16_HANDLER( twinkle_spu_ctrl_w )
 
 static READ16_HANDLER( twinkle_waveram_r )
 {
-	UINT16 *waveram = (UINT16 *)memory_region(space->machine, "rf");
+	UINT16 *waveram = (UINT16 *)memory_region(space->machine, "rfsnd");
 
 	return waveram[offset];
 }
 
 static WRITE16_HANDLER( twinkle_waveram_w )
 {
-	UINT16 *waveram = (UINT16 *)memory_region(space->machine, "rf");
+	UINT16 *waveram = (UINT16 *)memory_region(space->machine, "rfsnd");
 
 	COMBINE_DATA(&waveram[offset]);
 }
@@ -784,7 +765,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x280000, 0x280fff) AM_READWRITE( shared_68k_r, shared_68k_w )
 	AM_RANGE(0x300000, 0x30000f) AM_DEVREADWRITE("ide", twinkle_ide_r, twinkle_ide_w)
 	// 34000E = ???
-	AM_RANGE(0x400000, 0x400fff) AM_DEVREADWRITE("rf", rf5c400_r, rf5c400_w)
+	AM_RANGE(0x400000, 0x400fff) AM_DEVREADWRITE("rfsnd", rf5c400_r, rf5c400_w)
 	AM_RANGE(0x800000, 0xffffff) AM_READWRITE( twinkle_waveram_r, twinkle_waveram_w )	// 8 MB window wave RAM
 ADDRESS_MAP_END
 
@@ -894,8 +875,6 @@ static DRIVER_INIT( twinkle )
 	psx_dma_install_read_handler(5, scsi_dma_read);
 	psx_dma_install_write_handler(5, scsi_dma_write);
 
-	rtc65271_init(machine, xram, NULL);
-
 	i2cmem_init( machine, 0, I2CMEM_SLAVE_ADDRESS, 0, memory_region_length( machine, "user2" ), memory_region( machine, "user2" ) );
 	i2cmem_write( machine, 0, I2CMEM_E0, 0 );
 	i2cmem_write( machine, 0, I2CMEM_E1, 0 );
@@ -936,9 +915,10 @@ static MACHINE_DRIVER_START( twinkle )
 	MDRV_WATCHDOG_TIME_INIT(MSEC(1200)) /* check TD pin on LTC1232 */
 
 	MDRV_MACHINE_RESET( twinkle )
-	MDRV_NVRAM_HANDLER( twinkle )
+	MDRV_NVRAM_HANDLER( i2cmem_0 )
 
 	MDRV_IDE_CONTROLLER_ADD("ide", ide_interrupt)
+	MDRV_RTC65271_ADD("rtc", NULL)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("mainscreen", RASTER)
@@ -962,7 +942,7 @@ static MACHINE_DRIVER_START( twinkle )
 	MDRV_SOUND_ROUTE( 0, "speakerleft", 0.75 )
 	MDRV_SOUND_ROUTE( 1, "speakerright", 0.75 )
 
-	MDRV_SOUND_ADD("rf", RF5C400, 32000000/2)
+	MDRV_SOUND_ADD("rfsnd", RF5C400, 32000000/2)
 	MDRV_SOUND_ROUTE(0, "speakerleft", 1.0)
 	MDRV_SOUND_ROUTE(1, "speakerright", 1.0)
 
@@ -1026,7 +1006,7 @@ INPUT_PORTS_END
 	ROM_REGION32_LE( 0x080000, "audiocpu", 0 )\
 	ROM_LOAD16_WORD_SWAP( "863a05.2x",    0x000000, 0x080000, CRC(6f42a09e) SHA1(cab5209f90f47b9ee6e721479913ad74e3ba84b1) )\
 \
-	ROM_REGION(0x1800000, "rf", ROMREGION_ERASE00)
+	ROM_REGION(0x1800000, "rfsnd", ROMREGION_ERASE00)
 
 ROM_START( gq863 )
 	TWINKLE_BIOS

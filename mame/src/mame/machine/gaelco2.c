@@ -140,33 +140,33 @@ DRIVER_INIT( snowboar )
 WRITE16_HANDLER( gaelco2_coin_w )
 {
 	/* Coin Lockouts */
-	coin_lockout_w(0, ~data & 0x01);
-	coin_lockout_w(1, ~data & 0x02);
+	coin_lockout_w(space->machine, 0, ~data & 0x01);
+	coin_lockout_w(space->machine, 1, ~data & 0x02);
 
 	/* Coin Counters */
-	coin_counter_w(0, data & 0x04);
-	coin_counter_w(1, data & 0x08);
+	coin_counter_w(space->machine, 0, data & 0x04);
+	coin_counter_w(space->machine, 1, data & 0x08);
 }
 
 WRITE16_HANDLER( gaelco2_coin2_w )
 {
 	/* coin counters */
-	coin_counter_w(offset & 0x01,  data & 0x01);
+	coin_counter_w(space->machine, offset & 0x01,  data & 0x01);
 }
 
 WRITE16_HANDLER( wrally2_coin_w )
 {
 	/* coin counters */
-	coin_counter_w((offset >> 3) & 0x01,  data & 0x01);
+	coin_counter_w(space->machine, (offset >> 3) & 0x01,  data & 0x01);
 }
 
 WRITE16_HANDLER( touchgo_coin_w )
 {
 	if ((offset >> 2) == 0){
-		coin_counter_w(0, data & 0x01);
-		coin_counter_w(1, data & 0x02);
-		coin_counter_w(2, data & 0x04);
-		coin_counter_w(3, data & 0x08);
+		coin_counter_w(space->machine, 0, data & 0x01);
+		coin_counter_w(space->machine, 1, data & 0x02);
+		coin_counter_w(space->machine, 2, data & 0x04);
+		coin_counter_w(space->machine, 3, data & 0x08);
 	}
 }
 
@@ -264,46 +264,22 @@ WRITE16_HANDLER( wrally2_adc_cs )
 
 ***************************************************************************/
 
-static const eeprom_interface gaelco2_eeprom_interface =
-{
-	8,				/* address bits */
-	16,				/* data bits */
-	"*110",			/* read command */
-	"*101",			/* write command */
-	"*111",			/* erase command */
-	"*10000xxxxxx",	/* lock command */
-	"*10011xxxxxx", /* unlock command */
-//  "*10001xxxxxx", /* write all */
-//  "*10010xxxxxx", /* erase all */
-};
-
-NVRAM_HANDLER( gaelco2 )
-{
-	if (read_or_write){
-		eeprom_save(file);
-	} else {
-		eeprom_init(machine, &gaelco2_eeprom_interface);
-
-		if (file) eeprom_load(file);
-	}
-}
-
-WRITE16_HANDLER( gaelco2_eeprom_cs_w )
+WRITE16_DEVICE_HANDLER( gaelco2_eeprom_cs_w )
 {
 	/* bit 0 is CS (active low) */
-	eeprom_set_cs_line((data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom_set_cs_line(device, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE);
 }
 
-WRITE16_HANDLER( gaelco2_eeprom_sk_w )
+WRITE16_DEVICE_HANDLER( gaelco2_eeprom_sk_w )
 {
 	/* bit 0 is SK (active high) */
-	eeprom_set_clock_line((data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
+	eeprom_set_clock_line(device, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE);
 }
 
-WRITE16_HANDLER( gaelco2_eeprom_data_w )
+WRITE16_DEVICE_HANDLER( gaelco2_eeprom_data_w )
 {
 	/* bit 0 is EEPROM data (DIN) */
-	eeprom_write_bit(data & 0x01);
+	eeprom_write_bit(device, data & 0x01);
 }
 
 /***************************************************************************

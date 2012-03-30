@@ -126,8 +126,8 @@ static MACHINE_RESET( tiamc1 )
 
 static WRITE8_HANDLER( tiamc1_control_w )
 {
-	coin_lockout_w(0, ~data & 0x02);
-	coin_counter_w(0, data & 0x04);
+	coin_lockout_w(space->machine, 0, ~data & 0x02);
+	coin_counter_w(space->machine, 0, data & 0x04);
 }
 
 
@@ -181,7 +181,7 @@ static INPUT_PORTS_START( tiamc1 )
 
 	PORT_START("IN2")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL ) 	/* OUT:coin lockout */
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* OUT:coin lockout */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL )	/* OUT:game counter */
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* RAZR ??? */
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_COIN1 )

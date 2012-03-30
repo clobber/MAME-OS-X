@@ -24,7 +24,8 @@
     CONSTANTS
 ***************************************************************************/
 
-/* by convention, tags should all lowercase and this length or less */
+/* by convention, tags should all lowercase and between 2-15 characters */
+#define MIN_TAG_LENGTH			2
 #define MAX_TAG_LENGTH			15
 
 
@@ -137,12 +138,12 @@ struct _machine_config
 	video_start_func		video_start;			/* one-time video start callback */
 	video_reset_func		video_reset;			/* video reset callback */
 	video_eof_func			video_eof;				/* end-of-frame video callback */
-	video_update_func 		video_update; 			/* video update callback */
+	video_update_func		video_update;			/* video update callback */
 
 	sound_start_func		sound_start;			/* one-time sound start callback */
 	sound_reset_func		sound_reset;			/* sound reset callback */
 
-	device_config *			devicelist;				/* list head for devices */
+	device_list				devicelist;				/* list head for devices */
 };
 
 

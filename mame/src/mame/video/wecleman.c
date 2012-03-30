@@ -8,7 +8,7 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 
 #define BMP_PAD		8
 #define BLEND_STEPS	16
@@ -47,7 +47,7 @@ static int wecleman_bgpage[4], wecleman_fgpage[4];
 static const int *wecleman_gfx_bank;
 
 /* Variables only used here: */
-static tilemap *bg_tilemap, *fg_tilemap, *txt_tilemap;
+static tilemap_t *bg_tilemap, *fg_tilemap, *txt_tilemap;
 
 static struct sprite *sprite_list;
 static struct sprite **spr_ptr_list;
@@ -100,7 +100,7 @@ static void get_sprite_info(running_machine *machine)
 	UINT8 *base_gfx = memory_region(machine, "gfx1");
 	int gfx_max     = memory_region_length(machine, "gfx1");
 
-	UINT16 *source = spriteram16;
+	UINT16 *source = machine->generic.spriteram.u16;
 
 	struct sprite *sprite = sprite_list;
 	struct sprite *finish = sprite_list + NUM_SPRITES;
@@ -869,7 +869,7 @@ WRITE16_HANDLER( hotchase_paletteram16_SBGRBBBBGGGGRRRR_word_w )
 {
 	int newword, r, g, b;
 
-	newword = COMBINE_DATA(&paletteram16[offset]);
+	newword = COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 
 	r = ((newword << 1) & 0x1E ) | ((newword >> 12) & 0x01);
 	g = ((newword >> 3) & 0x1E ) | ((newword >> 13) & 0x01);
@@ -882,7 +882,7 @@ WRITE16_HANDLER( hotchase_paletteram16_SBGRBBBBGGGGRRRR_word_w )
 
 WRITE16_HANDLER( wecleman_paletteram16_SSSSBBBBGGGGRRRR_word_w )
 {
-	int newword = COMBINE_DATA(&paletteram16[offset]);
+	int newword = COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 
 	// the highest nibble has some unknown functions
 //  if (newword & 0xf000) logerror("MSN set on color %03x: %1x\n", offset, newword>>12);
@@ -983,16 +983,14 @@ VIDEO_START( wecleman )
 }
 
 //  Callbacks for the K051316
-#define ZOOMROM0_MEM_REGION "gfx2"
-#define ZOOMROM1_MEM_REGION "gfx3"
 
-static void zoom_callback_0(int *code,int *color,int *flags)
+void hotchase_zoom_callback_0(running_machine *machine, int *code,int *color,int *flags)
 {
 	*code |= (*color & 0x03) << 8;
 	*color = (*color & 0xfc) >> 2;
 }
 
-static void zoom_callback_1(int *code,int *color,int *flags)
+void hotchase_zoom_callback_1(running_machine *machine, int *code,int *color,int *flags)
 {
 	*code |= (*color & 0x01) << 8;
 	*color = ((*color & 0x3f) << 1) | ((*code & 0x80) >> 7);
@@ -1025,14 +1023,6 @@ VIDEO_START( hotchase )
 	spr_ptr_list = (struct sprite **)buffer;
 
 	sprite_list = auto_alloc_array_clear(machine, struct sprite, NUM_SPRITES);
-
-	K051316_vh_start_0(machine,ZOOMROM0_MEM_REGION,4,FALSE,0,zoom_callback_0);
-	K051316_vh_start_1(machine,ZOOMROM1_MEM_REGION,4,FALSE,0,zoom_callback_1);
-
-	K051316_wraparound_enable(0,1);
-//  K051316_wraparound_enable(1,1);
-	K051316_set_offset(0, -0xB0/2, -16);
-	K051316_set_offset(1, -0xB0/2, -16);
 }
 
 
@@ -1052,7 +1042,7 @@ VIDEO_UPDATE ( wecleman )
 
 	video_on = wecleman_irqctrl & 0x40;
 
-	set_led_status(0, wecleman_selected_ip & 0x04);	// Start lamp
+	set_led_status(screen->machine, 0, wecleman_selected_ip & 0x04);	// Start lamp
 
 	fg_y = (wecleman_txtram[0x0f24>>1] & (TILEMAP_DIMY - 1));
 	bg_y = (wecleman_txtram[0x0f26>>1] & (TILEMAP_DIMY - 1));
@@ -1135,26 +1125,32 @@ VIDEO_UPDATE ( wecleman )
 
 VIDEO_UPDATE( hotchase )
 {
+	const device_config *k051316_1 = devtag_get_device(screen->machine, "k051316_1");
+	const device_config *k051316_2 = devtag_get_device(screen->machine, "k051316_2");
 	int video_on;
 
 	video_on = wecleman_irqctrl & 0x40;
 
-	set_led_status(0, wecleman_selected_ip & 0x04);	// Start lamp
+	set_led_status(screen->machine, 0, wecleman_selected_ip & 0x04);	// Start lamp
 
 	get_sprite_info(screen->machine);
 
 	bitmap_fill(bitmap, cliprect, black_pen);
 
 	/* Draw the background */
-	if (video_on) K051316_zoom_draw_0(bitmap,cliprect, 0, 0);
+	if (video_on)
+		k051316_zoom_draw(k051316_1, bitmap, cliprect, 0, 0);
 
 	/* Draw the road */
-	if (video_on) hotchase_draw_road(screen->machine, bitmap, cliprect);
+	if (video_on)
+		hotchase_draw_road(screen->machine, bitmap, cliprect);
 
 	/* Draw the sprites */
-	if (video_on) sprite_draw(bitmap,cliprect);
+	if (video_on)
+		sprite_draw(bitmap,cliprect);
 
 	/* Draw the foreground (text) */
-	if (video_on) K051316_zoom_draw_1(bitmap,cliprect, 0, 0);
+	if (video_on)
+		k051316_zoom_draw(k051316_2, bitmap, cliprect, 0, 0);
 	return 0;
 }

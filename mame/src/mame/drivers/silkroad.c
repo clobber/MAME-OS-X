@@ -136,8 +136,8 @@ VIDEO_UPDATE(silkroad);
 
 static WRITE32_HANDLER( paletteram32_xRRRRRGGGGGBBBBB_dword_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
-	palette_set_color_rgb(space->machine,offset,pal5bit(paletteram32[offset] >> (10+16)),pal5bit(paletteram32[offset] >> (5+16)),pal5bit(paletteram32[offset] >> (0+16)));
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
+	palette_set_color_rgb(space->machine,offset,pal5bit(space->machine->generic.paletteram.u32[offset] >> (10+16)),pal5bit(space->machine->generic.paletteram.u32[offset] >> (5+16)),pal5bit(space->machine->generic.paletteram.u32[offset] >> (0+16)));
 }
 
 static WRITE32_DEVICE_HANDLER(silk_6295_bank_w)
@@ -154,26 +154,26 @@ static WRITE32_HANDLER(silk_coin_counter_w)
 {
 	if (ACCESSING_BITS_16_23)
 	{
-		coin_counter_w(0, data & 0x10000);
-		coin_counter_w(1, data & 0x80000);
+		coin_counter_w(space->machine, 0, data & 0x10000);
+		coin_counter_w(space->machine, 1, data & 0x80000);
 	}
 }
 
 static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x40c000, 0x40cfff) AM_RAM AM_BASE(&silkroad_sprram) // sprites
-	AM_RANGE(0x600000, 0x603fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE(&paletteram32) // palette
+	AM_RANGE(0x600000, 0x603fff) AM_RAM_WRITE(paletteram32_xRRRRRGGGGGBBBBB_dword_w) AM_BASE_GENERIC(paletteram) // palette
 	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(silkroad_fgram_w) AM_BASE(&silkroad_vidram)  // lower Layer
 	AM_RANGE(0x804000, 0x807fff) AM_RAM_WRITE(silkroad_fgram2_w) AM_BASE(&silkroad_vidram2)  // mid layer
 	AM_RANGE(0x808000, 0x80bfff) AM_RAM_WRITE(silkroad_fgram3_w) AM_BASE(&silkroad_vidram3) // higher layer
 	AM_RANGE(0xc00000, 0xc00003) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xc00004, 0xc00007) AM_READ_PORT("DSW")
 	AM_RANGE(0xc00024, 0xc00027) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff0000)
-	AM_RANGE(0xc00028, 0xc0002f) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff0000)
+	AM_RANGE(0xc00028, 0xc0002f) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff0000)
 	AM_RANGE(0xc00030, 0xc00033) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff0000)
 	AM_RANGE(0xc00034, 0xc00037) AM_DEVWRITE("oki1", silk_6295_bank_w)
 	AM_RANGE(0xc00038, 0xc0003b) AM_WRITE(silk_coin_counter_w)
-	AM_RANGE(0xc0010c, 0xc00123) AM_WRITE(SMH_RAM) AM_BASE(&silkroad_regs)
+	AM_RANGE(0xc0010c, 0xc00123) AM_WRITEONLY AM_BASE(&silkroad_regs)
 	AM_RANGE(0xfe0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -309,7 +309,7 @@ static MACHINE_DRIVER_START( silkroad )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 

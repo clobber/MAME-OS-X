@@ -53,6 +53,7 @@
 // performance options
 #define WINOPTION_PRIORITY				"priority"
 #define WINOPTION_MULTITHREADING		"multithreading"
+#define WINOPTION_NUMPROCESSORS			"numprocessors"
 
 // video options
 #define WINOPTION_VIDEO					"video"
@@ -131,6 +132,8 @@
 
 extern const options_entry mame_win_options[];
 
+// defined in winwork.c
+extern int osd_num_processors;
 
 
 //============================================================
@@ -139,3 +142,6 @@ extern const options_entry mame_win_options[];
 
 // use if you want to print something with the verbose flag
 void CLIB_DECL mame_printf_verbose(const char *text, ...) ATTR_PRINTF(1,2);
+
+// use this to ping the watchdog
+void winmain_watchdog_ping(void);

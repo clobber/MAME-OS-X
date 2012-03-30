@@ -888,45 +888,16 @@ static READ32_HANDLER( spi_unknown_r )
 	return 0xffffffff;
 }
 
-static WRITE32_HANDLER( ds2404_reset_w )
+static WRITE32_DEVICE_HANDLER( eeprom_w )
 {
-	if( ACCESSING_BITS_0_7 ) {
-		DS2404_1W_reset_w(space, offset, data);
-	}
-}
-
-static READ32_HANDLER( ds2404_data_r )
-{
-	if( ACCESSING_BITS_0_7 ) {
-		return DS2404_data_r(space, offset);
-	}
-	return 0;
-}
-
-static WRITE32_HANDLER( ds2404_data_w )
-{
-	if( ACCESSING_BITS_0_7 ) {
-		DS2404_data_w(space, offset, data);
-	}
-}
-
-static WRITE32_HANDLER( ds2404_clk_w )
-{
-	if( ACCESSING_BITS_0_7 ) {
-		DS2404_clk_w(space, offset, data);
-	}
-}
-
-static WRITE32_HANDLER( eeprom_w )
-{
-	const device_config *oki2 = devtag_get_device(space->machine, "oki2");
+	const device_config *oki2 = devtag_get_device(device->machine, "oki2");
 
 	// tile banks
 	if( ACCESSING_BITS_16_23 ) {
 		rf2_set_layer_banks(data >> 16);
-		eeprom_write_bit((data & 0x800000) ? 1 : 0);
-		eeprom_set_clock_line((data & 0x400000) ? ASSERT_LINE : CLEAR_LINE);
-		eeprom_set_cs_line((data & 0x200000) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_write_bit(device, (data & 0x800000) ? 1 : 0);
+		eeprom_set_clock_line(device, (data & 0x400000) ? ASSERT_LINE : CLEAR_LINE);
+		eeprom_set_cs_line(device, (data & 0x200000) ? CLEAR_LINE : ASSERT_LINE);
 	}
 
 	// oki banking
@@ -1026,7 +997,7 @@ static WRITE8_HANDLER( z80_bank_w )
 	if ((data & 7) != z80_lastbank)
 	{
 		z80_lastbank = (data & 7);
-		memory_set_bankptr(space->machine, 4, z80_rom + (0x8000 * z80_lastbank));
+		memory_set_bankptr(space->machine, "bank4", z80_rom + (0x8000 * z80_lastbank));
 	}
 }
 
@@ -1090,18 +1061,18 @@ static ADDRESS_MAP_START( spi_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000680, 0x00000683) AM_WRITE(sound_fifo_w)
 	AM_RANGE(0x00000684, 0x00000687) AM_READ(sound_fifo_status_r)
 	AM_RANGE(0x00000684, 0x00000687) AM_WRITENOP				/* Unknown */
-	AM_RANGE(0x000006d0, 0x000006d3) AM_WRITE(ds2404_reset_w)
-	AM_RANGE(0x000006d4, 0x000006d7) AM_WRITE(ds2404_data_w)
-	AM_RANGE(0x000006d8, 0x000006db) AM_WRITE(ds2404_clk_w)
-	AM_RANGE(0x000006dc, 0x000006df) AM_READ(ds2404_data_r)
+	AM_RANGE(0x000006d0, 0x000006d3) AM_DEVWRITE8("ds2404", ds2404_1w_reset_w, 0x000000ff)
+	AM_RANGE(0x000006d4, 0x000006d7) AM_DEVWRITE8("ds2404", ds2404_data_w, 0x000000ff)
+	AM_RANGE(0x000006d8, 0x000006db) AM_DEVWRITE8("ds2404", ds2404_clk_w, 0x000000ff)
+	AM_RANGE(0x000006dc, 0x000006df) AM_DEVREAD8("ds2404", ds2404_data_r, 0x000000ff)
 	AM_RANGE(0x00000800, 0x0003ffff) AM_RAM AM_BASE(&spimainram)
-	AM_RANGE(0x00200000, 0x003fffff) AM_ROM AM_SHARE(2)
+	AM_RANGE(0x00200000, 0x003fffff) AM_ROM AM_SHARE("share2")
 	AM_RANGE(0x00a00000, 0x013fffff) AM_READ(soundrom_r)
-	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)		/* ROM location in real-mode */
+	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")		/* ROM location in real-mode */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( spisound_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_RAMBANK(5)
+	AM_RANGE(0x0000, 0x3fff) AM_RAMBANK("bank5")
 	AM_RANGE(0x4002, 0x4002) AM_WRITENOP			/* ack RST 10 */
 	AM_RANGE(0x4003, 0x4003) AM_WRITENOP			/* Unknown */
 	AM_RANGE(0x4004, 0x4004) AM_WRITE(sb_coin_w)	/* single board systems */
@@ -1112,7 +1083,7 @@ static ADDRESS_MAP_START( spisound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4013, 0x4013) AM_READ(z80_coin_r)
 	AM_RANGE(0x401b, 0x401b) AM_WRITE(z80_bank_w)		/* control register: bits 0-2 = bank @ 8000, bit 3 = watchdog? */
 	AM_RANGE(0x6000, 0x600f) AM_DEVREADWRITE("ymf", ymf271_r, ymf271_w)
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(4)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank4")
 ADDRESS_MAP_END
 
 static READ8_DEVICE_HANDLER( flashrom_read )
@@ -1150,11 +1121,11 @@ static void irqhandler(const device_config *device, int state)
 		cputag_set_input_line(device->machine, "soundcpu", 0, CLEAR_LINE);
 }
 
-static WRITE32_HANDLER(sys386f2_eeprom_w)
+static WRITE32_DEVICE_HANDLER(sys386f2_eeprom_w)
 {
-	eeprom_write_bit((data & 0x80) ? 1 : 0);
-	eeprom_set_clock_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
-	eeprom_set_cs_line((data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom_write_bit(device, (data & 0x80) ? 1 : 0);
+	eeprom_set_clock_line(device, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	eeprom_set_cs_line(device, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static const ymf271_interface ymf271_config =
@@ -1181,12 +1152,12 @@ static ADDRESS_MAP_START( seibu386_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000604, 0x00000607) AM_READ(spi_controls1_r)	/* Player controls */
 	AM_RANGE(0x00000608, 0x0000060b) AM_READ(spi_unknown_r)
 	AM_RANGE(0x0000060c, 0x0000060f) AM_READ(spi_controls2_r)	/* Player controls (start) */
-	AM_RANGE(0x0000068c, 0x0000068f) AM_WRITE(eeprom_w)
+	AM_RANGE(0x0000068c, 0x0000068f) AM_DEVWRITE("eeprom", eeprom_w)
 	AM_RANGE(0x00000800, 0x0003ffff) AM_RAM AM_BASE(&spimainram)
-	AM_RANGE(0x00200000, 0x003fffff) AM_ROM AM_SHARE(2)
+	AM_RANGE(0x00200000, 0x003fffff) AM_ROM AM_SHARE("share2")
 	AM_RANGE(0x01200000, 0x01200003) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x000000ff)
 	AM_RANGE(0x01200004, 0x01200007) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x000000ff)
-	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)		/* ROM location in real-mode */
+	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")		/* ROM location in real-mode */
 ADDRESS_MAP_END
 
 static WRITE32_HANDLER(input_select_w)
@@ -1199,7 +1170,7 @@ static ADDRESS_MAP_START( sys386f2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000010, 0x00000013) AM_READ(spi_int_r)				/* Unknown */
 	AM_RANGE(0x00000090, 0x00000097) AM_RAM /* Unknown */
 	AM_RANGE(0x00000400, 0x00000403) AM_READNOP AM_WRITE(input_select_w)
-	AM_RANGE(0x00000404, 0x00000407) AM_WRITE(sys386f2_eeprom_w)
+	AM_RANGE(0x00000404, 0x00000407) AM_DEVWRITE("eeprom", sys386f2_eeprom_w)
 	AM_RANGE(0x00000408, 0x0000040f) AM_DEVWRITE8("ymz", ymz280b_w, 0x000000ff)
 	AM_RANGE(0x00000484, 0x00000487) AM_WRITE(palette_dma_start_w)
 	AM_RANGE(0x00000490, 0x00000493) AM_WRITE(video_dma_length_w)
@@ -1210,8 +1181,8 @@ static ADDRESS_MAP_START( sys386f2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000608, 0x0000060b) AM_READ(spi_unknown_r)
 	AM_RANGE(0x0000060c, 0x0000060f) AM_READ(spi_controls1_r)	/* Player controls */
 	AM_RANGE(0x00000800, 0x0003ffff) AM_RAM AM_BASE(&spimainram)
-	AM_RANGE(0x00200000, 0x003fffff) AM_ROM AM_SHARE(2)
-	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)		/* ROM location in real-mode */
+	AM_RANGE(0x00200000, 0x003fffff) AM_ROM AM_SHARE("share2")
+	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")		/* ROM location in real-mode */
 ADDRESS_MAP_END
 
 
@@ -1242,7 +1213,7 @@ static INPUT_PORTS_START( spi_2button )
 	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_SERVICE_NO_TOGGLE( 0x00000004, IP_ACTIVE_LOW) /* Test Button */
 	PORT_BIT( 0x00000008, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Service Coin") PORT_CODE(KEYCODE_7)
-	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x000000b0, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0xffffff00, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -1294,7 +1265,7 @@ static INPUT_PORTS_START( seibu386_2button )
 	PORT_BIT( 0x00000008, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Service Coin") PORT_CODE(KEYCODE_7)
 	PORT_BIT( 0x00000010, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x00000020, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00000040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x00000080, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0xffffff00, IP_ACTIVE_LOW, IPT_UNUSED )
 
@@ -1443,7 +1414,7 @@ static INPUT_PORTS_START( spi_ejsakura )
 	PORT_START("SYSTEM")
 	PORT_BIT( 0x00000040, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x00000080, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x00004000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00004000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0xffffbf3f, IP_ACTIVE_LOW, IPT_UNUSED )
 
 INPUT_PORTS_END
@@ -1822,16 +1793,6 @@ GFXDECODE_END
 
 static NVRAM_HANDLER( spi )
 {
-	if( read_or_write ) {
-		DS2404_save(file);
-	} else {
-		DS2404_init(machine, 1995, 1, 1);
-
-		if(file) {
-			DS2404_load(file);
-		}
-	}
-
 	nvram_handler_intelflash(machine, 0, file, read_or_write);
 	nvram_handler_intelflash(machine, 1, file, read_or_write);
 }
@@ -1850,18 +1811,6 @@ static const eeprom_interface eeprom_intf =
 	1				/* reset_delay */
 };
 
-static NVRAM_HANDLER( sxx2f )
-{
-	if( read_or_write ) {
-		eeprom_save(file);
-	} else {
-		eeprom_init(machine, &eeprom_intf);
-
-		if(file)
-			eeprom_load(file);
-	}
-}
-
 static INTERRUPT_GEN( spi_interrupt )
 {
 	cpu_set_input_line(device, 0, ASSERT_LINE );
@@ -1873,6 +1822,11 @@ static IRQ_CALLBACK(spi_irq_callback)
 }
 
 /* SPI */
+
+static MACHINE_START( spi )
+{
+	z80_rom = auto_alloc_array(machine, UINT8, 0x40000);
+}
 
 static MACHINE_RESET( spi )
 {
@@ -1889,9 +1843,8 @@ static MACHINE_RESET( spi )
 	memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00000688, 0x0000068b, 0, 0, z80_prg_fifo_w);
 	memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000068c, 0x0000068f, 0, 0, z80_enable_w);
 
-	z80_rom = auto_alloc_array(machine, UINT8, 0x40000);
-	memory_set_bankptr(machine, 4, z80_rom);
-	memory_set_bankptr(machine, 5, z80_rom);
+	memory_set_bankptr(machine, "bank4", z80_rom);
+	memory_set_bankptr(machine, "bank5", z80_rom);
 
 	/* If the first value doesn't match, the game shows a checksum error */
 	/* If any of the other values are wrong, the game goes to update mode */
@@ -1923,10 +1876,15 @@ static MACHINE_DRIVER_START( spi )
 
 	MDRV_QUANTUM_TIME(HZ(12000))
 
+	MDRV_MACHINE_START(spi)
 	MDRV_MACHINE_RESET(spi)
 	MDRV_NVRAM_HANDLER(spi)
 
- 	/* video hardware */
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
+
+	MDRV_DS2404_ADD("ds2404", 1995, 1, 1)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(54)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
@@ -1948,18 +1906,23 @@ static MACHINE_DRIVER_START( spi )
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 MACHINE_DRIVER_END
 
+static MACHINE_START( sxx2f )
+{
+	z80_rom = auto_alloc_array(machine, UINT8, 0x40000);
+}
+
 static MACHINE_RESET( sxx2f )
 {
 	UINT8 *rom = memory_region(machine, "soundcpu");
 
-	z80_rom = auto_alloc_array(machine, UINT8, 0x40000);
-	memory_set_bankptr(machine, 4, z80_rom);
-	memory_set_bankptr(machine, 5, z80_rom);
+	memory_set_bankptr(machine, "bank4", z80_rom);
+	memory_set_bankptr(machine, "bank5", z80_rom);
 
 	memcpy(z80_rom, rom, 0x40000);
 
-	memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000068c, 0x0000068f, 0, 0, eeprom_w);
+	memory_install_write32_device_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), devtag_get_device(machine, "eeprom"), 0x0000068c, 0x0000068f, 0, 0, eeprom_w);
 	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00000680, 0x00000683, 0, 0, sb_coin_r);
+
 	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), spi_irq_callback);
 
 	sb_coin_latch = 0;
@@ -1969,8 +1932,10 @@ static MACHINE_DRIVER_START( sxx2f ) /* Intel i386DX @ 25MHz, YMF271 @ 16.9344MH
 
 	MDRV_IMPORT_FROM(spi)
 
+	MDRV_MACHINE_START(sxx2f)
 	MDRV_MACHINE_RESET(sxx2f)
-	MDRV_NVRAM_HANDLER(sxx2f)
+
+	MDRV_NVRAM_HANDLER(0)
 
 MACHINE_DRIVER_END
 
@@ -1988,8 +1953,10 @@ static MACHINE_DRIVER_START( sxx2g ) /* single board version using measured cloc
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 
+	MDRV_MACHINE_START(sxx2f)
 	MDRV_MACHINE_RESET(sxx2f)
-	MDRV_NVRAM_HANDLER(sxx2f)
+
+	MDRV_NVRAM_HANDLER(0)
 
 MACHINE_DRIVER_END
 
@@ -2236,10 +2203,11 @@ static MACHINE_DRIVER_START( seibu386 )
 	MDRV_CPU_PROGRAM_MAP(seibu386_map)
 	MDRV_CPU_VBLANK_INT("screen", spi_interrupt)
 
-	MDRV_NVRAM_HANDLER(sxx2f)
 	MDRV_MACHINE_RESET(seibu386)
 
- 	/* video hardware */
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(54)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
@@ -2293,10 +2261,11 @@ static MACHINE_DRIVER_START( sys386f2 )
 
 	/* no z80? */
 
-	MDRV_NVRAM_HANDLER(sxx2f)
 	MDRV_MACHINE_RESET(seibu386)
 
- 	/* video hardware */
+	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(54)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))

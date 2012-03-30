@@ -113,13 +113,13 @@ static WRITE8_DEVICE_HANDLER( wolfpack_start_speech_w )
 
 static WRITE8_HANDLER( wolfpack_attract_w )
 {
-	coin_lockout_global_w(!(data & 1));
+	coin_lockout_global_w(space->machine, !(data & 1));
 }
 
 
 static WRITE8_HANDLER( wolfpack_credit_w )
 {
-	set_led_status(0, !(data & 1));
+	set_led_status(space->machine, 0, !(data & 1));
 }
 
 
@@ -132,7 +132,7 @@ static WRITE8_HANDLER( wolfpack_coldetres_w )
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x100)
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("INPUTS")
-	AM_RANGE(0x1000, 0x10ff) AM_WRITE(SMH_RAM) AM_BASE(&wolfpack_alpha_num_ram)
+	AM_RANGE(0x1000, 0x10ff) AM_WRITEONLY AM_BASE(&wolfpack_alpha_num_ram)
 	AM_RANGE(0x2000, 0x2000) AM_READ(wolfpack_misc_r)
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(wolfpack_high_explo_w)
 	AM_RANGE(0x2001, 0x2001) AM_WRITE(wolfpack_sonar_ping_w)

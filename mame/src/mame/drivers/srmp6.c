@@ -100,9 +100,9 @@ static void update_palette(running_machine *machine)
 
 	for(i = 0; i < 0x800; i++)
 	{
-		r = paletteram16[i] >>  0 & 0x1F;
-		g = paletteram16[i] >>  5 & 0x1F;
-		b = paletteram16[i] >> 10 & 0x1F;
+		r = machine->generic.paletteram.u16[i] >>  0 & 0x1F;
+		g = machine->generic.paletteram.u16[i] >>  5 & 0x1F;
+		b = machine->generic.paletteram.u16[i] >> 10 & 0x1F;
 
 		if(brg < 0) {
 			r += (r * brg) >> 5;
@@ -247,7 +247,7 @@ static VIDEO_UPDATE(srmp6)
 
 						drawgfx_alpha(bitmap,cliprect,screen->machine->gfx[0],tileno,global_pal,flip_x,flip_y,xb,yb,0,alpha);
 						tileno++;
-		 			}
+					}
 				}
 
 				sprite_sublist+=8;
@@ -308,7 +308,7 @@ static WRITE16_HANDLER( video_regs_w )
 		case 0x5e/2: // bank switch, used by ROM check
 			LOG(("%x\n",data));
 
-			memory_set_bankptr(space->machine, 1,(UINT16 *)(memory_region(space->machine, "nile") + (data & 0x0f)*0x200000));
+			memory_set_bankptr(space->machine, "bank1",(UINT16 *)(memory_region(space->machine, "nile") + (data & 0x0f)*0x200000));
 			break;
 
 		// set by IT4
@@ -353,37 +353,37 @@ static int destl;
 static UINT32 process(running_machine *machine,UINT8 b,UINT32 dst_offset)
 {
 
- 	int l=0;
+	int l=0;
 
- 	UINT8 *tram=(UINT8*)tileram;
+	UINT8 *tram=(UINT8*)tileram;
 
- 	if(lastb==lastb2)	//rle
- 	{
+	if(lastb==lastb2)	//rle
+	{
 		int i;
- 		int rle=(b+1)&0xff;
+		int rle=(b+1)&0xff;
 
- 		for(i=0;i<rle;++i)
- 		{
+		for(i=0;i<rle;++i)
+		{
 			tram[dst_offset+destl] = lastb;
 			gfx_element_mark_dirty(machine->gfx[0], (dst_offset+destl)/0x40);
 
 			dst_offset++;
- 			++l;
- 		}
- 		lastb2=0xffff;
+			++l;
+		}
+		lastb2=0xffff;
 
- 		return l;
- 	}
- 	else
- 	{
- 		lastb2=lastb;
- 		lastb=b;
+		return l;
+	}
+	else
+	{
+		lastb2=lastb;
+		lastb=b;
 		tram[dst_offset+destl] = b;
 		gfx_element_mark_dirty(machine->gfx[0], (dst_offset+destl)/0x40);
 
- 		return 1;
- 	}
- }
+		return 1;
+	}
+}
 
 
 static WRITE16_HANDLER(srmp6_dma_w)
@@ -423,7 +423,7 @@ static WRITE16_HANDLER(srmp6_dma_w)
 		{
 			int i;
 			UINT8 ctrl=rom[srcdata];
- 			++srcdata;
+			++srcdata;
 
 			for(i=0;i<8;++i)
 			{
@@ -436,14 +436,14 @@ static WRITE16_HANDLER(srmp6_dma_w)
 					tempidx+=process(space->machine,real_byte,tempidx);
 					real_byte = rom[srctab+p*2+1];//px[DMA_XOR((current_table_address+p*2+1))];
 					tempidx+=process(space->machine,real_byte,tempidx);
- 				}
- 				else
- 				{
- 					tempidx+=process(space->machine,p,tempidx);
- 				}
+				}
+				else
+				{
+					tempidx+=process(space->machine,p,tempidx);
+				}
 
- 				ctrl<<=1;
- 				++srcdata;
+				ctrl<<=1;
+				++srcdata;
 
 
 				if(tempidx>=len)
@@ -451,7 +451,7 @@ static WRITE16_HANDLER(srmp6_dma_w)
 					LOG(("%x\n",srcdata));
 					return;
 				}
- 			}
+			}
 		}
 	}
 }
@@ -513,11 +513,11 @@ static WRITE16_HANDLER(paletteram_w)
 static ADDRESS_MAP_START( srmp6, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x200000, 0x23ffff) AM_RAM					// work RAM
-	AM_RANGE(0x600000, 0x7fffff) AM_READ(SMH_BANK(1))		// banked ROM (used by ROM check)
+	AM_RANGE(0x600000, 0x7fffff) AM_ROMBANK("bank1")		// banked ROM (used by ROM check)
 	AM_RANGE(0x800000, 0x9fffff) AM_ROM AM_REGION("user1", 0)
 
 	AM_RANGE(0x300000, 0x300005) AM_READWRITE(srmp6_inputs_r, srmp6_input_select_w)		// inputs
-	AM_RANGE(0x480000, 0x480fff) AM_RAM_WRITE(paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x480000, 0x480fff) AM_RAM_WRITE(paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x4d0000, 0x4d0001) AM_READWRITE(watchdog_reset16_r, watchdog_reset16_w)	// watchdog
 
 	// OBJ RAM: checked [$400000-$47dfff]
@@ -528,8 +528,8 @@ static ADDRESS_MAP_START( srmp6, ADDRESS_SPACE_PROGRAM, 16 )
 //  AM_RANGE(0x5fff00, 0x5fffff) AM_WRITE(dma_w) AM_BASE(&dmaram)
 
 	AM_RANGE(0x4c0000, 0x4c006f) AM_READWRITE(video_regs_r, video_regs_w) AM_BASE(&video_regs)	// ? gfx regs ST-0026 NiLe
-  	AM_RANGE(0x4e0000, 0x4e00ff) AM_DEVREADWRITE("nile", nile_snd_r, nile_snd_w) AM_BASE(&nile_sound_regs)
-  	AM_RANGE(0x4e0100, 0x4e0101) AM_DEVREADWRITE("nile", nile_sndctrl_r, nile_sndctrl_w)
+	AM_RANGE(0x4e0000, 0x4e00ff) AM_DEVREADWRITE("nile", nile_snd_r, nile_snd_w) AM_BASE(&nile_sound_regs)
+	AM_RANGE(0x4e0100, 0x4e0101) AM_DEVREADWRITE("nile", nile_sndctrl_r, nile_sndctrl_w)
 //  AM_RANGE(0x4e0110, 0x4e0111) AM_NOP // ? accessed once ($268dc, written $b.w)
 //  AM_RANGE(0x5fff00, 0x5fff1f) AM_RAM // ? see routine $5ca8, video_regs related ???
 
@@ -682,7 +682,7 @@ ROM_START( srmp6 )
 	ROM_REGION( 0x200000, "user1", 0 ) /* 68000 Data */
 	ROM_LOAD( "sx011-09.10", 0x000000, 0x200000, CRC(58f74438) SHA1(a256e39ca0406e513ab4dbd812fb0b559b4f61f2) )
 
- 	/* these are accessed directly by the 68k, DMA device etc.  NOT decoded */
+	/* these are accessed directly by the 68k, DMA device etc.  NOT decoded */
 	ROM_REGION( 0x2000000, "nile", 0)	/* Banked ROM */
 	ROM_LOAD16_WORD_SWAP( "sx011-08.15", 0x0000000, 0x0400000, CRC(01b3b1f0) SHA1(bbd60509c9ba78358edbcbb5953eafafd6e2eaf5) ) // CHR00
 	ROM_LOAD16_WORD_SWAP( "sx011-07.16", 0x0400000, 0x0400000, CRC(26e57dac) SHA1(91272268977c5fbff7e8fbe1147bf108bd2ed321) ) // CHR01

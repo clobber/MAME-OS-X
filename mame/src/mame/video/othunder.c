@@ -1,8 +1,6 @@
 #include "driver.h"
 #include "video/taitoic.h"
 
-#define TC0100SCN_GFX_NUM 1
-
 struct tempsprite
 {
 	int gfx;
@@ -23,13 +21,7 @@ VIDEO_START( othunder )
 	/* Up to $800/8 big sprites, requires 0x100 * sizeof(*spritelist)
        Multiply this by 32 to give room for the number of small sprites,
        which are what actually get put in the structure. */
-
 	spritelist = auto_alloc_array(machine, struct tempsprite, 0x2000);
-
-	TC0100SCN_vh_start(machine,1,TC0100SCN_GFX_NUM,4,0,0,0,0,0,0);
-
-	if (TC0110PCR_mask(machine) & 1)
-		TC0110PCR_vh_start(machine);
 }
 
 
@@ -87,6 +79,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
 	UINT16 tile_mask = (machine->gfx[0]->total_elements) - 1;
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -98,7 +91,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
        while processing sprite ram and then draw them all at the end */
 	struct tempsprite *sprite_ptr = spritelist;
 
-	for (offs = (spriteram_size/2)-4;offs >=0;offs -= 4)
+	for (offs = (machine->generic.spriteram_size/2)-4;offs >=0;offs -= 4)
 	{
 		data = spriteram16[offs+0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -219,27 +212,28 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 
 VIDEO_UPDATE( othunder )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
 	int layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,1);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 2);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
 	/* Sprites can be under/over the layer below text layer */
 	{
-		static const int primasks[2] = {0xf0,0xfc};
-		draw_sprites(screen->machine, bitmap,cliprect,primasks,3);
+		static const int primasks[2] = {0xf0, 0xfc};
+		draw_sprites(screen->machine, bitmap, cliprect, primasks, 3);
 	}
 
 	return 0;

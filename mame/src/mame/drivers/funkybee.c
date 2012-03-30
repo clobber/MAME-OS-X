@@ -74,17 +74,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-
-
-extern WRITE8_HANDLER( funkybee_videoram_w );
-extern WRITE8_HANDLER( funkybee_colorram_w );
-extern WRITE8_HANDLER( funkybee_gfx_bank_w );
-extern WRITE8_HANDLER( funkybee_scroll_w );
-extern WRITE8_HANDLER( funkybee_flipscreen_w );
-
-extern PALETTE_INIT( funkybee );
-extern VIDEO_START( funkybee );
-extern VIDEO_UPDATE( funkybee );
+#include "includes/funkybee.h"
 
 
 static READ8_HANDLER( funkybee_input_port_0_r )
@@ -95,14 +85,14 @@ static READ8_HANDLER( funkybee_input_port_0_r )
 
 static WRITE8_HANDLER( funkybee_coin_counter_w )
 {
-	coin_counter_w(offset,data);
+	coin_counter_w(space->machine, offset, data);
 }
 
 static ADDRESS_MAP_START( funkybee_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x4fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(funkybee_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(funkybee_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(funkybee_videoram_w) AM_BASE_MEMBER(funkybee_state, videoram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(funkybee_colorram_w) AM_BASE_MEMBER(funkybee_state, colorram)
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(funkybee_scroll_w)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(funkybee_flipscreen_w)
 	AM_RANGE(0xe802, 0xe803) AM_WRITE(funkybee_coin_counter_w)
@@ -115,8 +105,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x02, 0x02) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x02, 0x02) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -288,13 +278,33 @@ static const ay8910_interface ay8910_config =
 };
 
 
+static MACHINE_START( funkybee )
+{
+	funkybee_state *state = (funkybee_state *)machine->driver_data;
+
+	state_save_register_global(machine, state->gfx_bank);
+}
+
+static MACHINE_RESET( funkybee )
+{
+	funkybee_state *state = (funkybee_state *)machine->driver_data;
+
+	state->gfx_bank = 0;
+}
+
 static MACHINE_DRIVER_START( funkybee )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(funkybee_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
 	MDRV_CPU_PROGRAM_MAP(funkybee_map)
 	MDRV_CPU_IO_MAP(io_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MDRV_MACHINE_START(funkybee)
+	MDRV_MACHINE_RESET(funkybee)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -314,7 +324,7 @@ static MACHINE_DRIVER_START( funkybee )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -394,7 +404,7 @@ Notes:
 */
 
 ROM_START( skylancr )
-  	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "1sl.5a",        0x0000, 0x2000, CRC(e80b315e) SHA1(0c02aa9f0d4bdfc3482c400d0e4e38fd3912a512) )
 	ROM_LOAD( "2sl.5c",        0x2000, 0x2000, CRC(9d70567b) SHA1(05ff6f0c4b4d928e937556d9943a76f6cbc0f05f) )
 	ROM_LOAD( "3sl.5d",        0x4000, 0x2000, CRC(64c39457) SHA1(b54a57a8576c2f852b765350c4504ccc3f5a431c) )
@@ -425,8 +435,7 @@ ROM_START( skylancre )
 	ROM_LOAD( "18s030.1a",     0x0000, 0x0020, CRC(e645bacb) SHA1(5f4c299c4cf165fd229731c0e5799a34892bf28e) )
 ROM_END
 
-GAME( 1982, funkybee, 0,        funkybee, funkybee, 0, ROT90, "Orca",                           "Funky Bee",                            0 )
-GAME( 1982, funkybeeb,funkybee, funkybee, funkbeeb, 0, ROT90, "bootleg",                        "Funky Bee (bootleg, harder)",          0 )
-GAME( 1983, skylancr, 0,        funkybee, skylancr, 0, ROT90, "Orca",                           "Sky Lancer",                           0 )
-GAME( 1983, skylancre,skylancr, funkybee, skylance, 0, ROT90, "Orca (Esco Trading Co license)", "Sky Lancer (Esco Trading Co license)", 0 )
-
+GAME( 1982, funkybee,  0,        funkybee, funkybee, 0, ROT90, "Orca",                           "Funky Bee",                            GAME_SUPPORTS_SAVE )
+GAME( 1982, funkybeeb, funkybee, funkybee, funkbeeb, 0, ROT90, "bootleg",                        "Funky Bee (bootleg, harder)",          GAME_SUPPORTS_SAVE )
+GAME( 1983, skylancr,  0,        funkybee, skylancr, 0, ROT90, "Orca",                           "Sky Lancer",                           GAME_SUPPORTS_SAVE )
+GAME( 1983, skylancre, skylancr, funkybee, skylance, 0, ROT90, "Orca (Esco Trading Co license)", "Sky Lancer (Esco Trading Co license)", GAME_SUPPORTS_SAVE )

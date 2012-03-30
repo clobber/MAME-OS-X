@@ -35,7 +35,8 @@ ft5_v6_c4.u58 /
 
 
 static UINT16 *bmc_1_videoram, *bmc_2_videoram,*main_ram;
-static tilemap *tilemap_1,*tilemap_2;
+static tilemap_t *tilemap_1,*tilemap_2;
+static UINT8 *bmc_colorram;
 static int clr_offset=0;
 
 static TILE_GET_INFO( get_t1_tile_info )
@@ -75,19 +76,19 @@ static VIDEO_UPDATE( koftball )
 
 static WRITE16_HANDLER( bmc_RAMDAC_offset_w )
 {
-		clr_offset=data*3;
+	clr_offset=data*3;
 }
 
 static WRITE16_HANDLER( bmc_RAMDAC_color_w )
 {
-		colorram[clr_offset]=data;
-		palette_set_color_rgb(space->machine,clr_offset/3,pal6bit(colorram[(clr_offset/3)*3]),pal6bit(colorram[(clr_offset/3)*3+1]),pal6bit(colorram[(clr_offset/3)*3+2]));
-		clr_offset=(clr_offset+1)%768;
+	bmc_colorram[clr_offset]=data;
+	palette_set_color_rgb(space->machine,clr_offset/3,pal6bit(bmc_colorram[(clr_offset/3)*3]),pal6bit(bmc_colorram[(clr_offset/3)*3+1]),pal6bit(bmc_colorram[(clr_offset/3)*3+2]));
+	clr_offset=(clr_offset+1)%768;
 }
 
 static READ16_HANDLER( bmc_RAMDAC_color_r )
 {
-		return colorram[clr_offset];
+	return bmc_colorram[clr_offset];
 }
 
 static READ16_HANDLER(random_number_r)
@@ -107,7 +108,7 @@ static READ16_HANDLER(prot_r)
 		case 0x8000: return 0x0f0f;
 	}
 
-	logerror("unk prot r %x %x\n",prot_data, 	cpu_get_previouspc(space->cpu));
+	logerror("unk prot r %x %x\n",prot_data,	cpu_get_previouspc(space->cpu));
 	return mame_rand(space->machine);
 }
 
@@ -271,7 +272,7 @@ static const UINT16 nvram[]=
 #endif
 static DRIVER_INIT(koftball)
 {
-	colorram=auto_alloc_array(machine, UINT8, 768);
+	bmc_colorram = auto_alloc_array(machine, UINT8, 768);
 
 #if NVRAM_HACK
 	{

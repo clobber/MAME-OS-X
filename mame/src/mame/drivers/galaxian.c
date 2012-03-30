@@ -229,7 +229,7 @@ TO DO :
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/s2650/s2650.h"
-#include "galaxian.h"
+#include "includes/galaxian.h"
 #include "machine/8255ppi.h"
 #include "sound/ay8910.h"
 #include "sound/sn76496.h"
@@ -254,7 +254,6 @@ static UINT8 zigzag_ay8910_latch;
 static UINT8 kingball_speech_dip;
 static UINT8 kingball_sound;
 static UINT8 mshuttle_ay8910_cs;
-static UINT8 *frogg_ram;
 
 static UINT16 protection_state;
 static UINT8 protection_result;
@@ -316,26 +315,26 @@ static WRITE8_HANDLER( start_lamp_w )
 {
 	/* offset 0 = 1P START LAMP */
 	/* offset 1 = 2P START LAMP */
-	set_led_status(offset, data & 1);
+	set_led_status(space->machine, offset, data & 1);
 }
 
 
 static WRITE8_HANDLER( coin_lock_w )
 {
 	/* many variants and bootlegs don't have this */
-	coin_lockout_global_w(~data & 1);
+	coin_lockout_global_w(space->machine, ~data & 1);
 }
 
 
 static WRITE8_HANDLER( coin_count_0_w )
 {
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine, 0, data & 1);
 }
 
 
 static WRITE8_HANDLER( coin_count_1_w )
 {
-	coin_counter_w(1, data & 1);
+	coin_counter_w(space->machine, 1, data & 1);
 }
 
 
@@ -505,7 +504,7 @@ static WRITE8_HANDLER( theend_ppi8255_w )
 
 static WRITE8_DEVICE_HANDLER( theend_coin_counter_w )
 {
-	coin_counter_w(0, data & 0x80);
+	coin_counter_w(device->machine, 0, data & 0x80);
 }
 
 
@@ -841,7 +840,7 @@ static INPUT_CHANGED( gmgalax_game_changed )
 	gmgalax_selected_game = newval;
 
 	/* select the bank and graphics bank based on it */
-	memory_set_bank(field->port->machine, 1, gmgalax_selected_game);
+	memory_set_bank(field->port->machine, "bank1", gmgalax_selected_game);
 	galaxian_gfxbank_w(space, 0, gmgalax_selected_game);
 
 	/* reset the stars */
@@ -870,8 +869,8 @@ static CUSTOM_INPUT( gmgalax_port_r )
 
 static WRITE8_HANDLER( zigzag_bankswap_w )
 {
-	memory_set_bank(space->machine, 1, data & 1);
-	memory_set_bank(space->machine, 2, ~data & 1);
+	memory_set_bank(space->machine, "bank1", data & 1);
+	memory_set_bank(space->machine, "bank2", ~data & 1);
 }
 
 
@@ -884,7 +883,7 @@ static WRITE8_HANDLER( zigzag_ay8910_w )
 			/* bit 0 = WRITE */
 			/* bit 1 = C/D */
 			if ((offset & 1) != 0)
-				ay8910_data_address_w(devtag_get_device(space->machine, "ay"), offset >> 1, zigzag_ay8910_latch);
+				ay8910_data_address_w(devtag_get_device(space->machine, "aysnd"), offset >> 1, zigzag_ay8910_latch);
 			break;
 
 		case 0x100:
@@ -976,21 +975,21 @@ static WRITE8_HANDLER( mshuttle_ay8910_cs_w )
 static WRITE8_HANDLER( mshuttle_ay8910_control_w )
 {
 	if (!mshuttle_ay8910_cs)
-		ay8910_address_w(devtag_get_device(space->machine, "ay"), offset, data);
+		ay8910_address_w(devtag_get_device(space->machine, "aysnd"), offset, data);
 }
 
 
 static WRITE8_HANDLER( mshuttle_ay8910_data_w )
 {
 	if (!mshuttle_ay8910_cs)
-		ay8910_data_w(devtag_get_device(space->machine, "ay"), offset, data);
+		ay8910_data_w(devtag_get_device(space->machine, "aysnd"), offset, data);
 }
 
 
 static READ8_HANDLER( mshuttle_ay8910_data_r )
 {
 	if (!mshuttle_ay8910_cs)
-		return ay8910_r(devtag_get_device(space->machine, "ay"), offset);
+		return ay8910_r(devtag_get_device(space->machine, "aysnd"), offset);
 	return 0xff;
 }
 
@@ -1113,7 +1112,7 @@ static const ppi8255_interface moonwar_ppi8255_0_intf =
 	DEVCB_INPUT_PORT("IN2"),				/* Port C read */
 	DEVCB_NULL,								/* Port A write */
 	DEVCB_NULL,								/* Port B write */
-	DEVCB_HANDLER(moonwar_port_select_w) 	/* Port C write */
+	DEVCB_HANDLER(moonwar_port_select_w)	/* Port C write */
 };
 
 
@@ -1190,8 +1189,8 @@ static ADDRESS_MAP_START( galaxian_map_base, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x0400) AM_RAM
-	AM_RANGE(0x5000, 0x53ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x5800, 0x58ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x5000, 0x53ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x5800, 0x58ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x6000, 0x6000) AM_MIRROR(0x07ff) AM_READ_PORT("IN0")
 	AM_RANGE(0x6000, 0x6001) AM_MIRROR(0x07f8) AM_WRITE(start_lamp_w)
 	AM_RANGE(0x6002, 0x6002) AM_MIRROR(0x07f8) AM_WRITE(coin_lock_w)
@@ -1225,8 +1224,8 @@ static ADDRESS_MAP_START( mooncrst_map_base, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_MIRROR(0x0400) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9800, 0x98ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x9800, 0x98ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x07ff) AM_READ_PORT("IN0")
 	AM_RANGE(0xa000, 0xa002) AM_MIRROR(0x07f8) AM_WRITE(galaxian_gfxbank_w)
 	AM_RANGE(0xa003, 0xa003) AM_MIRROR(0x07f8) AM_WRITE(coin_count_0_w)
@@ -1257,8 +1256,8 @@ static ADDRESS_MAP_START( dambustr_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0x8000, 0x8000) AM_WRITE(dambustr_bg_color_w)
 //  AM_RANGE(0x8001, 0x8001) AM_WRITE(dambustr_bg_split_line_w)
 	AM_RANGE(0xc000, 0xc3ff) AM_MIRROR(0x0400) AM_RAM
-	AM_RANGE(0xd000, 0xd3ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd800, 0xd8ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0xd000, 0xd3ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0xd800, 0xd8ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xe000, 0xe000) AM_MIRROR(0x07ff) AM_READ_PORT("IN0")
 	AM_RANGE(0xe004, 0xe007) AM_MIRROR(0x07f8) AM_WRITE(galaxian_lfo_freq_w)
 	AM_RANGE(0xe800, 0xe800) AM_MIRROR(0x07ff) AM_READ_PORT("IN1")
@@ -1279,8 +1278,8 @@ static ADDRESS_MAP_START( theend_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x5000, 0x50ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x5000, 0x50ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x6801, 0x6801) AM_MIRROR(0x07f8) AM_WRITE(irq_enable_w)
 	AM_RANGE(0x6802, 0x6802) AM_MIRROR(0x07f8) AM_WRITE(coin_count_0_w)
 	AM_RANGE(0x6803, 0x6803) AM_MIRROR(0x07f8) AM_WRITE(scramble_background_enable_w)
@@ -1298,8 +1297,8 @@ static ADDRESS_MAP_START( scobra_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x4000) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x4400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x4700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x4400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x4700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x9800, 0x9803) AM_MIRROR(0x47fc) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xa000, 0xa003) AM_MIRROR(0x47fc) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xa801, 0xa801) AM_MIRROR(0x47f8) AM_WRITE(irq_enable_w)
@@ -1319,8 +1318,8 @@ static ADDRESS_MAP_START( frogger_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8800) AM_MIRROR(0x07ff) AM_READ(watchdog_reset_r)
-	AM_RANGE(0xa800, 0xabff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xb000, 0xb0ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0xa800, 0xabff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0xb000, 0xb0ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xb808, 0xb808) AM_MIRROR(0x07e3) AM_WRITE(irq_enable_w)
 	AM_RANGE(0xb80c, 0xb80c) AM_MIRROR(0x07e3) AM_WRITE(galaxian_flip_screen_y_w)
 	AM_RANGE(0xb810, 0xb810) AM_MIRROR(0x07e3) AM_WRITE(galaxian_flip_screen_x_w)
@@ -1335,8 +1334,8 @@ static ADDRESS_MAP_START( turtles_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x4000) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x4400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9800, 0x98ff) AM_MIRROR(0x4700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x4400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x9800, 0x98ff) AM_MIRROR(0x4700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x47c7) AM_WRITE(scramble_background_red_w)
 	AM_RANGE(0xa008, 0xa008) AM_MIRROR(0x47c7) AM_WRITE(irq_enable_w)
 	AM_RANGE(0xa010, 0xa010) AM_MIRROR(0x47c7) AM_WRITE(galaxian_flip_screen_y_w)
@@ -1356,8 +1355,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sfx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x5000, 0x50ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x5000, 0x50ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x6800, 0x6800) AM_MIRROR(0x07f8) AM_WRITE(scramble_background_red_w)
 	AM_RANGE(0x6801, 0x6801) AM_MIRROR(0x07f8) AM_WRITE(irq_enable_w)
 	AM_RANGE(0x6802, 0x6802) AM_MIRROR(0x07f8) AM_WRITE(coin_count_0_w)
@@ -1385,10 +1384,10 @@ static ADDRESS_MAP_START( jumpbug_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x5000, 0x50ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
-	AM_RANGE(0x5800, 0x5800) AM_MIRROR(0x00ff) AM_DEVWRITE("ay", ay8910_data_w)
-	AM_RANGE(0x5900, 0x5900) AM_MIRROR(0x00ff) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x4800, 0x4bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x5000, 0x50ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x5800, 0x5800) AM_MIRROR(0x00ff) AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x5900, 0x5900) AM_MIRROR(0x00ff) AM_DEVWRITE("aysnd", ay8910_address_w)
 	AM_RANGE(0x6000, 0x6000) AM_MIRROR(0x07ff) AM_READ_PORT("IN0")
 	AM_RANGE(0x6002, 0x6006) AM_MIRROR(0x07f8) AM_WRITE(galaxian_gfxbank_w)
 	AM_RANGE(0x6800, 0x6800) AM_MIRROR(0x07ff) AM_READ_PORT("IN1")
@@ -1407,8 +1406,8 @@ static ADDRESS_MAP_START( frogf_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x8800, 0x8bff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xa802, 0xa802) AM_MIRROR(0x07f1) AM_WRITE(galaxian_flip_screen_x_w)
 	AM_RANGE(0xa804, 0xa804) AM_MIRROR(0x07f1) AM_WRITE(irq_enable_w)
 	AM_RANGE(0xa806, 0xa806) AM_MIRROR(0x07f1) AM_WRITE(galaxian_flip_screen_y_w)
@@ -1424,8 +1423,8 @@ static ADDRESS_MAP_START( mshuttle_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9800, 0x98ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE(&spriteram)
+	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM_WRITE(galaxian_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x9800, 0x98ff) AM_MIRROR(0x0700) AM_RAM_WRITE(galaxian_objram_w) AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(irq_enable_w)
 	AM_RANGE(0xa001, 0xa001) AM_WRITE(galaxian_stars_enable_w)
@@ -1519,8 +1518,8 @@ static ADDRESS_MAP_START( checkman_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x03, 0x03) AM_READ(soundlatch_r)
-	AM_RANGE(0x04, 0x05) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x06, 0x06) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x04, 0x05) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x06, 0x06) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -1529,8 +1528,8 @@ static ADDRESS_MAP_START( checkmaj_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xa002, 0xa002) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xa000, 0xa001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xa002, 0xa002) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -1913,7 +1912,7 @@ static MACHINE_DRIVER_START( zigzag )
 	MDRV_CPU_PROGRAM_MAP(galaxian_map_base)  /* no discrete sound */
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("ay", AY8910, 1789750)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1789750)
 
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -1950,7 +1949,7 @@ static MACHINE_DRIVER_START( jumpbug )
 	MDRV_CPU_PROGRAM_MAP(jumpbug_map)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("ay", AY8910, 1789750)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1789750)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 
@@ -1965,7 +1964,7 @@ static MACHINE_DRIVER_START( checkman )
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* NMIs are triggered by the main CPU */
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("ay", AY8910, 1789750)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1789750)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 
@@ -1984,7 +1983,7 @@ static MACHINE_DRIVER_START( checkmaj )
 	MDRV_TIMER_ADD_SCANLINE("irq0", checkmaj_irq0_gen, "screen", 0, 8)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("ay", AY8910, 1620000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1620000)
 	MDRV_SOUND_CONFIG(checkmaj_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2)
 MACHINE_DRIVER_END
@@ -1999,7 +1998,7 @@ static MACHINE_DRIVER_START( mshuttle )
 	MDRV_CPU_IO_MAP(mshuttle_portmap)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("ay", AY8910, GALAXIAN_PIXEL_CLOCK/3/4)
+	MDRV_SOUND_ADD("aysnd", AY8910, GALAXIAN_PIXEL_CLOCK/3/4)
 	MDRV_SOUND_CONFIG(cclimber_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -2430,9 +2429,9 @@ static void unmap_galaxian_sound(running_machine *machine, offs_t base)
 {
 	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
-	memory_install_write8_handler(space, base + 0x0004, base + 0x0007, 0, 0x07f8, (write8_space_func)SMH_UNMAP);
-	memory_install_write8_handler(space, base + 0x0800, base + 0x0807, 0, 0x07f8, (write8_space_func)SMH_UNMAP);
-	memory_install_write8_handler(space, base + 0x1800, base + 0x1800, 0, 0x07ff, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, base + 0x0004, base + 0x0007, 0, 0x07f8);
+	memory_unmap_write(space, base + 0x0800, base + 0x0807, 0, 0x07f8);
+	memory_unmap_write(space, base + 0x1800, base + 0x1800, 0, 0x07ff);
 }
 
 
@@ -2457,7 +2456,7 @@ static DRIVER_INIT( nolock )
 	DRIVER_INIT_CALL(galaxian);
 
 	/* ...but coin lockout disabled/disconnected */
-	memory_install_write8_handler(space, 0x6002, 0x6002, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0x6002, 0x6002, 0, 0x7f8);
 }
 
 
@@ -2469,7 +2468,7 @@ static DRIVER_INIT( azurian )
 	common_init(machine, scramble_draw_bullet, galaxian_draw_background, NULL, NULL);
 
 	/* coin lockout disabled */
-	memory_install_write8_handler(space, 0x6002, 0x6002, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0x6002, 0x6002, 0, 0x7f8);
 }
 
 
@@ -2481,11 +2480,11 @@ static DRIVER_INIT( gmgalax )
 	common_init(machine, galaxian_draw_bullet, galaxian_draw_background, gmgalax_extend_tile_info, gmgalax_extend_sprite_info);
 
 	/* ROM is banked */
-	memory_install_read8_handler(space, 0x0000, 0x3fff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_configure_bank(machine, 1, 0, 2, memory_region(machine, "maincpu") + 0x10000, 0x4000);
+	memory_install_read_bank(space, 0x0000, 0x3fff, 0, 0, "bank1");
+	memory_configure_bank(machine, "bank1", 0, 2, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 
 	/* callback when the game select is toggled */
-	gmgalax_game_changed(machine->portconfig->fieldlist, NULL, 0, 0);
+	gmgalax_game_changed(machine->portlist.head->fieldlist, NULL, 0, 0);
 	state_save_register_global(machine, gmgalax_selected_game);
 }
 
@@ -2522,11 +2521,7 @@ static DRIVER_INIT( frogg )
 	common_init(machine, galaxian_draw_bullet, frogger_draw_background, frogger_extend_tile_info, frogger_extend_sprite_info);
 
 	/* ...but needs a full 2k of RAM */
-	memory_install_readwrite8_handler(space, 0x4000, 0x47ff, 0, 0, (read8_space_func)SMH_BANK(1), (write8_space_func)SMH_BANK(1));
-	frogg_ram = auto_alloc_array(machine, UINT8, 0x800);
-	memory_set_bankptr(machine, 1, frogg_ram);
-
-	state_save_register_global_pointer(machine, frogg_ram, 0x800);
+	memory_install_ram(space, 0x4000, 0x47ff, 0, 0, NULL);
 }
 
 
@@ -2695,22 +2690,22 @@ static DRIVER_INIT( zigzag )
 	common_init(machine, NULL, galaxian_draw_background, NULL, NULL);
 
 	/* make ROMs 2 & 3 swappable */
-	memory_install_read8_handler(space, 0x2000, 0x2fff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_install_read8_handler(space, 0x3000, 0x3fff, 0, 0, (read8_space_func)SMH_BANK(2));
-	memory_configure_bank(machine, 1, 0, 2, memory_region(machine, "maincpu") + 0x2000, 0x1000);
-	memory_configure_bank(machine, 2, 0, 2, memory_region(machine, "maincpu") + 0x2000, 0x1000);
+	memory_install_read_bank(space, 0x2000, 0x2fff, 0, 0, "bank1");
+	memory_install_read_bank(space, 0x3000, 0x3fff, 0, 0, "bank2");
+	memory_configure_bank(machine, "bank1", 0, 2, memory_region(machine, "maincpu") + 0x2000, 0x1000);
+	memory_configure_bank(machine, "bank2", 0, 2, memory_region(machine, "maincpu") + 0x2000, 0x1000);
 
 	/* also re-install the fixed ROM area as a bank in order to inform the memory system that
        the fixed area only extends to 0x1fff */
-	memory_install_read8_handler(space, 0x0000, 0x1fff, 0, 0, (read8_space_func)SMH_BANK(3));
-	memory_set_bankptr(machine, 3, memory_region(machine, "maincpu") + 0x0000);
+	memory_install_read_bank(space, 0x0000, 0x1fff, 0, 0, "bank3");
+	memory_set_bankptr(machine, "bank3", memory_region(machine, "maincpu") + 0x0000);
 
 	/* handler for doing the swaps */
 	memory_install_write8_handler(space, 0x7002, 0x7002, 0, 0x07f8, zigzag_bankswap_w);
 	zigzag_bankswap_w(space, 0, 0);
 
 	/* coin lockout disabled */
-	memory_install_write8_handler(space, 0x6002, 0x6002, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0x6002, 0x6002, 0, 0x7f8);
 
 	/* remove the galaxian sound hardware */
 	unmap_galaxian_sound(machine, 0x6000);
@@ -2736,7 +2731,7 @@ static DRIVER_INIT( checkman )
 	common_init(machine, galaxian_draw_bullet, galaxian_draw_background, mooncrst_extend_tile_info, mooncrst_extend_sprite_info);
 
 	/* move the interrupt enable from $b000 to $b001 */
-	memory_install_write8_handler(space, 0xb000, 0xb000, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0xb000, 0xb000, 0, 0x7f8);
 	memory_install_write8_handler(space, 0xb001, 0xb001, 0, 0x7f8, irq_enable_w);
 
 	/* attach the sound command handler */
@@ -2786,7 +2781,7 @@ static DRIVER_INIT( dingoe )
 	common_init(machine, galaxian_draw_bullet, galaxian_draw_background, mooncrst_extend_tile_info, mooncrst_extend_sprite_info);
 
 	/* move the interrupt enable from $b000 to $b001 */
-	memory_install_write8_handler(space, 0xb000, 0xb000, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0xb000, 0xb000, 0, 0x7f8);
 	memory_install_write8_handler(space, 0xb001, 0xb001, 0, 0x7f8, irq_enable_w);
 
 	/* attach the sound command handler */
@@ -2810,12 +2805,10 @@ static DRIVER_INIT( skybase )
 	memory_install_write8_handler(space, 0xa002, 0xa002, 0, 0x7f8, galaxian_gfxbank_w);
 
 	/* needs a full 2k of RAM */
-	memory_install_readwrite8_handler(space, 0x8000, 0x87ff, 0, 0, (read8_space_func)SMH_BANK(1), (write8_space_func)SMH_BANK(1));
-	memory_set_bankptr(machine, 1, auto_alloc_array(machine, UINT8, 0x800));
+	memory_install_ram(space, 0x8000, 0x87ff, 0, 0, NULL);
 
 	/* extend ROM */
-	memory_install_read8_handler(space, 0x0000, 0x5fff, 0, 0, (read8_space_func)SMH_BANK(2));
-	memory_set_bankptr(machine, 2, memory_region(machine, "maincpu"));
+	memory_install_rom(space, 0x0000, 0x5fff, 0, 0, memory_region(machine, "maincpu"));
 }
 
 
@@ -2870,19 +2863,17 @@ static DRIVER_INIT( scorpnmc )
 	common_init(machine, galaxian_draw_bullet, galaxian_draw_background, batman2_extend_tile_info, upper_extend_sprite_info);
 
 	/* move the interrupt enable from $b000 to $b001 */
-	memory_install_write8_handler(space, 0xb000, 0xb000, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0xb000, 0xb000, 0, 0x7f8);
 	memory_install_write8_handler(space, 0xb001, 0xb001, 0, 0x7f8, irq_enable_w);
 
 	/* extra ROM */
-	memory_install_read8_handler(space, 0x5000, 0x67ff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x5000);
+	memory_install_rom(space, 0x5000, 0x67ff, 0, 0, memory_region(machine, "maincpu") + 0x5000);
 
 	/* install RAM at $4000-$4800 */
-	memory_install_readwrite8_handler(space, 0x4000, 0x47ff, 0, 0, (read8_space_func)SMH_BANK(2), (write8_space_func)SMH_BANK(2));
-	memory_set_bankptr(machine, 2, auto_alloc_array(machine, UINT8, 0x800));
+	memory_install_ram(space, 0x4000, 0x47ff, 0, 0, NULL);
 
 	/* doesn't appear to use original RAM */
-	memory_install_readwrite8_handler(space, 0x8000, 0x87ff, 0, 0, (read8_space_func)SMH_UNMAP, (write8_space_func)SMH_UNMAP);
+	memory_unmap_readwrite(space, 0x8000, 0x87ff, 0, 0);
 }
 
 
@@ -2901,7 +2892,7 @@ static DRIVER_INIT( theend )
 	common_init(machine, theend_draw_bullet, galaxian_draw_background, NULL, NULL);
 
 	/* coin counter on the upper bit of port C */
-	memory_install_write8_handler(space, 0x6802, 0x6802, 0, 0x7f8, (write8_space_func)SMH_UNMAP);
+	memory_unmap_write(space, 0x6802, 0x6802, 0, 0x7f8);
 }
 
 
@@ -2923,11 +2914,11 @@ static DRIVER_INIT( explorer )
 	memory_install_write8_handler(space, 0x7000, 0x7000, 0, 0x7ff, watchdog_reset_w);
 
 	/* I/O appears to be direct, not via PPIs */
-	memory_install_readwrite8_handler(space, 0x8000, 0xffff, 0, 0, (read8_space_func)SMH_UNMAP, (write8_space_func)SMH_UNMAP);
-	memory_install_read_port_handler(space, 0x8000, 0x8000, 0, 0xffc, "IN0");
-	memory_install_read_port_handler(space, 0x8001, 0x8001, 0, 0xffc, "IN1");
-	memory_install_read_port_handler(space, 0x8002, 0x8002, 0, 0xffc, "IN2");
-	memory_install_read_port_handler(space, 0x8003, 0x8003, 0, 0xffc, "IN3");
+	memory_unmap_readwrite(space, 0x8000, 0xffff, 0, 0);
+	memory_install_read_port(space, 0x8000, 0x8000, 0, 0xffc, "IN0");
+	memory_install_read_port(space, 0x8001, 0x8001, 0, 0xffc, "IN1");
+	memory_install_read_port(space, 0x8002, 0x8002, 0, 0xffc, "IN2");
+	memory_install_read_port(space, 0x8003, 0x8003, 0, 0xffc, "IN3");
 	memory_install_write8_handler(space, 0x8000, 0x8000, 0, 0xfff, soundlatch_w);
 	memory_install_write8_handler(space, 0x9000, 0x9000, 0, 0xfff, explorer_sound_control_w);
 }
@@ -2940,8 +2931,8 @@ static DRIVER_INIT( sfx )
 	galaxian_sfx_tilemap = TRUE;
 
 	/* sound board has space for extra ROM */
-	memory_install_read8_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_set_bankptr(machine, 1, memory_region(machine, "audiocpu"));
+	memory_install_read_bank(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x3fff, 0, 0, "bank1");
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "audiocpu"));
 }
 
 
@@ -2953,7 +2944,7 @@ static DRIVER_INIT( atlantis )
 	common_init(machine, scramble_draw_bullet, scramble_draw_background, NULL, NULL);
 
 	/* watchdog is at $7800? (or is it just disabled?) */
-	memory_install_read8_handler(space, 0x7000, 0x7000, 0, 0x7ff, (read8_space_func)SMH_UNMAP);
+	memory_unmap_read(space, 0x7000, 0x7000, 0, 0x7ff);
 	memory_install_read8_handler(space, 0x7800, 0x7800, 0, 0x7ff, watchdog_reset_r);
 }
 
@@ -2998,11 +2989,7 @@ static DRIVER_INIT( froggrmc )
 	memory_install_write8_handler(space, 0xb001, 0xb001, 0, 0x7f8, froggrmc_sound_control_w);
 
 	/* actually needs 2k of RAM */
-	memory_install_readwrite8_handler(space, 0x8000, 0x87ff, 0, 0, (read8_space_func)SMH_BANK(1), (write8_space_func)SMH_BANK(1));
-	frogg_ram = auto_alloc_array(machine, UINT8, 0x800);
-	memory_set_bankptr(machine, 1, frogg_ram);
-
-	state_save_register_global_pointer(machine, frogg_ram, 0x800);
+	memory_install_ram(space, 0x8000, 0x87ff, 0, 0, NULL);
 
 	/* decrypt */
 	decode_frogger_sound(machine);
@@ -3046,11 +3033,11 @@ static DRIVER_INIT( scorpion )
 	memory_install_readwrite8_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_IO), 0x00, 0xff, 0, 0, scorpion_ay8910_r, scorpion_ay8910_w);
 
 	/* extra ROM */
-	memory_install_read8_handler(space, 0x5800, 0x67ff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x5800);
+	memory_install_read_bank(space, 0x5800, 0x67ff, 0, 0, "bank1");
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "maincpu") + 0x5800);
 
 	/* no background related */
-//  memory_install_write8_handler(space, 0x6803, 0x6803, 0, 0, (write8_space_func)SMH_NOP);
+//  memory_nop_write(space, 0x6803, 0x6803, 0, 0);
 
 	memory_install_read8_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x3000, 0x3000, 0, 0, scorpion_digitalker_intr_r);
 /*

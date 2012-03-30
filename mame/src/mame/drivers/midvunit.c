@@ -24,7 +24,7 @@
 #include "audio/dcs.h"
 #include "machine/idectrl.h"
 #include "machine/midwayic.h"
-#include "midvunit.h"
+#include "includes/midvunit.h"
 
 
 #define CPU_CLOCK		50000000
@@ -41,7 +41,7 @@ static UINT8 adc_shift;
 static UINT16 last_port0;
 static UINT8 shifter_state;
 
-static emu_timer *timer[2];
+static const device_config *timer[2];
 static double timer_rate;
 
 static UINT32 *tms32031_control;
@@ -76,8 +76,8 @@ static MACHINE_RESET( midvunit )
 	memcpy(ram_base, memory_region(machine, "user1"), 0x20000*4);
 	device_reset(cputag_get_cpu(machine, "maincpu"));
 
-	timer[0] = timer_alloc(machine, NULL, NULL);
-	timer[1] = timer_alloc(machine, NULL, NULL);
+	timer[0] = devtag_get_device(machine, "timer0");
+	timer[1] = devtag_get_device(machine, "timer1");
 }
 
 
@@ -89,8 +89,8 @@ static MACHINE_RESET( midvplus )
 	memcpy(ram_base, memory_region(machine, "user1"), 0x20000*4);
 	device_reset(cputag_get_cpu(machine, "maincpu"));
 
-	timer[0] = timer_alloc(machine, NULL, NULL);
-	timer[1] = timer_alloc(machine, NULL, NULL);
+	timer[0] = devtag_get_device(machine, "timer0");
+	timer[1] = devtag_get_device(machine, "timer1");
 
 	devtag_reset(machine, "ide");
 }
@@ -183,13 +183,13 @@ static WRITE32_HANDLER( midvunit_cmos_protect_w )
 static WRITE32_HANDLER( midvunit_cmos_w )
 {
 	if (!cmos_protected)
-		COMBINE_DATA(generic_nvram32 + offset);
+		COMBINE_DATA(space->machine->generic.nvram.u32 + offset);
 }
 
 
 static READ32_HANDLER( midvunit_cmos_r )
 {
-	return generic_nvram32[offset];
+	return space->machine->generic.nvram.u32[offset];
 }
 
 
@@ -261,7 +261,7 @@ static READ32_HANDLER( tms32031_control_r )
 	{
 		/* timer is clocked at 100ns */
 		int which = (offset >> 4) & 1;
-		INT32 result = attotime_to_double(attotime_mul(timer_timeelapsed(timer[which]), timer_rate));
+		INT32 result = attotime_to_double(attotime_mul(timer_device_timeelapsed(timer[which]), timer_rate));
 //      logerror("%06X:tms32031_control_r(%02X) = %08X\n", cpu_get_pc(space->cpu), offset, result);
 		return result;
 	}
@@ -288,7 +288,7 @@ static WRITE32_HANDLER( tms32031_control_w )
 		int which = (offset >> 4) & 1;
 //  logerror("%06X:tms32031_control_w(%02X) = %08X\n", cpu_get_pc(space->cpu), offset, data);
 		if (data & 0x40)
-			timer_adjust_oneshot(timer[which], attotime_never, 0);
+			timer_device_adjust_oneshot(timer[which], attotime_never, 0);
 
 		/* bit 0x200 selects internal clocking, which is 1/2 the main CPU clock rate */
 		if (data & 0x200)
@@ -356,7 +356,7 @@ static READ32_HANDLER( bit_data_r )
 {
 	int bit = (bit_data[bit_index / 32] >> (31 - (bit_index % 32))) & 1;
 	bit_index = (bit_index + 1) % 512;
-	return bit ? generic_nvram32[offset] : ~generic_nvram32[offset];
+	return bit ? space->machine->generic.nvram.u32[offset] : ~space->machine->generic.nvram.u32[offset];
 }
 
 
@@ -493,7 +493,7 @@ static ADDRESS_MAP_START( midvunit_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x980082, 0x980083) AM_READ(midvunit_dma_trigger_r)
 	AM_RANGE(0x990000, 0x990000) AM_READNOP	// link PAL (low 4 bits must == 4)
 	AM_RANGE(0x991030, 0x991030) AM_READ_PORT("991030")
-//  AM_RANGE(0x991050, 0x991050) AM_READ(SMH_RAM) // seems to be another port
+//  AM_RANGE(0x991050, 0x991050) AM_READONLY // seems to be another port
 	AM_RANGE(0x991060, 0x991060) AM_READ(port0_r)
 	AM_RANGE(0x992000, 0x992000) AM_READ_PORT("992000")
 	AM_RANGE(0x993000, 0x993000) AM_READWRITE(midvunit_adc_r, midvunit_adc_w)
@@ -502,8 +502,8 @@ static ADDRESS_MAP_START( midvunit_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x995020, 0x995020) AM_WRITE(midvunit_cmos_protect_w)
 	AM_RANGE(0x997000, 0x997000) AM_NOP	// communications
 	AM_RANGE(0x9a0000, 0x9a0000) AM_WRITE(midvunit_sound_w)
-	AM_RANGE(0x9c0000, 0x9c1fff) AM_READWRITE(midvunit_cmos_r, midvunit_cmos_w) AM_BASE(&generic_nvram32) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0x9e0000, 0x9e7fff) AM_RAM_WRITE(midvunit_paletteram_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x9c0000, 0x9c1fff) AM_READWRITE(midvunit_cmos_r, midvunit_cmos_w) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x9e0000, 0x9e7fff) AM_RAM_WRITE(midvunit_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xa00000, 0xbfffff) AM_READWRITE(midvunit_textureram_r, midvunit_textureram_w) AM_BASE(&midvunit_textureram)
 	AM_RANGE(0xc00000, 0xffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -528,7 +528,7 @@ static ADDRESS_MAP_START( midvplus_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x994000, 0x994000) AM_WRITE(midvunit_control_w)
 	AM_RANGE(0x995020, 0x995020) AM_WRITE(midvunit_cmos_protect_w)
 	AM_RANGE(0x9a0000, 0x9a0007) AM_DEVREADWRITE("ide", midway_ide_asic_r, midway_ide_asic_w)
-	AM_RANGE(0x9c0000, 0x9c7fff) AM_RAM_WRITE(midvunit_paletteram_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x9c0000, 0x9c7fff) AM_RAM_WRITE(midvunit_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x9d0000, 0x9d000f) AM_READWRITE(midvplus_misc_r, midvplus_misc_w) AM_BASE(&midvplus_misc)
 	AM_RANGE(0xa00000, 0xbfffff) AM_READWRITE(midvunit_textureram_r, midvunit_textureram_w) AM_BASE(&midvunit_textureram)
 	AM_RANGE(0xc00000, 0xcfffff) AM_RAM
@@ -1028,6 +1028,9 @@ static MACHINE_DRIVER_START( midvcommon )
 	MDRV_MACHINE_RESET(midvunit)
 	MDRV_NVRAM_HANDLER(generic_1fill)
 
+	MDRV_TIMER_ADD("timer0", NULL)
+	MDRV_TIMER_ADD("timer1", NULL)
+
 	/* video hardware */
 	MDRV_PALETTE_LENGTH(32768)
 
@@ -1163,6 +1166,14 @@ ROM_START( crusnusa ) /* Version 4.1, Mon Feb 13 1995 - 16:53:40 */
 	ROM_LOAD32_BYTE( "cusa.u27",     0x800001, 0x80000, CRC(2d977a8e) SHA1(8f4d511bfd6c3bee18daa7253be1a27d079aec8f) )
 	ROM_LOAD32_BYTE( "cusa.u28",     0x800002, 0x80000, CRC(cffa5fb1) SHA1(fb73bc8f65b604c374f88d0ecf06c50ef52f0547) )
 	ROM_LOAD32_BYTE( "cusa.u29",     0x800003, 0x80000, CRC(cbe52c60) SHA1(3f309ce8ef1784c830f4160cfe76dc3a0b438cac) )
+
+	ROM_REGION( 0x0b33, "pals", 0 )
+    ROM_LOAD("a-19993.u38.bin",  0x0000, 0x02dd, CRC(b6323e94) SHA1(a84e04db8838b35ad9d30416b86aba65a29dcd87) ) /* TIBPAL22V10-15BCNT */
+    ROM_LOAD("a-19670.u43.bin",  0x0000, 0x0144, CRC(acafcc97) SHA1(b6f916838d08590a536fe925ec62d66e6ea3dcbc) ) /* TIBPAL20L8-10CNT */
+    ROM_LOAD("a-19668.u52.bin",  0x0000, 0x0157, CRC(7915134e) SHA1(aeb22e46abdc14a9e9b34cfe3b77da3e29b789fe) ) /* GAL20V8B */
+    ROM_LOAD("a-19671.u54.bin",  0x0000, 0x02dd, CRC(b9cce038) SHA1(8d1df026bdac66ea5493e9e51c23f8eb182b024e) ) /* TIBPAL22V10-15BCNT */
+    ROM_LOAD("a-19673.u111.bin", 0x0000, 0x02dd, CRC(8552977d) SHA1(a1a53d797697682b3f18893a90b6bef39ebb069e) ) /* TIBPAL22V10-15BCNT */
+    ROM_LOAD("a-19672.u114.bin", 0x0000, 0x0001, NO_DUMP ) /* TIBPAL22V10-15BCNT */
 ROM_END
 
 

@@ -1,12 +1,12 @@
 #include "driver.h"
 
-static tilemap *sderby_tilemap;
+static tilemap_t *sderby_tilemap;
 extern UINT16 *sderby_videoram;
 
-static tilemap *sderby_md_tilemap;
+static tilemap_t *sderby_md_tilemap;
 extern UINT16 *sderby_md_videoram;
 
-static tilemap *sderby_fg_tilemap;
+static tilemap_t *sderby_fg_tilemap;
 extern UINT16 *sderby_fg_videoram;
 
 /* BG Layer */
@@ -66,11 +66,12 @@ WRITE16_HANDLER( sderby_fg_videoram_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int codeshift)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 	int height = machine->gfx[0]->height;
 	int colordiv = machine->gfx[0]->color_granularity / 16;
 
-	for (offs = 4;offs < spriteram_size/2;offs += 4)
+	for (offs = 4;offs < machine->generic.spriteram_size/2;offs += 4)
 	{
 		int sx,sy,code,color,flipx;
 

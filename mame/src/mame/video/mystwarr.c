@@ -7,13 +7,13 @@
 
 #include "driver.h"
 #include "video/konamiic.h"
-#include "machine/konamigx.h"
+#include "includes/konamigx.h"
 
 static int layer_colorbase[6];
 static int oinprion, cbparam;
 static int sprite_colorbase, sub1_colorbase, last_psac_colorbase, gametype;
 static int roz_enable, roz_rombank;
-static tilemap *ult_936_tilemap;
+static tilemap_t *ult_936_tilemap;
 
 // create a decoding buffer to hold decodable tiles so that the ROM test will pass by
 // reading the original raw data
@@ -337,7 +337,7 @@ VIDEO_UPDATE(mystwarr)
 
 	sprite_colorbase = K055555_get_palette_index(4)<<5;
 
-	konamigx_mixer(screen->machine, bitmap, cliprect, 0, 0, 0, 0, blendmode);
+	konamigx_mixer(screen->machine, bitmap, cliprect, 0, 0, 0, 0, blendmode, 0, 0);
 	return 0;
 }
 
@@ -354,7 +354,7 @@ VIDEO_UPDATE(metamrph)
 
 	sprite_colorbase = K055555_get_palette_index(4)<<4;
 
-	konamigx_mixer(screen->machine, bitmap, cliprect, 0, GXSUB_K053250 | GXSUB_4BPP, 0, 0, 0);
+	konamigx_mixer(screen->machine, bitmap, cliprect, 0, GXSUB_K053250 | GXSUB_4BPP, 0, 0, 0, 0, 0);
 	return 0;
 }
 
@@ -377,7 +377,7 @@ VIDEO_UPDATE(martchmp)
 	// not quite right
 	blendmode = (oinprion==0xef && K054338_read_register(K338_REG_PBLEND)) ? ((1<<16|GXMIX_BLEND_FORCE)<<2) : 0;
 
-	konamigx_mixer(screen->machine, bitmap, cliprect, 0, 0, 0, 0, blendmode);
+	konamigx_mixer(screen->machine, bitmap, cliprect, 0, 0, 0, 0, blendmode, 0, 0);
 	return 0;
 }
 
@@ -400,7 +400,7 @@ WRITE16_HANDLER(ddd_053936_clip_w)
 
 	if (offset == 1)
 	{
- 		if (ACCESSING_BITS_8_15) K053936GP_clip_enable(0, data & 0x0100);
+		if (ACCESSING_BITS_8_15) K053936GP_clip_enable(0, data & 0x0100);
 	}
 	else
 	{
@@ -539,6 +539,6 @@ VIDEO_UPDATE(dadandrn) /* and gaiapols */
 			popmessage("K053936: PSAC colorbase changed");
 	}
 
-	konamigx_mixer(screen->machine, bitmap, cliprect, (roz_enable) ? ult_936_tilemap : 0, rozmode, 0, 0, 0);
+	konamigx_mixer(screen->machine, bitmap, cliprect, (roz_enable) ? ult_936_tilemap : 0, rozmode, 0, 0, 0, 0, 0);
 	return 0;
 }

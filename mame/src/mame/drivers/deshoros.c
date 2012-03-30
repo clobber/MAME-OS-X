@@ -55,7 +55,7 @@ static void answer_bankswitch(running_machine *machine,UINT8 new_bank)
 
 		bank = new_bank;
 		bankaddress = 0 + 0x6000 * bank;
-		memory_set_bankptr(machine, 1, &ROM[bankaddress]);
+		memory_set_bankptr(machine, "bank1", &ROM[bankaddress]);
 	}
 }
 
@@ -81,8 +81,8 @@ static WRITE8_HANDLER( io_w )
 	{
 		case 0x00: /*Printer data*/						return;
 		case 0x02: update_led_array(data);              return;
-		case 0x05: coin_lockout_w(0,io_ram[offset] & 1);return;
-		case 0x06: /*Printer IRQ enable*/    		    return;
+		case 0x05: coin_lockout_w(space->machine, 0,io_ram[offset] & 1);return;
+		case 0x06: /*Printer IRQ enable*/   		    return;
 //      case 0x0a: "buzzer" 0 write
 //      case 0x0b: "buzzer" 1 write
 		case 0x0c: answer_bankswitch(space->machine,data&0x03); return; //data & 0x10 enabled too,dunno if it is worth to shift the data...
@@ -92,7 +92,7 @@ static WRITE8_HANDLER( io_w )
 }
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x5fff) AM_READWRITE(SMH_BANK(1), SMH_ROM)
+	AM_RANGE(0x0000, 0x5fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x9000, 0x900f) AM_READWRITE(io_r,io_w) AM_BASE(&io_ram) //i/o area
 	AM_RANGE(0xc000, 0xffff) AM_ROM

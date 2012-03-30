@@ -20,8 +20,8 @@ Protection TODO:
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "decocrpt.h"
-#include "deco16ic.h"
+#include "includes/decocrpt.h"
+#include "includes/deco16ic.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 
@@ -58,6 +58,7 @@ x = xpos
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 
 	for (offs = 0x400-4;offs >= 0;offs -= 4)
@@ -168,53 +169,6 @@ static VIDEO_UPDATE(dblewing)
 }
 
 
-/*
-
-cheats.. to make testing a bit easier
-
-; [ Double Wings ]
-:dblewing:00000000:FF3C1F:00000009:FFFFFFFF:Infinite Credits
-:dblewing:00000000:FF381C:000000F8:FFFFFFFF:1P Rapid Fire
-:dblewing:00000000:FF3821:00000002:FFFFFFFF:1P Invincibility
-:dblewing:00000000:FF389D:00000008:FFFFFFFF:1P Infinite Lives
-:dblewing:00000000:FF389F:00000006:FFFFFFFF:1P Infinite Bombs
-:dblewing:00000000:FF38A5:0000001C:0000001C:1P Always Maximum Shot Power
-:dblewing:62000000:FF38A5:00000000:00000000:1P Select Weapon
-:dblewing:00010000:FF38A5:00000000:00000060:Vulcan
-:dblewing:00010000:FF38A5:00000020:00000060:Laser
-:dblewing:00010000:FF38A5:00000040:00000060:Break Vulcan
-:dblewing:00000000:FF38A7:0000000C:0000000C:1P Always Max Sub Wepon Power
-:dblewing:62000000:FF38A7:00000000:00000000:1P Select Sub Weapon
-:dblewing:00010000:FF38A7:00000000:000000F0:None
-:dblewing:00010000:FF38A7:00000060:000000F0:Missile
-:dblewing:00010000:FF38A7:00000070:000000F0:Homing
-:dblewing:00000000:FF38B5:00000001:FFFFFFFF:1P Always Have Restart Item
-:dblewing:62000000:FF38A1:00000000:FFFFFFFF:1P Select Character
-:dblewing:00010000:FF38A1:00000000:FFFFFFFF:Nick (Red)
-:dblewing:00010000:FF38A1:00000001:FFFFFFFF:Sophie (Blue)
-:dblewing:00010000:FF38A1:00000002:FFFFFFFF:Elan (Yellow)
-:dblewing:00000000:FF38DC:000000F8:FFFFFFFF:2P Rapid Fire
-:dblewing:00000000:FF38E1:00000002:FFFFFFFF:2P Invincibility
-:dblewing:00000000:FF395D:00000008:FFFFFFFF:2P Infinite Lives
-:dblewing:00000000:FF395F:00000006:FFFFFFFF:2P Infinite Bombs
-:dblewing:00000000:FF3965:0000001C:0000001C:2P Always Maximum Shot Power
-:dblewing:62000000:FF3965:00000000:00000000:2P Select Weapon
-:dblewing:00010000:FF3965:00000000:00000060:Vulcan
-:dblewing:00010000:FF3965:00000020:00000060:Laser
-:dblewing:00010000:FF3965:00000040:00000060:Break Vulcan
-:dblewing:00000000:FF3967:0000000C:0000000C:2P Always Max Sub Wepon Power
-:dblewing:62000000:FF3967:00000000:00000000:2P Select Sub Weapon
-:dblewing:00010000:FF3967:00000000:000000F0:None
-:dblewing:00010000:FF3967:00000060:000000F0:Missile
-:dblewing:00010000:FF3967:00000070:000000F0:Homing
-:dblewing:00000000:FF3975:00000001:FFFFFFFF:2P Always Have Restart Item
-:dblewing:62000000:FF3961:00000000:FFFFFFFF:2P Select Character
-:dblewing:00010000:FF3961:00000000:FFFFFFFF:Nick (Red)
-:dblewing:00010000:FF3961:00000001:FFFFFFFF:Sophie (Blue)
-:dblewing:00010000:FF3961:00000002:FFFFFFFF:Elan (Yellow)
-
-*/
-
 /* protection.. involves more addresses than this .. */
 /* this is going to be typical deco '104' protection...
  writes one place, reads back data shifted in another
@@ -257,7 +211,7 @@ static READ16_HANDLER ( dlbewing_prot_r )
 		case 0x6d6: return boss_move;          // boss 1 2nd pilot
 		case 0x748: return boss_move;          // boss 1 3rd pilot
 
-		case 0x566: return 0x0009;   	   	   // boss BGM,might be a variable one (read->write to the sound latch)
+		case 0x566: return 0x0009;  		   // boss BGM,might be a variable one (read->write to the sound latch)
 		case 0x1ea: return boss_shoot_type;    // boss 1 shoot type
 		case 0x596: return boss_3_data;		   // boss 3 appearing
 		case 0x692:	return boss_4_data;
@@ -366,7 +320,7 @@ static WRITE16_HANDLER( dblewing_prot_w )
 		case 0x380: // sound write
 			soundlatch_w(space, 0, data & 0xff);
 			dblewing_sound_irq |= 0x02;
-		 	cputag_set_input_line(space->machine, "audiocpu", 0, (dblewing_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
+			cputag_set_input_line(space->machine, "audiocpu", 0, (dblewing_sound_irq != 0) ? ASSERT_LINE : CLEAR_LINE);
 			return;
 		case 0x384:
 			dblwings_384_data = data;
@@ -432,10 +386,10 @@ static WRITE16_HANDLER( dblewing_prot_w )
 static ADDRESS_MAP_START( dblewing_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x100fff) AM_READ(SMH_RAM) AM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
-	AM_RANGE(0x102000, 0x102fff) AM_READ(SMH_RAM) AM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
-	AM_RANGE(0x104000, 0x104fff) AM_READ(SMH_RAM) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf1_rowscroll)
-	AM_RANGE(0x106000, 0x106fff) AM_READ(SMH_RAM) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf2_rowscroll)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
+	AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
+	AM_RANGE(0x104000, 0x104fff) AM_RAM AM_BASE(&deco16_pf1_rowscroll)
+	AM_RANGE(0x106000, 0x106fff) AM_RAM AM_BASE(&deco16_pf2_rowscroll)
 
 	/* protection */
 //  AM_RANGE(0x280104, 0x280105) AM_WRITENOP              // ??
@@ -451,9 +405,9 @@ static ADDRESS_MAP_START( dblewing_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE(0x284000, 0x284001) AM_RAM
 	AM_RANGE(0x288000, 0x288001) AM_RAM
-	AM_RANGE(0x28C000, 0x28C00f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf12_control)
-	AM_RANGE(0x300000, 0x3007ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x320000, 0x3207ff) AM_READWRITE(SMH_RAM,paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x28C000, 0x28C00f) AM_RAM AM_BASE(&deco16_pf12_control)
+	AM_RANGE(0x300000, 0x3007ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x320000, 0x3207ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xff0000, 0xff3fff) AM_MIRROR(0xc000) AM_RAM
 ADDRESS_MAP_END
 
@@ -468,11 +422,11 @@ static READ8_HANDLER(irq_latch_r)
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
- 	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ym", ym2151_status_port_r,ym2151_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2151_status_port_r,ym2151_w)
 	AM_RANGE(0xb000, 0xb000) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
 	AM_RANGE(0xc000, 0xc000) AM_READ(soundlatch_r)
- 	AM_RANGE(0xd000, 0xd000) AM_READ(irq_latch_r) //timing? sound latch?
- 	AM_RANGE(0xf000, 0xf000) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
+	AM_RANGE(0xd000, 0xd000) AM_READ(irq_latch_r) //timing? sound latch?
+	AM_RANGE(0xf000, 0xf000) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
@@ -691,7 +645,7 @@ static MACHINE_DRIVER_START( dblewing )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 

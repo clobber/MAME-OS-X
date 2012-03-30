@@ -383,7 +383,7 @@ static ADDRESS_MAP_START( bios_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM	// 8V
 	AM_RANGE(0x8800, 0x8fff) AM_READWRITE(ram_8w_r, ram_8w_w) AM_BASE(&ram_8w)	// 8W
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(playch10_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(playch10_videoram_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xffff) AM_READWRITE(pc10_prot_r, pc10_prot_w)
 ADDRESS_MAP_END
@@ -818,7 +818,7 @@ ROM_START( pc_1942 )	/* 1942 */
     BIOS_GFX
 
     ROM_REGION( 0x10000, "cart", 0 )
-    ROM_LOAD( "u1",    	 0x08000, 0x8000, CRC(c4e8c04a) SHA1(d608f769333b13da9c67f07599e405944893a950) )
+    ROM_LOAD( "u1", 	 0x08000, 0x8000, CRC(c4e8c04a) SHA1(d608f769333b13da9c67f07599e405944893a950) )
 
     ROM_REGION( 0x02000, "gfx2", 0 )	/* cart gfx */
     ROM_LOAD( "u2",		 0x00000, 0x2000, CRC(03379b76) SHA1(d2a6ca1cdd8935525f59f1d38806b2296cb12a12) )

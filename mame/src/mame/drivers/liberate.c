@@ -18,6 +18,9 @@
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 
+extern UINT8 *liberate_videoram;
+extern UINT8 *liberate_colorram;
+
 PALETTE_INIT( liberate );
 VIDEO_UPDATE( prosoccr );
 VIDEO_UPDATE( prosport );
@@ -56,9 +59,9 @@ static READ8_HANDLER( deco16_bank_r )
 		return ROM[offset];
 
 	/* Else the handler falls through to read the usual address */
-	if (offset<0x400) return colorram[offset];
-	if (offset<0x800) return videoram[offset-0x400];
-	if (offset<0x1000) return spriteram[offset-0x800];
+	if (offset<0x400) return liberate_colorram[offset];
+	if (offset<0x800) return liberate_videoram[offset-0x400];
+	if (offset<0x1000) return space->machine->generic.spriteram.u8[offset-0x800];
 	if (offset<0x2200) { logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset); return 0; }
 	if (offset<0x2800) return scratchram[offset-0x2200];
 
@@ -85,7 +88,7 @@ static WRITE8_HANDLER( deco16_bank_w )
 	if (deco16_bank)
 		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
 	else
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, (read8_space_func)SMH_BANK(1));
+		memory_install_read_bank(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, "bank1");
 }
 
 static UINT8 gfx_rom_readback;
@@ -99,10 +102,10 @@ static READ8_HANDLER( prosoccr_bank_r )
 		return ROM[offset];
 
 	/* Else the handler falls through to read the usual address */
-	if (offset<0x400) return colorram[offset];
-	if (offset<0x800) return videoram[offset-0x400];
-	if (offset<0xc00) return colorram[offset-0x800];
-	if (offset<0x1000) return spriteram[offset-0xc00];
+	if (offset<0x400) return liberate_colorram[offset];
+	if (offset<0x800) return liberate_videoram[offset-0x400];
+	if (offset<0xc00) return liberate_colorram[offset-0x800];
+	if (offset<0x1000) return space->machine->generic.spriteram.u8[offset-0xc00];
 	if (offset<0x2200) { logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset); return 0; }
 	if (offset<0x2800) return scratchram[offset-0x2200];
 
@@ -241,16 +244,16 @@ static WRITE8_HANDLER( prosport_charram_w )
  *************************************/
 
 static ADDRESS_MAP_START( prosport_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0200, 0x021f) AM_RAM_WRITE(prosport_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x0200, 0x021f) AM_RAM_WRITE(prosport_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x2000) AM_RAM
 	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(prosport_bg_vram_w) AM_BASE(&prosport_bg_vram)
 	AM_RANGE(0x0800, 0x1fff) AM_READWRITE(prosport_charram_r,prosport_charram_w) //0x1e00-0x1fff isn't charram!
- 	AM_RANGE(0x2400, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x2400, 0x2fff) AM_RAM
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x8000, 0x800f) AM_WRITE(prosport_io_w)
-	AM_RANGE(0x8000, 0x800f) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x800f) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -258,12 +261,12 @@ static ADDRESS_MAP_START( liberate_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(deco16_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE(&spriteram)
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
+	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE(&scratchram)
 	AM_RANGE(0x8000, 0x800f) AM_WRITE(deco16_io_w)
-	AM_RANGE(0x8000, 0x800f) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x800f) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -271,9 +274,9 @@ static ADDRESS_MAP_START( prosoccr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(prosoccr_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x800) AM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4c00, 0x4fff) AM_WRITEONLY AM_BASE(&spriteram)
+	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x800) AM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
+	AM_RANGE(0x4c00, 0x4fff) AM_WRITEONLY AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE(&scratchram)
 	AM_RANGE(0x8000, 0x97ff) AM_READWRITE(prosoccr_charram_r,prosoccr_charram_w)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(prosoccr_char_bank_w)
@@ -295,9 +298,9 @@ static ADDRESS_MAP_START( liberatb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(deco16_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE(&spriteram)
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
+	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x6200, 0x67ff) AM_WRITEONLY AM_BASE(&scratchram)
 	AM_RANGE(0xf000, 0xf00f) AM_WRITE(deco16_io_w)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("IN1")
@@ -658,7 +661,7 @@ static const gfx_layout charlayout =
 	8,8,
 	RGN_FRAC(1,3),
 	3,
- 	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
+	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
 	{ 0,1,2,3,4,5,6,7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
 	8*8
@@ -669,7 +672,7 @@ static const gfx_layout sprites =
 	16,16,
 	RGN_FRAC(1,3),
 	3,
- 	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
+	{ RGN_FRAC(2,3), RGN_FRAC(1,3), RGN_FRAC(0,3) },
 	{ 16*8, 1+(16*8), 2+(16*8), 3+(16*8), 4+(16*8), 5+(16*8), 6+(16*8), 7+(16*8),
 		0,1,2,3,4,5,6,7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 ,8*8,9*8,10*8,11*8,12*8,13*8,14*8,15*8 },
@@ -725,7 +728,7 @@ static const gfx_layout pro_tiles =
 	16,16,
 	RGN_FRAC(1,2),
 	3,
- 	{ 4,0, RGN_FRAC(1,2)+4 },
+	{ 4,0, RGN_FRAC(1,2)+4 },
 	{ 384+0, 384+1, 384+2, 384+3,
 	  256+0, 256+1, 256+2, 256+3,
 	  128+0, 128+1, 128+2, 128+3,
@@ -1230,9 +1233,9 @@ ROM_END
 
 ROM_START( liberate )
 	ROM_REGION( 0x10000, "maincpu", 0 )
- 	ROM_LOAD( "bt12-2.bin", 0x8000, 0x4000, CRC(a0079ffd) SHA1(340398352500a33f01dca07dd9c86ad3a78f227e) )
+	ROM_LOAD( "bt12-2.bin", 0x8000, 0x4000, CRC(a0079ffd) SHA1(340398352500a33f01dca07dd9c86ad3a78f227e) )
 	ROM_RELOAD(             0x0000, 0x4000 )
- 	ROM_LOAD( "bt13-2.bin", 0xc000, 0x4000, CRC(19f8485c) SHA1(1e2a68e4cf6b96c53832f7d020f14a45de19967d) )
+	ROM_LOAD( "bt13-2.bin", 0xc000, 0x4000, CRC(19f8485c) SHA1(1e2a68e4cf6b96c53832f7d020f14a45de19967d) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "bt11.bin",  0xe000, 0x2000,  CRC(b549ccaa) SHA1(e4c8350fea61ed85d21037cbd4c3c50f9a9de09f) )
@@ -1246,8 +1249,8 @@ ROM_START( liberate )
 	ROM_LOAD( "bt07.bin", 0x10000, 0x2000, CRC(f919e8e2) SHA1(e9eafa10f024aa522947f6098480bddf1fbe960f) )
 
 	ROM_REGION( 0x8000, "gfx2", 0 )
- 	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
- 	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
+	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
+	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
 	/* On early revision bt02 is split as BT01-A (0x2000) BT02-A (0x2000) */
 
 	ROM_REGION(0x4000, "user1", 0 )
@@ -1267,7 +1270,7 @@ ROM_START( dualaslt )
 	ROM_LOAD( "bt11.bin",  0xe000, 0x2000,  CRC(b549ccaa) SHA1(e4c8350fea61ed85d21037cbd4c3c50f9a9de09f) )
 
 	ROM_REGION( 0x12000, "gfx1", 0 )
-	ROM_LOAD( "bt04-5",   0x00000, 0x4000, CRC(159a3e85) SHA1(e916ee7e96c7c64d9ef05ff410d0cbba4d1b8ad0) ) 	/* Chars/Sprites */
+	ROM_LOAD( "bt04-5",   0x00000, 0x4000, CRC(159a3e85) SHA1(e916ee7e96c7c64d9ef05ff410d0cbba4d1b8ad0) )	/* Chars/Sprites */
 	ROM_LOAD( "bt03.bin", 0x04000, 0x2000, CRC(29ad1b59) SHA1(4d5a385ccad4cdebe87300ef08e1220bc9303673) )
 	ROM_LOAD( "bt06-5",   0x06000, 0x4000, CRC(3b5a80c8) SHA1(8b55b18ab46a64381fc135e84ab82fc451ee722d) )
 	ROM_LOAD( "bt05.bin", 0x0a000, 0x2000, CRC(a8896c20) SHA1(c21412c8a6b10719d324ce7ecb01ec4e9d803932) )
@@ -1277,7 +1280,7 @@ ROM_START( dualaslt )
 	ROM_REGION( 0x8000, "gfx2", 0 )
 	ROM_LOAD( "bt01",     0x0000, 0x2000, CRC(c0ddbeb5) SHA1(043c3ef2aa62a0e8b650d4daddb944e694078e01) )
 	ROM_LOAD( "bt02a",    0x2000, 0x2000, CRC(846d9d24) SHA1(d0c395876601cf666dcf40a0f95e461095a98df4) )
- 	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
+	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
 
 	ROM_REGION(0x4000, "user1", 0 )
 	ROM_LOAD( "bt09",  0x0000, 0x2000, CRC(2ea31472) SHA1(2e3125b53755260a036dfc2940970eeb4c5c058b) )
@@ -1294,7 +1297,7 @@ ROM_START( liberateb )
 	ROM_LOAD( "liber4.c18", 0xa000, 0x2000, CRC(0e8db1ce) SHA1(bb7b77c31b3bb2c0d523f5cad4ef46d42a9dc857) )
 	ROM_RELOAD(             0x2000, 0x2000)
 	ROM_LOAD( "liber3.c20", 0xc000, 0x2000, CRC(16c423f3) SHA1(0cf3c46c9fc13eb0f61a3945d3db6ca2f9ab76fe) )
- 	ROM_LOAD( "liber5.c19", 0xe000, 0x2000, CRC(7738c194) SHA1(54fb094150481640f40d8a2066e43dc647980cda) )
+	ROM_LOAD( "liber5.c19", 0xe000, 0x2000, CRC(7738c194) SHA1(54fb094150481640f40d8a2066e43dc647980cda) )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "bt11.bin",  0xe000, 0x2000,  CRC(b549ccaa) SHA1(e4c8350fea61ed85d21037cbd4c3c50f9a9de09f) )
@@ -1308,8 +1311,8 @@ ROM_START( liberateb )
 	ROM_LOAD( "bt07.bin", 0x10000, 0x2000, CRC(f919e8e2) SHA1(e9eafa10f024aa522947f6098480bddf1fbe960f) )
 
 	ROM_REGION( 0x8000, "gfx2", 0 )
- 	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
- 	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
+	ROM_LOAD( "bt02.bin", 0x0000, 0x4000, CRC(7169f7bb) SHA1(06e45a15d7e878d0a6063c2fab55d065334935b2) )
+	ROM_LOAD( "bt00.bin", 0x4000, 0x2000, CRC(b744454d) SHA1(664619c3907c538f353d8ac04d66086dcfbd53d4) )
 
 	ROM_REGION(0x4000, "user1", 0 )
 	ROM_LOAD( "bt10.bin",  0x0000, 0x4000,  CRC(ee335397) SHA1(2d54f93d330357033b8ebc4bc052383c25156311) )
@@ -1354,7 +1357,7 @@ static DRIVER_INIT( yellowcb )
 {
 	DRIVER_INIT_CALL(prosport);
 
-	memory_install_read_port_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa000, 0xa000, 0, 0, "IN0");
+	memory_install_read_port(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa000, 0xa000, 0, 0, "IN0");
 }
 
 static DRIVER_INIT( liberate )
@@ -1373,7 +1376,7 @@ static DRIVER_INIT( liberate )
 		decrypted[A] = (decrypted[A] & 0x7d) | ((decrypted[A] & 0x02) << 6) | ((decrypted[A] & 0x80) >> 6);
 	}
 
-	memory_configure_bank_decrypted(machine, 1, 0, 1, decrypted + 0x8000, 0x10);
+	memory_configure_bank_decrypted(machine, "bank1", 0, 1, decrypted + 0x8000, 0x10);
 
 	sound_cpu_decrypt(machine);
 }

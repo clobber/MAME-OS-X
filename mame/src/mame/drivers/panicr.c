@@ -69,7 +69,7 @@ D.9B         [f99cac4b] /
 #define SOUND_CLOCK		XTAL_14_31818MHz
 #define TC15_CLOCK		XTAL_12MHz
 
-static tilemap *bgtilemap, *txttilemap;
+static tilemap_t *bgtilemap, *txttilemap;
 static UINT8 *scrollram;
 static UINT8 *mainram;
 
@@ -144,8 +144,8 @@ static TILE_GET_INFO( get_bgtile_info )
 
 static TILE_GET_INFO( get_txttile_info )
 {
-	int code=videoram[tile_index*4];
-	int attr=videoram[tile_index*4+2];
+	int code=machine->generic.videoram.u8[tile_index*4];
+	int attr=machine->generic.videoram.u8[tile_index*4+2];
 	int color = attr & 0x07;
 
 	tileinfo->group = color;
@@ -174,10 +174,10 @@ static WRITE8_HANDLER(t5182shared_w)
 
 static ADDRESS_MAP_START( panicr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x01fff) AM_RAM AM_BASE(&mainram)
-	AM_RANGE(0x02000, 0x02fff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x02000, 0x02fff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x03000, 0x03fff) AM_RAM
 	AM_RANGE(0x08000, 0x0bfff) AM_RAM AM_REGION("user3", 0) //attribue map ?
-	AM_RANGE(0x0c000, 0x0cfff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x0c000, 0x0cfff) AM_RAM AM_BASE_GENERIC(videoram)
 	AM_RANGE(0x0d000, 0x0d000) AM_WRITE(t5182_sound_irq_w)
 	AM_RANGE(0x0d002, 0x0d002) AM_READ(t5182_sharedram_semaphore_snd_r)
 	AM_RANGE(0x0d004, 0x0d004) AM_WRITE(t5182_sharedram_semaphore_main_acquire_w)
@@ -202,6 +202,7 @@ static VIDEO_START( panicr )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs,fx,fy,x,y,color,sprite;
 
 	for (offs = 0; offs<0x1000; offs+=16)
@@ -288,7 +289,7 @@ static INPUT_PORTS_START( panicr )
 
 	PORT_START("DSW2")
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
- 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x06, 0x04, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,6")
 	PORT_DIPSETTING(    0x06, DEF_STR( Easy ) )
@@ -386,7 +387,7 @@ static MACHINE_DRIVER_START( panicr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK/4)	/* 3.579545 MHz */
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK/4)	/* 3.579545 MHz */
 	MDRV_SOUND_CONFIG(t5182_ym2151_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 1.0)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)

@@ -45,7 +45,7 @@ Note:   if MAME_DEBUG is defined, pressing:
 **************************************************************************/
 
 #include "driver.h"
-#include "cave.h"
+#include "includes/cave.h"
 
 /* Variables that driver has access to: */
 
@@ -64,13 +64,13 @@ size_t cave_paletteram_size;
 
 /* Variables only used here: */
 
-static tilemap *tilemap_0;
+static tilemap_t *tilemap_0;
 static int tiledim_0, old_tiledim_0;
-static tilemap *tilemap_1;
+static tilemap_t *tilemap_1;
 static int tiledim_1, old_tiledim_1;
-static tilemap *tilemap_2;
+static tilemap_t *tilemap_2;
 static int tiledim_2, old_tiledim_2;
-static tilemap *tilemap_3;
+static tilemap_t *tilemap_3;
 static int tiledim_3, old_tiledim_3;
 
 
@@ -249,7 +249,7 @@ static void set_pens(running_machine *machine)
 
 	for (pen = 0; pen < machine->config->total_colors; pen++)
 	{
-		UINT16 data = paletteram16[palette_map[pen]];
+		UINT16 data = machine->generic.paletteram.u16[palette_map[pen]];
 
 		rgb_t color = MAKE_RGB(pal5bit(data >> 5), pal5bit(data >> 10), pal5bit(data >> 0));
 
@@ -368,7 +368,7 @@ static TILE_GET_INFO( sailormn_get_tile_info_2 )
 }
 
 
-INLINE void vram_w(UINT16 *VRAM, tilemap *TILEMAP, ATTR_UNUSED offs_t offset, ATTR_UNUSED UINT16 data, ATTR_UNUSED UINT16 mem_mask)
+INLINE void vram_w(UINT16 *VRAM, tilemap_t *TILEMAP, ATTR_UNUSED offs_t offset, ATTR_UNUSED UINT16 data, ATTR_UNUSED UINT16 mem_mask)
 {
 	if ((VRAM[offset] & mem_mask)==(data & mem_mask)) return;
 	COMBINE_DATA(&VRAM[offset]);
@@ -390,7 +390,7 @@ INLINE void vram_w(UINT16 *VRAM, tilemap *TILEMAP, ATTR_UNUSED offs_t offset, AT
     and 408000-407fff both go to the 8x8 tilemap ram. Use this function
     in this cases. Note that the get_tile_info function looks in the
     4000-7fff range for tiles, so we have to write the data there. */
-INLINE void vram_8x8_w(UINT16 *VRAM, tilemap *TILEMAP,ATTR_UNUSED offs_t offset, ATTR_UNUSED UINT16 data, ATTR_UNUSED UINT16 mem_mask)
+INLINE void vram_8x8_w(UINT16 *VRAM, tilemap_t *TILEMAP,ATTR_UNUSED offs_t offset, ATTR_UNUSED UINT16 data, ATTR_UNUSED UINT16 mem_mask)
 {
 	offset %= 0x4000/2;
 	if ((VRAM[offset] & mem_mask)==(data & mem_mask)) return;
@@ -577,12 +577,12 @@ static void get_sprite_info_cave(running_machine *machine)
 	int max_x		=	video_screen_get_width(machine->primary_screen);
 	int max_y		=	video_screen_get_height(machine->primary_screen);
 
-	source = spriteram16 + ((spriteram_size/2) / 2) * spriteram_bank;
+	source = machine->generic.spriteram.u16 + ((machine->generic.spriteram_size/2) / 2) * spriteram_bank;
 
 	if (cave_videoregs[ 4 ] & 0x02)
-		if (cave_spriteram16_2) source = cave_spriteram16_2 + ((spriteram_size/2) / 2) * spriteram_bank;
+		if (cave_spriteram16_2) source = cave_spriteram16_2 + ((machine->generic.spriteram_size/2) / 2) * spriteram_bank;
 
-	finish = source + ((spriteram_size/2) / 2);
+	finish = source + ((machine->generic.spriteram_size/2) / 2);
 
 
 	for (; source < finish; source+=8 )
@@ -704,12 +704,12 @@ static void get_sprite_info_donpachi(running_machine *machine)
 	int max_x		=	video_screen_get_width(machine->primary_screen);
 	int max_y		=	video_screen_get_height(machine->primary_screen);
 
-	source = spriteram16 + ((spriteram_size/2) / 2) * spriteram_bank;
+	source = machine->generic.spriteram.u16 + ((machine->generic.spriteram_size/2) / 2) * spriteram_bank;
 
 	if (cave_videoregs[ 4 ] & 0x02)
-		if (cave_spriteram16_2) source = cave_spriteram16_2 + ((spriteram_size/2) / 2) * spriteram_bank;
+		if (cave_spriteram16_2) source = cave_spriteram16_2 + ((machine->generic.spriteram_size/2) / 2) * spriteram_bank;
 
-	finish = source + ((spriteram_size/2) / 2);
+	finish = source + ((machine->generic.spriteram_size/2) / 2);
 
 	for (; source < finish; source+=8 )
 	{
@@ -793,7 +793,7 @@ static void sprite_init_cave(running_machine *machine)
 	blit.baseaddr_zbuf = (UINT8 *)sprite_zbuf->base;
 	blit.line_offset_zbuf = sprite_zbuf->rowpixels * sprite_zbuf->bpp / 8;
 
-	num_sprites = spriteram_size / 0x10 / 2;
+	num_sprites = machine->generic.spriteram_size / 0x10 / 2;
 	sprite_cave = auto_alloc_array_clear(machine, struct sprite_cave, num_sprites);
 
 	memset(sprite_table,0,sizeof(sprite_table));
@@ -1328,7 +1328,7 @@ static void sprite_draw_donpachi_zbuf( int priority )
 
 INLINE void cave_tilemap_draw(
 	bitmap_t *bitmap, const rectangle *cliprect,
-	tilemap *TILEMAP, UINT16 *VRAM, UINT16 *VCTRL,
+	tilemap_t *TILEMAP, UINT16 *VRAM, UINT16 *VCTRL,
 	UINT32 flags, UINT32 priority, UINT32 priority2 )
 {
 	int sx, sy, flipx, flipy, offs_x, offs_y, offs_row;
@@ -1469,24 +1469,32 @@ VIDEO_UPDATE( cave )
 
 	/* Choose the tilemap to display (8x8 tiles or 16x16 tiles) */
 	if (tilemap_0)
-	{	tiledim_0 = cave_vctrl_0[ 1 ] & 0x2000;
+	{
+		tiledim_0 = cave_vctrl_0[ 1 ] & 0x2000;
 		if (tiledim_0 != old_tiledim_0)	tilemap_mark_all_tiles_dirty(tilemap_0);
-		old_tiledim_0 = tiledim_0;		}
+		old_tiledim_0 = tiledim_0;
+	}
 
 	if (tilemap_1)
-	{	tiledim_1 = cave_vctrl_1[ 1 ] & 0x2000;
+	{
+		tiledim_1 = cave_vctrl_1[ 1 ] & 0x2000;
 		if (tiledim_1 != old_tiledim_1)	tilemap_mark_all_tiles_dirty(tilemap_1);
-		old_tiledim_1 = tiledim_1;		}
+		old_tiledim_1 = tiledim_1;
+	}
 
 	if (tilemap_2)
-	{	tiledim_2 = cave_vctrl_2[ 1 ] & 0x2000;
+	{
+		tiledim_2 = cave_vctrl_2[ 1 ] & 0x2000;
 		if (tiledim_2 != old_tiledim_2)	tilemap_mark_all_tiles_dirty(tilemap_2);
-		old_tiledim_2 = tiledim_2;		}
+		old_tiledim_2 = tiledim_2;
+	}
 
 	if (tilemap_3)
-	{	tiledim_3 = cave_vctrl_3[ 1 ] & 0x2000;
+	{
+		tiledim_3 = cave_vctrl_3[ 1 ] & 0x2000;
 		if (tiledim_3 != old_tiledim_3)	tilemap_mark_all_tiles_dirty(tilemap_3);
-		old_tiledim_3 = tiledim_3;		}
+		old_tiledim_3 = tiledim_3;
+	}
 
 
 #ifdef MAME_DEBUG
@@ -1526,14 +1534,26 @@ VIDEO_UPDATE( cave )
 
 	/* Show the row / "column" scroll enable flags, when they change state */
 	rasflag = 0;
-	if (tilemap_0)	{	rasflag |= (cave_vctrl_0[0] & 0x4000) ? 0x0001 : 0;
-						rasflag |= (cave_vctrl_0[1] & 0x4000) ? 0x0002 : 0;	}
-	if (tilemap_1)	{	rasflag |= (cave_vctrl_1[0] & 0x4000) ? 0x0010 : 0;
-						rasflag |= (cave_vctrl_1[1] & 0x4000) ? 0x0020 : 0;	}
-	if (tilemap_2)	{	rasflag |= (cave_vctrl_2[0] & 0x4000) ? 0x0100 : 0;
-						rasflag |= (cave_vctrl_2[1] & 0x4000) ? 0x0200 : 0;	}
-	if (tilemap_3)	{	rasflag |= (cave_vctrl_3[0] & 0x4000) ? 0x1000 : 0;
-						rasflag |= (cave_vctrl_3[1] & 0x4000) ? 0x2000 : 0;	}
+	if (tilemap_0)
+	{
+		rasflag |= (cave_vctrl_0[0] & 0x4000) ? 0x0001 : 0;
+		rasflag |= (cave_vctrl_0[1] & 0x4000) ? 0x0002 : 0;
+	}
+	if (tilemap_1)
+	{
+		rasflag |= (cave_vctrl_1[0] & 0x4000) ? 0x0010 : 0;
+		rasflag |= (cave_vctrl_1[1] & 0x4000) ? 0x0020 : 0;
+	}
+	if (tilemap_2)
+	{
+		rasflag |= (cave_vctrl_2[0] & 0x4000) ? 0x0100 : 0;
+		rasflag |= (cave_vctrl_2[1] & 0x4000) ? 0x0200 : 0;
+	}
+	if (tilemap_3)
+	{
+		rasflag |= (cave_vctrl_3[0] & 0x4000) ? 0x1000 : 0;
+		rasflag |= (cave_vctrl_3[1] & 0x4000) ? 0x2000 : 0;
+	}
 	if (rasflag != old_rasflag)
 	{
 		popmessage("Line Effect: 0:%c%c 1:%c%c 2:%c%c 3:%c%c",

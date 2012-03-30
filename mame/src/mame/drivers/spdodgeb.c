@@ -269,7 +269,7 @@ static READ8_HANDLER( port_0_r )
 
 static ADDRESS_MAP_START( spdodgeb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x10ff) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x1000, 0x10ff) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x2000, 0x2fff) AM_RAM_WRITE(spdodgeb_videoram_w) AM_BASE(&spdodgeb_videoram)
 	AM_RANGE(0x3000, 0x3000) AM_READ(port_0_r) //AM_WRITENOP
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("DSW") //AM_WRITENOP
@@ -280,14 +280,14 @@ static ADDRESS_MAP_START( spdodgeb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3006, 0x3006) AM_WRITE(spdodgeb_ctrl_w)	/* scroll hi, flip screen, bank switch, palette select */
 	AM_RANGE(0x3800, 0x3800) AM_WRITE(mcu63701_w)
 	AM_RANGE(0x3801, 0x3805) AM_READ(mcu63701_r)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( spdodgeb_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x1000) AM_READ(soundlatch_r)
-	AM_RANGE(0x2800, 0x2801) AM_DEVWRITE("ym", ym3812_w)
+	AM_RANGE(0x2800, 0x2801) AM_DEVWRITE("ymsnd", ym3812_w)
 	AM_RANGE(0x3800, 0x3807) AM_WRITE(spd_adpcm_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -421,7 +421,7 @@ static MACHINE_RESET( spdodgeb )
 {
 	toggle = 0;
 	adpcm_pos[0] = adpcm_pos[1] = 0;
-	adpcm_end[0] = adpcm_end[0] = 0;
+	adpcm_end[0] = adpcm_end[1] = 0;
 	adpcm_idle[0] = adpcm_data[1] = 0;
 	adpcm_data[0] = adpcm_data[1] = -1;
 	mcu63701_command = 0;
@@ -461,7 +461,7 @@ static MACHINE_DRIVER_START( spdodgeb )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)

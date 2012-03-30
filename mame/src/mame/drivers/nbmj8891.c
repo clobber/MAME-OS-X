@@ -43,7 +43,7 @@ TODO:
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "nb1413m3.h"
+#include "includes/nb1413m3.h"
 #include "sound/dac.h"
 #include "sound/ay8910.h"
 #include "sound/3812intf.h"
@@ -445,7 +445,7 @@ static ADDRESS_MAP_START( gionbana_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x40) AM_WRITE(nbmj8891_clutsel_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -464,7 +464,7 @@ static ADDRESS_MAP_START( mgion_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x40) AM_WRITE(nbmj8891_clutsel_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -485,8 +485,8 @@ static ADDRESS_MAP_START( omotesnd_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x4f) AM_WRITE(nbmj8891_clut_w)
 //  AM_RANGE(0x50, 0x50) AM_WRITE(nb1413m3_nmi_clock_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREAD("fm", ay8910_r)
-	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fm", ay8910_data_address_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREAD("fmsnd", ay8910_r)
+	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fmsnd", ay8910_data_address_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r) AM_WRITENOP
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -505,7 +505,7 @@ static ADDRESS_MAP_START( hanamomo_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x40) AM_WRITE(nbmj8891_clutsel_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -524,7 +524,7 @@ static ADDRESS_MAP_START( msjiken_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x50, 0x57) AM_WRITE(nbmj8891_blitter_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -543,7 +543,7 @@ static ADDRESS_MAP_START( scandal_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x10, 0x10) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x20, 0x20) AM_WRITE(nbmj8891_clutsel_w)
 	AM_RANGE(0x50, 0x50) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -562,8 +562,8 @@ static ADDRESS_MAP_START( scandalm_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x20, 0x20) AM_WRITE(nbmj8891_clutsel_w)
 	AM_RANGE(0x40, 0x4f) AM_WRITE(nbmj8891_clut_w)
 	AM_RANGE(0x50, 0x50) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x81, 0x81) AM_DEVREAD("fm", ay8910_r)
-	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fm", ay8910_data_address_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREAD("fmsnd", ay8910_r)
+	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fmsnd", ay8910_data_address_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -583,7 +583,7 @@ static ADDRESS_MAP_START( bananadr_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x30, 0x30) AM_WRITE(nbmj8891_vramsel_w)
 	AM_RANGE(0x40, 0x4f) AM_WRITE(nbmj8891_clut_w)
 	AM_RANGE(0x50, 0x50) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -602,7 +602,7 @@ static ADDRESS_MAP_START( lovehous_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x50, 0x57) AM_WRITE(nbmj8891_blitter_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r) //AM_WRITENOP
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -621,7 +621,7 @@ static ADDRESS_MAP_START( maiko_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x50, 0x57) AM_WRITE(nbmj8891_blitter_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(nbmj8891_romsel_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(nbmj8891_scrolly_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fm", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("fmsnd", ym3812_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r)
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -635,8 +635,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( taiwanmb_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
-	AM_RANGE(0x81, 0x81) AM_DEVREAD("fm", ay8910_r)
-	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fm", ay8910_data_address_w)
+	AM_RANGE(0x81, 0x81) AM_DEVREAD("fmsnd", ay8910_r)
+	AM_RANGE(0x82, 0x83) AM_DEVWRITE("fmsnd", ay8910_data_address_w)
 	AM_RANGE(0x90, 0x90) AM_READ(nb1413m3_inputport0_r) //AM_WRITENOP   // ?
 	AM_RANGE(0xa0, 0xa0) AM_READWRITE(nb1413m3_inputport1_r,nb1413m3_inputportsel_w)
 	AM_RANGE(0xb0, 0xb0) AM_READWRITE(nb1413m3_inputport2_r,nb1413m3_sndrombank1_w)
@@ -2382,7 +2382,7 @@ static INPUT_PORTS_START( pairsnb )
 	PORT_START("DSWA")
 	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Easy ) )			// Hearts : 10 - Time : 60/60
-	PORT_DIPSETTING(    0x02, DEF_STR( Medium ) ) 		// Hearts :  7 - Time : 44/60
+	PORT_DIPSETTING(    0x02, DEF_STR( Medium ) )		// Hearts :  7 - Time : 44/60
 	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )			// Hearts :  5 - Time : 32/60
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )		// Hearts :  3 - Time : 24/60
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Coinage ) )
@@ -2632,7 +2632,7 @@ static MACHINE_DRIVER_START( gionbana )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("fm", YM3812, 2500000)
+	MDRV_SOUND_ADD("fmsnd", YM3812, 2500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
@@ -2663,7 +2663,7 @@ static MACHINE_DRIVER_START( omotesnd )
 	MDRV_NVRAM_HANDLER(nb1413m3)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("fm", AY8910, 1250000)
+	MDRV_SOUND_REPLACE("fmsnd", AY8910, 1250000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
 MACHINE_DRIVER_END
@@ -2874,7 +2874,7 @@ static MACHINE_DRIVER_START( mjfocusm )
 	MDRV_VIDEO_START(nbmj8891_1layer)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("fm", AY8910, 1250000)
+	MDRV_SOUND_REPLACE("fmsnd", AY8910, 1250000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
 MACHINE_DRIVER_END
@@ -2897,7 +2897,7 @@ static MACHINE_DRIVER_START( taiwanmb )
 	MDRV_VIDEO_START(nbmj8891_1layer)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("fm", AY8910, 1250000)
+	MDRV_SOUND_REPLACE("fmsnd", AY8910, 1250000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
 MACHINE_DRIVER_END
@@ -3806,7 +3806,7 @@ ROM_START( hnxmasev )
 	ROM_LOAD( "b.3f",   0x00000, 0x10000, CRC(45e34624) SHA1(db7f880a8b2f36d5bed939bd0b2694f27e29141b) )
 
 	ROM_REGION( 0x20000, "voice", 0 ) /* voice */
-	ROM_LOAD( "a.3c", 	 0x00000, 0x20000, CRC(713b3f8f) SHA1(460e9dcfc4a31f8e6d3f40ba77d6639257d9762f) ) //same as maiko
+	ROM_LOAD( "a.3c",	 0x00000, 0x20000, CRC(713b3f8f) SHA1(460e9dcfc4a31f8e6d3f40ba77d6639257d9762f) ) //same as maiko
 
 	ROM_REGION( 0x80000, "gfx1", 0 ) /* gfx */
 	ROM_LOAD( "c.10a", 0x000000, 0x10000, CRC(e46a1baa) SHA1(95ccf45a3c542391b67bd7993b5f7828ab525ebc) )
@@ -3860,7 +3860,7 @@ ROM_START( hnageman )
 	ROM_LOAD( "2.3f",   0x00000, 0x10000, CRC(155ed09a) SHA1(254f199063fe525c574032ae69d4d21b0debb4c5) )
 
 	ROM_REGION( 0x20000, "voice", 0 ) /* voice */
-	ROM_LOAD( "1.3c", 	 0x00000, 0x20000, CRC(713b3f8f) SHA1(460e9dcfc4a31f8e6d3f40ba77d6639257d9762f) ) //same as maiko
+	ROM_LOAD( "1.3c",	 0x00000, 0x20000, CRC(713b3f8f) SHA1(460e9dcfc4a31f8e6d3f40ba77d6639257d9762f) ) //same as maiko
 
 	ROM_REGION( 0xd0000, "gfx1", 0 ) /* gfx */
 	ROM_LOAD( "3.10a", 0x000000, 0x20000, CRC(080e0daa) SHA1(331137392c46fededdc55bd731c3a0bee88e59e3) )

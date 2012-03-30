@@ -313,9 +313,9 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "audio/taitosnd.h"
-#include "seta.h"
+#include "includes/seta.h"
 #include "sound/2610intf.h"
 #include "sound/2151intf.h"
 #include "includes/cchip.h"
@@ -362,10 +362,10 @@ static WRITE16_HANDLER( daisenpu_input_w )
 	switch (offset)
 	{
 		case 0x04:	/* coin counters and lockout */
-			coin_counter_w(0,data & 0x01);
-			coin_counter_w(1,data & 0x02);
-			coin_lockout_w(0,~data & 0x04);
-			coin_lockout_w(1,~data & 0x08);
+			coin_counter_w(space->machine, 0,data & 0x01);
+			coin_counter_w(space->machine, 1,data & 0x02);
+			coin_lockout_w(space->machine, 0,~data & 0x04);
+			coin_lockout_w(space->machine, 1,~data & 0x08);
 //logerror("taitox coin control %04x to offset %04x\n",data,offset);
 			break;
 
@@ -380,10 +380,10 @@ static WRITE16_HANDLER( kyustrkr_input_w )
 	switch (offset)
 	{
 		case 0x04:	/* coin counters and lockout */
-			coin_counter_w(0,data & 0x01);
-			coin_counter_w(1,data & 0x02);
-			coin_lockout_w(0,data & 0x04);
-			coin_lockout_w(1,data & 0x08);
+			coin_counter_w(space->machine, 0,data & 0x01);
+			coin_counter_w(space->machine, 1,data & 0x02);
+			coin_lockout_w(space->machine, 0,data & 0x04);
+			coin_lockout_w(space->machine, 1,data & 0x08);
 //logerror("taitox coin control %04x to offset %04x\n",data,offset);
 			break;
 
@@ -399,7 +399,7 @@ static INT32 banknum;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine,  2, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
+	memory_set_bankptr(machine,  "bank2", memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
@@ -422,9 +422,9 @@ static ADDRESS_MAP_START( superman_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x900000, 0x9007ff) AM_READWRITE(cchip1_ram_r, cchip1_ram_w)
 	AM_RANGE(0x900802, 0x900803) AM_READWRITE(cchip1_ctrl_r, cchip1_ctrl_w)
 	AM_RANGE(0x900c00, 0x900c01) AM_WRITE(cchip1_bank_w)
-	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&spriteram16	)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE(&spriteram16_2	)	// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_GENERIC(spriteram	)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_GENERIC(spriteram2	)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
@@ -436,9 +436,9 @@ static ADDRESS_MAP_START( daisenpu_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x800001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x800002, 0x800003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
 	AM_RANGE(0x900000, 0x90000f) AM_READWRITE(daisenpu_input_r, daisenpu_input_w)
-	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&spriteram16	)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE(&spriteram16_2	)	// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_GENERIC(spriteram	)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_GENERIC(spriteram2	)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
@@ -450,9 +450,9 @@ static ADDRESS_MAP_START( gigandes_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x800001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x800002, 0x800003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
 	AM_RANGE(0x900000, 0x90000f) AM_READWRITE(daisenpu_input_r, daisenpu_input_w)
-	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&spriteram16	)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE(&spriteram16_2	)	// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_GENERIC(spriteram)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_GENERIC(spriteram2	)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
@@ -464,9 +464,9 @@ static ADDRESS_MAP_START( ballbros_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x800001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x800002, 0x800003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
 	AM_RANGE(0x900000, 0x90000f) AM_READWRITE(daisenpu_input_r, daisenpu_input_w)
-	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&spriteram16	)	// Sprites Y
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE(&spriteram16_2	)	// Sprites Code + X + Attr
+	AM_RANGE(0xb00000, 0xb00fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_GENERIC(spriteram	)	// Sprites Y
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_GENERIC(spriteram2	)	// Sprites Code + X + Attr
 	AM_RANGE(0xf00000, 0xf03fff) AM_RAM			/* Main RAM */
 ADDRESS_MAP_END
 
@@ -475,9 +475,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(2)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank2")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP /* pan */
@@ -489,9 +489,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( daisenpu_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(2)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank2")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP /* pan */
@@ -931,7 +931,7 @@ static MACHINE_DRIVER_START( superman )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, XTAL_16MHz/2)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2610, XTAL_16MHz/2)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -970,7 +970,7 @@ static MACHINE_DRIVER_START( daisenpu )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_16MHz/4)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_16MHz/4)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
@@ -1007,7 +1007,7 @@ static MACHINE_DRIVER_START( gigandes )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -1046,7 +1046,7 @@ static MACHINE_DRIVER_START( ballbros )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -1120,7 +1120,7 @@ ROM_START( superman )
 	ROM_LOAD( "j01_16.bin", 0x100000, 0x80000, CRC(3622ed2f) SHA1(03f4383f6ff8b5f1e26bc6bbef2fb1855d3bb93f) ) /* Plane 2, 3 */
 	ROM_LOAD( "k01_17.bin", 0x180000, 0x80000, CRC(c34f27e0) SHA1(07ee02c18ce29f35e8ae87d0c1ed80b726c246a6) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "e18_01.bin", 0x00000, 0x80000, CRC(3cf99786) SHA1(f6febf9bda87ca04f0a5890d0e8001c26dfa6c81) )
 ROM_END
 
@@ -1141,7 +1141,7 @@ ROM_START( supermanj )
 	ROM_LOAD( "j01_16.bin", 0x100000, 0x80000, CRC(3622ed2f) SHA1(03f4383f6ff8b5f1e26bc6bbef2fb1855d3bb93f) ) /* Plane 2, 3 */
 	ROM_LOAD( "k01_17.bin", 0x180000, 0x80000, CRC(c34f27e0) SHA1(07ee02c18ce29f35e8ae87d0c1ed80b726c246a6) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "e18_01.bin", 0x00000, 0x80000, CRC(3cf99786) SHA1(f6febf9bda87ca04f0a5890d0e8001c26dfa6c81) )
 ROM_END
 
@@ -1210,10 +1210,10 @@ ROM_START( gigandes )
 	ROM_LOAD( "east_9.3j", 0x100000, 0x80000, CRC(5c5e6898) SHA1(f348ac752a571902c55f36e21aa3fb9ef97528e3) ) /* Plane 2, 3 */
 	ROM_LOAD( "east_6.3k", 0x180000, 0x80000, CRC(52db30e9) SHA1(0b6d73f2c6e6c1ad5fcb2a9edf50069cd0691483) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )      /* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )      /* Delta-T samples */
 	ROM_LOAD( "east-11.16f", 0x00000, 0x80000, CRC(92111f96) SHA1(e781f24761b7a923388f4cda64c7b31388fd64c5) )
 
-	ROM_REGION( 0x80000, "ym", 0 )   /* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )   /* ADPCM samples */
 	ROM_LOAD( "east-10.16e", 0x00000, 0x80000, CRC(ca0ac419) SHA1(b29f30a8ff1286c65b741353b6551918a45bcafe) )
 ROM_END
 
@@ -1234,10 +1234,10 @@ ROM_START( gigandesj )
 	ROM_LOAD( "east_9.3j", 0x100000, 0x80000, CRC(5c5e6898) SHA1(f348ac752a571902c55f36e21aa3fb9ef97528e3) ) /* Plane 2, 3 */
 	ROM_LOAD( "east_6.3k", 0x180000, 0x80000, CRC(52db30e9) SHA1(0b6d73f2c6e6c1ad5fcb2a9edf50069cd0691483) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )   /* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )   /* Delta-T samples */
 	ROM_LOAD( "east-11.16f", 0x00000, 0x80000, CRC(92111f96) SHA1(e781f24761b7a923388f4cda64c7b31388fd64c5) )
 
-	ROM_REGION( 0x80000, "ym", 0 )   /* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )   /* ADPCM samples */
 	ROM_LOAD( "east-10.16e", 0x00000, 0x80000, CRC(ca0ac419) SHA1(b29f30a8ff1286c65b741353b6551918a45bcafe) )
 ROM_END
 
@@ -1256,10 +1256,10 @@ ROM_START( kyustrkr )
 	ROM_LOAD( "m-8-1.u5",     0x40000, 0x20000, CRC(9d95aad6) SHA1(3391b14196fea12223ab247d909791bc68fc8d56) )
 	ROM_LOAD( "m-8-0.u6",     0x60000, 0x20000, CRC(0dfb6ed3) SHA1(0937614c8f97040d0216363bfb2bc21161128a3c) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )   /* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )   /* Delta-T samples */
 	ROM_LOAD( "m-8-5.u2",     0x00000, 0x20000, CRC(d9d90e0a) SHA1(1011548b4fb5f1a194c93ded512e74cda2c06ceb) )
 
-	ROM_REGION( 0x80000, "ym", 0 )   /* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )   /* ADPCM samples */
 	ROM_LOAD( "m-8-4.u1",     0x00000, 0x20000, CRC(d3f6047a) SHA1(0db6d762bbe2d68cddf30e06125b904e1021b96d) )
 ROM_END
 
@@ -1278,10 +1278,10 @@ ROM_START( ballbros )
 	ROM_LOAD( "1", 0x040000, 0x20000, CRC(8196d624) SHA1(c859e3b1d3b481f38cfe47576efc1dcdbe6cde28) )
 	ROM_LOAD( "0", 0x060000, 0x20000, CRC(1cc584e5) SHA1(18cf607fa06c095d088b80cea2a1e507d19c7126) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )   /* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )   /* Delta-T samples */
 	ROM_LOAD( "east-11", 0x00000, 0x80000, CRC(92111f96) SHA1(e781f24761b7a923388f4cda64c7b31388fd64c5) )
 
-	ROM_REGION( 0x80000, "ym", 0 )   /* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )   /* ADPCM samples */
 	ROM_LOAD( "east-10", 0x00000, 0x80000, CRC(ca0ac419) SHA1(b29f30a8ff1286c65b741353b6551918a45bcafe) )
 ROM_END
 

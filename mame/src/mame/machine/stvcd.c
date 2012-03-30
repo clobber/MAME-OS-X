@@ -106,7 +106,7 @@ typedef enum
 } trans32T;
 
 // local variables
-static emu_timer *sector_timer;
+static const device_config *sector_timer;
 static partitionT partitions[MAX_FILTERS];
 static partitionT *transpart;
 
@@ -182,7 +182,7 @@ static int firstfile;			// first non-directory file
 #define CD_STAT_WAIT     0x8000		// waiting for command if set, else executed immediately
 #define CD_STAT_REJECT   0xff00		// ultra-fatal error.
 
-static TIMER_CALLBACK( sector_cb )
+TIMER_DEVICE_CALLBACK( stv_sector_cb )
 {
 	if (fadstoplay)
 	{
@@ -199,7 +199,7 @@ static TIMER_CALLBACK( sector_cb )
 	cr3 = (cd_curfad>>16)&0xff;
 	cr4 = cd_curfad;
 
-	timer_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);
+	timer_device_adjust_oneshot(timer, ATTOTIME_IN_HZ(150), 0);
 }
 
 // global functions
@@ -274,8 +274,8 @@ void stvcd_reset(running_machine *machine)
 		cd_stat = CD_STAT_OPEN;
 	}
 
-	sector_timer = timer_alloc(machine, sector_cb, NULL);
-	timer_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);	// 150 sectors / second = 300kBytes/second
+	sector_timer = devtag_get_device(machine, "sector_timer");
+	timer_device_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);	// 150 sectors / second = 300kBytes/second
 }
 
 static blockT *cd_alloc_block(UINT8 *blknum)
@@ -538,7 +538,7 @@ static void cd_writeWord(UINT32 addr, UINT16 data)
 		return;
 	case 0x000c:
 	case 0x000e:
-      		CDROM_LOG(("WW HIRM: %04x => %04x\n", hirqmask, data))
+    		CDROM_LOG(("WW HIRM: %04x => %04x\n", hirqmask, data))
 		hirqmask = data;
 		return;
 	case 0x0018:
@@ -766,8 +766,8 @@ static void cd_writeWord(UINT32 addr, UINT16 data)
 
 			// and do the disc I/O
 			// make sure it doesn't come in too early
-			timer_adjust_oneshot(sector_timer, attotime_never, 0);
-			timer_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);	// 150 sectors / second = 300kBytes/second
+			timer_device_adjust_oneshot(sector_timer, attotime_never, 0);
+			timer_device_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);	// 150 sectors / second = 300kBytes/second
 			break;
 
 		case 0x1100: // disk seek
@@ -792,7 +792,7 @@ static void cd_writeWord(UINT32 addr, UINT16 data)
 				// is it a valid track?
 				if (cr2 >> 8)
 				{
-				 	cd_stat = CD_STAT_PAUSE;
+					cd_stat = CD_STAT_PAUSE;
 					// (index is cr2 low byte)
 				}
 				else
@@ -1231,7 +1231,7 @@ static void cd_writeWord(UINT32 addr, UINT16 data)
 				finfbuf[1] = (curdir[temp].firstfad>>16)&0xff;
 				finfbuf[2] = (curdir[temp].firstfad>>8)&0xff;
 				finfbuf[3] = (curdir[temp].firstfad&0xff);
-		 		// second 4 bytes = length of file
+				// second 4 bytes = length of file
 				finfbuf[4] = (curdir[temp].length>>24)&0xff;
 				finfbuf[5] = (curdir[temp].length>>16)&0xff;
 				finfbuf[6] = (curdir[temp].length>>8)&0xff;
@@ -1275,7 +1275,7 @@ static void cd_writeWord(UINT32 addr, UINT16 data)
 			playtype = 1;
 
 			// and do the disc I/O
-//          timer_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);  // 150 sectors / second = 300kBytes/second
+//          timer_device_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);  // 150 sectors / second = 300kBytes/second
 			break;
 
 		case 0x7500:
@@ -1414,7 +1414,7 @@ static void read_new_dir(UINT32 fileno)
 
 			if ((sect[1] == 'C') && (sect[2] == 'D') && (sect[3] == '0') && (sect[4] == '0') && (sect[5] == '1'))
 			{
-			 	switch (sect[0])
+				switch (sect[0])
 				{
 					case 0:	// boot record
 						break;
@@ -1819,7 +1819,7 @@ static void cd_playdata(void)
 	{
 		if (fadstoplay)
 		{
-          		logerror("STVCD: Reading FAD %d\n", cd_curfad);
+        		logerror("STVCD: Reading FAD %d\n", cd_curfad);
 
 			if (cdrom)
 			{

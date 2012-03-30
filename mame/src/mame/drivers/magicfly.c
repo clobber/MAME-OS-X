@@ -405,7 +405,9 @@
 *     Video Hardware     *
 *************************/
 
-static tilemap *bg_tilemap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *bg_tilemap;
 
 static WRITE8_HANDLER( magicfly_videoram_w )
 {
@@ -439,7 +441,7 @@ static TILE_GET_INFO( get_magicfly_tile_info )
     /* Boot only check the first color RAM offset */
 
 	colorram[0] = colorram[0] | ((colorram[0] & 0x08) << 4);	/* only for 1st offset */
-//  colorram[tile_index] = attr | ((attr & 0x08) << 4);         /* for the whole color RAM */
+	//colorram[tile_index] = attr | ((attr & 0x08) << 4);         /* for the whole color RAM */
 
 	SET_TILE_INFO(bank, code, color, 0);
 }
@@ -469,7 +471,7 @@ static TILE_GET_INFO( get_7mezzo_tile_info )
     /* Boot only check the first color RAM offset */
 
 	colorram[0] = colorram[0] | ((colorram[0] & 0x04) << 5);	/* only for 1st offset */
-//  colorram[tile_index] = attr | ((attr & 0x04) << 5);         /* for the whole color RAM */
+	//colorram[tile_index] = attr | ((attr & 0x04) << 5);         /* for the whole color RAM */
 
 	SET_TILE_INFO(bank, code, color, 0);
 }
@@ -542,9 +544,9 @@ static WRITE8_HANDLER( mux_port_w )
 
 	dac_data_w(devtag_get_device(space->machine, "dac"), data & 0x80);		/* Sound DAC */
 
-	coin_counter_w(0, data & 0x40);	/* Coin1 */
-	coin_counter_w(1, data & 0x10);	/* Coin2 */
-	coin_counter_w(2, data & 0x20);	/* Payout */
+	coin_counter_w(space->machine, 0, data & 0x40);	/* Coin1 */
+	coin_counter_w(space->machine, 1, data & 0x10);	/* Coin2 */
+	coin_counter_w(space->machine, 2, data & 0x20);	/* Payout */
 }
 
 
@@ -553,7 +555,7 @@ static WRITE8_HANDLER( mux_port_w )
 *************************/
 
 static ADDRESS_MAP_START( magicfly_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)    /* MK48Z02B NVRAM */
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)    /* MK48Z02B NVRAM */
 	AM_RANGE(0x0800, 0x0800) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x0801, 0x0801) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(magicfly_videoram_w) AM_BASE(&videoram)	/* HM6116LP #1 (2K x 8) RAM (only 1st half used) */

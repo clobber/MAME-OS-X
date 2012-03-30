@@ -45,7 +45,7 @@ Notes:
 #define MASTER_CLOCK	XTAL_12MHz
 #define SOUND_CLOCK		XTAL_45MHz
 
-static tilemap *bg_tilemap, *mlow_tilemap, *mhigh_tilemap, *tx_tilemap;
+static tilemap_t *bg_tilemap, *mlow_tilemap, *mhigh_tilemap, *tx_tilemap;
 static UINT16 *bg_videoram, *mlow_videoram, *mhigh_videoram, *tx_videoram, *sprites_buffer;
 static UINT16 *bg_scrollram, *mlow_scrollram, *mhigh_scrollram, *vidattrram;
 static UINT16 *mwarr_ram;
@@ -104,7 +104,7 @@ static WRITE16_HANDLER( sprites_commands_w )
 			/* refresh sprites on screen */
 			for( i = 0; i < 0x800; i++)
 			{
-				sprites_buffer[i] = spriteram16[i];
+				sprites_buffer[i] = space->machine->generic.spriteram.u16[i];
 			}
 			break;
 
@@ -142,8 +142,8 @@ static ADDRESS_MAP_START( mwarr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x103400, 0x1037ff) AM_RAM AM_BASE(&mlow_scrollram)
 	AM_RANGE(0x103800, 0x103bff) AM_RAM AM_BASE(&mhigh_scrollram)
 	AM_RANGE(0x103c00, 0x103fff) AM_RAM AM_BASE(&vidattrram)
-	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x108000, 0x108fff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x108000, 0x108fff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x110000, 0x110001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x110002, 0x110003) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x110004, 0x110005) AM_READ_PORT("DSW")

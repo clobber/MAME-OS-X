@@ -172,8 +172,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(wwfsstar_fg0_videoram_w) AM_BASE(&wwfsstar_fg0_videoram)	/* FG0 Ram */
 	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(wwfsstar_bg0_videoram_w) AM_BASE(&wwfsstar_bg0_videoram)	/* BG0 Ram */
-	AM_RANGE(0x100000, 0x1003ff) AM_RAM AM_BASE(&spriteram16)		/* SPR Ram */
-	AM_RANGE(0x140000, 0x140fff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x100000, 0x1003ff) AM_RAM AM_BASE_GENERIC(spriteram)		/* SPR Ram */
+	AM_RANGE(0x140000, 0x140fff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x180000, 0x180003) AM_WRITE(wwfsstar_irqack_w)
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x180002, 0x180003) AM_READ_PORT("DSW2")
@@ -189,7 +189,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -457,7 +457,7 @@ static MACHINE_DRIVER_START( wwfsstar )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)

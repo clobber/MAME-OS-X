@@ -52,7 +52,7 @@ Note:   if MAME_DEBUG is defined, pressing Z with:
 ***************************************************************************/
 
 #include "driver.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 
 /* Variables that driver has access to: */
 
@@ -69,7 +69,7 @@ static int has_zoom;
 
 
 UINT16 *metro_K053936_ram;
-static tilemap *metro_K053936_tilemap;
+static tilemap_t *metro_K053936_tilemap;
 
 static UINT16 *metro_tiletable_old;
 static UINT8 *dirtyindex;
@@ -128,7 +128,7 @@ static TILEMAP_MAPPER( tilemap_scan_gstrik2 )
 #ifdef UNUSED_FUNCTION
 WRITE16_HANDLER( metro_paletteram_w )
 {
-	data = COMBINE_DATA(&paletteram16[offset]);
+	data = COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 	palette_set_color_rgb(space->machine,offset,pal5bit(data >> 6),pal5bit(data >> 11),pal5bit(data >> 1));
 }
 #endif
@@ -163,8 +163,8 @@ WRITE16_HANDLER( metro_paletteram_w )
 
 ***************************************************************************/
 
-static tilemap *bg_tilemap[3];
-static tilemap *tilemap_16x16[3];
+static tilemap_t *bg_tilemap[3];
+static tilemap_t *tilemap_16x16[3];
 static UINT8 *empty_tiles;
 
 /* A 2048 x 2048 virtual tilemap */
@@ -419,14 +419,14 @@ VIDEO_START( metro_14100 )
 	tilemap_16x16[1] = NULL;
 	tilemap_16x16[2] = NULL;
 
-    tilemap_map_pen_to_layer(bg_tilemap[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(bg_tilemap[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(bg_tilemap[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
 }
 
@@ -448,14 +448,14 @@ VIDEO_START( metro_14220 )
 	tilemap_16x16[1] = NULL;
 	tilemap_16x16[2] = NULL;
 
-    tilemap_map_pen_to_layer(bg_tilemap[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(bg_tilemap[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(bg_tilemap[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
 	tilemap_set_scrolldx(bg_tilemap[0], -2, 2);
 	tilemap_set_scrolldx(bg_tilemap[1], -2, 2);
@@ -480,24 +480,24 @@ VIDEO_START( metro_14300 )
 	tilemap_16x16[1] = tilemap_create(machine, get_tile_info_1_16x16_8bit,tilemap_scan_rows,16,16,WIN_NX,WIN_NY);
 	tilemap_16x16[2] = tilemap_create(machine, get_tile_info_2_16x16_8bit,tilemap_scan_rows,16,16,WIN_NX,WIN_NY);
 
-    tilemap_map_pen_to_layer(bg_tilemap[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(bg_tilemap[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(bg_tilemap[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(bg_tilemap[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(bg_tilemap[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
 
-    tilemap_map_pen_to_layer(tilemap_16x16[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(tilemap_16x16[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(tilemap_16x16[0], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(tilemap_16x16[0], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(tilemap_16x16[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(tilemap_16x16[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(tilemap_16x16[1], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(tilemap_16x16[1], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
-    tilemap_map_pen_to_layer(tilemap_16x16[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
-    tilemap_map_pen_to_layer(tilemap_16x16[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(tilemap_16x16[2], 0, 15,  TILEMAP_PIXEL_TRANSPARENT);
+	tilemap_map_pen_to_layer(tilemap_16x16[2], 1, 255, TILEMAP_PIXEL_TRANSPARENT);
 
 }
 
@@ -507,11 +507,7 @@ VIDEO_START( blzntrnd )
 
 	has_zoom = 1;
 
-	metro_K053936_tilemap = tilemap_create(machine, metro_K053936_get_tile_info, tilemap_scan_rows,
-								 8,8, 256, 512 );
-
-	K053936_wraparound_enable(0, 0);
-	K053936_set_offset(0, -69, -21);
+	metro_K053936_tilemap = tilemap_create(machine, metro_K053936_get_tile_info, tilemap_scan_rows, 8,8, 256, 512 );
 
 	tilemap_set_scrolldx(bg_tilemap[0], 8, -8);
 	tilemap_set_scrolldx(bg_tilemap[1], 8, -8);
@@ -524,11 +520,7 @@ VIDEO_START( gstrik2 )
 
 	has_zoom = 1;
 
-	metro_K053936_tilemap = tilemap_create(machine, metro_K053936_gstrik2_get_tile_info, tilemap_scan_gstrik2,
-								 16,16, 128, 256 );
-
-	K053936_wraparound_enable(0, 0);
-	K053936_set_offset(0, -69, -19);
+	metro_K053936_tilemap = tilemap_create(machine, metro_K053936_gstrik2_get_tile_info, tilemap_scan_gstrik2, 16,16, 128, 256 );
 
 	tilemap_set_scrolldx(bg_tilemap[0], 8, -8);
 	tilemap_set_scrolldx(bg_tilemap[1], 0, 0);
@@ -605,7 +597,7 @@ void metro_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectan
 	int max_x = video_screen_get_width(machine->primary_screen);
 	int max_y = video_screen_get_height(machine->primary_screen);
 
-	int max_sprites			=	spriteram_size / 8;
+	int max_sprites			=	machine->generic.spriteram_size / 8;
 	int sprites				=	metro_videoregs[0x00/2] % max_sprites;
 
 	int color_start			=	((metro_videoregs[0x08/2] & 0xf) << 4 ) + 0x100;
@@ -625,10 +617,10 @@ void metro_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectan
 
 		if (!(metro_videoregs[0x02/2] & 0x8000))
 		{
-			src = spriteram16 + (sprites - 1) * (8/2);
+			src = machine->generic.spriteram.u16 + (sprites - 1) * (8/2);
 			inc = -(8/2);
 		} else {
-			src = spriteram16;
+			src = machine->generic.spriteram.u16;
 			inc = (8/2);
 		}
 
@@ -743,8 +735,8 @@ void metro_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectan
 
 ***************************************************************************/
 
-static void draw_tilemap(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, tilemap *tmap, UINT32 flags, UINT32 priority,
-		  				 int sx, int sy, int wx, int wy)	// scroll & window values
+static void draw_tilemap(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, tilemap_t *tmap, UINT32 flags, UINT32 priority,
+						 int sx, int sy, int wx, int wy)	// scroll & window values
 {
 #if 1
 		tilemap_set_scrollx(tmap, 0, sx - wx + (wx & 7));
@@ -856,6 +848,7 @@ static void dirty_tiles(int layer,UINT16 *vram)
 
 VIDEO_UPDATE( metro )
 {
+	const device_config *k053936 = devtag_get_device(screen->machine, "k053936");
 	int i,pri,layers_ctrl = -1;
 	UINT16 screenctrl = *metro_screenctrl;
 
@@ -931,8 +924,10 @@ if (input_code_pressed(screen->machine, KEYCODE_Z))
 	if (input_code_pressed(screen->machine, KEYCODE_E))	msk |= 4;
 	if (input_code_pressed(screen->machine, KEYCODE_A))	msk |= 8;
 	if (msk != 0)
-	{	bitmap_fill(bitmap,cliprect,0);
-		layers_ctrl &= msk;	}
+	{
+		bitmap_fill(bitmap,cliprect,0);
+		layers_ctrl &= msk;
+	}
 
 	popmessage("l %x-%x-%x r %04x %04x %04x",
 				(metro_videoregs[0x10/2]&0x30)>>4,(metro_videoregs[0x10/2]&0xc)>>2,metro_videoregs[0x10/2]&3,
@@ -941,10 +936,10 @@ if (input_code_pressed(screen->machine, KEYCODE_Z))
 }
 #endif
 
-	if (has_zoom) K053936_0_zoom_draw(bitmap,cliprect,metro_K053936_tilemap,0,0, 1);
+	if (has_zoom)
+		k053936_zoom_draw(k053936, bitmap, cliprect, metro_K053936_tilemap, 0, 0, 1);
 
-
-	for (pri=3; pri>=0; pri--)
+	for (pri = 3; pri >= 0; pri--)
 		draw_layers(screen->machine, bitmap,cliprect,pri,layers_ctrl);
 
 	if (layers_ctrl & 0x08)

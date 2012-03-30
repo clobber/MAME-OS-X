@@ -48,6 +48,8 @@ This info came from http://www.ne.jp/asahi/cc-sakura/akkun/old/fryski.html
 #include "sound/ay8910.h"
 #include "sound/dac.h"
 
+extern UINT8 *seicross_videoram;
+extern UINT8 *seicross_colorram;
 extern UINT8 *seicross_row_scroll;
 
 extern WRITE8_HANDLER( seicross_videoram_w );
@@ -119,12 +121,12 @@ static WRITE8_DEVICE_HANDLER( friskyt_portB_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
-	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x8820, 0x887f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(seicross_videoram_w) AM_BASE(&videoram)	/* video RAM */
+	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x8820, 0x887f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(seicross_videoram_w) AM_BASE(&seicross_videoram)	/* video RAM */
 	AM_RANGE(0x9800, 0x981f) AM_RAM AM_BASE(&seicross_row_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_WRITE(SMH_RAM) AM_BASE(&spriteram_2) AM_SIZE(&spriteram_2_size)
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(seicross_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x9880, 0x989f) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram2)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(seicross_colorram_w) AM_BASE(&seicross_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")		/* IN0 */
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("IN1")		/* IN1 */
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("TEST")		/* test */
@@ -133,8 +135,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_MIRROR(0x08) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x04, 0x04) AM_MIRROR(0x08) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_MIRROR(0x08) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x04, 0x04) AM_MIRROR(0x08) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -143,7 +145,7 @@ static ADDRESS_MAP_START( mcu_nvram_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x10ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0x8000, 0xf7ff) AM_ROM
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mcu_no_nvram_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -153,7 +155,7 @@ static ADDRESS_MAP_START( mcu_no_nvram_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1006, 0x1006) AM_READ_PORT("DSW3")		/* DSW3 */
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0x8000, 0xf7ff) AM_ROM
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -431,7 +433,7 @@ static MACHINE_DRIVER_START( nvram )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 1536000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 1536000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 

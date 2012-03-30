@@ -173,33 +173,10 @@
 #include "cpu/m6502/m6502.h"
 #include "machine/atarigen.h"
 #include "machine/6522via.h"
-#include "atarisy1.h"
+#include "includes/atarisy1.h"
 #include "sound/tms5220.h"
 #include "sound/2151intf.h"
 #include "sound/pokey.h"
-
-
-
-/*************************************
- *
- *  Statics
- *
- *************************************/
-
-static UINT8 joystick_type;
-static UINT8 trackball_type;
-
-static emu_timer *joystick_timer;
-static UINT8 joystick_int;
-static UINT8 joystick_int_enable;
-static UINT8 joystick_value;
-
-static UINT8 tms5220_out_data;
-static UINT8 tms5220_in_data;
-static UINT8 tms5220_ctl;
-
-
-static TIMER_CALLBACK( delayed_joystick_int );
 
 
 
@@ -211,26 +188,43 @@ static TIMER_CALLBACK( delayed_joystick_int );
 
 static void update_interrupts(running_machine *machine)
 {
-	cputag_set_input_line(machine, "maincpu", 2, joystick_int && joystick_int_enable ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 3, atarigen_scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 4, atarigen_video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 6, atarigen_sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+	cputag_set_input_line(machine, "maincpu", 2, state->joystick_int && state->joystick_int_enable ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 3, state->atarigen.scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 4, state->atarigen.video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 6, state->atarigen.sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+}
+
+
+static MACHINE_START( atarisy1 )
+{
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+	atarigen_init(machine);
+
+	state_save_register_global(machine, state->joystick_int);
+	state_save_register_global(machine, state->joystick_int_enable);
+	state_save_register_global(machine, state->joystick_value);
+	state_save_register_global(machine, state->tms5220_out_data);
+	state_save_register_global(machine, state->tms5220_in_data);
+	state_save_register_global(machine, state->tms5220_ctl);
 }
 
 
 static MACHINE_RESET( atarisy1 )
 {
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	/* initialize the system */
-	atarigen_eeprom_reset();
-	atarigen_slapstic_reset();
-	atarigen_interrupt_reset(update_interrupts);
+	atarigen_eeprom_reset(&state->atarigen);
+	atarigen_slapstic_reset(&state->atarigen);
+	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
 	atarigen_sound_io_reset(cputag_get_cpu(machine, "audiocpu"));
 
 	/* reset the joystick parameters */
-	joystick_value = 0;
-	joystick_timer = timer_alloc(machine, delayed_joystick_int, NULL);
-	joystick_int = 0;
-	joystick_int_enable = 0;
+	state->joystick_value = 0;
+	state->joystick_timer = devtag_get_device(machine, "joystick_timer");
+	state->joystick_int = 0;
+	state->joystick_int_enable = 0;
 }
 
 
@@ -241,47 +235,50 @@ static MACHINE_RESET( atarisy1 )
  *
  *************************************/
 
-static TIMER_CALLBACK( delayed_joystick_int )
+static TIMER_DEVICE_CALLBACK( delayed_joystick_int )
 {
-	joystick_value = param;
-	joystick_int = 1;
-	atarigen_update_interrupts(machine);
+	atarisy1_state *state = (atarisy1_state *)timer->machine->driver_data;
+	state->joystick_value = param;
+	state->joystick_int = 1;
+	atarigen_update_interrupts(timer->machine);
 }
 
 
 static READ16_HANDLER( joystick_r )
 {
+	atarisy1_state *state = (atarisy1_state *)space->machine->driver_data;
 	int newval = 0xff;
 	static const char *const portnames[] = { "IN0", "IN1" };
 
 	/* digital joystick type */
-	if (joystick_type == 1)
+	if (state->joystick_type == 1)
 		newval = (input_port_read(space->machine, "IN0") & (0x80 >> offset)) ? 0xf0 : 0x00;
 
 	/* Hall-effect analog joystick */
-	else if (joystick_type == 2)
+	else if (state->joystick_type == 2)
 		newval = input_port_read(space->machine, portnames[offset & 1]);
 
 	/* Road Blasters gas pedal */
-	else if (joystick_type == 3)
+	else if (state->joystick_type == 3)
 		newval = input_port_read(space->machine, "IN1");
 
 	/* the A4 bit enables/disables joystick IRQs */
-	joystick_int_enable = ((offset >> 3) & 1) ^ 1;
+	state->joystick_int_enable = ((offset >> 3) & 1) ^ 1;
 
 	/* clear any existing interrupt and set a timer for a new one */
-	joystick_int = 0;
-	timer_adjust_oneshot(joystick_timer, ATTOTIME_IN_USEC(50), newval);
+	state->joystick_int = 0;
+	timer_device_adjust_oneshot(state->joystick_timer, ATTOTIME_IN_USEC(50), newval);
 	atarigen_update_interrupts(space->machine);
 
-	return joystick_value;
+	return state->joystick_value;
 }
 
 
 static WRITE16_HANDLER( joystick_w )
 {
 	/* the A4 bit enables/disables joystick IRQs */
-	joystick_int_enable = ((offset >> 3) & 1) ^ 1;
+	atarisy1_state *state = (atarisy1_state *)space->machine->driver_data;
+	state->joystick_int_enable = ((offset >> 3) & 1) ^ 1;
 }
 
 
@@ -294,10 +291,11 @@ static WRITE16_HANDLER( joystick_w )
 
 static READ16_HANDLER( trakball_r )
 {
+	atarisy1_state *state = (atarisy1_state *)space->machine->driver_data;
 	int result = 0xff;
 
 	/* Marble Madness trackball type -- rotated 45 degrees! */
-	if (trackball_type == 1)
+	if (state->trackball_type == 1)
 	{
 		static UINT8 cur[2][2];
 		int player = (offset >> 1) & 1;
@@ -327,7 +325,7 @@ static READ16_HANDLER( trakball_r )
 	}
 
 	/* Road Blasters steering wheel */
-	else if (trackball_type == 2)
+	else if (state->trackball_type == 2)
 		result = input_port_read(space->machine, "IN0");
 
 	return result;
@@ -343,8 +341,9 @@ static READ16_HANDLER( trakball_r )
 
 static READ16_HANDLER( port4_r )
 {
+	atarisy1_state *state = (atarisy1_state *)space->machine->driver_data;
 	int temp = input_port_read(space->machine, "F60000");
-	if (atarigen_cpu_to_sound_ready) temp ^= 0x0080;
+	if (state->atarigen.cpu_to_sound_ready) temp ^= 0x0080;
 	return temp;
 }
 
@@ -358,10 +357,11 @@ static READ16_HANDLER( port4_r )
 
 static READ8_HANDLER( switch_6502_r )
 {
+	atarisy1_state *state = (atarisy1_state *)space->machine->driver_data;
 	int temp = input_port_read(space->machine, "1820");
 
-	if (atarigen_cpu_to_sound_ready) temp ^= 0x08;
-	if (atarigen_sound_to_cpu_ready) temp ^= 0x10;
+	if (state->atarigen.cpu_to_sound_ready) temp ^= 0x08;
+	if (state->atarigen.sound_to_cpu_ready) temp ^= 0x10;
 	if (!(input_port_read(space->machine, "F60000") & 0x0040)) temp ^= 0x80;
 
 	return temp;
@@ -392,28 +392,31 @@ static READ8_HANDLER( switch_6502_r )
 
 static WRITE8_DEVICE_HANDLER( via_pa_w )
 {
-	tms5220_out_data = data;
+	atarisy1_state *state = (atarisy1_state *)device->machine->driver_data;
+	state->tms5220_out_data = data;
 }
 
 
 static READ8_DEVICE_HANDLER( via_pa_r )
 {
-	return tms5220_in_data;
+	atarisy1_state *state = (atarisy1_state *)device->machine->driver_data;
+	return state->tms5220_in_data;
 }
 
 
 static WRITE8_DEVICE_HANDLER( via_pb_w )
 {
-	UINT8 old = tms5220_ctl;
-	tms5220_ctl = data;
+	atarisy1_state *state = (atarisy1_state *)device->machine->driver_data;
+	UINT8 old = state->tms5220_ctl;
+	state->tms5220_ctl = data;
 
 	/* write strobe */
-	if (!(old & 1) && (tms5220_ctl & 1))
-		tms5220_data_w(device, 0, tms5220_out_data);
+	if (!(old & 1) && (state->tms5220_ctl & 1))
+		tms5220_data_w(device, 0, state->tms5220_out_data);
 
 	/* read strobe */
-	if (!(old & 2) && (tms5220_ctl & 2))
-		tms5220_in_data = tms5220_status_r(device, 0);
+	if (!(old & 2) && (state->tms5220_ctl & 2))
+		state->tms5220_in_data = tms5220_status_r(device, 0);
 
 	/* bit 4 is connected to an up-counter, clocked by SYCLKB */
 	data = 5 | ((data >> 3) & 2);
@@ -446,7 +449,7 @@ static const via6522_interface via_interface =
 
 static WRITE8_HANDLER( led_w )
 {
-	set_led_status(offset, ~data & 1);
+	set_led_status(space->machine, offset, ~data & 1);
 }
 
 
@@ -462,19 +465,19 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x080000, 0x087fff) AM_ROM	/* slapstic maps here */
 	AM_RANGE(0x2e0000, 0x2e0001) AM_READ(atarisy1_int3state_r)
 	AM_RANGE(0x400000, 0x401fff) AM_RAM
-	AM_RANGE(0x800000, 0x800001) AM_WRITE(atarisy1_xscroll_w) AM_BASE(&atarigen_xscroll)
-	AM_RANGE(0x820000, 0x820001) AM_WRITE(atarisy1_yscroll_w) AM_BASE(&atarigen_yscroll)
+	AM_RANGE(0x800000, 0x800001) AM_WRITE(atarisy1_xscroll_w) AM_BASE_MEMBER(atarisy1_state, atarigen.xscroll)
+	AM_RANGE(0x820000, 0x820001) AM_WRITE(atarisy1_yscroll_w) AM_BASE_MEMBER(atarisy1_state, atarigen.yscroll)
 	AM_RANGE(0x840000, 0x840001) AM_WRITE(atarisy1_priority_w)
-	AM_RANGE(0x860000, 0x860001) AM_WRITE(atarisy1_bankselect_w) AM_BASE(&atarisy1_bankselect)
+	AM_RANGE(0x860000, 0x860001) AM_WRITE(atarisy1_bankselect_w) AM_BASE_MEMBER(atarisy1_state, bankselect)
 	AM_RANGE(0x880000, 0x880001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x8a0000, 0x8a0001) AM_WRITE(atarigen_video_int_ack_w)
 	AM_RANGE(0x8c0000, 0x8c0001) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0x900000, 0x9fffff) AM_RAM
-	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE(&atarigen_playfield)
+	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(atarisy1_state, atarigen.playfield)
 	AM_RANGE(0xa02000, 0xa02fff) AM_RAM_WRITE(atarisy1_spriteram_w) AM_BASE(&atarimo_0_spriteram)
-	AM_RANGE(0xa03000, 0xa03fff) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE(&atarigen_alpha)
-	AM_RANGE(0xb00000, 0xb007ff) AM_RAM_WRITE(paletteram16_IIIIRRRRGGGGBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xf00000, 0xf00fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE(&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
+	AM_RANGE(0xa03000, 0xa03fff) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(atarisy1_state, atarigen.alpha)
+	AM_RANGE(0xb00000, 0xb007ff) AM_RAM_WRITE(paletteram16_IIIIRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf00000, 0xf00fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE_SIZE_MEMBER(atarisy1_state, atarigen.eeprom, atarigen.eeprom_size)
 	AM_RANGE(0xf20000, 0xf20007) AM_READ(trakball_r)
 	AM_RANGE(0xf40000, 0xf4001f) AM_READWRITE(joystick_r, joystick_w)
 	AM_RANGE(0xf60000, 0xf60003) AM_READ(port4_r)
@@ -494,7 +497,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x100f) AM_DEVREADWRITE("via6522_0", via_r, via_w)
-	AM_RANGE(0x1800, 0x1801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x1800, 0x1801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x1810, 0x1810) AM_READWRITE(atarigen_6502_sound_r, atarigen_6502_sound_w)
 	AM_RANGE(0x1820, 0x1820) AM_READ(switch_6502_r)
 	AM_RANGE(0x1824, 0x1825) AM_WRITE(led_w)
@@ -750,6 +753,7 @@ static const ym2151_interface ym2151_config =
  *************************************/
 
 static MACHINE_DRIVER_START( atarisy1 )
+	MDRV_DRIVER_DATA(atarisy1_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68010, ATARI_CLOCK_14MHz/2)
@@ -759,8 +763,14 @@ static MACHINE_DRIVER_START( atarisy1 )
 	MDRV_CPU_ADD("audiocpu", M6502, ATARI_CLOCK_14MHz/8)
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 
+	MDRV_MACHINE_START(atarisy1)
 	MDRV_MACHINE_RESET(atarisy1)
 	MDRV_NVRAM_HANDLER(atarigen)
+
+	MDRV_TIMER_ADD("joystick_timer", delayed_joystick_int)
+	MDRV_TIMER_ADD("scan_timer", atarisy1_int3_callback)
+	MDRV_TIMER_ADD("int3off_timer", atarisy1_int3off_callback)
+	MDRV_TIMER_ADD("yreset_timer", atarisy1_reset_yscroll_callback)
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -779,7 +789,7 @@ static MACHINE_DRIVER_START( atarisy1 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, ATARI_CLOCK_14MHz/4)
+	MDRV_SOUND_ADD("ymsnd", YM2151, ATARI_CLOCK_14MHz/4)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
@@ -823,27 +833,27 @@ MACHINE_DRIVER_END
 
 #define MOTHERBOARD_BIOS											                                                           \
 	ROM_SYSTEM_BIOS( 0, "ttl", "TTL Motherboard (Rev 2)" )                                                                     \
- 	ROM_LOAD16_BYTE_BIOS(0, "136032.205.l13", 0x00000, 0x04000, CRC(88d0be26) SHA1(d124045eccc562ff0423b23a240e27ad740fa0c9) ) \
+	ROM_LOAD16_BYTE_BIOS(0, "136032.205.l13", 0x00000, 0x04000, CRC(88d0be26) SHA1(d124045eccc562ff0423b23a240e27ad740fa0c9) ) \
 	ROM_LOAD16_BYTE_BIOS(0, "136032.206.l12", 0x00001, 0x04000, CRC(3c79ef05) SHA1(20fdca7131478e1ee12691bdafd2d5bb74cbd16f) ) \
 	ROM_SYSTEM_BIOS( 1, "ttl1", "TTL Motherboard (Rev 1)" )                                                                    \
- 	ROM_LOAD16_BYTE_BIOS(1, "136032.105.l13", 0x00000, 0x04000, CRC(690b37d3) SHA1(547372f1044a3442aa52fcd2b3546540aba59344) ) \
+	ROM_LOAD16_BYTE_BIOS(1, "136032.105.l13", 0x00000, 0x04000, CRC(690b37d3) SHA1(547372f1044a3442aa52fcd2b3546540aba59344) ) \
 	ROM_LOAD16_BYTE_BIOS(1, "136032.106.l12", 0x00001, 0x04000, CRC(76ee86c4) SHA1(cbcd424510435a04e9041967a13781fd19b0f2c4) ) \
 	ROM_SYSTEM_BIOS( 2, "lsi", "LSI Motherboard" )                                                                             \
- 	ROM_LOAD16_BYTE_BIOS(2, "136032.114.j11", 0x00000, 0x04000, CRC(195c54ad) SHA1(d7cda3cd3db4c6f77074ca05e96ae11b62e048b7) ) \
+	ROM_LOAD16_BYTE_BIOS(2, "136032.114.j11", 0x00000, 0x04000, CRC(195c54ad) SHA1(d7cda3cd3db4c6f77074ca05e96ae11b62e048b7) ) \
 	ROM_LOAD16_BYTE_BIOS(2, "136032.115.j10", 0x00001, 0x04000, CRC(7275b4dc) SHA1(0896ab37ea832a1335046353612c1b4c86d8d040) )
 
 #define MOTHERBOARD_ALPHA                                                                           				   \
- 	ROM_LOAD_BIOS(0, "136032.104.f5", 0x00000, 0x02000, CRC(7a29dc07) SHA1(72ba464da01bd6d3a91b8d9997d5ac14b6f47aad) ) \
- 	ROM_LOAD_BIOS(1, "136032.104.f5", 0x00000, 0x02000, CRC(7a29dc07) SHA1(72ba464da01bd6d3a91b8d9997d5ac14b6f47aad) ) \
- 	ROM_LOAD_BIOS(2, "136032.107.b2", 0x00000, 0x02000, CRC(315e4bea) SHA1(a00ea23fbdbf075f8f3f184275be83387e8ac82b) )
+	ROM_LOAD_BIOS(0, "136032.104.f5", 0x00000, 0x02000, CRC(7a29dc07) SHA1(72ba464da01bd6d3a91b8d9997d5ac14b6f47aad) ) \
+	ROM_LOAD_BIOS(1, "136032.104.f5", 0x00000, 0x02000, CRC(7a29dc07) SHA1(72ba464da01bd6d3a91b8d9997d5ac14b6f47aad) ) \
+	ROM_LOAD_BIOS(2, "136032.107.b2", 0x00000, 0x02000, CRC(315e4bea) SHA1(a00ea23fbdbf075f8f3f184275be83387e8ac82b) )
 
 #define MOTHERBOARD_PROMS                                                                                              \
- 	ROM_LOAD_BIOS(0, "136032.101.e3", 0x00000, 0x00100, CRC(7e84972a) SHA1(84d422b53547271e3a07342704a05ef481db3f99) ) \
- 	ROM_LOAD_BIOS(0, "136032.102.e5", 0x00000, 0x00100, CRC(ebf1e0ae) SHA1(2d327e78832edd67ca3909c25b8c8c839637a1ed) ) \
- 	ROM_LOAD_BIOS(0, "136032.103.f7", 0x00000, 0x00001, NO_DUMP ) /* N82S153 */                                        \
- 	ROM_LOAD_BIOS(1, "136032.101.e3", 0x00000, 0x00100, CRC(7e84972a) SHA1(84d422b53547271e3a07342704a05ef481db3f99) ) \
- 	ROM_LOAD_BIOS(1, "136032.102.e5", 0x00000, 0x00100, CRC(ebf1e0ae) SHA1(2d327e78832edd67ca3909c25b8c8c839637a1ed) ) \
- 	ROM_LOAD_BIOS(1, "136032.103.f7", 0x00000, 0x00001, NO_DUMP ) /* N82S153 */
+	ROM_LOAD_BIOS(0, "136032.101.e3", 0x00000, 0x00100, CRC(7e84972a) SHA1(84d422b53547271e3a07342704a05ef481db3f99) ) \
+	ROM_LOAD_BIOS(0, "136032.102.e5", 0x00000, 0x00100, CRC(ebf1e0ae) SHA1(2d327e78832edd67ca3909c25b8c8c839637a1ed) ) \
+	ROM_LOAD_BIOS(0, "136032.103.f7", 0x00000, 0x00001, NO_DUMP ) /* N82S153 */                                        \
+	ROM_LOAD_BIOS(1, "136032.101.e3", 0x00000, 0x00100, CRC(7e84972a) SHA1(84d422b53547271e3a07342704a05ef481db3f99) ) \
+	ROM_LOAD_BIOS(1, "136032.102.e5", 0x00000, 0x00100, CRC(ebf1e0ae) SHA1(2d327e78832edd67ca3909c25b8c8c839637a1ed) ) \
+	ROM_LOAD_BIOS(1, "136032.103.f7", 0x00000, 0x00001, NO_DUMP ) /* N82S153 */
 
 ROM_START( atarisy1 )
 	ROM_REGION( 0x88000, "maincpu", 0 )	/* 8.5*64k for 68000 code & slapstic ROM */
@@ -1050,7 +1060,7 @@ ROM_END
 
 
 ROM_START( marble5 ) /* LSI Cartridge */
- 	ROM_REGION( 0x88000, "maincpu", 0 )	/* 8.5*64k for 68000 code & slapstic ROM */
+	ROM_REGION( 0x88000, "maincpu", 0 )	/* 8.5*64k for 68000 code & slapstic ROM */
     MOTHERBOARD_BIOS
 	ROM_LOAD16_BYTE( "136033.201", 0x10000, 0x08000, CRC(9395804d) SHA1(7cca2cc85a9678199c7a60c0976f3e0362f8538f) ) /* Located at B10 */
 	ROM_LOAD16_BYTE( "136033.202", 0x10001, 0x08000, CRC(edd313f5) SHA1(f3ec6f5812287e187026446fe286f257b54c426e) ) /* Located at A10 */
@@ -1076,7 +1086,7 @@ ROM_START( marble5 ) /* LSI Cartridge */
 	ROM_LOAD(        "136033.116", 0x94000, 0x04000, CRC(84ee1c80) SHA1(5192c0a2887f46b616d130bdbfffbbd5e394e9a3) )  /* bank 2, plane 1 - located at B7 */
 	ROM_LOAD(        "136033.117", 0xa4000, 0x04000, CRC(daa02926) SHA1(33c7a38c66fb4d67a6ee88ef2da2bba091439e0c) )  /* bank 2, plane 2 - located at C7 */
 
- 	ROM_REGION( 0x400, "proms", 0 )	/* graphics mapping PROMs */
+	ROM_REGION( 0x400, "proms", 0 )	/* graphics mapping PROMs */
 	ROM_LOAD(        "136033.118", 0x00000, 0x00200, CRC(2101b0ed) SHA1(e4fb8dfa80ed78847c697f9de2bd8540b0c04889) )  /* remap, located at A7 */
 	ROM_LOAD(        "136033.159", 0x00200, 0x00200, CRC(19f6e767) SHA1(041f24cc03c9043c31c3294c9565dfda9bdada74) )  /* color, located at A5 */
 
@@ -2327,61 +2337,67 @@ ROM_END
 
 static DRIVER_INIT( marble )
 {
-	atarigen_eeprom_default = NULL;
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x080000, 0, 103);
 
-	joystick_type = 0;	/* none */
-	trackball_type = 1;	/* rotated */
+	state->joystick_type = 0;	/* none */
+	state->trackball_type = 1;	/* rotated */
 }
 
 
 static DRIVER_INIT( peterpak )
 {
-	atarigen_eeprom_default = NULL;
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x080000, 0, 107);
 
-	joystick_type = 1;	/* digital */
-	trackball_type = 0;	/* none */
+	state->joystick_type = 1;	/* digital */
+	state->trackball_type = 0;	/* none */
 }
 
 
 static DRIVER_INIT( indytemp )
 {
-	atarigen_eeprom_default = NULL;
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x080000, 0, 105);
 
-	joystick_type = 1;	/* digital */
-	trackball_type = 0;	/* none */
+	state->joystick_type = 1;	/* digital */
+	state->trackball_type = 0;	/* none */
 }
 
 
 static DRIVER_INIT( roadrunn )
 {
-	atarigen_eeprom_default = NULL;
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x080000, 0, 108);
 
-	joystick_type = 2;	/* analog */
-	trackball_type = 0;	/* none */
+	state->joystick_type = 2;	/* analog */
+	state->trackball_type = 0;	/* none */
 }
 
 
 static DRIVER_INIT( roadb109 )
 {
-	atarigen_eeprom_default = NULL;
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x080000, 0, 109);
 
-	joystick_type = 3;	/* pedal */
-	trackball_type = 2;	/* steering wheel */
+	state->joystick_type = 3;	/* pedal */
+	state->trackball_type = 2;	/* steering wheel */
 }
 
 
 static DRIVER_INIT( roadb110 )
 {
-	atarigen_eeprom_default = NULL;
+	atarisy1_state *state = (atarisy1_state *)machine->driver_data;
+
 	atarigen_slapstic_init(cputag_get_cpu(machine, "maincpu"), 0x080000, 0, 110);
 
-	joystick_type = 3;	/* pedal */
-	trackball_type = 2;	/* steering wheel */
+	state->joystick_type = 3;	/* pedal */
+	state->trackball_type = 2;	/* steering wheel */
 }
 
 

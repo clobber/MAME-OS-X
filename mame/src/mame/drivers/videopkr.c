@@ -276,7 +276,6 @@ static UINT8 color_ram[0x0400];
 static UINT16 p1, p2;
 static UINT8 t0_latch;
 static UINT16 n_offs;
-static emu_timer *t1_timer;
 
 static UINT8 vp_sound_p2;
 static UINT8 p24_data;
@@ -299,7 +298,7 @@ static UINT8 sbp0, sbp2, sbp3;
 *     Video Hardware     *
 *************************/
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 
 /* BCD to Seven Segment Decoder */
 static UINT8 dec_7seg(int data)
@@ -327,7 +326,7 @@ static UINT8 dec_7seg(int data)
 static void count_7dig(unsigned long data, UINT8 index)
 {
 	UINT8 i;
-	char strn[7];
+	char strn[8];
 	sprintf(strn,"%7lu",data);
 
 	for (i = 0; i < 7; i++)
@@ -471,7 +470,7 @@ static READ8_HANDLER( videopkr_io_r )
 	{
 		case 0xef:	/* inputs are multiplexed through a diode matrix */
 		{
-			hf = ((input_port_read(space->machine, "IN1") & 0x10 ) >> 4) & 1; 			/* Hopper full detection */
+			hf = ((input_port_read(space->machine, "IN1") & 0x10 ) >> 4) & 1;			/* Hopper full detection */
 			co = 0x10 * ((input_port_read(space->machine, "IN1") & 0x20 ) >> 5);		/* Coin Out detection */
 			kbdin = ((input_port_read(space->machine, "IN1") & 0xaf ) << 8) + input_port_read(space->machine, "IN0");
 
@@ -856,7 +855,7 @@ static WRITE8_DEVICE_HANDLER(baby_sound_p3_w)
 }
 
 
-static TIMER_CALLBACK(sound_t1_callback)
+static TIMER_DEVICE_CALLBACK(sound_t1_callback)
 {
 	if (te_40103 == 1)
 	{
@@ -864,7 +863,7 @@ static TIMER_CALLBACK(sound_t1_callback)
 
 		if (dc_40103 == 0)
 		{
-			cputag_set_input_line(machine, "soundcpu", 0, ASSERT_LINE);
+			cputag_set_input_line(timer->machine, "soundcpu", 0, ASSERT_LINE);
 		}
 	}
 }
@@ -906,7 +905,7 @@ static ADDRESS_MAP_START( i8051_sound_port, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(MCS51_PORT_P0, MCS51_PORT_P0) AM_READWRITE(baby_sound_p0_r, baby_sound_p0_w)
 	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_READWRITE(baby_sound_p1_r, baby_sound_p1_w)
 	AM_RANGE(MCS51_PORT_P2, MCS51_PORT_P2) AM_READ(baby_sound_p2_r) AM_DEVWRITE("dac", baby_sound_p2_w)
-	AM_RANGE(MCS51_PORT_P3, MCS51_PORT_P3) AM_DEVREADWRITE("ay", baby_sound_p3_r, baby_sound_p3_w)
+	AM_RANGE(MCS51_PORT_P3, MCS51_PORT_P3) AM_DEVREADWRITE("aysnd", baby_sound_p3_r, baby_sound_p3_w)
 ADDRESS_MAP_END
 
 
@@ -1136,8 +1135,6 @@ static MACHINE_START(videopkr)
 	p1 = 0xff;
 	ant_cio = 0;
 	count0 = 0;
-	t1_timer = timer_alloc(machine, sound_t1_callback, NULL);
-	timer_adjust_periodic(t1_timer, attotime_zero, 0, ATTOTIME_IN_HZ(50));	/* 50Hz. */
 }
 
 static const ay8910_interface ay8910_config =
@@ -1169,6 +1166,8 @@ static MACHINE_DRIVER_START( videopkr )
 	MDRV_CPU_IO_MAP(i8039_sound_port)
 	MDRV_MACHINE_START(videopkr)
 	MDRV_NVRAM_HANDLER(videopkr)
+
+	MDRV_TIMER_ADD_PERIODIC("t1_timer", sound_t1_callback, HZ(50))
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -1239,7 +1238,7 @@ static MACHINE_DRIVER_START( babypkr )
 	MDRV_GFXDECODE(videodad)
 	MDRV_VIDEO_START(vidadcba)
 
-	MDRV_SOUND_ADD("ay", AY8910, CPU_CLOCK / 6)
+	MDRV_SOUND_ADD("aysnd", AY8910, CPU_CLOCK / 6)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END

@@ -30,36 +30,36 @@ WRITE8_HANDLER( paletteram_xBGR_RRRR_GGGG_BBBB_w );
 static WRITE8_HANDLER( quizdna_rombank_w )
 {
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
-	memory_set_bankptr(space->machine, 1,&ROM[0x10000+0x4000*(data & 0x3f)]);
+	memory_set_bankptr(space->machine, "bank1",&ROM[0x10000+0x4000*(data & 0x3f)]);
 }
 
 static WRITE8_HANDLER( gekiretu_rombank_w )
 {
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
-	memory_set_bankptr(space->machine, 1,&ROM[0x10000+0x4000*((data & 0x3f) ^ 0x0a)]);
+	memory_set_bankptr(space->machine, "bank1",&ROM[0x10000+0x4000*((data & 0x3f) ^ 0x0a)]);
 }
 
 /****************************************************************************/
 
 static ADDRESS_MAP_START( quizdna_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x9fff) AM_WRITE(quizdna_fg_ram_w)
 	AM_RANGE(0xa000, 0xbfff) AM_WRITE(quizdna_bg_ram_w)
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xe200, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(paletteram_xBGR_RRRR_GGGG_BBBB_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(paletteram_xBGR_RRRR_GGGG_BBBB_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( gekiretu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x9fff) AM_WRITE(quizdna_fg_ram_w)
 	AM_RANGE(0xa000, 0xbfff) AM_WRITE(quizdna_bg_ram_w)
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(paletteram_xBGR_RRRR_GGGG_BBBB_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(paletteram_xBGR_RRRR_GGGG_BBBB_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xf200, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -74,7 +74,7 @@ static ADDRESS_MAP_START( quizdna_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x91, 0x91) AM_READ_PORT("SERVICE")
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(quizdna_rombank_w)
 	AM_RANGE(0xd0, 0xd0) AM_WRITE(quizdna_screen_ctrl_w)
-	AM_RANGE(0xe0, 0xe1) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xe0, 0xe1) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xf0, 0xf0) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 ADDRESS_MAP_END
 
@@ -89,7 +89,7 @@ static ADDRESS_MAP_START( gakupara_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x91, 0x91) AM_READ_PORT("SERVICE")
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(quizdna_rombank_w)
 	AM_RANGE(0xd0, 0xd0) AM_WRITE(quizdna_screen_ctrl_w)
-	AM_RANGE(0xe0, 0xe1) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xe0, 0xe1) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xf0, 0xf0) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 ADDRESS_MAP_END
 
@@ -104,7 +104,7 @@ static ADDRESS_MAP_START( gekiretu_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x91, 0x91) AM_READ_PORT("SERVICE")
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(gekiretu_rombank_w)
 	AM_RANGE(0xd0, 0xd0) AM_WRITE(quizdna_screen_ctrl_w)
-	AM_RANGE(0xe0, 0xe1) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xe0, 0xe1) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xf0, 0xf0) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 ADDRESS_MAP_END
 
@@ -477,7 +477,7 @@ static MACHINE_DRIVER_START( quizdna )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, MCLK/4)
+	MDRV_SOUND_ADD("ymsnd", YM2203, MCLK/4)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.10)
 	MDRV_SOUND_ROUTE(1, "mono", 0.10)

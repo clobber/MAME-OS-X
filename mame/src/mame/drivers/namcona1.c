@@ -161,7 +161,7 @@ Notes:
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
-#include "namcona1.h"
+#include "includes/namcona1.h"
 #include "sound/c140.h"
 #include "cpu/m37710/m37710.h"
 
@@ -177,7 +177,7 @@ static const UINT8 ExvaniaDefaultNvMem[] =
  * the game software automatically writes these values there, but then jumps
  * to an unmapped (bogus) address, causing MAME to crash.
  */
- 	0x30,0x32,0x4f,0x63,0x74,0x39,0x32,0x52,0x45,0x56,0x49,0x53,0x49,0x4f,0x4e,0x35,
+	0x30,0x32,0x4f,0x63,0x74,0x39,0x32,0x52,0x45,0x56,0x49,0x53,0x49,0x4f,0x4e,0x35,
 	0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x01,
 	0x00,0x01,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x02
 }; /* ExvaniaDefaultNvMem */
@@ -532,7 +532,7 @@ static int transfer_dword( running_machine *machine, UINT32 dest, UINT32 source 
 	}
 	else if( dest>=0xfff000 && dest<0x1000000 )
 	{
-		spriteram16[(dest-0xfff000)/2] = data;
+		space->machine->generic.spriteram.u16[(dest-0xfff000)/2] = data;
 	}
 	else
 	{
@@ -749,12 +749,12 @@ static ADDRESS_MAP_START( namcona1_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xe00000, 0xe00fff) AM_READWRITE(namcona1_nvram_r, namcona1_nvram_w)
 	AM_RANGE(0xe40000, 0xe4000f) AM_READWRITE(custom_key_r, custom_key_w)
 	AM_RANGE(0xefff00, 0xefffff) AM_READWRITE(namcona1_vreg_r, namcona1_vreg_w) AM_BASE(&namcona1_vreg)
-	AM_RANGE(0xf00000, 0xf01fff) AM_READWRITE(namcona1_paletteram_r, namcona1_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xf00000, 0xf01fff) AM_READWRITE(namcona1_paletteram_r, namcona1_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf40000, 0xf7ffff) AM_READWRITE(namcona1_gfxram_r, namcona1_gfxram_w)
-	AM_RANGE(0xff0000, 0xffbfff) AM_READWRITE(namcona1_videoram_r,    namcona1_videoram_w) AM_BASE(&videoram16)
+	AM_RANGE(0xff0000, 0xffbfff) AM_READWRITE(namcona1_videoram_r,    namcona1_videoram_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xffd000, 0xffdfff) AM_RAM /* unknown */
 	AM_RANGE(0xffe000, 0xffefff) AM_RAM	AM_BASE(&namcona1_scroll)		/* scroll registers */
-	AM_RANGE(0xfff000, 0xffffff) AM_RAM	AM_BASE(&spriteram16)			/* spriteram */
+	AM_RANGE(0xfff000, 0xffffff) AM_RAM	AM_BASE_GENERIC(spriteram)			/* spriteram */
 ADDRESS_MAP_END
 
 
@@ -771,12 +771,12 @@ static ADDRESS_MAP_START( namcona2_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	/* xday: additional battery-backed ram at 00E024FA? */
 	AM_RANGE(0xe40000, 0xe4000f) AM_READWRITE(custom_key_r, custom_key_w)
 	AM_RANGE(0xefff00, 0xefffff) AM_READWRITE(namcona1_vreg_r, namcona1_vreg_w) AM_BASE(&namcona1_vreg)
-	AM_RANGE(0xf00000, 0xf01fff) AM_READWRITE(namcona1_paletteram_r, namcona1_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xf00000, 0xf01fff) AM_READWRITE(namcona1_paletteram_r, namcona1_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf40000, 0xf7ffff) AM_READWRITE(namcona1_gfxram_r, namcona1_gfxram_w)
-	AM_RANGE(0xff0000, 0xffbfff) AM_READWRITE(namcona1_videoram_r,    namcona1_videoram_w) AM_BASE(&videoram16)
+	AM_RANGE(0xff0000, 0xffbfff) AM_READWRITE(namcona1_videoram_r,    namcona1_videoram_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xffd000, 0xffdfff) AM_RAM /* unknown */
 	AM_RANGE(0xffe000, 0xffefff) AM_RAM	AM_BASE(&namcona1_scroll)		/* scroll registers */
-	AM_RANGE(0xfff000, 0xffffff) AM_RAM	AM_BASE(&spriteram16)			/* spriteram */
+	AM_RANGE(0xfff000, 0xffffff) AM_RAM	AM_BASE_GENERIC(spriteram)			/* spriteram */
 ADDRESS_MAP_END
 
 
@@ -888,7 +888,7 @@ static READ8_HANDLER( port7_r )
 		case 0x40:
 			return input_port_read(space->machine, "P1");
 
-  		case 0x60:
+		case 0x60:
 			return input_port_read(space->machine, "P2");
 
 		case 0x20:
@@ -990,7 +990,7 @@ static INTERRUPT_GEN( mcu_interrupt )
 {
 	if (cpu_getiloops(device) == 0)
 	{
- 		cpu_set_input_line(device, M37710_LINE_IRQ1, HOLD_LINE);
+		cpu_set_input_line(device, M37710_LINE_IRQ1, HOLD_LINE);
 	}
 	else if (cpu_getiloops(device) == 1)
 	{

@@ -183,8 +183,8 @@ static ADDRESS_MAP_START( mugsmash_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(mugsmash_videoram1_w) AM_BASE(&mugsmash_videoram1)
 	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(mugsmash_videoram2_w) AM_BASE(&mugsmash_videoram2)
-	AM_RANGE(0x0c0000, 0x0c0007) AM_WRITE(mugsmash_reg_w) AM_BASE(&mugsmash_regs1) 	/* video registers*/
-	AM_RANGE(0x100000, 0x1005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0c0000, 0x0c0007) AM_WRITE(mugsmash_reg_w) AM_BASE(&mugsmash_regs1)	/* video registers*/
+	AM_RANGE(0x100000, 0x1005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x140000, 0x140007) AM_WRITE(mugsmash_reg2_w) AM_BASE(&mugsmash_regs2) /* sound + ? */
 	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM /* main ram? */
 	AM_RANGE(0x1c4000, 0x1cffff) AM_RAM
@@ -202,7 +202,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mugsmash_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
+	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -385,7 +385,7 @@ static const gfx_layout mugsmash2_layout =
 	16,16,
 	RGN_FRAC(1,4),
 	4,
-	{ 	0x080000*3*8, 	0x080000*2*8, 	0x080000*1*8,	0x080000*0*8 },
+	{	0x080000*3*8,	0x080000*2*8,	0x080000*1*8,	0x080000*0*8 },
 	{ 0, 1, 2, 3, 4, 5, 6, 7, 16*8+0,16*8+1,16*8+2,16*8+3,16*8+4,16*8+5,16*8+6,16*8+7  },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8, 8*8, 9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8 },
 	32*8
@@ -429,7 +429,7 @@ static MACHINE_DRIVER_START( mugsmash )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.00)	/* music */
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.00)

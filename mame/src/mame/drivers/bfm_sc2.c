@@ -339,7 +339,7 @@ static void on_scorpion2_reset(running_machine *machine)
 
 	e2ram_reset();
 
-	devtag_reset(machine, "ym");
+	devtag_reset(machine, "ymsnd");
 
   // reset stepper motors /////////////////////////////////////////////////
 	{
@@ -369,10 +369,10 @@ send data to them, although obviously there's no response. */
 	{
 		UINT8 *rom = memory_region(machine, "maincpu");
 
-		memory_configure_bank(machine, 1, 0, 1, &rom[0x10000], 0);
-		memory_configure_bank(machine, 1, 1, 3, &rom[0x02000], 0x02000);
+		memory_configure_bank(machine, "bank1", 0, 1, &rom[0x10000], 0);
+		memory_configure_bank(machine, "bank1", 1, 3, &rom[0x02000], 0x02000);
 
-		memory_set_bank(machine, 1,3);
+		memory_set_bank(machine, "bank1",3);
 	}
 }
 
@@ -487,7 +487,7 @@ static WRITE8_HANDLER( watchdog_w )
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bank(space->machine, 1,data & 0x03);
+	memory_set_bank(space->machine, "bank1",data & 0x03);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -605,15 +605,15 @@ static WRITE8_HANDLER( mmtr_w )
 	mmtr_latch = data;
 
 	for (i = 0; i<8; i++)
- 	{
+	{
 		if ( changed & (1 << i) )
- 		{
+		{
 			if ( Mechmtr_update(i, cycles, data & (1 << i) ) )
 			{
 				sc2gui_update_mmtr |= (1 << i);
 			}
- 		}
- 	}
+		}
+	}
 	if ( data & 0x1F ) cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE, ASSERT_LINE );
 }
 
@@ -698,7 +698,7 @@ static WRITE8_HANDLER( volume_override_w )
 
 	if ( old != volume_override )
 	{
-		const device_config *ym = devtag_get_device(space->machine, "ym");
+		const device_config *ym = devtag_get_device(space->machine, "ymsnd");
 		const device_config *upd = devtag_get_device(space->machine, "upd");
 		float percent = volume_override? 1.0f : (32-global_volume)/32.0f;
 
@@ -812,7 +812,7 @@ static WRITE8_HANDLER( expansion_latch_w )
 			}
 
 			{
-				const device_config *ym = devtag_get_device(space->machine, "ym");
+				const device_config *ym = devtag_get_device(space->machine, "ymsnd");
 				const device_config *upd = devtag_get_device(space->machine, "upd");
 				float percent = volume_override ? 1.0f : (32-global_volume)/32.0f;
 
@@ -880,7 +880,7 @@ static WRITE8_HANDLER( coininhib_w )
 	{
 		if ( changed & p )
 		{ // this inhibit line has changed
-			coin_lockout_w(i, (~data & p) ); // update lockouts
+			coin_lockout_w(space->machine, i, (~data & p) ); // update lockouts
 			changed &= ~p;
 		}
 
@@ -1275,7 +1275,7 @@ static WRITE8_HANDLER( e2ram_w )
 								e2data_to_read = e2ram[e2address];
 
 								if ( e2rw & 1 ) e2state = 7; // read data
-								else  		  e2state = 0; //?not sure
+								else		  e2state = 0; //?not sure
 							}
 							else
 							{
@@ -1399,7 +1399,7 @@ static WRITE8_HANDLER( e2ram_w )
 
 					LOG(("e2ram: ? c:%d d:%d\n", (data & SCL)?1:0, (data&SDA)?1:0 ));
 					break;
-				}
+			}
 			break;
 		}
 	}
@@ -1544,7 +1544,7 @@ static ADDRESS_MAP_START( memmap_vid, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2A00, 0x2AFF) AM_DEVWRITE("upd", nec_latch_w)			// this is where it reads?
 	AM_RANGE(0x2B00, 0x2BFF) AM_DEVWRITE("upd", nec_reset_w)			// upd7759 reset line
 	AM_RANGE(0x2C00, 0x2C00) AM_WRITE(unlock_w)				// custom chip unlock
-	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x2E00, 0x2E00) AM_WRITE(bankswitch_w)			// write bank (rom page select for 0x6000 - 0x7fff )
 	AM_RANGE(0x2F00, 0x2F00) AM_WRITE(vfd2_data_w)			// vfd2 data
 
@@ -1556,7 +1556,7 @@ static ADDRESS_MAP_START( memmap_vid, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3FFF, 0x3FFF) AM_READ(coin_input_r)
 	AM_RANGE(0x4000, 0x5fff) AM_ROM							// 8k  fixed ROM
 	AM_RANGE(0x4000, 0xFFFF) AM_WRITE(unknown_w)			// contains unknown I/O registers
-	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK(1)					// 8k  paged ROM (4 pages)
+	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK("bank1")					// 8k  paged ROM (4 pages)
 	AM_RANGE(0x8000, 0xFFFF) AM_ROM							// 32k ROM
 
 ADDRESS_MAP_END
@@ -2248,7 +2248,7 @@ static MACHINE_DRIVER_START( scorpion2_vid )
 	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -2613,7 +2613,7 @@ GAMEL( 1995, paradice, 0,		  scorpion2_vid, paradice,  adder_dutch,0,       "BFM
 GAMEL( 1996, pyramid,  0,		  scorpion2_vid, pyramid,   pyramid,	0,       "BFM/ELAM", "Pyramid (Dutch, Game Card 95-750-898)",		GAME_SUPPORTS_SAVE,layout_pyramid )
 
 GAMEL( 1996, sltblgtk, 0,		  scorpion2_vid, sltblgtk,  sltsbelg,   0,       "BFM/ELAM", "Slots (Belgian Token, Game Card 95-750-943)",	GAME_SUPPORTS_SAVE,layout_sltblgtk )
-GAMEL( 1996, sltblgpo, 0, 		  scorpion2_vid, sltblgpo,  sltsbelg,   0,       "BFM/ELAM", "Slots (Belgian Cash, Game Card 95-750-938)",	GAME_SUPPORTS_SAVE,layout_sltblgpo )
+GAMEL( 1996, sltblgpo, 0,		  scorpion2_vid, sltblgpo,  sltsbelg,   0,       "BFM/ELAM", "Slots (Belgian Cash, Game Card 95-750-938)",	GAME_SUPPORTS_SAVE,layout_sltblgpo )
 GAMEL( 1996, sltblgp1, sltblgpo,  scorpion2_vid, sltblgpo,  sltsbelg,   0,       "BFM/ELAM", "Slots (Belgian Cash, Game Card 95-752-008)",	GAME_SUPPORTS_SAVE,layout_sltblgpo )
 GAMEL( 1997, gldncrwn, 0,		  scorpion2_vid, gldncrwn,  gldncrwn,   0,       "BFM/ELAM", "Golden Crown (Dutch, Game Card 95-752-011)",	GAME_SUPPORTS_SAVE,layout_gldncrwn )
 
@@ -2784,13 +2784,13 @@ static ADDRESS_MAP_START( sc2_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2A00, 0x2AFF) AM_DEVWRITE("upd", nec_latch_w)
 	AM_RANGE(0x2B00, 0x2BFF) AM_DEVWRITE("upd", nec_reset_w)
 	AM_RANGE(0x2C00, 0x2C00) AM_WRITE(unlock_w)						/* custom chip unlock */
-	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x2E00, 0x2E00) AM_WRITE(bankswitch_w)					/* write bank (rom page select for 0x6000 - 0x7fff ) */
 	AM_RANGE(0x2F00, 0x2F00) AM_WRITE(vfd2_data_w)					/* vfd2 data */
 
 	AM_RANGE(0x3FFF, 0x3FFF) AM_READ( coin_input_r)
 	AM_RANGE(0x4000, 0x5FFF) AM_ROM									/* 8k  fixed ROM */
-	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK(1)							/* 8k  paged ROM (4 pages) */
+	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK("bank1")							/* 8k  paged ROM (4 pages) */
 	AM_RANGE(0x8000, 0xFFFF) AM_ROM									/* 32k ROM */
 ADDRESS_MAP_END
 
@@ -2833,13 +2833,13 @@ static ADDRESS_MAP_START( sc3_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2A00, 0x2AFF) AM_DEVWRITE("upd", nec_latch_w)
 	AM_RANGE(0x2B00, 0x2BFF) AM_DEVWRITE("upd", nec_reset_w)
 	AM_RANGE(0x2C00, 0x2C00) AM_WRITE(unlock_w)
-	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x2E00, 0x2E00) AM_WRITE(bankswitch_w)
 	AM_RANGE(0x2F00, 0x2F00) AM_WRITE(vfd2_data_w)
 	AM_RANGE(0x3FFF, 0x3FFF) AM_READ( coin_input_r)
 	AM_RANGE(0x4000, 0x5FFF) AM_ROM
 //  AM_RANGE(0x4000, 0xFFFF) AM_WRITE(unknown_w)
-	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK(1)
+	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xFFFF) AM_ROM
 ADDRESS_MAP_END
 
@@ -2882,14 +2882,14 @@ static ADDRESS_MAP_START( memmap_sc2_dm01, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2A00, 0x2AFF) AM_DEVWRITE("upd", nec_latch_w)
 	AM_RANGE(0x2B00, 0x2BFF) AM_DEVWRITE("upd", nec_reset_w)
 	AM_RANGE(0x2C00, 0x2C00) AM_WRITE(unlock_w)
-	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x2D00, 0x2D01) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x2E00, 0x2E00) AM_WRITE(bankswitch_w)
 	AM_RANGE(0x2F00, 0x2F00) AM_WRITE(vfd2_data_w)
 	AM_RANGE(0x3FFE, 0x3FFE) AM_READ( direct_input_r)
 	AM_RANGE(0x3FFF, 0x3FFF) AM_READ( coin_input_r)
 	AM_RANGE(0x4000, 0x5FFF) AM_ROM
 //  AM_RANGE(0x4000, 0xFFFF) AM_WRITE(unknown_w)
-	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK(1)
+	AM_RANGE(0x6000, 0x7FFF) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xFFFF) AM_ROM
 ADDRESS_MAP_END
 
@@ -3977,7 +3977,7 @@ static MACHINE_DRIVER_START( scorpion2 )
 	MDRV_SOUND_ADD("upd",UPD7759, UPD7759_STANDARD_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("ym",YM2413, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd",YM2413, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_NVRAM_HANDLER(bfm_sc2)
@@ -4004,7 +4004,7 @@ static MACHINE_DRIVER_START( scorpion2_dm01 )
 	MDRV_CPU_PERIODIC_INT(timer_irq, 1000 )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym",YM2413, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd",YM2413, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("upd",UPD7759, UPD7759_STANDARD_CLOCK)
@@ -4193,9 +4193,53 @@ static DRIVER_INIT (luvjub)
 	Scorpion2_SetSwitchState(7,3,0);
 }
 
+/*********************************************
+The Big Breakfast
+*********************************************/
+
 ROM_START( m_brkfst )
 	ROM_REGION( 0x12000, "maincpu", 0 )
 	ROM_LOAD("big-breakfast_std_ar_var_a.bin",	0x00000, 0x10000, CRC(5f016daa) SHA1(25ee10138bddf453588e3c458268533a88a51217) )
+
+	ROM_REGION( 0x80000, "upd", 0 )
+	ROM_LOAD("bigbreakfastsnd.bin", 0x00000, 0x80000, CRC(bf91aa2b) SHA1(40942165e65ff9b027015d500e5a9726c44ba1c5))
+ROM_END
+
+ROM_START( m_brkfs1 )
+	ROM_REGION( 0x12000, "maincpu", 0 )
+	ROM_LOAD("big-breakfast_std_ss_var_a.bin",	0x00000, 0x10000, CRC(08d1fa7d) SHA1(a3dba79eef32835f0b46dbd7b376b797324df904) )
+
+	ROM_REGION( 0x80000, "upd", 0 )
+	ROM_LOAD("bigbreakfastsnd.bin", 0x00000, 0x80000, CRC(bf91aa2b) SHA1(40942165e65ff9b027015d500e5a9726c44ba1c5))
+ROM_END
+
+ROM_START( m_brkfs2 )
+	ROM_REGION( 0x12000, "maincpu", 0 )
+	ROM_LOAD("big-breakfast_std_ac_var_jp-8_a.bin",	0x00000, 0x10000, CRC(2671af1b) SHA1(0a34dd2953a99be9fb2a128f9d1f7ddc0fc8242a) )
+
+	ROM_REGION( 0x80000, "upd", 0 )
+	ROM_LOAD("bigbreakfastsnd.bin", 0x00000, 0x80000, CRC(bf91aa2b) SHA1(40942165e65ff9b027015d500e5a9726c44ba1c5))
+ROM_END
+
+ROM_START( m_brkfs3 )
+	ROM_REGION( 0x12000, "maincpu", 0 )
+	ROM_LOAD("big-breakfast_std_ac_8pnd20p_a.bin",	0x00000, 0x10000, CRC(054c38ad) SHA1(f4ab55f977848e3d2a933bba1ab619ffa3e14db6) )
+
+	ROM_REGION( 0x80000, "upd", 0 )
+	ROM_LOAD("bigbreakfastsnd.bin", 0x00000, 0x80000, CRC(bf91aa2b) SHA1(40942165e65ff9b027015d500e5a9726c44ba1c5))
+ROM_END
+
+ROM_START( m_brkfs4 )
+	ROM_REGION( 0x12000, "maincpu", 0 )
+	ROM_LOAD("big-breakfast_std_ac_var_10pnd-20p_a.bin",	0x00000, 0x10000, CRC(d879feaa) SHA1(2656fbe018fe40194c2b77d289b77fabbc9e537c) )
+
+	ROM_REGION( 0x80000, "upd", 0 )
+	ROM_LOAD("bigbreakfastsnd.bin", 0x00000, 0x80000, CRC(bf91aa2b) SHA1(40942165e65ff9b027015d500e5a9726c44ba1c5))
+ROM_END
+
+ROM_START( m_brkfs5 )
+	ROM_REGION( 0x12000, "maincpu", 0 )
+	ROM_LOAD("big-breakfast_std_ac_10pnd-20p_a.bin",	0x00000, 0x10000, CRC(55d7321c) SHA1(0b4a6b66aa64fbb3238539a2167f761d0910b814) )
 
 	ROM_REGION( 0x80000, "upd", 0 )
 	ROM_LOAD("bigbreakfastsnd.bin", 0x00000, 0x80000, CRC(bf91aa2b) SHA1(40942165e65ff9b027015d500e5a9726c44ba1c5))
@@ -4408,7 +4452,6 @@ ROM_START( m_cpeno1 )
 ROM_END
 
 /*     year, name,     parent,    machine,       input,     init,       monitor, company,    fullname */
-GAME( 1994, m_brkfst, 0,		  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (UK, Game Card 95-750-524 )",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
 
 GAMEL( 1994, m_bdrwho, 0,		  scorpion2,	 drwho,		drwho,		0,		 "BFM",      "Dr.Who The Timelord (set 1, UK, Game Card 95-750-288)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK,layout_drwho)
 GAMEL( 1994, m_bdrwh1, m_bdrwho,  scorpion2,	 drwho,		drwho,		0,		 "BFM",      "Dr.Who The Timelord (set 2, UK, Game Card 95-750-661)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK,layout_drwho)
@@ -4429,11 +4472,17 @@ GAMEL( 1994, m_bdrw15, m_bdrwho,  scorpion2,	 drwho,		drwho,		0,		 "BFM",      "
 GAMEL( 1994, m_bdrw16, m_bdrwho,  scorpion2,	 drwho,		drwho,		0,		 "BFM",      "Dr.Who The Timelord (set 17)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK,layout_drwho)
 GAMEL( 1994, m_bdrw17, m_bdrwho,  scorpion2,	 drwho,		drwhon,		0,		 "BFM",      "Dr.Who The Timelord (set 18, not encrypted)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK,layout_drwho)
 
+GAME( 1994, m_brkfst, 0,		  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (Set 1 UK, Game Card 95-750-524)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
+GAME( 1994, m_brkfs1, m_brkfst,	  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (Set 2)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
+GAME( 1994, m_brkfs2, m_brkfst,	  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (Set 3)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
+GAME( 1994, m_brkfs3, m_brkfst,	  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (Set 4)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
+GAME( 1994, m_brkfs4, m_brkfst,	  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (Set 5)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
+GAME( 1994, m_brkfs5, m_brkfst,	  scorpion2,	 bbrkfst,	bbrkfst,	0,		 "BFM",      "The Big Breakfast (Set 6)",GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING)
+
 GAME ( 1995, m_bfocus, 0,		  scorpion3,	 scorpion3,	focus,		0,		 "BFM/ELAM", "Focus (Dutch, Game Card 95-750-347)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK)
 
 GAME ( 1996, m_bcgslm, 0,		  scorpion2,	 bfmcgslm,	bfmcgslm,	0,		 "BFM",		 "Club Grandslam (UK, Game Card 95-750-843)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK)
 
-GAME ( 1996, m_luvjub,   0,		  scorpion2_dm01,luvjub,	luvjub,		0,		 "BFM",		 "Luvvly Jubbly (UK Multisite 10/25p, Game Card 95-750-808)", GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK)
+GAME ( 1996, m_luvjub, 0,		  scorpion2_dm01,luvjub,	luvjub,		0,		 "BFM",		 "Luvvly Jubbly (UK Multisite 10/25p, Game Card 95-750-808)", GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK)
 
-GAME ( 1996, m_cpeno1,   0,		  scorpion2_dm01,cpeno1,    cpeno1,     0,       "BFM",      "Club Public Enemy No.1 (UK, Game Card 95-750-846)", GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK)
-
+GAME ( 1996, m_cpeno1, 0,		  scorpion2_dm01,cpeno1,    cpeno1,     0,       "BFM",      "Club Public Enemy No.1 (UK, Game Card 95-750-846)", GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK)

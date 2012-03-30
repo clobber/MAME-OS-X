@@ -93,10 +93,7 @@ write:
 #include "cpu/z80/z80.h"
 #include "machine/z80dma.h"
 
-#include "mario.h"
-
-static READ8_DEVICE_HANDLER(mario_dma_read_byte);
-static WRITE8_DEVICE_HANDLER(mario_dma_write_byte);
+#include "includes/mario.h"
 
 /*************************************
  *
@@ -104,39 +101,22 @@ static WRITE8_DEVICE_HANDLER(mario_dma_write_byte);
  *
  *************************************/
 
-static const z80dma_interface mario_dma =
+static Z80DMA_INTERFACE( mario_dma )
 {
-	"maincpu",
-
-	mario_dma_read_byte,
-	mario_dma_write_byte,
-	0, 0, 0, 0,
-	NULL
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_HALT),
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, memory_read_byte),
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, memory_write_byte),
+	DEVCB_NULL,
+	DEVCB_NULL
 };
 
-/*************************************
- *
- *  Machine setup
- *
- *************************************/
-
-/*************************************
- *
- *  DMA handling
- *
- *************************************/
-
-static READ8_DEVICE_HANDLER(mario_dma_read_byte)
+static WRITE8_DEVICE_HANDLER( mario_z80dma_rdy_w )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	return memory_read_byte(space, offset);
+	z80dma_rdy_w(device, data & 0x01);
 }
 
-static WRITE8_DEVICE_HANDLER(mario_dma_write_byte)
-{
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_write_byte(space, offset, data);
-}
 
 /*************************************
  *
@@ -147,7 +127,7 @@ static WRITE8_DEVICE_HANDLER(mario_dma_write_byte)
 static ADDRESS_MAP_START( mario_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_MEMBER(mario_state, spriteram) AM_SIZE_MEMBER(mario_state, spriteram_size) /* physical sprite ram */
+	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_SIZE_MEMBER(mario_state, spriteram, spriteram_size) /* physical sprite ram */
 	AM_RANGE(0x7400, 0x77ff) AM_RAM_WRITE(mario_videoram_w) AM_BASE_MEMBER(mario_state, videoram)
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("IN0") AM_DEVWRITE("discrete", mario_sh1_w) /* Mario run sample */
 	AM_RANGE(0x7c80, 0x7c80) AM_READ_PORT("IN1") AM_DEVWRITE("discrete", mario_sh2_w) /* Luigi run sample */
@@ -156,7 +136,7 @@ static ADDRESS_MAP_START( mario_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7e82, 0x7e82) AM_WRITE(mario_flip_w)
 	AM_RANGE(0x7e83, 0x7e83) AM_WRITE(mario_palettebank_w)
 	AM_RANGE(0x7e84, 0x7e84) AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0x7e85, 0x7e85) AM_DEVWRITE("z80dma", z80dma_rdy_w)	/* ==> DMA Chip */
+	AM_RANGE(0x7e85, 0x7e85) AM_DEVWRITE("z80dma", mario_z80dma_rdy_w)	/* ==> DMA Chip */
 	AM_RANGE(0x7f00, 0x7f07) AM_WRITE(mario_sh3_w) /* Sound port */
 	AM_RANGE(0x7f80, 0x7f80) AM_READ_PORT("DSW")	/* DSW */
 	AM_RANGE(0x7e00, 0x7e00) AM_WRITE(mario_sh_tuneselect_w)
@@ -166,7 +146,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( masao_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_MEMBER(mario_state, spriteram) AM_SIZE_MEMBER(mario_state, spriteram_size) /* physical sprite ram */
+	AM_RANGE(0x7000, 0x73ff) AM_RAM	AM_BASE_SIZE_MEMBER(mario_state, spriteram, spriteram_size) /* physical sprite ram */
 	AM_RANGE(0x7400, 0x77ff) AM_RAM_WRITE(mario_videoram_w) AM_BASE_MEMBER(mario_state, videoram)
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("IN0")
 	AM_RANGE(0x7c80, 0x7c80) AM_READ_PORT("IN1")
@@ -176,7 +156,7 @@ static ADDRESS_MAP_START( masao_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7e82, 0x7e82) AM_WRITE(mario_flip_w)
 	AM_RANGE(0x7e83, 0x7e83) AM_WRITE(mario_palettebank_w)
 	AM_RANGE(0x7e84, 0x7e84) AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0x7e85, 0x7e85) AM_DEVWRITE("z80dma", z80dma_rdy_w)	/* ==> DMA Chip */
+	AM_RANGE(0x7e85, 0x7e85) AM_DEVWRITE("z80dma", mario_z80dma_rdy_w)	/* ==> DMA Chip */
 	AM_RANGE(0x7f00, 0x7f00) AM_WRITE(masao_sh_irqtrigger_w)
 	AM_RANGE(0x7f80, 0x7f80) AM_READ_PORT("DSW")	/* DSW */
 	AM_RANGE(0xf000, 0xffff) AM_ROM
@@ -324,7 +304,7 @@ static const gfx_layout spritelayout =
 
 static GFXDECODE_START( mario )
 	GFXDECODE_ENTRY( "gfx1", 0, charlayout,      0, 16 )
-	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 	  0, 32 )
+	GFXDECODE_ENTRY( "gfx2", 0, spritelayout,	  0, 32 )
 GFXDECODE_END
 
 

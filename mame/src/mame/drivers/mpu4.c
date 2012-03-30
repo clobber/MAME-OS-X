@@ -443,9 +443,9 @@ static MACHINE_RESET( mpu4 )
 	{
 		UINT8 *rom = memory_region(machine, "maincpu");
 
-		memory_configure_bank(machine, 1, 0, 8, &rom[0x01000], 0x10000);
+		memory_configure_bank(machine, "bank1", 0, 8, &rom[0x01000], 0x10000);
 
-		memory_set_bank(machine, 1,0);
+		memory_set_bank(machine, "bank1",0);
 		device_reset(cputag_get_cpu(machine, "maincpu"));
 	}
 
@@ -493,13 +493,13 @@ static WRITE_LINE_DEVICE_HANDLER( cpu0_irq_m6840 )
 /* Bankswitching */
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bank(space->machine, 1,data & 0x07);
+	memory_set_bank(space->machine, "bank1",data & 0x07);
 }
 
 
 static READ8_HANDLER( bankswitch_r )
 {
-	return memory_get_bank(space->machine, 1);
+	return memory_get_bank(space->machine, "bank1");
 }
 
 
@@ -708,8 +708,8 @@ static READ8_DEVICE_HANDLER( pia_ic4_portb_r )
 	if ( optic_pattern & 0x08 ) ic4_input_b |=  0x08; /* reel D tab */
 	else                        ic4_input_b &= ~0x08;
 
-	if ( signal_50hz ) 			ic4_input_b |=  0x04; /* 50 Hz */
-	else   	                    ic4_input_b &= ~0x04;
+	if ( signal_50hz )			ic4_input_b |=  0x04; /* 50 Hz */
+	else	                    ic4_input_b &= ~0x04;
 
 	#ifdef UNUSED_FUNCTION
 	if ( lamp_overcurrent  ) ic4_input_b |= 0x02;
@@ -759,10 +759,10 @@ static READ8_DEVICE_HANDLER( pia_ic5_portb_r )
 {
 	const device_config *pia_ic5 = devtag_get_device(device->machine, "pia_ic5");
 	LOG(("%s: IC5 PIA Read of Port B (coin input AUX2)\n",cpuexec_describe_context(device->machine)));
-	coin_lockout_w(0, (pia6821_get_output_b(pia_ic5) & 0x01) );
-	coin_lockout_w(1, (pia6821_get_output_b(pia_ic5) & 0x02) );
-	coin_lockout_w(2, (pia6821_get_output_b(pia_ic5) & 0x04) );
-	coin_lockout_w(3, (pia6821_get_output_b(pia_ic5) & 0x08) );
+	coin_lockout_w(device->machine, 0, (pia6821_get_output_b(pia_ic5) & 0x01) );
+	coin_lockout_w(device->machine, 1, (pia6821_get_output_b(pia_ic5) & 0x02) );
+	coin_lockout_w(device->machine, 2, (pia6821_get_output_b(pia_ic5) & 0x04) );
+	coin_lockout_w(device->machine, 3, (pia6821_get_output_b(pia_ic5) & 0x08) );
 	return input_port_read(device->machine, "AUX2");
 }
 
@@ -803,26 +803,26 @@ static void update_ay(const device_config *device)
 	{
 		switch (ay8913_address)
 		{
-  			case 0x00:
+			case 0x00:
 			{
 				/* Inactive */
 				break;
 		    }
-		  	case 0x01:
+			case 0x01:
 			{	/* CA2 = 1 CB2 = 0? : Read from selected PSG register and make the register data available to Port A */
 				const device_config *pia_ic6 = devtag_get_device(device->machine, "pia_ic6");
 				LOG(("AY8913 address = %d \n",pia6821_get_output_a(pia_ic6)&0x0f));
 				break;
-		  	}
-		  	case 0x02:
+			}
+			case 0x02:
 			{/* CA2 = 0 CB2 = 1? : Write to selected PSG register and write data to Port A */
 				const device_config *pia_ic6 = devtag_get_device(device->machine, "pia_ic6");
 				const device_config *ay = devtag_get_device(device->machine, "ay8913");
-	  			ay8910_data_w(ay, 0, pia6821_get_output_a(pia_ic6));
+				ay8910_data_w(ay, 0, pia6821_get_output_a(pia_ic6));
 				LOG(("AY Chip Write \n"));
 				break;
-	  		}
-		  	case 0x03:
+			}
+			case 0x03:
 			{/* CA2 = 1 CB2 = 1? : The register will now be selected and the user can read from or write to it.
              The register will remain selected until another is chosen.*/
 				const device_config *pia_ic6 = devtag_get_device(device->machine, "pia_ic6");
@@ -830,7 +830,7 @@ static void update_ay(const device_config *device)
 				ay8910_address_w(ay, 0, pia6821_get_output_a(pia_ic6));
 				LOG(("AY Chip Select \n"));
 				break;
-	  		}
+			}
 			default:
 			{
 				LOG(("AY Chip error \n"));
@@ -888,7 +888,7 @@ static WRITE8_DEVICE_HANDLER( pia_ic6_porta_w )
 	LOG(("%s: IC6 PIA Write A %2x\n", cpuexec_describe_context(device->machine),data));
 	if (mod_number <4)
 	{
-	  	ay_data = data;
+		ay_data = data;
 	    update_ay(device);
 	}
 }
@@ -1192,7 +1192,7 @@ static INPUT_PORTS_START( mpu4 )
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_BUTTON2) PORT_NAME("Lo")
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_OTHER)   PORT_NAME("18")
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_OTHER)   PORT_NAME("19")
-	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER) 	PORT_NAME("20")
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_OTHER)	PORT_NAME("20")
 	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("Test Button") PORT_CODE(KEYCODE_W)
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_SERVICE) PORT_NAME("Refill Key") PORT_CODE(KEYCODE_R) PORT_TOGGLE
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_INTERLOCK) PORT_NAME("Cashbox Door")  PORT_CODE(KEYCODE_Q) PORT_TOGGLE
@@ -1384,8 +1384,8 @@ static INPUT_PORTS_START( connect4 )
 	PORT_BIT(0x40, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("6")
 	PORT_BIT(0x80, IP_ACTIVE_HIGH, IPT_OTHER) PORT_NAME("7")
 
-  	PORT_START("AUX2")
-  	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_SPECIAL)
+	PORT_START("AUX2")
+	PORT_BIT(0x01, IP_ACTIVE_HIGH, IPT_SPECIAL)
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_SPECIAL)
 	PORT_BIT(0x04, IP_ACTIVE_HIGH, IPT_SPECIAL)
 	PORT_BIT(0x08, IP_ACTIVE_HIGH, IPT_SPECIAL)
@@ -1748,7 +1748,7 @@ static TIMER_DEVICE_CALLBACK( gen_50hz )
 
 
 static ADDRESS_MAP_START( mod2_memmap, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x0800, 0x0810) AM_READWRITE(characteriser_r,characteriser_w)
 
 	AM_RANGE(0x0850, 0x0850) AM_READWRITE(bankswitch_r,bankswitch_w)	/* write bank (rom page select) */
@@ -1757,18 +1757,18 @@ static ADDRESS_MAP_START( mod2_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write) /* 6840PTM */
 
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)	  	/* PIA6821 IC3 */
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)	  	/* PIA6821 IC4 */
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)	  	/* PIA6821 IC5 */
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)		/* PIA6821 IC3 */
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)		/* PIA6821 IC4 */
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)		/* PIA6821 IC5 */
 	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)		/* PIA6821 IC6 */
 	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)		/* PIA6821 IC7 */
 	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)		/* PIA6821 IC8 */
 
-	AM_RANGE(0x1000, 0xffff) AM_READ(SMH_BANK(1))	/* 64k  paged ROM (4 pages)  */
+	AM_RANGE(0x1000, 0xffff) AM_ROMBANK("bank1")	/* 64k  paged ROM (4 pages)  */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mod4_yam_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0x0800, 0x0810) AM_READWRITE(characteriser_r,characteriser_w)
 
@@ -1780,18 +1780,18 @@ static ADDRESS_MAP_START( mod4_yam_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write) /* 6840PTM */
 
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)	  	/* PIA6821 IC3 */
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)	  	/* PIA6821 IC4 */
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)	  	/* PIA6821 IC5 */
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)		/* PIA6821 IC3 */
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)		/* PIA6821 IC4 */
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)		/* PIA6821 IC5 */
 	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)		/* PIA6821 IC6 */
 	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)		/* PIA6821 IC7 */
 	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)		/* PIA6821 IC8 */
 
-	AM_RANGE(0x1000, 0xffff) AM_READ(SMH_BANK(1))	// 64k  paged ROM (4 pages)
+	AM_RANGE(0x1000, 0xffff) AM_ROMBANK("bank1")	// 64k  paged ROM (4 pages)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mod4_oki_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0x0800, 0x0810) AM_READWRITE(characteriser_r,characteriser_w)
 
@@ -1805,21 +1805,21 @@ static ADDRESS_MAP_START( mod4_oki_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write) /* 6840PTM */
 
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)	  	/* PIA6821 IC3 */
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)	  	/* PIA6821 IC4 */
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)	  	/* PIA6821 IC5 */
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)		/* PIA6821 IC3 */
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)		/* PIA6821 IC4 */
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)		/* PIA6821 IC5 */
 	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)		/* PIA6821 IC6 */
 	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)		/* PIA6821 IC7 */
 	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)		/* PIA6821 IC8 */
 
-	AM_RANGE(0x1000, 0xffff) AM_READ(SMH_BANK(1))	// 64k  paged ROM (4 pages)
+	AM_RANGE(0x1000, 0xffff) AM_ROMBANK("bank1")	// 64k  paged ROM (4 pages)
 ADDRESS_MAP_END
 
 // memory map for barcrest mpu4 board /////////////////////////////////////
 
 static ADDRESS_MAP_START( dutch_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 //  AM_RANGE(0x0800, 0x0810) AM_READWRITE(characteriser_r,characteriser_w)
 
@@ -1832,14 +1832,14 @@ static ADDRESS_MAP_START( dutch_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x0900, 0x0907) AM_DEVREADWRITE("6840ptm", ptm6840_read, ptm6840_write) /* 6840PTM */
 
-	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)	  	/* PIA6821 IC3 */
-	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)	  	/* PIA6821 IC4 */
-	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)	  	/* PIA6821 IC5 */
+	AM_RANGE(0x0a00, 0x0a03) AM_DEVREADWRITE("pia_ic3", pia6821_r, pia6821_w)		/* PIA6821 IC3 */
+	AM_RANGE(0x0b00, 0x0b03) AM_DEVREADWRITE("pia_ic4", pia6821_r, pia6821_w)		/* PIA6821 IC4 */
+	AM_RANGE(0x0c00, 0x0c03) AM_DEVREADWRITE("pia_ic5", pia6821_r, pia6821_w)		/* PIA6821 IC5 */
 	AM_RANGE(0x0d00, 0x0d03) AM_DEVREADWRITE("pia_ic6", pia6821_r, pia6821_w)		/* PIA6821 IC6 */
 	AM_RANGE(0x0e00, 0x0e03) AM_DEVREADWRITE("pia_ic7", pia6821_r, pia6821_w)		/* PIA6821 IC7 */
 	AM_RANGE(0x0f00, 0x0f03) AM_DEVREADWRITE("pia_ic8", pia6821_r, pia6821_w)		/* PIA6821 IC8 */
 
-	AM_RANGE(0x1000, 0xffff) AM_READ(SMH_BANK(1))	// 64k paged ROM (4 pages)
+	AM_RANGE(0x1000, 0xffff) AM_ROMBANK("bank1")	// 64k paged ROM (4 pages)
 ADDRESS_MAP_END
 
 static const ay8910_interface ay8910_config =
@@ -1912,7 +1912,7 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( mpu4dutch )
 	MDRV_IMPORT_FROM( mod4oki )
 	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(dutch_memmap)	  			// setup read and write memorymap
+	MDRV_CPU_PROGRAM_MAP(dutch_memmap)				// setup read and write memorymap
 	MDRV_MACHINE_START(mpu4dutch)						// main mpu4 board initialisation
 MACHINE_DRIVER_END
 
@@ -1932,8 +1932,8 @@ ROM_START( m_gmball )
 ROM_END
 
 //    year, name,    parent,  machine,  input,       init,    monitor, company,         fullname,                                    flags
-GAME( 198?, m_oldtmr,0,       mpu4dutch,mpu4,		 0,        ROT0,   "Barcrest", 		"Old Timer",														GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK )
-GAME( 198?, m_ccelbr,0,       mpu4mod2, mpu4,		 m_ccelbr, ROT0,   "Barcrest", 		"Club Celebration",													GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK )
+GAME( 198?, m_oldtmr,0,       mpu4dutch,mpu4,		 0,        ROT0,   "Barcrest",		"Old Timer",														GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK )
+GAME( 198?, m_ccelbr,0,       mpu4mod2, mpu4,		 m_ccelbr, ROT0,   "Barcrest",		"Club Celebration",													GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK )
 GAMEL(198?, m_gmball,0,		  mod4yam,  gamball,     m_gmball, ROT0,   "Barcrest",      "Gamball",															GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK,layout_gamball )
 
 #include "drivers/mpu4drvr.c"

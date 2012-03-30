@@ -36,7 +36,7 @@ Note:   if MAME_DEBUG is defined, pressing Z with:
 ***************************************************************************/
 
 #include "driver.h"
-#include "lordgun.h"
+#include "includes/lordgun.h"
 
 // Variables needed by driver:
 
@@ -56,7 +56,7 @@ lordgun_gun_data lordgun_gun[2];
 
 ***************************************************************************/
 
-static tilemap *tilemap_0, *tilemap_1, *tilemap_2, *tilemap_3;
+static tilemap_t *tilemap_0, *tilemap_1, *tilemap_2, *tilemap_3;
 
 static TILE_GET_INFO( get_tile_info_0 )
 {
@@ -222,8 +222,8 @@ void lordgun_update_gun(running_machine *machine, int i)
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT16 *s		=	spriteram16;
-	UINT16 *end		=	spriteram16 + spriteram_size/2;
+	UINT16 *s		=	machine->generic.spriteram.u16;
+	UINT16 *end		=	machine->generic.spriteram.u16 + machine->generic.spriteram_size/2;
 
 	for ( ; s < end; s += 8/2 )
 	{

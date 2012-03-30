@@ -60,7 +60,9 @@ Notes:
 #include "sound/2203intf.h"
 #include "video/kan_pand.h"
 
-static tilemap *bg_tilemap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *bg_tilemap;
 static UINT16 hu_scrollx, hu_scrolly;
 static UINT16 port0_data;
 
@@ -286,15 +288,14 @@ static TILE_GET_INFO( get_bg_tile_info )
 static VIDEO_START(hvyunit)
 {
 	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 32, 32);
-	pandora_start(machine,0,0,0);
 }
 
-#define SX_POS 	152
+#define SX_POS	152
 #define SY_POS	258
 
 static VIDEO_UPDATE(hvyunit)
 {
-
+	const device_config *pandora = devtag_get_device(screen->machine, "pandora");
 	tilemap_set_scrollx( bg_tilemap,0, ((port0_data&0x40)<<2)+ hu_scrollx + SX_POS); //TODO
 	tilemap_set_scrolly( bg_tilemap,0, ((port0_data&0x80)<<1)+ hu_scrolly + SY_POS); // TODO
 
@@ -302,13 +303,14 @@ static VIDEO_UPDATE(hvyunit)
 
 	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
 	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
-	pandora_update(screen->machine,bitmap,cliprect);
+	pandora_update(pandora, bitmap, cliprect);
 	return 0;
 }
 
 static VIDEO_EOF(hvyunit)
 {
-	pandora_eof(machine);
+	const device_config *pandora = devtag_get_device(machine, "pandora");
+	pandora_eof(pandora);
 }
 
 static WRITE8_HANDLER( trigger_nmi_on_sound_cpu2 )
@@ -330,7 +332,7 @@ static WRITE8_HANDLER( master_bankswitch_w )
 
 	ROM = &ROM[0x4000 * bank];
 
-	memory_set_bankptr(space->machine, 1,ROM);
+	memory_set_bankptr(space->machine, "bank1",ROM);
 }
 
 
@@ -348,10 +350,10 @@ static WRITE8_HANDLER( hu_colorram_w )
 
 static ADDRESS_MAP_START( master_memory, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xcfff) AM_READWRITE( pandora_spriteram_r, pandora_spriteram_w )
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xcfff) AM_DEVREADWRITE("pandora", pandora_spriteram_r, pandora_spriteram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -369,7 +371,7 @@ static WRITE8_HANDLER( slave_bankswitch_w )
 	port0_data=data;
 	ROM = &ROM[0x4000 * bank];
 
-	memory_set_bankptr(space->machine, 2,ROM);
+	memory_set_bankptr(space->machine, "bank2",ROM);
 }
 
 static WRITE8_HANDLER( hu_scrollx_w)
@@ -384,13 +386,13 @@ static WRITE8_HANDLER( hu_scrolly_w)
 
 static ADDRESS_MAP_START( slave_memory, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(2)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(hu_videoram_w) AM_BASE(&videoram)
 	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(hu_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xd000, 0xd1ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_split2_w) AM_BASE(&paletteram_2)
-	AM_RANGE(0xd800, 0xd9ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_split1_w) AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xd1ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_split2_w) AM_BASE_GENERIC(paletteram2)
+	AM_RANGE(0xd800, 0xd9ff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_split1_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xe000, 0xefff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -416,19 +418,19 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 
 	ROM = &ROM[0x4000 * bank];
 
-	memory_set_bankptr(space->machine, 3,ROM);
+	memory_set_bankptr(space->machine, "bank3",ROM);
 }
 
 static ADDRESS_MAP_START( sound_memory, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(3)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank3")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(sound_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sound_bankswitch_w)
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x04, 0x04) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -630,6 +632,13 @@ static INTERRUPT_GEN( hvyunit_interrupt )
 	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, addr);
 }
 
+static const kaneko_pandora_interface hvyunit_pandora_config =
+{
+	"screen",	/* screen tag */
+	0,	/* gfx_region */
+	0, 0	/* x_offs, y_offs */
+};
+
 
 static MACHINE_DRIVER_START( hvyunit )
 
@@ -661,6 +670,8 @@ static MACHINE_DRIVER_START( hvyunit )
 	MDRV_GFXDECODE(hvyunit)
 	MDRV_PALETTE_LENGTH(0x800)
 
+	MDRV_KANEKO_PANDORA_ADD("pandora", hvyunit_pandora_config)
+
 	MDRV_VIDEO_START(hvyunit)
 	MDRV_VIDEO_UPDATE(hvyunit)
 	MDRV_VIDEO_EOF(hvyunit)
@@ -668,7 +679,7 @@ static MACHINE_DRIVER_START( hvyunit )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_DRIVER_END
 

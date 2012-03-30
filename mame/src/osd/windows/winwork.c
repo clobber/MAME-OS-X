@@ -110,10 +110,10 @@ struct _scalable_lock
 #if USE_SCALABLE_LOCKS
    struct
    {
-      volatile INT32 	haslock;		// do we have the lock?
+      volatile INT32	haslock;		// do we have the lock?
       INT32 			filler[64/4-1];	// assumes a 64-byte cache line
    } slot[WORK_MAX_THREADS];			// one slot per thread
-   volatile INT32 		nextindex;		// index of next slot to use
+   volatile INT32		nextindex;		// index of next slot to use
 #else
 	CRITICAL_SECTION	section;
 #endif
@@ -140,7 +140,7 @@ struct _work_thread_info
 
 struct _osd_work_queue
 {
-	scalable_lock	 	lock;			// lock for protecting the queue
+	scalable_lock		lock;			// lock for protecting the queue
 	osd_work_item * volatile list;		// list of items in the queue
 	osd_work_item ** volatile tailptr;	// pointer to the tail pointer of work items in the queue
 	osd_work_item * volatile free;		// free list of work items
@@ -166,7 +166,7 @@ struct _osd_work_item
 {
 	osd_work_item *		next;			// pointer to next item
 	osd_work_queue *	queue;			// pointer back to the owning queue
-	osd_work_callback 	callback;		// callback function
+	osd_work_callback	callback;		// callback function
 	void *				param;			// callback parameter
 	void *				result;			// callback result
 	HANDLE				event;			// event signalled when complete
@@ -174,7 +174,11 @@ struct _osd_work_item
 	volatile INT32		done;			// is the item done?
 };
 
+//============================================================
+//  GLOBAL VARIABLES
+//============================================================
 
+int osd_num_processors = 0;
 
 //============================================================
 //  FUNCTION PROTOTYPES
@@ -677,20 +681,28 @@ void osd_work_item_release(osd_work_item *item)
 
 static int effective_num_processors(void)
 {
-	TCHAR *procsoverride;
 	SYSTEM_INFO info;
-	int numprocs = 0;
-
-	// if the OSDPROCESSORS environment variable is set, use that value if valid
-	procsoverride = _tgetenv(_T("OSDPROCESSORS"));
-	if (procsoverride != NULL && _stscanf(procsoverride, _T("%d"), &numprocs) == 1 && numprocs > 0)
-		return numprocs;
-
-	// otherwise, fetch the info from the system
+	// fetch the info from the system
 	GetSystemInfo(&info);
 
-	// max out at 4 for now since scaling above that seems to do poorly
-	return MIN(info.dwNumberOfProcessors, 4);
+	if (osd_num_processors > 0)
+	{
+		return MIN(info.dwNumberOfProcessors * 4, osd_num_processors);
+	}
+	else
+	{
+		TCHAR *procsoverride;
+		int numprocs = 0;
+
+		// if the OSDPROCESSORS environment variable is set, use that value if valid
+		procsoverride = _tgetenv(_T("OSDPROCESSORS"));
+		if (procsoverride != NULL && _stscanf(procsoverride, _T("%d"), &numprocs) == 1 && numprocs > 0)
+			// Be well behaved ...
+			return MIN(info.dwNumberOfProcessors * 4, numprocs);
+
+		// max out at 4 for now since scaling above that seems to do poorly
+		return MIN(info.dwNumberOfProcessors, 4);
+	}
 }
 
 

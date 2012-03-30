@@ -94,7 +94,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xa00000, 0xa01fff) AM_RAM AM_BASE(&taotaido_spriteram)		// sprite ram
 	AM_RANGE(0xc00000, 0xc0ffff) AM_RAM AM_BASE(&taotaido_spriteram2)		// sprite tile lookup ram
 	AM_RANGE(0xfe0000, 0xfeffff) AM_RAM										// main ram
-	AM_RANGE(0xffc000, 0xffcfff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)	// palette ram
+	AM_RANGE(0xffc000, 0xffcfff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// palette ram
 	AM_RANGE(0xffe000, 0xffe3ff) AM_RAM AM_BASE(&taotaido_scrollram)		// rowscroll / rowselect / scroll ram
 	AM_RANGE(0xffff80, 0xffff81) AM_READ_PORT("P1")
 	AM_RANGE(0xffff82, 0xffff83) AM_READ_PORT("P2")
@@ -102,7 +102,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xffff86, 0xffff87) AM_READ_PORT("DSW1")
 	AM_RANGE(0xffff88, 0xffff89) AM_READ_PORT("DSW2")
 	AM_RANGE(0xffff8a, 0xffff8b) AM_READ_PORT("DSW3")
-	AM_RANGE(0xffff8c, 0xffff8d) AM_READ(SMH_RAM)						// unknown
+	AM_RANGE(0xffff8c, 0xffff8d) AM_READONLY						// unknown
 	AM_RANGE(0xffff8e, 0xffff8f) AM_READ_PORT("JP")
 	AM_RANGE(0xffffa0, 0xffffa1) AM_READ_PORT("P3")						// used only by taotaida
 	AM_RANGE(0xffffa2, 0xffffa3) AM_READ_PORT("P4")						// used only by taotaida
@@ -126,18 +126,18 @@ static WRITE8_HANDLER( taotaido_sh_bankswitch_w )
 {
 	UINT8 *rom = memory_region(space->machine, "audiocpu") + 0x10000;
 
-	memory_set_bankptr(space->machine, 1,rom + (data & 0x03) * 0x8000);
+	memory_set_bankptr(space->machine, "bank1",rom + (data & 0x03) * 0x8000);
 }
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_READWRITE(SMH_BANK(1), SMH_ROM)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0x04, 0x04) AM_WRITE(taotaido_sh_bankswitch_w)
 	AM_RANGE(0x08, 0x08) AM_WRITE(pending_command_clear_w)
 	AM_RANGE(0x0c, 0x0c) AM_READ(soundlatch_r)
@@ -358,7 +358,7 @@ static MACHINE_DRIVER_START( taotaido )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -376,10 +376,10 @@ ROM_START( taotaido )
 	ROM_LOAD( "3-u113.bin", 0x000000, 0x20000, CRC(a167c4e4) SHA1(d32184e7040935cd440d4d82c66491b710ec87a8) )
 	ROM_RELOAD ( 0x10000, 0x20000 )
 
-	ROM_REGION( 0x100000, "ym.deltat", 0 ) /* sound samples */
+	ROM_REGION( 0x100000, "ymsnd.deltat", 0 ) /* sound samples */
 	ROM_LOAD( "u104.bin",     0x000000, 0x100000, CRC(e89387a9) SHA1(1deeee056af367d1a5aa0722dd3d6c68a82d0489) )
 
-	ROM_REGION( 0x200000, "ym", 0 ) /* sound samples */
+	ROM_REGION( 0x200000, "ymsnd", 0 ) /* sound samples */
 	ROM_LOAD( "u127.bin",     0x00000, 0x200000, CRC(0cf0cb23) SHA1(a87e7159db2fa0d50446cbf45ec9fbf585b8f396) )
 
 	ROM_REGION( 0x600000, "gfx1", 0 ) /* Sprites */
@@ -400,10 +400,10 @@ ROM_START( taotaidoa )
 	ROM_LOAD( "3-u113.bin", 0x000000, 0x20000, CRC(a167c4e4) SHA1(d32184e7040935cd440d4d82c66491b710ec87a8) )
 	ROM_RELOAD ( 0x10000, 0x20000 )
 
-	ROM_REGION( 0x100000, "ym.deltat", 0 ) /* sound samples */
+	ROM_REGION( 0x100000, "ymsnd.deltat", 0 ) /* sound samples */
 	ROM_LOAD( "u104.bin",     0x000000, 0x100000, CRC(e89387a9) SHA1(1deeee056af367d1a5aa0722dd3d6c68a82d0489) )
 
-	ROM_REGION( 0x200000, "ym", 0 ) /* sound samples */
+	ROM_REGION( 0x200000, "ymsnd", 0 ) /* sound samples */
 	ROM_LOAD( "u127.bin",     0x00000, 0x200000, CRC(0cf0cb23) SHA1(a87e7159db2fa0d50446cbf45ec9fbf585b8f396) )
 
 	ROM_REGION( 0x600000, "gfx1", 0 ) /* Sprites */

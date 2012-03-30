@@ -295,8 +295,9 @@ static WRITE16_HANDLER( rocknms_sub2main_w )
 
 static WRITE16_HANDLER( tetrisp2_coincounter_w )
 {
-	coin_counter_w( 0, (data & 0x0001));
+	coin_counter_w( space->machine, 0, (data & 0x0001));
 }
+
 
 
 /***************************************************************************
@@ -309,11 +310,11 @@ static WRITE16_HANDLER( tetrisp2_coincounter_w )
 
 static ADDRESS_MAP_START( tetrisp2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM															// ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)			// Object RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)			// Object RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM															// Spare Object RAM
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM															// Work RAM
-	AM_RANGE(0x200000, 0x23ffff) AM_RAM_WRITE(tetrisp2_priority_w) AM_BASE(&tetrisp2_priority)	// Priority
-	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE(&paletteram16)		// Palette
+	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE8(tetrisp2_priority_r, tetrisp2_priority_w, 0x00ff)
+	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE_GENERIC(paletteram)		// Palette
 	AM_RANGE(0x400000, 0x403fff) AM_RAM_WRITE(tetrisp2_vram_fg_w) AM_BASE(&tetrisp2_vram_fg)	// Foreground
 	AM_RANGE(0x404000, 0x407fff) AM_RAM_WRITE(tetrisp2_vram_bg_w) AM_BASE(&tetrisp2_vram_bg)	// Background
 	AM_RANGE(0x408000, 0x409fff) AM_RAM															// ???
@@ -344,16 +345,16 @@ static WRITE16_HANDLER( nndmseal_coincounter_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w( 0,  data  & 0x0001 );
+		coin_counter_w( space->machine, 0,  data  & 0x0001 );
 		//                  data  & 0x0004 ?
-		coin_lockout_w( 0,(~data) & 0x0008 );
+		coin_lockout_w( space->machine, 0,(~data) & 0x0008 );
 	}
 	if (ACCESSING_BITS_8_15)
 	{
-		set_led_status( 0, data & 0x1000 );	// +
-		set_led_status( 1, data & 0x2000 );	// -
-		set_led_status( 2, data & 0x4000 );	// Cancel
-		set_led_status( 3, data & 0x8000 );	// OK
+		set_led_status( space->machine, 0, data & 0x1000 );	// +
+		set_led_status( space->machine, 1, data & 0x2000 );	// -
+		set_led_status( space->machine, 2, data & 0x4000 );	// Cancel
+		set_led_status( space->machine, 3, data & 0x8000 );	// OK
 	}
 //  popmessage("%04x",data);
 }
@@ -366,11 +367,12 @@ static WRITE16_HANDLER( nndmseal_b20000_w )
 
 static ADDRESS_MAP_START( nndmseal_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size	)	// Object RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// Object RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM	// Spare Object RAM
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM	// Work RAM
-	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE(nndmseal_priority_r, SMH_RAM) AM_BASE(&tetrisp2_priority	)	// Priority
-	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE(&paletteram16		)	// Palette
+	AM_RANGE(0x200000, 0x23ffff) AM_WRITE8(tetrisp2_priority_w, 0x00ff)	// Priority
+	AM_RANGE(0x200000, 0x23ffff) AM_READ(nndmseal_priority_r)
+	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE_GENERIC(paletteram)	// Palette
 	AM_RANGE(0x400000, 0x403fff) AM_RAM_WRITE(tetrisp2_vram_fg_w) AM_BASE(&tetrisp2_vram_fg	)	// Foreground
 	AM_RANGE(0x404000, 0x407fff) AM_RAM_WRITE(tetrisp2_vram_bg_w) AM_BASE(&tetrisp2_vram_bg	)	// Background
 
@@ -387,19 +389,19 @@ static ADDRESS_MAP_START( nndmseal_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xb00000, 0xb00001) AM_WRITE(nndmseal_coincounter_w)	// Coin Counter
 	AM_RANGE(0xb20000, 0xb20001) AM_WRITE(nndmseal_b20000_w)		// ???
 
-	AM_RANGE(0xb40000, 0xb4000b) AM_WRITE(SMH_RAM) AM_BASE(&tetrisp2_scroll_fg	)	// Foreground Scrolling
-	AM_RANGE(0xb40010, 0xb4001b) AM_WRITE(SMH_RAM) AM_BASE(&tetrisp2_scroll_bg	)	// Background Scrolling
+	AM_RANGE(0xb40000, 0xb4000b) AM_WRITEONLY AM_BASE(&tetrisp2_scroll_fg	)	// Foreground Scrolling
+	AM_RANGE(0xb40010, 0xb4001b) AM_WRITEONLY AM_BASE(&tetrisp2_scroll_bg	)	// Background Scrolling
 	AM_RANGE(0xb4003e, 0xb4003f) AM_WRITENOP	// scr_size
 
-	AM_RANGE(0xb60000, 0xb6002f) AM_WRITE(SMH_RAM) AM_BASE(&tetrisp2_rotregs)	// Rotation Registers
+	AM_RANGE(0xb60000, 0xb6002f) AM_WRITEONLY AM_BASE(&tetrisp2_rotregs)	// Rotation Registers
 
 	AM_RANGE(0xb80000, 0xb80001) AM_WRITE(nndmseal_sound_bank_w)
 
 	AM_RANGE(0xba0000, 0xba001f) AM_WRITE(rockn_systemregs_w	)	// system param
-	AM_RANGE(0xba001a, 0xba001b) AM_WRITE(SMH_NOP				)	// Lev 4 irq ack
-	AM_RANGE(0xba001e, 0xba001f) AM_WRITE(SMH_NOP				)	// Lev 2 irq ack
+	AM_RANGE(0xba001a, 0xba001b) AM_WRITENOP	// Lev 4 irq ack
+	AM_RANGE(0xba001e, 0xba001f) AM_WRITENOP	// Lev 2 irq ack
 
-	AM_RANGE(0xbe0000, 0xbe0001) AM_READ     (SMH_NOP			)	// INT-level1 dummy read
+	AM_RANGE(0xbe0000, 0xbe0001) AM_READNOP	// INT-level1 dummy read
 	AM_RANGE(0xbe0002, 0xbe0003) AM_READ_PORT("BUTTONS"			)	// Inputs
 	AM_RANGE(0xbe0004, 0xbe0005) AM_READ_PORT("COINS"			)	// ""
 	AM_RANGE(0xbe0006, 0xbe0007) AM_READ_PORT("PRINT"			)	// ""
@@ -411,11 +413,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rockn1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM															// ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)			// Object RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)			// Object RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM															// Spare Object RAM
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM															// Work RAM
-	AM_RANGE(0x200000, 0x23ffff) AM_RAM_WRITE(rockn_priority_w) AM_BASE(&tetrisp2_priority)		// Priority
-	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE(&paletteram16)		// Palette
+	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE8(tetrisp2_priority_r, rockn_priority_w, 0x00ff)		// Priority
+	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE_GENERIC(paletteram)		// Palette
 	AM_RANGE(0x400000, 0x403fff) AM_RAM_WRITE(tetrisp2_vram_fg_w) AM_BASE(&tetrisp2_vram_fg)	// Foreground
 	AM_RANGE(0x404000, 0x407fff) AM_RAM_WRITE(tetrisp2_vram_bg_w) AM_BASE(&tetrisp2_vram_bg)	// Background
 	AM_RANGE(0x408000, 0x409fff) AM_RAM															// ???
@@ -445,11 +447,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rockn2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM															// ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)			// Object RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)			// Object RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM															// Spare Object RAM
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM															// Work RAM
-	AM_RANGE(0x200000, 0x23ffff) AM_RAM_WRITE(rockn_priority_w) AM_BASE(&tetrisp2_priority)		// Priority
-	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE(&paletteram16)		// Palette
+	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE8(tetrisp2_priority_r, rockn_priority_w, 0x00ff)	// Priority
+	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE_GENERIC(paletteram)		// Palette
 	AM_RANGE(0x500000, 0x50ffff) AM_RAM															// Line
 	AM_RANGE(0x600000, 0x60ffff) AM_RAM_WRITE(tetrisp2_vram_rot_w) AM_BASE(&tetrisp2_vram_rot)	// Rotation
 	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(tetrisp2_vram_fg_w) AM_BASE(&tetrisp2_vram_fg)	// Foreground
@@ -462,10 +464,10 @@ static ADDRESS_MAP_START( rockn2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xa48000, 0xa48001) AM_WRITENOP													// YMZ280 Reset
 	AM_RANGE(0xb00000, 0xb00001) AM_WRITE(tetrisp2_coincounter_w)								// Coin Counter
 	AM_RANGE(0xb20000, 0xb20001) AM_WRITENOP													// ???
-	AM_RANGE(0xb40000, 0xb4000b) AM_WRITE(SMH_RAM) AM_BASE(&tetrisp2_scroll_fg)					// Foreground Scrolling
-	AM_RANGE(0xb40010, 0xb4001b) AM_WRITE(SMH_RAM) AM_BASE(&tetrisp2_scroll_bg)					// Background Scrolling
+	AM_RANGE(0xb40000, 0xb4000b) AM_WRITEONLY AM_BASE(&tetrisp2_scroll_fg)					// Foreground Scrolling
+	AM_RANGE(0xb40010, 0xb4001b) AM_WRITEONLY AM_BASE(&tetrisp2_scroll_bg)					// Background Scrolling
 	AM_RANGE(0xb4003e, 0xb4003f) AM_WRITENOP													// scr_size
-	AM_RANGE(0xb60000, 0xb6002f) AM_WRITE(SMH_RAM) AM_BASE(&tetrisp2_rotregs)					// Rotation Registers
+	AM_RANGE(0xb60000, 0xb6002f) AM_WRITEONLY AM_BASE(&tetrisp2_rotregs)					// Rotation Registers
 	AM_RANGE(0xba0000, 0xba001f) AM_WRITE(rockn_systemregs_w)									// system param
 	AM_RANGE(0xba001a, 0xba001b) AM_WRITENOP													// Lev 4 irq ack
 	AM_RANGE(0xba001e, 0xba001f) AM_WRITENOP													// Lev 2 irq ack
@@ -479,11 +481,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rocknms_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM															// ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)			// Object RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)			// Object RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM															// Spare Object RAM
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM															// Work RAM
-	AM_RANGE(0x200000, 0x23ffff) AM_RAM_WRITE(rockn_priority_w) AM_BASE(&tetrisp2_priority)		// Priority
-	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE(&paletteram16)		// Palette
+	AM_RANGE(0x200000, 0x23ffff) AM_READWRITE8(tetrisp2_priority_r, rockn_priority_w, 0x00ff)		// Priority
+	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(tetrisp2_palette_w) AM_BASE_GENERIC(paletteram)		// Palette
 //  AM_RANGE(0x500000, 0x50ffff) AM_RAM                                                         // Line
 	AM_RANGE(0x600000, 0x60ffff) AM_RAM_WRITE(tetrisp2_vram_rot_w) AM_BASE(&tetrisp2_vram_rot)	// Rotation
 	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(tetrisp2_vram_fg_w) AM_BASE(&tetrisp2_vram_fg)	// Foreground
@@ -514,11 +516,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( rocknms_sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM															// ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size)		// Object RAM
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)		// Object RAM
 	AM_RANGE(0x104000, 0x107fff) AM_RAM															// Spare Object RAM
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM															// Work RAM
 	AM_RANGE(0x200000, 0x23ffff) AM_RAM_WRITE(rocknms_sub_priority_w) AM_BASE(&rocknms_sub_priority) // Priority
-	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(rocknms_sub_palette_w) AM_BASE(&paletteram16_2)	// Palette
+	AM_RANGE(0x300000, 0x31ffff) AM_RAM_WRITE(rocknms_sub_palette_w) AM_BASE_GENERIC(paletteram2)	// Palette
 //  AM_RANGE(0x500000, 0x50ffff) AM_RAM                                                         // Line
 	AM_RANGE(0x600000, 0x60ffff) AM_RAM_WRITE(rocknms_sub_vram_rot_w) AM_BASE(&rocknms_sub_vram_rot) // Rotation
 	AM_RANGE(0x800000, 0x803fff) AM_RAM_WRITE(rocknms_sub_vram_fg_w) AM_BASE(&rocknms_sub_vram_fg) // Foreground
@@ -1003,19 +1005,24 @@ static const gfx_layout layout_16x16x8 =
 	16*16*8
 };
 
+
+/* sprites are contained in 256x256 "tiles" */
+static GFXLAYOUT_RAW( spritelayout, 8, 256, 256, 256*8, 256*256*8 )
+
+
 static GFXDECODE_START( tetrisp2 )
-	GFXDECODE_ENTRY( "gfx1", 0, layout_8x8x8,   0x0000, 0x10 ) // [0] Sprites
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout,   0x0000, 0x10 ) // [0] Sprites
 	GFXDECODE_ENTRY( "gfx2", 0, layout_16x16x8, 0x1000, 0x10 ) // [1] Background
 	GFXDECODE_ENTRY( "gfx3", 0, layout_16x16x8, 0x2000, 0x10 ) // [2] Rotation
 	GFXDECODE_ENTRY( "gfx4", 0, layout_8x8x8,   0x6000, 0x10 ) // [3] Foreground
 GFXDECODE_END
 
 static GFXDECODE_START( rocknms )
-	GFXDECODE_ENTRY( "gfx1", 0, layout_8x8x8,   0x0000, 0x10 ) // [0] Sprites
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout,   0x0000, 0x10 ) // [0] Sprites
 	GFXDECODE_ENTRY( "gfx2", 0, layout_16x16x8, 0x1000, 0x10 ) // [1] Background
 	GFXDECODE_ENTRY( "gfx3", 0, layout_16x16x8, 0x2000, 0x10 ) // [2] Rotation
 	GFXDECODE_ENTRY( "gfx4", 0, layout_8x8x8,   0x6000, 0x10 ) // [3] Foreground
-	GFXDECODE_ENTRY( "gfx5", 0, layout_8x8x8,   0x8000, 0x10 ) // [0] Sprites
+	GFXDECODE_ENTRY( "gfx5", 0, spritelayout,   0x8000, 0x10 ) // [0] Sprites
 	GFXDECODE_ENTRY( "gfx6", 0, layout_16x16x8, 0x9000, 0x10 ) // [1] Background
 	GFXDECODE_ENTRY( "gfx7", 0, layout_16x16x8, 0xa000, 0x10 ) // [2] Rotation
 	GFXDECODE_ENTRY( "gfx8", 0, layout_8x8x8,   0xe000, 0x10 ) // [3] Foreground
@@ -1435,8 +1442,8 @@ ROM_START( nndmseal )
 	ROM_LOAD16_BYTE( "1.1", 0x00000, 0x40000, CRC(45acea25) SHA1(f2f2e78be261c3d8c0145a639bc3771f0588401d) )	// 1xxxxxxxxxxxxxxxxx = 0xFF
 	ROM_LOAD16_BYTE( "3.3", 0x00001, 0x40000, CRC(0754d96a) SHA1(1da44994e8bcfd8832755e298c0125b38cfdd16e) )	// 1xxxxxxxxxxxxxxxxx = 0xFF
 
-	ROM_REGION( 0x100, "gfx1", ROMREGION_ERASE )	/* 8x8x8 (Sprites) */
-	// unused
+	ROM_REGION( 0x100000, "gfx1", ROMREGION_ERASE )    /* 8x8x8 (Sprites) */
+/* This game doesn't use sprites, but the region needs to be a valid size for at least one sprite 'page' for the init to work. */
 
 	ROM_REGION( 0x400000, "gfx2", 0 )	// 16x16x8 (Background)
 	ROM_LOAD( "mr97006-02.5", 0x000000, 0x200000, CRC(4793f84e) SHA1(05acba6cc8a527a6050af79a460b08c4676287aa) )
@@ -1743,7 +1750,7 @@ ROM_START( rockn4 ) /* Prototype */
 
 	ROM_REGION( 0x7000000, "ymz", 0 )	/* Samples */
 	ROM_LOAD( "sound00", 0x0000000, 0x0400000, CRC(918ea8eb) SHA1(0cd82859634635b6ce49db36fb91ed3365a101eb)  ) // COMMON AREA
-	ROM_FILL(            0x0400000, 0x0c00000, 0xff ) 		  // BANK AREA
+	ROM_FILL(            0x0400000, 0x0c00000, 0xff )		  // BANK AREA
 	ROM_LOAD( "sound01", 0x1000000, 0x0400000, CRC(c548e51e) SHA1(4fe1e35c9ed4366dce98b4f4c00f94e202ef15dc)  ) // bank 0
 	ROM_LOAD( "sound02", 0x1400000, 0x0400000, CRC(ffda0253) SHA1(9b8ae98accc2f72a1cd881086f89e647e4904ad9)  ) // bank 0
 	ROM_LOAD( "sound03", 0x1800000, 0x0400000, CRC(1f813af5) SHA1(a72d842e39b9fc955a2fc6721673b34b1b591e4a)  ) // bank 0
@@ -1792,7 +1799,7 @@ ROM_START( rocknms )
 
 	ROM_REGION( 0x7000000, "ymz", 0 )	/* Samples */
 	ROM_LOAD( "sound00", 0x0000000, 0x0400000, CRC(8bafae71) SHA1(db74accd4bc1bfeb4a3341a0fd572b81287f1278)  ) // COMMON AREA
-	ROM_FILL(                0x0400000, 0x0c00000, 0xff ) 		// BANK AREA
+	ROM_FILL(                0x0400000, 0x0c00000, 0xff )		// BANK AREA
 	ROM_LOAD( "sound01", 0x1000000, 0x0400000, CRC(eec0589b) SHA1(f54c1c7e7741100a1398ebd45aef4755171d9965)  ) // bank 0
 	ROM_LOAD( "sound02", 0x1400000, 0x0400000, CRC(564aa972) SHA1(b19e960fd79647e5bcca509982c9887decb92bc6)  ) // bank 0
 	ROM_LOAD( "sound03", 0x1800000, 0x0400000, CRC(940302d0) SHA1(b28c2bb1a9b8cea0b6963ffa5d3ac26d90b0bffc)  ) // bank 0

@@ -32,14 +32,14 @@
 **************************************************************************/
 
 #include "driver.h"
-#include "kaneko16.h"
+#include "includes/kaneko16.h"
 #include "kan_pand.h"
 
 static UINT16 kaneko16_disp_enable;
 
 
-static tilemap *kaneko16_tmap_0, *kaneko16_tmap_1;
-static tilemap *kaneko16_tmap_2, *kaneko16_tmap_3;
+static tilemap_t *kaneko16_tmap_0, *kaneko16_tmap_1;
+static tilemap_t *kaneko16_tmap_2, *kaneko16_tmap_3;
 UINT16 *kaneko16_vram_0,    *kaneko16_vram_1,    *kaneko16_layers_0_regs;
 UINT16 *kaneko16_vscroll_0, *kaneko16_vscroll_1;
 UINT16 *kaneko16_vram_2,    *kaneko16_vram_3,    *kaneko16_layers_1_regs;
@@ -235,7 +235,6 @@ VIDEO_START( kaneko16_2xVIEW2 )
 VIDEO_START( sandscrp_1xVIEW2 )
 {
 	VIDEO_START_CALL(kaneko16_1xVIEW2);
-	pandora_start(machine,0,0,0);
 
 	tilemap_set_scrolldy( kaneko16_tmap_0, 0, 256 - 1 );
 	tilemap_set_scrolldy( kaneko16_tmap_1, 0, 256 - 1 );
@@ -391,12 +390,13 @@ Offset:         Format:                     Value:
 
 static int kaneko16_parse_sprite_type012(running_machine *machine, int i, struct tempsprite *s)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int attr, xoffs, offs;
 
 	if (kaneko16_sprite_type == 2)	offs = i * 16/2 + 0x8/2;
 	else							offs = i * 8/2;
 
-	if (offs >= (spriteram_size/2))	return -1;
+	if (offs >= (machine->generic.spriteram_size/2))	return -1;
 
 	attr			=		spriteram16[offs + 0];
 	s->code			=		spriteram16[offs + 1];
@@ -433,7 +433,7 @@ else
 	s->yoffs		+=		video_screen_get_visible_area(machine->primary_screen)->min_y<<6;
 }
 
-	return 					( (attr & 0x2000) ? USE_LATCHED_XY    : 0 ) |
+	return					( (attr & 0x2000) ? USE_LATCHED_XY    : 0 ) |
 							( (attr & 0x4000) ? USE_LATCHED_COLOR : 0 ) |
 							( (attr & 0x8000) ? USE_LATCHED_CODE  : 0 ) ;
 }
@@ -881,9 +881,9 @@ static void kaneko16_prepare_first_tilemap_chip(running_machine *machine, bitmap
 
 	/* Flip layers */
 	tilemap_set_flip(kaneko16_tmap_0,	((layers_flip_0 & 0x0100) ? TILEMAP_FLIPY : 0) |
-								 		((layers_flip_0 & 0x0200) ? TILEMAP_FLIPX : 0) );
+										((layers_flip_0 & 0x0200) ? TILEMAP_FLIPX : 0) );
 	tilemap_set_flip(kaneko16_tmap_1,	((layers_flip_0 & 0x0100) ? TILEMAP_FLIPY : 0) |
-								 		((layers_flip_0 & 0x0200) ? TILEMAP_FLIPX : 0) );
+										((layers_flip_0 & 0x0200) ? TILEMAP_FLIPX : 0) );
 
 	/* Scroll layers */
 	layer0_scrollx		=	kaneko16_layers_0_regs[ 2 ];
@@ -913,17 +913,17 @@ static void kaneko16_prepare_second_tilemap_chip(running_machine *machine, bitma
 	UINT16 layer1_scrollx, layer1_scrolly;
 	int i;
 
-  	if (kaneko16_tmap_2)
-  	{
+	if (kaneko16_tmap_2)
+	{
 		layers_flip_1 = kaneko16_layers_1_regs[ 4 ];
 
 		tilemap_set_enable(kaneko16_tmap_2, ~layers_flip_1 & 0x1000);
 		tilemap_set_enable(kaneko16_tmap_3, ~layers_flip_1 & 0x0010);
 
 		tilemap_set_flip(kaneko16_tmap_2,	((layers_flip_1 & 0x0100) ? TILEMAP_FLIPY : 0) |
-									 		((layers_flip_1 & 0x0200) ? TILEMAP_FLIPX : 0) );
+											((layers_flip_1 & 0x0200) ? TILEMAP_FLIPX : 0) );
 		tilemap_set_flip(kaneko16_tmap_3,	((layers_flip_1 & 0x0100) ? TILEMAP_FLIPY : 0) |
-									 		((layers_flip_1 & 0x0200) ? TILEMAP_FLIPX : 0) );
+											((layers_flip_1 & 0x0200) ? TILEMAP_FLIPX : 0) );
 
 		layer0_scrollx		=	kaneko16_layers_1_regs[ 2 ];
 		layer0_scrolly		=	kaneko16_layers_1_regs[ 3 ] >> 6;
@@ -1121,6 +1121,7 @@ VIDEO_UPDATE( galsnew )
 
 VIDEO_UPDATE( sandscrp )
 {
+	const device_config *pandora = devtag_get_device(screen->machine, "pandora");
 	kaneko16_fill_bitmap(screen->machine,bitmap,cliprect);
 
 	// if the display is disabled, do nothing?
@@ -1129,7 +1130,7 @@ VIDEO_UPDATE( sandscrp )
 	VIDEO_UPDATE_CALL(common);
 
 	// copy sprite bitmap to screen
-	pandora_update(screen->machine,bitmap,cliprect);
+	pandora_update(pandora, bitmap, cliprect);
 	return 0;
 }
 

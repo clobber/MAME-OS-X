@@ -70,8 +70,8 @@ static VIDEO_UPDATE( quizo )
 	{
 		for(x=0;x<80;x++)
 		{
-			int data=videoram[y*80+x];
-			int data1=videoram[y*80+x+0x4000];
+			int data=screen->machine->generic.videoram.u8[y*80+x];
+			int data1=screen->machine->generic.videoram.u8[y*80+x+0x4000];
 			int pix;
 
 			pix=(data&1)|(((data>>4)&1)<<1)|((data1&1)<<2)|(((data1>>4)&1)<<3);
@@ -96,7 +96,7 @@ static VIDEO_UPDATE( quizo )
 static WRITE8_HANDLER(vram_w)
 {
 	int bank=(port70&8)?1:0;
-	videoram[offset+bank*0x4000]=data;
+	space->machine->generic.videoram.u8[offset+bank*0x4000]=data;
 }
 
 static WRITE8_HANDLER(port70_w)
@@ -112,13 +112,13 @@ static WRITE8_HANDLER(port60_w)
 		data=0;
 	}
 	port60=data;
-	memory_set_bankptr(space->machine,  1, &memory_region(space->machine, "user1")[rombankLookup[data]*0x4000] );
+	memory_set_bankptr(space->machine,  "bank1", &memory_region(space->machine, "user1")[rombankLookup[data]*0x4000] );
 }
 
 static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xffff) AM_WRITE(vram_w)
 
 ADDRESS_MAP_END
@@ -128,7 +128,7 @@ static ADDRESS_MAP_START( portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x10, 0x10) AM_READ_PORT("IN1")
 	AM_RANGE(0x40, 0x40) AM_READ_PORT("IN2")
-	AM_RANGE(0x50, 0x51) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x50, 0x51) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x60, 0x60) AM_WRITE(port60_w)
 	AM_RANGE(0x70, 0x70) AM_WRITE(port70_w)
 ADDRESS_MAP_END
@@ -206,7 +206,7 @@ static MACHINE_DRIVER_START( quizo )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, XTAL2/16 )
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL2/16 )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -244,7 +244,7 @@ ROM_END
 
 static DRIVER_INIT(quizo)
 {
-	videoram=auto_alloc_array(machine, UINT8, 0x4000*2);
+	machine->generic.videoram.u8=auto_alloc_array(machine, UINT8, 0x4000*2);
 }
 
 GAME( 1985, quizo,  0,       quizo,  quizo,  quizo, ROT0, "Seoul Coin Corp.", "Quiz Olympic (set 1)", 0 )

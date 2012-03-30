@@ -226,7 +226,7 @@ U145        1Brown          PAL14H4CN
 
 static WRITE8_HANDLER(bankswitch_w)
 {
-	memory_set_bank(space->machine, 1, data);
+	memory_set_bank(space->machine, "bank1", data);
 }
 
 /*************************************
@@ -384,9 +384,9 @@ static WRITE8_DEVICE_HANDLER(ppi0_b_w)
 	output_set_lamp_value(8, !BIT(data,7)); /* Stand Light */
 	output_set_lamp_value(9, !BIT(data,6)); /* Cancel Light */
 
-	coin_counter_w(0, BIT(data,1));
-	coin_lockout_w(0, BIT(data,5));
-	coin_lockout_w(1, BIT(data,4));
+	coin_counter_w(device->machine, 0, BIT(data,1));
+	coin_lockout_w(device->machine, 0, BIT(data,5));
+	coin_lockout_w(device->machine, 1, BIT(data,4));
 }
 
 static const ppi8255_interface ppi8255_intf[2] =
@@ -479,18 +479,18 @@ static PALETTE_INIT( sms )
  *************************************/
 
 static ADDRESS_MAP_START( sms_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x00800, 0x00803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x01000, 0x01007) AM_WRITE(video_w)
 	AM_RANGE(0x01800, 0x01803) AM_READWRITE(link_r, link_w)
-	AM_RANGE(0x04000, 0x07fff) AM_ROMBANK(1)
+	AM_RANGE(0x04000, 0x07fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x04000, 0x04000) AM_WRITE(bankswitch_w)
 	AM_RANGE(0x08000, 0x0ffff) AM_ROM
 	AM_RANGE(0xf8000, 0xfffff) AM_ROM // mirror for vectors
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sureshot_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x00000, 0x007ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x02000, 0x02007) AM_WRITE(video_w)
 	AM_RANGE(0x03000, 0x03003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x03800, 0x03803) AM_READWRITE(link_r, link_w)
@@ -502,7 +502,7 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x27ff) AM_RAM
 	AM_RANGE(0x3100, 0x3103) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
-	AM_RANGE(0x3381, 0x3382) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x3381, 0x3382) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x3400, 0x3400) AM_READ(z80_8088_r)
 	AM_RANGE(0x3500, 0x3501) AM_READWRITE(p03_r, p03_w)
 ADDRESS_MAP_END
@@ -515,19 +515,21 @@ ADDRESS_MAP_END
 
 static MACHINE_START( sms )
 {
-	memory_configure_bank(machine, 1, 0, 16, memory_region(machine, "questions"), 0x4000);
+	memory_configure_bank(machine, "bank1", 0, 16, memory_region(machine, "questions"), 0x4000);
+
+	state_save_register_global(machine, communication_port_status);
+	state_save_register_global_array(machine, communication_port);
 }
 
 static MACHINE_START( sureshot )
 {
+	state_save_register_global(machine, communication_port_status);
+	state_save_register_global_array(machine, communication_port);
 }
 
 static MACHINE_RESET( sms )
 {
 	communication_port_status = 0;
-
-	state_save_register_global(machine, communication_port_status);
-	state_save_register_global_array(machine, communication_port);
 }
 
 static MACHINE_DRIVER_START( sms )
@@ -564,7 +566,7 @@ static MACHINE_DRIVER_START( sms )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_16MHz/8)
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_16MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_DRIVER_END
 

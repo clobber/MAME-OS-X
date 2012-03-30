@@ -105,10 +105,10 @@ struct _ui_menu_pool
 typedef struct _ui_menu_item ui_menu_item;
 struct _ui_menu_item
 {
-   const char *			text;
-   const char *			subtext;
-   UINT32 				flags;
-   void *				ref;
+	const char *			text;
+	const char *			subtext;
+	UINT32				flags;
+	void *				ref;
 };
 
 
@@ -146,8 +146,8 @@ struct _input_item_data
 	input_seq			seq;				/* copy of the live sequence */
 	const input_seq *	defseq;				/* pointer to the default sequence */
 	const char *		name;				/* pointer to the base name of the item */
-	UINT16 				sortorder;			/* sorting information */
-	UINT8 				type;				/* type of port */
+	UINT16				sortorder;			/* sorting information */
+	UINT8				type;				/* type of port */
 };
 
 
@@ -168,7 +168,7 @@ typedef struct _dip_descriptor dip_descriptor;
 struct _dip_descriptor
 {
 	dip_descriptor *	next;
-	const char *	 	name;
+	const char *		name;
 	UINT32				mask;
 	UINT32				state;
 };
@@ -186,11 +186,11 @@ struct _settings_menu_state
 typedef struct _input_menu_state input_menu_state;
 struct _input_menu_state
 {
-	UINT16 				last_sortorder;
+	UINT16				last_sortorder;
 	const void *		pollingref;
 	input_item_data *	pollingitem;
 	UINT8				record_next;
-	input_seq 			starting_seq;
+	input_seq			starting_seq;
 };
 
 
@@ -1460,7 +1460,7 @@ static void menu_main_populate(running_machine *machine, ui_menu *menu, void *st
 	int has_dips = FALSE;
 
 	/* scan the input port array to see what options we need to enable */
-	for (port = machine->portconfig; port != NULL; port = port->next)
+	for (port = machine->portlist.head; port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 		{
 			if (field->type == IPT_DIPSWITCH)
@@ -1488,7 +1488,7 @@ static void menu_main_populate(running_machine *machine, ui_menu *menu, void *st
 		ui_menu_item_append(menu, "Analog Controls", NULL, 0, (void *)menu_analog);
 
 #ifndef MESS
-  	/* add bookkeeping menu */
+	/* add bookkeeping menu */
 	ui_menu_item_append(menu, "Bookkeeping Info", NULL, 0, (void *)menu_bookkeeping);
 #endif
 
@@ -1661,7 +1661,7 @@ static void menu_input_specific_populate(running_machine *machine, ui_menu *menu
 	suborder[SEQ_TYPE_INCREMENT] = 2;
 
 	/* iterate over the input ports and add menu items */
-	for (port = machine->portconfig; port != NULL; port = port->next)
+	for (port = machine->portlist.head; port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 		{
 			const char *name = input_field_name(field);
@@ -2020,7 +2020,7 @@ static void menu_settings_populate(running_machine *machine, ui_menu *menu, sett
 	diplist_tailptr = &menustate->diplist;
 
 	/* loop over input ports and set up the current values */
-	for (port = machine->portconfig; port != NULL; port = port->next)
+	for (port = machine->portlist.head; port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->type == type && input_condition_true(machine, &field->condition))
 			{
@@ -2140,7 +2140,7 @@ static void menu_settings_custom_render_one(float x1, float y1, float x2, float 
 	numtoggles = 32 - count_leading_zeros(dip->mask);
 
 	/* center based on the number of switches */
- 	x1 += (x2 - x1 - numtoggles * switch_field_width) / 2;
+	x1 += (x2 - x1 - numtoggles * switch_field_width) / 2;
 
 	/* draw the dip switch name */
 	ui_draw_text_full(	dip->name,
@@ -2273,7 +2273,7 @@ static void menu_analog_populate(running_machine *machine, ui_menu *menu)
 	const input_port_config *port;
 
 	/* loop over input ports and add the items */
-	for (port = machine->portconfig; port != NULL; port = port->next)
+	for (port = machine->portlist.head; port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (input_type_is_analog(field->type))
 			{
@@ -2413,6 +2413,7 @@ static void menu_bookkeeping(running_machine *machine, ui_menu *menu, void *para
 #ifndef MESS
 static void menu_bookkeeping_populate(running_machine *machine, ui_menu *menu, attotime *curtime)
 {
+	int tickets = get_dispensed_tickets(machine);
 	astring *tempstring = astring_alloc();
 	int ctrnum;
 
@@ -2423,23 +2424,25 @@ static void menu_bookkeeping_populate(running_machine *machine, ui_menu *menu, a
 		astring_catprintf(tempstring, "Uptime: %d:%02d\n\n", (curtime->seconds / 60) % 60, curtime->seconds % 60);
 
 	/* show tickets at the top */
-	if (dispensed_tickets > 0)
-		astring_catprintf(tempstring, "Tickets dispensed: %d\n\n", dispensed_tickets);
+	if (tickets > 0)
+		astring_catprintf(tempstring, "Tickets dispensed: %d\n\n", tickets);
 
 	/* loop over coin counters */
 	for (ctrnum = 0; ctrnum < COIN_COUNTERS; ctrnum++)
 	{
+		int count = coin_counter_get_count(machine, ctrnum);
+
 		/* display the coin counter number */
 		astring_catprintf(tempstring, "Coin %c: ", ctrnum + 'A');
 
 		/* display how many coins */
-		if (coin_count[ctrnum] == 0)
+		if (count == 0)
 			astring_catc(tempstring, "NA");
 		else
-			astring_catprintf(tempstring, "%d", coin_count[ctrnum]);
+			astring_catprintf(tempstring, "%d", count);
 
 		/* display whether or not we are locked out */
-		if (coinlockedout[ctrnum])
+		if (coin_lockout_get_state(machine, ctrnum))
 			astring_catc(tempstring, " (locked)");
 		astring_catc(tempstring, "\n");
 	}
@@ -2690,7 +2693,7 @@ static void menu_memory_card_populate(running_machine *machine, ui_menu *menu, i
 
 	/* add the remaining items */
 	ui_menu_item_append(menu, "Load Selected Card", NULL, 0, (void *)MEMCARD_ITEM_LOAD);
-	if (memcard_present() != -1)
+	if (memcard_present(machine) != -1)
 		ui_menu_item_append(menu, "Eject Current Card", NULL, 0, (void *)MEMCARD_ITEM_EJECT);
 	ui_menu_item_append(menu, "Create New Card", NULL, 0, (void *)MEMCARD_ITEM_CREATE);
 }
@@ -3055,8 +3058,8 @@ static void menu_video_options_populate(running_machine *machine, ui_menu *menu,
 	{
 		case ROT0:		subtext = "None";					break;
 		case ROT90:		subtext = "CW 90" UTF8_DEGREES; 	break;
-		case ROT180:	subtext = "180" UTF8_DEGREES; 		break;
-		case ROT270:	subtext = "CCW 90" UTF8_DEGREES; 	break;
+		case ROT180:	subtext = "180" UTF8_DEGREES;		break;
+		case ROT270:	subtext = "CCW 90" UTF8_DEGREES;	break;
 	}
 	ui_menu_item_append(menu, "Rotate", subtext, MENU_FLAG_LEFT_ARROW | MENU_FLAG_RIGHT_ARROW, (void *)VIDEO_ITEM_ROTATE);
 

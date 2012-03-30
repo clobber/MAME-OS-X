@@ -73,7 +73,7 @@ quaquiz2 - no inputs, needs NVRAM
 #define MASTER_CLOCK		12440000
 
 
-static tilemap *statriv2_tilemap;
+static tilemap_t *statriv2_tilemap;
 static UINT8 *question_offset;
 
 static UINT8 question_offset_low;
@@ -93,16 +93,16 @@ static UINT8 last_coin;
 
 static TILE_GET_INFO( horizontal_tile_info )
 {
-	int code = videoram[0x400+tile_index];
-	int attr = videoram[tile_index] & 0x3f;
+	int code = machine->generic.videoram.u8[0x400+tile_index];
+	int attr = machine->generic.videoram.u8[tile_index] & 0x3f;
 
 	SET_TILE_INFO(0, code, attr, 0);
 }
 
 static TILE_GET_INFO( vertical_tile_info )
 {
-	int code = videoram[0x400+tile_index];
-	int attr = videoram[tile_index] & 0x3f;
+	int code = machine->generic.videoram.u8[0x400+tile_index];
+	int attr = machine->generic.videoram.u8[tile_index] & 0x3f;
 
 	SET_TILE_INFO(0, ((code & 0x7f) << 1) | ((code & 0x80) >> 7), attr, 0);
 }
@@ -146,7 +146,7 @@ static VIDEO_START( vertical )
 
 static WRITE8_HANDLER( statriv2_videoram_w )
 {
-	videoram[offset] = data;
+	space->machine->generic.videoram.u8[offset] = data;
 	tilemap_mark_tile_dirty(statriv2_tilemap, offset & 0x3ff);
 }
 
@@ -251,8 +251,8 @@ static const ppi8255_interface ppi8255_intf =
 	DEVCB_INPUT_PORT("IN0"),		/* Port A read */
 	DEVCB_INPUT_PORT("IN1"),		/* Port B read */
 	DEVCB_INPUT_PORT("IN2"),		/* Port C read (Lower Nibble as Input) */
-	DEVCB_NULL,   					/* Port A write */
-	DEVCB_NULL,  		 			/* Port B write */
+	DEVCB_NULL, 					/* Port A write */
+	DEVCB_NULL, 					/* Port B write */
 	DEVCB_HANDLER(ppi_portc_hi_w)	/* Port C write (High nibble as Output) */
 };
 
@@ -267,23 +267,23 @@ static const ppi8255_interface ppi8255_intf =
 static ADDRESS_MAP_START( statriv2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
-	AM_RANGE(0x4800, 0x48ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(statriv2_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x4800, 0x48ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(statriv2_videoram_w) AM_BASE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( statriv2_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE("ppi", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x28, 0x2b) AM_READ(question_data_r) AM_WRITEONLY AM_BASE(&question_offset)
-	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xcf) AM_DEVREADWRITE("tms", tms9927_r, tms9927_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( statusbj_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE("ppi", ppi8255_r, ppi8255_w)
-	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xb0, 0xb1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xcf) AM_DEVREADWRITE("tms", tms9927_r, tms9927_w)
 ADDRESS_MAP_END
 
@@ -375,7 +375,7 @@ static INPUT_PORTS_START( hangman )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Spinner")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
- 	PORT_START("IN1")
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Left")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -414,7 +414,7 @@ static INPUT_PORTS_START( statriv2 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Button D")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
- 	PORT_START("IN1")
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Play 1000")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SPECIAL ) PORT_CUSTOM(latched_coin_r, "COIN")
@@ -443,7 +443,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( statriv4 )
 	PORT_INCLUDE(statriv2)
 
- 	PORT_MODIFY("IN1")
+	PORT_MODIFY("IN1")
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_2C ) )
@@ -491,7 +491,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( sextriv )
 	PORT_INCLUDE(statriv2)
 
- 	PORT_MODIFY("IN1")
+	PORT_MODIFY("IN1")
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
@@ -591,7 +591,7 @@ static MACHINE_DRIVER_START( statriv2 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/8)
+	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

@@ -71,7 +71,7 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "seta.h"
+#include "includes/seta.h"
 
 UINT16 *seta2_vregs;
 
@@ -124,7 +124,9 @@ WRITE16_HANDLER( seta2_vregs_w )
                grdians =  019a
     */
 
-	if ( seta2_vregs[offset] != COMBINE_DATA(&seta2_vregs[offset]) )
+	UINT16 olddata = seta2_vregs[offset];
+	COMBINE_DATA(&seta2_vregs[offset]);
+	if ( seta2_vregs[offset] != olddata )
 		logerror("CPU #0 PC %06X: Video Reg %02X <- %04X\n",cpu_get_pc(space->cpu),offset*2,data);
 
 	switch( offset*2 )
@@ -161,8 +163,9 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 {
 	/* Sprites list */
 
+	UINT16 *buffered_spriteram16 = machine->generic.buffered_spriteram.u16;
 	UINT16 *s1  = buffered_spriteram16 + 0x3000/2;
-	UINT16 *end = &buffered_spriteram16[spriteram_size/2];
+	UINT16 *end = &buffered_spriteram16[machine->generic.spriteram_size/2];
 
 	for ( ; s1 < end; s1+=4 )
 	{
@@ -190,7 +193,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 			default:
 				popmessage("unknown gfxset %x",(num & 0x0700)>>8);
 				gfx = mame_rand(machine)&3; break;
-			case 0x0700: 	// 8bpp tiles (76543210)
+			case 0x0700:	// 8bpp tiles (76543210)
 				gfx = 3; break;
 			case 0x0600:	// 6bpp tiles (--543210) (myangel sliding blocks test)
 				gfx = 2; break;
@@ -357,7 +360,7 @@ VIDEO_START( seta2 )
 	machine->gfx[4]->color_granularity = 16;
 	machine->gfx[5]->color_granularity = 16;
 
-	buffered_spriteram16 = auto_alloc_array(machine, UINT16, spriteram_size/2);
+	machine->generic.buffered_spriteram.u16 = auto_alloc_array(machine, UINT16, machine->generic.spriteram_size/2);
 
 	yoffset = 0;
 }
@@ -383,5 +386,5 @@ VIDEO_UPDATE( seta2 )
 VIDEO_EOF( seta2 )
 {
 	/* Buffer sprites by 1 frame */
-	memcpy(buffered_spriteram16,spriteram16,spriteram_size);
+	memcpy(machine->generic.buffered_spriteram.u16,machine->generic.spriteram.u16,machine->generic.spriteram_size);
 }

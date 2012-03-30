@@ -218,9 +218,10 @@ cpu #2 (PC=0000060E): unmapped memory word read from 0000683A & FFFF
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "audio/taitosnd.h"
 #include "video/taitoic.h"
+#include "machine/taitoio.h"
 #include "cpu/tms32025/tms32025.h"
 #include "sound/2610intf.h"
 
@@ -230,7 +231,6 @@ static UINT16 *taitoh_68000_mainram;
 UINT16 *taitoair_line_ram;
 static UINT16 *dsp_ram;	/* Shared 68000/TMS32025 RAM */
 
-VIDEO_START( taitoair );
 VIDEO_UPDATE( taitoair );
 
 
@@ -293,9 +293,9 @@ static WRITE16_HANDLER( dsp_HOLDA_signal_w )
 static WRITE16_HANDLER( airsys_paletteram16_w )	/* xxBBBBxRRRRxGGGG */
 {
 	int a;
-	COMBINE_DATA(&paletteram16[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 
-	a = paletteram16[offset];
+	a = space->machine->generic.paletteram.u16[offset];
 	palette_set_color_rgb(space->machine,offset,pal4bit(a >> 0),pal4bit(a >> 5),pal4bit(a >> 10));
 }
 
@@ -347,7 +347,7 @@ static INT32 banknum;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
@@ -379,15 +379,15 @@ static ADDRESS_MAP_START( airsys_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_BASE(&taitoh_68000_mainram)
 	AM_RANGE(0x140000, 0x140001) AM_WRITE(system_control_w)	/* Pause the TMS32025 */
-	AM_RANGE(0x180000, 0x183fff) AM_RAM              		/* "gradiation ram (0)" */
-	AM_RANGE(0x184000, 0x187fff) AM_RAM            			/* "gradiation ram (1)" */
-	AM_RANGE(0x188000, 0x18bfff) AM_RAM_WRITE(airsys_paletteram16_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x800000, 0x820fff) AM_READWRITE(TC0080VCO_word_r, TC0080VCO_word_w)	/* tilemaps, sprites */
+	AM_RANGE(0x180000, 0x183fff) AM_RAM             		/* "gradiation ram (0)" */
+	AM_RANGE(0x184000, 0x187fff) AM_RAM         			/* "gradiation ram (1)" */
+	AM_RANGE(0x188000, 0x18bfff) AM_RAM_WRITE(airsys_paletteram16_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x800000, 0x820fff) AM_DEVREADWRITE("tc0080vco", tc0080vco_word_r, tc0080vco_word_w)	/* tilemaps, sprites */
 	AM_RANGE(0x908000, 0x90ffff) AM_RAM AM_BASE(&taitoair_line_ram)	/* "line ram" */
 	AM_RANGE(0x910000, 0x91ffff) AM_RAM	AM_BASE(&dsp_ram)	/* "dsp common ram" (TMS320C25) */
 	AM_RANGE(0xa00000, 0xa00007) AM_READ(stick_input_r)
 	AM_RANGE(0xa00100, 0xa00107) AM_READ(stick2_input_r)
-	AM_RANGE(0xa00200, 0xa0020f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)	/* other I/O */
+	AM_RANGE(0xa00200, 0xa0020f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)	/* other I/O */
 	AM_RANGE(0xa80000, 0xa80001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0xa80002, 0xa80003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
 	AM_RANGE(0xb00000, 0xb007ff) AM_RAM						/* "power common ram" (mecha drive) */
@@ -397,15 +397,15 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
-	AM_RANGE(0xe200, 0xe200) AM_READWRITE(SMH_NOP, taitosound_slave_port_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
+	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP		/* pan control */
 	AM_RANGE(0xea00, 0xea00) AM_READNOP
-	AM_RANGE(0xee00, 0xee00) AM_WRITENOP 		/* ? */
-	AM_RANGE(0xf000, 0xf000) AM_WRITENOP 		/* ? */
+	AM_RANGE(0xee00, 0xee00) AM_WRITENOP		/* ? */
+	AM_RANGE(0xf000, 0xf000) AM_WRITENOP		/* ? */
 	AM_RANGE(0xf200, 0xf200) AM_WRITE(sound_bankswitch_w)
 ADDRESS_MAP_END
 
@@ -595,6 +595,19 @@ static const ym2610_interface airsys_ym2610_interface =
                 MACHINE DRIVERS
 ************************************************************/
 
+static const tc0080vco_interface airsys_tc0080vco_intf =
+{
+	0, 1,	/* gfxnum, txnum */
+	1, 1, -2,
+	0
+};
+
+static const tc0220ioc_interface airsys_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
 static MACHINE_DRIVER_START( airsys )
 
 	/* basic machine hardware */
@@ -614,6 +627,8 @@ static MACHINE_DRIVER_START( airsys )
 
 	MDRV_MACHINE_START(taitoair)
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", airsys_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -625,13 +640,14 @@ static MACHINE_DRIVER_START( airsys )
 	MDRV_GFXDECODE(airsys)
 	MDRV_PALETTE_LENGTH(512*16)
 
-	MDRV_VIDEO_START(taitoair)
 	MDRV_VIDEO_UPDATE(taitoair)
+
+	MDRV_TC0080VCO_ADD("tc0080vco", airsys_tc0080vco_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(airsys_ym2610_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.30)
 	MDRV_SOUND_ROUTE(1, "mono", 0.60)
@@ -673,14 +689,14 @@ ROM_START( topland )
 	ROM_LOAD16_BYTE( "b62-31.29",  0x0c0000, 0x20000, CRC(3feebfe3) SHA1(5b014d7d6fa1daf400ac1a437f551281debfdba6) )
 	ROM_LOAD16_BYTE( "b62-32.30",  0x0c0001, 0x20000, CRC(66806646) SHA1(d8e0c37b5227d8583d523164ffc6828b4508d5a3) )
 
-	ROM_REGION( 0xa0000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0xa0000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b62-17.5",  0x00000, 0x20000, CRC(36447066) SHA1(91c8cc4e99534b2d533895a342abb22766a20090) )
 	ROM_LOAD( "b62-16.4",  0x20000, 0x20000, CRC(203a5c27) SHA1(f6fc9322dea8d82bfec3be3fdc8616dc6adf666e) )
 	ROM_LOAD( "b62-15.3",  0x40000, 0x20000, CRC(e35ffe81) SHA1(f35afdd7cfd4c09907fb062beb5ae46c2286a381) )
 	ROM_LOAD( "b62-14.2",  0x60000, 0x20000, CRC(617948a3) SHA1(4660570fa6263c28cfae7ccdf154763cc6144896) )
 	ROM_LOAD( "b62-13.1",  0x80000, 0x20000, CRC(b37dc3ea) SHA1(198d4f828132316c624da998e49b1873b9886bf0) )
 
-	ROM_REGION( 0x20000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x20000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b62-18.31", 0x00000, 0x20000, CRC(3a4e687a) SHA1(43f07fe19dec351e851defdf9c7810fb9df04736) )
 
 	ROM_REGION( 0x02000, "user1", 0 )	/* unknown */
@@ -720,14 +736,14 @@ ROM_START( ainferno )
 	ROM_LOAD16_BYTE( "c45-14.31", 0x0c0000, 0x20000, CRC(481b6f29) SHA1(0b047e805663b144dc2388c86438950fcdc29658) )
 	ROM_LOAD16_BYTE( "c45-18.43", 0x0c0001, 0x20000, CRC(ba7ecf3b) SHA1(dd073b7bfbf2f88432337027ae9fb6c4f02a538f) )
 
-	ROM_REGION( 0xa0000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0xa0000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c45-01.5",  0x00000, 0x20000, CRC(052997b2) SHA1(3aa8b4f759a1c196de39754a9ccdf4fabdbab388) )
 	ROM_LOAD( "c45-02.4",  0x20000, 0x20000, CRC(2fc0a88e) SHA1(6a635671fa2518f74015429ce580d7b7f00299ad) )
 	ROM_LOAD( "c45-03.3",  0x40000, 0x20000, CRC(0e1e5b5f) SHA1(a53d5ba01825f825e31a014cb4808f59ef86f0c9) )
 	ROM_LOAD( "c45-04.2",  0x60000, 0x20000, CRC(6d081044) SHA1(2d98bde55621762509dfc645d9ca5e267b1757ae) )
 	ROM_LOAD( "c45-05.1",  0x80000, 0x20000, CRC(6c59a808) SHA1(6264bbe4d7ad3070c6441859eb704a42910a82f0) )
 
-	ROM_REGION( 0x20000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x20000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c45-06.31", 0x00000, 0x20000, CRC(6a7976d4) SHA1(a465f9bb874b1eff08742b33cc3c364703b281ca) )
 
 	ROM_REGION( 0x02000, "user1", 0 )

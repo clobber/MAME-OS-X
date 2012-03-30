@@ -44,7 +44,7 @@ int darkmist_hw;
 static WRITE8_HANDLER(darkmist_hw_w)
 {
   darkmist_hw=data;
-  memory_set_bankptr(space->machine, 1,&memory_region(space->machine, "maincpu")[0x010000+((data&0x80)?0x4000:0)]);
+  memory_set_bankptr(space->machine, "bank1",&memory_region(space->machine, "maincpu")[0x010000+((data&0x80)?0x4000:0)]);
 }
 
 static READ8_HANDLER(t5182shared_r)
@@ -60,25 +60,25 @@ static WRITE8_HANDLER(t5182shared_w)
 
 static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc801, 0xc801) AM_READ_PORT("P1")
 	AM_RANGE(0xc802, 0xc802) AM_READ_PORT("P2")
 	AM_RANGE(0xc803, 0xc803) AM_READ_PORT("START")
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(darkmist_hw_w)
-	AM_RANGE(0xc805, 0xc805) AM_WRITE(SMH_RAM) AM_BASE(&darkmist_spritebank)
+	AM_RANGE(0xc805, 0xc805) AM_WRITEONLY AM_BASE(&darkmist_spritebank)
 	AM_RANGE(0xc806, 0xc806) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc807, 0xc807) AM_READ_PORT("DSW2")
 	AM_RANGE(0xc808, 0xc808) AM_READ_PORT("UNK")
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xd400, 0xd41f) AM_RAM AM_BASE(&darkmist_scroll)
 	AM_RANGE(0xd600, 0xd67f) AM_READWRITE(t5182shared_r, t5182shared_w)
 	AM_RANGE(0xd680, 0xd680) AM_WRITE(t5182_sound_irq_w)
 	AM_RANGE(0xd681, 0xd681) AM_READ(t5182_sharedram_semaphore_snd_r)
 	AM_RANGE(0xd682, 0xd682) AM_WRITE(t5182_sharedram_semaphore_main_acquire_w)
 	AM_RANGE(0xd683, 0xd683) AM_WRITE(t5182_sharedram_semaphore_main_release_w)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM AM_BASE(&darkmist_workram)
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 
@@ -273,7 +273,7 @@ static MACHINE_DRIVER_START( darkmist )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 14318180/4)	/* 3.579545 MHz */
+	MDRV_SOUND_ADD("ymsnd", YM2151, 14318180/4)	/* 3.579545 MHz */
 	MDRV_SOUND_CONFIG(t5182_ym2151_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 1.0)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -458,7 +458,7 @@ static DRIVER_INIT(darkmist)
 	}
 
 	memory_set_decrypted_region(space, 0x0000, 0x7fff, decrypt);
-	memory_set_bankptr(space->machine, 1,&ROM[0x010000]);
+	memory_set_bankptr(space->machine, "bank1",&ROM[0x010000]);
 
 	/* adr line swaps */
 	ROM = memory_region(machine, "user1");

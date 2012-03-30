@@ -37,7 +37,7 @@ Memo:
 #include "cpu/m68000/m68000.h"
 #include "machine/m68kfmly.h"
 #include "machine/z80ctc.h"
-#include "nb1413m3.h"
+#include "includes/nb1413m3.h"
 #include "sound/dac.h"
 #include "sound/3812intf.h"
 #include "cpu/z80/z80daisy.h"
@@ -61,7 +61,7 @@ static void niyanpai_soundbank_w(running_machine *machine, int data)
 {
 	UINT8 *SNDROM = memory_region(machine, "audiocpu");
 
-	memory_set_bankptr(machine, 1, &SNDROM[0x08000 + (0x8000 * (data & 0x03))]);
+	memory_set_bankptr(machine, "bank1", &SNDROM[0x08000 + (0x8000 * (data & 0x03))]);
 }
 
 static READ8_HANDLER( niyanpai_sound_r )
@@ -273,7 +273,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( niyanpai_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 
 	AM_RANGE(0x0a0000, 0x0a08ff) AM_READWRITE(niyanpai_palette_r,niyanpai_palette_w)
 	AM_RANGE(0x0a0900, 0x0a11ff) AM_RAM	// palette work ram?
@@ -313,7 +313,7 @@ static ADDRESS_MAP_START( musobana_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0a0000, 0x0a08ff) AM_READWRITE(niyanpai_palette_r,niyanpai_palette_w)
 	AM_RANGE(0x0a0900, 0x0a11ff) AM_RAM				// palette work ram?
 
-	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x0bf800, 0x0bffff) AM_RAM
 
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(niyanpai_sound_w)
@@ -352,7 +352,7 @@ static ADDRESS_MAP_START( mhhonban_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x060900, 0x0611ff) AM_RAM				// palette work ram?
 	AM_RANGE(0x07f800, 0x07ffff) AM_RAM
 
-	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x0bf000, 0x0bffff) AM_RAM
 
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(niyanpai_sound_w)
@@ -388,7 +388,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( niyanpai_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( niyanpai_sound_io_map, ADDRESS_SPACE_IO, 8 )
@@ -404,7 +404,7 @@ static ADDRESS_MAP_START( niyanpai_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x56, 0x56) AM_READWRITE(tmpz84c011_0_dir_pc_r, tmpz84c011_0_dir_pc_w)
 	AM_RANGE(0x34, 0x34) AM_READWRITE(tmpz84c011_0_dir_pd_r, tmpz84c011_0_dir_pd_w)
 	AM_RANGE(0x44, 0x44) AM_READWRITE(tmpz84c011_0_dir_pe_r, tmpz84c011_0_dir_pe_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ym", ym3812_w)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ymsnd", ym3812_w)
 ADDRESS_MAP_END
 
 
@@ -418,7 +418,7 @@ static INPUT_PORTS_START( niyanpai )
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE2 )			// ANALYZER
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_START1 )			// START1
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )			// ?
- 	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
+	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
 
 	PORT_START("P1_P2")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
@@ -621,7 +621,7 @@ static INPUT_PORTS_START( musobana )	// I don't have manual for this game.
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE2 )			// ANALYZER
 	PORT_BIT( 0x2000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(musobana_outcoin_flag_r, NULL)	// OUT COIN
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
- 	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
+	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
 
 	PORT_INCLUDE( nbmjctrl_16 )
 INPUT_PORTS_END
@@ -687,7 +687,7 @@ static INPUT_PORTS_START( 4psimasy )	// I don't have manual for this game.
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE2 )			// ANALYZER
 	PORT_BIT( 0x2000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(musobana_outcoin_flag_r, NULL)	// OUT COIN
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
- 	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
+	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
 
 	PORT_INCLUDE( nbmjctrl_16 )
 INPUT_PORTS_END
@@ -753,7 +753,7 @@ static INPUT_PORTS_START( mhhonban )	// I don't have manual for this game.
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE2 )			// ANALYZER
 	PORT_BIT( 0x2000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(musobana_outcoin_flag_r, NULL)	// OUT COIN
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
- 	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
+	PORT_SERVICE( 0x8000, IP_ACTIVE_LOW )					// TEST
 
 	PORT_INCLUDE( nbmjctrl_16 )
 INPUT_PORTS_END
@@ -804,7 +804,7 @@ static MACHINE_DRIVER_START( niyanpai )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
 	MDRV_SOUND_ADD("dac1", DAC, 0)

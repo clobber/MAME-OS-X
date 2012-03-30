@@ -17,7 +17,7 @@
 #include "cpu/z80/z80.h"
 #include "cpu/mcs51/mcs51.h"
 #include "deprecat.h"
-#include "system16.h"
+#include "includes/system16.h"
 #include "machine/segaic16.h"
 #include "machine/fd1089.h"
 #include "machine/8255ppi.h"
@@ -285,10 +285,10 @@ static WRITE8_DEVICE_HANDLER( video_lamps_w )
 	segaic16_sprites_set_flip(device->machine, 0, data & 0x80);
 	segaic16_sprites_set_shadow(device->machine, 0, ~data & 0x40);
 	segaic16_set_display_enable(device->machine, data & 0x10);
-	set_led_status(1, data & 0x08);
-	set_led_status(0, data & 0x04);
-	coin_counter_w(1, data & 0x02);
-	coin_counter_w(0, data & 0x01);
+	set_led_status(device->machine, 1, data & 0x08);
+	set_led_status(device->machine, 0, data & 0x04);
+	coin_counter_w(device->machine, 1, data & 0x02);
+	coin_counter_w(device->machine, 0, data & 0x01);
 }
 
 
@@ -403,10 +403,10 @@ static ADDRESS_MAP_START( hangon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x400000, 0x403fff) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM AM_BASE(&segaic16_spriteram_0)
-	AM_RANGE(0xa00000, 0xa00fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xa00000, 0xa00fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
 	AM_RANGE(0xc00000, 0xc3ffff) AM_ROM AM_REGION("sub", 0)
-	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE(1) AM_BASE(&segaic16_roadram_0)
-	AM_RANGE(0xc7c000, 0xc7ffff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE("share1") AM_BASE(&segaic16_roadram_0)
+	AM_RANGE(0xc7c000, 0xc7ffff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0xe00000, 0xffffff) AM_READWRITE(hangon_io_r, hangon_io_w)
 ADDRESS_MAP_END
 
@@ -416,11 +416,11 @@ static ADDRESS_MAP_START( sharrier_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x040000, 0x043fff) AM_RAM AM_BASE(&workram)
 	AM_RANGE(0x100000, 0x107fff) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x108000, 0x108fff) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
-	AM_RANGE(0x110000, 0x110fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x124000, 0x127fff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0x110000, 0x110fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
+	AM_RANGE(0x124000, 0x127fff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0x130000, 0x130fff) AM_RAM AM_BASE(&segaic16_spriteram_0)
 	AM_RANGE(0x140000, 0x14ffff) AM_READWRITE(sharrier_io_r, sharrier_io_w)
-	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE(1) AM_BASE(&segaic16_roadram_0)
+	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE("share1") AM_BASE(&segaic16_roadram_0)
 ADDRESS_MAP_END
 
 
@@ -436,8 +436,8 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x7ffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x068000, 0x068fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x07c000, 0x07ffff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0x068000, 0x068fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x07c000, 0x07ffff) AM_RAM AM_SHARE("share2")
 ADDRESS_MAP_END
 
 
@@ -452,7 +452,7 @@ static ADDRESS_MAP_START( sound_map_2203, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x0800) AM_RAM
-	AM_RANGE(0xd000, 0xd001) AM_MIRROR(0x0ffe) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xd000, 0xd001) AM_MIRROR(0x0ffe) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0xe000, 0xe0ff) AM_MIRROR(0x0f00) AM_DEVREADWRITE("pcm", sega_pcm_r, sega_pcm_w)
 ADDRESS_MAP_END
 
@@ -473,7 +473,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_portmap_2151, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
@@ -939,7 +939,7 @@ static MACHINE_DRIVER_START( sound_board_2203 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2203, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_ADD("ymsnd", YM2203, MASTER_CLOCK_8MHz/2)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.13)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.13)
@@ -1005,7 +1005,7 @@ static MACHINE_DRIVER_START( sound_board_2151 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_ADD("ymsnd", YM2151, MASTER_CLOCK_8MHz/2)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.43)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.43)

@@ -8,7 +8,7 @@
 
 #include "driver.h"
 #include "video/resnet.h"
-#include "phoenix.h"
+#include "includes/phoenix.h"
 
 static UINT8 *videoram_pg[2];
 static UINT8 videoram_pg_index;
@@ -17,7 +17,7 @@ static UINT8 cocktail_mode;
 static UINT8 pleiads_protection_question;
 static UINT8 survival_protection_value;
 static int survival_sid_value;
-static tilemap *fg_tilemap, *bg_tilemap;
+static tilemap_t *fg_tilemap, *bg_tilemap;
 static UINT8 survival_input_latches[2];
 static UINT8 survival_input_readc;
 
@@ -181,9 +181,9 @@ VIDEO_START( phoenix )
 	videoram_pg[0] = auto_alloc_array(machine, UINT8, 0x1000);
 	videoram_pg[1] = auto_alloc_array(machine, UINT8, 0x1000);
 
-	memory_configure_bank(machine, 1, 0, 1, videoram_pg[0], 0);
-	memory_configure_bank(machine, 1, 1, 1, videoram_pg[1], 0);
-	memory_set_bank(machine, 1, 0);
+	memory_configure_bank(machine, "bank1", 0, 1, videoram_pg[0], 0);
+	memory_configure_bank(machine, "bank1", 1, 1, videoram_pg[1], 0);
+	memory_set_bank(machine, "bank1", 0);
 
     videoram_pg_index = 0;
 	palette_bank = 0;
@@ -252,7 +252,7 @@ WRITE8_HANDLER( phoenix_videoreg_w )
 	{
 		/* set memory bank */
 		videoram_pg_index = data & 1;
-		memory_set_bank(space->machine, 1, videoram_pg_index);
+		memory_set_bank(space->machine, "bank1", videoram_pg_index);
 
 		cocktail_mode = videoram_pg_index && (input_port_read(space->machine, "CAB") & 0x01);
 
@@ -275,7 +275,7 @@ WRITE8_HANDLER( pleiads_videoreg_w )
 	{
 		/* set memory bank */
 		videoram_pg_index = data & 1;
-		memory_set_bank(space->machine, 1, videoram_pg_index);
+		memory_set_bank(space->machine, "bank1", videoram_pg_index);
 
 		cocktail_mode = videoram_pg_index && (input_port_read(space->machine, "CAB") & 0x01);
 
@@ -290,7 +290,7 @@ WRITE8_HANDLER( pleiads_videoreg_w )
 
     if (palette_bank != ((data >> 1) & 3))
 	{
-   		palette_bank = ((data >> 1) & 3);
+		palette_bank = ((data >> 1) & 3);
 
 		tilemap_mark_all_tiles_dirty_all(space->machine);
 

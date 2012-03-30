@@ -252,7 +252,8 @@ static const UINT8 cc_op[0x100] = {
  5*5+1*2,10*5+1*2,10*5+3*2,10*5+3*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2,10*5+1*2,10*5+3*2, 0*5+1*2,10*5+3*2,17*5+3*2, 7*5+2*2,11*5+1*2,
  5*5+1*2,10*5+1*2,10*5+3*2,11*5+2*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 4*5+1*2,10*5+3*2,11*5+2*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2,
  5*5+1*2,10*5+1*2,10*5+3*2,19*5+1*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 4*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2,
- 5*5+1*2,10*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 6*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2};
+ 5*5+1*2,10*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2,11*5+1*2, 7*5+2*2,11*5+1*2, 5*5+1*2, 6*5+1*2,10*5+3*2, 4*5+1*2,10*5+3*2, 0*5    , 7*5+2*2,11*5+1*2
+};
 
 static const UINT8 cc_cb[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
@@ -270,7 +271,8 @@ static const UINT8 cc_cb[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2,
- 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2};
+ 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,15*5+2*2, 8*5+2*2
+};
 
 static const UINT8 cc_ed[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
@@ -288,7 +290,8 @@ static const UINT8 cc_ed[0x100] = {
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
  8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2,
- 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2};
+ 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2, 8*5+2*2
+};
 
 static const UINT8 cc_xy[0x100] = {
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,15*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
@@ -306,7 +309,8 @@ static const UINT8 cc_xy[0x100] = {
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 0*5    , 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
  4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
  4*5+2*2,14*5+2*2, 4*5+2*2,23*5+2*2, 4*5+2*2,15*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 8*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,
- 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,10*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2};
+ 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2,10*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2, 4*5+2*2
+};
 
 static const UINT8 cc_xycb[0x100] = {
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
@@ -324,7 +328,8 @@ static const UINT8 cc_xycb[0x100] = {
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
 23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,
-23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2};
+23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2,23*5+4*2
+};
 
 /* extra cycles if jr/jp/call taken and 'interrupt latency' on rst 0-7 */
 static const UINT8 cc_ex[0x100] = {
@@ -343,7 +348,8 @@ static const UINT8 cc_ex[0x100] = {
  6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5,
  6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5,
  6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5,
- 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5};
+ 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5, 6*5, 0*5, 0*5, 0*5, 7*5, 0*5, 0*5, 2*5
+};
 
 
 static MACHINE_START( system1 )
@@ -351,10 +357,10 @@ static MACHINE_START( system1 )
 	UINT32 numbanks = (memory_region_length(machine, "maincpu") - 0x10000) / 0x4000;
 
 	if (numbanks > 0)
-		memory_configure_bank(machine, 1, 0, numbanks, memory_region(machine, "maincpu") + 0x10000, 0x4000);
+		memory_configure_bank(machine, "bank1", 0, numbanks, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 	else
-		memory_configure_bank(machine, 1, 0, 1, memory_region(machine, "maincpu") + 0x8000, 0);
-	memory_set_bank(machine, 1, 0);
+		memory_configure_bank(machine, "bank1", 0, 1, memory_region(machine, "maincpu") + 0x8000, 0);
+	memory_set_bank(machine, "bank1", 0);
 
 	z80_set_cycle_tables(cputag_get_cpu(machine, "maincpu"), cc_op, cc_cb, cc_ed, cc_xy, cc_xycb, cc_ex);
 
@@ -390,14 +396,14 @@ static MACHINE_RESET( system1 )
 static void bank44_custom_w(running_machine *machine, UINT8 data, UINT8 prevdata)
 {
 	/* bank bits are bits 6 and 2 */
-	memory_set_bank(machine, 1, ((data & 0x40) >> 5) | ((data & 0x04) >> 2));
+	memory_set_bank(machine, "bank1", ((data & 0x40) >> 5) | ((data & 0x04) >> 2));
 }
 
 
 static void bank0c_custom_w(running_machine *machine, UINT8 data, UINT8 prevdata)
 {
 	/* bank bits are bits 3 and 2 */
-	memory_set_bank(machine, 1, (data & 0x0c) >> 2);
+	memory_set_bank(machine, "bank1", (data & 0x0c) >> 2);
 }
 
 
@@ -415,7 +421,7 @@ static WRITE8_HANDLER( videomode_w )
 	videomode_prev = data;
 
 	/* bit 0 is for the coin counters */
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine, 0, data & 1);
 
 	/* remaining signals are video-related */
 	system1_videomode_w(space, 0, data);
@@ -631,7 +637,9 @@ static WRITE8_HANDLER( nob_mcu_control_p2_w )
 
 	/* bit 3 is toggled once at the start of an IRQ, and again at the end */
 	if (((mcu_control ^ data) & 0x08) && !(data & 0x08))
-		;//logerror("MCU IRQ(8) toggle\n");
+	{
+		//logerror("MCU IRQ(8) toggle\n");
+	}
 
 	mcu_control = data;
 }
@@ -702,10 +710,10 @@ static WRITE8_HANDLER( nobb_outport24_w )
 /* main memory map */
 static ADDRESS_MAP_START( system1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE(&system1_ram)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe000, 0xefff) AM_READWRITE(system1_videoram_r, system1_videoram_w)
 	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE(system1_mixer_collision_r, system1_mixer_collision_w)
 	AM_RANGE(0xf400, 0xf7ff) AM_WRITE(system1_mixer_collision_reset_w)
@@ -716,13 +724,13 @@ ADDRESS_MAP_END
 /* same as normal System 1 except address map is shuffled (RAM/collision are swapped) */
 static ADDRESS_MAP_START( nobo_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc3ff) AM_READWRITE(system1_mixer_collision_r, system1_mixer_collision_w)
 	AM_RANGE(0xc400, 0xc7ff) AM_WRITE(system1_mixer_collision_reset_w)
 	AM_RANGE(0xc800, 0xcbff) AM_READWRITE(system1_sprite_collision_r, system1_sprite_collision_w)
 	AM_RANGE(0xcc00, 0xcfff) AM_WRITE(system1_sprite_collision_reset_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(system1_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe000, 0xefff) AM_READWRITE(system1_videoram_r, system1_videoram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&system1_ram)
 ADDRESS_MAP_END
@@ -4243,7 +4251,7 @@ ROM_END
 ROM_START( ufosensib )
 	ROM_REGION( 0x40000, "maincpu", 0 )
 	ROM_LOAD( "k108.ic18.3-4s", 0x20000, 0x8000, CRC(6b1d0955) SHA1(dbda145d40eaecd30c1d55a9675c58a2967c20c4) )
-	ROM_CONTINUE(            	0x00000, 0x8000 )             /* Now load the operands in RAM */
+	ROM_CONTINUE(           	0x00000, 0x8000 )             /* Now load the operands in RAM */
 	ROM_LOAD( "k109.ic19.4s",   0x30000, 0x8000, CRC(fc543b26) SHA1(b9e1d2ca6f9811bf341edf104fe209dbf56e4b2d) )
 	ROM_CONTINUE(               0x10000, 0x8000 )
 	ROM_LOAD( "k110.ic20.4-5s", 0x38000, 0x8000, CRC(6ba2dc77) SHA1(09a65f55988ae28e285d402af9a2a1f1dc05a82c) )
@@ -4512,14 +4520,14 @@ static DRIVER_INIT( 4dwarrio )	{ DRIVER_INIT_CALL(bank00); fdwarrio_decode(machi
 static DRIVER_INIT( wboy )		{ DRIVER_INIT_CALL(bank00); astrofl_decode(machine, "maincpu"); }
 static DRIVER_INIT( wboy2 )		{ DRIVER_INIT_CALL(bank00); wboy2_decode(machine, "maincpu"); }
 static DRIVER_INIT( wboyo )		{ DRIVER_INIT_CALL(bank00); hvymetal_decode(machine, "maincpu"); }
-static DRIVER_INIT( blockgal )	{ DRIVER_INIT_CALL(bank00); mc8123_decrypt_rom(machine, "maincpu", "key", 0, 0); }
+static DRIVER_INIT( blockgal )	{ DRIVER_INIT_CALL(bank00); mc8123_decrypt_rom(machine, "maincpu", "key", NULL, 0); }
 
 static DRIVER_INIT( hvymetal )	{ DRIVER_INIT_CALL(bank44); hvymetal_decode(machine, "maincpu"); }
 static DRIVER_INIT( gardia )	{ DRIVER_INIT_CALL(bank44); gardia_decode(machine, "maincpu"); }
 static DRIVER_INIT( gardiab )	{ DRIVER_INIT_CALL(bank44); gardiab_decode(machine, "maincpu"); }
 
-static DRIVER_INIT( wbml )		{ DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", 1, 4); }
-static DRIVER_INIT( ufosensi )  { DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", 1, 4); }
+static DRIVER_INIT( wbml )		{ DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", "bank1", 4); }
+static DRIVER_INIT( ufosensi )  { DRIVER_INIT_CALL(bank0c); mc8123_decrypt_rom(machine, "maincpu", "key", "bank1", 4); }
 static DRIVER_INIT( wboysys2 )	{ DRIVER_INIT_CALL(bank0c); astrofl_decode(machine, "maincpu"); }
 
 
@@ -4528,7 +4536,7 @@ static DRIVER_INIT( dakkochn )
 	DRIVER_INIT_CALL(bank0c);
 	videomode_custom = dakkochn_custom_w;
 
-	mc8123_decrypt_rom(machine, "maincpu", "key", 1, 4);
+	mc8123_decrypt_rom(machine, "maincpu", "key", "bank1", 4);
 
 //  memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x00, 0, 0, dakkochn_port_00_r);
 //  memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x03, 0x03, 0, 0, dakkochn_port_03_r);
@@ -4650,7 +4658,7 @@ static DRIVER_INIT( bootsys2 )
 {
 	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x20000);
-	memory_configure_bank_decrypted(machine, 1, 0, 4, memory_region(machine, "maincpu") + 0x30000, 0x4000);
+	memory_configure_bank_decrypted(machine, "bank1", 0, 4, memory_region(machine, "maincpu") + 0x30000, 0x4000);
 	DRIVER_INIT_CALL(bank0c);
 }
 
@@ -4669,10 +4677,10 @@ static DRIVER_INIT( choplift )
 static DRIVER_INIT( shtngmst )
 {
 	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	memory_install_read_port_handler(iospace, 0x12, 0x12, 0x00, 0x00, "TRIGGER");
-	memory_install_read_port_handler(iospace, 0x18, 0x18, 0x00, 0x03, "18");
-	memory_install_read_port_handler(iospace, 0x1c, 0x1c, 0x00, 0x02, "GUNX");
-	memory_install_read_port_handler(iospace, 0x1d, 0x1d, 0x00, 0x02, "GUNY");
+	memory_install_read_port(iospace, 0x12, 0x12, 0x00, 0x00, "TRIGGER");
+	memory_install_read_port(iospace, 0x18, 0x18, 0x00, 0x03, "18");
+	memory_install_read_port(iospace, 0x1c, 0x1c, 0x00, 0x02, "GUNX");
+	memory_install_read_port(iospace, 0x1d, 0x1d, 0x00, 0x02, "GUNY");
 	DRIVER_INIT_CALL(bank0c);
 }
 

@@ -8,7 +8,7 @@
  * 7C -> 100 => 256 - 124 = 132 ==> 264 Scanlines
  */
 
-#define MASTER_CLOCK		 	XTAL_24MHz
+#define MASTER_CLOCK			XTAL_24MHz
 #define PIXEL_CLOCK				(MASTER_CLOCK / 4)
 #define CLOCK_1H				(MASTER_CLOCK / 8)
 #define CLOCK_16H				(CLOCK_1H / 16)
@@ -40,7 +40,7 @@ struct _mario_state
 	/* sound state */
 	UINT8	last;
 	UINT8	portT;
-	UINT8	eabank;
+	const char *eabank;
 
 	/* video state */
 	UINT8	gfx_bank;
@@ -53,7 +53,7 @@ struct _mario_state
 	UINT8	*spriteram;
 	UINT8	*videoram;
 	size_t	spriteram_size;
-	tilemap *bg_tilemap;
+	tilemap_t *bg_tilemap;
 	int monitor;
 };
 

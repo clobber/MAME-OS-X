@@ -8,6 +8,8 @@
 
 #include "driver.h"
 
+UINT8 *popeye_videoram;
+UINT8 *popeye_colorram;
 UINT8 *popeye_background_pos;
 UINT8 *popeye_palettebank;
 static UINT8 *popeye_bitmapram;
@@ -18,7 +20,7 @@ static UINT8 invertmask;
 static UINT8 bitmap_type;
 enum { TYPE_SKYSKIPR, TYPE_POPEYE };
 
-static tilemap *fg_tilemap;
+static tilemap_t *fg_tilemap;
 
 static UINT8 lastflip;
 
@@ -173,13 +175,13 @@ static void set_background_palette(running_machine *machine,int bank)
 
 WRITE8_HANDLER( popeye_videoram_w )
 {
-	videoram[offset] = data;
+	popeye_videoram[offset] = data;
 	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
 
 WRITE8_HANDLER( popeye_colorram_w )
 {
-	colorram[offset] = data;
+	popeye_colorram[offset] = data;
 	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
 
@@ -236,8 +238,8 @@ WRITE8_HANDLER( skyskipr_bitmap_w )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int code = videoram[tile_index];
-	int color = colorram[tile_index] & 0x0f;
+	int code = popeye_videoram[tile_index];
+	int color = popeye_colorram[tile_index] & 0x0f;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -315,9 +317,10 @@ static void draw_background(running_machine *machine, bitmap_t *bitmap, const re
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = 0;offs < spriteram_size;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size;offs += 4)
 	{
 		int code,color,flipx,flipy,sx,sy;
 

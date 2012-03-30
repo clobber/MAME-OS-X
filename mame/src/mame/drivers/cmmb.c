@@ -47,8 +47,8 @@ static VIDEO_UPDATE( cmmb )
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = videoram[count] & 0x3f;
-			int colour = (videoram[count] & 0xc0)>>6;
+			int tile = screen->machine->generic.videoram.u8[count] & 0x3f;
+			int colour = (screen->machine->generic.videoram.u8[count] & 0xc0)>>6;
 			drawgfx_opaque(bitmap,cliprect,gfx,tile,colour,0,0,x*8,y*8);
 
 			count++;
@@ -87,7 +87,7 @@ static WRITE8_HANDLER( cmmb_paletteram_w )
 
 static READ8_HANDLER( cmmb_input_r )
 {
-	printf("%02x R\n",offset);
+	//printf("%02x R\n",offset);
 	switch(offset)
 	{
 		case 0x00: return input_port_read(space->machine, "IN2");
@@ -107,13 +107,13 @@ static UINT8 irq_mask;
         UINT32 bankaddress;
 
         bankaddress = 0x10000 + (0x10000 * (data & 0x03));
-        memory_set_bankptr(space->machine, 1, &ROM[bankaddress]);
+        memory_set_bankptr(space->machine, "bank1", &ROM[bankaddress]);
     }
 */
 
 static WRITE8_HANDLER( cmmb_output_w )
 {
-	printf("%02x -> [%02x] W\n",data,offset);
+	//printf("%02x -> [%02x] W\n",data,offset);
 	switch(offset)
 	{
 		case 0x01:
@@ -122,7 +122,7 @@ static WRITE8_HANDLER( cmmb_output_w )
 				UINT32 bankaddress;
 
 				bankaddress = 0x1c000 + (0x10000 * (data & 0x03));
-				memory_set_bankptr(space->machine, 1, &ROM[bankaddress]);
+				memory_set_bankptr(space->machine, "bank1", &ROM[bankaddress]);
 			}
 			break;
 		case 0x03:
@@ -142,11 +142,11 @@ static READ8_HANDLER( kludge_r )
 static ADDRESS_MAP_START( cmmb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM /* zero page address */
 //  AM_RANGE(0x13c0, 0x13ff) AM_RAM //spriteram
-	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&videoram)
-	AM_RANGE(0x2480, 0x249f) AM_RAM_WRITE(cmmb_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x2480, 0x249f) AM_RAM_WRITE(cmmb_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x4000, 0x400f) AM_READWRITE(cmmb_input_r,cmmb_output_w) //i/o
 	AM_RANGE(0x4900, 0x4900) AM_READ(kludge_r)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xafff) AM_RAM
 	AM_RANGE(0xb000, 0xbfff) AM_READWRITE(cmmb_charram_r,cmmb_charram_w)
 	AM_RANGE(0xc000, 0xc00f) AM_READWRITE(cmmb_input_r,cmmb_output_w) //i/o
@@ -202,7 +202,7 @@ static INPUT_PORTS_START( cmmb )
 	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Service_Mode ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_START("IN2")
@@ -294,7 +294,7 @@ static MACHINE_DRIVER_START( cmmb )
 
 	/* sound hardware */
 //  MDRV_SPEAKER_STANDARD_MONO("mono")
-//  MDRV_SOUND_ADD("ay", AY8910, 8000000/4)
+//  MDRV_SOUND_ADD("aysnd", AY8910, 8000000/4)
 //  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END
 
@@ -307,7 +307,7 @@ MACHINE_DRIVER_END
 ROM_START( cmmb162 )
 	ROM_REGION( 0x50000, "maincpu", 0 )
 	ROM_LOAD( "cmmb162.bin",   0x10000, 0x40000, CRC(71a5a75d) SHA1(0ad7b97580082cda98cb1e8aab8efcf491d0ed25) )
-	ROM_COPY( "maincpu", 	   0x18000, 0x08000, 0x08000 )
+	ROM_COPY( "maincpu",	   0x18000, 0x08000, 0x08000 )
 
 	ROM_REGION( 0x1000, "gfx", ROMREGION_ERASE00 )
 ROM_END

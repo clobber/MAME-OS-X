@@ -25,7 +25,7 @@
 #include "cpu/m68000/m68000.h"
 #include "cpu/tms34010/tms34010.h"
 #include "video/tlc34076.h"
-#include "artmagic.h"
+#include "includes/artmagic.h"
 #include "sound/okim6295.h"
 
 
@@ -94,7 +94,6 @@ static MACHINE_RESET( artmagic )
 	tms_irq = hack_irq = 0;
 	update_irq_state(machine);
 	tlc34076_reset(6);
-	tlc34076_state_save(machine);
 }
 
 
@@ -152,7 +151,8 @@ static TIMER_CALLBACK( irq_off )
 static READ16_HANDLER( ultennis_hack_r )
 {
 	/* IRQ5 points to: jsr (a5); rte */
-	if (cpu_get_pc(space->cpu) == 0x18c2)
+	UINT32 pc = cpu_get_pc(space->cpu);
+	if (pc == 0x18c2 || pc == 0x18e4)
 	{
 		hack_irq = 1;
 		update_irq_state(space->machine);
@@ -426,7 +426,7 @@ static WRITE16_HANDLER( protection_bit_w )
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x220000, 0x23ffff) AM_RAM
-	AM_RANGE(0x240000, 0x240fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x240000, 0x240fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x300000, 0x300001) AM_READ_PORT("300000")
 	AM_RANGE(0x300002, 0x300003) AM_READ_PORT("300002")
 	AM_RANGE(0x300004, 0x300005) AM_READ_PORT("300004")
@@ -443,7 +443,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( stonebal_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x27ffff) AM_RAM
-	AM_RANGE(0x280000, 0x280fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x280000, 0x280fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x300000, 0x300001) AM_READ_PORT("300000")
 	AM_RANGE(0x300002, 0x300003) AM_READ_PORT("300002")
 	AM_RANGE(0x300004, 0x300005) AM_READ_PORT("300004")
@@ -791,6 +791,19 @@ ROM_START( ultennis )
 ROM_END
 
 
+ROM_START( ultennisj )
+	ROM_REGION( 0x80000, "maincpu", 0 )	/* 64k for 68000 code */
+	ROM_LOAD16_BYTE( "a&m001d0194-13c-u102-japan.u102", 0x00000, 0x40000, CRC(65cee452) SHA1(49259e8faf289d6d80769f6d44e9d61d15e431c6) )
+	ROM_LOAD16_BYTE( "a&m001d0194-12c-u101-japan.u101", 0x00001, 0x40000, CRC(5f4b0ca0) SHA1(57e9ed60cc0e53eeb4e08c4003138d3bdaec3de7) )
+
+	ROM_REGION16_LE( 0x200000, "gfx1", 0 )
+	ROM_LOAD( "a&m-001-01-a.ic133", 0x000000, 0x200000, CRC(29d9204d) SHA1(0b2b77a55b8c2877c2e31b63156505584d4ee1f0) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "a&m001c1293-14a-u151.u151", 0x00000,  0x40000, CRC(4e19ca89) SHA1(ac7e17631ec653f83c4912df6f458b0e1df88096) )
+ROM_END
+
+
 /*
 Stone Ball
 Art & Magic, 1994
@@ -932,7 +945,8 @@ static DRIVER_INIT( stonebal )
  *
  *************************************/
 
-GAME( 1993, ultennis, 0,        artmagic, ultennis, ultennis, ROT0, "Art & Magic", "Ultimate Tennis",		 GAME_SUPPORTS_SAVE )
-GAME( 1994, cheesech, 0,        cheesech, cheesech, cheesech, ROT0, "Art & Magic", "Cheese Chase",			 GAME_SUPPORTS_SAVE )
+GAME( 1993, ultennis, 0,        artmagic, ultennis, ultennis, ROT0, "Art & Magic", "Ultimate Tennis", GAME_SUPPORTS_SAVE )
+GAME( 1993, ultennisj,ultennis, artmagic, ultennis, ultennis, ROT0, "[Art & Magic] (Banpresto license)", "Ultimate Tennis (v 1.4, Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1994, cheesech, 0,        cheesech, cheesech, cheesech, ROT0, "Art & Magic", "Cheese Chase", GAME_SUPPORTS_SAVE )
 GAME( 1994, stonebal, 0,        stonebal, stonebal, stonebal, ROT0, "Art & Magic", "Stone Ball (4 Players)", GAME_SUPPORTS_SAVE )
 GAME( 1994, stonebal2,stonebal, stonebal, stoneba2, stonebal, ROT0, "Art & Magic", "Stone Ball (2 Players)", GAME_SUPPORTS_SAVE )

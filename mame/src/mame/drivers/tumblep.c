@@ -42,11 +42,11 @@ Stephh's notes (based on the games M68000 code and some tests) :
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
-#include "decocrpt.h"
+#include "includes/decocrpt.h"
 #include "sound/2151intf.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
-#include "deco16ic.h"
+#include "includes/deco16ic.h"
 
 #define TUMBLEP_HACK	0
 
@@ -86,7 +86,7 @@ static WRITE16_HANDLER( jumppop_sound_w )
 
 static READ16_HANDLER( tumblepop_controls_r )
 {
- 	switch (offset<<1)
+	switch (offset<<1)
 	{
 		case 0:
 			return input_port_read(space->machine, "PLAYERS");
@@ -106,22 +106,22 @@ static READ16_HANDLER( tumblepop_controls_r )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 #if TUMBLEP_HACK
-	AM_RANGE(0x000000, 0x07ffff) AM_WRITE(SMH_RAM)	// To write levels modifications
-	AM_RANGE(0x000000, 0x07ffff) AM_READ(SMH_ROM)
+	AM_RANGE(0x000000, 0x07ffff) AM_WRITEONLY	// To write levels modifications
+	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 #else
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 #endif
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(tumblep_sound_w)
 	AM_RANGE(0x120000, 0x123fff) AM_RAM
-	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x140000, 0x1407ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x180000, 0x18000f) AM_READ(tumblepop_controls_r)
 	AM_RANGE(0x18000c, 0x18000d) AM_WRITENOP
-	AM_RANGE(0x1a0000, 0x1a07ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x300000, 0x30000f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf12_control)
+	AM_RANGE(0x1a0000, 0x1a07ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x300000, 0x30000f) AM_WRITEONLY AM_BASE(&deco16_pf12_control)
 	AM_RANGE(0x320000, 0x320fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
 	AM_RANGE(0x322000, 0x322fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
-	AM_RANGE(0x340000, 0x3407ff) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf1_rowscroll) // unused
-	AM_RANGE(0x342000, 0x3427ff) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf2_rowscroll) // unused
+	AM_RANGE(0x340000, 0x3407ff) AM_WRITEONLY AM_BASE(&deco16_pf1_rowscroll) // unused
+	AM_RANGE(0x342000, 0x3427ff) AM_WRITEONLY AM_BASE(&deco16_pf2_rowscroll) // unused
 ADDRESS_MAP_END
 
 /******************************************************************************/
@@ -130,11 +130,11 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP	/* YM2203 - this board doesn't have one */
-	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x130000, 0x130001) AM_NOP	/* This board only has 1 oki chip */
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_READWRITE(SMH_BANK(8), SMH_BANK(8))
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -309,7 +309,7 @@ static MACHINE_DRIVER_START( tumblep )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)

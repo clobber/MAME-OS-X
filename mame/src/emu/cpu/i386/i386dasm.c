@@ -89,7 +89,7 @@ enum
 #define VAR_NAME4			0x200
 #define ALWAYS64			0x400
 #define SPECIAL64			0x800
-#define SPECIAL64_ENT(x) 	(SPECIAL64 | ((x) << 24))
+#define SPECIAL64_ENT(x)	(SPECIAL64 | ((x) << 24))
 
 typedef struct {
 	const char *mnemonic;
@@ -2115,7 +2115,7 @@ handle_unknown:
 	sprintf(s, "???");
 }
 
-static int i386_dasm_one_ex(char *buffer, UINT64 eip, const UINT8 *oprom, int mode)
+int i386_dasm_one_ex(char *buffer, UINT64 eip, const UINT8 *oprom, int mode)
 {
 	UINT8 op;
 

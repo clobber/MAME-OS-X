@@ -94,7 +94,7 @@ static emu_timer *irq_timer;
 
 static WRITE8_HANDLER( cliff_test_led_w )
 {
-	set_led_status(0, offset ^ 1);
+	set_led_status(space->machine, 0, offset ^ 1);
 }
 
 static WRITE8_HANDLER( cliff_port_bank_w )
@@ -132,7 +132,7 @@ static WRITE8_HANDLER( cliff_phillips_clear_w )
 
 static WRITE8_HANDLER( cliff_coin_counter_w )
 {
-	coin_counter_w(0, (data & 0x40) ? 1 : 0 );
+	coin_counter_w(space->machine, 0, (data & 0x40) ? 1 : 0 );
 }
 
 static READ8_HANDLER( cliff_irq_ack_r )
@@ -230,7 +230,7 @@ static MACHINE_RESET( cliffhgr )
 
 static ADDRESS_MAP_START( mainmem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM		/* ROM */
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* NVRAM */
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	/* NVRAM */
 	AM_RANGE(0xe800, 0xefff) AM_RAM		/* RAM */
 ADDRESS_MAP_END
 
@@ -551,7 +551,7 @@ static INPUT_PORTS_START( goaltogo )
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )		PORT_DIPLOCATION("E11:3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Single Coin Continue" ) 	PORT_DIPLOCATION("E11:2")
+	PORT_DIPNAME( 0x02, 0x02, "Single Coin Continue" )	PORT_DIPLOCATION("E11:2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) ) PORT_CONDITION("BANK1",0x01,PORTCOND_EQUALS,0x00)
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) ) PORT_CONDITION("BANK1",0x01,PORTCOND_EQUALS,0x00)
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("E11:1")

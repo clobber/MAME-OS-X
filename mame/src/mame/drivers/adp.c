@@ -150,13 +150,18 @@ Video board has additional chips:
 #include "machine/microtch.h"
 #include "machine/68681.h"
 
-static UINT8 register_active;
-static UINT8 mux_data;
-
-static struct
+typedef struct _adp_state adp_state;
+struct _adp_state
 {
-	const device_config *duart68681;
-} skattv_devices;
+	/* misc */
+	UINT8 mux_data;
+	UINT8 register_active;
+
+	/* devices */
+	const device_config *maincpu;
+	const device_config *duart;
+};
+
 
 /***************************************************************************
 
@@ -164,38 +169,49 @@ static struct
 
 ***************************************************************************/
 
-static void duart_irq_handler(const device_config *device, UINT8 vector)
+static void duart_irq_handler( const device_config *device, UINT8 vector )
 {
-	cputag_set_input_line_and_vector(device->machine, "maincpu", 4, HOLD_LINE, vector);
+	adp_state *state = (adp_state *)device->machine->driver_data;
+	cpu_set_input_line_and_vector(state->maincpu, 4, HOLD_LINE, vector);
 };
 
-static void duart_tx(const device_config *device, int channel, UINT8 data)
+static void duart_tx( const device_config *device, int channel, UINT8 data )
 {
-	if ( channel == 0 )
+	if (channel == 0)
 	{
 		microtouch_rx(1, &data);
 	}
 };
 
-static void microtouch_tx(running_machine *machine, UINT8 data)
+static void microtouch_tx( running_machine *machine, UINT8 data )
 {
-	duart68681_rx_data(skattv_devices.duart68681, 0, data);
+	adp_state *state = (adp_state *)machine->driver_data;
+	duart68681_rx_data(state->duart, 0, data);
 }
 
-static UINT8 duart_input(const device_config *device)
+static UINT8 duart_input( const device_config *device )
 {
 	return input_port_read(device->machine, "DSW1");
 }
 
 static MACHINE_START( skattv )
 {
+	adp_state *state = (adp_state *)machine->driver_data;
 	microtouch_init(machine, microtouch_tx, 0);
+
+	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->duart = devtag_get_device(machine, "duart68681");
+
+	state_save_register_global(machine, state->mux_data);
+	state_save_register_global(machine, state->register_active);
 }
 
 static MACHINE_RESET( skattv )
 {
-	skattv_devices.duart68681 = devtag_get_device( machine, "duart68681" );
-	mux_data = 0;
+	adp_state *state = (adp_state *)machine->driver_data;
+
+	state->mux_data = 0;
+	state->register_active = 0;
 }
 
 static const duart68681_config skattv_duart68681_config =
@@ -210,10 +226,9 @@ static PALETTE_INIT( adp )
 {
     int i;
 
-
-    for (i = 0;i < machine->config->total_colors;i++)
+    for (i = 0; i < machine->config->total_colors; i++)
     {
-        int bit0,bit1,bit2,r,g,b;
+        int bit0, bit1, bit2, r, g, b;
 
 
         // red component
@@ -232,7 +247,7 @@ static PALETTE_INIT( adp )
         bit2 = (i >> 2) & 0x01;
         b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-        palette_set_color(machine,i,MAKE_RGB(r,g,b));
+        palette_set_color(machine, i, MAKE_RGB(r,g,b));
     }
 }
 
@@ -250,7 +265,7 @@ static VIDEO_START(adp)
 
 static VIDEO_UPDATE(adp)
 {
-	int x,y,b;
+	int x, y, b;
 
 	b = ((HD63484_reg[0xcc/2] & 0x000f) << 16) + HD63484_reg[0xce/2];
 #if 0
@@ -321,11 +336,12 @@ if (!input_code_pressed(screen->machine, KEYCODE_O))
 	return 0;
 }
 
-static READ16_HANDLER(test_r)
+static READ16_HANDLER( test_r )
 {
+	adp_state *state = (adp_state *)space->machine->driver_data;
 	int value = 0xffff;
 
-	switch(mux_data)
+	switch (state->mux_data)
 	{
 		case 0x00: value = input_port_read(space->machine, "x0"); break;
 		case 0x01: value = input_port_read(space->machine, "x1"); break;
@@ -344,8 +360,9 @@ static READ16_HANDLER(test_r)
 		case 0x0e: value = input_port_read(space->machine, "x14"); break;
 		case 0x0f: value = input_port_read(space->machine, "x15"); break;
 	}
-	mux_data++;
-	mux_data&=0xf;
+
+	state->mux_data++;
+	state->mux_data &= 0xf;
 
 	return value;
 }
@@ -353,22 +370,27 @@ static READ16_HANDLER(test_r)
 /*???*/
 static WRITE16_HANDLER(wh2_w)
 {
-	register_active = data;
+	adp_state *state = (adp_state *)space->machine->driver_data;
+	state->register_active = data;
 }
 
-static READ16_HANDLER(t2_r)
+static READ8_DEVICE_HANDLER(t2_r)
 {
- static UINT16 vblank = 0,hblank = 0;
+	static UINT8 res;
+	static int h,w;
+	res = 0;
+	h = video_screen_get_height(device->machine->primary_screen);
+	w = video_screen_get_width(device->machine->primary_screen);
 
- vblank ^=0x40;
- hblank ^=0x20;
+//  popmessage("%d %d",h,w);
 
- return mame_rand(space->machine) & 0x00f0;
+	if (video_screen_get_hpos(device->machine->primary_screen) > h)
+		res|= 0x20; //hblank
 
-// FIXME: this code is never executed
-// popmessage("%08x",cpu_get_pc(space->cpu));
-// return 0x0000;
- return 0xff9f | vblank | hblank;
+	if (video_screen_get_vpos(device->machine->primary_screen) > w)
+		res|= 0x40; //vblank
+
+	return res;
 }
 
 static ADDRESS_MAP_START( skattv_mem, ADDRESS_SPACE_PROGRAM, 16 )
@@ -376,9 +398,7 @@ static ADDRESS_MAP_START( skattv_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800080, 0x800081) AM_READWRITE(HD63484_status_r, HD63484_address_w)
 	AM_RANGE(0x800082, 0x800083) AM_READWRITE(HD63484_data_r, HD63484_data_w)
 	AM_RANGE(0x800100, 0x800101) AM_READWRITE(test_r,wh2_w) //related to input
-	AM_RANGE(0x800140, 0x800141) AM_READ(t2_r)
-	AM_RANGE(0x800140, 0x800143) AM_DEVWRITE8("ay", ay8910_address_data_w, 0x00ff) //18b too
-	AM_RANGE(0x800142, 0x800143) AM_DEVREAD8("ay", ay8910_r, 0x00ff) //18b too
+	AM_RANGE(0x800140, 0x800143) AM_DEVREADWRITE8("aysnd", ay8910_r, ay8910_address_data_w, 0x00ff) //18b too
 	AM_RANGE(0x800180, 0x80019f) AM_DEVREADWRITE8( "duart68681", duart68681_r, duart68681_w, 0xff )
 //  AM_RANGE(0xffd246, 0xffd247) AM_READ(handler3_r)
 //  AM_RANGE(0xffd248, 0xffd249) AM_READ(handler3_r)
@@ -395,31 +415,67 @@ static ADDRESS_MAP_START( quickjac_mem, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( backgamn_mem, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x500000, 0x503fff) AM_RAM // sound?
-	AM_RANGE(0x503ffa, 0x503ffb) AM_READWRITE(HD63484_status_r, HD63484_address_w) // bad
-	AM_RANGE(0x503ffc, 0x503ffd) AM_READWRITE(HD63484_data_r, HD63484_data_w) // bad
-	AM_RANGE(0x600000, 0x60001f) AM_NOP // sound?
-	AM_RANGE(0x800084, 0xffbfff) AM_RAM // used?
+	AM_RANGE(0x000000, 0x01ffff) AM_ROM
+	AM_RANGE(0x100000, 0x10003f) AM_RAM
+	AM_RANGE(0x200000, 0x20003f) AM_RAM
+	AM_RANGE(0x400000, 0x40001f) AM_DEVREADWRITE8( "duart68681", duart68681_r, duart68681_w, 0xff )
+	AM_RANGE(0x500000, 0x503fff) AM_RAM //work RAM
+	AM_RANGE(0x600006, 0x600007) AM_NOP //(r) is discarded (watchdog?)
 ADDRESS_MAP_END
+
+static WRITE8_HANDLER( ramdac_io_w )
+{
+	static int pal_offs,r,g,b,internal_pal_offs;
+
+	switch(offset)
+	{
+		case 0:
+			pal_offs = data;
+			internal_pal_offs = 0;
+			break;
+		case 2:
+			//mask pen reg
+			break;
+		case 1:
+			switch(internal_pal_offs)
+			{
+				case 0:
+					r = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					internal_pal_offs++;
+					break;
+				case 1:
+					g = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					internal_pal_offs++;
+					break;
+				case 2:
+					b = ((data & 0x3f) << 2) | ((data & 0x30) >> 4);
+					palette_set_color(space->machine, pal_offs, MAKE_RGB(r, g, b));
+					internal_pal_offs = 0;
+					pal_offs++;
+					pal_offs&=0xff;
+					break;
+			}
+
+			break;
+	}
+}
 
 static ADDRESS_MAP_START( funland_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	//400000-40001f?
 	AM_RANGE(0x800080, 0x800081) AM_READWRITE(HD63484_status_r, HD63484_address_w)
 	AM_RANGE(0x800082, 0x800083) AM_READWRITE(HD63484_data_r, HD63484_data_w)
-//  AM_RANGE(0x800100, 0x8001ff) AM_READ(test_r) //18b too
-	AM_RANGE(0x800140, 0x800141) AM_READ(t2_r)
-	AM_RANGE(0x800140, 0x800143) AM_DEVWRITE8("ay", ay8910_address_data_w, 0x00ff) //18b too
-	AM_RANGE(0x800142, 0x800143) AM_DEVREAD8("ay", ay8910_r, 0x00ff) //18b too
+	AM_RANGE(0x800088, 0x80008d) AM_WRITE8(ramdac_io_w, 0x00ff)
+	AM_RANGE(0x800100, 0x800101) AM_RAM //???
+	AM_RANGE(0x800140, 0x800143) AM_DEVREADWRITE8("aysnd", ay8910_r, ay8910_address_data_w, 0x00ff) //18b too
 	AM_RANGE(0x800180, 0x80019f) AM_DEVREADWRITE8( "duart68681", duart68681_r, duart68681_w, 0xff )
 	AM_RANGE(0xfc0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-
+#if 0
 static INPUT_PORTS_START( adp )
 
 INPUT_PORTS_END
+#endif
 
 static INPUT_PORTS_START( skattv )
 	PORT_INCLUDE(microtouch)
@@ -507,13 +563,28 @@ static INPUT_PORTS_START( skattv )
 	PORT_DIPSETTING(     0x0000, DEF_STR( On ) )
 	PORT_BIT( 0xfffb, IP_ACTIVE_LOW,  IPT_UNUSED  )
 INPUT_PORTS_END
+
 /*
 static INTERRUPT_GEN( adp_int )
 {
     cpu_set_input_line(device, 1, HOLD_LINE); // ??? All irqs have the same vector, and the mask used is 0 or 7
 }
 */
+static const ay8910_interface ay8910_config =
+{
+	AY8910_LEGACY_OUTPUT,
+	AY8910_DEFAULT_LOADS,
+	DEVCB_HANDLER(t2_r),
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
 static MACHINE_DRIVER_START( quickjac )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(adp_state)
+
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)
 	MDRV_CPU_PROGRAM_MAP(quickjac_mem)
 //  MDRV_CPU_VBLANK_INT("screen", adp_int)
@@ -524,8 +595,8 @@ static MACHINE_DRIVER_START( quickjac )
 	MDRV_DUART68681_ADD( "duart68681", XTAL_8_664MHz / 2, skattv_duart68681_config )
 
 	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(30)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(384, 280)
 	MDRV_SCREEN_VISIBLE_AREA(0, 384-1, 0, 280-1)
@@ -536,12 +607,17 @@ static MACHINE_DRIVER_START( quickjac )
 	MDRV_VIDEO_UPDATE(adp)
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, 3686400/2)
+	MDRV_SOUND_ADD("aysnd", AY8910, 3686400/2)
+	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( skattv )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(adp_state)
+
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)
 	MDRV_CPU_PROGRAM_MAP(skattv_mem)
 //  MDRV_CPU_VBLANK_INT("screen", adp_int)
@@ -552,8 +628,8 @@ static MACHINE_DRIVER_START( skattv )
 	MDRV_DUART68681_ADD( "duart68681", XTAL_8_664MHz / 2, skattv_duart68681_config )
 
 	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(30)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(384, 280)
 	MDRV_SCREEN_VISIBLE_AREA(0, 384-1, 0, 280-1)
@@ -564,18 +640,25 @@ static MACHINE_DRIVER_START( skattv )
 	MDRV_VIDEO_UPDATE(adp)
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, 3686400/2)
+	MDRV_SOUND_ADD("aysnd", AY8910, 3686400/2)
+	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( backgamn )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(adp_state)
+
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)
 	MDRV_CPU_PROGRAM_MAP(backgamn_mem)
 
+	MDRV_DUART68681_ADD( "duart68681", XTAL_8_664MHz / 2, skattv_duart68681_config )
+
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(640, 480)
 	MDRV_SCREEN_VISIBLE_AREA(0, 640-1, 0, 480-1)
@@ -586,7 +669,8 @@ static MACHINE_DRIVER_START( backgamn )
 	MDRV_VIDEO_UPDATE(adp)
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, 3686400/2)
+	MDRV_SOUND_ADD("aysnd", AY8910, 3686400/2)
+	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 MACHINE_DRIVER_END
@@ -595,6 +679,9 @@ static MACHINE_DRIVER_START( funland )
 	MDRV_IMPORT_FROM( skattv )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(funland_mem)
+
+	MDRV_PALETTE_LENGTH(0x100)
+	MDRV_PALETTE_INIT(all_black)
 MACHINE_DRIVER_END
 
 ROM_START( quickjac )
@@ -662,10 +749,9 @@ ROM_START( funlddlx )
 	ROM_LOAD16_BYTE( "flv_f1_ii.bin", 0x00001, 0x80000, CRC(2aa904e6) SHA1(864530b136dd488d619cc95f48e7dce8d93d88e0) )
 ROM_END
 
-GAME( 1990, backgamn,        0, backgamn,    adp,    0, ROT0,  "ADP", "Backgammon", GAME_NOT_WORKING )
-GAME( 1993, quickjac,        0, quickjac,    skattv,    0, ROT0,  "ADP", "Quick Jack", GAME_NOT_WORKING )
-GAME( 1994, skattv,          0, skattv,      skattv,    0, ROT0,  "ADP", "Skat TV", GAME_NOT_WORKING )
-GAME( 1995, skattva,    skattv, skattv,      skattv,    0, ROT0,  "ADP", "Skat TV (version TS3)", GAME_NOT_WORKING )
-GAME( 1997, fashiong,        0, skattv,      skattv,    0, ROT0,  "ADP", "Fashion Gambler", GAME_NOT_WORKING )
-GAME( 1999, funlddlx,        0, funland,     skattv,    0, ROT0,  "Stella", "Funny Land de Luxe", GAME_NOT_WORKING )
-
+GAME( 1990, backgamn,        0, backgamn,    skattv,    0, ROT0,  "ADP",     "Backgammon", GAME_NOT_WORKING )
+GAME( 1993, quickjac,        0, quickjac,    skattv,    0, ROT0,  "ADP",     "Quick Jack", GAME_NOT_WORKING )
+GAME( 1994, skattv,          0, skattv,      skattv,    0, ROT0,  "ADP",     "Skat TV", GAME_NOT_WORKING )
+GAME( 1995, skattva,    skattv, skattv,      skattv,    0, ROT0,  "ADP",     "Skat TV (version TS3)", GAME_NOT_WORKING )
+GAME( 1997, fashiong,        0, skattv,      skattv,    0, ROT0,  "ADP",     "Fashion Gambler", GAME_NOT_WORKING )
+GAME( 1999, funlddlx,        0, funland,     skattv,    0, ROT0,  "Stella",  "Funny Land de Luxe", GAME_NOT_WORKING )

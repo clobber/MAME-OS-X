@@ -99,7 +99,7 @@
 #include "includes/decocrpt.h"
 #include "machine/eeprom.h"
 #include "sound/ymz280b.h"
-#include "decoprot.h"
+#include "includes/decoprot.h"
 #include "cpu/arm/arm.h"
 #include "cpu/sh2/sh2.h"
 
@@ -109,7 +109,7 @@ VIDEO_EOF( mlc );
 
 extern UINT32 *mlc_vram, *mlc_clip_ram;
 static UINT32 *mlc_ram, *irq_ram;
-static emu_timer *raster_irq_timer;
+static const device_config *raster_irq_timer;
 static int mainCpuIsArm;
 static int mlc_raster_table[9][256];
 static UINT32 vbl_i;
@@ -136,28 +136,28 @@ static READ32_HANDLER(test3_r)
 	return 0xffffffff;
 }
 
-static WRITE32_HANDLER( avengrs_eprom_w )
+static WRITE32_DEVICE_HANDLER( avengrs_eprom_w )
 {
 	if (ACCESSING_BITS_8_15) {
 		UINT8 ebyte=(data>>8)&0xff;
 //      if (ebyte&0x80) {
-			eeprom_set_clock_line((ebyte & 0x2) ? ASSERT_LINE : CLEAR_LINE);
-			eeprom_write_bit(ebyte & 0x1);
-			eeprom_set_cs_line((ebyte & 0x4) ? CLEAR_LINE : ASSERT_LINE);
+			eeprom_set_clock_line(device, (ebyte & 0x2) ? ASSERT_LINE : CLEAR_LINE);
+			eeprom_write_bit(device, ebyte & 0x1);
+			eeprom_set_cs_line(device, (ebyte & 0x4) ? CLEAR_LINE : ASSERT_LINE);
 //      }
 	}
 	else if (ACCESSING_BITS_0_7) {
 		//volume control todo
 	}
 	else
-		logerror("%08x:  eprom_w %08x mask %08x\n",cpu_get_pc(space->cpu),data,mem_mask);
+		logerror("%s:  eprom_w %08x mask %08x\n",cpuexec_describe_context(device->machine),data,mem_mask);
 }
 
 static WRITE32_HANDLER( avengrs_palette_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
 	/* x bbbbb ggggg rrrrr */
-	palette_set_color_rgb(space->machine,offset,pal5bit(paletteram32[offset] >> 0),pal5bit(paletteram32[offset] >> 5),pal5bit(paletteram32[offset] >> 10));
+	palette_set_color_rgb(space->machine,offset,pal5bit(space->machine->generic.paletteram.u32[offset] >> 0),pal5bit(space->machine->generic.paletteram.u32[offset] >> 5),pal5bit(space->machine->generic.paletteram.u32[offset] >> 10));
 }
 
 static READ32_HANDLER( decomlc_vbl_r )
@@ -174,10 +174,10 @@ static READ32_HANDLER( mlc_scanline_r )
 	return video_screen_get_vpos(space->machine->primary_screen);
 }
 
-static TIMER_CALLBACK( interrupt_gen )
+static TIMER_DEVICE_CALLBACK( interrupt_gen )
 {
 //  logerror("hit scanline IRQ %d (%08x)\n", video_screen_get_vpos(machine->primary_screen), info.i);
-	cputag_set_input_line(machine, "maincpu", mainCpuIsArm ? ARM_IRQ_LINE : 1, HOLD_LINE);
+	cputag_set_input_line(timer->machine, "maincpu", mainCpuIsArm ? ARM_IRQ_LINE : 1, HOLD_LINE);
 }
 
 static WRITE32_HANDLER( mlc_irq_w )
@@ -192,7 +192,7 @@ static WRITE32_HANDLER( mlc_irq_w )
 		cputag_set_input_line(space->machine, "maincpu", mainCpuIsArm ? ARM_IRQ_LINE : 1, CLEAR_LINE);
 		return;
 	case 0x14: /* Prepare scanline interrupt */
-		timer_adjust_oneshot(raster_irq_timer,video_screen_get_time_until_pos(space->machine->primary_screen, irq_ram[0x14/4], 0),0);
+		timer_device_adjust_oneshot(raster_irq_timer,video_screen_get_time_until_pos(space->machine->primary_screen, irq_ram[0x14/4], 0),0);
 		//logerror("prepare scanline to fire at %d (currently on %d)\n", irq_ram[0x14/4], video_screen_get_vpos(space->machine->primary_screen));
 		return;
 	case 0x18:
@@ -229,7 +229,7 @@ static WRITE32_HANDLER( mlc_irq_w )
 
 static READ32_HANDLER(mlc_spriteram_r)
 {
-	return spriteram32[offset]&0xffff;
+	return space->machine->generic.spriteram.u32[offset]&0xffff;
 }
 
 static READ32_HANDLER(mlc_vram_r)
@@ -273,13 +273,13 @@ static ADDRESS_MAP_START( decomlc_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x0200078, 0x020007f) AM_READ(test2_r)	AM_MIRROR(0xff000000)
 	AM_RANGE(0x0200000, 0x020007f) AM_WRITE(mlc_irq_w) AM_BASE(&irq_ram) AM_MIRROR(0xff000000)
 	AM_RANGE(0x0200080, 0x02000ff) AM_RAM AM_BASE(&mlc_clip_ram) AM_MIRROR(0xff000000)
-	AM_RANGE(0x0204000, 0x0206fff) AM_READWRITE(mlc_spriteram_r, SMH_RAM) AM_BASE(&spriteram32) AM_SIZE(&spriteram_size) AM_MIRROR(0xff000000)
-	AM_RANGE(0x0280000, 0x029ffff) AM_READWRITE(mlc_vram_r, SMH_RAM) AM_BASE(&mlc_vram) AM_MIRROR(0xff000000)
-	AM_RANGE(0x0300000, 0x0307fff) AM_RAM_WRITE(avengrs_palette_w) AM_BASE(&paletteram32) AM_MIRROR(0xff000000)
+	AM_RANGE(0x0204000, 0x0206fff) AM_RAM_READ(mlc_spriteram_r) AM_BASE_SIZE_GENERIC(spriteram) AM_MIRROR(0xff000000)
+	AM_RANGE(0x0280000, 0x029ffff) AM_RAM_READ(mlc_vram_r) AM_BASE(&mlc_vram) AM_MIRROR(0xff000000)
+	AM_RANGE(0x0300000, 0x0307fff) AM_RAM_WRITE(avengrs_palette_w) AM_BASE_GENERIC(paletteram) AM_MIRROR(0xff000000)
 	AM_RANGE(0x0400000, 0x0400003) AM_READ_PORT("INPUTS") AM_MIRROR(0xff000000)
 	AM_RANGE(0x0440000, 0x044001f) AM_READ(test3_r)	AM_MIRROR(0xff000000)
 	AM_RANGE(0x044001c, 0x044001f) AM_WRITENOP AM_MIRROR(0xff000000)
-	AM_RANGE(0x0500000, 0x0500003) AM_WRITE(avengrs_eprom_w) AM_MIRROR(0xff000000)
+	AM_RANGE(0x0500000, 0x0500003) AM_DEVWRITE("eeprom", avengrs_eprom_w) AM_MIRROR(0xff000000)
 	AM_RANGE(0x0600000, 0x0600007) AM_DEVREADWRITE8("ymz", ymz280b_r, ymz280b_w, 0xff000000) AM_MIRROR(0xff000000)
 	AM_RANGE(0x070f000, 0x070ffff) AM_READ(stadhr96_prot_146_r) AM_MIRROR(0xff000000)
 //  AM_RANGE(0x070f000, 0x070ffff) AM_READ(stadhr96_prot_146_w) AM_BASE(&deco32_prot_ram)
@@ -313,7 +313,7 @@ static INPUT_PORTS_START( mlc )
 	PORT_BIT( 0x00100000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00200000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 	PORT_BIT( 0x01000000, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -379,26 +379,7 @@ GFXDECODE_END
 static MACHINE_RESET( mlc )
 {
 	vbl_i = 0xffffffff;
-	raster_irq_timer = timer_alloc(machine, interrupt_gen, NULL);
-}
-
-static NVRAM_HANDLER( mlc )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C46); // actually 93C45
-
-		if (file) eeprom_load(file);
-		else
-		{
-			UINT8* defaultram = memory_region(machine, "defaults");
-
-			if (defaultram)
-				eeprom_set_data(defaultram, memory_region_length(machine, "defaults"));
-		}
-	}
+	raster_irq_timer = devtag_get_device(machine, "int_timer");
 }
 
 static MACHINE_DRIVER_START( avengrgs )
@@ -408,7 +389,9 @@ static MACHINE_DRIVER_START( avengrgs )
 	MDRV_CPU_PROGRAM_MAP(decomlc_map)
 
 	MDRV_MACHINE_RESET(mlc)
-	MDRV_NVRAM_HANDLER(mlc) /* Actually 93c45 */
+	MDRV_EEPROM_93C46_ADD("eeprom") /* Actually 93c45 */
+
+	MDRV_TIMER_ADD("int_timer", interrupt_gen)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -439,7 +422,9 @@ static MACHINE_DRIVER_START( mlc )
 	MDRV_CPU_PROGRAM_MAP(decomlc_map)
 
 	MDRV_MACHINE_RESET(mlc)
-	MDRV_NVRAM_HANDLER(mlc) /* Actually 93c45 */
+	MDRV_EEPROM_93C46_ADD("eeprom") /* Actually 93c45 */
+
+	MDRV_TIMER_ADD("int_timer", interrupt_gen)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -663,8 +648,8 @@ ROM_START( skullfng )
 	ROM_LOAD( "mch-06.6a",  0x200000, 0x200000, CRC(b2efe4ae) SHA1(5a9dab74c2ba73a65e8f1419b897467804734fa2) )
 	ROM_LOAD( "mch-07.11j", 0x400000, 0x200000, CRC(bc1a50a1) SHA1(3de191fbc92d2ae84e54263f1c70afec6ff7cc3c) )
 
-	ROM_REGION( 0x80, "defaults", ROMREGION_ERASE00 )
-	ROM_LOAD_OPTIONAL( "skullfng.eeprom",  0x00, 0x80, CRC(240d882e) SHA1(3c1a15ccac91d95b02a8c54b051aa64ff28ce2ab) )
+	ROM_REGION16_BE( 0x80, "eeprom", ROMREGION_ERASE00 )
+	ROM_LOAD( "skullfng.eeprom",  0x00, 0x80, CRC(240d882e) SHA1(3c1a15ccac91d95b02a8c54b051aa64ff28ce2ab) )
 ROM_END
 
 ROM_START( skullfngj )
@@ -687,8 +672,8 @@ ROM_START( skullfngj )
 	ROM_LOAD( "mch-06.6a",  0x200000, 0x200000, CRC(b2efe4ae) SHA1(5a9dab74c2ba73a65e8f1419b897467804734fa2) )
 	ROM_LOAD( "mch-07.11j", 0x400000, 0x200000, CRC(bc1a50a1) SHA1(3de191fbc92d2ae84e54263f1c70afec6ff7cc3c) )
 
-	ROM_REGION( 0x80, "defaults", ROMREGION_ERASE00 )
-	ROM_LOAD_OPTIONAL( "skullfng.eeprom",  0x00, 0x80, CRC(240d882e) SHA1(3c1a15ccac91d95b02a8c54b051aa64ff28ce2ab) )
+	ROM_REGION16_BE( 0x80, "eeprom", ROMREGION_ERASE00 )
+	ROM_LOAD( "skullfng.eeprom",  0x00, 0x80, CRC(240d882e) SHA1(3c1a15ccac91d95b02a8c54b051aa64ff28ce2ab) )
 ROM_END
 
 /***************************************************************************/

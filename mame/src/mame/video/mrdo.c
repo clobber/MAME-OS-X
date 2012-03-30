@@ -10,7 +10,7 @@
 
 
 UINT8 *mrdo_bgvideoram,*mrdo_fgvideoram;
-static tilemap *bg_tilemap,*fg_tilemap;
+static tilemap_t *bg_tilemap,*fg_tilemap;
 static int flipscreen;
 
 
@@ -234,10 +234,11 @@ WRITE8_HANDLER( mrdo_flipscreen_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
 
-	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		if (spriteram[offs + 1] != 0)
 		{

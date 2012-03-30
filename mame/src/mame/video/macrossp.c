@@ -12,7 +12,7 @@ UINT32 *macrossp_spriteram;
 
 static UINT32 *spriteram_old,*spriteram_old2;
 
-static tilemap  *macrossp_scra_tilemap, *macrossp_scrb_tilemap,*macrossp_scrc_tilemap, *macrossp_text_tilemap;
+static tilemap_t  *macrossp_scra_tilemap, *macrossp_scrb_tilemap,*macrossp_scrc_tilemap, *macrossp_text_tilemap;
 
 
 /*** SCR A LAYER ***/
@@ -146,8 +146,8 @@ static TILE_GET_INFO( get_macrossp_text_tile_info )
 
 VIDEO_START(macrossp)
 {
-	spriteram_old = auto_alloc_array_clear(machine, UINT32, spriteram_size/4);
-	spriteram_old2 = auto_alloc_array_clear(machine, UINT32, spriteram_size/4);
+	spriteram_old = auto_alloc_array_clear(machine, UINT32, machine->generic.spriteram_size/4);
+	spriteram_old2 = auto_alloc_array_clear(machine, UINT32, machine->generic.spriteram_size/4);
 
 	macrossp_text_tilemap = tilemap_create(machine, get_macrossp_text_tile_info,tilemap_scan_rows,16,16,64,64);
 	macrossp_scra_tilemap = tilemap_create(machine, get_macrossp_scra_tile_info,tilemap_scan_rows,16,16,64,64);
@@ -172,7 +172,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 	const gfx_element *gfx = machine->gfx[0];
 //  UINT32 *source = macrossp_spriteram;
 	UINT32 *source = spriteram_old2; /* buffers by two frames */
-	UINT32 *finish = source + spriteram_size/4;
+	UINT32 *finish = source + machine->generic.spriteram_size/4;
 
 
 	while( source<finish )
@@ -295,7 +295,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 static void draw_layer(bitmap_t *bitmap, const rectangle *cliprect, int layer)
 {
-	tilemap *tm;
+	tilemap_t *tm;
 	UINT32 *vr;
 
 	switch (layer)
@@ -404,6 +404,6 @@ macrossp_scrc_videoregs[2]);// 08 - 0b
 VIDEO_EOF( macrossp )
 {
 	/* looks like sprites are *two* frames ahead, like nmk16 */
-	memcpy(spriteram_old2,spriteram_old,spriteram_size);
-	memcpy(spriteram_old,macrossp_spriteram,spriteram_size);
+	memcpy(spriteram_old2,spriteram_old,machine->generic.spriteram_size);
+	memcpy(spriteram_old,macrossp_spriteram,machine->generic.spriteram_size);
 }

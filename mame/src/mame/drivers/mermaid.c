@@ -117,6 +117,8 @@ Stephh's notes (based on the games Z80 code and some tests) :
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
+extern UINT8* mermaid_videoram;
+extern UINT8* mermaid_colorram;
 extern UINT8* mermaid_videoram2;
 extern UINT8* mermaid_bg_scrollram;
 extern UINT8* mermaid_fg_scrollram;
@@ -161,11 +163,11 @@ static ADDRESS_MAP_START( mermaid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(mermaid_videoram2_w) AM_BASE(&mermaid_videoram2)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(mermaid_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(mermaid_videoram_w) AM_BASE(&mermaid_videoram)
 	AM_RANGE(0xd800, 0xd81f) AM_RAM_WRITE(mermaid_bg_scroll_w) AM_BASE(&mermaid_bg_scrollram)
 	AM_RANGE(0xd840, 0xd85f) AM_RAM_WRITE(mermaid_fg_scroll_w) AM_BASE(&mermaid_fg_scrollram)
-	AM_RANGE(0xd880, 0xd8bf) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(mermaid_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd880, 0xd8bf) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(mermaid_colorram_w) AM_BASE(&mermaid_colorram)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("DSW")
 	AM_RANGE(0xe000, 0xe001) AM_RAM AM_BASE(&mermaid_ay8910_enable)
 	AM_RANGE(0xe002, 0xe002) AM_WRITENOP	// ???
@@ -404,8 +406,8 @@ ROM_START( mermaid )
 	ROM_LOAD( "g960_43.26",	0x0000, 0x1000, CRC(6f077417) SHA1(f2c20e03427a2f5a113c6a4cf95875b77a0ec418) )
 
 	ROM_REGION( 0x40, "proms", 0 )
-	ROM_LOAD( "col_a.96", 	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) )
-	ROM_LOAD( "col_b.95", 	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) )
+	ROM_LOAD( "col_a.96",	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) )
+	ROM_LOAD( "col_b.95",	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) )
 
 	ROM_REGION( 0x1000, "user1", 0 )	// unknown
 	ROM_LOAD( "g960_42.39",	0x0000, 0x1000, CRC(287840bb) SHA1(9a1836f39f328b0c9672976d95a9ece45bb9e89f) )
@@ -474,8 +476,8 @@ ROM_START( yachtmn )
 	ROM_LOAD( "g960_43.26",	0x0000, 0x1000, CRC(6f077417) SHA1(f2c20e03427a2f5a113c6a4cf95875b77a0ec418) ) // merv_2.26
 
 	ROM_REGION( 0x40, "proms", 0 )
-	ROM_LOAD( "col_a.96", 	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) ) // col_a.96
-	ROM_LOAD( "col_b.95", 	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) ) // col_b.95
+	ROM_LOAD( "col_a.96",	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) ) // col_a.96
+	ROM_LOAD( "col_b.95",	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) ) // col_b.95
 
 	ROM_REGION( 0x1000, "user1", 0 )	// unknown
 	ROM_LOAD( "g960_42.39",	0x0000, 0x1000, CRC(287840bb) SHA1(9a1836f39f328b0c9672976d95a9ece45bb9e89f) ) // mervce.39

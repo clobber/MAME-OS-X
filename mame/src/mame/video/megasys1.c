@@ -192,10 +192,10 @@ actual code sent to the hardware.
 ***************************************************************************/
 
 #include "driver.h"
-#include "megasys1.h"
+#include "includes/megasys1.h"
 
 /* Variables defined here, that have to be shared: */
-tilemap *megasys1_tmap[3];
+tilemap_t *megasys1_tmap[3];
 
 UINT16 *megasys1_scrollram[3];
 UINT16 *megasys1_objectram, *megasys1_vregs, *megasys1_ram;
@@ -209,7 +209,7 @@ static int megasys1_sprite_bank;
 static int megasys1_screen_flag, megasys1_sprite_flag;
 static int megasys1_8x8_scroll_factor[3], megasys1_16x16_scroll_factor[3];
 
-static tilemap *megasys1_tilemap[3][2][4];
+static tilemap_t *megasys1_tilemap[3][2][4];
 
 /* Variables defined in driver: */
 static int hardware_type_z;
@@ -247,7 +247,7 @@ VIDEO_START( megasys1 )
 {
 	int i;
 
-	spriteram16 = &megasys1_ram[0x8000/2];
+	machine->generic.spriteram.u16 = &megasys1_ram[0x8000/2];
 
 	megasys1_buffer_objectram = auto_alloc_array(machine, UINT16, 0x2000);
 	megasys1_buffer_spriteram16 = auto_alloc_array(machine, UINT16, 0x2000);
@@ -261,12 +261,12 @@ VIDEO_START( megasys1 )
 
 	megasys1_active_layers = megasys1_sprite_bank = megasys1_screen_flag = megasys1_sprite_flag = 0;
 
- 	for (i = 0; i < 3; i ++)
+	for (i = 0; i < 3; i ++)
 	{
 		megasys1_scroll_flag[i] = megasys1_scrollx[i] = megasys1_scrolly[i] = 0;
 	}
 
- 	megasys1_bits_per_color_code = 4;
+	megasys1_bits_per_color_code = 4;
 
 /*
     The tile code of a specific layer is multiplied for a constant
@@ -633,6 +633,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 	}	/* non Z hw */
 	else
 	{
+		UINT16 *spriteram16 = machine->generic.spriteram.u16;
 
 		/* MS1-Z just draws Sprite Data, and in reverse order */
 
@@ -816,7 +817,7 @@ PALETTE_INIT( megasys1 )
 					{
 						if (opacity & top_mask)
 						{
-							if (layer != top )	result |= 1; 	// error: opaque pens aren't always opaque!
+							if (layer != top )	result |= 1;	// error: opaque pens aren't always opaque!
 						}
 						else
 						{
@@ -1036,7 +1037,7 @@ VIDEO_EOF( megasys1 )
 	memcpy(megasys1_buffer_objectram, megasys1_objectram, 0x2000);
 //spriteram16
 	memcpy(megasys1_buffer2_spriteram16, megasys1_buffer_spriteram16, 0x2000);
-	memcpy(megasys1_buffer_spriteram16, spriteram16, 0x2000);
+	memcpy(megasys1_buffer_spriteram16, machine->generic.spriteram.u16, 0x2000);
 
 }
 

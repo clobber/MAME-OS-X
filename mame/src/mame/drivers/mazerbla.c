@@ -312,14 +312,14 @@ static WRITE8_HANDLER(cfb_rom_bank_sel_w)	/* mazer blazer */
 {
 	gfx_rom_bank = data;
 
-	memory_set_bankptr(space->machine,  1, memory_region(space->machine, "sub2") + (gfx_rom_bank * 0x2000) + 0x10000 );
+	memory_set_bankptr(space->machine,  "bank1", memory_region(space->machine, "sub2") + (gfx_rom_bank * 0x2000) + 0x10000 );
 }
 
 static WRITE8_HANDLER(cfb_rom_bank_sel_w_gg)	/* great guns */
 {
 	gfx_rom_bank = data>>1;
 
-	memory_set_bankptr(space->machine,  1, memory_region(space->machine, "sub2") + (gfx_rom_bank * 0x2000) + 0x10000 );
+	memory_set_bankptr(space->machine,  "bank1", memory_region(space->machine, "sub2") + (gfx_rom_bank * 0x2000) + 0x10000 );
 }
 
 
@@ -856,7 +856,7 @@ static WRITE8_HANDLER( zpu_led_w )
 {
 	/* 0x6e - reset (offset = 0)*/
 	/* 0x6f - set */
-	set_led_status(0, offset&1 );
+	set_led_status(space->machine, 0, offset&1 );
 }
 
 static WRITE8_HANDLER( zpu_lamps_w)
@@ -864,26 +864,26 @@ static WRITE8_HANDLER( zpu_lamps_w)
 	/* bit 4 = /LAMP0 */
 	/* bit 5 = /LAMP1 */
 
-	/*set_led_status(0, (data&0x10)>>4 );*/
-	/*set_led_status(1, (data&0x20)>>4 );*/
+	/*set_led_status(space->machine, 0, (data&0x10)>>4 );*/
+	/*set_led_status(space->machine, 1, (data&0x20)>>4 );*/
 }
 
 static WRITE8_HANDLER( zpu_coin_counter_w )
 {
 	/* bit 6 = coin counter */
-	coin_counter_w(offset, (data&0x40)>>6 );
+	coin_counter_w(space->machine, offset, (data&0x40)>>6 );
 }
 
 static WRITE8_HANDLER(cfb_led_w)
 {
 	/* bit 7 - led on */
-	set_led_status(2,(data&0x80)>>7);
+	set_led_status(space->machine, 2,(data&0x80)>>7);
 }
 
 static WRITE8_DEVICE_HANDLER( gg_led_ctrl_w )
 {
 	/* bit 0, bit 1 - led on */
-	set_led_status(1,data&0x01);
+	set_led_status(device->machine,1,data&0x01);
 }
 
 
@@ -898,7 +898,7 @@ static WRITE8_HANDLER( vsb_ls273_audio_control_w )
 	vsb_ls273 = data;
 
 	/* bit 5 - led on */
-	set_led_status(1,(data&0x20)>>5);
+	set_led_status(space->machine, 1,(data&0x20)>>5);
 }
 
 static READ8_DEVICE_HANDLER( soundcommand_r )
@@ -938,9 +938,9 @@ static WRITE8_HANDLER( sound_nmi_clear_w )
 
 static ADDRESS_MAP_START( mazerbla_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xd800, 0xd800) AM_READ(cfb_zpu_int_req_clr)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM
 ADDRESS_MAP_END
 
@@ -968,8 +968,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mazerbla_cpu3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x37ff) AM_ROM
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK(1)					/* GFX roms */
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK("bank1")					/* GFX roms */
 	AM_RANGE(0x4000, 0x4003) AM_WRITE(VCU_video_reg_w)
 	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&cfb_ram)		/* Color Frame Buffer PCB, a.k.a. RAM for VCU commands and parameters */
 	AM_RANGE(0xa000, 0xa7ff) AM_READ(VCU_set_cmd_param_r)	/* VCU command and parameters LOAD */

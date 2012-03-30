@@ -128,7 +128,7 @@ static unsigned char *tile_palette;
 static unsigned char *sprite_palette;
 static const device_config *nvram_1c;
 static const device_config *nvram_1d;
-static tilemap *bgtiles;
+static tilemap_t *bgtiles;
 
 static int control_num;
 static UINT8 sound_to_main_flag;
@@ -171,7 +171,7 @@ static VIDEO_UPDATE( firefox )
 
 	for( sprite = 0; sprite < 32; sprite++ )
 	{
-		UINT8 *sprite_data = spriteram + ( 0x200 * sprite_bank ) + ( sprite * 16 );
+		UINT8 *sprite_data = screen->machine->generic.spriteram.u8 + ( 0x200 * sprite_bank ) + ( sprite * 16 );
 		int flags = sprite_data[ 0 ];
 		int y = sprite_data[ 1 ] + ( 256 * ( ( flags >> 0 ) & 1 ) );
 		int x = sprite_data[ 2 ] + ( 256 * ( ( flags >> 1 ) & 1 ) );
@@ -383,7 +383,7 @@ static WRITE8_HANDLER( novram_store_w )
 
 static WRITE8_HANDLER( rom_bank_w )
 {
-	memory_set_bank(space->machine, 1, data & 0x1f);
+	memory_set_bank(space->machine, "bank1", data & 0x1f);
 }
 
 static WRITE8_HANDLER( main_irq_clear_w )
@@ -411,12 +411,12 @@ static WRITE8_HANDLER( self_reset_w )
 
 static WRITE8_HANDLER( led_w )
 {
-    set_led_status( offset, ( data & 0x80 ) == 0 );
+    set_led_status( space->machine, offset, ( data & 0x80 ) == 0 );
 }
 
 static WRITE8_HANDLER( firefox_coin_counter_w )
 {
-	coin_counter_w( offset, data & 0x80 );
+	coin_counter_w( space->machine, offset, data & 0x80 );
 }
 
 
@@ -430,7 +430,7 @@ static void firq_gen(const device_config *device, int state)
 
 static MACHINE_START( firefox )
 {
-	memory_configure_bank(machine, 1, 0, 32, memory_region(machine, "maincpu") + 0x10000, 0x1000);
+	memory_configure_bank(machine, "bank1", 0, 32, memory_region(machine, "maincpu") + 0x10000, 0x1000);
 	nvram_1c = devtag_get_device(machine, "nvram_1c");
 	nvram_1d = devtag_get_device(machine, "nvram_1d");
 
@@ -451,11 +451,11 @@ static MACHINE_START( firefox )
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(tileram_w) AM_BASE(&tileram)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0x2800, 0x2aff) AM_READWRITE(SMH_RAM, sprite_palette_w) AM_BASE(&sprite_palette)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x2800, 0x2aff) AM_RAM_WRITE(sprite_palette_w) AM_BASE(&sprite_palette)
 	AM_RANGE(0x2b00, 0x2b00) AM_MIRROR(0x04ff) AM_WRITE(firefox_objram_bank_w)
-	AM_RANGE(0x2c00, 0x2eff) AM_READWRITE(SMH_RAM, tile_palette_w) AM_BASE(&tile_palette)
-	AM_RANGE(0x3000, 0x3fff) AM_ROMBANK(1)
+	AM_RANGE(0x2c00, 0x2eff) AM_RAM_WRITE(tile_palette_w) AM_BASE(&tile_palette)
+	AM_RANGE(0x3000, 0x3fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0x40ff) AM_READWRITE(nvram_r, nvram_w)						/* NOVRAM */
 	AM_RANGE(0x4100, 0x4100) AM_MIRROR(0x00f8) AM_READ_PORT("rdin0")			/* RDIN0 */
 	AM_RANGE(0x4101, 0x4101) AM_MIRROR(0x00f8) AM_READ_PORT("rdin1")			/* RDIN1 */

@@ -368,6 +368,9 @@
 
 
 /* from video */
+extern UINT8 *snookr10_videoram;
+extern UINT8 *snookr10_colorram;
+
 WRITE8_HANDLER( snookr10_videoram_w );
 WRITE8_HANDLER( snookr10_colorram_w );
 PALETTE_INIT( snookr10 );
@@ -457,9 +460,9 @@ static WRITE8_HANDLER( output_port_0_w )
 	output_set_lamp_value(5, bit3);	/* Lamp 5 - STOP4  */
 	output_set_lamp_value(6, bit4);	/* Lamp 6 - STOP5  */
 
-	coin_counter_w(0, data & 0x01);	/* Coin in */
-	coin_counter_w(1, data & 0x10);	/* Key in */
-	coin_counter_w(2, data & 0x04);	/* Payout x10 */
+	coin_counter_w(space->machine, 0, data & 0x01);	/* Coin in */
+	coin_counter_w(space->machine, 1, data & 0x10);	/* Key in */
+	coin_counter_w(space->machine, 2, data & 0x04);	/* Payout x10 */
 
 //  logerror("high: %04x - low: %X \n", outporth, outportl);
 //  popmessage("written : %02X", data);
@@ -505,7 +508,7 @@ static WRITE8_HANDLER( output_port_1_w )
 *************************/
 
 static ADDRESS_MAP_START( snookr10_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("IN0")		/* IN0 */
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("IN1")		/* IN1 */
@@ -514,13 +517,13 @@ static ADDRESS_MAP_START( snookr10_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3004, 0x3004) AM_READ(dsw_port_1_r)		/* complement of DS1, bit 7 */
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(output_port_0_w)	/* OUT0 */
 	AM_RANGE(0x5001, 0x5001) AM_WRITE(output_port_1_w)	/* OUT1 */
-	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE(&snookr10_videoram)
+	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE(&snookr10_colorram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tenballs_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("IN0")		/* IN0 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("IN1")		/* IN1 */
@@ -528,8 +531,8 @@ static ADDRESS_MAP_START( tenballs_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4003, 0x4003) AM_READ_PORT("SW1")		/* DS1 */
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(output_port_0_w)	/* OUT0 */
 	AM_RANGE(0x5001, 0x5001) AM_WRITE(output_port_1_w)	/* OUT1 */
-	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE(&snookr10_videoram)
+	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE(&snookr10_colorram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 

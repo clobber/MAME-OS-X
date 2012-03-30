@@ -381,7 +381,7 @@ static DISCRETE_SOUND_START(mario)
 	DISCRETE_TASK_START(1)
 	DISCRETE_COUNTER(NODE_100,1,0,NODE_118,0,0xFFFF,DISC_COUNT_UP,0,DISC_CLK_BY_COUNT)
 
-	DISCRETE_BIT_DECODE(NODE_102, NODE_100, 3, 1) 	//LS157 2B
+	DISCRETE_BIT_DECODE(NODE_102, NODE_100, 3, 1)	//LS157 2B
 	DISCRETE_BIT_DECODE(NODE_104, NODE_100, 11, TTL_HIGH) //LS157 3B
 
 	DISCRETE_LS123(NODE_110, DS_SOUND7_INV, MR_R61, MR_C41)
@@ -453,7 +453,7 @@ static void set_ea(const address_space *space, int ea)
 	mario_state	*state = (mario_state *)space->machine->driver_data;
 	//printf("ea: %d\n", ea);
 	//cputag_set_input_line(machine, "audiocpu", MCS48_INPUT_EA, (ea) ? ASSERT_LINE : CLEAR_LINE);
-	if (state->eabank != 0)
+	if (state->eabank != NULL)
 		memory_set_bank(space->machine, state->eabank, ea);
 }
 
@@ -473,13 +473,13 @@ static SOUND_START( mario )
 	SND[0x1001] = 0x01;
 #endif
 
-	state->eabank = 0;
+	state->eabank = NULL;
 	if (audiocpu != NULL && cpu_get_type(audiocpu) != CPU_Z80)
 	{
-		state->eabank = 1;
-		memory_install_read8_handler(cpu_get_address_space(audiocpu, ADDRESS_SPACE_PROGRAM), 0x000, 0x7ff, 0, 0, (read8_space_func)SMH_BANK(1));
-		memory_configure_bank(machine, 1, 0, 1, memory_region(machine, "audiocpu"), 0);
-	    memory_configure_bank(machine, 1, 1, 1, memory_region(machine, "audiocpu") + 0x1000, 0x800);
+		state->eabank = "bank1";
+		memory_install_read_bank(cpu_get_address_space(audiocpu, ADDRESS_SPACE_PROGRAM), 0x000, 0x7ff, 0, 0, "bank1");
+		memory_configure_bank(machine, "bank1", 0, 1, memory_region(machine, "audiocpu"), 0);
+	    memory_configure_bank(machine, "bank1", 1, 1, memory_region(machine, "audiocpu") + 0x1000, 0x800);
 	}
 
     state_save_register_global(machine, state->last);
@@ -641,7 +641,7 @@ WRITE8_HANDLER( mario_sh3_w )
  *************************************/
 
 static ADDRESS_MAP_START( mario_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_ROMBANK(1) AM_REGION("audiocpu", 0)
+	AM_RANGE(0x0000, 0x07ff) AM_ROMBANK("bank1") AM_REGION("audiocpu", 0)
 	AM_RANGE(0x0800, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -656,8 +656,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( masao_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
-	AM_RANGE(0x4000, 0x4000) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x4000, 0x4000) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("aysnd", ay8910_address_w)
 ADDRESS_MAP_END
 
 /*************************************
@@ -713,7 +713,7 @@ MACHINE_DRIVER_START( masao_audio )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 14318000/6)
+	MDRV_SOUND_ADD("aysnd", AY8910, 14318000/6)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 

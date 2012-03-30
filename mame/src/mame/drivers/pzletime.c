@@ -20,7 +20,7 @@
 #include "machine/eeprom.h"
 
 static UINT16 *bg_videoram, *mid_videoram, *txt_videoram, *tilemap_regs, *video_regs;
-static tilemap *mid_tilemap, *txt_tilemap;
+static tilemap_t *mid_tilemap, *txt_tilemap;
 static int ticket = 0;
 
 static TILE_GET_INFO( get_mid_tile_info )
@@ -89,6 +89,7 @@ static VIDEO_UPDATE( pzletime )
 	tilemap_draw(bitmap,cliprect,mid_tilemap, 0,0);
 
 	{
+		UINT16 *spriteram16 = screen->machine->generic.spriteram.u16;
 		int offs,spr_offs,colour,sx,sy;
 
 		for(offs = 0; offs < 0x2000/2; offs += 4)
@@ -126,13 +127,13 @@ static WRITE16_HANDLER( txt_videoram_w )
 	tilemap_mark_tile_dirty(txt_tilemap,offset);
 }
 
-static WRITE16_HANDLER( eeprom_w )
+static WRITE16_DEVICE_HANDLER( eeprom_w )
 {
 	if( ACCESSING_BITS_0_7 )
 	{
-		eeprom_write_bit(data & 0x01);
-		eeprom_set_cs_line((data & 0x02) ? CLEAR_LINE : ASSERT_LINE );
-		eeprom_set_clock_line((data & 0x04) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_write_bit(device, data & 0x01);
+		eeprom_set_cs_line(device, (data & 0x02) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom_set_clock_line(device, (data & 0x04) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
@@ -186,13 +187,13 @@ static ADDRESS_MAP_START( pzletime_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x3fffff) AM_ROM
 	AM_RANGE(0x700000, 0x700005) AM_RAM_WRITE(video_regs_w) AM_BASE(&video_regs)
 	AM_RANGE(0x800000, 0x800001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x900000, 0x9005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x900000, 0x9005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xa00000, 0xa00007) AM_RAM AM_BASE(&tilemap_regs)
 	AM_RANGE(0xb00000, 0xb3ffff) AM_RAM AM_BASE(&bg_videoram)
 	AM_RANGE(0xc00000, 0xc00fff) AM_RAM_WRITE(mid_videoram_w) AM_BASE(&mid_videoram)
 	AM_RANGE(0xc01000, 0xc01fff) AM_RAM_WRITE(txt_videoram_w) AM_BASE(&txt_videoram)
-	AM_RANGE(0xd00000, 0xd01fff) AM_RAM AM_BASE(&spriteram16)
-	AM_RANGE(0xe00000, 0xe00001) AM_READ_PORT("INPUT") AM_WRITE(eeprom_w)
+	AM_RANGE(0xd00000, 0xd01fff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0xe00000, 0xe00001) AM_READ_PORT("INPUT") AM_DEVWRITE("eeprom", eeprom_w)
 	AM_RANGE(0xe00002, 0xe00003) AM_READ_PORT("SYSTEM") AM_WRITE(ticket_w)
 	AM_RANGE(0xe00004, 0xe00005) AM_DEVWRITE("oki", oki_bank_w)
 	AM_RANGE(0xf00000, 0xf0ffff) AM_RAM
@@ -207,7 +208,7 @@ static INPUT_PORTS_START( pzletime )
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL) /* eeprom */
+	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit) /* eeprom */
 	PORT_BIT( 0x0080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(ticket_status_r, NULL) /* ticket dispenser */
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
@@ -272,7 +273,7 @@ static PALETTE_INIT( pzletime )
 static MACHINE_DRIVER_START( pzletime )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("cpu",M68000,10000000)
+	MDRV_CPU_ADD("maincpu",M68000,10000000)
 	MDRV_CPU_PROGRAM_MAP(pzletime_map)
 	MDRV_CPU_VBLANK_INT("screen",irq4_line_hold)
 
@@ -285,7 +286,7 @@ static MACHINE_DRIVER_START( pzletime )
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 28*8-1)
 	MDRV_GFXDECODE(pzletime)
 	MDRV_PALETTE_LENGTH(0x300 + 32768)
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	MDRV_PALETTE_INIT(pzletime)
 	MDRV_VIDEO_START(pzletime)
@@ -305,7 +306,7 @@ MACHINE_DRIVER_END
 ***************************************************************************/
 
 ROM_START( pzletime )
-	ROM_REGION( 0x400000, "cpu", 0 )
+	ROM_REGION( 0x400000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "5.bin", 0x000000, 0x80000, CRC(78b027dc) SHA1(6719908a075ecf0666bb817ac8a31056a7f315c6) )
 	ROM_LOAD16_BYTE( "1.bin", 0x000001, 0x80000, CRC(0a69cbc7) SHA1(bae8b5746209c6773da27acaec7bd535a69019d2) )
 	ROM_LOAD16_BYTE( "6.bin", 0x100000, 0x80000, CRC(526733ef) SHA1(21a921416d1ae7b9d49789d70ae99f240b012489) )

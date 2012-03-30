@@ -22,7 +22,7 @@
 
 /* Local variables: */
 
-static tilemap *bg_tilemap,*fg_tilemap;
+static tilemap_t *bg_tilemap,*fg_tilemap;
 
 static UINT8 metlclsh_write_mask, *metlclsh_otherram;
 
@@ -37,12 +37,12 @@ WRITE8_HANDLER( metlclsh_rambank_w )
 	if (data & 1)
 	{
 		metlclsh_write_mask = 0;
-		memory_set_bankptr(space->machine, 1, metlclsh_bgram);
+		memory_set_bankptr(space->machine, "bank1", metlclsh_bgram);
 	}
 	else
 	{
 		metlclsh_write_mask = 1 << (data >> 1);
-		memory_set_bankptr(space->machine, 1, metlclsh_otherram);
+		memory_set_bankptr(space->machine, "bank1", metlclsh_otherram);
 	}
 }
 
@@ -174,10 +174,11 @@ VIDEO_START( metlclsh )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	gfx_element *gfx = machine->gfx[0];
 	int offs;
 
-	for (offs = 0;offs < spriteram_size; offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size; offs += 4)
 	{
 		int attr,code,color,sx,sy,flipx,flipy,wrapy,sizey;
 

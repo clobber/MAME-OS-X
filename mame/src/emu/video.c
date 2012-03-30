@@ -16,7 +16,6 @@
 #include "rendutil.h"
 #include "ui.h"
 #include "aviio.h"
-#include "deprecat.h"
 
 #include "snap.lh"
 
@@ -70,9 +69,9 @@ struct _screen_state
 	attoseconds_t			frame_period;			/* attoseconds per frame */
 	attoseconds_t			scantime;				/* attoseconds per scanline */
 	attoseconds_t			pixeltime;				/* attoseconds per pixel */
-	attoseconds_t 			vblank_period;			/* attoseconds per VBLANK period */
-	attotime 				vblank_start_time;		/* time of last VBLANK start */
-	attotime 				vblank_end_time;		/* time of last VBLANK end */
+	attoseconds_t			vblank_period;			/* attoseconds per VBLANK period */
+	attotime				vblank_start_time;		/* time of last VBLANK start */
+	attotime				vblank_end_time;		/* time of last VBLANK end */
 	emu_timer *				vblank_begin_timer;		/* timer to signal VBLANK start */
 	emu_timer *				vblank_end_timer;		/* timer to signal VBLANK end */
 	emu_timer *				scanline0_timer;		/* scanline 0 timer */
@@ -93,15 +92,15 @@ struct _video_global
 
 	/* throttling calculations */
 	osd_ticks_t				throttle_last_ticks;	/* osd_ticks the last call to throttle */
-	attotime 				throttle_realtime;		/* real time the last call to throttle */
-	attotime 				throttle_emutime;		/* emulated time the last call to throttle */
-	UINT32 					throttle_history;		/* history of frames where we were fast enough */
+	attotime				throttle_realtime;		/* real time the last call to throttle */
+	attotime				throttle_emutime;		/* emulated time the last call to throttle */
+	UINT32					throttle_history;		/* history of frames where we were fast enough */
 
 	/* dynamic speed computation */
 	osd_ticks_t 			speed_last_realtime;	/* real time at the last speed calculation */
-	attotime 				speed_last_emutime;		/* emulated time at the last speed calculation */
-	double 					speed_percent;			/* most recent speed percentage */
-	UINT32 					partial_updates_this_frame;/* partial update counter this frame */
+	attotime				speed_last_emutime;		/* emulated time at the last speed calculation */
+	double					speed_percent;			/* most recent speed percentage */
+	UINT32					partial_updates_this_frame;/* partial update counter this frame */
 
 	/* overall speed computation */
 	UINT32					overall_real_seconds;	/* accumulated real seconds at normal speed */
@@ -136,7 +135,7 @@ struct _video_global
 	avi_file *				avifile;				/* handle to the open movie file */
 	attotime				movie_frame_period;		/* period of a single movie frame */
 	attotime				movie_next_frame_time;	/* time of next frame */
-	UINT32 					movie_frame;			/* current movie frame number */
+	UINT32					movie_frame;			/* current movie frame number */
 };
 
 
@@ -174,9 +173,6 @@ static const UINT8 skiptable[FRAMESKIP_LEVELS][FRAMESKIP_LEVELS] =
 /* core implementation */
 static void video_exit(running_machine *machine);
 static void init_buffered_spriteram(running_machine *machine);
-
-/* graphics decoding */
-static void allocate_graphics(running_machine *machine, const gfx_decode_entry *gfxdecodeinfo);
 
 static void realloc_screen_bitmaps(const device_config *screen);
 static STATE_POSTLOAD( video_screen_postload );
@@ -335,11 +331,6 @@ void video_init(running_machine *machine)
 	if (machine->config->video_attributes & VIDEO_BUFFERS_SPRITERAM)
 		init_buffered_spriteram(machine);
 
-	/* convert the gfx ROMs into character sets. This is done BEFORE calling the driver's */
-	/* palette_init() routine because it might need to check the machine->gfx[] data */
-	if (machine->config->gfxdecodeinfo != NULL)
-		allocate_graphics(machine, machine->config->gfxdecodeinfo);
-
 	/* call the PALETTE_INIT function */
 	if (machine->config->init_palette != NULL)
 		(*machine->config->init_palette)(machine, memory_region(machine, "proms"));
@@ -431,164 +422,22 @@ static void video_exit(running_machine *machine)
 
 static void init_buffered_spriteram(running_machine *machine)
 {
-	assert_always(spriteram_size != 0, "Video buffers spriteram but spriteram_size is 0");
+	assert_always(machine->generic.spriteram_size != 0, "Video buffers spriteram but spriteram size is 0");
 
 	/* allocate memory for the back buffer */
-	buffered_spriteram = auto_alloc_array(machine, UINT8, spriteram_size);
+	machine->generic.buffered_spriteram.u8 = auto_alloc_array(machine, UINT8, machine->generic.spriteram_size);
 
 	/* register for saving it */
-	state_save_register_global_pointer(machine, buffered_spriteram, spriteram_size);
+	state_save_register_global_pointer(machine, machine->generic.buffered_spriteram.u8, machine->generic.spriteram_size);
 
 	/* do the same for the second back buffer, if present */
-	if (spriteram_2_size)
+	if (machine->generic.spriteram2_size)
 	{
 		/* allocate memory */
-		buffered_spriteram_2 = auto_alloc_array(machine, UINT8, spriteram_2_size);
+		machine->generic.buffered_spriteram2.u8 = auto_alloc_array(machine, UINT8, machine->generic.spriteram2_size);
 
 		/* register for saving it */
-		state_save_register_global_pointer(machine, buffered_spriteram_2, spriteram_2_size);
-	}
-
-	/* make 16-bit and 32-bit pointer variants */
-	buffered_spriteram16 = (UINT16 *)buffered_spriteram;
-	buffered_spriteram32 = (UINT32 *)buffered_spriteram;
-	buffered_spriteram16_2 = (UINT16 *)buffered_spriteram_2;
-	buffered_spriteram32_2 = (UINT32 *)buffered_spriteram_2;
-}
-
-
-
-/***************************************************************************
-    GRAPHICS DECODING
-***************************************************************************/
-
-/*-------------------------------------------------
-    allocate_graphics - allocate memory for the
-    graphics
--------------------------------------------------*/
-
-static void allocate_graphics(running_machine *machine, const gfx_decode_entry *gfxdecodeinfo)
-{
-	int curgfx;
-
-	/* loop over all elements */
-	for (curgfx = 0; curgfx < MAX_GFX_ELEMENTS && gfxdecodeinfo[curgfx].gfxlayout != NULL; curgfx++)
-	{
-		const gfx_decode_entry *gfxdecode = &gfxdecodeinfo[curgfx];
-		UINT32 region_length = 8 * memory_region_length(machine, gfxdecode->memory_region);
-		const UINT8 *region_base = memory_region(machine, gfxdecode->memory_region);
-		UINT32 xscale = (gfxdecode->xscale == 0) ? 1 : gfxdecode->xscale;
-		UINT32 yscale = (gfxdecode->yscale == 0) ? 1 : gfxdecode->yscale;
-		UINT32 *extpoffs, extxoffs[MAX_ABS_GFX_SIZE], extyoffs[MAX_ABS_GFX_SIZE];
-		const gfx_layout *gl = gfxdecode->gfxlayout;
-		int israw = (gl->planeoffset[0] == GFX_RAW);
-		int planes = gl->planes;
-		UINT32 width = gl->width;
-		UINT32 height = gl->height;
-		UINT32 total = gl->total;
-		UINT32 charincrement = gl->charincrement;
-		gfx_layout glcopy;
-		int j;
-
-		/* make a copy of the layout */
-		glcopy = *gfxdecode->gfxlayout;
-
-		/* copy the X and Y offsets into temporary arrays */
-		memcpy(extxoffs, glcopy.xoffset, sizeof(glcopy.xoffset));
-		memcpy(extyoffs, glcopy.yoffset, sizeof(glcopy.yoffset));
-
-		/* if there are extended offsets, copy them over top */
-		if (glcopy.extxoffs != NULL)
-			memcpy(extxoffs, glcopy.extxoffs, glcopy.width * sizeof(extxoffs[0]));
-		if (glcopy.extyoffs != NULL)
-			memcpy(extyoffs, glcopy.extyoffs, glcopy.height * sizeof(extyoffs[0]));
-
-		/* always use the extended offsets here */
-		glcopy.extxoffs = extxoffs;
-		glcopy.extyoffs = extyoffs;
-
-		extpoffs = glcopy.planeoffset;
-
-		/* expand X and Y by the scale factors */
-		if (xscale > 1)
-		{
-			width *= xscale;
-			for (j = width - 1; j >= 0; j--)
-				extxoffs[j] = extxoffs[j / xscale];
-		}
-		if (yscale > 1)
-		{
-			height *= yscale;
-			for (j = height - 1; j >= 0; j--)
-				extyoffs[j] = extyoffs[j / yscale];
-		}
-
-		/* if the character count is a region fraction, compute the effective total */
-		if (IS_FRAC(total))
-		{
-			assert(region_length != 0);
-			total = region_length / charincrement * FRAC_NUM(total) / FRAC_DEN(total);
-		}
-
-		/* for non-raw graphics, decode the X and Y offsets */
-		if (!israw)
-		{
-			/* loop over all the planes, converting fractions */
-			for (j = 0; j < planes; j++)
-			{
-				UINT32 value = extpoffs[j];
-				if (IS_FRAC(value))
-				{
-					assert(region_length != 0);
-					extpoffs[j] = FRAC_OFFSET(value) + region_length * FRAC_NUM(value) / FRAC_DEN(value);
-				}
-			}
-
-			/* loop over all the X/Y offsets, converting fractions */
-			for (j = 0; j < width; j++)
-			{
-				UINT32 value = extxoffs[j];
-				if (IS_FRAC(value))
-				{
-					assert(region_length != 0);
-					extxoffs[j] = FRAC_OFFSET(value) + region_length * FRAC_NUM(value) / FRAC_DEN(value);
-				}
-			}
-
-			for (j = 0; j < height; j++)
-			{
-				UINT32 value = extyoffs[j];
-				if (IS_FRAC(value))
-				{
-					assert(region_length != 0);
-					extyoffs[j] = FRAC_OFFSET(value) + region_length * FRAC_NUM(value) / FRAC_DEN(value);
-				}
-			}
-		}
-
-		/* otherwise, just use the line modulo */
-		else
-		{
-			int base = gfxdecode->start;
-			int end = region_length/8;
-			int linemod = gl->yoffset[0];
-			while (total > 0)
-			{
-				int elementbase = base + (total - 1) * charincrement / 8;
-				int lastpixelbase = elementbase + height * linemod / 8 - 1;
-				if (lastpixelbase < end)
-					break;
-				total--;
-			}
-		}
-
-		/* update glcopy */
-		glcopy.width = width;
-		glcopy.height = height;
-		glcopy.total = total;
-
-		/* allocate the graphics */
-		machine->gfx[curgfx] = gfx_element_alloc(machine, &glcopy, (region_base != NULL) ? region_base + gfxdecode->start : NULL, gfxdecode->total_color_codes, gfxdecode->color_codes_start);
+		state_save_register_global_pointer(machine, machine->generic.buffered_spriteram2.u8, machine->generic.spriteram2_size);
 	}
 }
 
@@ -2224,7 +2073,7 @@ static void create_snapshot_bitmap(const device_config *screen)
 	/* select the appropriate view in our dummy target */
 	if (global.snap_native && screen != NULL)
 	{
-		view_index = device_list_index(screen->machine->config->devicelist, VIDEO_SCREEN, screen->tag);
+		view_index = device_list_index(&screen->machine->config->devicelist, VIDEO_SCREEN, screen->tag);
 		assert(view_index != -1);
 		render_target_set_view(global.snap_target, view_index);
 	}

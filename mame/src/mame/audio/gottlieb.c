@@ -130,11 +130,11 @@ static void play_sample(const device_config *samples, const char *phonemes)
 		sample_start(samples, 0, 42, 0);
 	else if (strcmp(phonemes, "BAH1EH1Y") == 0)							  /* Q-Bert - Bye, bye */
 		sample_start(samples, 0, 43, 0);
-	else if (strcmp(phonemes, "A2YHT LEH2FTTH") == 0) 					  /* Reactor - Eight left */
+	else if (strcmp(phonemes, "A2YHT LEH2FTTH") == 0)					  /* Reactor - Eight left */
 		sample_start(samples, 0, 0, 0);
-	else if (strcmp(phonemes, "SI3KS DTYN LEH2FTTH") == 0) 				  /* Reactor - Sixteen left */
+	else if (strcmp(phonemes, "SI3KS DTYN LEH2FTTH") == 0)				  /* Reactor - Sixteen left */
 		sample_start(samples, 0, 1, 0);
-	else if (strcmp(phonemes, "WO2RNYNG KO2R UH1NSDTABUH1L") == 0) 		  /* Reactor - Warning core unstable */
+	else if (strcmp(phonemes, "WO2RNYNG KO2R UH1NSDTABUH1L") == 0)		  /* Reactor - Warning core unstable */
 		sample_start(samples, 0, 5, 0);
 	else if (strcmp(phonemes, "CHAMBERR   AE1EH2KTI1VA1I3DTEH1DT ") == 0) /* Reactor - Chamber activated */
 		sample_start(samples, 0, 7, 0);
@@ -469,7 +469,7 @@ static WRITE8_HANDLER( nmi_rate_w )
 
 static CUSTOM_INPUT( speech_drq_custom_r )
 {
-	return sp0250_drq_r(devtag_get_device(field->port->machine, "sp"));
+	return sp0250_drq_r(devtag_get_device(field->port->machine, "spsnd"));
 }
 
 
@@ -506,14 +506,14 @@ static WRITE8_HANDLER( speech_control_w )
 	/* bit 6 = speech chip DATA PRESENT pin; high then low to make the chip read data */
 	if ((previous & 0x40) == 0 && (data & 0x40) != 0)
 	{
-		const device_config *sp = devtag_get_device(space->machine, "sp");
+		const device_config *sp = devtag_get_device(space->machine, "spsnd");
 		sp0250_w(sp, 0, *sp0250_latch);
 	}
 
 	/* bit 7 goes to the speech chip RESET pin */
 	if ((previous ^ data) & 0x80)
 	{
-		const device_config *sp = devtag_get_device(space->machine, "sp");
+		const device_config *sp = devtag_get_device(space->machine, "spsnd");
 		device_reset(sp);
 	}
 }
@@ -601,7 +601,7 @@ MACHINE_DRIVER_START( gottlieb_soundrev2 )
 	MDRV_SOUND_ADD("ay2", AY8913, SOUND2_CLOCK/2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("sp", SP0250, SOUND2_SPEECH_CLOCK)
+	MDRV_SOUND_ADD("spsnd", SP0250, SOUND2_SPEECH_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

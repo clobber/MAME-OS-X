@@ -5,7 +5,7 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "lockon.h"
+#include "includes/lockon.h"
 #include "cpu/nec/nec.h"
 #include "video/resnet.h"
 
@@ -38,7 +38,7 @@ size_t	lockon_groundram_size;
  *
  *************************************/
 
-static tilemap *lockon_tilemap;
+static tilemap_t *lockon_tilemap;
 static UINT8	ground_ctrl;
 static UINT16	scroll_h;
 static UINT16	scroll_v;

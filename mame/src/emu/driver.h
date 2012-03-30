@@ -76,13 +76,13 @@
 #define memcard_handler_0			NULL
 #define machine_start_0 			NULL
 #define machine_reset_0 			NULL
-#define sound_start_0 				NULL
-#define sound_reset_0 				NULL
-#define video_start_0 				NULL
-#define video_reset_0 				NULL
+#define sound_start_0				NULL
+#define sound_reset_0				NULL
+#define video_start_0				NULL
+#define video_reset_0				NULL
 #define palette_init_0				NULL
 #define video_eof_0 				NULL
-#define video_update_0 				NULL
+#define video_update_0				NULL
 
 
 typedef void   (*driver_init_func)(running_machine *machine);
@@ -182,12 +182,7 @@ struct _game_driver
 	const input_port_token *ipt;					/* pointer to array of input port tokens */
 	void				(*driver_init)(running_machine *machine); /* DRIVER_INIT callback */
 	const rom_entry *	rom;						/* pointer to list of ROMs for the game */
-
-#ifdef MESS
-	void (*sysconfig_ctor)(struct SystemConfigurationParamBlock *cfg);
 	const char *		compatible_with;
-#endif
-
 	UINT32				flags;						/* orientation and other flags; see defines below */
 	const char *		default_layout;				/* default internally defined layout */
 };
@@ -217,6 +212,7 @@ const game_driver GAME_NAME(NAME) =			\
 	INPUT_PORTS_NAME(INPUT),							\
 	DRIVER_INIT_NAME(INIT),						\
 	ROM_NAME(NAME),								\
+	NULL,									\
 	(MONITOR)|(FLAGS),						\
 	&LAYOUT[0]								\
 };

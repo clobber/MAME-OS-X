@@ -42,10 +42,10 @@ The Grid         v1.2   10/18/2000
 #define BEAM_DX			3
 #define BEAM_XOFFS		40		/* table in the code indicates an offset of 20 with a beam height of 7 */
 
-static UINT32 			gun_control;
-static UINT8 			gun_irq_state;
+static UINT32			gun_control;
+static UINT8			gun_irq_state;
 static emu_timer *		gun_timer[2];
-static INT32 			gun_x[2], gun_y[2];
+static INT32			gun_x[2], gun_y[2];
 
 static UINT8			crusnexo_leds_select;
 static UINT8			keypad_select;
@@ -129,7 +129,7 @@ static INTERRUPT_GEN( display_irq )
 static WRITE32_HANDLER( cmos_w )
 {
 	if (bitlatch[2] && !cmos_protected)
-		COMBINE_DATA(&generic_nvram32[offset]);
+		COMBINE_DATA(&space->machine->generic.nvram.u32[offset]);
 	else
 		logerror("%06X:timekeeper_w with bitlatch[2] = %d, cmos_protected = %d\n", cpu_get_pc(space->cpu), bitlatch[2], cmos_protected);
 	cmos_protected = TRUE;
@@ -138,7 +138,7 @@ static WRITE32_HANDLER( cmos_w )
 
 static READ32_HANDLER( cmos_r )
 {
-	return generic_nvram32[offset] | 0xffffff00;
+	return space->machine->generic.nvram.u32[offset] | 0xffffff00;
 }
 
 
@@ -286,7 +286,7 @@ static WRITE32_HANDLER( bitlatches_w )
 
 		/* ROM bank selection on Zeus 2 */
 		case 5:
-			memory_set_bank(space->machine, 1, bitlatch[offset] & 3);
+			memory_set_bank(space->machine, "bank1", bitlatch[offset] & 3);
 			break;
 
 		/* unknown purpose; crusnexo/thegrid write 1 at startup */
@@ -587,7 +587,7 @@ static ADDRESS_MAP_START( zeus_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x8d0000, 0x8d0004) AM_READWRITE(bitlatches_r, bitlatches_w)
 	AM_RANGE(0x990000, 0x99000f) AM_READWRITE(midway_ioasic_r, midway_ioasic_w)
 	AM_RANGE(0x9e0000, 0x9e0000) AM_WRITENOP		// watchdog?
-	AM_RANGE(0x9f0000, 0x9f7fff) AM_READWRITE(cmos_r, cmos_w) AM_BASE(&generic_nvram32) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x9f0000, 0x9f7fff) AM_READWRITE(cmos_r, cmos_w) AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x9f8000, 0x9f8000) AM_WRITE(cmos_protect_w)
 	AM_RANGE(0xa00000, 0xffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -608,7 +608,7 @@ static ADDRESS_MAP_START( zeus2_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x9f0000, 0x9f7fff) AM_DEVREADWRITE("m48t35", zeus2_timekeeper_r, zeus2_timekeeper_w)
 	AM_RANGE(0x9f8000, 0x9f8000) AM_WRITE(cmos_protect_w)
 	AM_RANGE(0xa00000, 0xbfffff) AM_ROM AM_REGION("user1", 0)
-	AM_RANGE(0xc00000, 0xffffff) AM_ROMBANK(1) AM_REGION("user2", 0)
+	AM_RANGE(0xc00000, 0xffffff) AM_ROMBANK("bank1") AM_REGION("user2", 0)
 ADDRESS_MAP_END
 
 /*
@@ -686,21 +686,21 @@ static INPUT_PORTS_START( mk4 )
 	PORT_DIPNAME( 0x0080, 0x0080, "Test Switch" )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0100, 0x0100, "Fatalities" )
+	PORT_DIPNAME( 0x0100, 0x0100, "Fatalities" )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0100, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0200, 0x0200, "Blood" )
+	PORT_DIPNAME( 0x0200, 0x0200, "Blood" )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0200, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) ) /* Manual states that switches 3-7 are Unused */
+	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) ) /* Manual states that switches 3-7 are Unused */
 	PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
- 	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
- 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
@@ -860,58 +860,58 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( crusnexo )
 	PORT_START("DIPS")		/* DS1 */
- 	PORT_DIPNAME( 0x001f, 0x001f, "Country Code" )
- 	PORT_DIPSETTING(      0x001f, DEF_STR( USA ) )
- 	PORT_DIPSETTING(      0x001e, "Germany" )
- 	PORT_DIPSETTING(      0x001d, "France" )
- 	PORT_DIPSETTING(      0x001c, "Canada" )
- 	PORT_DIPSETTING(      0x001b, "Switzerland" )
- 	PORT_DIPSETTING(      0x001a, "Italy" )
- 	PORT_DIPSETTING(      0x0019, "UK" )
- 	PORT_DIPSETTING(      0x0018, "Spain" )
- 	PORT_DIPSETTING(      0x0017, "Austrilia" )
- 	PORT_DIPSETTING(      0x0016, DEF_STR( Japan ) )
- 	PORT_DIPSETTING(      0x0015, "Taiwan" )
- 	PORT_DIPSETTING(      0x0014, "Austria" )
- 	PORT_DIPSETTING(      0x0013, "Belgium" )
- 	PORT_DIPSETTING(      0x000f, "Sweden" )
- 	PORT_DIPSETTING(      0x000e, "Findland" )
+	PORT_DIPNAME( 0x001f, 0x001f, "Country Code" )
+	PORT_DIPSETTING(      0x001f, DEF_STR( USA ) )
+	PORT_DIPSETTING(      0x001e, "Germany" )
+	PORT_DIPSETTING(      0x001d, "France" )
+	PORT_DIPSETTING(      0x001c, "Canada" )
+	PORT_DIPSETTING(      0x001b, "Switzerland" )
+	PORT_DIPSETTING(      0x001a, "Italy" )
+	PORT_DIPSETTING(      0x0019, "UK" )
+	PORT_DIPSETTING(      0x0018, "Spain" )
+	PORT_DIPSETTING(      0x0017, "Austrilia" )
+	PORT_DIPSETTING(      0x0016, DEF_STR( Japan ) )
+	PORT_DIPSETTING(      0x0015, "Taiwan" )
+	PORT_DIPSETTING(      0x0014, "Austria" )
+	PORT_DIPSETTING(      0x0013, "Belgium" )
+	PORT_DIPSETTING(      0x000f, "Sweden" )
+	PORT_DIPSETTING(      0x000e, "Findland" )
 	PORT_DIPSETTING(      0x000d, "Netherlands" )
- 	PORT_DIPSETTING(      0x000c, "Norway" )
- 	PORT_DIPSETTING(      0x000b, "Denmark" )
- 	PORT_DIPSETTING(      0x000a, "Hungary" )
- 	PORT_DIPSETTING(      0x0008, "General" )
- 	PORT_DIPNAME( 0x0060, 0x0060, "Coin Mode" )
- 	PORT_DIPSETTING(      0x0060, "Mode 1" ) /* USA1/GER1/FRA1/SPN1/AUSTRIA1/GEN1/CAN1/SWI1/ITL1/JPN1/TWN1/BLGN1/NTHRLND1/FNLD1/NRWY1/DNMK1/HUN1 */
- 	PORT_DIPSETTING(      0x0040, "Mode 2" ) /* USA3/GER1/FRA1/SPN1/AUSTRIA1/GEN3/CAN2/SWI2/ITL2/JPN2/TWN2/BLGN2/NTHRLND2 */
- 	PORT_DIPSETTING(      0x0020, "Mode 3" ) /* USA7/GER1/FRA1/SPN1/AUSTRIA1/GEN5/CAN3/SWI3/ITL3/JPN3/TWN3/BLGN3 */
- 	PORT_DIPSETTING(      0x0000, "Mode 4" ) /* USA8/GER1/FRA1/SPN1/AUSTRIA1/GEN7 */
+	PORT_DIPSETTING(      0x000c, "Norway" )
+	PORT_DIPSETTING(      0x000b, "Denmark" )
+	PORT_DIPSETTING(      0x000a, "Hungary" )
+	PORT_DIPSETTING(      0x0008, "General" )
+	PORT_DIPNAME( 0x0060, 0x0060, "Coin Mode" )
+	PORT_DIPSETTING(      0x0060, "Mode 1" ) /* USA1/GER1/FRA1/SPN1/AUSTRIA1/GEN1/CAN1/SWI1/ITL1/JPN1/TWN1/BLGN1/NTHRLND1/FNLD1/NRWY1/DNMK1/HUN1 */
+	PORT_DIPSETTING(      0x0040, "Mode 2" ) /* USA3/GER1/FRA1/SPN1/AUSTRIA1/GEN3/CAN2/SWI2/ITL2/JPN2/TWN2/BLGN2/NTHRLND2 */
+	PORT_DIPSETTING(      0x0020, "Mode 3" ) /* USA7/GER1/FRA1/SPN1/AUSTRIA1/GEN5/CAN3/SWI3/ITL3/JPN3/TWN3/BLGN3 */
+	PORT_DIPSETTING(      0x0000, "Mode 4" ) /* USA8/GER1/FRA1/SPN1/AUSTRIA1/GEN7 */
 	PORT_DIPNAME( 0x0080, 0x0080, "Test Switch" )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0100, 0x0100, "Game Type" )	/* Manual states "*DIP 1, Switch 1 MUST be set */
- 	PORT_DIPSETTING(      0x0100, "Dedicated" )	/*   to OFF position for proper operation" */
- 	PORT_DIPSETTING(      0x0000, "Kit" )
- 	PORT_DIPNAME( 0x0200, 0x0200, "Seat Motion" )	/* For dedicated Sit Down models with Motion Seat */
-  	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-  	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Cabinet ) )
- 	PORT_DIPSETTING(      0x0400, "Stand Up" )
- 	PORT_DIPSETTING(      0x0000, "Sit Down" )
- 	PORT_DIPNAME( 0x0800, 0x0800, "Wheel Invert" )
-  	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
-  	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x1000, 0x1000, "ROM Configuration" )	/* Manual lists this dip as Unused */
- 	PORT_DIPSETTING(      0x1000, "32M ROM Normal" )
-  	PORT_DIPSETTING(      0x0000, "16M ROM Split Active" )
- 	PORT_DIPNAME( 0x2000, 0x2000, "Link" )
- 	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
-  	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0xc000, 0xc000, "Linking I.D.")
- 	PORT_DIPSETTING(      0xc000, "Master #1" )
- 	PORT_DIPSETTING(      0x8000, "Slave #2" )
- 	PORT_DIPSETTING(      0x4000, "Slave #3" )
- 	PORT_DIPSETTING(      0x0000, "Slave #4" )
+	PORT_DIPNAME( 0x0100, 0x0100, "Game Type" )	/* Manual states "*DIP 1, Switch 1 MUST be set */
+	PORT_DIPSETTING(      0x0100, "Dedicated" )	/*   to OFF position for proper operation" */
+	PORT_DIPSETTING(      0x0000, "Kit" )
+	PORT_DIPNAME( 0x0200, 0x0200, "Seat Motion" )	/* For dedicated Sit Down models with Motion Seat */
+	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Cabinet ) )
+	PORT_DIPSETTING(      0x0400, "Stand Up" )
+	PORT_DIPSETTING(      0x0000, "Sit Down" )
+	PORT_DIPNAME( 0x0800, 0x0800, "Wheel Invert" )
+	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x1000, "ROM Configuration" )	/* Manual lists this dip as Unused */
+	PORT_DIPSETTING(      0x1000, "32M ROM Normal" )
+	PORT_DIPSETTING(      0x0000, "16M ROM Split Active" )
+	PORT_DIPNAME( 0x2000, 0x2000, "Link" )
+	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0xc000, 0xc000, "Linking I.D.")
+	PORT_DIPSETTING(      0xc000, "Master #1" )
+	PORT_DIPSETTING(      0x8000, "Slave #2" )
+	PORT_DIPSETTING(      0x4000, "Slave #3" )
+	PORT_DIPSETTING(      0x0000, "Slave #4" )
 
 	PORT_START("SYSTEM")
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -940,9 +940,9 @@ static INPUT_PORTS_START( crusnexo )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("View 3")		/* View 3 */
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("View 4")		/* View 4 */
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("1st Gear")	/* Gear 1 */
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("2nd Gear") 	/* Gear 2 */
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("3rd Gear") 	/* Gear 3 */
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("4th Gear") 	/* Gear 4 */
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("2nd Gear")	/* Gear 2 */
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("3rd Gear")	/* Gear 3 */
+	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("4th Gear")	/* Gear 4 */
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_UNKNOWN )							/* Not Used */
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )							/* Not Used */
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )							/* Not Used */
@@ -982,21 +982,21 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( thegrid )
 	PORT_START("DIPS")		/* DS1 */
- 	PORT_DIPNAME( 0x0001, 0x0001, "Show Blood" )
+	PORT_DIPNAME( 0x0001, 0x0001, "Show Blood" )
 	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) ) /* Manual states that switches 2-7 are Unused */
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) ) /* Manual states that switches 2-7 are Unused */
 	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0004, 0x0004, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0008, DEF_STR( On ) )
- 	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
- 	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
- 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
@@ -1198,6 +1198,23 @@ ROM_START( mk4a )
 	ROM_LOAD32_WORD( "mk4_l2.u17", 0x0c00002, 0x200000, CRC(3a1a082c) SHA1(5f8e8ce760d8ebadd1240ef08f1382a37cf11d0b) )
 ROM_END
 
+ROM_START( mk4b )
+	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
+	ROM_LOAD16_BYTE( "mk4_l1.u2", 0x000000, 0x200000, CRC(daac8ab5) SHA1(b93aa205868212077a9b6ac8e93205e1ebf8c05e) ) /* All sound roms were labeled as v1.0 & are M27C160 type */
+	ROM_LOAD16_BYTE( "mk4_l1.u3", 0x400000, 0x200000, CRC(cb59413e) SHA1(f7e5c589a8f6a2e7dceee4881594e7403be4d4ad) )
+	ROM_LOAD16_BYTE( "mk4_l1.u4", 0x800000, 0x200000, CRC(dee91696) SHA1(00a182a36a414744cd014fcfc53c2e1a66ab5189) )
+	ROM_LOAD16_BYTE( "mk4_l1.u5", 0xc00000, 0x200000, CRC(44d072be) SHA1(8a636c2801d799dfb84e69607ade76d2b49cf09f) )
+
+	ROM_REGION32_LE( 0x1800000, "user1", 0 )
+	ROM_LOAD32_WORD( "mk4_l1.u10", 0x0000000, 0x200000, CRC(6fcc86dd) SHA1(b3b2b463daf51450fbcd5d2922ac1b091bd91c4a) ) /* All roms were labeled as v1.0 */
+	ROM_LOAD32_WORD( "mk4_l1.u11", 0x0000002, 0x200000, CRC(04895940) SHA1(55d368905f5986587c4e3da236401fdd5e2c269c) )
+	ROM_LOAD32_WORD( "mk4_l1.u12", 0x0400000, 0x200000, CRC(323ddc5c) SHA1(4303c109c68a7cc15ff6fe91b6d34383b6066351) )
+	ROM_LOAD32_WORD( "mk4_l1.u13", 0x0400002, 0x200000, CRC(0b95bdf0) SHA1(a25d48b33a861b5e52736720c7a79291fa837f78) )
+	ROM_LOAD32_WORD( "mk4_l1.u14", 0x0800000, 0x200000, CRC(cb6816ef) SHA1(9c828c188d297aee0f211acc283035289e80b5a8) )
+	ROM_LOAD32_WORD( "mk4_l1.u15", 0x0800002, 0x200000, CRC(cde47df7) SHA1(63383d983c03703b2f3f1973ce2a7553654836d4) )
+	/* No U16 or U17 roms present in this version */
+ROM_END
+
 ROM_START( invasnab ) /* Version 5.0 Program roms, v4.0 Graphics roms, v2.0 Sound roms */
 	ROM_REGION16_LE( 0x1000000, "dcs", ROMREGION_ERASEFF )	/* sound data */
 	ROM_LOAD16_BYTE( "invasion2.u2", 0x000000, 0x200000, CRC(59d2e1d6) SHA1(994a4311ac4841d4341449c0c7480952b6f3855d) ) /* These four sound roms were labeled as v2.0 */
@@ -1330,7 +1347,7 @@ ROM_START( thegrid ) /* Version 1.2 Program roms */
 	ROM_LOAD( "the_grid.u4", 0x800000, 0x400000, CRC(7a15c203) SHA1(a0a49dd08bba92402640ed2d1fb4fee112c4ab5f) )
 
 	ROM_REGION32_LE( 0x0800000, "user1", 0 )
- 	ROM_LOAD32_WORD( "thegrid-12.u10", 0x0000000, 0x100000, CRC(eb6c2d54) SHA1(ddd32757a9be011988b7add3c091e93292a0867c) )
+	ROM_LOAD32_WORD( "thegrid-12.u10", 0x0000000, 0x100000, CRC(eb6c2d54) SHA1(ddd32757a9be011988b7add3c091e93292a0867c) )
 	ROM_LOAD32_WORD( "thegrid-12.u11", 0x0000002, 0x100000, CRC(b9b5f92b) SHA1(36e16f109af9a5172869344f09b337b67e0b3e11) )
 	ROM_LOAD32_WORD( "thegrid-12.u12", 0x0200000, 0x100000, CRC(2810c207) SHA1(d244eaf85473ed49442a906d437af1a9f91a2f9d) )
 	ROM_LOAD32_WORD( "thegrid-12.u13", 0x0200002, 0x100000, CRC(8b721848) SHA1(d82f39045437ada2061587176e24f558a5e203fe) )
@@ -1352,7 +1369,7 @@ ROM_START( thegrida ) /* Version 1.1 Program roms */
 	ROM_LOAD( "the_grid.u4", 0x800000, 0x400000, CRC(7a15c203) SHA1(a0a49dd08bba92402640ed2d1fb4fee112c4ab5f) )
 
 	ROM_REGION32_LE( 0x0800000, "user1", 0 )
- 	ROM_LOAD32_WORD( "thegrid-11.u10", 0x0000000, 0x100000, CRC(87ea0e9e) SHA1(618de2ca87b7a3e0225d1f7e65f8fc1356de1421) )
+	ROM_LOAD32_WORD( "thegrid-11.u10", 0x0000000, 0x100000, CRC(87ea0e9e) SHA1(618de2ca87b7a3e0225d1f7e65f8fc1356de1421) )
 	ROM_LOAD32_WORD( "thegrid-11.u11", 0x0000002, 0x100000, CRC(73d84b1a) SHA1(8dcfcab5ff64f46f8486e6439a10d91ad26fd48a) )
 	ROM_LOAD32_WORD( "thegrid-11.u12", 0x0200000, 0x100000, CRC(78d16ca1) SHA1(7b893ec8af2f44d8bc293861fd8622d68d41ccbe) )
 	ROM_LOAD32_WORD( "thegrid-11.u13", 0x0200002, 0x100000, CRC(8e00b400) SHA1(96581c5da62afc19e6d69b2352b3166665cb9918) )
@@ -1394,7 +1411,7 @@ static DRIVER_INIT( crusnexo )
 {
 	dcs2_init(machine, 0, 0);
 	midway_ioasic_init(machine, MIDWAY_IOASIC_STANDARD, 472/* or 476,477,478,110 */, 99, NULL);
-	memory_configure_bank(machine, 1, 0, 3, memory_region(machine, "user2"), 0x400000*4);
+	memory_configure_bank(machine, "bank1", 0, 3, memory_region(machine, "user2"), 0x400000*4);
 
 	memory_install_readwrite32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x9b0004, 0x9b0007, 0, 0, crusnexo_leds_r, crusnexo_leds_w);
 	memory_install_write32_handler    (cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8d0009, 0x8d000a, 0, 0, keypad_select_w);
@@ -1405,7 +1422,7 @@ static DRIVER_INIT( thegrid )
 {
 	dcs2_init(machine, 0, 0);
 	midway_ioasic_init(machine, MIDWAY_IOASIC_STANDARD, 474/* or 491 */, 99, NULL);
-	memory_configure_bank(machine, 1, 0, 3, memory_region(machine, "user2"), 0x400000*4);
+	memory_configure_bank(machine, "bank1", 0, 3, memory_region(machine, "user2"), 0x400000*4);
 }
 
 
@@ -1418,6 +1435,7 @@ static DRIVER_INIT( thegrid )
 
 GAME(  1997, mk4,      0,        midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 3.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1997, mk4a,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 2.1)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME(  1997, mk4b,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 1.0)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1999, invasnab, 0,        midzeus,  invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 5.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1999, invasnv4, invasnab, midzeus,  invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 4.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAMEL( 1999, crusnexo, 0,        midzeus2, crusnexo, crusnexo, ROT0, "Midway", "Cruis'n Exotica (version 2.4)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_crusnexo )

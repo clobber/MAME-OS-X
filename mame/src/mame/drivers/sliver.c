@@ -90,6 +90,7 @@ static int jpeg_y=0;
 static int tmp_counter;
 static int clr_offset=0;
 
+static UINT8 *colorram;
 static bitmap_t *sliver_bitmap_fg;
 static bitmap_t *sliver_bitmap_bg;
 
@@ -174,7 +175,7 @@ static const int gfxlookup[][4]=
    { 0x1b78000, 0x017b5db, 512, 256 },
    { 0x1bd8000, 0x017f2e6, 512, 256 },
    { -1,-1,-1,-1}
- };
+};
 
 static WRITE16_HANDLER( sliver_RAMDAC_offset_w )
 {
@@ -207,7 +208,7 @@ static void plot_pixel_rgb(int x, int y, UINT32 r, UINT32 g, UINT32 b)
 	}
 }
 
-static void plot_pixel_pal(int x, int y, int addr)
+static void plot_pixel_pal(running_machine *machine, int x, int y, int addr)
 {
 	UINT32 r,g,b;
 	UINT16 color;
@@ -277,7 +278,7 @@ static void blit_gfx(running_machine *machine)
 					romdata = rom[romoffs&0x1fffff];
 					if(romdata)
 					{
-						plot_pixel_pal(fifo[tmpptr+5]+fifo[tmpptr+3]-x, fifo[tmpptr+6]+fifo[tmpptr+4]-y, romdata);
+						plot_pixel_pal(machine, fifo[tmpptr+5]+fifo[tmpptr+3]-x, fifo[tmpptr+6]+fifo[tmpptr+4]-y, romdata);
 					}
 					romoffs++;
 				}
@@ -353,8 +354,8 @@ static WRITE16_HANDLER( jpeg2_w )
 				jpeg_w = gfxlookup[idx][2];
 				jpeg_h = gfxlookup[idx][3];
 				render_jpeg(space->machine);
-		}
-		else
+			}
+			else
 			{
 				jpeg_addr = -1;
 			}
@@ -491,7 +492,7 @@ static INPUT_PORTS_START( sliver )
 	PORT_DIPSETTING(	0x000c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(	0x000b, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(	0x0000, DEF_STR( Free_Play ) )
- 	PORT_DIPNAME( 0x0030, 0x0020, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x0030, 0x0020, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x0030, "2" )
 	PORT_DIPSETTING(    0x0020, "3" )
 	PORT_DIPSETTING(    0x0010, "4" )

@@ -5,13 +5,13 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "skydiver.h"
+#include "includes/skydiver.h"
 #include "sound/discrete.h"
 
 
 UINT8 *skydiver_videoram;
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 static int width = 0;
 
 
@@ -93,18 +93,18 @@ WRITE8_HANDLER( skydiver_width_w )
 
 WRITE8_HANDLER( skydiver_coin_lockout_w )
 {
-	coin_lockout_global_w(!offset);
+	coin_lockout_global_w(space->machine, !offset);
 }
 
 
 WRITE8_HANDLER( skydiver_start_lamp_1_w )
 {
-	set_led_status(0, offset);
+	set_led_status(space->machine, 0, offset);
 }
 
 WRITE8_HANDLER( skydiver_start_lamp_2_w )
 {
-	set_led_status(1, offset);
+	set_led_status(space->machine, 1, offset);
 }
 
 

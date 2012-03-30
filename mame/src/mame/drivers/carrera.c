@@ -38,8 +38,9 @@ Emulation Notes:
  There is also a 'Bomberman' title in the GFX roms, unused from what I can see.
 
 TODO:
-- Needs a reference for the colors.
+- Are colors 100% correct? Needs a reference to be sure.
 - There are reel gfxs on the roms (near the end), left-over or there's a way to enable it?
+  Update: if you trigger a normal irq 0 instead of a NMI the game will change into a proper 8 liner game without inputs. Investigate on it...
 
 */
 
@@ -71,7 +72,7 @@ static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x04, 0x04) AM_READ_PORT("IN4")
 	AM_RANGE(0x05, 0x05) AM_READ_PORT("IN5")
 	AM_RANGE(0x06, 0x06) AM_WRITENOP // ?
-	AM_RANGE(0x08, 0x09) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x08, 0x09) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( carrera )
@@ -274,21 +275,21 @@ static const ay8910_interface ay8910_config =
 static PALETTE_INIT(carrera)
 {
 	int br_bit0, br_bit1, bit0, bit1, r, g, b;
-	int i;
+	int	i;
 
-	for (i = 0; i < 0x20; ++i)
+	for (i = 0; i < 0x40; ++i)
 	{
-		br_bit0 = (color_prom[0] >> 0) & 0x01;
-		br_bit1 = (color_prom[0] >> 1) & 0x01;
+		br_bit0 = (color_prom[0] >> 6) & 0x01;
+		br_bit1 = (color_prom[0] >> 7) & 0x01;
 
-		bit0 = (color_prom[0] >> 2) & 0x01;
+		bit0 = (color_prom[0] >> 0) & 0x01;
 		bit1 = (color_prom[0] >> 3) & 0x01;
 		b = 0x0e * br_bit0 + 0x1f * br_bit1 + 0x43 * bit0 + 0x8f * bit1;
-		bit0 = (color_prom[0] >> 4) & 0x01;
-		bit1 = (color_prom[0] >> 5) & 0x01;
+		bit0 = (color_prom[0] >> 1) & 0x01;
+		bit1 = (color_prom[0] >> 4) & 0x01;
 		g = 0x0e * br_bit0 + 0x1f * br_bit1 + 0x43 * bit0 + 0x8f * bit1;
-		bit0 = (color_prom[0] >> 6) & 0x01;
-		bit1 = (color_prom[0] >> 7) & 0x01;
+		bit0 = (color_prom[0] >> 2) & 0x01;
+		bit1 = (color_prom[0] >> 5) & 0x01;
 		r = 0x0e * br_bit0 + 0x1f * br_bit1 + 0x43 * bit0 + 0x8f * bit1;
 
 		palette_set_color(machine, i, MAKE_RGB(r, g, b));
@@ -338,7 +339,7 @@ static MACHINE_DRIVER_START( carrera )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/12)
+	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/12)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 MACHINE_DRIVER_END
@@ -360,5 +361,5 @@ ROM_START( carrera )
 ROM_END
 
 
-GAME( 19??, carrera, 0, carrera, carrera,0, ROT0, "BS Electronics", "Carrera (Version 6.7)", GAME_WRONG_COLORS )
+GAME( 19??, carrera, 0, carrera, carrera,0, ROT0, "BS Electronics", "Carrera (Version 6.7)", 0 )
 

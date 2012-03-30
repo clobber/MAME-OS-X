@@ -28,6 +28,7 @@
 #include <stddef.h>
 #include "cpuintrf.h"
 #include "debugger.h"
+#include "profiler.h"
 #include "cpuexec.h"
 #include "mips3com.h"
 #include "mips3fe.h"
@@ -623,7 +624,7 @@ static CPU_GET_INFO( mips3 )
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
 
 		/* --- everything else is handled generically --- */
-		default:										mips3com_get_info(mips3, state, info); 			break;
+		default:										mips3com_get_info(mips3, state, info);			break;
 	}
 }
 
@@ -749,6 +750,8 @@ static void code_compile_block(mips3_state *mips3, UINT8 mode, offs_t pc)
 	drcuml_block *block;
 	jmp_buf errorbuf;
 
+	profiler_mark_start(PROFILER_DRC_COMPILE);
+
 	/* get a description of this sequence */
 	desclist = drcfe_describe_code(mips3->impstate->drcfe, pc);
 	if (LOG_UML || LOG_NATIVE)
@@ -832,6 +835,7 @@ static void code_compile_block(mips3_state *mips3, UINT8 mode, offs_t pc)
 
 	/* end the sequence */
 	drcuml_block_end(block);
+	profiler_mark_end();
 }
 
 
@@ -1103,8 +1107,8 @@ static void static_generate_tlb_mismatch(mips3_state *mips3)
 	}
 	UML_TEST(block, IREG(1), IMM(VTLB_FETCH_ALLOWED));								// test    i1,VTLB_FETCH_ALLOWED
 	UML_JMPc(block, IF_NZ, 1);														// jmp     1,nz
-	UML_TEST(block, IREG(1), IMM(VTLB_FLAG_VALID));									// test    i1,VTLB_FLAG_VALID
-	UML_EXHc(block, IF_Z, mips3->impstate->exception[EXCEPTION_TLBLOAD], IREG(0));	// exh     exception[TLBLOAD],i0,z
+	UML_TEST(block, IREG(1), IMM(VTLB_FLAG_FIXED));									// test    i1,VTLB_FLAG_FIXED
+	UML_EXHc(block, IF_NZ, mips3->impstate->exception[EXCEPTION_TLBLOAD], IREG(0));	// exh     exception[TLBLOAD],i0,nz
 	UML_EXH(block, mips3->impstate->exception[EXCEPTION_TLBLOAD_FILL], IREG(0));	// exh     exception[TLBLOAD_FILL],i0
 	UML_LABEL(block, 1);														// 1:
 	save_fast_iregs(mips3, block);
@@ -1125,6 +1129,7 @@ static void static_generate_exception(mips3_state *mips3, UINT8 exception, int r
 	drcuml_state *drcuml = mips3->impstate->drcuml;
 	UINT32 offset = 0x180;
 	drcuml_codelabel next = 1;
+	drcuml_codelabel skip = 2;
 	drcuml_block *block;
 	jmp_buf errorbuf;
 
@@ -1147,7 +1152,7 @@ static void static_generate_exception(mips3_state *mips3, UINT8 exception, int r
 	UML_HANDLE(block, *exception_handle);											// handle  name
 
 	/* exception parameter is expected to be the fault address in this case */
-	if (exception == EXCEPTION_TLBLOAD || exception == EXCEPTION_TLBSTORE || exception == EXCEPTION_ADDRLOAD || exception == EXCEPTION_ADDRSTORE)
+	if (exception == EXCEPTION_TLBLOAD || exception == EXCEPTION_TLBSTORE || exception == EXCEPTION_TLBMOD || exception == EXCEPTION_ADDRLOAD || exception == EXCEPTION_ADDRSTORE)
 	{
 		/* set BadVAddr to the fault address */
 		UML_GETEXP(block, IREG(0));													// getexp  i0
@@ -1159,7 +1164,7 @@ static void static_generate_exception(mips3_state *mips3, UINT8 exception, int r
 	{
 		/* set the upper bits of EntryHi and the lower bits of Context to the fault page */
 		UML_ROLINS(block, CPR032(COP0_EntryHi), IREG(0), IMM(0), IMM(0xffffe000));	// rolins  [EntryHi],i0,0,0xffffe000
-		UML_ROLINS(block, CPR032(COP0_Context), IREG(0), IMM(32-9), IMM(0x7fffff));	// rolins  [Context],i0,32-9,0x7fffff
+		UML_ROLINS(block, CPR032(COP0_Context), IREG(0), IMM(32-9), IMM(0x7ffff0));	// rolins  [Context],i0,32-9,0x7ffff0
 	}
 
 	/* set the EPC and Cause registers */
@@ -1175,8 +1180,10 @@ static void static_generate_exception(mips3_state *mips3, UINT8 exception, int r
 	UML_OR(block, IREG(2), IREG(2), IMM(0x80000000));								// or      i2,i2,0x80000000
 	UML_SUB(block, IREG(0), IREG(0), IMM(1));										// sub     i0,i0,1
 	UML_LABEL(block, next);														// <next>:
+	UML_MOV(block, IREG(3), IMM(offset));											// mov     i3,offset
 	UML_TEST(block, CPR032(COP0_Status), IMM(SR_EXL));								// test    [Status],SR_EXL
 	UML_MOVc(block, IF_Z, CPR032(COP0_EPC), IREG(0));								// mov     [EPC],i0,Z
+	UML_MOVc(block, IF_NZ, IREG(3), IMM(0x180));									// mov     i3,0x180,NZ
 	UML_OR(block, CPR032(COP0_Cause), IREG(2), IMM(exception << 2));				// or      [Cause],i2,exception << 2
 
 	/* for BADCOP exceptions, we use the exception parameter to know which COP */
@@ -1199,12 +1206,14 @@ static void static_generate_exception(mips3_state *mips3, UINT8 exception, int r
 	}
 
 	/* choose our target PC */
-	UML_MOV(block, IREG(0), IMM(0xbfc00200 + offset));								// mov     i0,0xbfc00200 + offset
+	UML_ADD(block, IREG(0), IREG(3), IMM(0xbfc00200));								// add     i0,i3,0xbfc00200
 	UML_TEST(block, IREG(1), IMM(SR_BEV));											// test    i1,SR_BEV
-	UML_MOVc(block, IF_Z, IREG(0), IMM(0x80000000 + offset));						// mov     i0,0x80000000 + offset,z
+	UML_JMPc(block, IF_NZ, skip);													// jnz     <skip>
+	UML_ADD(block, IREG(0), IREG(3), IMM(0x80000000));								// add     i0,i3,0x80000000,z
+	UML_LABEL(block, skip);														// <skip>:
 
 	/* adjust cycles */
-	UML_SUB(block, MEM(&mips3->icount), MEM(&mips3->icount), IREG(1));			 	// sub icount,icount,cycles,S
+	UML_SUB(block, MEM(&mips3->icount), MEM(&mips3->icount), IREG(1));				// sub icount,icount,cycles,S
 	UML_EXHc(block, IF_S, mips3->impstate->out_of_cycles, IREG(0));					// exh     out_of_cycles,i0
 
 	UML_HASHJMP(block, MEM(&mips3->impstate->mode), IREG(0), mips3->impstate->nocode);// hashjmp <mode>,i0,nocode
@@ -1296,20 +1305,17 @@ static void static_generate_memory_accessor(mips3_state *mips3, int mode, int si
 					}
 					else if (size == 2)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(1));						// shr     i0,i0,1
-						UML_XOR(block, IREG(0), IREG(0), IMM(mips3->bigendian ? BYTE_XOR_BE(0) : BYTE_XOR_LE(0)));
-																						// xor     i0,i0,bytexor
-						UML_LOAD(block, IREG(0), fastbase, IREG(0), WORD);				// load    i0,fastbase,i0,word
+						UML_XOR(block, IREG(0), IREG(0), IMM(mips3->bigendian ? WORD_XOR_BE(0) : WORD_XOR_LE(0)));
+																						// xor     i0,i0,wordxor
+						UML_LOAD(block, IREG(0), fastbase, IREG(0), WORD_x1);			// load    i0,fastbase,i0,word_x1
 					}
 					else if (size == 4)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(2));						// shr     i0,i0,2
-						UML_LOAD(block, IREG(0), fastbase, IREG(0), DWORD);				// load    i0,fastbase,i0,dword
+						UML_LOAD(block, IREG(0), fastbase, IREG(0), DWORD_x1);			// load    i0,fastbase,i0,dword_x1
 					}
 					else if (size == 8)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(3));						// shr     i0,i0,3
-						UML_DLOAD(block, IREG(0), fastbase, IREG(0), QWORD);			// dload   i0,fastbase,i0,qword
+						UML_DLOAD(block, IREG(0), fastbase, IREG(0), QWORD_x1);			// dload   i0,fastbase,i0,qword_x1
 						UML_DROR(block, IREG(0), IREG(0), IMM(32 * (mips3->bigendian ? BYTE_XOR_BE(0) : BYTE_XOR_LE(0))));
 																						// dror    i0,i0,32*bytexor
 					}
@@ -1325,38 +1331,35 @@ static void static_generate_memory_accessor(mips3_state *mips3, int mode, int si
 					}
 					else if (size == 2)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(1));						// shr     i0,i0,1
-						UML_XOR(block, IREG(0), IREG(0), IMM(mips3->bigendian ? BYTE_XOR_BE(0) : BYTE_XOR_LE(0)));
-																						// xor     i0,i0,bytexor
-						UML_STORE(block, fastbase, IREG(0), IREG(1), WORD);				// store   fastbase,i0,i1,word
+						UML_XOR(block, IREG(0), IREG(0), IMM(mips3->bigendian ? WORD_XOR_BE(0) : WORD_XOR_LE(0)));
+																						// xor     i0,i0,wordxor
+						UML_STORE(block, fastbase, IREG(0), IREG(1), WORD_x1);			// store   fastbase,i0,i1,word_x1
 					}
 					else if (size == 4)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(2));						// shr     i0,i0,2
 						if (ismasked)
 						{
-							UML_LOAD(block, IREG(3), fastbase, IREG(0), DWORD);			// load    i3,fastbase,i0,dword
+							UML_LOAD(block, IREG(3), fastbase, IREG(0), DWORD_x1);		// load    i3,fastbase,i0,dword_x1
 							UML_ROLINS(block, IREG(3), IREG(1), IMM(0), IREG(2));		// rolins  i3,i1,0,i2
-							UML_STORE(block, fastbase, IREG(0), IREG(3), DWORD);		// store   fastbase,i0,i3,dword
+							UML_STORE(block, fastbase, IREG(0), IREG(3), DWORD_x1);		// store   fastbase,i0,i3,dword_x1
 						}
 						else
-							UML_STORE(block, fastbase, IREG(0), IREG(1), DWORD);		// store   fastbase,i0,i1,dword
+							UML_STORE(block, fastbase, IREG(0), IREG(1), DWORD_x1);		// store   fastbase,i0,i1,dword_x1
 					}
 					else if (size == 8)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(3));						// shr     i0,i0,3
 						UML_DROR(block, IREG(1), IREG(1), IMM(32 * (mips3->bigendian ? BYTE_XOR_BE(0) : BYTE_XOR_LE(0))));
 																						// dror    i1,i1,32*bytexor
 						if (ismasked)
 						{
 							UML_DROR(block, IREG(2), IREG(2), IMM(32 * (mips3->bigendian ? BYTE_XOR_BE(0) : BYTE_XOR_LE(0))));
 																						// dror    i2,i2,32*bytexor
-							UML_DLOAD(block, IREG(3), fastbase, IREG(0), QWORD);		// dload   i3,fastbase,i0,qword
+							UML_DLOAD(block, IREG(3), fastbase, IREG(0), QWORD_x1);		// dload   i3,fastbase,i0,qword_x1
 							UML_DROLINS(block, IREG(3), IREG(1), IMM(0), IREG(2));		// drolins i3,i1,0,i2
-							UML_DSTORE(block, fastbase, IREG(0), IREG(3), QWORD);		// dstore  fastbase,i0,i3,qword
+							UML_DSTORE(block, fastbase, IREG(0), IREG(3), QWORD_x1);	// dstore  fastbase,i0,i3,qword_x1
 						}
 						else
-							UML_DSTORE(block, fastbase, IREG(0), IREG(1), QWORD);		// dstore  fastbase,i0,i1,qword
+							UML_DSTORE(block, fastbase, IREG(0), IREG(1), QWORD_x1);	// dstore  fastbase,i0,i1,qword_x1
 					}
 					UML_RET(block);														// ret
 				}
@@ -1425,8 +1428,8 @@ static void static_generate_memory_accessor(mips3_state *mips3, int mode, int si
 			UML_EXHc(block, IF_NZ, mips3->impstate->exception[EXCEPTION_TLBMOD], IREG(0));
 																					// exh     tlbmod,i0,nz
 		}
-		UML_TEST(block, IREG(3), IMM(VTLB_FLAG_VALID));								// test    i3,VTLB_FLAG_VALID
-		UML_EXHc(block, IF_Z, exception_tlb, IREG(0));								// exh     tlb,i0,z
+		UML_TEST(block, IREG(3), IMM(VTLB_FLAG_FIXED));								// test    i3,VTLB_FLAG_FIXED
+		UML_EXHc(block, IF_NZ, exception_tlb, IREG(0));								// exh     tlb,i0,nz
 		UML_EXH(block, exception_tlbfill, IREG(0));									// exh     tlbfill,i0
 	}
 

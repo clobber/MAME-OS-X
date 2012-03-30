@@ -23,7 +23,7 @@ To Do:
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
 #include "machine/eeprom.h"
-#include "kaneko16.h"
+#include "includes/kaneko16.h"
 #include "sound/okim6295.h"
 
 /***************************************************************************
@@ -35,24 +35,24 @@ To Do:
 ***************************************************************************/
 
 static UINT16 eeprom_word;
-static READ16_HANDLER(galpani2_eeprom_r)
+static READ16_DEVICE_HANDLER(galpani2_eeprom_r)
 {
-	return (eeprom_word & ~1) | (eeprom_read_bit() & 1);
+	return (eeprom_word & ~1) | (eeprom_read_bit(device) & 1);
 }
 
-static WRITE16_HANDLER(galpani2_eeprom_w)
+static WRITE16_DEVICE_HANDLER(galpani2_eeprom_w)
 {
 	COMBINE_DATA( &eeprom_word );
 	if ( ACCESSING_BITS_0_7 )
 	{
 		// latch the bit
-		eeprom_write_bit(data & 0x02);
+		eeprom_write_bit(device, data & 0x02);
 
 		// reset line asserted: reset.
-		eeprom_set_cs_line((data & 0x08) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom_set_cs_line(device, (data & 0x08) ? CLEAR_LINE : ASSERT_LINE );
 
 		// clock line asserted: write latch or select next bit to read
-		eeprom_set_clock_line((data & 0x04) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_set_clock_line(device, (data & 0x04) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
@@ -264,10 +264,10 @@ static WRITE8_HANDLER( galpani2_mcu_nmi2_w ) //driven by CPU2's int5 ISR
 
 static WRITE8_HANDLER( galpani2_coin_lockout_w )
 {
-		coin_counter_w(0, data & 0x01);
-		coin_counter_w(1, data & 0x02);
-		coin_lockout_w(0,~data & 0x04);
-		coin_lockout_w(1,~data & 0x08);
+		coin_counter_w(space->machine, 0, data & 0x01);
+		coin_counter_w(space->machine, 1, data & 0x02);
+		coin_lockout_w(space->machine, 0,~data & 0x04);
+		coin_lockout_w(space->machine, 1,~data & 0x08);
 		// & 0x10     CARD in lockout?
 		// & 0x20     CARD in lockout?
 		// & 0x40     CARD out
@@ -292,15 +292,15 @@ static ADDRESS_MAP_START( galpani2_mem1, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&galpani2_ram				)		// Work RAM
 	AM_RANGE(0x110000, 0x11000f) AM_RAM												// ? corrupted? stack dumper on POST failure, pc+sr on gp2se
 	AM_RANGE(0x300000, 0x301fff) AM_RAM												// ?
-	AM_RANGE(0x302000, 0x303fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size	)	// Sprites
+	AM_RANGE(0x302000, 0x303fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// Sprites
 	AM_RANGE(0x304000, 0x30401f) AM_RAM_WRITE(kaneko16_sprites_regs_w) AM_BASE(&kaneko16_sprites_regs	)	// Sprites Regs
 	AM_RANGE(0x308000, 0x308001) AM_WRITENOP										// ? 0 at startup
 	AM_RANGE(0x30c000, 0x30c001) AM_WRITENOP										// ? hblank effect ?
 	AM_RANGE(0x310000, 0x3101ff) AM_RAM_WRITE(galpani2_palette_0_w) AM_BASE(&galpani2_palette_0	)	// ?
 	AM_RANGE(0x314000, 0x314001) AM_WRITENOP										// ? flip backgrounds ?
-	AM_RANGE(0x318000, 0x318001) AM_READWRITE(galpani2_eeprom_r, galpani2_eeprom_w)	// EEPROM
+	AM_RANGE(0x318000, 0x318001) AM_DEVREADWRITE("eeprom", galpani2_eeprom_r, galpani2_eeprom_w)	// EEPROM
 	AM_RANGE(0x380000, 0x387fff) AM_RAM												// Palette?
-	AM_RANGE(0x388000, 0x38ffff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE(&paletteram16	)	// Palette
+	AM_RANGE(0x388000, 0x38ffff) AM_RAM_WRITE(paletteram16_xGGGGGRRRRRBBBBB_word_w) AM_BASE_GENERIC(paletteram	)	// Palette
 	AM_RANGE(0x390000, 0x3901ff) AM_WRITENOP										// ? at startup of service mode
 
 	AM_RANGE(0x400000, 0x43ffff) AM_RAM_WRITE(galpani2_bg8_0_w) AM_BASE(&galpani2_bg8_0	)	// Background 0
@@ -363,14 +363,14 @@ static ADDRESS_MAP_START( galpani2_mem2, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100000, 0x13ffff) AM_RAM AM_BASE(&galpani2_ram2)										// Work RAM
 	AM_RANGE(0x400000, 0x4fffff) AM_RAM_WRITE(galpani2_bg15_w) AM_BASE(&galpani2_bg15)	// bg15
 	AM_RANGE(0x500000, 0x5fffff) AM_RAM																// bg15
-	AM_RANGE(0x600000, 0x600001) AM_READWRITE(SMH_NOP, SMH_NOP			)	// ? 0 at startup only
+	AM_RANGE(0x600000, 0x600001) AM_NOP	// ? 0 at startup only
 	AM_RANGE(0x640000, 0x640001) AM_WRITENOP								// ? 0 at startup only
 	AM_RANGE(0x680000, 0x680001) AM_WRITENOP								// ? 0 at startup only
 	AM_RANGE(0x6c0000, 0x6c0001) AM_WRITENOP								// ? 0 at startup only
 	AM_RANGE(0x700000, 0x700001) AM_WRITENOP								// Watchdog
 //  AM_RANGE(0x740000, 0x740001) AM_WRITENOP                                // ? Reset mcu
 	AM_RANGE(0x780000, 0x780001) AM_WRITE8(galpani2_mcu_nmi2_w, 0x00ff)				// ? 0 -> 1 -> 0 (lev 5)
-	AM_RANGE(0x7c0000, 0x7c0001) AM_WRITE(SMH_RAM) AM_BASE(&galpani2_rombank	)	// Rom Bank
+	AM_RANGE(0x7c0000, 0x7c0001) AM_WRITEONLY AM_BASE(&galpani2_rombank	)	// Rom Bank
 	AM_RANGE(0x800000, 0xffffff) AM_READ(galpani2_bankedrom_r		)		// Banked ROM
 ADDRESS_MAP_END
 
@@ -586,7 +586,7 @@ static MACHINE_DRIVER_START( galpani2 )
 	MDRV_CPU_VBLANK_INT_HACK(galpani2_interrupt2,GALPANI2_INTERRUPTS_NUM2)
 
 	MDRV_MACHINE_RESET(galpani2)
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -689,11 +689,11 @@ Custom ICs   - 10x PQFPs
 ***************************************************************************/
 
 ROM_START( galpani2 )
- 	ROM_REGION( 0x100000, "maincpu", 0 )			/* CPU#1 Code */
+	ROM_REGION( 0x100000, "maincpu", 0 )			/* CPU#1 Code */
 	ROM_LOAD16_BYTE( "g000a2.u165-1", 0x000000, 0x080000, CRC(0c6dfe3f) SHA1(22b16eaa3fee7f8f8434c6775255b25c8d960620) )
 	ROM_LOAD16_BYTE( "g001a2.u164-1", 0x000001, 0x080000, CRC(b3a5951f) SHA1(78cf2d85a8b3cd46c5e30fd13b474af2ed2ee09b) )
 
- 	ROM_REGION( 0x40000, "sub", 0 )			/* CPU#2 Code */
+	ROM_REGION( 0x40000, "sub", 0 )			/* CPU#2 Code */
 	ROM_LOAD16_BYTE( "g002a2.u64-1", 0x000000, 0x020000, CRC(c0b94eaf) SHA1(4f3a65b238b31ee8d256b7025253f01eaf6e55d5) )
 	ROM_LOAD16_BYTE( "g003a2.u63-1", 0x000001, 0x020000, CRC(0d30725d) SHA1(d4614f9ffb930c4ea36cb3fbacffe63060e92402) )
 
@@ -735,11 +735,11 @@ ROM_START( galpani2 )
 ROM_END
 
 ROM_START( galpani2g )
- 	ROM_REGION( 0x100000, "maincpu", 0 )			/* CPU#1 Code */
+	ROM_REGION( 0x100000, "maincpu", 0 )			/* CPU#1 Code */
 	ROM_LOAD16_BYTE( "g000g1.u133-0", 0x000000, 0x080000, CRC(5a9c4886) SHA1(6fbc443612e72bafc5cac30de78c72815db20c4c) )
 	ROM_LOAD16_BYTE( "g001g1.u134-0", 0x000001, 0x080000, CRC(c92937c3) SHA1(0c9e894c0e23e319bd2d01ec573f02ed510e3ed6) )
 
- 	ROM_REGION( 0x40000, "sub", 0 )			/* CPU#2 Code */
+	ROM_REGION( 0x40000, "sub", 0 )			/* CPU#2 Code */
 	ROM_LOAD16_BYTE( "g002t1.125", 0x000000, 0x020000, CRC(a3034e1c) SHA1(493e4be36f2aea0083d5d37e16486ed66dab952e) )
 	ROM_LOAD16_BYTE( "g003t1.126", 0x000001, 0x020000, CRC(20d3a2ad) SHA1(93450e5a23456c242ebf1a3560013a17c6b05354) )
 
@@ -786,11 +786,11 @@ ROM_START( galpani2g )
 ROM_END
 
 ROM_START( galpani2t )
- 	ROM_REGION( 0x100000, "maincpu", 0 )			/* CPU#1 Code */
+	ROM_REGION( 0x100000, "maincpu", 0 )			/* CPU#1 Code */
 	ROM_LOAD16_BYTE( "g000t1.133", 0x000000, 0x080000, CRC(332048e7) SHA1(1a353d4b29f7a08158fc454309dc496df6b5b108) )
 	ROM_LOAD16_BYTE( "g001t1.134", 0x000001, 0x080000, CRC(c92937c3) SHA1(0c9e894c0e23e319bd2d01ec573f02ed510e3ed6) )
 
- 	ROM_REGION( 0x40000, "sub", 0 )			/* CPU#2 Code */
+	ROM_REGION( 0x40000, "sub", 0 )			/* CPU#2 Code */
 	ROM_LOAD16_BYTE( "g002t1.125", 0x000000, 0x020000, CRC(a3034e1c) SHA1(493e4be36f2aea0083d5d37e16486ed66dab952e) )
 	ROM_LOAD16_BYTE( "g003t1.126", 0x000001, 0x020000, CRC(20d3a2ad) SHA1(93450e5a23456c242ebf1a3560013a17c6b05354) )
 

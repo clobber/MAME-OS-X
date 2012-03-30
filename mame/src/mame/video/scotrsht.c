@@ -2,7 +2,9 @@
 
 UINT8 *scotrsht_scroll;
 
-static tilemap *bg_tilemap;
+UINT8 *scotrsht_videoram;
+UINT8 *scotrsht_colorram;
+static tilemap_t *bg_tilemap;
 static int scotrsht_charbank = 0;
 static int scotrsht_palette_bank = 0;
 
@@ -42,13 +44,13 @@ PALETTE_INIT( scotrsht )
 
 WRITE8_HANDLER( scotrsht_videoram_w )
 {
-	videoram[offset] = data;
+	scotrsht_videoram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( scotrsht_colorram_w )
 {
-	colorram[offset] = data;
+	scotrsht_colorram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
@@ -71,8 +73,8 @@ WRITE8_HANDLER( scotrsht_palettebank_w )
 		tilemap_mark_all_tiles_dirty(bg_tilemap);
 	}
 
-	coin_counter_w(0, data & 1);
-	coin_counter_w(1, data & 2);
+	coin_counter_w(space->machine, 0, data & 1);
+	coin_counter_w(space->machine, 1, data & 2);
 
 	// data & 4 unknown
 }
@@ -80,8 +82,8 @@ WRITE8_HANDLER( scotrsht_palettebank_w )
 
 static TILE_GET_INFO( scotrsht_get_bg_tile_info )
 {
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] + (scotrsht_charbank << 9) + ((attr & 0x40) << 2);
+	int attr = scotrsht_colorram[tile_index];
+	int code = scotrsht_videoram[tile_index] + (scotrsht_charbank << 9) + ((attr & 0x40) << 2);
 	int color = (attr & 0x0f) + scotrsht_palette_bank * 16;
 	int flag = 0;
 
@@ -96,9 +98,10 @@ static TILE_GET_INFO( scotrsht_get_bg_tile_info )
 /* Same as Jailbreak + palette bank */
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int i;
 
-	for (i = 0; i < spriteram_size; i += 4)
+	for (i = 0; i < machine->generic.spriteram_size; i += 4)
 	{
 		int attr = spriteram[i + 1];	// attributes = ?tyxcccc
 		int code = spriteram[i] + ((attr & 0x40) << 2);

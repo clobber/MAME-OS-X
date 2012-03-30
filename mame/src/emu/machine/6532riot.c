@@ -40,7 +40,7 @@ struct _riot6532_port
 {
 	UINT8					in;
 	UINT8					out;
-	UINT8			 		ddr;
+	UINT8					ddr;
 	devcb_resolved_read8	in_func;
 	devcb_resolved_write8	out_func;
 };
@@ -60,8 +60,8 @@ struct _riot6532_state
 	UINT8			irqstate;
 	UINT8			irqenable;
 
-	UINT8 			pa7dir;		/* 0x80 = high-to-low, 0x00 = low-to-high */
-	UINT8 			pa7prev;
+	UINT8			pa7dir;		/* 0x80 = high-to-low, 0x00 = low-to-high */
+	UINT8			pa7prev;
 
 	UINT8			timershift;
 	UINT8			timerstate;
@@ -435,7 +435,7 @@ static DEVICE_START( riot6532 )
 	/* set static values */
 	riot->device = device;
 	riot->intf = (riot6532_interface *)device->static_config;
-	riot->index = device_list_index(device->machine->config->devicelist, RIOT6532, device->tag);
+	riot->index = device_list_index(&device->machine->config->devicelist, RIOT6532, device->tag);
 
 	/* configure the ports */
 	devcb_resolve_read8(&riot->port[0].in_func, &riot->intf->in_a_func, device);

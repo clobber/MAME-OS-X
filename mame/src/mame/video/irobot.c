@@ -5,7 +5,7 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "irobot.h"
+#include "includes/irobot.h"
 
 #define BITMAP_WIDTH	256
 static UINT8 *polybitmap1,*polybitmap2;
@@ -204,7 +204,7 @@ static void draw_line (UINT8 *polybitmap, int x1, int y1, int x2, int y2, int co
             {
                  x1 += sx;
                  cy += dy;
-             }
+            }
         }
     }
 }
@@ -359,8 +359,8 @@ VIDEO_UPDATE( irobot )
 	for (y = offs = 0; y < 32; y++)
 		for (x = 0; x < 32; x++, offs++)
 		{
-			int code = videoram[offs] & 0x3f;
-			int color = ((videoram[offs] & 0xc0) >> 6) | (irobot_alphamap >> 3);
+			int code = screen->machine->generic.videoram.u8[offs] & 0x3f;
+			int color = ((screen->machine->generic.videoram.u8[offs] & 0xc0) >> 6) | (irobot_alphamap >> 3);
 
 			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],
 					code, color,

@@ -101,7 +101,7 @@ static ADDRESS_MAP_START( mosaic_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x20000, 0x21fff) AM_RAM
 	AM_RANGE(0x22000, 0x22fff) AM_RAM_WRITE(mosaic_bgvideoram_w) AM_BASE(&mosaic_bgvideoram)
 	AM_RANGE(0x23000, 0x23fff) AM_RAM_WRITE(mosaic_fgvideoram_w) AM_BASE(&mosaic_fgvideoram)
-	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( gfire2_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -109,14 +109,14 @@ static ADDRESS_MAP_START( gfire2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x10000, 0x17fff) AM_RAM
 	AM_RANGE(0x22000, 0x22fff) AM_RAM_WRITE(mosaic_bgvideoram_w) AM_BASE(&mosaic_bgvideoram)
 	AM_RANGE(0x23000, 0x23fff) AM_RAM_WRITE(mosaic_fgvideoram_w) AM_BASE(&mosaic_fgvideoram)
-	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0x24000, 0x241ff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mosaic_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x3f) AM_WRITENOP	/* Z180 internal registers */
 	AM_RANGE(0x30, 0x30) AM_READNOP	/* Z180 internal registers */
-	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x72, 0x72) AM_READWRITE(protection_r, protection_w)
 	AM_RANGE(0x74, 0x74) AM_READ_PORT("P1")
 	AM_RANGE(0x76, 0x76) AM_READ_PORT("P2")
@@ -126,7 +126,7 @@ static ADDRESS_MAP_START( gfire2_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x3f) AM_WRITENOP	/* Z180 internal registers */
 	AM_RANGE(0x30, 0x30) AM_READNOP	/* Z180 internal registers */
-	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x72, 0x72) AM_READWRITE(gfire2_protection_r, gfire2_protection_w)
 	AM_RANGE(0x74, 0x74) AM_READ_PORT("P1")
 	AM_RANGE(0x76, 0x76) AM_READ_PORT("P2")
@@ -281,7 +281,7 @@ static MACHINE_DRIVER_START( mosaic )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END

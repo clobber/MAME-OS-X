@@ -54,7 +54,7 @@ Note:   if MAME_DEBUG is defined, pressing Z or X with:
 ***************************************************************************/
 
 #include "driver.h"
-#include "megasys1.h"
+#include "includes/megasys1.h"
 #include "includes/cischeat.h"
 
 /* Variables only used here: */
@@ -147,7 +147,7 @@ VIDEO_START( cischeat )
 	shift_ret = 1;
 	VIDEO_START_CALL(megasys1);
 
- 	megasys1_bits_per_color_code = 5;
+	megasys1_bits_per_color_code = 5;
 
 	prepare_shadows();
 }
@@ -161,7 +161,7 @@ VIDEO_START( f1gpstar )
 {
 	VIDEO_START_CALL(cischeat);
 
- 	megasys1_bits_per_color_code = 4;
+	megasys1_bits_per_color_code = 4;
 }
 
 VIDEO_START( bigrun )
@@ -252,25 +252,25 @@ WRITE16_HANDLER( bigrun_vregs_w )
 
 	switch (offset)
 	{
- 		case 0x0000/2   :	// leds
+		case 0x0000/2   :	// leds
 			if (ACCESSING_BITS_0_7)
 			{
-	 			coin_counter_w(0,new_data & 0x01);
-	 			coin_counter_w(1,new_data & 0x02);
-	 			set_led_status(0,new_data & 0x10);	// start button
-				set_led_status(1,new_data & 0x20);	// ?
+				coin_counter_w(space->machine, 0,new_data & 0x01);
+				coin_counter_w(space->machine, 1,new_data & 0x02);
+				set_led_status(space->machine, 0,new_data & 0x10);	// start button
+				set_led_status(space->machine, 1,new_data & 0x20);	// ?
 			}
 			break;
 
 		case 0x0002/2   :	// ?? 91/1/91/1 ...
 			break;
 
- 		case 0x0004/2   :	// motor (seat?)
+		case 0x0004/2   :	// motor (seat?)
 			if (ACCESSING_BITS_0_7)
-				set_led_status(2, (new_data != old_data) ? 1 : 0);
- 			break;
+				set_led_status(space->machine, 2, (new_data != old_data) ? 1 : 0);
+			break;
 
- 		case 0x0006/2   :	// motor (wheel?)
+		case 0x0006/2   :	// motor (wheel?)
 			break;
 
 		case 0x000a/2   :	// to sound cpu
@@ -345,25 +345,25 @@ WRITE16_HANDLER( cischeat_vregs_w )
 
 	switch (offset)
 	{
- 		case 0x0000/2   :	// leds
+		case 0x0000/2   :	// leds
 			if (ACCESSING_BITS_0_7)
 			{
-	 			coin_counter_w(0,new_data & 0x01);
-	 			coin_counter_w(1,new_data & 0x02);
-	 			set_led_status(0,new_data & 0x10);	// start button
-				set_led_status(1,new_data & 0x20);	// ?
+				coin_counter_w(space->machine, 0,new_data & 0x01);
+				coin_counter_w(space->machine, 1,new_data & 0x02);
+				set_led_status(space->machine, 0,new_data & 0x10);	// start button
+				set_led_status(space->machine, 1,new_data & 0x20);	// ?
 			}
 			break;
 
 		case 0x0002/2   :	// ?? 91/1/91/1 ...
 			break;
 
- 		case 0x0004/2   :	// motor (seat?)
+		case 0x0004/2   :	// motor (seat?)
 			if (ACCESSING_BITS_0_7)
-				set_led_status(2, (new_data != old_data) ? 1 : 0);
- 			break;
+				set_led_status(space->machine, 2, (new_data != old_data) ? 1 : 0);
+			break;
 
- 		case 0x0006/2   :	// motor (wheel?)
+		case 0x0006/2   :	// motor (wheel?)
 			break;
 
 		case 0x0010/2   : cischeat_ip_select = new_data;	break;
@@ -489,12 +489,12 @@ CPU #0 PC 00235C : Warning, vreg 0006 <- 0000
 		case 0x0004/2   :
 			if (ACCESSING_BITS_0_7)
 			{
-	 			coin_counter_w(0,new_data & 0x01);
-	 			coin_counter_w(1,new_data & 0x02);
-				set_led_status(0,new_data & 0x04);	// start button
-				set_led_status(1,new_data & 0x20);	// ?
+				coin_counter_w(space->machine, 0,new_data & 0x01);
+				coin_counter_w(space->machine, 1,new_data & 0x02);
+				set_led_status(space->machine, 0,new_data & 0x04);	// start button
+				set_led_status(space->machine, 1,new_data & 0x20);	// ?
 				// wheel | seat motor
-				set_led_status(2, ((new_data >> 3) | (new_data >> 4)) & 1 );
+				set_led_status(space->machine, 2, ((new_data >> 3) | (new_data >> 4)) & 1 );
 			}
 			break;
 		case 0x0014/2   :	break;
@@ -836,7 +836,7 @@ static void cischeat_draw_sprites(running_machine *machine, bitmap_t *bitmap , c
 
 	int min_priority, max_priority, high_sprites;
 
-	UINT16		*source	=	spriteram16;
+	UINT16		*source	=	machine->generic.spriteram.u16;
 	const UINT16	*finish	=	source + 0x1000/2;
 
 
@@ -904,7 +904,7 @@ static void cischeat_draw_sprites(running_machine *machine, bitmap_t *bitmap , c
 			continue;
 
 #ifdef MAME_DEBUG
-if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) ) 	{ continue; };
+if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) )	{ continue; };
 #endif
 
 		xscale = xdim / 16;
@@ -991,7 +991,7 @@ static void bigrun_draw_sprites(running_machine *machine, bitmap_t *bitmap , con
 
 	int min_priority, max_priority, high_sprites;
 
-	UINT16		*source	=	spriteram16;
+	UINT16		*source	=	machine->generic.spriteram.u16;
 	const UINT16	*finish	=	source + 0x1000/2;
 
 	/* Move the priority values in place */
@@ -1058,7 +1058,7 @@ static void bigrun_draw_sprites(running_machine *machine, bitmap_t *bitmap , con
 			continue;
 
 #ifdef MAME_DEBUG
-if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) ) 	{ continue; };
+if ( (debugsprites) && ( ((attr & 0x0300)>>8) != (debugsprites-1) ) )	{ continue; };
 #endif
 
 		xscale = xdim / 16;

@@ -11,7 +11,7 @@
 #include "cpu/m6809/m6809.h"
 #include "cpu/z80/z80.h"
 #include "cpu/konami/konami.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "includes/ajax.h"
 
 static int firq_enable;
@@ -42,15 +42,15 @@ static WRITE8_HANDLER( ajax_bankswitch_w )
 	if (!(data & 0x80))	bankaddress += 0x8000;
 
 	/* coin counters */
-	coin_counter_w(0,data & 0x20);
-	coin_counter_w(1,data & 0x40);
+	coin_counter_w(space->machine, 0,data & 0x20);
+	coin_counter_w(space->machine, 1,data & 0x40);
 
 	/* priority */
 	ajax_priority = data & 0x08;
 
 	/* bank # (ROMS N11 and N12) */
 	bankaddress += 0x10000 + (data & 0x07)*0x2000;
-	memory_set_bankptr(space->machine, 2,&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank2",&RAM[bankaddress]);
 }
 
 /*  ajax_lamps_w:
@@ -79,14 +79,14 @@ static WRITE8_HANDLER( ajax_bankswitch_w )
 
 static WRITE8_HANDLER( ajax_lamps_w )
 {
-	set_led_status(1,data & 0x02);	/* super weapon lamp */
-	set_led_status(2,data & 0x04);	/* power up lamps */
-	set_led_status(5,data & 0x04);	/* power up lamps */
-	set_led_status(0,data & 0x20);	/* start lamp */
-	set_led_status(3,data & 0x40);	/* game over lamps */
-	set_led_status(6,data & 0x40);	/* game over lamps */
-	set_led_status(4,data & 0x80);	/* game over lamps */
-	set_led_status(7,data & 0x80);	/* game over lamps */
+	set_led_status(space->machine, 1,data & 0x02);	/* super weapon lamp */
+	set_led_status(space->machine, 2,data & 0x04);	/* power up lamps */
+	set_led_status(space->machine, 5,data & 0x04);	/* power up lamps */
+	set_led_status(space->machine, 0,data & 0x20);	/* start lamp */
+	set_led_status(space->machine, 3,data & 0x40);	/* game over lamps */
+	set_led_status(space->machine, 6,data & 0x40);	/* game over lamps */
+	set_led_status(space->machine, 4,data & 0x80);	/* game over lamps */
+	set_led_status(space->machine, 7,data & 0x80);	/* game over lamps */
 }
 
 /*  ajax_ls138_f10:
@@ -180,21 +180,23 @@ WRITE8_HANDLER( ajax_ls138_f10_w )
 
 WRITE8_HANDLER( ajax_bankswitch_2_w )
 {
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+	const device_config *k051316 = devtag_get_device(space->machine, "k051316");
 	UINT8 *RAM = memory_region(space->machine, "sub");
 	int bankaddress;
 
 	/* enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(k052109, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 5 enables 051316 wraparound */
-	K051316_wraparound_enable(0, data & 0x20);
+	k051316_wraparound_enable(k051316, data & 0x20);
 
 	/* FIRQ control */
 	firq_enable = data & 0x10;
 
 	/* bank # (ROMS G16 and I16) */
 	bankaddress = 0x10000 + (data & 0x0f)*0x2000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
 }
 
 MACHINE_START( ajax )
@@ -211,6 +213,7 @@ MACHINE_RESET( ajax )
 
 INTERRUPT_GEN( ajax_interrupt )
 {
-	if (K051960_is_IRQ_enabled())
+	const device_config *k051960 = devtag_get_device(device->machine, "k051960");
+	if (k051960_is_irq_enabled(k051960))
 		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }

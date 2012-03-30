@@ -173,14 +173,14 @@ Stephh's log (2007.11.28) :
 #include "pe_keno.lh"
 #include "pe_slots.lh"
 
-#define MASTER_CLOCK 		XTAL_20MHz
+#define MASTER_CLOCK		XTAL_20MHz
 #define CPU_CLOCK			((MASTER_CLOCK)/2)		/* divided by 2 - 7474 */
 #define MC6845_CLOCK		((MASTER_CLOCK)/8/3)
 #define SOUND_CLOCK			((MASTER_CLOCK)/12)
 
 static UINT16 autohold_addr; /* address to patch in program RAM to enable autohold feature */
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 static UINT8 wingboard;
 static UINT8 jumper_e16_e17; /* Set this to TRUE when CG chips are 27c512 instead of 27c256 */
 
@@ -343,7 +343,7 @@ static void handle_lightpen( const device_config *device )
     yt = y_val * (vis_area->max_y - vis_area->min_y) / 1024 + vis_area->min_y;
 
      timer_set(device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, yt, xt), (void *) device, 0, assert_lp_cb);
- }
+}
 
 static WRITE_LINE_DEVICE_HANDLER(crtc_vsync)
 {
@@ -353,7 +353,7 @@ static WRITE_LINE_DEVICE_HANDLER(crtc_vsync)
 
 static WRITE8_DEVICE_HANDLER( peplus_crtc_display_w )
 {
-	videoram[vid_address] = data;
+	device->machine->generic.videoram.u8[vid_address] = data;
 	palette_ram[vid_address] = io_port[1];
 	palette_ram2[vid_address] = io_port[3];
 
@@ -375,7 +375,7 @@ static WRITE8_HANDLER( peplus_duart_w )
 
 static WRITE8_HANDLER( peplus_cmos_w )
 {
-	char bank_name[5];
+	char bank_name[6];
 
 	/* Test for Wingboard PAL Trigger Condition */
 	if (offset == 0x1fff && wingboard && data < 5)
@@ -642,7 +642,7 @@ static TILE_GET_INFO( get_bg_tile_info )
 {
 	int pr = palette_ram[tile_index];
 	int pr2 = palette_ram2[tile_index];
-	int vr = videoram[tile_index];
+	int vr = machine->generic.videoram.u8[tile_index];
 
 	int code = ((pr & 0x0f)*256) | vr;
 	int color = (pr>>4) & 0x0f;
@@ -741,8 +741,8 @@ static ADDRESS_MAP_START( peplus_iomap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x3000, 0x3fff) AM_READWRITE(peplus_s3000_r, peplus_s3000_w) AM_BASE(&s3000_ram)
 
 	// Sound and Dipswitches
-	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x4004, 0x4004) AM_READ_PORT("SW1")/* likely ay8910 input port, not direct */ AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x4004, 0x4004) AM_READ_PORT("SW1")/* likely ay8910 input port, not direct */ AM_DEVWRITE("aysnd", ay8910_data_w)
 
     // Superboard Data
 	AM_RANGE(0x5000, 0x5fff) AM_READWRITE(peplus_s5000_r, peplus_s5000_w) AM_BASE(&s5000_ram)
@@ -751,7 +751,7 @@ static ADDRESS_MAP_START( peplus_iomap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x6000, 0x6000) AM_READ(peplus_bgcolor_r) AM_WRITE(peplus_bgcolor_w)
 
     // Bogus Location for Video RAM
-	AM_RANGE(0x06001, 0x06400) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x06001, 0x06400) AM_RAM AM_BASE_GENERIC(videoram)
 
     // Superboard Data
 	AM_RANGE(0x7000, 0x7fff) AM_READWRITE(peplus_s7000_r, peplus_s7000_w) AM_BASE(&s7000_ram)
@@ -1045,7 +1045,7 @@ static MACHINE_DRIVER_START( peplus )
 	// sound hardware
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8912, SOUND_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8912, SOUND_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 MACHINE_DRIVER_END
 

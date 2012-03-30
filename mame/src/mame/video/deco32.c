@@ -1,6 +1,6 @@
 #include "driver.h"
-#include "deco16ic.h"
-#include "deco32.h"
+#include "includes/deco16ic.h"
+#include "includes/deco32.h"
 
 UINT32 *deco32_pf1_data,*deco32_pf2_data,*deco32_pf3_data,*deco32_pf4_data;
 UINT32 *deco32_pf12_control,*deco32_pf34_control;
@@ -10,7 +10,7 @@ UINT32 *dragngun_sprite_lookup_0_ram, *dragngun_sprite_lookup_1_ram;
 UINT32 *deco32_ace_ram;
 
 static UINT8 *dirty_palette;
-static tilemap *pf1_tilemap,*pf1a_tilemap,*pf2_tilemap,*pf3_tilemap,*pf4_tilemap;
+static tilemap_t *pf1_tilemap,*pf1a_tilemap,*pf2_tilemap,*pf3_tilemap,*pf4_tilemap;
 static int deco32_pf1_bank,deco32_pf2_bank,deco32_pf3_bank,deco32_pf4_bank;
 static int deco32_pf1_flip,deco32_pf2_flip,deco32_pf3_flip,deco32_pf4_flip;
 static int deco32_pf2_colourbank,deco32_pf4_colourbank,deco32_pri;
@@ -66,8 +66,8 @@ WRITE32_HANDLER( dragngun_sprite_control_w )
 WRITE32_HANDLER( dragngun_spriteram_dma_w )
 {
 	/* DMA spriteram to private sprite chip area, and clear cpu ram */
-	memcpy(buffered_spriteram32,spriteram32,spriteram_size);
-	memset(spriteram32,0,0x2000);
+	memcpy(space->machine->generic.buffered_spriteram.u32,space->machine->generic.spriteram.u32,space->machine->generic.spriteram_size);
+	memset(space->machine->generic.spriteram.u32,0,0x2000);
 }
 
 WRITE32_HANDLER( deco32_ace_ram_w )
@@ -125,9 +125,9 @@ static void updateAceRam(running_machine* machine)
 	for (i=0; i<2048; i++)
 	{
 		/* Lerp palette entry to 'fadept' according to 'fadeps' */
-		b = (paletteram32[i] >>16) & 0xff;
-		g = (paletteram32[i] >> 8) & 0xff;
-		r = (paletteram32[i] >> 0) & 0xff;
+		b = (machine->generic.paletteram.u32[i] >>16) & 0xff;
+		g = (machine->generic.paletteram.u32[i] >> 8) & 0xff;
+		r = (machine->generic.paletteram.u32[i] >> 0) & 0xff;
 
 		if (i>255) /* Screenshots seem to suggest ACE fades do not affect playfield 1 palette (0-255) */
 		{
@@ -150,18 +150,18 @@ WRITE32_HANDLER( deco32_nonbuffered_palette_w )
 {
 	int r,g,b;
 
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
 
-	b = (paletteram32[offset] >>16) & 0xff;
-	g = (paletteram32[offset] >> 8) & 0xff;
-	r = (paletteram32[offset] >> 0) & 0xff;
+	b = (space->machine->generic.paletteram.u32[offset] >>16) & 0xff;
+	g = (space->machine->generic.paletteram.u32[offset] >> 8) & 0xff;
+	r = (space->machine->generic.paletteram.u32[offset] >> 0) & 0xff;
 
 	palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
 }
 
 WRITE32_HANDLER( deco32_buffered_palette_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
 	dirty_palette[offset]=1;
 }
 
@@ -180,9 +180,9 @@ WRITE32_HANDLER( deco32_palette_dma_w )
 			}
 			else
 			{
-				b = (paletteram32[i] >>16) & 0xff;
-				g = (paletteram32[i] >> 8) & 0xff;
-				r = (paletteram32[i] >> 0) & 0xff;
+				b = (space->machine->generic.paletteram.u32[i] >>16) & 0xff;
+				g = (space->machine->generic.paletteram.u32[i] >> 8) & 0xff;
+				r = (space->machine->generic.paletteram.u32[i] >> 0) & 0xff;
 
 				palette_set_color(space->machine,i,MAKE_RGB(r,g,b));
 			}
@@ -972,8 +972,6 @@ VIDEO_START( captaven )
 	pf1a_tilemap =tilemap_create(machine, get_pf1a_tile_info,   deco16_scan_rows,16,16,64,32);
 	pf2_tilemap = tilemap_create(machine, get_pf2_tile_info,    deco16_scan_rows,16,16,64,32);
 	pf3_tilemap = tilemap_create(machine, get_ca_pf3_tile_info, tilemap_scan_rows,16,16,32,32);
-	deco32_raster_display_list=auto_alloc_array(machine, UINT16, 10 * 256 / 2);
-	memset(deco32_raster_display_list, 0, 10 * 256);
 
 	tilemap_set_transparent_pen(pf1_tilemap,0);
 	tilemap_set_transparent_pen(pf1a_tilemap,0);
@@ -1000,7 +998,6 @@ VIDEO_START( fghthist )
 	tilemap_set_transparent_pen(pf2_tilemap,0);
 	tilemap_set_transparent_pen(pf3_tilemap,0);
 
-	deco32_raster_display_list=0;
 	deco32_pf2_colourbank=deco32_pf4_colourbank=0;
 	has_ace_ram=0;
 }
@@ -1072,7 +1069,6 @@ VIDEO_START( nslasher )
 	tilemap_set_transparent_pen(pf3_tilemap,0);
 	memset(dirty_palette,0,4096);
 
-	deco32_raster_display_list=0;
 	deco32_pf2_colourbank=16;
 	deco32_pf4_colourbank=16;
 	state_save_register_global(machine, deco32_pri);
@@ -1083,8 +1079,7 @@ VIDEO_START( nslasher )
 
 VIDEO_EOF( captaven )
 {
-	memcpy(buffered_spriteram32,spriteram32,spriteram_size);
-	deco32_raster_display_position=0;
+	memcpy(machine->generic.buffered_spriteram.u32,machine->generic.spriteram.u32,machine->generic.spriteram_size);
 }
 
 VIDEO_EOF( dragngun )
@@ -1111,79 +1106,7 @@ static void print_debug_info(bitmap_t *bitmap)
 
 #endif
 
-static void tilemap_raster_draw(bitmap_t *bitmap, const rectangle *cliprect, int flags, int pri)
-{
-	int ptr=0,sx0,sy0,sx1,sy1,start,end=0;
-	rectangle clip;
-	int overflow=deco32_raster_display_position;
-
-	clip.min_x = cliprect->min_x;
-	clip.max_x = cliprect->max_x;
-
-	/* Finish list up to end of visible display */
-	deco32_raster_display_list[overflow++]=255;
-	deco32_raster_display_list[overflow++]=deco32_pf12_control[1];
-	deco32_raster_display_list[overflow++]=deco32_pf12_control[2];
-	deco32_raster_display_list[overflow++]=deco32_pf12_control[3];
-	deco32_raster_display_list[overflow++]=deco32_pf12_control[4];
-
-	while (ptr<overflow) {
-		start=end;
-		end=deco32_raster_display_list[ptr++];
-		sx0=deco32_raster_display_list[ptr++];
-		sy0=deco32_raster_display_list[ptr++];
-		sx1=deco32_raster_display_list[ptr++];
-		sy1=deco32_raster_display_list[ptr++];
-
-		clip.min_y = start;
-		clip.max_y = end;
-
-		tilemap_set_scrollx(pf2_tilemap,0,sx1);
-		tilemap_set_scrolly(pf2_tilemap,0,sy1);
-		tilemap_draw(bitmap,&clip,pf2_tilemap,flags,pri);
-	}
-}
-
-static void combined_tilemap_draw(running_machine* machine, bitmap_t *bitmap, const rectangle *cliprect)
-{
-	const bitmap_t *bitmap0 = tilemap_get_pixmap(pf3_tilemap);
-	const bitmap_t *bitmap1 = tilemap_get_pixmap(pf4_tilemap);
-	int x,y,p;
-
-	const UINT16 width_mask=0x3ff;
-	const UINT16 height_mask=0x1ff;
-	const UINT16 y_src=deco32_pf34_control[2];
-//  const UINT32 *rows=deco32_pf3_rowscroll;
-
-	const UINT16 *bitmap0_y;
-	const UINT16 *bitmap1_y;
-	UINT32 *bitmap2_y;
-
-	UINT16 x_src;
-
-	for (y=8; y<248; y++) {
-		const int py=(y_src+y)&height_mask;
-
-		bitmap0_y=BITMAP_ADDR16(bitmap0, py, 0);
-		bitmap1_y=BITMAP_ADDR16(bitmap1, py, 0);
-		bitmap2_y=BITMAP_ADDR32(bitmap, y, 0);
-
-		/* Todo:  Should add row enable, and col scroll, but never used as far as I can see */
-		x_src=(deco32_pf34_control[1] + deco32_pf3_rowscroll[py])&width_mask;
-
-		for (x=0; x<320; x++) {
-
-			/* 0x200 is palette base for this tilemap */
-			p = 0x200 +((bitmap0_y[x_src]&0xf) | ((bitmap0_y[x_src]&0x30)<<4) | ((bitmap1_y[x_src]&0xf)<<4));
-
-			bitmap2_y[x]=machine->pens[p];
-
-			x_src=(x_src+1)&width_mask;
-		}
-	}
-}
-
-static void deco32_setup_scroll(tilemap *pf_tilemap, UINT16 height, UINT8 control0, UINT8 control1, UINT16 sy, UINT16 sx, UINT32 *rowdata, UINT32 *coldata)
+static void deco32_setup_scroll(tilemap_t *pf_tilemap, UINT16 height, UINT8 control0, UINT8 control1, UINT16 sy, UINT16 sx, UINT32 *rowdata, UINT32 *coldata)
 {
 	int rows,offs;
 
@@ -1225,6 +1148,48 @@ static void deco32_setup_scroll(tilemap *pf_tilemap, UINT16 height, UINT8 contro
 	}
 }
 
+
+static void combined_tilemap_draw(running_machine* machine, bitmap_t *bitmap, const rectangle *cliprect)
+{
+	const bitmap_t *bitmap0 = tilemap_get_pixmap(pf3_tilemap);
+	const bitmap_t *bitmap1 = tilemap_get_pixmap(pf4_tilemap);
+	int x,y,p;
+
+	const UINT16 width_mask=0x3ff;
+	const UINT16 height_mask=0x1ff;
+	const UINT16 y_src=deco32_pf34_control[2];
+//  const UINT32 *rows=deco32_pf3_rowscroll;
+
+	const UINT16 *bitmap0_y;
+	const UINT16 *bitmap1_y;
+	UINT32 *bitmap2_y;
+
+	UINT16 x_src;
+
+	for (y=8; y<248; y++) {
+		const int py=(y_src+y)&height_mask;
+
+		bitmap0_y=BITMAP_ADDR16(bitmap0, py, 0);
+		bitmap1_y=BITMAP_ADDR16(bitmap1, py, 0);
+		bitmap2_y=BITMAP_ADDR32(bitmap, y, 0);
+
+		/* Todo:  Should add row enable, and col scroll, but never used as far as I can see */
+		x_src=(deco32_pf34_control[1] + deco32_pf3_rowscroll[py])&width_mask;
+
+		for (x=0; x<320; x++) {
+
+			/* 0x200 is palette base for this tilemap */
+			p = 0x200 +((bitmap0_y[x_src]&0xf) | ((bitmap0_y[x_src]&0x30)<<4) | ((bitmap1_y[x_src]&0xf)<<4));
+
+			bitmap2_y[x]=machine->pens[p];
+
+			x_src=(x_src+1)&width_mask;
+		}
+	}
+}
+
+
+
 /******************************************************************************/
 
 VIDEO_UPDATE( captaven )
@@ -1265,16 +1230,10 @@ VIDEO_UPDATE( captaven )
 		else
 			bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
 
-		if (deco32_raster_display_position)
-			tilemap_raster_draw(bitmap,cliprect,0,2);
-		else
-			tilemap_draw(bitmap,cliprect,pf2_tilemap,0,2);
+		tilemap_draw(bitmap,cliprect,pf2_tilemap,0,2);
 	} else {
 		if (pf2_enable) {
-			if (deco32_raster_display_position)
-				tilemap_raster_draw(bitmap,cliprect,TILEMAP_DRAW_OPAQUE,1);
-			else
-				tilemap_draw(bitmap,cliprect,pf2_tilemap,0,1);
+			tilemap_draw(bitmap,cliprect,pf2_tilemap,0,1);
 		}
 		else
 			bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
@@ -1288,7 +1247,7 @@ VIDEO_UPDATE( captaven )
 	else
 		tilemap_draw(bitmap,cliprect,pf1a_tilemap,0,4);
 
-	captaven_draw_sprites(screen->machine,bitmap,cliprect,buffered_spriteram32,3);
+	captaven_draw_sprites(screen->machine,bitmap,cliprect,screen->machine->generic.buffered_spriteram.u32,3);
 
 	return 0;
 }
@@ -1368,7 +1327,7 @@ VIDEO_UPDATE( dragngun )
 		tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
 	}
 
-	dragngun_draw_sprites(screen->machine,bitmap,cliprect,buffered_spriteram32);
+	dragngun_draw_sprites(screen->machine,bitmap,cliprect,screen->machine->generic.buffered_spriteram.u32);
 
 	/* PF1 can be in 8x8 mode or 16x16 mode */
 	if (deco32_pf12_control[6]&0x80)
@@ -1428,7 +1387,7 @@ VIDEO_UPDATE( fghthist )
 		tilemap_draw(bitmap,cliprect,pf3_tilemap,0,0);
 		tilemap_draw(bitmap,cliprect,pf2_tilemap,0,2);
 	}
-	fghthist_draw_sprites(screen->machine, bitmap, cliprect, buffered_spriteram32,3,0, 0xf);
+	fghthist_draw_sprites(screen->machine, bitmap, cliprect, screen->machine->generic.buffered_spriteram.u32,3,0, 0xf);
 	tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 	return 0;
 }
@@ -1620,8 +1579,8 @@ VIDEO_UPDATE( nslasher )
 		bitmap_fill(bitmap,cliprect,screen->machine->pens[0x200]);
 
 	/* Draw sprites to temporary bitmaps, saving alpha & priority info for later mixing */
-	nslasher_draw_sprites(screen->machine,sprite0_mix_bitmap,cliprect,buffered_spriteram32,3);
-	nslasher_draw_sprites(screen->machine,sprite1_mix_bitmap,cliprect,buffered_spriteram32_2,4);
+	nslasher_draw_sprites(screen->machine,sprite0_mix_bitmap,cliprect,screen->machine->generic.buffered_spriteram.u32,3);
+	nslasher_draw_sprites(screen->machine,sprite1_mix_bitmap,cliprect,screen->machine->generic.buffered_spriteram2.u32,4);
 
 	/* Render alpha-blended tilemap to seperate buffer for proper mixing */
 	bitmap_fill(tilemap_alpha_bitmap,cliprect,0);

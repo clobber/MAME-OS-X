@@ -152,12 +152,12 @@ static VIDEO_UPDATE(gamecstl)
 
 static READ8_DEVICE_HANDLER(at_dma8237_2_r)
 {
-	return dma8237_r(device, offset / 2);
+	return i8237_r(device, offset / 2);
 }
 
 static WRITE8_DEVICE_HANDLER(at_dma8237_2_w)
 {
-	dma8237_w(device, offset / 2, data);
+	i8237_w(device, offset / 2, data);
 }
 
 static READ32_DEVICE_HANDLER(at32_dma8237_2_r)
@@ -192,11 +192,11 @@ static void mxtc_config_w(const device_config *busdevice, const device_config *d
 		{
 			if (data & 0x10)		// enable RAM access to region 0xf0000 - 0xfffff
 			{
-				memory_set_bankptr(busdevice->machine, 1, bios_ram);
+				memory_set_bankptr(busdevice->machine, "bank1", bios_ram);
 			}
 			else					// disable RAM access (reads go to BIOS ROM)
 			{
-				memory_set_bankptr(busdevice->machine, 1, memory_region(busdevice->machine, "user1") + 0x30000);
+				memory_set_bankptr(busdevice->machine, "bank1", memory_region(busdevice->machine, "user1") + 0x30000);
 			}
 			break;
 		}
@@ -371,6 +371,7 @@ static WRITE32_HANDLER(bios_ram_w)
  *
  *************************************************************************/
 
+static int dma_channel;
 static UINT8 dma_offset[2][4];
 static UINT8 at_pages[0x10];
 
@@ -420,60 +421,62 @@ static WRITE8_HANDLER(at_page8_w)
 }
 
 
-static DMA8237_HRQ_CHANGED( pc_dma_hrq_changed )
+static WRITE_LINE_DEVICE_HANDLER( pc_dma_hrq_changed )
 {
 	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_HALT, state ? ASSERT_LINE : CLEAR_LINE);
 
 	/* Assert HLDA */
-	dma8237_set_hlda( device, state );
+	i8237_hlda_w( device, state );
 }
 
 
-static DMA8237_MEM_READ( pc_dma_read_byte )
+static READ8_HANDLER( pc_dma_read_byte )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	offs_t page_offset = (((offs_t) dma_offset[0][channel]) << 16)
+	offs_t page_offset = (((offs_t) dma_offset[0][dma_channel]) << 16)
 		& 0xFF0000;
 
 	return memory_read_byte(space, page_offset + offset);
 }
 
 
-static DMA8237_MEM_WRITE( pc_dma_write_byte )
+static WRITE8_HANDLER( pc_dma_write_byte )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	offs_t page_offset = (((offs_t) dma_offset[0][channel]) << 16)
+	offs_t page_offset = (((offs_t) dma_offset[0][dma_channel]) << 16)
 		& 0xFF0000;
 
 	memory_write_byte(space, page_offset + offset, data);
 }
 
-
-static const struct dma8237_interface dma8237_1_config =
+static void set_dma_channel(const device_config *device, int channel, int state)
 {
-	XTAL_14_31818MHz/3,
+	if (!state) dma_channel = channel;
+}
 
-	pc_dma_hrq_changed,
-	pc_dma_read_byte,
-	pc_dma_write_byte,
+static WRITE_LINE_DEVICE_HANDLER( pc_dack0_w ) { set_dma_channel(device, 0, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack1_w ) { set_dma_channel(device, 1, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack2_w ) { set_dma_channel(device, 2, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack3_w ) { set_dma_channel(device, 3, state); }
 
-	{ NULL, NULL, NULL, NULL },
-	{ NULL, NULL, NULL, NULL },
-	NULL
+static I8237_INTERFACE( dma8237_1_config )
+{
+	DEVCB_LINE(pc_dma_hrq_changed),
+	DEVCB_NULL,
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, pc_dma_read_byte),
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, pc_dma_write_byte),
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_LINE(pc_dack0_w), DEVCB_LINE(pc_dack1_w), DEVCB_LINE(pc_dack2_w), DEVCB_LINE(pc_dack3_w) }
 };
 
-
-static const struct dma8237_interface dma8237_2_config =
+static I8237_INTERFACE( dma8237_2_config )
 {
-	XTAL_14_31818MHz/3,
-
-	NULL,
-	NULL,
-	NULL,
-
-	{ NULL, NULL, NULL, NULL },
-	{ NULL, NULL, NULL, NULL },
-	NULL
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL }
 };
 
 static READ32_HANDLER(at_page32_r)
@@ -495,14 +498,14 @@ static ADDRESS_MAP_START( gamecstl_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000a0000, 0x000affff) AM_RAM
 	AM_RANGE(0x000b0000, 0x000b7fff) AM_RAM AM_BASE(&cga_ram)
 	AM_RANGE(0x000e0000, 0x000effff) AM_RAM
-	AM_RANGE(0x000f0000, 0x000fffff) AM_ROMBANK(1)
+	AM_RANGE(0x000f0000, 0x000fffff) AM_ROMBANK("bank1")
 	AM_RANGE(0x000f0000, 0x000fffff) AM_WRITE(bios_ram_w)
 	AM_RANGE(0x00100000, 0x01ffffff) AM_RAM
 	AM_RANGE(0xfffc0000, 0xffffffff) AM_ROM AM_REGION("user1", 0)	/* System BIOS */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(gamecstl_io, ADDRESS_SPACE_IO, 32)
-	AM_RANGE(0x0000, 0x001f) AM_DEVREADWRITE8("dma8237_1", dma8237_r, dma8237_w, 0xffffffff)
+	AM_RANGE(0x0000, 0x001f) AM_DEVREADWRITE8("dma8237_1", i8237_r, i8237_w, 0xffffffff)
 	AM_RANGE(0x0020, 0x003f) AM_DEVREADWRITE8("pic8259_1", pic8259_r, pic8259_w, 0xffffffff)
 	AM_RANGE(0x0040, 0x005f) AM_DEVREADWRITE8("pit8254", pit8253_r, pit8253_w, 0xffffffff)
 	AM_RANGE(0x0060, 0x006f) AM_READWRITE(kbdc8042_32le_r,			kbdc8042_32le_w)
@@ -573,7 +576,7 @@ static INPUT_PORTS_START(gamecstl)
 	AT_KEYB_HELPER( 0x0200, "(MF2)Cursor Right",	KEYCODE_RIGHT       ) /* Right                       6a  ea */
 	AT_KEYB_HELPER( 0x0800, "(MF2)Cursor Down",		KEYCODE_DOWN        ) /* Down                        6c  ec */
 	AT_KEYB_HELPER( 0x1000, "(MF2)Page Down",		KEYCODE_PGDN        ) /* Page Down                   6d  ed */
-	AT_KEYB_HELPER( 0x4000, "Del",       		    KEYCODE_A           ) /* Delete                      6f  ef */
+	AT_KEYB_HELPER( 0x4000, "Del",      		    KEYCODE_A           ) /* Delete                      6f  ef */
 
 	PORT_START("pc_keyboard_7")
 INPUT_PORTS_END
@@ -600,7 +603,7 @@ static MACHINE_START(gamecstl)
 
 static MACHINE_RESET(gamecstl)
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "user1") + 0x30000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1") + 0x30000);
 
 	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
 }
@@ -677,9 +680,9 @@ static MACHINE_DRIVER_START(gamecstl)
 
 	MDRV_PIT8254_ADD( "pit8254", gamecstl_pit8254_config )
 
-	MDRV_DMA8237_ADD( "dma8237_1", dma8237_1_config )
+	MDRV_I8237_ADD( "dma8237_1", XTAL_14_31818MHz/3, dma8237_1_config )
 
-	MDRV_DMA8237_ADD( "dma8237_2", dma8237_2_config )
+	MDRV_I8237_ADD( "dma8237_2", XTAL_14_31818MHz/3, dma8237_2_config )
 
 	MDRV_PIC8259_ADD( "pic8259_1", gamecstl_pic8259_1_config )
 
@@ -689,7 +692,7 @@ static MACHINE_DRIVER_START(gamecstl)
 
 	MDRV_NVRAM_HANDLER( mc146818 )
 
- 	/* video hardware */
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))

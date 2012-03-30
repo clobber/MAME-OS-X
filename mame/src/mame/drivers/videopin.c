@@ -12,7 +12,7 @@
 
 #include "driver.h"
 #include "cpu/m6502/m6502.h"
-#include "videopin.h"
+#include "includes/videopin.h"
 #include "videopin.lh"
 #include "sound/discrete.h"
 
@@ -132,7 +132,7 @@ static WRITE8_HANDLER( videopin_led_w )
 	output_set_value(matrix[i][3], (data >> 3) & 1);
 
 	if (i == 7)
-		set_led_status(0, data & 8);   /* start button */
+		set_led_status(space->machine, 0, data & 8);   /* start button */
 
 	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
@@ -154,7 +154,7 @@ static WRITE8_DEVICE_HANDLER( videopin_out1_w )
 	if (mask)
 		cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
 
-	coin_lockout_global_w(~data & 0x08);
+	coin_lockout_global_w(device->machine, ~data & 0x08);
 
 	/* Convert octave data to divide value and write to sound */
 	discrete_sound_w(device, VIDEOPIN_OCTAVE_DATA, (0x01 << (~data & 0x07)) & 0xfe);
@@ -172,7 +172,7 @@ static WRITE8_DEVICE_HANDLER( videopin_out2_w )
 	/* D6 => BELL      */
 	/* D7 => ATTRACT   */
 
-	coin_counter_w(0, data & 0x10);
+	coin_counter_w(device->machine, 0, data & 0x10);
 
 	discrete_sound_w(device, VIDEOPIN_BELL_EN, data & 0x40);	// Bell
 	discrete_sound_w(device, VIDEOPIN_BONG_EN, data & 0x20);	// Bong
@@ -206,7 +206,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("IN0")
 	AM_RANGE(0x1800, 0x1800) AM_READ_PORT("DSW")
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
-	AM_RANGE(0xe000, 0xffff) AM_READ(SMH_ROM)   /* mirror for 6502 vectors */
+	AM_RANGE(0xe000, 0xffff) AM_ROM   /* mirror for 6502 vectors */
 ADDRESS_MAP_END
 
 

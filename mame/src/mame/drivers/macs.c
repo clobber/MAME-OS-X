@@ -58,7 +58,7 @@ KISEKAE -- info
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 
 
 
@@ -69,21 +69,21 @@ static MACHINE_RESET(macs);
 
 static ADDRESS_MAP_START( macs_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM /* work ram ? */
 	AM_RANGE(0xe800, 0xe87f) AM_RAM AM_BASE(&macs_ram2)
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAMBANK(3) /* common /backup ram ?*/
-	AM_RANGE(0xf800, 0xffff) AM_RAMBANK(2) /* common /backup ram ?*/
+	AM_RANGE(0xf000, 0xf7ff) AM_RAMBANK("bank3") /* common /backup ram ?*/
+	AM_RANGE(0xf800, 0xffff) AM_RAMBANK("bank2") /* common /backup ram ?*/
 ADDRESS_MAP_END
 
 static WRITE8_HANDLER(rambank_w)
 {
-	memory_set_bankptr(space->machine,  3, &macs_ram1[0x10000+(data&1)*0x800] );
+	memory_set_bankptr(space->machine,  "bank3", &macs_ram1[0x10000+(data&1)*0x800] );
 }
 
 static READ8_HANDLER( macs_input_r )
@@ -112,7 +112,7 @@ static READ8_HANDLER( macs_input_r )
 		case 5: return input_port_read(space->machine, "DSW3");
 		case 6: return input_port_read(space->machine, "DSW4");
 		case 7: return input_port_read(space->machine, "SYS1");
-		default: 	popmessage("Unmapped I/O read at PC = %06x offset = %02x",cpu_get_pc(space->cpu),offset+0xc0);
+		default:	popmessage("Unmapped I/O read at PC = %06x offset = %02x",cpu_get_pc(space->cpu),offset+0xc0);
 	}
 
 	return 0xff;
@@ -122,7 +122,7 @@ static WRITE8_HANDLER( macs_output_w )
 {
 	switch(offset)
 	{
-		case 0: memory_set_bankptr(space->machine,  2, &macs_ram1[((data&0x20)>>5)*0x1000+0x800] );break;
+		case 0: memory_set_bankptr(space->machine,  "bank2", &macs_ram1[((data&0x20)>>5)*0x1000+0x800] );break;
 		case 2: macs_mux_data = data; break;
 
 	}
@@ -424,7 +424,7 @@ static MACHINE_DRIVER_START( macs )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
+	MDRV_SOUND_ADD("stsnd", ST0016, 0)
 	MDRV_SOUND_CONFIG(st0016_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -603,7 +603,7 @@ static MACHINE_RESET(macs)
 		memcpy(macs_ram1 + 0x0800, memory_region(machine, "user1")+0x73fa, 0x507);
 		memcpy(macs_ram1 + 0x1800, memory_region(machine, "user1")+0x73fa, 0x507);
 
-#define MAKEJMP(n,m) 	macs_ram2[(n) - 0xe800 + 0]=0xc3;\
+#define MAKEJMP(n,m)	macs_ram2[(n) - 0xe800 + 0]=0xc3;\
 						macs_ram2[(n) - 0xe800 + 1]=(m)&0xff;\
 						macs_ram2[(n) - 0xe800 + 2]=((m)>>8)&0xff;
 
@@ -636,9 +636,9 @@ static MACHINE_RESET(macs)
 		macs_ram1[0x0ff9]=0x07;
 		macs_ram1[0x1ff9]=0x07;
 
-		memory_set_bankptr(machine,  1, memory_region(machine, "maincpu") + 0x10000 );
-		memory_set_bankptr(machine,  2, macs_ram1+0x800);
-		memory_set_bankptr(machine,  3, macs_ram1+0x10000);
+		memory_set_bankptr(machine,  "bank1", memory_region(machine, "maincpu") + 0x10000 );
+		memory_set_bankptr(machine,  "bank2", macs_ram1+0x800);
+		memory_set_bankptr(machine,  "bank3", macs_ram1+0x10000);
 }
 
 static DRIVER_INIT(macs)

@@ -201,16 +201,16 @@ static WRITE8_DEVICE_HANDLER( alg_cia_0_porta_w )
 	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	/* switch banks as appropriate */
-	memory_set_bank(device->machine, 1, data & 1);
+	memory_set_bank(device->machine, "bank1", data & 1);
 
 	/* swap the write handlers between ROM and bank 1 based on the bit */
 	if ((data & 1) == 0)
 		/* overlay disabled, map RAM on 0x000000 */
-		memory_install_write16_handler(space, 0x000000, 0x07ffff, 0, 0, (write16_space_func)SMH_BANK(1));
+		memory_install_write_bank(space, 0x000000, 0x07ffff, 0, 0, "bank1");
 
 	else
 		/* overlay enabled, map Amiga system ROM on 0x000000 */
-		memory_install_write16_handler(space, 0x000000, 0x07ffff, 0, 0, (write16_space_func)SMH_UNMAP);
+		memory_unmap_write(space, 0x000000, 0x07ffff, 0, 0);
 }
 
 
@@ -256,40 +256,40 @@ static WRITE8_DEVICE_HANDLER( alg_cia_1_porta_w )
 
 static ADDRESS_MAP_START( main_map_r1, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x000000, 0x07ffff) AM_RAMBANK(1) AM_BASE(&amiga_chip_ram)	AM_SIZE(&amiga_chip_ram_size)
+	AM_RANGE(0x000000, 0x07ffff) AM_RAMBANK("bank1") AM_BASE(&amiga_chip_ram)	AM_SIZE(&amiga_chip_ram_size)
 	AM_RANGE(0xbfd000, 0xbfefff) AM_READWRITE(amiga_cia_r, amiga_cia_w)
 	AM_RANGE(0xc00000, 0xdfffff) AM_READWRITE(amiga_custom_r, amiga_custom_w) AM_BASE(&amiga_custom_regs)
 	AM_RANGE(0xe80000, 0xe8ffff) AM_READWRITE(amiga_autoconfig_r, amiga_autoconfig_w)
 	AM_RANGE(0xfc0000, 0xffffff) AM_ROM AM_REGION("user1", 0)			/* System ROM */
 
 	AM_RANGE(0xf00000, 0xf1ffff) AM_ROM AM_REGION("user2", 0)			/* Custom ROM */
-	AM_RANGE(0xf54000, 0xf55fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf54000, 0xf55fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( main_map_r2, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x000000, 0x07ffff) AM_RAMBANK(1) AM_BASE(&amiga_chip_ram)	AM_SIZE(&amiga_chip_ram_size)
+	AM_RANGE(0x000000, 0x07ffff) AM_RAMBANK("bank1") AM_BASE(&amiga_chip_ram)	AM_SIZE(&amiga_chip_ram_size)
 	AM_RANGE(0xbfd000, 0xbfefff) AM_READWRITE(amiga_cia_r, amiga_cia_w)
 	AM_RANGE(0xc00000, 0xdfffff) AM_READWRITE(amiga_custom_r, amiga_custom_w) AM_BASE(&amiga_custom_regs)
 	AM_RANGE(0xe80000, 0xe8ffff) AM_READWRITE(amiga_autoconfig_r, amiga_autoconfig_w)
 	AM_RANGE(0xfc0000, 0xffffff) AM_ROM AM_REGION("user1", 0)			/* System ROM */
 
 	AM_RANGE(0xf00000, 0xf3ffff) AM_ROM AM_REGION("user2", 0)			/* Custom ROM */
-	AM_RANGE(0xf7c000, 0xf7dfff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf7c000, 0xf7dfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( main_map_picmatic, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x000000, 0x07ffff) AM_RAMBANK(1) AM_BASE(&amiga_chip_ram)	AM_SIZE(&amiga_chip_ram_size)
+	AM_RANGE(0x000000, 0x07ffff) AM_RAMBANK("bank1") AM_BASE(&amiga_chip_ram)	AM_SIZE(&amiga_chip_ram_size)
 	AM_RANGE(0xbfd000, 0xbfefff) AM_READWRITE(amiga_cia_r, amiga_cia_w)
 	AM_RANGE(0xc00000, 0xdfffff) AM_READWRITE(amiga_custom_r, amiga_custom_w) AM_BASE(&amiga_custom_regs)
 	AM_RANGE(0xe80000, 0xe8ffff) AM_READWRITE(amiga_autoconfig_r, amiga_autoconfig_w)
 	AM_RANGE(0xfc0000, 0xffffff) AM_ROM AM_REGION("user1", 0)			/* System ROM */
 
 	AM_RANGE(0xf00000, 0xf1ffff) AM_ROM AM_REGION("user2", 0)			/* Custom ROM */
-	AM_RANGE(0xf40000, 0xf41fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf40000, 0xf41fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 
@@ -669,8 +669,8 @@ static void alg_init(running_machine *machine)
 	amiga_machine_config(machine, &alg_intf);
 
 	/* set up memory */
-	memory_configure_bank(machine, 1, 0, 1, amiga_chip_ram, 0);
-	memory_configure_bank(machine, 1, 1, 1, memory_region(machine, "user1"), 0);
+	memory_configure_bank(machine, "bank1", 0, 1, amiga_chip_ram, 0);
+	memory_configure_bank(machine, "bank1", 1, 1, memory_region(machine, "user1"), 0);
 }
 
 

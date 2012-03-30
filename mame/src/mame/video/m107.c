@@ -35,12 +35,12 @@
 *****************************************************************************/
 
 #include "driver.h"
-#include "m107.h"
+#include "includes/m107.h"
 
 typedef struct _pf_layer_info pf_layer_info;
 struct _pf_layer_info
 {
-	tilemap *		tmap;
+	tilemap_t *		tmap;
 	UINT16			vram_base;
 	UINT16			control[4];
 };
@@ -226,7 +226,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 
 					if (rom[rom_offs+1]&0x80) break;	/* end of block */
 
- 					rom_offs += 8;
+					rom_offs += 8;
 				}
 			}
 		}
@@ -302,7 +302,7 @@ WRITE16_HANDLER( m107_spritebuffer_w )
 {
 	if (ACCESSING_BITS_0_7) {
 //      logerror("%04x: buffered spriteram\n",cpu_get_pc(space->cpu));
-		memcpy(m107_spriteram,spriteram16,0x1000);
+		memcpy(m107_spriteram,space->machine->generic.spriteram.u16,0x1000);
 	}
 }
 

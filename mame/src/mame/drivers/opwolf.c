@@ -277,7 +277,7 @@ register. So what is controlling priority.
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "video/taitoic.h"
 #include "audio/taitosnd.h"
 #include "sound/2151intf.h"
@@ -295,7 +295,6 @@ static int adpcm_data[2];
 static int opwolf_gun_xoffs, opwolf_gun_yoffs;
 
 WRITE16_HANDLER( rainbow_spritectrl_w );
-VIDEO_START( opwolf );
 VIDEO_UPDATE( opwolf );
 
 static READ16_HANDLER( cchip_r )
@@ -360,7 +359,7 @@ static READ8_HANDLER( z80_input2_r )
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	memory_set_bank(device->machine, 10, (data-1) & 0x03);
+	memory_set_bank(device->machine, "bank10", (data-1) & 0x03);
 }
 
 /***********************************************************
@@ -376,19 +375,19 @@ static ADDRESS_MAP_START( opwolf_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0ff802, 0x0ff803) AM_WRITE(opwolf_cchip_status_w)
 	AM_RANGE(0x0ffc00, 0x0ffc01) AM_WRITE(opwolf_cchip_bank_w)
 	AM_RANGE(0x100000, 0x107fff) AM_RAM
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x380000, 0x380003) AM_READ(opwolf_dsw_r)			/* dip switches */
 	AM_RANGE(0x380000, 0x380003) AM_WRITE(rainbow_spritectrl_w)	// usually 0x4, changes when you fire
 	AM_RANGE(0x3a0000, 0x3a0003) AM_READ(opwolf_lightgun_r)		/* lightgun, read at $11e0/6 */
 	AM_RANGE(0x3c0000, 0x3c0001) AM_WRITENOP					/* watchdog ?? */
 	AM_RANGE(0x3e0000, 0x3e0001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x3e0002, 0x3e0003) AM_READWRITE8(taitosound_comm_r,taitosound_comm_w, 0xff00)
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(PC080SN_word_0_r,PC080SN_word_0_w)
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("pc080sn", pc080sn_word_r, pc080sn_word_w)
 	AM_RANGE(0xc10000, 0xc1ffff) AM_WRITEONLY					/* error in init code (?) */
-	AM_RANGE(0xc20000, 0xc20003) AM_WRITE(PC080SN_yscroll_word_0_w)
-	AM_RANGE(0xc40000, 0xc40003) AM_WRITE(PC080SN_xscroll_word_0_w)
-	AM_RANGE(0xc50000, 0xc50003) AM_WRITE(PC080SN_ctrl_word_0_w)
-	AM_RANGE(0xd00000, 0xd03fff) AM_READWRITE(PC090OJ_word_0_r,PC090OJ_word_0_w)	/* sprite ram */
+	AM_RANGE(0xc20000, 0xc20003) AM_DEVWRITE("pc080sn", pc080sn_yscroll_word_w)
+	AM_RANGE(0xc40000, 0xc40003) AM_DEVWRITE("pc080sn", pc080sn_xscroll_word_w)
+	AM_RANGE(0xc50000, 0xc50003) AM_DEVWRITE("pc080sn", pc080sn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd03fff) AM_DEVREADWRITE("pc090oj", pc090oj_word_r, pc090oj_word_w)	/* sprite ram */
 ADDRESS_MAP_END
 
 
@@ -397,19 +396,19 @@ static ADDRESS_MAP_START( opwolfb_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0f0008, 0x0f000b) AM_READ(opwolf_in_r)			/* coins and buttons */
 	AM_RANGE(0x0ff000, 0x0fffff) AM_READWRITE(cchip_r,cchip_w)
 	AM_RANGE(0x100000, 0x107fff) AM_RAM
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x380000, 0x380003) AM_READ(opwolf_dsw_r)			/* dip switches */
 	AM_RANGE(0x380000, 0x380003) AM_WRITE(rainbow_spritectrl_w)	// usually 0x4, changes when you fire
 	AM_RANGE(0x3a0000, 0x3a0003) AM_READ(opwolf_lightgun_r)		/* lightgun, read at $11e0/6 */
 	AM_RANGE(0x3c0000, 0x3c0001) AM_WRITENOP					/* watchdog ?? */
 	AM_RANGE(0x3e0000, 0x3e0001) AM_READNOP AM_WRITE8(taitosound_port_w, 0xff00)
 	AM_RANGE(0x3e0002, 0x3e0003) AM_READWRITE8(taitosound_comm_r,taitosound_comm_w, 0xff00)
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(PC080SN_word_0_r,PC080SN_word_0_w)
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("pc080sn", pc080sn_word_r, pc080sn_word_w)
 	AM_RANGE(0xc10000, 0xc1ffff) AM_WRITEONLY					/* error in init code (?) */
-	AM_RANGE(0xc20000, 0xc20003) AM_WRITE(PC080SN_yscroll_word_0_w)
-	AM_RANGE(0xc40000, 0xc40003) AM_WRITE(PC080SN_xscroll_word_0_w)
-	AM_RANGE(0xc50000, 0xc50003) AM_WRITE(PC080SN_ctrl_word_0_w)
-	AM_RANGE(0xd00000, 0xd03fff) AM_READWRITE(PC090OJ_word_0_r,PC090OJ_word_0_w)	/* sprite ram */
+	AM_RANGE(0xc20000, 0xc20003) AM_DEVWRITE("pc080sn", pc080sn_yscroll_word_w)
+	AM_RANGE(0xc40000, 0xc40003) AM_DEVWRITE("pc080sn", pc080sn_xscroll_word_w)
+	AM_RANGE(0xc50000, 0xc50003) AM_DEVWRITE("pc080sn", pc080sn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd03fff) AM_DEVREADWRITE("pc090oj", pc090oj_word_r, pc090oj_word_w)	/* sprite ram */
 ADDRESS_MAP_END
 
 
@@ -534,9 +533,9 @@ static WRITE8_HANDLER( opwolf_adpcm_e_w )
 
 static ADDRESS_MAP_START( opwolf_sound_z80_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(10)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0x9002, 0x9100) AM_READNOP
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r,taitosound_slave_comm_w)
@@ -709,6 +708,17 @@ static const msm5205_interface msm5205_config =
                  MACHINE DRIVERS
 ***********************************************************/
 
+static const pc080sn_interface opwolf_pc080sn_intf =
+{
+	1,	 /* gfxnum */
+	0, 0, 0, 0	/* x_offset, y_offset, y_invert, dblwidth */
+};
+
+static const pc090oj_interface opwolf_pc090oj_intf =
+{
+	0, 0, 0, 0
+};
+
 static MACHINE_DRIVER_START( opwolf )
 
 	/* basic machine hardware */
@@ -735,13 +745,15 @@ static MACHINE_DRIVER_START( opwolf )
 	MDRV_GFXDECODE(opwolf)
 	MDRV_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(opwolf)
 	MDRV_VIDEO_UPDATE(opwolf)
+
+	MDRV_PC080SN_ADD("pc080sn", opwolf_pc080sn_intf)
+	MDRV_PC090OJ_ADD("pc090oj", opwolf_pc090oj_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CPU_CLOCK )	/* 4 MHz */
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CPU_CLOCK )	/* 4 MHz */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.75)
@@ -787,13 +799,15 @@ static MACHINE_DRIVER_START( opwolfb ) /* OSC clocks unknown for the bootleg, bu
 	MDRV_GFXDECODE(opwolfb)
 	MDRV_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(opwolf)
 	MDRV_VIDEO_UPDATE(opwolf)
+
+	MDRV_PC080SN_ADD("pc080sn", opwolf_pc080sn_intf)
+	MDRV_PC090OJ_ADD("pc090oj", opwolf_pc090oj_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, SOUND_CPU_CLOCK )
+	MDRV_SOUND_ADD("ymsnd", YM2151, SOUND_CPU_CLOCK )
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.75)
@@ -961,7 +975,7 @@ static DRIVER_INIT( opwolf )
 	opwolf_gun_xoffs = 0xec - (rom[0x03ffb0 / 2] & 0xff);
 	opwolf_gun_yoffs = 0x1c - (rom[0x03ffae / 2] & 0xff);
 
-	memory_configure_bank(machine, 10, 0, 4, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
+	memory_configure_bank(machine, "bank10", 0, 4, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
 }
 
 
@@ -975,7 +989,7 @@ static DRIVER_INIT( opwolfb )
 	opwolf_gun_xoffs = -2;
 	opwolf_gun_yoffs = 17;
 
-	memory_configure_bank(machine, 10, 0, 4, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
+	memory_configure_bank(machine, "bank10", 0, 4, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
 }
 
 

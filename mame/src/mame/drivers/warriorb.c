@@ -145,10 +145,11 @@ Colscroll effects?
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "rendlay.h"
 #include "cpu/m68000/m68000.h"
 #include "video/taitoic.h"
+#include "machine/taitoio.h"
 #include "audio/taitosnd.h"
 #include "sound/2610intf.h"
 #include "sound/flt_vol.h"
@@ -156,7 +157,6 @@ Colscroll effects?
 static MACHINE_START( warriorb );
 static MACHINE_RESET( taito_dualscreen );
 
-VIDEO_START( darius2d );
 VIDEO_START( warriorb );
 VIDEO_UPDATE( warriorb );
 
@@ -169,7 +169,7 @@ static INT32 banknum;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine,  10, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
+	memory_set_bankptr(machine,  "bank10", memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
@@ -209,6 +209,14 @@ static WRITE8_HANDLER( warriorb_pancontrol )
 }
 
 
+WRITE16_HANDLER( tc0100scn_dual_screen_w )
+{
+	const device_config *tc0100scn_1 = devtag_get_device(space->machine, "tc0100scn_1");
+	const device_config *tc0100scn_2 = devtag_get_device(space->machine, "tc0100scn_2");
+
+	tc0100scn_word_w(tc0100scn_1, offset, data, mem_mask);
+	tc0100scn_word_w(tc0100scn_2, offset, data, mem_mask);
+}
 
 /***********************************************************
                       MEMORY STRUCTURES
@@ -217,15 +225,15 @@ static WRITE8_HANDLER( warriorb_pancontrol )
 static ADDRESS_MAP_START( darius2d_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM		/* main ram */
-	AM_RANGE(0x200000, 0x213fff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_dual_screen_w)	/* tilemaps (all screens) */
+	AM_RANGE(0x200000, 0x213fff) AM_DEVREAD("tc0100scn_1", tc0100scn_word_r) AM_WRITE(tc0100scn_dual_screen_w)	/* tilemaps (all screens) */
 	AM_RANGE(0x214000, 0x2141ff) AM_WRITENOP											/* error in screen clearing code ? */
-	AM_RANGE(0x220000, 0x22000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0x240000, 0x253fff) AM_READWRITE(TC0100SCN_word_1_r, TC0100SCN_word_1_w)		/* tilemaps (2nd screen) */
-	AM_RANGE(0x260000, 0x26000f) AM_READWRITE(TC0100SCN_ctrl_word_1_r, TC0100SCN_ctrl_word_1_w)
-	AM_RANGE(0x400000, 0x400007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_word_w)		/* palette (1st screen) */
-	AM_RANGE(0x420000, 0x420007) AM_READWRITE(TC0110PCR_word_1_r, TC0110PCR_step1_word_1_w)	/* palette (2nd screen) */
-	AM_RANGE(0x600000, 0x6013ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x800000, 0x80000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x220000, 0x22000f) AM_DEVREADWRITE("tc0100scn_1", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x240000, 0x253fff) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_word_r, tc0100scn_word_w)		/* tilemaps (2nd screen) */
+	AM_RANGE(0x260000, 0x26000f) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x400000, 0x400007) AM_DEVREADWRITE("tc0110pcr_1", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette (1st screen) */
+	AM_RANGE(0x420000, 0x420007) AM_DEVREADWRITE("tc0110pcr_2", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette (2nd screen) */
+	AM_RANGE(0x600000, 0x6013ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x800000, 0x80000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 //  AM_RANGE(0x820000, 0x820001) AM_WRITENOP    // ???
 	AM_RANGE(0x830000, 0x830003) AM_READWRITE(warriorb_sound_r, warriorb_sound_w)
 ADDRESS_MAP_END
@@ -233,14 +241,14 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( warriorb_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
 	AM_RANGE(0x200000, 0x213fff) AM_RAM
-	AM_RANGE(0x300000, 0x313fff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_dual_screen_w)	/* tilemaps (all screens) */
-	AM_RANGE(0x320000, 0x32000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0x340000, 0x353fff) AM_READWRITE(TC0100SCN_word_1_r, TC0100SCN_word_1_w)		/* tilemaps (2nd screen) */
-	AM_RANGE(0x360000, 0x36000f) AM_READWRITE(TC0100SCN_ctrl_word_1_r, TC0100SCN_ctrl_word_1_w)
-	AM_RANGE(0x400000, 0x400007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_word_w)		/* palette (1st screen) */
-	AM_RANGE(0x420000, 0x420007) AM_READWRITE(TC0110PCR_word_1_r, TC0110PCR_step1_word_1_w)	/* palette (2nd screen) */
-	AM_RANGE(0x600000, 0x6013ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x800000, 0x80000f) AM_READWRITE(TC0510NIO_halfword_r, TC0510NIO_halfword_w)
+	AM_RANGE(0x300000, 0x313fff) AM_DEVREAD("tc0100scn_1", tc0100scn_word_r) AM_WRITE(tc0100scn_dual_screen_w)	/* tilemaps (all screens) */
+	AM_RANGE(0x320000, 0x32000f) AM_DEVREADWRITE("tc0100scn_1", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x340000, 0x353fff) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_word_r, tc0100scn_word_w)		/* tilemaps (2nd screen) */
+	AM_RANGE(0x360000, 0x36000f) AM_DEVREADWRITE("tc0100scn_2", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x400000, 0x400007) AM_DEVREADWRITE("tc0110pcr_1", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette (1st screen) */
+	AM_RANGE(0x420000, 0x420007) AM_DEVREADWRITE("tc0110pcr_2", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette (2nd screen) */
+	AM_RANGE(0x600000, 0x6013ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x800000, 0x80000f) AM_DEVREADWRITE("tc0510nio", tc0510nio_halfword_r, tc0510nio_halfword_w)
 //  AM_RANGE(0x820000, 0x820001) AM_WRITENOP    // ? uses bits 0,2,3
 	AM_RANGE(0x830000, 0x830003) AM_READWRITE(warriorb_sound_r, warriorb_sound_w)
 ADDRESS_MAP_END
@@ -249,10 +257,10 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( z80_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(SMH_BANK(10), SMH_ROM)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
-	AM_RANGE(0xe200, 0xe200) AM_READWRITE(SMH_NOP, taitosound_slave_port_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
+	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITE(warriorb_pancontrol) /* pan */
 	AM_RANGE(0xea00, 0xea00) AM_READNOP
@@ -444,6 +452,69 @@ static DEVICE_GET_INFO( subwoofer )
                        MACHINE DRIVERS
 ***********************************************************/
 
+static const tc0100scn_interface darius2d_tc0100scn_intf_l =
+{
+	"lscreen",
+	1, 3,		/* gfxnum, txnum */
+	4, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0100scn_interface darius2d_tc0100scn_intf_r =
+{
+	"rscreen",
+	2, 3,		/* gfxnum, txnum */
+	4, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 1
+};
+
+static const tc0100scn_interface warriorb_tc0100scn_intf_l =
+{
+	"lscreen",
+	1, 3,		/* gfxnum, txnum */
+	4, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0100scn_interface warriorb_tc0100scn_intf_r =
+{
+	"rscreen",
+	2, 3,		/* gfxnum, txnum */
+	4, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	1, 1
+};
+
+static const tc0110pcr_interface darius2d_tc0110pcr_intf_l =
+{
+	0
+};
+
+static const tc0110pcr_interface darius2d_tc0110pcr_intf_r =
+{
+	1
+};
+
+
+static const tc0220ioc_interface darius2d_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
+static const tc0510nio_interface warriorb_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
 static MACHINE_DRIVER_START( darius2d )
 
 	/* basic machine hardware */
@@ -456,6 +527,8 @@ static MACHINE_DRIVER_START( darius2d )
 
 	MDRV_MACHINE_START( warriorb )
 	MDRV_MACHINE_RESET( taito_dualscreen )
+
+	MDRV_TC0220IOC_ADD("tc0220ioc", darius2d_io_intf)
 
 	/* video hardware */
 	MDRV_GFXDECODE(warriorb)
@@ -476,13 +549,18 @@ static MACHINE_DRIVER_START( darius2d )
 	MDRV_SCREEN_SIZE(40*8, 32*8)
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 3*8, 32*8-1)
 
-	MDRV_VIDEO_START(darius2d)
+	MDRV_VIDEO_START(warriorb)
 	MDRV_VIDEO_UPDATE(warriorb)
+
+	MDRV_TC0100SCN_ADD("tc0100scn_1", darius2d_tc0100scn_intf_l)
+	MDRV_TC0100SCN_ADD("tc0100scn_2", darius2d_tc0100scn_intf_r)
+	MDRV_TC0110PCR_ADD("tc0110pcr_1", darius2d_tc0110pcr_intf_l)
+	MDRV_TC0110PCR_ADD("tc0110pcr_2", darius2d_tc0110pcr_intf_r)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -515,6 +593,8 @@ static MACHINE_DRIVER_START( warriorb )
 	MDRV_MACHINE_START( warriorb )
 	MDRV_MACHINE_RESET( taito_dualscreen )
 
+	MDRV_TC0510NIO_ADD("tc0510nio", warriorb_io_intf)
+
 	/* video hardware */
 	MDRV_GFXDECODE(warriorb)
 	MDRV_PALETTE_LENGTH(4096*2)
@@ -537,10 +617,15 @@ static MACHINE_DRIVER_START( warriorb )
 	MDRV_VIDEO_START(warriorb)
 	MDRV_VIDEO_UPDATE(warriorb)
 
+	MDRV_TC0100SCN_ADD("tc0100scn_1", warriorb_tc0100scn_intf_l)
+	MDRV_TC0100SCN_ADD("tc0100scn_2", warriorb_tc0100scn_intf_r)
+	MDRV_TC0110PCR_ADD("tc0110pcr_1", darius2d_tc0110pcr_intf_l)
+	MDRV_TC0110PCR_ADD("tc0110pcr_2", darius2d_tc0110pcr_intf_r)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -594,11 +679,11 @@ ROM_START( darius2d )
 //  ROM_LOAD( "c07-03.47", 0x00000, 0x80000, CRC(189bafce) SHA1(d885e444523489fe24269b90dec58e0d92cfbd6e) )
 //  ROM_LOAD( "c07-04.48", 0x80000, 0x80000, CRC(50421e81) SHA1(27ac420602f1dac00dc32903543a518e6f47fb2f) )
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c07-10.95", 0x00000, 0x80000, CRC(4bbe0ed9) SHA1(081b73c4e4d4fa548445e5548573099bcb1e9213) )
 	ROM_LOAD( "c07-11.96", 0x80000, 0x80000, CRC(3c815699) SHA1(0471ff5b0c0da905267f2cee52fd68c8661cccc9) )
 
-	ROM_REGION( 0x080000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x080000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c07-12.107", 0x00000, 0x80000, CRC(e0b71258) SHA1(0258e308b643d723475824752ebffc4ea29d1ac4) )
 
 	ROM_REGION( 0x001000, "user1", 0 )	/* unknown roms */
@@ -640,11 +725,11 @@ ROM_START( darius2do )
 //  ROM_LOAD( "c07-03.47", 0x00000, 0x80000, CRC(189bafce) SHA1(d885e444523489fe24269b90dec58e0d92cfbd6e) )
 //  ROM_LOAD( "c07-04.48", 0x80000, 0x80000, CRC(50421e81) SHA1(27ac420602f1dac00dc32903543a518e6f47fb2f) )
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c07-10.95", 0x00000, 0x80000, CRC(4bbe0ed9) SHA1(081b73c4e4d4fa548445e5548573099bcb1e9213) )
 	ROM_LOAD( "c07-11.96", 0x80000, 0x80000, CRC(3c815699) SHA1(0471ff5b0c0da905267f2cee52fd68c8661cccc9) )
 
-	ROM_REGION( 0x080000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x080000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c07-12.107", 0x00000, 0x80000, CRC(e0b71258) SHA1(0258e308b643d723475824752ebffc4ea29d1ac4) )
 
 	ROM_REGION( 0x001000, "user1", 0 )	/* unknown roms */
@@ -680,7 +765,7 @@ ROM_START( warriorb )
 	ROM_LOAD( "d24-07.47", 0x000000, 0x100000, CRC(9f50c271) SHA1(1a1b2ae7cb7785e7f66aa26258a6cd2921a29545) )	/* SCR B, screen 2 */
 	ROM_LOAD( "d24-08.48", 0x100000, 0x100000, CRC(1e6d1528) SHA1(d6843aa67befd7db44f468be16ba2f0efb85d40f) )
 
-	ROM_REGION( 0x300000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x300000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "d24-12.107", 0x000000, 0x100000, CRC(279203a1) SHA1(ed75e811a1f0863c134034457ce2e97372726bdb) )
 	ROM_LOAD( "d24-10.95",  0x100000, 0x100000, CRC(0e0c716d) SHA1(5e2f334dd484678766c5a71196d9bad0ba0fe8d9) )
 	ROM_LOAD( "d24-11.118", 0x200000, 0x100000, CRC(15362573) SHA1(8602c9f24134cac6fe1375fb189b152f0c68aeb7) )

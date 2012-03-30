@@ -19,7 +19,7 @@ UINT8 *senjyo_bg1videoram,*senjyo_bg2videoram,*senjyo_bg3videoram;
 UINT8 *senjyo_radarram;
 UINT8 *senjyo_bgstripesram;
 
-static tilemap *fg_tilemap,*bg1_tilemap,*bg2_tilemap,*bg3_tilemap;
+static tilemap_t *fg_tilemap,*bg1_tilemap,*bg2_tilemap,*bg3_tilemap;
 
 int is_senjyo, senjyo_scrollhack;
 static int senjyo_bgstripes;
@@ -229,10 +229,11 @@ static void draw_radar(running_machine *machine,bitmap_t *bitmap,const rectangle
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int priority)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
 
-	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		int big,sx,sy,flipx,flipy;
 

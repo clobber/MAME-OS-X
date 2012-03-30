@@ -91,12 +91,12 @@ static WRITE8_HANDLER( irq1_ack_w )
 
 static WRITE8_HANDLER( coincounter_w )
 {
-	coin_counter_w(0, data & 1);
+	coin_counter_w(space->machine, 0, data & 1);
 }
 
 static WRITE8_HANDLER( coinlockout_w )
 {
-	coin_lockout_w(0,~data & 1);
+	coin_lockout_w(space->machine, 0,~data & 1);
 }
 
 
@@ -105,9 +105,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7fff, 0x7fff) AM_WRITE(coincounter_w)
 	AM_RANGE(0x7b00, 0x7bff) AM_ROM	/* space for diagnostic ROM? The code looks */
 									/* for a string here, and jumps if it's present */
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE(2) AM_BASE(&retofinv_fg_videoram)
-	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE(1) AM_BASE(&retofinv_sharedram)
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(retofinv_bg_videoram_w) AM_SHARE(3) AM_BASE(&retofinv_bg_videoram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE("share2") AM_BASE(&retofinv_fg_videoram)
+	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE("share1") AM_BASE(&retofinv_sharedram)
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(retofinv_bg_videoram_w) AM_SHARE("share3") AM_BASE(&retofinv_bg_videoram)
 	AM_RANGE(0xb800, 0xb802) AM_WRITE(retofinv_gfx_ctrl_w)
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("P1")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P2")
@@ -132,9 +132,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE(2)
-	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(retofinv_bg_videoram_w) AM_SHARE(3)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(retofinv_fg_videoram_w) AM_SHARE("share2")
+	AM_RANGE(0x8800, 0x9fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(retofinv_bg_videoram_w) AM_SHARE("share3")
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(irq1_ack_w)
 ADDRESS_MAP_END
 
@@ -145,7 +145,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x6000, 0x6000) AM_WRITE(cpu2_m6000_w)
 	AM_RANGE(0x8000, 0x8000) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("sn2", sn76496_w)
-	AM_RANGE(0xe000, 0xffff) AM_ROM  		/* space for diagnostic ROM */
+	AM_RANGE(0xe000, 0xffff) AM_ROM 		/* space for diagnostic ROM */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -325,7 +325,7 @@ static const gfx_layout spritelayout =
 			24*8+0, 24*8+1, 24*8+2, 24*8+3 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8,
 			32*8, 33*8, 34*8, 35*8, 36*8, 37*8, 38*8, 39*8 },
-  	64*8
+	64*8
 };
 
 static GFXDECODE_START( retofinv )

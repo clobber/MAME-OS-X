@@ -52,10 +52,10 @@ WRITE8_HANDLER( battlera_palette_w )
 {
 	int pal_word;
 
-	paletteram[offset]=data;
+	space->machine->generic.paletteram.u8[offset]=data;
 	if (offset%2) offset-=1;
 
-	pal_word=paletteram[offset] | (paletteram[offset+1]<<8);
+	pal_word=space->machine->generic.paletteram.u8[offset] | (space->machine->generic.paletteram.u8[offset+1]<<8);
 	palette_set_color_rgb(space->machine, offset/2, pal3bit(pal_word >> 3), pal3bit(pal_word >> 6), pal3bit(pal_word >> 0));
 }
 
@@ -331,7 +331,7 @@ VIDEO_UPDATE( battlera )
 		/* If this tile was changed OR tilemap was changed, redraw */
 		if (vram_dirty[offs/2]) {
 			vram_dirty[offs/2]=0;
-	        drawgfx_opaque(tile_bitmap,0,screen->machine->gfx[0],
+			drawgfx_opaque(tile_bitmap,0,screen->machine->gfx[0],
 					code,
 					HuC6270_vram[offs] >> 4,
 					0,0,
@@ -341,12 +341,12 @@ VIDEO_UPDATE( battlera )
 					0,	/* fill the spot with pen 256 */
 					0,0,
 					8*mx,8*my);
-	        drawgfx_transmask(front_bitmap,0,screen->machine->gfx[0],
+			drawgfx_transmask(front_bitmap,0,screen->machine->gfx[0],
 					code,
 					HuC6270_vram[offs] >> 4,
 					0,0,
 					8*mx,8*my,0x1);
-			}
+		}
 	}
 
 	/* Render bitmap */

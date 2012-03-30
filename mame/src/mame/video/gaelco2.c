@@ -83,7 +83,7 @@ UINT16 *gaelco2_vregs;
 static UINT16 *gaelco2_videoram;
 
 /* tilemaps */
-static tilemap *pant[2];
+static tilemap_t *pant[2];
 
 static int dual_monitor;
 
@@ -228,8 +228,8 @@ WRITE16_HANDLER( gaelco2_palette_w )
 {
 	int i, color, r, g, b, auxr, auxg, auxb;
 
-	COMBINE_DATA(&paletteram16[offset]);
-	color = paletteram16[offset];
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
+	color = space->machine->generic.paletteram.u16[offset];
 
 	/* extract RGB components */
 	r = (color >> 10) & 0x1f;
@@ -265,7 +265,7 @@ WRITE16_HANDLER( gaelco2_palette_w )
 
 VIDEO_START( gaelco2 )
 {
-	gaelco2_videoram = spriteram16;
+	gaelco2_videoram = machine->generic.spriteram.u16;
 
 	/* create tilemaps */
 	pant[0] = tilemap_create(machine, get_tile_info_gaelco2_screen0,tilemap_scan_rows,16,16,64,32);
@@ -285,7 +285,7 @@ VIDEO_START( gaelco2 )
 
 VIDEO_START( gaelco2_dual )
 {
-	gaelco2_videoram = spriteram16;
+	gaelco2_videoram = machine->generic.spriteram.u16;
 
 	/* create tilemaps */
 	pant[0] = tilemap_create(machine, get_tile_info_gaelco2_screen0_dual,tilemap_scan_rows,16,16,64,32);
@@ -341,6 +341,7 @@ VIDEO_START( gaelco2_dual )
 
 static void draw_sprites(const device_config *screen, bitmap_t *bitmap, const rectangle *cliprect, int mask, int xoffs)
 {
+	UINT16 *buffered_spriteram16 = screen->machine->generic.buffered_spriteram.u16;
 	int j, x, y, ex, ey, px, py;
 	const gfx_element *gfx = screen->machine->gfx[0];
 
@@ -439,7 +440,7 @@ VIDEO_UPDATE( gaelco2 )
 	int i;
 
 	/* read scroll values */
- 	int scroll0x = gaelco2_videoram[0x2802/2] + 0x14;
+	int scroll0x = gaelco2_videoram[0x2802/2] + 0x14;
 	int scroll1x = gaelco2_videoram[0x2806/2] + 0x10;
 	int scroll0y = gaelco2_videoram[0x2800/2] + 0x01;
 	int scroll1y = gaelco2_videoram[0x2804/2] + 0x01;

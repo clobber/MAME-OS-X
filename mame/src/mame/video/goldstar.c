@@ -9,6 +9,8 @@
 #include "driver.h"
 
 UINT8 *goldstar_reel1_scroll, *goldstar_reel2_scroll, *goldstar_reel3_scroll;
+UINT8 *goldstar_fg_atrram;
+UINT8 *goldstar_fg_vidram;
 
 static int bgcolor;
 
@@ -20,7 +22,7 @@ static int bgcolor;
 
 ***************************************************************************/
 
-static tilemap *goldstar_fg_tilemap;
+static tilemap_t *goldstar_fg_tilemap;
 static UINT8 cmaster_girl_num;
 static UINT8 cmaster_girl_pal;
 static UINT8 cm_enable_reg;
@@ -55,20 +57,20 @@ WRITE8_HANDLER( cm_outport0_w )
 
 WRITE8_HANDLER( goldstar_fg_vidram_w )
 {
-	videoram[offset] = data;
+	goldstar_fg_vidram[offset] = data;
 	tilemap_mark_tile_dirty(goldstar_fg_tilemap,offset);
 }
 
 WRITE8_HANDLER( goldstar_fg_atrram_w )
 {
-	colorram[offset] = data;
+	goldstar_fg_atrram[offset] = data;
 	tilemap_mark_tile_dirty(goldstar_fg_tilemap,offset);
 }
 
 static TILE_GET_INFO( get_goldstar_fg_tile_info )
 {
-	int code = videoram[tile_index];
-	int attr = colorram[tile_index];
+	int code = goldstar_fg_vidram[tile_index];
+	int attr = goldstar_fg_atrram[tile_index];
 
 	SET_TILE_INFO(
 			0,
@@ -80,8 +82,8 @@ static TILE_GET_INFO( get_goldstar_fg_tile_info )
 // colour / high tile bits are swapped around
 static TILE_GET_INFO( get_cherrym_fg_tile_info )
 {
-	int code = videoram[tile_index];
-	int attr = colorram[tile_index];
+	int code = goldstar_fg_vidram[tile_index];
+	int attr = goldstar_fg_atrram[tile_index];
 
 	SET_TILE_INFO(
 			0,
@@ -92,7 +94,7 @@ static TILE_GET_INFO( get_cherrym_fg_tile_info )
 
 
 
-static tilemap *goldstar_reel1_tilemap;
+static tilemap_t *goldstar_reel1_tilemap;
 UINT8 *goldstar_reel1_ram;
 
 WRITE8_HANDLER( goldstar_reel1_ram_w )
@@ -113,7 +115,7 @@ static TILE_GET_INFO( get_goldstar_reel1_tile_info )
 }
 
 
-static tilemap *goldstar_reel2_tilemap;
+static tilemap_t *goldstar_reel2_tilemap;
 UINT8 *goldstar_reel2_ram;
 
 WRITE8_HANDLER( goldstar_reel2_ram_w )
@@ -133,7 +135,7 @@ static TILE_GET_INFO( get_goldstar_reel2_tile_info )
 			0);
 }
 
-static tilemap *goldstar_reel3_tilemap;
+static tilemap_t *goldstar_reel3_tilemap;
 UINT8 *goldstar_reel3_ram;
 
 WRITE8_HANDLER( goldstar_reel3_ram_w )

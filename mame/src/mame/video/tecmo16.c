@@ -16,7 +16,7 @@ UINT16 *tecmo16_videoram2;
 UINT16 *tecmo16_colorram2;
 UINT16 *tecmo16_charram;
 
-static tilemap *fg_tilemap,*bg_tilemap,*tx_tilemap;
+static tilemap_t *fg_tilemap,*bg_tilemap,*tx_tilemap;
 static bitmap_t *sprite_bitmap, *tile_bitmap_bg, *tile_bitmap_fg;
 
 static int flipscreen, game_is_riot;
@@ -331,6 +331,7 @@ static void blendbitmaps(running_machine *machine,
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap_bg, bitmap_t *bitmap_fg, bitmap_t *bitmap_sp, const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 	static const UINT8 layout[8][8] =
 	{
@@ -346,7 +347,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap_bg, bitmap_t
 
 	bitmap_t *bitmap = bitmap_bg;
 
-	for (offs = spriteram_size/2 - 8;offs >= 0;offs -= 8)
+	for (offs = machine->generic.spriteram_size/2 - 8;offs >= 0;offs -= 8)
 	{
 		if (spriteram16[offs] & 0x04)	/* enable */
 		{

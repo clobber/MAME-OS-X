@@ -6,7 +6,7 @@
 static int exp_bank = 0;
 
 static UINT8   *fg_tile_ram, *fg_color_ram;
-static tilemap *fg_tilemap;
+static tilemap_t *fg_tilemap;
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
@@ -36,7 +36,7 @@ static WRITE8_HANDLER( bg_scroll_w )
 	bg_scroll[offset] = data;
 }
 
-static tilemap *jackie_reel1_tilemap;
+static tilemap_t *jackie_reel1_tilemap;
 static UINT8 *jackie_reel1_ram;
 
 static WRITE8_HANDLER( jackie_reel1_ram_w )
@@ -52,7 +52,7 @@ static TILE_GET_INFO( get_jackie_reel1_tile_info )
 }
 
 
-static tilemap *jackie_reel2_tilemap;
+static tilemap_t *jackie_reel2_tilemap;
 static UINT8 *jackie_reel2_ram;
 
 static WRITE8_HANDLER( jackie_reel2_ram_w )
@@ -67,7 +67,7 @@ static TILE_GET_INFO( get_jackie_reel2_tile_info )
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
-static tilemap *jackie_reel3_tilemap;
+static tilemap_t *jackie_reel3_tilemap;
 static UINT8 *jackie_reel3_ram;
 
 static WRITE8_HANDLER( jackie_reel3_ram_w )
@@ -208,12 +208,12 @@ static WRITE8_HANDLER( jackie_unk_reg3_hi_w ) { jackie_unk_reg_hi_w( 2, offset, 
 
 static WRITE8_HANDLER( jackie_nmi_and_coins_w )
 {
-	coin_counter_w(0,		data & 0x01);	// coin_a
-	coin_counter_w(1,		data & 0x04);	// coin_c
-	coin_counter_w(2,		data & 0x08);	// key in
-	coin_counter_w(3,		data & 0x10);	// coin out mech
+	coin_counter_w(space->machine, 0,		data & 0x01);	// coin_a
+	coin_counter_w(space->machine, 1,		data & 0x04);	// coin_c
+	coin_counter_w(space->machine, 2,		data & 0x08);	// key in
+	coin_counter_w(space->machine, 3,		data & 0x10);	// coin out mech
 
-	set_led_status(6,		data & 0x20);	// led for coin out / hopper active
+	set_led_status(space->machine, 6,		data & 0x20);	// led for coin out / hopper active
 
 	exp_bank   = (data & 0x02) ? 1 : 0;		// expram bank number
 	nmi_enable = data & 0x80;     // nmi enable?
@@ -284,8 +284,8 @@ static ADDRESS_MAP_START( jackie_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x05a0, 0x05a4) AM_WRITE(jackie_unk_reg3_lo_w)
 	AM_RANGE(0x0da0, 0x0da4) AM_WRITE(jackie_unk_reg3_hi_w)
 	AM_RANGE(0x1000, 0x1107) AM_RAM AM_BASE( &bg_scroll2 )
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("DSW1")			/* DSW1 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("DSW2")			/* DSW2 */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("DSW3")			/* DSW3 */
@@ -297,7 +297,7 @@ static ADDRESS_MAP_START( jackie_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x5090, 0x5090) AM_READ_PORT("BUTTONS1")
 	AM_RANGE(0x5091, 0x5091) AM_WRITE( jackie_lamps_w )
 	AM_RANGE(0x50a0, 0x50a0) AM_READ_PORT("BUTTONS2")
-	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ym", ym2413_w)
+	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x50c0, 0x50c0) AM_READ(igs_irqack_r) AM_WRITE(igs_irqack_w)
 	AM_RANGE(0x6000, 0x60ff) AM_RAM_WRITE( bg_scroll_w ) AM_BASE( &bg_scroll )
 	AM_RANGE(0x6800, 0x69ff) AM_RAM_WRITE( jackie_reel1_ram_w )  AM_BASE( &jackie_reel1_ram )
@@ -481,7 +481,7 @@ static MACHINE_DRIVER_START( jackie )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 MACHINE_DRIVER_END

@@ -24,7 +24,7 @@
 #include "sound/2203intf.h"
 #include "sound/msm5205.h"
 
-static tilemap *suprgolf_tilemap;
+static tilemap_t *suprgolf_tilemap;
 static UINT8 *suprgolf_bg_vram;
 static UINT16 *suprgolf_bg_fb,*suprgolf_fg_fb;
 static int suprgolf_rom_bank;
@@ -35,8 +35,8 @@ static UINT8 suprgolf_vreg_pen;
 
 static TILE_GET_INFO( get_tile_info )
 {
-	int code = videoram[tile_index*2]+256*(videoram[tile_index*2+1]);
-	int color = videoram[tile_index*2+0x800] & 0x7f;
+	int code = machine->generic.videoram.u8[tile_index*2]+256*(machine->generic.videoram.u8[tile_index*2+1]);
+	int color = machine->generic.videoram.u8[tile_index*2+0x800] & 0x7f;
 
 	SET_TILE_INFO(
 		0,
@@ -48,7 +48,7 @@ static TILE_GET_INFO( get_tile_info )
 static VIDEO_START( suprgolf )
 {
 	suprgolf_tilemap = tilemap_create( machine, get_tile_info,tilemap_scan_rows,8,8,32,32 );
-	paletteram = auto_alloc_array(machine, UINT8, 0x1000);
+	machine->generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x1000);
 	suprgolf_bg_vram = auto_alloc_array(machine, UINT8, 0x2000*0x20);
 	suprgolf_bg_fb = auto_alloc_array(machine, UINT16, 0x2000*0x20);
 	suprgolf_fg_fb = auto_alloc_array(machine, UINT16, 0x2000*0x20);
@@ -105,9 +105,9 @@ static UINT8 palette_switch;
 static READ8_HANDLER( suprgolf_videoram_r )
 {
 	if(palette_switch)
-		return paletteram[offset];
+		return space->machine->generic.paletteram.u8[offset];
 	else
-		return videoram[offset];
+		return space->machine->generic.videoram.u8[offset];
 }
 
 static WRITE8_HANDLER( suprgolf_videoram_w )
@@ -115,9 +115,9 @@ static WRITE8_HANDLER( suprgolf_videoram_w )
 	if(palette_switch)
 	{
 		int r,g,b,datax;
-		paletteram[offset] = data;
+		space->machine->generic.paletteram.u8[offset] = data;
 		offset>>=1;
-		datax=paletteram[offset*2]+256*paletteram[offset*2+1];
+		datax=space->machine->generic.paletteram.u8[offset*2]+256*space->machine->generic.paletteram.u8[offset*2+1];
 
 		b = (datax & 0x8000) ? 0 : ((datax)&0x001f)>>0;
 		g = (datax & 0x8000) ? 0 : ((datax)&0x03e0)>>5;
@@ -127,7 +127,7 @@ static WRITE8_HANDLER( suprgolf_videoram_w )
 	}
 	else
 	{
-		videoram[offset] = data;
+		space->machine->generic.videoram.u8[offset] = data;
 		tilemap_mark_tile_dirty(suprgolf_tilemap, (offset & 0x7fe) >> 1);
 	}
 }
@@ -226,7 +226,7 @@ static WRITE8_HANDLER( rom_bank_select_w )
 	//popmessage("%08x %02x",((data & 0x3f) * 0x4000),data);
 
 	mame_printf_debug("ROM_BANK 0x8000 - %X @%X\n",data,cpu_get_previouspc(space->cpu));
-	memory_set_bankptr(space->machine, 2, region_base + (data&0x3f ) * 0x4000);
+	memory_set_bankptr(space->machine, "bank2", region_base + (data&0x3f ) * 0x4000);
 
 	msm_nmi_mask = data & 0x40;
 	flip_screen_set(space->machine, data & 0x80);
@@ -237,7 +237,7 @@ static WRITE8_HANDLER( rom2_bank_select_w )
 	UINT8 *region_base = memory_region(space->machine, "user2");
 	mame_printf_debug("ROM_BANK 0x4000 - %X @%X\n",data,cpu_get_previouspc(space->cpu));
 
-	memory_set_bankptr(space->machine, 1, region_base + (data&0x0f ) * 0x4000);
+	memory_set_bankptr(space->machine, "bank1", region_base + (data&0x0f ) * 0x4000);
 
 	if(data & 0xf0)
 		printf("Rom bank select 2 with data %02x activated\n",data);
@@ -265,11 +265,11 @@ static READ8_HANDLER( p2_r )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0x4000) AM_WRITE( rom2_bank_select_w )
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(2)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
 	AM_RANGE(0xc000, 0xdfff) AM_READWRITE( suprgolf_bg_vram_r, suprgolf_bg_vram_w ) // banked background vram
-	AM_RANGE(0xe000, 0xefff) AM_READWRITE( suprgolf_videoram_r, suprgolf_videoram_w ) AM_BASE(&videoram) //foreground vram + paletteram
+	AM_RANGE(0xe000, 0xefff) AM_READWRITE( suprgolf_videoram_r, suprgolf_videoram_w ) AM_BASE_GENERIC(videoram) //foreground vram + paletteram
 	AM_RANGE(0xf000, 0xf000) AM_WRITE( suprgolf_pen_w )
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
@@ -285,7 +285,7 @@ static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x05, 0x05) AM_READ(rom_bank_select_r) AM_WRITE(rom_bank_select_w)
 	AM_RANGE(0x06, 0x06) AM_READWRITE( suprgolf_vregs_r,suprgolf_vregs_w )
 //  AM_RANGE(0x07, 0x07)
-	AM_RANGE(0x08, 0x09) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x08, 0x09) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x0c, 0x0c) AM_WRITE(adpcm_data_w)
  ADDRESS_MAP_END
 
@@ -319,9 +319,9 @@ static INPUT_PORTS_START( suprgolf )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)	/* release power? */
 
 	PORT_START("SYSTEM")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )               			/* 1P */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )             			/* 1P */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)			/* POW */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )  	                	/* 1P */
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 ) 	                	/* 1P */
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)			/* POW */
 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
@@ -473,7 +473,7 @@ static MACHINE_DRIVER_START( suprgolf )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000) /* guess */
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000) /* guess */
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 

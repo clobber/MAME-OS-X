@@ -11,12 +11,13 @@ press F1+F3 to see ROM/RAM tests and the final animation
 
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "cpu/z80/z80.h"
 #include "sound/2608intf.h"
 
 
 extern UINT16 *tail2nos_bgvideoram;
+extern void tail2nos_zoom_callback(running_machine *machine, int *code,int *color,int *flags);
 
 WRITE16_HANDLER( tail2nos_bgvideoram_w );
 READ16_HANDLER( tail2nos_zoomdata_r );
@@ -29,11 +30,11 @@ VIDEO_UPDATE( tail2nos );
 static MACHINE_RESET( tail2nos )
 {
 	/* point to the extra ROMs */
-	memory_set_bankptr(machine, 1,memory_region(machine, "user1"));
-	memory_set_bankptr(machine, 2,memory_region(machine, "user2"));
+	memory_set_bankptr(machine, "bank1",memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2",memory_region(machine, "user2"));
 
 	/* initialize sound bank */
-	memory_set_bankptr(machine, 3,memory_region(machine, "audiocpu") + 0x10000);
+	memory_set_bankptr(machine, "bank3",memory_region(machine, "audiocpu") + 0x10000);
 }
 
 
@@ -46,6 +47,7 @@ static WRITE16_HANDLER( sound_command_w )
 	}
 }
 
+#if 0
 static READ16_HANDLER( tail2nos_K051316_0_r )
 {
 	return K051316_0_r(space,offset);
@@ -62,24 +64,25 @@ static WRITE16_HANDLER( tail2nos_K051316_ctrl_0_w )
 	if (ACCESSING_BITS_0_7)
 		K051316_ctrl_0_w(space,offset,data & 0xff);
 }
+#endif
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	memory_set_bankptr(device->machine, 3,memory_region(device->machine, "audiocpu") + 0x10000 + (data & 0x01) * 0x8000);
+	memory_set_bankptr(device->machine, "bank3",memory_region(device->machine, "audiocpu") + 0x10000 + (data & 0x01) * 0x8000);
 }
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x200000, 0x27ffff) AM_READWRITE(SMH_BANK(1), SMH_ROM)	/* extra ROM */
-	AM_RANGE(0x2c0000, 0x2dffff) AM_READWRITE(SMH_BANK(2), SMH_ROM)
+	AM_RANGE(0x200000, 0x27ffff) AM_ROMBANK("bank1")	/* extra ROM */
+	AM_RANGE(0x2c0000, 0x2dffff) AM_ROMBANK("bank2")
 	AM_RANGE(0x400000, 0x41ffff) AM_READWRITE(tail2nos_zoomdata_r, tail2nos_zoomdata_w)
-	AM_RANGE(0x500000, 0x500fff) AM_READWRITE(tail2nos_K051316_0_r, tail2nos_K051316_0_w)
-	AM_RANGE(0x510000, 0x51001f) AM_WRITE(tail2nos_K051316_ctrl_0_w)
+	AM_RANGE(0x500000, 0x500fff) AM_DEVREADWRITE8("k051316", k051316_r, k051316_w, 0x00ff)
+	AM_RANGE(0x510000, 0x51001f) AM_DEVWRITE8("k051316", k051316_ctrl_w, 0x00ff)
 	AM_RANGE(0xff8000, 0xffbfff) AM_RAM								/* work RAM */
-	AM_RANGE(0xffc000, 0xffc2ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xffc000, 0xffc2ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xffc300, 0xffcfff) AM_RAM
 	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(tail2nos_bgvideoram_w) AM_BASE(&tail2nos_bgvideoram)
-	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfff000, 0xfff001) AM_READ_PORT("INPUTS") AM_WRITE(tail2nos_gfxbank_w)
 	AM_RANGE(0xfff004, 0xfff005) AM_READ_PORT("DSW")
 	AM_RANGE(0xfff008, 0xfff009) AM_WRITE(sound_command_w)
@@ -88,15 +91,15 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_READWRITE(SMH_BANK(3), SMH_ROM)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank3")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x07, 0x07) AM_READWRITE(soundlatch_r, SMH_NOP)	/* the write is a clear pending command */
-	AM_RANGE(0x08, 0x0b) AM_DEVWRITE("ym", ym2608_w)
+	AM_RANGE(0x07, 0x07) AM_READ(soundlatch_r) AM_WRITENOP	/* the write is a clear pending command */
+	AM_RANGE(0x08, 0x0b) AM_DEVWRITE("ymsnd", ym2608_w)
 #if 0
-	AM_RANGE(0x18, 0x1b) AM_DEVREAD("ym", ym2608_r)
+	AM_RANGE(0x18, 0x1b) AM_DEVREAD("ymsnd", ym2608_r)
 #endif
 ADDRESS_MAP_END
 
@@ -232,6 +235,13 @@ static const ym2608_interface ym2608_config =
 };
 
 
+static const k051316_interface tail2nos_k051316_intf =
+{
+	"gfx3", 2,
+	-4, TRUE, 0,
+	1, -89, -14,
+	tail2nos_zoom_callback
+};
 
 static MACHINE_DRIVER_START( tail2nos )
 
@@ -260,10 +270,12 @@ static MACHINE_DRIVER_START( tail2nos )
 	MDRV_VIDEO_START(tail2nos)
 	MDRV_VIDEO_UPDATE(tail2nos)
 
+	MDRV_K051316_ADD("k051316", tail2nos_k051316_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2608, XTAL_8MHz)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2608, XTAL_8MHz)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2608_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -304,7 +316,7 @@ ROM_START( tail2nos )
 	ROM_REGION( 0x20000, "gfx3", ROMREGION_ERASE00 )	/* gfx data for the 051316 */
 	/* RAM, not ROM - handled at run time */
 
-	ROM_REGION( 0x20000, "ym", 0 ) /* sound samples */
+	ROM_REGION( 0x20000, "ymsnd", 0 ) /* sound samples */
 	ROM_LOAD( "osb",          0x00000, 0x20000, CRC(d49ab2f5) SHA1(92f7f6c8f35ac39910879dd88d2cfb6db7c848c9) )
 ROM_END
 
@@ -339,7 +351,7 @@ ROM_START( sformula )
 	ROM_REGION( 0x20000, "gfx3", ROMREGION_ERASE00 )	/* gfx data for the 051316 */
 	/* RAM, not ROM - handled at run time */
 
-	ROM_REGION( 0x20000, "ym", 0 ) /* sound samples */
+	ROM_REGION( 0x20000, "ymsnd", 0 ) /* sound samples */
 	ROM_LOAD( "osb",          0x00000, 0x20000, CRC(d49ab2f5) SHA1(92f7f6c8f35ac39910879dd88d2cfb6db7c848c9) )
 ROM_END
 

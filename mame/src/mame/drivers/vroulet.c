@@ -42,7 +42,9 @@ Tomasz Slanina 20050225
 /* video */
 
 static UINT8 *vroulet_ball;
-static tilemap *bg_tilemap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *bg_tilemap;
 
 static WRITE8_HANDLER(vroulet_paletteram_w)
 {
@@ -52,13 +54,13 @@ static WRITE8_HANDLER(vroulet_paletteram_w)
     */
 
 	int i,j,a,b;
-	paletteram[offset]=data;
+	space->machine->generic.paletteram.u8[offset]=data;
 	for(i=0;i<32;i++)
 	{
 		for(j=0;j<16;j++)
 		{
-			a=paletteram[((i*8+j)*2)&0xff ];
-			b=paletteram[((i*8+j)*2+1)&0xff ];
+			a=space->machine->generic.paletteram.u8[((i*8+j)*2)&0xff ];
+			b=space->machine->generic.paletteram.u8[((i*8+j)*2+1)&0xff ];
 			palette_set_color_rgb(space->machine,i*16+j,pal4bit(b),pal4bit(b>>4),pal4bit(a));
 		}
 	}
@@ -103,19 +105,19 @@ static VIDEO_UPDATE(vroulet)
 
 static ADDRESS_MAP_START( vroulet_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x8000, 0x8000) AM_NOP
 	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(vroulet_videoram_w) AM_BASE(&videoram)
 	AM_RANGE(0x9400, 0x97ff) AM_RAM_WRITE(vroulet_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0xa000, 0xa001) AM_RAM AM_BASE(&vroulet_ball)
-	AM_RANGE(0xb000, 0xb0ff) AM_WRITE(vroulet_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xb000, 0xb0ff) AM_WRITE(vroulet_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xc000, 0xc000) AM_NOP
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( vroulet_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x10, 0x13) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 ADDRESS_MAP_END
@@ -287,7 +289,7 @@ static MACHINE_DRIVER_START( vroulet )
 	// sound hardware
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 2000000)
+	MDRV_SOUND_ADD("aysnd", AY8910, 2000000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 

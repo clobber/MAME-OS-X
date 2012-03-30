@@ -110,7 +110,7 @@ static WRITE16_DEVICE_HANDLER( soundbank_w )
 static ADDRESS_MAP_START( oneshot_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x087fff) AM_RAM
-	AM_RANGE(0x0c0000, 0x0c07ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0c0000, 0x0c07ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x120000, 0x120fff) AM_RAM AM_BASE(&oneshot_sprites)
 	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(oneshot_mid_videoram_w) AM_BASE(&oneshot_mid_videoram) // some people , girl etc.
 	AM_RANGE(0x181000, 0x181fff) AM_RAM_WRITE(oneshot_fg_videoram_w) AM_BASE(&oneshot_fg_videoram) // credits etc.
@@ -134,7 +134,7 @@ static ADDRESS_MAP_START( oneshot_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8000) AM_READWRITE(soundlatch_r,soundlatch_w)
 	AM_RANGE(0x8001, 0x87ff) AM_RAM
-	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ym", ym3812_r,ym3812_w)
+	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ymsnd", ym3812_r,ym3812_w)
 	AM_RANGE(0xe010, 0xe010) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
 ADDRESS_MAP_END
 
@@ -372,7 +372,7 @@ static MACHINE_DRIVER_START( oneshot )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3500000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3500000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 

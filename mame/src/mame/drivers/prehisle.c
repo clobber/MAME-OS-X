@@ -37,10 +37,10 @@ static WRITE16_HANDLER( prehisle_sound16_w )
 static ADDRESS_MAP_START( prehisle_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x070000, 0x073fff) AM_RAM
-	AM_RANGE(0x090000, 0x0907ff) AM_RAM_WRITE(prehisle_fg_videoram16_w) AM_BASE(&videoram16)
-	AM_RANGE(0x0a0000, 0x0a07ff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x090000, 0x0907ff) AM_RAM_WRITE(prehisle_fg_videoram16_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x0a0000, 0x0a07ff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(prehisle_bg_videoram16_w) AM_BASE(&prehisle_bg_videoram16)
-	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e00ff) AM_READ(prehisle_control16_r)
 	AM_RANGE(0x0f0070, 0x0ff071) AM_WRITE(prehisle_sound16_w)
 	AM_RANGE(0x0f0000, 0x0ff0ff) AM_WRITE(prehisle_control16_w)
@@ -69,8 +69,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( prehisle_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ym", ym3812_status_port_r, ym3812_control_port_w)
-	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ym", ym3812_write_port_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ymsnd", ym3812_status_port_r, ym3812_control_port_w)
+	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ymsnd", ym3812_write_port_w)
 	AM_RANGE(0x40, 0x40) AM_DEVWRITE("upd", D7759_write_port_0_w)
 	AM_RANGE(0x80, 0x80) AM_DEVWRITE("upd", D7759_upd_reset_w)
 ADDRESS_MAP_END
@@ -215,7 +215,7 @@ static const ym3812_interface ym3812_config =
 static MACHINE_DRIVER_START( prehisle )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, XTAL_18MHz/2) 	/* verified on pcb */
+	MDRV_CPU_ADD("maincpu", M68000, XTAL_18MHz/2)	/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(prehisle_map)
 	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
@@ -240,7 +240,7 @@ static MACHINE_DRIVER_START( prehisle )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, XTAL_4MHz)	/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_4MHz)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 

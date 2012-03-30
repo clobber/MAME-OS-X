@@ -895,23 +895,23 @@ static void I386OP(arpl)(i386_state *cpustate)           // Opcode 0x63
 	UINT8 flag = 0;
 
      if( modrm >= 0xc0 ) {
-       	src = LOAD_REG16(modrm);
-       	dst = LOAD_RM16(modrm);
+    	src = LOAD_REG16(modrm);
+    	dst = LOAD_RM16(modrm);
 		if( (dst&0x3) < (src&0x3) ) {
 			dst = (dst&0xfffc) | (src&0x3);
 			flag = 1;
 			STORE_RM16(modrm, dst);
 		}
 	} else {
-       	UINT32 ea = GetEA(cpustate, modrm);
-       	src = LOAD_REG16(modrm);
-       	dst = READ16(cpustate, ea);
+    	UINT32 ea = GetEA(cpustate, modrm);
+    	src = LOAD_REG16(modrm);
+    	dst = READ16(cpustate, ea);
 		if( (dst&0x3) < (src&0x3) ) {
 			dst = (dst&0xfffc) | (src&0x3);
 			flag = 1;
 			WRITE16(cpustate, ea, dst);
 		}
-    }
+	}
 	SetZF(flag);
 }
 
@@ -973,9 +973,9 @@ static void I386OP(outs_generic)(i386_state *cpustate, int size)
 	UINT32 vd;
 
 	if( cpustate->segment_prefix ) {
-		eas = i386_translate(cpustate, cpustate->segment_override, REG32(ESI) );
+		eas = i386_translate(cpustate, cpustate->segment_override, cpustate->address_size ? REG32(ESI) : REG16(SI) );
 	} else {
-		eas = i386_translate(cpustate, DS, REG32(ESI) );
+		eas = i386_translate(cpustate, DS, cpustate->address_size ? REG32(ESI) : REG16(SI) );
 	}
 
 	switch(size) {
@@ -1030,28 +1030,28 @@ static void I386OP(repeat)(i386_state *cpustate, int invert_flag)
 	opcode = FETCH(cpustate);
 	switch(opcode) {
 		case 0x26:
-	    cpustate->segment_override=1;
-		cpustate->segment_prefix=ES;
+	    cpustate->segment_override=ES;
+		cpustate->segment_prefix=1;
 		break;
 		case 0x2e:
-	    cpustate->segment_override=1;
-		cpustate->segment_prefix=CS;
+	    cpustate->segment_override=CS;
+		cpustate->segment_prefix=1;
 		break;
 		case 0x36:
-	    cpustate->segment_override=1;
-		cpustate->segment_prefix=SS;
+	    cpustate->segment_override=SS;
+		cpustate->segment_prefix=1;
 		break;
 		case 0x3e:
-	    cpustate->segment_override=1;
-		cpustate->segment_prefix=DS;
+	    cpustate->segment_override=DS;
+		cpustate->segment_prefix=1;
 		break;
 		case 0x64:
-	    cpustate->segment_override=1;
-		cpustate->segment_prefix=FS;
+	    cpustate->segment_override=FS;
+		cpustate->segment_prefix=1;
 		break;
 		case 0x65:
-	    cpustate->segment_override=1;
-		cpustate->segment_prefix=GS;
+	    cpustate->segment_override=GS;
+		cpustate->segment_prefix=1;
 		break;
 		case 0x66:
 		cpustate->operand_size ^= 1;
@@ -1061,7 +1061,7 @@ static void I386OP(repeat)(i386_state *cpustate, int invert_flag)
 		break;
         default:
 		prefix_flag=0;
-      }
+	}
 	} while (prefix_flag);
 
 
@@ -1177,10 +1177,10 @@ outofcycles:
 static void I386OP(rep)(i386_state *cpustate)				// Opcode 0xf3
 {
 	I386OP(repeat)(cpustate, 0);
-	}
+}
 
 static void I386OP(repne)(i386_state *cpustate)				// Opcode 0xf2
-	{
+{
 	I386OP(repeat)(cpustate, 1);
 }
 
@@ -2212,6 +2212,11 @@ static void I386OP(into)(i386_state *cpustate)				// Opcode 0xce
 static void I386OP(escape)(i386_state *cpustate)			// Opcodes 0xd8 - 0xdf
 {
 	UINT8 modrm = FETCH(cpustate);
+	if(modrm < 0xc0)
+	{
+		UINT32 ea;
+		ea = GetEA(cpustate,modrm);
+	}
 	CYCLES(cpustate,3);	// TODO: confirm this
 	(void) LOAD_RM8(modrm);
 }

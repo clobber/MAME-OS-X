@@ -30,8 +30,8 @@ static void draw_layer(running_machine *machine, bitmap_t *bitmap, const rectang
 			if (flip_screen_get(machine)) sy = 248 - sy;
 			sy &= 0xff;
 
-			attr = videoram[base + 2*y + 1];
-			code = videoram[base + 2*y] + ((attr & 0x0f) << 8);
+			attr = machine->generic.videoram.u8[base + 2*y + 1];
+			code = machine->generic.videoram.u8[base + 2*y] + ((attr & 0x0f) << 8);
 			color = attr >> 4;
 
 			drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
@@ -82,9 +82,9 @@ static int draw_layer_daikaiju(running_machine *machine, bitmap_t *bitmap, const
 		scrolly = -lsasquad_scrollram[offs+0];
 		scrollx =  lsasquad_scrollram[offs+3];
 
-	 	//check for global x scroll used in bg layer in game (starts at offset 0 in scrollram
-	 	// and game name/logo on title screen (starts in the middle of scrollram, but with different
-	 	// (NOT unique )id than prev coulmn(s)
+		//check for global x scroll used in bg layer in game (starts at offset 0 in scrollram
+		// and game name/logo on title screen (starts in the middle of scrollram, but with different
+		// (NOT unique )id than prev coulmn(s)
 
 		if( *previd!=1 )
 		{
@@ -113,25 +113,25 @@ static int draw_layer_daikaiju(running_machine *machine, bitmap_t *bitmap, const
 			if (flip_screen_get(machine)) sy = 248 - sy;
 			sy &= 0xff;
 
-			attr = videoram[base + 2*y + 1];
-			code = videoram[base + 2*y] + ((attr & 0x0f) << 8);
+			attr = machine->generic.videoram.u8[base + 2*y + 1];
+			code = machine->generic.videoram.u8[base + 2*y] + ((attr & 0x0f) << 8);
 			color = attr >> 4;
 
 
 			if((type==0 && color!=0x0d) || (type !=0 && color==0x0d))
-				{
-			drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+			{
+				drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
 					code,
 					color,
 					flip_screen_get(machine),flip_screen_get(machine),
 					sx,sy,15);
-			if (sx > 248)	/* wraparound */
-				drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
+				if (sx > 248)	/* wraparound */
+					drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
 						code,
 						color,
 						flip_screen_get(machine),flip_screen_get(machine),
 						sx-256,sy,15);
-					}
+			}
 		}
 	}
 	return offs;
@@ -158,9 +158,10 @@ static void drawbg(running_machine *machine, bitmap_t *bitmap, const rectangle *
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = spriteram_size-4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram_size-4;offs >= 0;offs -= 4)
 	{
 		int sx,sy,attr,code,color,flipx,flipy;
 

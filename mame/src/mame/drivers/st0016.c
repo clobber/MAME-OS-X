@@ -14,7 +14,7 @@ Dips verified for Neratte Chu (nratechu) from manual
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 
 
 
@@ -29,12 +29,12 @@ UINT32 st0016_rom_bank;
 
 static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xe87f) AM_RAM /* common ram */
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w) /* sound regs 8 x $20 bytes, see notes */
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w) /* sound regs 8 x $20 bytes, see notes */
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM /* work ram */
@@ -69,7 +69,7 @@ static WRITE8_HANDLER(mux_select_w)
 
 WRITE8_HANDLER(st0016_rom_bank_w)
 {
-	memory_set_bankptr(space->machine,  1, memory_region(space->machine, "maincpu") + (data* 0x4000) + 0x10000 );
+	memory_set_bankptr(space->machine,  "bank1", memory_region(space->machine, "maincpu") + (data* 0x4000) + 0x10000 );
 	st0016_rom_bank=data;
 }
 
@@ -136,7 +136,7 @@ static ADDRESS_MAP_START( v810_mem,ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x80000000, 0x8001ffff) AM_RAM
 	AM_RANGE(0xc0000000, 0xc001ffff) AM_RAM
 	AM_RANGE(0x40000000, 0x4000000f) AM_READ(latch32_r) AM_WRITE(latch32_w)
-	AM_RANGE(0xfff80000, 0xffffffff) AM_READ(SMH_BANK(2))
+	AM_RANGE(0xfff80000, 0xffffffff) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( st0016_m2_io, ADDRESS_SPACE_IO, 8 )
@@ -456,7 +456,7 @@ static MACHINE_DRIVER_START( st0016 )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
+	MDRV_SOUND_ADD("stsnd", ST0016, 0)
 	MDRV_SOUND_CONFIG(st0016_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
@@ -661,13 +661,13 @@ static DRIVER_INIT(nratechu)
 static DRIVER_INIT(mayjinsn)
 {
 	st0016_game=4|0x80;
-	memory_set_bankptr(machine, 2, memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2", memory_region(machine, "user1"));
 }
 
 static DRIVER_INIT(mayjisn2)
 {
 	st0016_game=4;
-	memory_set_bankptr(machine, 2, memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2", memory_region(machine, "user1"));
 }
 
 /*************************************

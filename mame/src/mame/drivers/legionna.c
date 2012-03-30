@@ -90,9 +90,9 @@ static ADDRESS_MAP_START( legionna_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x102000, 0x1027ff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102800, 0x1037ff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
 	AM_RANGE(0x104000, 0x104fff) AM_RAM /* The 4000-4fff area contains PALETTE words and may be extra paletteram? */
-	AM_RANGE(0x105000, 0x105fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x105000, 0x105fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x106000, 0x106fff) AM_RAM /* is this used outside inits ?? */
-	AM_RANGE(0x107000, 0x107fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)	/* palette xRRRRxGGGGxBBBBx ? */
+	AM_RANGE(0x107000, 0x107fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)	/* palette xRRRRxGGGGxBBBBx ? */
 	AM_RANGE(0x108000, 0x11ffff) AM_RAM /* main ram */
 ADDRESS_MAP_END
 
@@ -105,8 +105,8 @@ static ADDRESS_MAP_START( heatbrl_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(legionna_foreground_w) AM_BASE(&legionna_fore_data)
 	AM_RANGE(0x101800, 0x101fff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
-	AM_RANGE(0x103000, 0x103fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x103000, 0x103fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x108000, 0x11ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -119,8 +119,8 @@ static ADDRESS_MAP_START( godzilla_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x102000, 0x1027ff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102800, 0x1037ff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
 	AM_RANGE(0x103800, 0x103fff) AM_RAM_WRITE(legionna_foreground_w) AM_BASE(&legionna_fore_data)
-	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x105000, 0x105fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x105000, 0x105fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x106000, 0x1067ff) AM_RAM
 	AM_RANGE(0x106800, 0x106fff) AM_RAM
 	AM_RANGE(0x107000, 0x107fff) AM_RAM /*Ani-DSP ram*/
@@ -131,7 +131,7 @@ ADDRESS_MAP_END
 static WRITE16_HANDLER( denjin_paletteram16_xBBBBBGGGGGRRRRR_word_w )
 {
 	offset^=1;
-	COMBINE_DATA(&paletteram16[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 	paletteram16_xBBBBBGGGGGRRRRR_word_w(space,offset,data,mem_mask);
 }
 
@@ -145,10 +145,10 @@ static ADDRESS_MAP_START( denjinmk_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x102000, 0x1027ff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102800, 0x103fff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
 	AM_RANGE(0x104000, 0x104fff) AM_RAM
-	AM_RANGE(0x105000, 0x105fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x105000, 0x105fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x106000, 0x107fff) AM_RAM
 	AM_RANGE(0x108000, 0x11dfff) AM_RAM
-	AM_RANGE(0x11e000, 0x11efff) AM_RAM_WRITE(denjin_paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x11e000, 0x11efff) AM_RAM_WRITE(denjin_paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x11f000, 0x11ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -160,11 +160,11 @@ static ADDRESS_MAP_START( grainbow_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(legionna_foreground_w) AM_BASE(&legionna_fore_data)
 	AM_RANGE(0x101800, 0x101fff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
-	AM_RANGE(0x103000, 0x103fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x103000, 0x103fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w)
 	AM_RANGE(0x105000, 0x105fff) AM_RAM
 	AM_RANGE(0x106000, 0x106fff) AM_RAM
-	AM_RANGE(0x107000, 0x107fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x107000, 0x107fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x108000, 0x11ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -172,14 +172,14 @@ static ADDRESS_MAP_START( cupsoc_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x1003ff) AM_RAM
 	AM_RANGE(0x100400, 0x1007ff) AM_READWRITE(cupsoc_mcu_r,cupsoc_mcu_w) AM_BASE(&cop_mcu_ram)
-	AM_RANGE(0x100800, 0x100fff) AM_READWRITE(SMH_RAM,legionna_background_w) AM_BASE(&legionna_back_data)
+	AM_RANGE(0x100800, 0x100fff) AM_RAM_WRITE(legionna_background_w) AM_BASE(&legionna_back_data)
 	AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(legionna_foreground_w) AM_BASE(&legionna_fore_data)
 	AM_RANGE(0x101800, 0x101fff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
-	AM_RANGE(0x103000, 0x103fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x103000, 0x103fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) /*<according to the debug mode,there is a DMA that copies from here to the paletteram>*/
 	AM_RANGE(0x105000, 0x106fff) AM_RAM
-	AM_RANGE(0x107000, 0x1077ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x107000, 0x1077ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x107800, 0x107fff) AM_RAM /*Ani Dsp(?) Ram*/
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM
 	AM_RANGE(0x110000, 0x119fff) AM_RAM
@@ -195,10 +195,10 @@ static ADDRESS_MAP_START( cupsocbl_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x101000, 0x1017ff) AM_RAM_WRITE(legionna_foreground_w) AM_BASE(&legionna_fore_data)
 	AM_RANGE(0x101800, 0x101fff) AM_RAM_WRITE(legionna_midground_w) AM_BASE(&legionna_mid_data)
 	AM_RANGE(0x102000, 0x102fff) AM_RAM_WRITE(legionna_text_w) AM_BASE(&legionna_textram)
-	AM_RANGE(0x103000, 0x103fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x103000, 0x103fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) /*<according to the debug mode,there is a DMA that copies from here to the paletteram>*/
 	AM_RANGE(0x105000, 0x106fff) AM_RAM
-	AM_RANGE(0x107000, 0x1077ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x107000, 0x1077ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x107800, 0x107fff) AM_RAM /*Ani Dsp(?) Ram*/
 	AM_RANGE(0x108000, 0x10ffff) AM_RAM
 	AM_RANGE(0x110000, 0x119fff) AM_RAM
@@ -1042,7 +1042,7 @@ GFXDECODE_END
 static MACHINE_DRIVER_START( legionna )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000,20000000/2) 	/* ??? */
+	MDRV_CPU_ADD("maincpu", M68000,20000000/2)	/* ??? */
 	MDRV_CPU_PROGRAM_MAP(legionna_map)
 	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)/* VBL */
 
@@ -1074,7 +1074,7 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( heatbrl )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000,20000000/2) 	/* ??? */
+	MDRV_CPU_ADD("maincpu", M68000,20000000/2)	/* ??? */
 	MDRV_CPU_PROGRAM_MAP(heatbrl_map)
 	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)/* VBL */
 
@@ -2116,7 +2116,7 @@ GAME( 1992, heatbrlo, heatbrl,  heatbrl,  heatbrl,  0,   ROT0, "Tad", "Heated Ba
 GAME( 1992, heatbrlu, heatbrl,  heatbrl,  heatbrl,  0,   ROT0, "Tad", "Heated Barrel (US)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
 GAME( 1993, godzilla, 0,        godzilla, godzilla, 0,        ROT0, "Banpresto", "Godzilla", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1993, grainbow, 0,        grainbow, grainbow, 0, 		  ROT0, "Banpresto", "SD Gundam Sangokushi Rainbow Tairiku Senki", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, grainbow, 0,        grainbow, grainbow, 0,		  ROT0, "Banpresto", "SD Gundam Sangokushi Rainbow Tairiku Senki", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 GAME( 1993, denjinmk, 0,        denjinmk, denjinmk, denjinmk, ROT0, "Banpresto", "Denjin Makai", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
 GAME( 1992, cupsoc,   0,        cupsoc,   cupsoc,   0,        ROT0, "Seibu", "Seibu Cup Soccer (set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )

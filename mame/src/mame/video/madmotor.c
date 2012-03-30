@@ -16,7 +16,7 @@ UINT16 *madmotor_pf2_control;
 UINT16 *madmotor_pf3_control;
 
 static int flipscreen;
-static tilemap *madmotor_pf1_tilemap,*madmotor_pf2_tilemap,*madmotor_pf3_tilemap,*madmotor_pf3a_tilemap;
+static tilemap_t *madmotor_pf1_tilemap,*madmotor_pf2_tilemap,*madmotor_pf3_tilemap,*madmotor_pf3a_tilemap;
 
 
 
@@ -152,10 +152,11 @@ WRITE16_HANDLER( madmotor_pf3_data_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int pri_mask,int pri_val)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 
 	offs = 0;
-	while (offs < spriteram_size/2)
+	while (offs < machine->generic.spriteram_size/2)
 	{
 		int sx,sy,code,color,w,h,flipx,flipy,incy,flash,mult,x,y;
 
@@ -212,7 +213,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 			}
 
 			offs += 4;
-			if (offs >= spriteram_size/2 ||
+			if (offs >= machine->generic.spriteram_size/2 ||
 					spriteram16[offs] & 0x8000)	// seems the expected behaviour on the title screen
 				 break;
 		}

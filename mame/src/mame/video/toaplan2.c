@@ -219,8 +219,8 @@ static UINT8 fg_tile_priority[2][16];
 static UINT8 bg_tile_priority[2][16];
 
 
-static tilemap *top_tilemap[2], *fg_tilemap[2], *bg_tilemap[2];
-static tilemap *tx_tilemap;	/* Tilemap for extra-text-layer */
+static tilemap_t *top_tilemap[2], *fg_tilemap[2], *bg_tilemap[2];
+static tilemap_t *tx_tilemap;	/* Tilemap for extra-text-layer */
 
 static int xoffset[4];
 static int yoffset[4];
@@ -750,7 +750,7 @@ WRITE16_HANDLER( batrider_textdata_decode )
 
 	memcpy(dest, toaplan2_txvideoram16, toaplan2_tx_vram_size);
 	dest += (toaplan2_tx_vram_size/2);
-	memcpy(dest, paletteram16, batrider_paletteram16_size);
+	memcpy(dest, space->machine->generic.paletteram.u16, batrider_paletteram16_size);
 	dest += (batrider_paletteram16_size/2);
 	memcpy(dest, toaplan2_txvideoram16_offs, toaplan2_tx_offs_vram_size);
 	dest += (toaplan2_tx_offs_vram_size/2);
@@ -1023,12 +1023,12 @@ static void toaplan2_scroll_reg_data_w(running_machine *machine, offs_t offset, 
 					if ((toaplan2_sub_cpu == CPU_2_Z80) && (data == 3))
 					{
 						/* HACK! When tilted, sound CPU needs to be reset. */
-						const device_config *ym = devtag_get_device(machine, "ym");
+						const device_config *ym = devtag_get_device(machine, "ymsnd");
 
 						if (ym && (sound_get_type(ym) == SOUND_YM3812))
 						{
 							cputag_set_input_line(machine, "audiocpu", INPUT_LINE_RESET, PULSE_LINE);
-							devtag_reset(machine, "ym");
+							devtag_reset(machine, "ymsnd");
 						}
 					}
 
@@ -1210,8 +1210,8 @@ static void toaplan2_log_vram(running_machine *machine)
 			sypos[1] = source_new0[sprite_voffs + 3];
 			logerror("SPoffs    Sprt Attr Xpos Ypos     Sprt Attr Xpos Ypos\n");
 			logerror("0:%03x now:%04x %04x %04x %04x new:%04x %04x %04x %04x\n",sprite_voffs,
-						 						schar[0], sattr[0],sxpos[0], sypos[0],
-						 						schar[1], sattr[1],sxpos[1], sypos[1]);
+												schar[0], sattr[0],sxpos[0], sypos[0],
+												schar[1], sattr[1],sxpos[1], sypos[1]);
 			if (vid_controllers == 2)
 			{
 				sattr[0] = source_now1[sprite_voffs];
@@ -1223,8 +1223,8 @@ static void toaplan2_log_vram(running_machine *machine)
 				sxpos[1] = source_new1[sprite_voffs + 2];
 				sypos[1] = source_new1[sprite_voffs + 3];
 				logerror("1:%03x now:%04x %04x %04x %04x new:%04x %04x %04x %04x\n",sprite_voffs,
-							 					schar[0], sattr[0],sxpos[0], sypos[0],
-							 					schar[1], sattr[1],sxpos[1], sypos[1]);
+												schar[0], sattr[0],sxpos[0], sypos[0],
+												schar[1], sattr[1],sxpos[1], sypos[1]);
 			}
 		}
 	}

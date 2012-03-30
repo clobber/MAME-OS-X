@@ -14,7 +14,7 @@
 #include "cpu/m6809/m6809.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
-#include "mcr.h"
+#include "includes/mcr.h"
 
 #define VERBOSE 0
 #define LOG(x) do { if (VERBOSE) logerror x; } while (0)
@@ -236,10 +236,10 @@ const z80_daisy_chain mcr_ipu_daisy_chain[] =
 Z80CTC_INTERFACE( mcr_ctc_intf )
 {
 	0,              			/* timer disables */
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),  	/* interrupt handler */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),	/* interrupt handler */
 	DEVCB_LINE(z80ctc_trg1_w),	/* ZC/TO0 callback */
-	DEVCB_NULL,              	/* ZC/TO1 callback */
-	DEVCB_NULL               	/* ZC/TO2 callback */
+	DEVCB_NULL,             	/* ZC/TO1 callback */
+	DEVCB_NULL              	/* ZC/TO2 callback */
 };
 
 
@@ -249,7 +249,7 @@ Z80CTC_INTERFACE( nflfoot_ctc_intf )
 	DEVCB_CPU_INPUT_LINE("ipu", INPUT_LINE_IRQ0),  /* interrupt handler */
 	DEVCB_NULL,			/* ZC/TO0 callback */
 	DEVCB_NULL,			/* ZC/TO1 callback */
-	DEVCB_NULL         	/* ZC/TO2 callback */
+	DEVCB_NULL      	/* ZC/TO2 callback */
 };
 
 
@@ -517,9 +517,9 @@ WRITE8_HANDLER( mcr_control_port_w )
             D0 = coin meter 1
     */
 
-	coin_counter_w(0, (data >> 0) & 1);
-	coin_counter_w(1, (data >> 1) & 1);
-	coin_counter_w(2, (data >> 2) & 1);
+	coin_counter_w(space->machine, 0, (data >> 0) & 1);
+	coin_counter_w(space->machine, 1, (data >> 1) & 1);
+	coin_counter_w(space->machine, 2, (data >> 2) & 1);
 	mcr_cocktail_flip = (data >> 6) & 1;
 }
 
@@ -538,7 +538,7 @@ WRITE8_HANDLER( mcrmono_control_port_w )
             D0 = coin meter 1
     */
 
-	coin_counter_w(0, (data >> 0) & 1);
+	coin_counter_w(space->machine, 0, (data >> 0) & 1);
 	mcr_cocktail_flip = (data >> 6) & 1;
 }
 

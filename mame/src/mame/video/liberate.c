@@ -12,8 +12,10 @@
 #include "driver.h"
 #include "cpu/m6502/m6502.h"
 
+UINT8 *liberate_videoram;
+UINT8 *liberate_colorram;
 static int background_color, background_disable;
-static tilemap *background_tilemap, *fix_tilemap;
+static tilemap_t *background_tilemap, *fix_tilemap;
 static UINT8 deco16_io_ram[16];
 extern UINT8 *prosoccr_charram;
 extern UINT8 *prosport_bg_vram;
@@ -70,9 +72,11 @@ static TILE_GET_INFO( get_back_tile_info )
 
 static TILE_GET_INFO( get_fix_tile_info )
 {
+	UINT8 *videoram = liberate_videoram;
+	UINT8 *colorram = liberate_colorram;
 	int tile, color;
 
-	tile = videoram[tile_index] + ((colorram[tile_index] & 0x7) << 8);
+	tile = videoram[tile_index] + (colorram[tile_index] << 8);
 	color = (colorram[tile_index] & 0x70) >> 4;
 
 	SET_TILE_INFO(0, tile, color, 0);
@@ -181,13 +185,13 @@ WRITE8_HANDLER( prosport_io_w )
 
 WRITE8_HANDLER( liberate_videoram_w )
 {
-	videoram[offset] = data;
+	liberate_videoram[offset] = data;
 	tilemap_mark_tile_dirty(fix_tilemap, offset);
 }
 
 WRITE8_HANDLER( liberate_colorram_w )
 {
-	colorram[offset] = data;
+	liberate_colorram[offset] = data;
 	tilemap_mark_tile_dirty(fix_tilemap, offset);
 }
 
@@ -238,7 +242,7 @@ VIDEO_START( prosport )
 
 WRITE8_HANDLER( prosport_paletteram_w )
 {
-	paletteram[offset] = data;
+	space->machine->generic.paletteram.u8[offset] = data;
 
 	/* RGB output is inverted */
 	palette_set_color_rgb(space->machine, offset, pal3bit(~data >> 0), pal3bit(~data >> 3), pal2bit(~data >> 6));
@@ -278,6 +282,7 @@ PALETTE_INIT( liberate )
 
 static void liberate_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
 	/* Sprites */
@@ -345,10 +350,11 @@ static void liberate_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 static void prosport_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
 	int offs,multi,fx,fy,sx,sy,sy2,code,code2,color,gfx_region;
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 
 	for (offs = 0x000;offs < 0x800;offs += 4)
 	{
-	  	if ((spriteram[offs+0]&1)!=1) continue;
+		if ((spriteram[offs+0]&1)!=1) continue;
 
 		code = spriteram[offs+1] + ((spriteram[offs+0]&0x3)<<8);
 		code2=code+1;
@@ -405,6 +411,7 @@ static void prosport_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 
 static void boomrang_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int pri)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs,multi,fx,fy,sx,sy,sy2,code,code2,color;
 
 	for (offs = 0x000;offs < 0x800;offs += 4)
@@ -461,6 +468,7 @@ static void boomrang_draw_sprites(running_machine *machine, bitmap_t *bitmap, co
 
 static void prosoccr_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs,code,fx,fy,sx,sy;
 
 	for (offs = 0x000;offs < 0x400;offs += 4)
@@ -521,7 +529,7 @@ VIDEO_UPDATE( prosport )
 
 	for (offs = 0;offs < 0x400;offs++)
 	{
-		tile=videoram[offs]+((colorram[offs]&0x3)<<8);
+		tile=liberate_videoram[offs]+((liberate_colorram[offs]&0x3)<<8);
 
 		if(deco16_io_ram[0]&0x40) //dynamic ram-based gfxs for Pro Golf
 			gfx_region = 3;

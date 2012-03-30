@@ -8,6 +8,8 @@
 
     TODO:
 
+    - remove CDP1802 dependency
+    - sound base frequencies are TPA/TPB
     - white noise
     - scanline based update
     - CMSEL output
@@ -47,7 +49,10 @@ enum
 typedef struct _cdp1869_t cdp1869_t;
 struct _cdp1869_t
 {
+	devcb_resolved_read8		in_page_ram_func;
+	devcb_resolved_write8		out_page_ram_func;
 	devcb_resolved_write_line	out_prd_func;
+	devcb_resolved_read_line	in_pal_ntsc_func;
 
 	const device_config *device;
 	const cdp1869_interface *intf;	/* interface */
@@ -57,6 +62,7 @@ struct _cdp1869_t
 	int color_clock;
 
 	/* video state */
+	int prd;						/* predisplay */
 	int dispoff;					/* display off */
 	int fresvert;					/* full resolution vertical */
 	int freshorz;					/* full resolution horizontal */
@@ -100,6 +106,9 @@ INLINE cdp1869_t *get_safe_token(const device_config *device)
     IMPLEMENTATION
 ***************************************************************************/
 
+#define CDP1869_IS_NTSC \
+	(!devcb_call_read_line(&cdp1869->in_pal_ntsc_func))
+
 /*-------------------------------------------------
     update_prd_changed_timer - update predisplay
     changed timer
@@ -114,7 +123,7 @@ static void update_prd_changed_timer(cdp1869_t *cdp1869)
 		int scanline = video_screen_get_vpos(cdp1869->screen);
 		int next_scanline;
 
-		if (cdp1869->intf->pal_ntsc == CDP1869_NTSC)
+		if (CDP1869_IS_NTSC)
 		{
 			start = CDP1869_SCANLINE_PREDISPLAY_START_NTSC;
 			end = CDP1869_SCANLINE_PREDISPLAY_END_NTSC;
@@ -161,6 +170,7 @@ static TIMER_CALLBACK( prd_changed_tick )
 	cdp1869_t *cdp1869 = get_safe_token(device);
 
 	devcb_call_write_line(&cdp1869->out_prd_func, param);
+	cdp1869->prd = param;
 
 	update_prd_changed_timer(cdp1869);
 }
@@ -502,7 +512,7 @@ WRITE8_DEVICE_HANDLER( cdp1869_out5_w )
 	cdp1869->cmem = BIT(word, 0);
 	cdp1869->line9 = BIT(word, 3);
 
-	if (cdp1869->intf->pal_ntsc == CDP1869_NTSC)
+	if (CDP1869_IS_NTSC)
 	{
 		cdp1869->line16 = BIT(word, 5);
 	}
@@ -609,7 +619,7 @@ READ8_DEVICE_HANDLER( cdp1869_pageram_r )
 		pma = offset;
 	}
 
-	return cdp1869->intf->page_ram_r(device, pma);
+	return devcb_call_read8(&cdp1869->in_page_ram_func, pma);
 }
 
 /*-------------------------------------------------
@@ -631,10 +641,7 @@ WRITE8_DEVICE_HANDLER( cdp1869_pageram_w )
 		pma = offset;
 	}
 
-	if (cdp1869->intf->page_ram_w)
-	{
-		cdp1869->intf->page_ram_w(device, pma, data);
-	}
+	devcb_call_write8(&cdp1869->out_page_ram_func, pma, data);
 }
 
 /*-------------------------------------------------
@@ -697,6 +704,17 @@ WRITE8_DEVICE_HANDLER( cdp1869_charram_w )
 }
 
 /*-------------------------------------------------
+    cdp1869_predisplay_r - predisplay read
+-------------------------------------------------*/
+
+READ_LINE_DEVICE_HANDLER( cdp1869_predisplay_r )
+{
+	cdp1869_t *cdp1869 = get_safe_token(device);
+
+	return cdp1869->prd;
+}
+
+/*-------------------------------------------------
     cdp1869_update - screen update
 -------------------------------------------------*/
 
@@ -706,9 +724,8 @@ void cdp1869_update(const device_config *device, bitmap_t *bitmap, const rectang
 
 	rectangle screen_rect, outer;
 
-	switch (cdp1869->intf->pal_ntsc)
+	if (CDP1869_IS_NTSC)
 	{
-	case CDP1869_NTSC:
 		outer.min_x = CDP1869_HBLANK_END;
 		outer.max_x = CDP1869_HBLANK_START - 1;
 		outer.min_y = CDP1869_SCANLINE_VBLANK_END_NTSC;
@@ -717,10 +734,9 @@ void cdp1869_update(const device_config *device, bitmap_t *bitmap, const rectang
 		screen_rect.max_x = CDP1869_SCREEN_END - 1;
 		screen_rect.min_y = CDP1869_SCANLINE_DISPLAY_START_NTSC;
 		screen_rect.max_y = CDP1869_SCANLINE_DISPLAY_END_NTSC - 1;
-		break;
-
-	default:
-	case CDP1869_PAL:
+	}
+	else
+	{
 		outer.min_x = CDP1869_HBLANK_END;
 		outer.max_x = CDP1869_HBLANK_START - 1;
 		outer.min_y = CDP1869_SCANLINE_VBLANK_END_PAL;
@@ -729,7 +745,6 @@ void cdp1869_update(const device_config *device, bitmap_t *bitmap, const rectang
 		screen_rect.max_x = CDP1869_SCREEN_END - 1;
 		screen_rect.min_y = CDP1869_SCANLINE_DISPLAY_START_PAL;
 		screen_rect.max_y = CDP1869_SCANLINE_DISPLAY_END_PAL - 1;
-		break;
 	}
 
 	sect_rect(&outer, cliprect);
@@ -849,12 +864,14 @@ static DEVICE_START( cdp1869 )
 	/* validate arguments */
 	cdp1869->intf = (const cdp1869_interface *)device->static_config;
 
-	assert(cdp1869->intf->page_ram_r != NULL);
 	assert(cdp1869->intf->pcb_r != NULL);
 	assert(cdp1869->intf->char_ram_r != NULL);
 
 	/* resolve callbacks */
+	devcb_resolve_read8(&cdp1869->in_page_ram_func, &cdp1869->intf->in_page_ram_func, device);
+	devcb_resolve_write8(&cdp1869->out_page_ram_func, &cdp1869->intf->out_page_ram_func, device);
 	devcb_resolve_write_line(&cdp1869->out_prd_func, &cdp1869->intf->out_prd_func, device);
+	devcb_resolve_read_line(&cdp1869->in_pal_ntsc_func, &cdp1869->intf->in_pal_ntsc_func, device);
 
 	/* set initial values */
 	cdp1869->device = device;
@@ -879,6 +896,7 @@ static DEVICE_START( cdp1869 )
 	/* register for state saving */
 	state_save_register_postload(device->machine, cdp1869_state_save_postload, cdp1869);
 
+	state_save_register_device_item(device, 0, cdp1869->prd);
 	state_save_register_device_item(device, 0, cdp1869->dispoff);
 	state_save_register_device_item(device, 0, cdp1869->fresvert);
 	state_save_register_device_item(device, 0, cdp1869->freshorz);

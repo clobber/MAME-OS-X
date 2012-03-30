@@ -11,7 +11,9 @@
 #include "sound/okim6295.h"
 #include "sound/2203intf.h"
 
-static tilemap *tmap;
+static tilemap_t *tmap;
+static UINT8 *colorram;
+static UINT8 *videoram;
 
 static WRITE8_HANDLER( cowrace_videoram_w )
 {
@@ -84,14 +86,14 @@ static READ8_HANDLER( cowrace_30c3_r )
 }
 
 static ADDRESS_MAP_START( mem_map_cowrace, ADDRESS_SPACE_PROGRAM, 8 )
-AM_RANGE(0x302f, 0x302f) AM_READ( ret_00 )
-AM_RANGE(0x30c3, 0x30c3) AM_READ( cowrace_30c3_r )
-AM_RANGE(0x38c2, 0x38c2) AM_READWRITE( ret_ff, cowrace_38c2_w )
+	AM_RANGE(0x302f, 0x302f) AM_READ(ret_00)
+	AM_RANGE(0x30c3, 0x30c3) AM_READ(cowrace_30c3_r)
+	AM_RANGE(0x38c2, 0x38c2) AM_READWRITE(ret_ff, cowrace_38c2_w)
 
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x3000, 0x33ff) AM_RAM
-	AM_RANGE(0x4000, 0x43ff) AM_READWRITE( SMH_RAM, cowrace_videoram_w ) AM_BASE( &videoram )
-	AM_RANGE(0x5000, 0x53ff) AM_READWRITE( SMH_RAM, cowrace_colorram_w ) AM_BASE( &colorram )
+	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(cowrace_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(cowrace_colorram_w) AM_BASE(&colorram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( io_map_cowrace, ADDRESS_SPACE_IO, 8 )
@@ -107,7 +109,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( io_map_sound_cowrace, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ym", ym2203_w)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ymsnd", ym2203_w)
 ADDRESS_MAP_END
 
 
@@ -225,7 +227,7 @@ static MACHINE_DRIVER_START( cowrace )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_interface_1)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)

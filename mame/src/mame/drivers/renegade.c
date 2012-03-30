@@ -255,7 +255,7 @@ static const UINT8 kuniokun_xor_table[0x2a] =
 static void setbank(running_machine *machine)
 {
 	UINT8 *RAM = memory_region(machine, "maincpu");
-	memory_set_bankptr(machine, 1, &RAM[bank ? 0x10000 : 0x4000]);
+	memory_set_bankptr(machine, "bank1", &RAM[bank ? 0x10000 : 0x4000]);
 }
 
 static STATE_POSTLOAD( renegade_postload )
@@ -538,10 +538,10 @@ static WRITE8_HANDLER( renegade_coin_counter_w )
 static ADDRESS_MAP_START( renegade_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x17ff) AM_RAM
 	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(renegade_videoram2_w) AM_BASE(&renegade_videoram2)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&spriteram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(renegade_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0x3000, 0x30ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0x3100, 0x31ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(renegade_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x3000, 0x30ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x3100, 0x31ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0x3800, 0x3800) AM_READ_PORT("IN0") AM_WRITE(renegade_scroll0_w)		/* Player#1 controls, P1,P2 start */
 	AM_RANGE(0x3801, 0x3801) AM_READ_PORT("IN1") AM_WRITE(renegade_scroll1_w)		/* Player#2 controls, coin triggers */
 	AM_RANGE(0x3802, 0x3802) AM_READ_PORT("DSW2") AM_WRITE(sound_w)	/* DIP2  various IO ports */
@@ -550,7 +550,7 @@ static ADDRESS_MAP_START( renegade_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3805, 0x3805) AM_READWRITE(mcu_reset_r,bankswitch_w)
 	AM_RANGE(0x3806, 0x3806) AM_WRITENOP // ?? watchdog
 	AM_RANGE(0x3807, 0x3807) AM_WRITE(renegade_coin_counter_w)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -559,7 +559,7 @@ static ADDRESS_MAP_START( renegade_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x1000) AM_READ(soundlatch_r)
 	AM_RANGE(0x1800, 0x1800) AM_WRITENOP // this gets written the same values as 0x2000
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(adpcm_play_w)
-	AM_RANGE(0x2800, 0x2801) AM_DEVREADWRITE("ym", ym3526_r,ym3526_w)
+	AM_RANGE(0x2800, 0x2801) AM_DEVREADWRITE("ymsnd", ym3526_r,ym3526_w)
 	AM_RANGE(0x3000, 0x3000) AM_WRITENOP /* adpcm related? stereo pan? */
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -807,7 +807,7 @@ static MACHINE_DRIVER_START( renegade )
     /* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3526, 12000000/4)
+	MDRV_SOUND_ADD("ymsnd", YM3526, 12000000/4)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 

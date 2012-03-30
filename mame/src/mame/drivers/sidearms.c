@@ -40,6 +40,8 @@ Notes:
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 
+extern UINT8 *sidearms_videoram;
+extern UINT8 *sidearms_colorram;
 extern UINT8 *sidearms_bg_scrollx;
 extern UINT8 *sidearms_bg_scrolly;
 
@@ -64,7 +66,7 @@ static WRITE8_HANDLER( sidearms_bankswitch_w )
 
 	/* bits 0 and 1 select the ROM bank */
 	bankaddress = 0x10000 + (data & 0x0f) * 0x4000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
 }
 
 
@@ -86,9 +88,9 @@ static READ8_HANDLER( turtship_ports_r )
 
 static ADDRESS_MAP_START( sidearms_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xc800, 0xc800) AM_READ_PORT("SYSTEM") AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc801, 0xc801) AM_READ_PORT("P1") AM_WRITE(sidearms_bankswitch_w)
 	AM_RANGE(0xc802, 0xc802) AM_READ_PORT("P2") AM_WRITE(watchdog_reset_w)
@@ -99,19 +101,19 @@ static ADDRESS_MAP_START( sidearms_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc808, 0xc809) AM_WRITEONLY AM_BASE(&sidearms_bg_scrollx)
 	AM_RANGE(0xc80a, 0xc80b) AM_WRITEONLY AM_BASE(&sidearms_bg_scrolly)
 	AM_RANGE(0xc80c, 0xc80c) AM_WRITE(sidearms_gfxctrl_w)	/* background and sprite enable */
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE(&sidearms_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE(&sidearms_colorram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( turtship_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xe800, 0xe807) AM_READ(turtship_ports_r)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xe801, 0xe801) AM_WRITE(sidearms_bankswitch_w)
@@ -122,8 +124,8 @@ static ADDRESS_MAP_START( turtship_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe808, 0xe809) AM_WRITEONLY AM_BASE(&sidearms_bg_scrollx)
 	AM_RANGE(0xe80a, 0xe80b) AM_WRITEONLY AM_BASE(&sidearms_bg_scrolly)
 	AM_RANGE(0xe80c, 0xe80c) AM_WRITE(sidearms_gfxctrl_w)	/* background and sprite enable */
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE(&sidearms_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE(&sidearms_colorram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sidearms_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -143,7 +145,7 @@ static WRITE8_HANDLER( whizz_bankswitch_w )
 	int bank = 0;
 
 	switch (data & 0xC0)
- 	{
+	{
 		case 0x00 :	bank = 0;	break;
 		case 0x40 :	bank = 2;	break;
 		case 0x80 :	bank = 1;	break;
@@ -151,14 +153,14 @@ static WRITE8_HANDLER( whizz_bankswitch_w )
 	}
 
 	bankaddress = 0x10000 + bank * 0x4000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
 }
 
 static ADDRESS_MAP_START( whizz_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_split2_w) AM_BASE_GENERIC(paletteram2)
 	AM_RANGE(0xc800, 0xc800) AM_READ_PORT("DSW0") AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc801, 0xc801) AM_READ_PORT("DSW1") AM_WRITE(whizz_bankswitch_w)
 	AM_RANGE(0xc802, 0xc802) AM_READ_PORT("DSW2") AM_WRITE(watchdog_reset_w)
@@ -172,10 +174,10 @@ static ADDRESS_MAP_START( whizz_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe805, 0xe805) AM_WRITE(sidearms_star_scrollx_w)
 	AM_RANGE(0xe806, 0xe806) AM_WRITE(sidearms_star_scrolly_w)
 	AM_RANGE(0xc80c, 0xc80c) AM_WRITE(sidearms_gfxctrl_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(sidearms_videoram_w) AM_BASE(&sidearms_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(sidearms_colorram_w) AM_BASE(&sidearms_colorram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( whizz_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -185,7 +187,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( whizz_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_WRITENOP
 	AM_RANGE(0xc0, 0xc0) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -790,7 +792,7 @@ static MACHINE_DRIVER_START( whizz )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_CONFIG(whizz_ym2151_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 1.0)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)

@@ -12,7 +12,7 @@ To Do:
 
 #include "driver.h"
 #include "cpu/m6800/m6800.h"
-#include "triplhnt.h"
+#include "includes/triplhnt.h"
 
 static UINT8 triplhnt_cmos[16];
 static UINT8 triplhnt_da_latch;
@@ -23,8 +23,8 @@ static UINT8 triplhnt_hit_code;
 
 static DRIVER_INIT( triplhnt )
 {
-	generic_nvram = triplhnt_cmos;
-	generic_nvram_size = sizeof triplhnt_cmos;
+	machine->generic.nvram.u8 = triplhnt_cmos;
+	machine->generic.nvram_size = sizeof triplhnt_cmos;
 }
 
 
@@ -69,10 +69,10 @@ static void triplhnt_update_misc(running_machine *machine, int offset)
 	triplhnt_sprite_zoom = (triplhnt_misc_flags >> 4) & 1;
 	triplhnt_sprite_bank = (triplhnt_misc_flags >> 7) & 1;
 
-	set_led_status(0, triplhnt_misc_flags & 0x02);
+	set_led_status(machine, 0, triplhnt_misc_flags & 0x02);
 
-	coin_lockout_w(0, !(triplhnt_misc_flags & 0x08));
-	coin_lockout_w(1, !(triplhnt_misc_flags & 0x08));
+	coin_lockout_w(machine, 0, !(triplhnt_misc_flags & 0x08));
+	coin_lockout_w(machine, 1, !(triplhnt_misc_flags & 0x08));
 
 	discrete_sound_w(discrete, TRIPLHNT_SCREECH_EN, triplhnt_misc_flags & 0x04);	// screech
 	discrete_sound_w(discrete, TRIPLHNT_LAMP_EN, triplhnt_misc_flags & 0x02);	// Lamp is used to reset noise
@@ -137,11 +137,11 @@ static READ8_HANDLER( triplhnt_da_latch_r )
 static ADDRESS_MAP_START( triplhnt_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x300)
-	AM_RANGE(0x0400, 0x04ff) AM_WRITE(SMH_RAM) AM_BASE(&triplhnt_playfield_ram)
-	AM_RANGE(0x0800, 0x080f) AM_WRITE(SMH_RAM) AM_BASE(&triplhnt_vpos_ram)
-	AM_RANGE(0x0810, 0x081f) AM_WRITE(SMH_RAM) AM_BASE(&triplhnt_hpos_ram)
-	AM_RANGE(0x0820, 0x082f) AM_WRITE(SMH_RAM) AM_BASE(&triplhnt_orga_ram)
-	AM_RANGE(0x0830, 0x083f) AM_WRITE(SMH_RAM) AM_BASE(&triplhnt_code_ram)
+	AM_RANGE(0x0400, 0x04ff) AM_WRITEONLY AM_BASE(&triplhnt_playfield_ram)
+	AM_RANGE(0x0800, 0x080f) AM_WRITEONLY AM_BASE(&triplhnt_vpos_ram)
+	AM_RANGE(0x0810, 0x081f) AM_WRITEONLY AM_BASE(&triplhnt_hpos_ram)
+	AM_RANGE(0x0820, 0x082f) AM_WRITEONLY AM_BASE(&triplhnt_orga_ram)
+	AM_RANGE(0x0830, 0x083f) AM_WRITEONLY AM_BASE(&triplhnt_code_ram)
 	AM_RANGE(0x0c00, 0x0c00) AM_READ_PORT("0C00")
 	AM_RANGE(0x0c08, 0x0c08) AM_READ_PORT("0C08")
 	AM_RANGE(0x0c09, 0x0c09) AM_READ_PORT("0C09")

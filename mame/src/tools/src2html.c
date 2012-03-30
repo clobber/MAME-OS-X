@@ -528,7 +528,7 @@ static int output_file(file_type type, int srcrootlen, int dstrootlen, const ast
 		case FILE_TYPE_C:
 			color_quotes = TRUE;
 			comment_start = comment_start_esc = "/*";
-            comment_end = comment_end_esc = "*/";
+			comment_end = comment_end_esc = "*/";
 			comment_inline = comment_inline_esc = "//";
 			token_table = c_token_table;
 			break;
@@ -590,6 +590,7 @@ static int output_file(file_type type, int srcrootlen, int dstrootlen, const ast
 		int quotes_are_linked = FALSE;
 		char in_quotes = 0;
 		int curcol = 0;
+		int escape = 0;
 
 		/* start with the line number */
 		dstptr += sprintf(dstptr, "<span class=\"linenum\">%5d</span>&nbsp;&nbsp;", linenum++);
@@ -704,7 +705,7 @@ static int output_file(file_type type, int srcrootlen, int dstrootlen, const ast
 				}
 
 				/* track closing quotes */
-				else if (!in_comment && !in_inline_comment && in_quotes && ch == in_quotes && (type != FILE_TYPE_C || srcptr[-2] != '\\' || srcptr[-3] == '\\'))
+				else if (!in_comment && !in_inline_comment && in_quotes && ch == in_quotes && !escape)
 				{
 					if (quotes_are_linked)
 						dstptr += sprintf(dstptr, "</a>");
@@ -727,6 +728,10 @@ static int output_file(file_type type, int srcrootlen, int dstrootlen, const ast
 					*dstptr++ = ch;
 				curcol++;
 			}
+
+			/* Update escape state */
+			if (in_quotes)
+				escape = (ch == '\\' && type == FILE_TYPE_C) ? !escape : 0;
 		}
 
 		/* finish inline comments */

@@ -5,7 +5,7 @@
 #if 0
 static const char copyright_notice[] =
 "MUSASHI\n"
-"Version 4.5 (2009-10-09)\n"
+"Version 4.55 (2009-10-31)\n"
 "A portable Motorola M680x0 processor emulation engine.\n"
 "Copyright Karl Stenerud.  All rights reserved.\n"
 "\n"
@@ -42,6 +42,7 @@ static const char copyright_notice[] =
 
 extern void m68040_fpu_op0(m68ki_cpu_core *m68k);
 extern void m68040_fpu_op1(m68ki_cpu_core *m68k);
+extern void m68881_mmu_ops(m68ki_cpu_core *m68k);
 
 /* ======================================================================== */
 /* ================================= DATA ================================= */
@@ -482,7 +483,7 @@ const UINT8 m68ki_ea_idx_cycle_table[64] =
     CPU STATE DESCRIPTION
 ***************************************************************************/
 
-#define MASK_ALL 				(CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040)
+#define MASK_ALL				(CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040)
 #define MASK_24BIT_SPACE			(CPU_TYPE_000 | CPU_TYPE_008 | CPU_TYPE_010 | CPU_TYPE_EC020)
 #define MASK_32BIT_SPACE			(CPU_TYPE_020 | CPU_TYPE_EC030 | CPU_TYPE_030 | CPU_TYPE_EC040 | CPU_TYPE_040)
 #define MASK_010_OR_LATER			(CPU_TYPE_010 | CPU_TYPE_EC020 | CPU_TYPE_020 | CPU_TYPE_030 | CPU_TYPE_EC030 | CPU_TYPE_040 | CPU_TYPE_EC040)
@@ -560,6 +561,7 @@ INLINE m68ki_cpu_core *get_safe_token(const device_config *device)
 		   cpu_get_type(device) == CPU_M68010 ||
 		   cpu_get_type(device) == CPU_M68EC020 ||
 		   cpu_get_type(device) == CPU_M68020 ||
+		   cpu_get_type(device) == CPU_M68020_68851 ||
 		   cpu_get_type(device) == CPU_M68EC030 ||
 		   cpu_get_type(device) == CPU_M68030 ||
 		   cpu_get_type(device) == CPU_M68EC040 ||
@@ -910,7 +912,7 @@ static CPU_GET_INFO( m68k )
 		case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(m68k);			break;
 		case CPUINFO_FCT_IMPORT_STATE:	info->import_state = CPU_IMPORT_STATE_NAME(m68k);		break;
 		case CPUINFO_FCT_EXPORT_STATE:	info->export_state = CPU_EXPORT_STATE_NAME(m68k);		break;
-		case CPUINFO_FCT_TRANSLATE:	       	info->translate = CPU_TRANSLATE_NAME(m68k);		break;
+		case CPUINFO_FCT_TRANSLATE:	    	info->translate = CPU_TRANSLATE_NAME(m68k);		break;
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &m68k->remaining_cycles;	break;
@@ -1282,7 +1284,7 @@ CPU_GET_INFO( m68000 )
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:						strcpy(info->s, "68000");						break;
 
-		default: 									CPU_GET_INFO_CALL(m68k);						break;
+		default:									CPU_GET_INFO_CALL(m68k);						break;
 	}
 }
 
@@ -1330,7 +1332,7 @@ CPU_GET_INFO( m68008 )
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "68008");				break;
 
-		default: 										CPU_GET_INFO_CALL(m68k);				break;
+		default:										CPU_GET_INFO_CALL(m68k);				break;
 	}
 }
 
@@ -1720,7 +1722,7 @@ CPU_GET_INFO( m68040 )
 }
 
 /****************************************************************************
- * M680EC30 section
+ * M68EC040 section
  ****************************************************************************/
 
 static CPU_INIT( m68ec040 )
@@ -1763,6 +1765,49 @@ CPU_GET_INFO( m68ec040 )
 }
 
 /****************************************************************************
+ * M68LC040 section
+ ****************************************************************************/
+
+static CPU_INIT( m68lc040 )
+{
+	m68ki_cpu_core *m68k = get_safe_token(device);
+
+	CPU_INIT_CALL(m68k);
+
+	m68k->cpu_type         = CPU_TYPE_LC040;
+	m68k->state.subtypemask = m68k->cpu_type;
+	m68k->dasm_type        = M68K_CPU_TYPE_68LC040;
+	m68k->memory           = interface_d32;
+	m68k->sr_mask          = 0xf71f; /* T1 T0 S  M  -- I2 I1 I0 -- -- -- X  N  Z  V  C  */
+	m68k->cyc_instruction  = m68ki_cycles[4];
+	m68k->cyc_exception    = m68ki_exception_cycle_table[4];
+	m68k->cyc_bcc_notake_b = -2;
+	m68k->cyc_bcc_notake_w = 0;
+	m68k->cyc_dbcc_f_noexp = 0;
+	m68k->cyc_dbcc_f_exp   = 4;
+	m68k->cyc_scc_r_true   = 0;
+	m68k->cyc_movem_w      = 2;
+	m68k->cyc_movem_l      = 2;
+	m68k->cyc_shift        = 0;
+	m68k->cyc_reset        = 518;
+	m68k->has_pmmu	       = 1;
+}
+
+CPU_GET_INFO( m68lc040 )
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as pointers to data or functions --- */
+		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68lc040);					break;
+
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "68LC040");				break;
+
+		default:										CPU_GET_INFO_CALL(m68040);				break;
+	}
+}
+
+/****************************************************************************
  * SCC-68070 section
  ****************************************************************************/
 
@@ -1788,7 +1833,7 @@ CPU_GET_INFO( scc68070 )
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "SCC68070");			break;
 
-		default: 										CPU_GET_INFO_CALL(m68k);				break;
+		default:										CPU_GET_INFO_CALL(m68k);				break;
 	}
 }
 

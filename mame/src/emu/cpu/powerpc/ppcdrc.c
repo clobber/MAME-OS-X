@@ -19,6 +19,7 @@
 #include <stddef.h>
 #include "cpuintrf.h"
 #include "debugger.h"
+#include "profiler.h"
 #include "ppccom.h"
 #include "ppcfe.h"
 #include "cpu/drcfe.h"
@@ -99,25 +100,25 @@ extern offs_t ppc_dasm_one(char *buffer, UINT32 pc, UINT32 op);
 /* DSISR values for various addressing types */
 #define DSISR_IMM(op)	((0) |										/* bits 15-16: cleared */			\
 						 ((((op) >> (31- 5)) & 0x01) << (31-17)) |	/* bit  17:    opcode bit 5 */		\
-						 ((((op) >> (31- 4)) & 0x0f) << (31-21)) | 	/* bits 18-21: opcode bits 1-4 */	\
+						 ((((op) >> (31- 4)) & 0x0f) << (31-21)) |	/* bits 18-21: opcode bits 1-4 */	\
 						 ((((op) >> (31-10)) & 0x1f) << (31-26)) |	/* bits 22-26: opcode bits 6-10 */	\
 						 (0))										/* bits 27-31: undefined */
 
 #define DSISR_IMMU(op)	((0) |										/* bits 15-16: cleared */			\
 						 ((((op) >> (31- 5)) & 0x01) << (31-17)) |	/* bit  17:    opcode bit 5 */		\
-						 ((((op) >> (31- 4)) & 0x0f) << (31-21)) | 	/* bits 18-21: opcode bits 1-4 */	\
+						 ((((op) >> (31- 4)) & 0x0f) << (31-21)) |	/* bits 18-21: opcode bits 1-4 */	\
 						 ((((op) >> (31-10)) & 0x1f) << (31-26)) |	/* bits 22-26: opcode bits 6-10 */	\
 						 ((((op) >> (31-15)) & 0x1f) << (31-31)))	/* bits 27-31: opcode bits 11-15 */
 
 #define DSISR_IDX(op)	(((((op) >> (31-30)) & 0x03) << (31-16)) |	/* bits 15-16: opcode bits 29-30 */	\
 						 ((((op) >> (31-25)) & 0x01) << (31-17)) |	/* bit  17:    opcode bit 25 */		\
-						 ((((op) >> (31-24)) & 0x0f) << (31-21)) | 	/* bits 18-21: opcode bits 21-24 */	\
+						 ((((op) >> (31-24)) & 0x0f) << (31-21)) |	/* bits 18-21: opcode bits 21-24 */	\
 						 ((((op) >> (31-10)) & 0x1f) << (31-26)) |	/* bits 22-26: opcode bits 6-10 */	\
 						 (0))										/* bits 27-31: undefined */
 
 #define DSISR_IDXU(op)	(((((op) >> (31-30)) & 0x03) << (31-16)) |	/* bits 15-16: opcode bits 29-30 */	\
 						 ((((op) >> (31-25)) & 0x01) << (31-17)) |	/* bit  17:    opcode bit 25 */		\
-						 ((((op) >> (31-24)) & 0x0f) << (31-21)) | 	/* bits 18-21: opcode bits 21-24 */	\
+						 ((((op) >> (31-24)) & 0x0f) << (31-21)) |	/* bits 18-21: opcode bits 21-24 */	\
 						 ((((op) >> (31-10)) & 0x1f) << (31-26)) |	/* bits 22-26: opcode bits 6-10 */	\
 						 ((((op) >> (31-15)) & 0x1f) << (31-31)))	/* bits 27-31: opcode bits 11-15 */
 
@@ -814,7 +815,7 @@ static CPU_GET_INFO( ppcdrc )
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
 
 		/* --- everything else is handled generically --- */
-		default:										ppccom_get_info(ppc, state, info); 				break;
+		default:										ppccom_get_info(ppc, state, info);				break;
 	}
 }
 
@@ -953,6 +954,8 @@ static void code_compile_block(powerpc_state *ppc, UINT8 mode, offs_t pc)
 	drcuml_block *block;
 	jmp_buf errorbuf;
 
+	profiler_mark_start(PROFILER_DRC_COMPILE);
+
 	/* get a description of this sequence */
 	desclist = drcfe_describe_code(ppc->impstate->drcfe, pc);
 	if (LOG_UML || LOG_NATIVE)
@@ -1034,6 +1037,7 @@ static void code_compile_block(powerpc_state *ppc, UINT8 mode, offs_t pc)
 
 	/* end the sequence */
 	drcuml_block_end(block);
+	profiler_mark_end();
 }
 
 
@@ -1257,7 +1261,7 @@ static void static_generate_tlb_mismatch(powerpc_state *ppc)
 	UML_MOV(block, MEM(&ppc->param0), IREG(0));												// mov     [param0],i0
 	UML_MOV(block, MEM(&ppc->param1), IMM(TRANSLATE_FETCH));								// mov     [param1],TRANSLATE_FETCH
 	UML_CALLC(block, ppccom_tlb_fill, ppc);													// callc   tlbfill,ppc
-	UML_SHR(block, IREG(1), IREG(0), IMM(12));												// shr     i1,i0,11
+	UML_SHR(block, IREG(1), IREG(0), IMM(12));												// shr     i1,i0,12
 	UML_LOAD(block, IREG(1), (void *)vtlb_table(ppc->vtlb), IREG(1), DWORD);				// load    i1,[vtlb],i1,dword
 	UML_TEST(block, IREG(1), IMM(VTLB_FETCH_ALLOWED));										// test    i1,VTLB_FETCH_ALLOWED
 	UML_JMPc(block, IF_Z, isi = label++);													// jmp     isi,z
@@ -1458,7 +1462,7 @@ static void static_generate_exception(powerpc_state *ppc, UINT8 exception, int r
 	}
 
 	/* adjust cycles */
-	UML_SUB(block, MEM(&ppc->icount), MEM(&ppc->icount), IREG(1));			 				// sub     icount,icount,cycles
+	UML_SUB(block, MEM(&ppc->icount), MEM(&ppc->icount), IREG(1));							// sub     icount,icount,cycles
 	UML_EXHc(block, IF_S, ppc->impstate->out_of_cycles, IREG(0));							// exh     out_of_cycles,i0
 	UML_HASHJMP(block, MEM(&ppc->impstate->mode), IREG(0), ppc->impstate->nocode);			// hashjmp <mode>,i0,nocode
 
@@ -1568,25 +1572,22 @@ static void static_generate_memory_accessor(powerpc_state *ppc, int mode, int si
 				{
 					if (size == 1)
 					{
-						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor >> 0));					// xor     i0,i0,fastxor >> 0
+						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor & 7));						// xor     i0,i0,fastxor & 7
 						UML_LOAD(block, IREG(0), fastbase, IREG(0), BYTE);						// load    i0,fastbase,i0,byte
 					}
 					else if (size == 2)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(1));								// shr     i0,i0,1
-						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor >> 1));					// xor     i0,i0,fastxor >> 1
-						UML_LOAD(block, IREG(0), fastbase, IREG(0), WORD);						// load    i0,fastbase,i0,word
+						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor & 6));						// xor     i0,i0,fastxor & 6
+						UML_LOAD(block, IREG(0), fastbase, IREG(0), WORD_x1);					// load    i0,fastbase,i0,word_x1
 					}
 					else if (size == 4)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(2));								// shr     i0,i0,2
-						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor >> 2));					// xor     i0,i0,fastxor >> 2
-						UML_LOAD(block, IREG(0), fastbase, IREG(0), DWORD);						// load    i0,fastbase,i0,dword
+						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor & 4));						// xor     i0,i0,fastxor & 4
+						UML_LOAD(block, IREG(0), fastbase, IREG(0), DWORD_x1);					// load    i0,fastbase,i0,dword_x1
 					}
 					else if (size == 8)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(3));								// shr     i0,i0,3
-						UML_DLOAD(block, IREG(0), fastbase, IREG(0), QWORD);					// dload   i0,fastbase,i0,qword
+						UML_DLOAD(block, IREG(0), fastbase, IREG(0), QWORD_x1);					// dload   i0,fastbase,i0,qword
 					}
 					UML_RET(block);																// ret
 				}
@@ -1594,41 +1595,38 @@ static void static_generate_memory_accessor(powerpc_state *ppc, int mode, int si
 				{
 					if (size == 1)
 					{
-						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor >> 0));					// xor     i0,i0,fastxor >> 0
+						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor & 7));						// xor     i0,i0,fastxor & 7
 						UML_STORE(block, fastbase, IREG(0), IREG(1), BYTE);						// store   fastbase,i0,i1,byte
 					}
 					else if (size == 2)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(1));								// shr     i0,i0,1
-						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor >> 1));					// xor     i0,i0,fastxor >> 1
-						UML_STORE(block, fastbase, IREG(0), IREG(1), WORD);						// store   fastbase,i0,i1,word
+						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor & 6));						// xor     i0,i0,fastxor & 6
+						UML_STORE(block, fastbase, IREG(0), IREG(1), WORD_x1);					// store   fastbase,i0,i1,word_x1
 					}
 					else if (size == 4)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(2));								// shr     i0,i0,2
-						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor >> 2));					// xor     i0,i0,fastxor >> 2
+						UML_XOR(block, IREG(0), IREG(0), IMM(fastxor & 4));						// xor     i0,i0,fastxor & 4
 						if (ismasked)
 						{
-							UML_LOAD(block, IREG(3), fastbase, IREG(0), DWORD);					// load    i3,fastbase,i0,dword
+							UML_LOAD(block, IREG(3), fastbase, IREG(0), DWORD_x1);				// load    i3,fastbase,i0,dword_x1
 							UML_AND(block, IREG(1), IREG(1), IREG(2));							// and     i1,i1,i2
 							UML_XOR(block, IREG(2), IREG(2), IMM(0xffffffff));					// xor     i2,i2,0xfffffffff
 							UML_AND(block, IREG(3), IREG(3), IREG(2));							// and     i3,i3,i2
 							UML_OR(block, IREG(1), IREG(1), IREG(3));							// or      i1,i1,i3
 						}
-						UML_STORE(block, fastbase, IREG(0), IREG(1), DWORD);					// store   fastbase,i0,i1,dword
+						UML_STORE(block, fastbase, IREG(0), IREG(1), DWORD_x1);					// store   fastbase,i0,i1,dword_x1
 					}
 					else if (size == 8)
 					{
-						UML_SHR(block, IREG(0), IREG(0), IMM(3));								// shr     i0,i0,3
 						if (ismasked)
 						{
-							UML_DLOAD(block, IREG(3), fastbase, IREG(0), QWORD);				// dload   i3,fastbase,i0,qword
+							UML_DLOAD(block, IREG(3), fastbase, IREG(0), QWORD_x1);				// dload   i3,fastbase,i0,qword_x1
 							UML_DAND(block, IREG(1), IREG(1), IREG(2));							// dand    i1,i1,i2
 							UML_DXOR(block, IREG(2), IREG(2), IMM(U64(0xffffffffffffffff)));	// dxor    i2,i2,0xfffffffffffffffff
 							UML_DAND(block, IREG(3), IREG(3), IREG(2));							// dand    i3,i3,i2
 							UML_DOR(block, IREG(1), IREG(1), IREG(3));							// dor     i1,i1,i3
 						}
-						UML_DSTORE(block, fastbase, IREG(0), IREG(1), QWORD);					// dstore  fastbase,i0,i1,qword
+						UML_DSTORE(block, fastbase, IREG(0), IREG(1), QWORD_x1);				// dstore  fastbase,i0,i1,qword_x1
 					}
 					UML_RET(block);																// ret
 				}

@@ -93,9 +93,9 @@ Notes:
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 
-#include "decocrpt.h"
-#include "decoprot.h"
-#include "deco16ic.h"
+#include "includes/decocrpt.h"
+#include "includes/decoprot.h"
+#include "includes/deco16ic.h"
 
 VIDEO_START( funkyjet );
 VIDEO_UPDATE( funkyjet );
@@ -104,13 +104,13 @@ VIDEO_UPDATE( funkyjet );
 
 static ADDRESS_MAP_START( funkyjet_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x140000, 0x143fff) AM_RAM
-	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x160000, 0x1607ff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x180000, 0x1807ff) AM_READWRITE(deco16_146_funkyjet_prot_r, deco16_146_funkyjet_prot_w) AM_BASE(&deco16_prot_ram)
 	AM_RANGE(0x184000, 0x184001) AM_WRITENOP
 	AM_RANGE(0x188000, 0x188001) AM_WRITENOP
-	AM_RANGE(0x300000, 0x30000f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf12_control)
+	AM_RANGE(0x300000, 0x30000f) AM_WRITEONLY AM_BASE(&deco16_pf12_control)
 	AM_RANGE(0x320000, 0x321fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
 	AM_RANGE(0x322000, 0x323fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
 	AM_RANGE(0x340000, 0x340bff) AM_RAM AM_BASE(&deco16_pf1_rowscroll)
@@ -123,11 +123,11 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP /* YM2203 - this board doesn't have one */
-	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x130000, 0x130001) AM_NOP /* This board only has 1 oki chip */
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -184,7 +184,7 @@ static INPUT_PORTS_START( funkyjet )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_SERVICE( 0x0001, IP_ACTIVE_LOW )
 
-  	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0100, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Allow_Continue ) )
@@ -212,7 +212,7 @@ static INPUT_PORTS_START( funkyjej )
 	PORT_INCLUDE(funkyjet)
 
 	PORT_MODIFY("DSW")
-  	PORT_DIPNAME( 0x0100, 0x0000, DEF_STR( Demo_Sounds ) )
+	PORT_DIPNAME( 0x0100, 0x0000, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -314,7 +314,7 @@ static MACHINE_DRIVER_START( funkyjet )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
@@ -340,10 +340,10 @@ ROM_START( funkyjet )
 
 	ROM_REGION( 0x100000, "gfx2", 0 )
 	ROM_LOAD( "mat01", 0x000000, 0x80000, CRC(24093a8d) SHA1(71f76ddd8a4b6e05ceb2fff4e20b6edb5e011e79) ) /* sprites */
-  	ROM_LOAD( "mat00", 0x080000, 0x80000, CRC(fbda0228) SHA1(815d49898d02e699393e370209181f2ca8301949) )
+	ROM_LOAD( "mat00", 0x080000, 0x80000, CRC(fbda0228) SHA1(815d49898d02e699393e370209181f2ca8301949) )
 
 	ROM_REGION( 0x40000, "oki", 0 )	/* ADPCM samples */
-  	ROM_LOAD( "jk03.15h",    0x00000, 0x20000, CRC(69a0eaf7) SHA1(05038e82ee03106625f05082fe9912e16be181ee) )
+	ROM_LOAD( "jk03.15h",    0x00000, 0x20000, CRC(69a0eaf7) SHA1(05038e82ee03106625f05082fe9912e16be181ee) )
 ROM_END
 
 ROM_START( funkyjetj )
@@ -359,10 +359,10 @@ ROM_START( funkyjetj )
 
 	ROM_REGION( 0x100000, "gfx2", 0 )
 	ROM_LOAD( "mat01", 0x000000, 0x80000, CRC(24093a8d) SHA1(71f76ddd8a4b6e05ceb2fff4e20b6edb5e011e79) ) /* sprites */
-  	ROM_LOAD( "mat00", 0x080000, 0x80000, CRC(fbda0228) SHA1(815d49898d02e699393e370209181f2ca8301949) )
+	ROM_LOAD( "mat00", 0x080000, 0x80000, CRC(fbda0228) SHA1(815d49898d02e699393e370209181f2ca8301949) )
 
 	ROM_REGION( 0x40000, "oki", 0 )	/* ADPCM samples */
-  	ROM_LOAD( "jk03.15h",    0x00000, 0x20000, CRC(69a0eaf7) SHA1(05038e82ee03106625f05082fe9912e16be181ee) )
+	ROM_LOAD( "jk03.15h",    0x00000, 0x20000, CRC(69a0eaf7) SHA1(05038e82ee03106625f05082fe9912e16be181ee) )
 ROM_END
 
 ROM_START( sotsugyo )
@@ -378,10 +378,10 @@ ROM_START( sotsugyo )
 
 	ROM_REGION( 0x100000, "gfx2", 0 )
 	ROM_LOAD( "01.4a", 0x000000, 0x80000, CRC(fa10dd54) SHA1(5dfe66df0bbab5eb151bf65f7e767a2325a50b36) ) /* sprites */
-  	ROM_LOAD( "00.2a", 0x080000, 0x80000, CRC(d35a14ef) SHA1(b8d27766db7e183aee208c690364e4383f3c6882) )
+	ROM_LOAD( "00.2a", 0x080000, 0x80000, CRC(d35a14ef) SHA1(b8d27766db7e183aee208c690364e4383f3c6882) )
 
 	ROM_REGION( 0x40000, "oki", 0 )	/* ADPCM samples */
-  	ROM_LOAD( "sb030.15h",    0x00000, 0x20000, CRC(1ea43f48) SHA1(74cc8c740f1c7fa94c2cb460ea4ee7aa0c490ed7) )
+	ROM_LOAD( "sb030.15h",    0x00000, 0x20000, CRC(1ea43f48) SHA1(74cc8c740f1c7fa94c2cb460ea4ee7aa0c490ed7) )
 ROM_END
 
 static DRIVER_INIT( funkyjet )

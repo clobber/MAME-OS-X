@@ -8,7 +8,7 @@
 #include "video/avgdvg.h"
 #include "sound/tms5220.h"
 #include "cpu/m6502/m6502.h"
-#include "mhavoc.h"
+#include "includes/mhavoc.h"
 
 UINT8 *mhavoc_zram0, *mhavoc_zram1;
 
@@ -36,7 +36,7 @@ static UINT8 speech_write_buffer;
  *
  *************************************/
 
-static TIMER_CALLBACK( cpu_irq_clock )
+TIMER_DEVICE_CALLBACK( mhavoc_cpu_irq_clock )
 {
 	/* clock the LS161 driving the alpha CPU IRQ */
 	if (alpha_irq_clock_enable)
@@ -44,7 +44,7 @@ static TIMER_CALLBACK( cpu_irq_clock )
 		alpha_irq_clock++;
 		if ((alpha_irq_clock & 0x0c) == 0x0c)
 		{
-			cputag_set_input_line(machine, "alpha", 0, ASSERT_LINE);
+			cputag_set_input_line(timer->machine, "alpha", 0, ASSERT_LINE);
 			alpha_irq_clock_enable = 0;
 		}
 	}
@@ -53,7 +53,7 @@ static TIMER_CALLBACK( cpu_irq_clock )
 	if (has_gamma_cpu)
 	{
 		gamma_irq_clock++;
-		cputag_set_input_line(machine, "gamma", 0, (gamma_irq_clock & 0x08) ? ASSERT_LINE : CLEAR_LINE);
+		cputag_set_input_line(timer->machine, "gamma", 0, (gamma_irq_clock & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
 
@@ -82,14 +82,31 @@ WRITE8_HANDLER( mhavoc_gamma_irq_ack_w )
  *
  *************************************/
 
+MACHINE_START( mhavoc )
+{
+	state_save_register_item(machine, "misc", NULL, 0, alpha_data);
+	state_save_register_item(machine, "misc", NULL, 0, alpha_rcvd);
+	state_save_register_item(machine, "misc", NULL, 0, alpha_xmtd);
+	state_save_register_item(machine, "misc", NULL, 0, gamma_data);
+	state_save_register_item(machine, "misc", NULL, 0, gamma_rcvd);
+	state_save_register_item(machine, "misc", NULL, 0, gamma_xmtd);
+	state_save_register_item(machine, "misc", NULL, 0, player_1);
+	state_save_register_item(machine, "misc", NULL, 0, alpha_irq_clock);
+	state_save_register_item(machine, "misc", NULL, 0, alpha_irq_clock_enable);
+	state_save_register_item(machine, "misc", NULL, 0, gamma_irq_clock);
+
+	state_save_register_item(machine, "misc", NULL, 0, speech_write_buffer);
+}
+
+
 MACHINE_RESET( mhavoc )
 {
 	const address_space *space = cputag_get_address_space(machine, "alpha", ADDRESS_SPACE_PROGRAM);
 	has_gamma_cpu = (cputag_get_cpu(machine, "gamma") != NULL);
 
-	memory_configure_bank(machine, 1, 0, 1, mhavoc_zram0, 0);
-	memory_configure_bank(machine, 1, 1, 1, mhavoc_zram1, 0);
-	memory_configure_bank(machine, 2, 0, 4, memory_region(machine, "alpha") + 0x10000, 0x2000);
+	memory_configure_bank(machine, "bank1", 0, 1, mhavoc_zram0, 0);
+	memory_configure_bank(machine, "bank1", 1, 1, mhavoc_zram1, 0);
+	memory_configure_bank(machine, "bank2", 0, 4, memory_region(machine, "alpha") + 0x10000, 0x2000);
 
 	/* reset RAM/ROM banks to 0 */
 	mhavoc_ram_banksel_w(space, 0, 0);
@@ -112,22 +129,6 @@ MACHINE_RESET( mhavoc )
 	alpha_irq_clock = 0;
 	alpha_irq_clock_enable = 1;
 	gamma_irq_clock = 0;
-
-	/* set a timer going for the CPU interrupt generators */
-	timer_pulse(machine, ATTOTIME_IN_HZ(MHAVOC_CLOCK_5K), NULL, 0, cpu_irq_clock);
-
-	state_save_register_item(machine, "misc", NULL, 0, alpha_data);
-	state_save_register_item(machine, "misc", NULL, 0, alpha_rcvd);
-	state_save_register_item(machine, "misc", NULL, 0, alpha_xmtd);
-	state_save_register_item(machine, "misc", NULL, 0, gamma_data);
-	state_save_register_item(machine, "misc", NULL, 0, gamma_rcvd);
-	state_save_register_item(machine, "misc", NULL, 0, gamma_xmtd);
-	state_save_register_item(machine, "misc", NULL, 0, player_1);
-	state_save_register_item(machine, "misc", NULL, 0, alpha_irq_clock);
-	state_save_register_item(machine, "misc", NULL, 0, alpha_irq_clock_enable);
-	state_save_register_item(machine, "misc", NULL, 0, gamma_irq_clock);
-
-	state_save_register_item(machine, "misc", NULL, 0, speech_write_buffer);
 }
 
 
@@ -203,13 +204,13 @@ READ8_HANDLER( mhavoc_gamma_r )
 
 WRITE8_HANDLER( mhavoc_ram_banksel_w )
 {
-	memory_set_bank(space->machine, 1, data & 1);
+	memory_set_bank(space->machine, "bank1", data & 1);
 }
 
 
 WRITE8_HANDLER( mhavoc_rom_banksel_w )
 {
-	memory_set_bank(space->machine, 2, data & 3);
+	memory_set_bank(space->machine, "bank2", data & 3);
 }
 
 
@@ -282,23 +283,23 @@ WRITE8_HANDLER( mhavoc_out_0_w )
 	}
 
 	/* Bit 0 = Roller light (Blinks on fatal errors) */
-	set_led_status(0, data & 0x01);
+	set_led_status(space->machine, 0, data & 0x01);
 }
 
 
 WRITE8_HANDLER( alphaone_out_0_w )
 {
 	/* Bit 5 = P2 lamp */
-	set_led_status(0, ~data & 0x20);
+	set_led_status(space->machine, 0, ~data & 0x20);
 
 	/* Bit 4 = P1 lamp */
-	set_led_status(1, ~data & 0x10);
+	set_led_status(space->machine, 1, ~data & 0x10);
 
 	/* Bit 1 = right coin counter */
-	coin_counter_w(1, data & 0x02);
+	coin_counter_w(space->machine, 1, data & 0x02);
 
 	/* Bit 0 = left coin counter */
-	coin_counter_w(0, data & 0x01);
+	coin_counter_w(space->machine, 0, data & 0x01);
 
 logerror("alphaone_out_0_w(%02X)\n", data);
 }
@@ -307,10 +308,10 @@ logerror("alphaone_out_0_w(%02X)\n", data);
 WRITE8_HANDLER( mhavoc_out_1_w )
 {
 	/* Bit 1 = left coin counter */
-	coin_counter_w(0, data & 0x02);
+	coin_counter_w(space->machine, 0, data & 0x02);
 
 	/* Bit 0 = right coin counter */
-	coin_counter_w(1, data & 0x01);
+	coin_counter_w(space->machine, 1, data & 0x01);
 }
 
 /*************************************

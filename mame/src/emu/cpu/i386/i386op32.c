@@ -998,9 +998,41 @@ static void I386OP(lea32)(i386_state *cpustate)				// Opcode 0x8d
 	CYCLES(cpustate,CYCLES_LEA);
 }
 
+static void I386OP(enter32)(i386_state *cpustate)			// Opcode 0xc8
+{
+	UINT16 framesize = FETCH16(cpustate);
+	UINT8 level = FETCH(cpustate) % 32;
+	UINT8 x;
+	UINT32 frameptr;
+	PUSH32(cpustate,REG32(EBP));
+	if(!STACK_32BIT)
+		frameptr = REG16(SP);
+	else
+		frameptr = REG32(ESP);
+
+	if(level > 0)
+	{
+		for(x=1;x<level-1;x++)
+		{
+			REG32(EBP) -= 4;
+			PUSH32(cpustate,READ32(cpustate,REG32(EBP)));
+		}
+		PUSH32(cpustate,frameptr);
+	}
+	REG32(EBP) = frameptr;
+	if(!STACK_32BIT)
+		REG16(SP) -= framesize;
+	else
+		REG32(ESP) -= framesize;
+	CYCLES(cpustate,CYCLES_ENTER);
+}
+
 static void I386OP(leave32)(i386_state *cpustate)			// Opcode 0xc9
 {
-	REG32(ESP) = REG32(EBP);
+	if(!STACK_32BIT)
+		REG16(SP) = REG16(BP);
+	else
+		REG32(ESP) = REG32(EBP);
 	REG32(EBP) = POP32(cpustate);
 	CYCLES(cpustate,CYCLES_LEAVE);
 }
@@ -2623,6 +2655,42 @@ static void I386OP(group0F00_32)(i386_state *cpustate)			// Opcode 0x0f 00
 
 	switch( (modrm >> 3) & 0x7 )
 	{
+		case 0:			/* SLDT */
+			if ( PROTECTED_MODE && !V8086_MODE )
+			{
+				if( modrm >= 0xc0 ) {
+					address = LOAD_RM32(modrm);
+					STORE_RM32(address, cpustate->ldtr.segment);
+					CYCLES(cpustate,CYCLES_SLDT_REG);
+				} else {
+					ea = GetEA(cpustate,modrm);
+					WRITE32(cpustate, ea, cpustate->ldtr.segment);
+					CYCLES(cpustate,CYCLES_SLDT_MEM);
+				}
+			}
+			else
+			{
+				i386_trap(cpustate,6, 0);
+			}
+			break;
+		case 1: 		/* STR */
+			if ( PROTECTED_MODE && !V8086_MODE )
+			{
+				if( modrm >= 0xc0 ) {
+					address = LOAD_RM32(modrm);
+					STORE_RM32(address, cpustate->task.segment);
+					CYCLES(cpustate,CYCLES_STR_REG);
+				} else {
+					ea = GetEA(cpustate,modrm);
+					WRITE32(cpustate, ea, cpustate->task.segment);
+					CYCLES(cpustate,CYCLES_STR_MEM);
+				}
+			}
+			else
+			{
+				i386_trap(cpustate,6, 0);
+			}
+			break;
 		case 2:			/* LLDT */
 			if ( PROTECTED_MODE && !V8086_MODE )
 			{
@@ -2853,6 +2921,33 @@ static void I386OP(group0FBA_32)(i386_state *cpustate)		// Opcode 0x0f ba
 			fatalerror("i386: group0FBA_32 /%d unknown", (modrm >> 3) & 0x7);
 			break;
 	}
+}
+
+static void I386OP(lsl_r32_rm32)(i386_state *cpustate)  // Opcode 0x0f 0x03
+{
+	UINT8 modrm = FETCH(cpustate);
+	UINT32 limit;
+	I386_SREG seg;
+
+	if(PROTECTED_MODE)
+	{
+		memset(&seg, 0, sizeof(seg));
+		seg.selector = LOAD_RM32(modrm);
+		if(seg.selector == 0)
+		{
+			SetZF(0);  // not a valid segment
+		}
+		else
+		{
+			// TODO: check segment type
+			i386_load_protected_mode_segment(cpustate,&seg);
+			limit = seg.limit;
+			STORE_REG32(modrm,limit);
+			SetZF(1);
+		}
+	}
+	else
+		i386_trap(cpustate,6, 0);
 }
 
 static void I386OP(bound_r32_m32_m32)(i386_state *cpustate)	// Opcode 0x62

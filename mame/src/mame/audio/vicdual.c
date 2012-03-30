@@ -5,7 +5,7 @@
 *************************************************************************/
 
 #include "driver.h"
-#include "vicdual.h"
+#include "includes/vicdual.h"
 #include "sound/discrete.h"
 #include "sound/samples.h"
 
@@ -73,7 +73,7 @@ static DISCRETE_SOUND_START(frogs)
 	DISCRETE_INPUT_NOT(FROGS_CAPTURE_EN)
 	DISCRETE_INPUT_NOT(FROGS_SPLASH_EN)
 
-	DISCRETE_ADJUSTMENT_TAG(FROGS_R93, RES_M(1), RES_K(10), DISC_LOGADJ, "R93")
+	DISCRETE_ADJUSTMENT(FROGS_R93, RES_M(1), RES_K(10), DISC_LOGADJ, "R93")
 
 	DISCRETE_555_MSTABLE(NODE_30, 1, FROGS_TONGUE_EN, RES_K(100), CAP_U(1), &frogsZip555m)
 
@@ -311,7 +311,7 @@ static const discrete_lfsr_desc mm5837_lfsr =
 	DISC_LFSR_NOT_IN0,	  /* F1 is inverted F0*/
 	DISC_LFSR_REPLACE,	  /* F2 replaces the shifted register contents */
 	0x000001,		      /* Everything is shifted into the first bit only */
-	0, 					  /* Flags */
+	0,					  /* Flags */
 	16			          /* Output bit */
 };
 

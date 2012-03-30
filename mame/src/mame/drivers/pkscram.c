@@ -24,8 +24,8 @@ static UINT16* pkscramble_fgtilemap_ram;
 static UINT16* pkscramble_mdtilemap_ram;
 static UINT16* pkscramble_bgtilemap_ram;
 
-static tilemap *fg_tilemap, *md_tilemap, *bg_tilemap;
-static emu_timer *scanline_timer;
+static tilemap_t *fg_tilemap, *md_tilemap, *bg_tilemap;
+static const device_config *scanline_timer;
 
 static WRITE16_HANDLER( pkscramble_fgtilemap_w )
 {
@@ -77,19 +77,19 @@ static WRITE16_HANDLER( pkscramble_output_w )
 		interrupt_line_active = 0;
 	}
 
-	coin_counter_w(0, data & 0x80);
+	coin_counter_w(space->machine, 0, data & 0x80);
 }
 
 static ADDRESS_MAP_START( pkscramble_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ffff)
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x040000, 0x0400ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x040000, 0x0400ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x041000, 0x043fff) AM_RAM // main ram
 	AM_RANGE(0x044000, 0x044fff) AM_RAM_WRITE(pkscramble_fgtilemap_w) AM_BASE(&pkscramble_fgtilemap_ram) // fg tilemap
 	AM_RANGE(0x045000, 0x045fff) AM_RAM_WRITE(pkscramble_mdtilemap_w) AM_BASE(&pkscramble_mdtilemap_ram) // md tilemap (just a copy of fg?)
 	AM_RANGE(0x046000, 0x046fff) AM_RAM_WRITE(pkscramble_bgtilemap_w) AM_BASE(&pkscramble_bgtilemap_ram) // bg tilemap
 	AM_RANGE(0x047000, 0x047fff) AM_RAM // unused
-	AM_RANGE(0x048000, 0x048fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x048000, 0x048fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x049000, 0x049001) AM_READ_PORT("DSW")
 	AM_RANGE(0x049004, 0x049005) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x049008, 0x049009) AM_WRITE(pkscramble_output_w)
@@ -98,7 +98,7 @@ static ADDRESS_MAP_START( pkscramble_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x049018, 0x049019) AM_WRITENOP
 	AM_RANGE(0x04901c, 0x04901d) AM_WRITENOP
 	AM_RANGE(0x049020, 0x049021) AM_WRITENOP
-	AM_RANGE(0x04900c, 0x04900f) AM_DEVREADWRITE8("ym", ym2203_r, ym2203_w, 0x00ff)
+	AM_RANGE(0x04900c, 0x04900f) AM_DEVREADWRITE8("ymsnd", ym2203_r, ym2203_w, 0x00ff)
 	AM_RANGE(0x052086, 0x052087) AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -191,20 +191,20 @@ static TILE_GET_INFO( get_fg_tile_info )
 	SET_TILE_INFO(0,tile,color,0);
 }
 
-static TIMER_CALLBACK( scanline_callback )
+static TIMER_DEVICE_CALLBACK( scanline_callback )
 {
 	if (param == interrupt_scanline)
 	{
     	if (out & 0x2000)
-    		cputag_set_input_line(machine, "maincpu", 1, ASSERT_LINE);
-		timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, param + 1, 0), param+1);
+    		cputag_set_input_line(timer->machine, "maincpu", 1, ASSERT_LINE);
+		timer_device_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(timer->machine->primary_screen, param + 1, 0), param+1);
 		interrupt_line_active = 1;
 	}
 	else
 	{
 		if (interrupt_line_active)
-	    	cputag_set_input_line(machine, "maincpu", 1, CLEAR_LINE);
-		timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, interrupt_scanline, 0), interrupt_scanline);
+	    	cputag_set_input_line(timer->machine, "maincpu", 1, CLEAR_LINE);
+		timer_device_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(timer->machine->primary_screen, interrupt_scanline, 0), interrupt_scanline);
 		interrupt_line_active = 0;
 	}
 }
@@ -259,15 +259,18 @@ static const ym2203_interface ym2203_config =
 	irqhandler
 };
 
+static MACHINE_START( pkscramble)
+{
+	state_save_register_global(machine, out);
+	state_save_register_global(machine, interrupt_line_active);
+}
+
 static MACHINE_RESET( pkscramble)
 {
 	out = 0;
 	interrupt_line_active=0;
-	scanline_timer = timer_alloc(machine, scanline_callback, NULL);
-	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, interrupt_scanline, 0), interrupt_scanline);
-
-	state_save_register_global(machine, out);
-	state_save_register_global(machine, interrupt_line_active);
+	scanline_timer = devtag_get_device(machine, "scan_timer");
+	timer_device_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, interrupt_scanline, 0), interrupt_scanline);
 }
 
 static MACHINE_DRIVER_START( pkscramble )
@@ -278,7 +281,10 @@ static MACHINE_DRIVER_START( pkscramble )
 
 	MDRV_NVRAM_HANDLER(generic_0fill)
 
+	MDRV_MACHINE_START(pkscramble)
 	MDRV_MACHINE_RESET(pkscramble)
+
+	MDRV_TIMER_ADD("scan_timer", scanline_callback)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -297,7 +303,7 @@ static MACHINE_DRIVER_START( pkscramble )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 12000000/4)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 12000000/4)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 MACHINE_DRIVER_END

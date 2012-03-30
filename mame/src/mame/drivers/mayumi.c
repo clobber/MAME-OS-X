@@ -32,7 +32,7 @@ static WRITE8_HANDLER( bank_sel_w )
 {
 	UINT8 *BANKROM = memory_region(space->machine, "maincpu");
 	int bank = ((data & 0x80)) >> 7 | ((data & 0x40) >> 5);
-	memory_set_bankptr(space->machine, 1, &BANKROM[0x10000+bank*0x4000]);
+	memory_set_bankptr(space->machine, "bank1", &BANKROM[0x10000+bank*0x4000]);
 
 	int_enable = data & 1;
 
@@ -76,8 +76,8 @@ static READ8_HANDLER( key_matrix_r )
 
 static ADDRESS_MAP_START( mayumi_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0xe000, 0xf7ff) AM_RAM_WRITE(mayumi_videoram_w) AM_BASE(&mayumi_videoram)
 ADDRESS_MAP_END
 
@@ -88,7 +88,7 @@ static ADDRESS_MAP_START( mayumi_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(input_sel_w)
 	AM_RANGE(0xc1, 0xc2) AM_READ(key_matrix_r)	// 0xc0-c3 8255ppi
 	AM_RANGE(0xc3, 0xc3) AM_WRITENOP		// 0xc0-c3 8255ppi
-	AM_RANGE(0xd0, 0xd1) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0xd0, 0xd1) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 ADDRESS_MAP_END
 
 /****************************************************************************/
@@ -296,7 +296,7 @@ static MACHINE_DRIVER_START( mayumi )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, MCLK/4)
+	MDRV_SOUND_ADD("ymsnd", YM2203, MCLK/4)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.15)
 	MDRV_SOUND_ROUTE(1, "mono", 0.15)

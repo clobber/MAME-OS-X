@@ -139,7 +139,7 @@
 #include "audio/segasnd.h"
 #include "video/vector.h"
 #include "includes/segag80r.h"
-#include "segag80v.h"
+#include "includes/segag80v.h"
 
 
 /*************************************
@@ -370,8 +370,8 @@ static READ8_HANDLER( multiply_r )
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(0, (data >> 7) & 1);
-	coin_counter_w(1, (data >> 6) & 1);
+	coin_counter_w(space->machine, 0, (data >> 7) & 1);
+	coin_counter_w(space->machine, 1, (data >> 6) & 1);
 }
 
 
@@ -968,7 +968,7 @@ static MACHINE_DRIVER_START( zektor )
 	MDRV_SOUND_CONFIG(zektor_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MDRV_SOUND_ADD("ay", AY8910, CPU_CLOCK/2/2)
+	MDRV_SOUND_ADD("aysnd", AY8910, CPU_CLOCK/2/2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 
 	/* speech board */
@@ -1367,7 +1367,7 @@ static DRIVER_INIT( spacfury )
 static DRIVER_INIT( zektor )
 {
 	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	const device_config *ay = devtag_get_device(machine, "ay");
+	const device_config *ay = devtag_get_device(machine, "aysnd");
 
 	/* configure security */
 	sega_security(82);

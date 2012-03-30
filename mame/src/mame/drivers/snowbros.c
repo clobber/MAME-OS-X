@@ -82,21 +82,19 @@ static WRITE16_HANDLER( snowbros_flipscreen_w )
 
 static VIDEO_UPDATE( snowbros )
 {
+	const device_config *pandora = devtag_get_device(screen->machine, "pandora");
+
 	/* This clears & redraws the entire screen each pass */
 	bitmap_fill(bitmap,cliprect,0xf0);
-	pandora_update(screen->machine,bitmap,cliprect);
+	pandora_update(pandora, bitmap, cliprect);
 	return 0;
 }
 
 
-static VIDEO_START( snowbros )
-{
-	pandora_start(machine,0,0,0);
-}
-
 static VIDEO_EOF( snowbros )
 {
-	pandora_eof(machine);
+	const device_config *pandora = devtag_get_device(machine, "pandora");
+	pandora_eof(pandora);
 }
 
 
@@ -184,8 +182,8 @@ static ADDRESS_MAP_START( snowbros_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x700000, 0x701fff) AM_READWRITE(pandora_spriteram_LSB_r,pandora_spriteram_LSB_w)
+	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x701fff) AM_DEVREADWRITE("pandora", pandora_spriteram_LSB_r, pandora_spriteram_LSB_w)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(snowbros_irq4_ack_w)	/* IRQ 4 acknowledge */
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(snowbros_irq3_ack_w)	/* IRQ 3 acknowledge */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(snowbros_irq2_ack_w)	/* IRQ 2 acknowledge */
@@ -198,7 +196,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x04, 0x04) AM_READWRITE(soundlatch_r, soundlatch_w)	/* goes back to the main CPU, checked during boot */
 ADDRESS_MAP_END
 
@@ -267,8 +265,8 @@ static ADDRESS_MAP_START( wintbob_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x700000, 0x701fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x701fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(snowbros_irq4_ack_w)	/* IRQ 4 acknowledge */
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(snowbros_irq3_ack_w)	/* IRQ 3 acknowledge */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(snowbros_irq2_ack_w)	/* IRQ 2 acknowledge */
@@ -288,8 +286,8 @@ static ADDRESS_MAP_START( honeydol_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x900000, 0x900001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x900002, 0x900003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x900004, 0x900005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0xa00000, 0xa007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xb00000, 0xb01fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xa00000, 0xa007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xb00000, 0xb01fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( honeydol_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -300,7 +298,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( honeydol_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)								// not connected?
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)								// not connected?
 	AM_RANGE(0x04, 0x04) AM_READWRITE(soundlatch_r, soundlatch_w)	/* goes back to the main CPU, checked during boot */
 ADDRESS_MAP_END
 
@@ -325,8 +323,8 @@ static ADDRESS_MAP_START( twinadv_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x700000, 0x701fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x701fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(snowbros_irq4_ack_w)	/* IRQ 4 acknowledge */
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(snowbros_irq3_ack_w)	/* IRQ 3 acknowledge */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(snowbros_irq2_ack_w)	/* IRQ 2 acknowledge */
@@ -365,8 +363,8 @@ static ADDRESS_MAP_START( hyperpac_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("SYSTEM")
 
-	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x700000, 0x701fff) AM_READWRITE(pandora_spriteram_LSB_r,pandora_spriteram_LSB_w)
+	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x701fff) AM_DEVREADWRITE("pandora", pandora_spriteram_LSB_r,pandora_spriteram_LSB_w)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(snowbros_irq4_ack_w)	/* IRQ 4 acknowledge */
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(snowbros_irq3_ack_w)	/* IRQ 3 acknowledge */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(snowbros_irq2_ack_w)	/* IRQ 2 acknowledge */
@@ -375,7 +373,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( hyperpac_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xcfff) AM_ROM
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
-	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
+	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0xf002, 0xf002) AM_DEVREADWRITE("oki",okim6295_r,okim6295_w)
 	AM_RANGE(0xf008, 0xf008) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -497,8 +495,8 @@ static ADDRESS_MAP_START( snowbros3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x500000, 0x500001) AM_READ_PORT("DSW1")
 	AM_RANGE( 0x500002, 0x500003) AM_READ_PORT("DSW2")
 	AM_RANGE( 0x500004, 0x500005) AM_READ_PORT("SYSTEM")
-	AM_RANGE( 0x600000, 0x6003ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE (&paletteram16)
-	AM_RANGE( 0x700000, 0x7021ff) AM_RAM AM_BASE( &spriteram16) AM_SIZE( &spriteram_size )
+	AM_RANGE( 0x600000, 0x6003ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC (paletteram)
+	AM_RANGE( 0x700000, 0x7021ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(snowbros_irq4_ack_w)	/* IRQ 4 acknowledge */
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(snowbros_irq3_ack_w)	/* IRQ 3 acknowledge */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(snowbros_irq2_ack_w)	/* IRQ 2 acknowledge */
@@ -516,8 +514,8 @@ static ADDRESS_MAP_START( finalttr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("SYSTEM")
 
-	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x700000, 0x701fff) AM_READWRITE(pandora_spriteram_LSB_r,pandora_spriteram_LSB_w)
+	AM_RANGE(0x600000, 0x6001ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x701fff) AM_DEVREADWRITE("pandora", pandora_spriteram_LSB_r, pandora_spriteram_LSB_w)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(snowbros_irq4_ack_w)	/* IRQ 4 acknowledge */
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(snowbros_irq3_ack_w)	/* IRQ 3 acknowledge */
 	AM_RANGE(0xa00000, 0xa00001) AM_WRITE(snowbros_irq2_ack_w)	/* IRQ 2 acknowledge */
@@ -1454,15 +1452,15 @@ static const gfx_layout hyperpac_tilelayout =
 
 static const gfx_layout sb3_tilebglayout =
 {
- 	16,16,
- 	RGN_FRAC(1,1),
- 	8,
- 	{8, 9,10, 11, 0, 1, 2, 3  },
- 	{ 0, 4, 16, 20, 32, 36, 48, 52,
- 	512+0,512+4,512+16,512+20,512+32,512+36,512+48,512+52},
- 	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64,
- 	1024+0*16,1024+1*64,1024+2*64,1024+3*64,1024+4*64,1024+5*64,1024+6*64,1024+7*64},
- 	32*64
+	16,16,
+	RGN_FRAC(1,1),
+	8,
+	{8, 9,10, 11, 0, 1, 2, 3  },
+	{ 0, 4, 16, 20, 32, 36, 48, 52,
+	512+0,512+4,512+16,512+20,512+32,512+36,512+48,512+52},
+	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64,
+	1024+0*16,1024+1*64,1024+2*64,1024+3*64,1024+4*64,1024+5*64,1024+6*64,1024+7*64},
+	32*64
 };
 
 
@@ -1514,6 +1512,13 @@ static MACHINE_RESET (finalttr)
 	hyperpac_ram[0x2000/2 + i] = PROTDATA[i];
 }
 
+static const kaneko_pandora_interface snowbros_pandora_config =
+{
+	"screen",	/* screen tag */
+	0,	/* gfx_region */
+	0, 0	/* x_offs, y_offs */
+};
+
 static MACHINE_DRIVER_START( snowbros )
 
 	/* basic machine hardware */
@@ -1536,14 +1541,15 @@ static MACHINE_DRIVER_START( snowbros )
 	MDRV_GFXDECODE(snowbros)
 	MDRV_PALETTE_LENGTH(256)
 
-	MDRV_VIDEO_START(snowbros)
 	MDRV_VIDEO_UPDATE(snowbros)
 	MDRV_VIDEO_EOF(snowbros)
+
+	MDRV_KANEKO_PANDORA_ADD("pandora", snowbros_pandora_config)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1554,6 +1560,8 @@ static MACHINE_DRIVER_START( wintbob )
 	MDRV_IMPORT_FROM(snowbros)
 	MDRV_CPU_REPLACE("maincpu", M68000, 10000000) /* 10mhz - Confirmed */
 	MDRV_CPU_PROGRAM_MAP(wintbob_map)
+
+	MDRV_DEVICE_REMOVE("pandora")
 
 	/* video hardware */
 	MDRV_GFXDECODE(wb)
@@ -1575,7 +1583,7 @@ static MACHINE_DRIVER_START( semicom )
 	MDRV_GFXDECODE(hyperpac)
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("ym", YM2151, 4000000)
+	MDRV_SOUND_REPLACE("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.10)
 	MDRV_SOUND_ROUTE(1, "mono", 0.10)
@@ -1652,7 +1660,7 @@ static MACHINE_DRIVER_START( honeydol )
 
 	/* sound hardware */
 
-	MDRV_SOUND_ADD("ym", YM3812, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
@@ -1725,7 +1733,7 @@ static MACHINE_DRIVER_START( finalttr )
 
 	MDRV_MACHINE_RESET ( finalttr )
 
-	MDRV_SOUND_REPLACE("ym", YM2151, 4000000)
+	MDRV_SOUND_REPLACE("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.08)
 	MDRV_SOUND_ROUTE(1, "mono", 0.08)

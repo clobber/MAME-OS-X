@@ -130,7 +130,6 @@ typedef struct
 	UINT32 visible_area;
 } GCU_REGS;
 
-static UINT8 xram[4096];
 static UINT8 extend_board_irq_enable;
 static UINT8 extend_board_irq_active;
 
@@ -471,7 +470,7 @@ static VIDEO_UPDATE(firebeat)
 {
 	int chip;
 
-	if (screen == device_list_find_by_index(screen->machine->config->devicelist, VIDEO_SCREEN, 0))
+	if (screen == device_list_find_by_index(&screen->machine->config->devicelist, VIDEO_SCREEN, 0))
 		chip = 0;
 	else
 		chip = 1;
@@ -600,7 +599,7 @@ static void GCU_w(running_machine *machine, int chip, UINT32 offset, UINT32 data
 			COMBINE_DATA( &gcu[chip].visible_area );
 			if (ACCESSING_BITS_0_15)
 			{
-				const device_config *screen = device_list_find_by_index(machine->config->devicelist, VIDEO_SCREEN, chip);
+				const device_config *screen = device_list_find_by_index(&machine->config->devicelist, VIDEO_SCREEN, chip);
 
 				if (screen != NULL)
 				{
@@ -1109,7 +1108,7 @@ static void atapi_command_reg_w(running_machine *machine, int reg, UINT16 data)
 						break;
 
 					case 0xa0:		/* ATAPI Packet */
-			 			atapi_regs[ATAPI_REG_CMDSTATUS] = ATAPI_STAT_BSY | ATAPI_STAT_DRQ;
+						atapi_regs[ATAPI_REG_CMDSTATUS] = ATAPI_STAT_BSY | ATAPI_STAT_DRQ;
 						atapi_regs[ATAPI_REG_INTREASON] = ATAPI_INTREASON_COMMAND;
 
 						atapi_data_ptr = 0;
@@ -1278,55 +1277,6 @@ static void comm_uart_irq_callback(running_machine *machine, int channel, int va
 {
 	// TODO
 	//cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ2, ASSERT_LINE);
-}
-
-/*****************************************************************************/
-/* Epson RTC-65271 Real-time Clock/NVRAM */
-
-static READ32_HANDLER( rtc_r )
-{
-	int reg = offset * 4;
-	UINT32 r = 0;
-
-	if (ACCESSING_BITS_24_31)
-	{
-		r |= rtc65271_r((reg >> 8) & 0x1, (reg & 0xff) + 0) << 24;
-	}
-	if (ACCESSING_BITS_16_23)
-	{
-		r |= rtc65271_r((reg >> 8) & 0x1, (reg & 0xff) + 1) << 16;
-	}
-	if (ACCESSING_BITS_8_15)
-	{
-		r |= rtc65271_r((reg >> 8) & 0x1, (reg & 0xff) + 2) << 8;
-	}
-	if (ACCESSING_BITS_0_7)
-	{
-		r |= rtc65271_r((reg >> 8) & 0x1, (reg & 0xff) + 3) << 0;
-	}
-
-	return r;
-}
-
-static WRITE32_HANDLER( rtc_w )
-{
-	int reg = offset * 4;
-	if (ACCESSING_BITS_24_31)
-	{
-		rtc65271_w((reg >> 8) & 0x1, (reg & 0xff) + 0, (data >> 24) & 0xff);
-	}
-	if (ACCESSING_BITS_16_23)
-	{
-		rtc65271_w((reg >> 8) & 0x1, (reg & 0xff) + 1, (data >> 16) & 0xff);
-	}
-	if (ACCESSING_BITS_8_15)
-	{
-		rtc65271_w((reg >> 8) & 0x1, (reg & 0xff) + 2, (data >> 8) & 0xff);
-	}
-	if (ACCESSING_BITS_0_7)
-	{
-		rtc65271_w((reg >> 8) & 0x1, (reg & 0xff) + 3, (data >> 0) & 0xff);
-	}
 }
 
 /*****************************************************************************/
@@ -1753,7 +1703,8 @@ static ADDRESS_MAP_START( firebeat_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x7d400000, 0x7d5fffff) AM_READWRITE(flashram_r, flashram_w)
 	AM_RANGE(0x7d800000, 0x7dbfffff) AM_READWRITE(soundflash_r, soundflash_w)
 	AM_RANGE(0x7dc00000, 0x7dc0000f) AM_READWRITE(comm_uart_r, comm_uart_w)
-	AM_RANGE(0x7e000000, 0x7e00013f) AM_READWRITE(rtc_r, rtc_w)
+	AM_RANGE(0x7e000000, 0x7e00003f) AM_DEVREADWRITE8("rtc", rtc65271_rtc_r, rtc65271_rtc_w, 0xffffffff)
+	AM_RANGE(0x7e000100, 0x7e00013f) AM_DEVREADWRITE8("rtc", rtc65271_xram_r, rtc65271_xram_w, 0xffffffff)
 	AM_RANGE(0x7e800000, 0x7e8000ff) AM_READWRITE(gcu0_r, gcu0_w)
 	AM_RANGE(0x7e800100, 0x7e8001ff) AM_READWRITE(gcu1_r, gcu1_w)
 	AM_RANGE(0x7fe00000, 0x7fe0000f) AM_READWRITE(atapi_command_r, atapi_command_w)
@@ -1797,27 +1748,13 @@ static NVRAM_HANDLER(firebeat)
 	nvram_handler_intelflash(machine, 0, file, read_or_write);
 	nvram_handler_intelflash(machine, 1, file, read_or_write);
 	nvram_handler_intelflash(machine, 2, file, read_or_write);
-
-	if (read_or_write)
-	{
-		rtc65271_file_save(file);
-	}
-	else
-	{
-		rtc65271_init(machine, xram, NULL);
-
-		if (file != NULL)
-		{
-			rtc65271_file_load(machine, file);
-		}
-	}
 }
 
 static INPUT_PORTS_START(ppp)
 	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )			// Left
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 )			// Right
-	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW) 			// Test
+	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW)			// Test
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Service") PORT_CODE(KEYCODE_7)		// Service
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 )				// Coin
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )				// Start / Ok
@@ -1850,7 +1787,7 @@ static INPUT_PORTS_START(kbm)
 	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )				// Start P1
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )				// Start P2
-	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW) 			// Test
+	PORT_SERVICE_NO_TOGGLE( 0x04, IP_ACTIVE_LOW)			// Test
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Service") PORT_CODE(KEYCODE_7)		// Service
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 )				// Coin
 	PORT_BIT( 0xe0, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -1986,7 +1923,9 @@ static MACHINE_DRIVER_START(firebeat)
 	MDRV_MACHINE_RESET(firebeat)
 	MDRV_NVRAM_HANDLER(firebeat)
 
- 	/* video hardware */
+	MDRV_RTC65271_ADD("rtc", NULL)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
@@ -2024,7 +1963,9 @@ static MACHINE_DRIVER_START(firebeat2)
 	MDRV_MACHINE_RESET(firebeat)
 	MDRV_NVRAM_HANDLER(firebeat)
 
- 	/* video hardware */
+	MDRV_RTC65271_ADD("rtc", NULL)
+
+	/* video hardware */
 	MDRV_PALETTE_LENGTH(32768)
 	MDRV_PALETTE_INIT(RRRRR_GGGGG_BBBBB)
 
@@ -2240,8 +2181,6 @@ static void init_firebeat(running_machine *machine)
 	intelflash_init(machine, 0, FLASH_FUJITSU_29F016A, NULL);
 	intelflash_init(machine, 1, FLASH_FUJITSU_29F016A, NULL);
 	intelflash_init(machine, 2, FLASH_FUJITSU_29F016A, NULL);
-
-	rtc65271_init(machine, xram, NULL);
 
 	pc16552d_init(machine, 0, 19660800, comm_uart_irq_callback, 0);		// Network UART
 	pc16552d_init(machine, 1, 24000000, midi_uart_irq_callback, 0);		// MIDI UART

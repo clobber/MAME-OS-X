@@ -36,29 +36,21 @@ TODO:
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
 #include "sound/msm5205.h"
+#include "includes/hnayayoi.h"
 
-
-VIDEO_START( hnayayoi );
-VIDEO_START( untoucha );
-VIDEO_UPDATE( hnayayoi );
-
-WRITE8_HANDLER( dynax_blitter_rev1_param_w );
-WRITE8_HANDLER( dynax_blitter_rev1_start_w );
-WRITE8_HANDLER( dynax_blitter_rev1_clear_w );
-WRITE8_HANDLER( hnayayoi_palbank_w );
-
-
-
-static int keyb;
 
 static READ8_HANDLER( keyboard_0_r )
 {
+	hnayayoi_state *state = (hnayayoi_state *)space->machine->driver_data;
 	int res = 0x3f;
 	int i;
 	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3", "KEY4" };
 
-	for (i = 0;i < 5;i++)
-		if (~keyb & (1 << i)) res &= input_port_read(space->machine, keynames[i]);
+	for (i = 0; i < 5; i++)
+	{
+		if (~state->keyb & (1 << i))
+			res &= input_port_read(space->machine, keynames[i]);
+	}
 
 	return res;
 }
@@ -71,48 +63,42 @@ static READ8_HANDLER( keyboard_1_r )
 
 static WRITE8_HANDLER( keyboard_w )
 {
-	keyb = data;
+	hnayayoi_state *state = (hnayayoi_state *)space->machine->driver_data;
+	state->keyb = data;
 }
 
 
 static WRITE8_DEVICE_HANDLER( adpcm_data_w )
 {
-	msm5205_data_w(device,data);
+	msm5205_data_w(device, data);
 }
 
 static WRITE8_DEVICE_HANDLER( adpcm_vclk_w )
 {
-	msm5205_vclk_w(device,data & 1);
+	msm5205_vclk_w(device, data & 1);
 }
 
 static WRITE8_DEVICE_HANDLER( adpcm_reset_w )
 {
-	msm5205_reset_w(device,data & 1);
+	msm5205_reset_w(device, data & 1);
 }
 
 static WRITE8_DEVICE_HANDLER( adpcm_reset_inv_w )
 {
-	msm5205_reset_w(device,~data & 1);
+	msm5205_reset_w(device, ~data & 1);
 }
-
-static MACHINE_RESET( hnayayoi )
-{
-	/* start with the MSM5205 reset */
-	msm5205_reset_w(devtag_get_device(machine, "msm"),1);
-}
-
 
 
 static ADDRESS_MAP_START( hnayayoi_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
-	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( hnayayoi_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ym", ym2203_w)
-	AM_RANGE(0x02, 0x03) AM_DEVREAD("ym", ym2203_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym2203_w)
+	AM_RANGE(0x02, 0x03) AM_DEVREAD("ymsnd", ym2203_r)
 	AM_RANGE(0x04, 0x04) AM_READ_PORT("DSW3")
 	AM_RANGE(0x06, 0x06) AM_DEVWRITE("msm", adpcm_data_w)
 //  AM_RANGE(0x08, 0x08) AM_WRITENOP // CRT Controller
@@ -131,10 +117,10 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( hnfubuki_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
-	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x8000, 0xfeff) AM_ROM
-	AM_RANGE(0xff00, 0xff01) AM_DEVWRITE("ym", ym2203_w)
-	AM_RANGE(0xff02, 0xff03) AM_DEVREAD("ym", ym2203_r)
+	AM_RANGE(0xff00, 0xff01) AM_DEVWRITE("ymsnd", ym2203_w)
+	AM_RANGE(0xff02, 0xff03) AM_DEVREAD("ymsnd", ym2203_r)
 	AM_RANGE(0xff04, 0xff04) AM_READ_PORT("DSW3")
 	AM_RANGE(0xff06, 0xff06) AM_DEVWRITE("msm", adpcm_data_w)
 //  AM_RANGE(0xff08, 0xff08) AM_WRITENOP // CRT Controller
@@ -153,14 +139,14 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( untoucha_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
-	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x7800, 0x7fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( untoucha_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x10, 0x10) AM_DEVWRITE("ym", ym2203_control_port_w)
-	AM_RANGE(0x11, 0x11) AM_DEVREAD("ym", ym2203_status_port_r)
+	AM_RANGE(0x10, 0x10) AM_DEVWRITE("ymsnd", ym2203_control_port_w)
+	AM_RANGE(0x11, 0x11) AM_DEVREAD("ymsnd", ym2203_status_port_r)
 //  AM_RANGE(0x12, 0x12) AM_WRITENOP // CRT Controller
 	AM_RANGE(0x13, 0x13) AM_DEVWRITE("msm", adpcm_data_w)
 	AM_RANGE(0x14, 0x14) AM_READ_PORT("COIN")
@@ -173,8 +159,8 @@ static ADDRESS_MAP_START( untoucha_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x28, 0x28) AM_WRITE(dynax_blitter_rev1_start_w)
 	AM_RANGE(0x31, 0x31) AM_DEVWRITE("msm", adpcm_vclk_w)
 	AM_RANGE(0x32, 0x32) AM_DEVWRITE("msm", adpcm_reset_inv_w)
-	AM_RANGE(0x50, 0x50) AM_DEVWRITE("ym", ym2203_write_port_w)
-	AM_RANGE(0x51, 0x51) AM_DEVREAD("ym", ym2203_read_port_r)
+	AM_RANGE(0x50, 0x50) AM_DEVWRITE("ymsnd", ym2203_write_port_w)
+	AM_RANGE(0x51, 0x51) AM_DEVREAD("ymsnd", ym2203_read_port_r)
 //  AM_RANGE(0x52, 0x52) AM_WRITENOP // CRT Controller
 ADDRESS_MAP_END
 
@@ -516,7 +502,7 @@ INPUT_PORTS_END
 static void irqhandler(const device_config *device, int irq)
 {
 	popmessage("irq");
-//  cputag_set_input_line(device->machine, "maincpu",0,irq ? ASSERT_LINE : CLEAR_LINE);
+//  cputag_set_input_line(device->machine, "maincpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -541,7 +527,37 @@ static const msm5205_interface msm5205_config =
 
 
 
+static MACHINE_START( hnayayoi )
+{
+	hnayayoi_state *state = (hnayayoi_state *)machine->driver_data;
+
+	state_save_register_global(machine, state->palbank);
+	state_save_register_global(machine, state->blit_layer);
+	state_save_register_global(machine, state->blit_dest);
+	state_save_register_global(machine, state->blit_src);
+	state_save_register_global(machine, state->keyb);
+}
+
+static MACHINE_RESET( hnayayoi )
+{
+	hnayayoi_state *state = (hnayayoi_state *)machine->driver_data;
+
+	/* start with the MSM5205 reset */
+	msm5205_reset_w(devtag_get_device(machine, "msm"), 1);
+
+	state->palbank = 0;
+	state->blit_layer = 0;
+	state->blit_dest = 0;
+	state->blit_src = 0;
+	state->keyb = 0;
+}
+
+
 static MACHINE_DRIVER_START( hnayayoi )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(hnayayoi_state)
+
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 20000000/4 )        /* 5 MHz ???? */
 	MDRV_CPU_PROGRAM_MAP(hnayayoi_map)
@@ -549,6 +565,7 @@ static MACHINE_DRIVER_START( hnayayoi )
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 	MDRV_CPU_PERIODIC_INT(nmi_line_pulse, 8000)
 
+	MDRV_MACHINE_START(hnayayoi)
 	MDRV_MACHINE_RESET(hnayayoi)
 
 	MDRV_NVRAM_HANDLER(generic_0fill)
@@ -570,7 +587,7 @@ static MACHINE_DRIVER_START( hnayayoi )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 20000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 20000000/8)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 0.25)
@@ -666,14 +683,14 @@ static DRIVER_INIT( hnfubuki )
 {
 	UINT8 *rom = memory_region(machine, "gfx1");
 	int len = memory_region_length(machine, "gfx1");
-	int i,j;
+	int i, j;
 
 	/* interestingly, the blitter data has a slight encryption */
 
 	/* swap address bits 4 and 5 */
-	for (i = 0;i < len;i += 0x40)
+	for (i = 0; i < len; i += 0x40)
 	{
-		for (j = 0;j < 0x10;j++)
+		for (j = 0; j < 0x10; j++)
 		{
 			UINT8 t = rom[i + j + 0x10];
 			rom[i + j + 0x10] = rom[i + j + 0x20];
@@ -682,13 +699,13 @@ static DRIVER_INIT( hnfubuki )
 	}
 
 	/* swap data bits 0 and 1 */
-	for (i = 0;i < len;i++)
+	for (i = 0; i < len; i++)
 	{
 		rom[i] = BITSWAP8(rom[i],7,6,5,4,3,2,0,1);
 	}
 }
 
 
-GAME( 1987, hnayayoi, 0,        hnayayoi, hnayayoi, 0,        ROT0, "Dyna Electronics", "Hana Yayoi (Japan)", 0 )
-GAME( 1987, hnfubuki, hnayayoi, hnfubuki, hnfubuki, hnfubuki, ROT0, "Dynax", "Hana Fubuki [BET] (Japan)", 0 )
-GAME( 1987, untoucha, 0,        untoucha, untoucha, 0,        ROT0, "Dynax", "Untouchable (Japan)", 0 )
+GAME( 1987, hnayayoi, 0,        hnayayoi, hnayayoi, 0,        ROT0, "Dyna Electronics", "Hana Yayoi (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1987, hnfubuki, hnayayoi, hnfubuki, hnfubuki, hnfubuki, ROT0, "Dynax", "Hana Fubuki [BET] (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1987, untoucha, 0,        untoucha, untoucha, 0,        ROT0, "Dynax", "Untouchable (Japan)", GAME_SUPPORTS_SAVE )

@@ -55,28 +55,28 @@ static WRITE8_HANDLER( maniach_sh_command_w )
 
 static ADDRESS_MAP_START( matmania_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x077f) AM_RAM
-	AM_RANGE(0x0780, 0x07df) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x0780, 0x07df) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&matmania_videoram2) AM_SIZE(&matmania_videoram2_size)
 	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE(&matmania_colorram2)
-	AM_RANGE(0x2000, 0x21ff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0x2200, 0x23ff) AM_RAM AM_BASE(&colorram)
+	AM_RANGE(0x2000, 0x21ff) AM_RAM AM_BASE(&matmania_videoram) AM_SIZE(&matmania_videoram_size)
+	AM_RANGE(0x2200, 0x23ff) AM_RAM AM_BASE(&matmania_colorram)
 	AM_RANGE(0x2400, 0x25ff) AM_RAM AM_BASE(&matmania_videoram3) AM_SIZE(&matmania_videoram3_size)
 	AM_RANGE(0x2600, 0x27ff) AM_RAM AM_BASE(&matmania_colorram3)
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("IN0") AM_WRITEONLY AM_BASE(&matmania_pageselect)
 	AM_RANGE(0x3010, 0x3010) AM_READ_PORT("IN1") AM_WRITE(matmania_sh_command_w)
 	AM_RANGE(0x3020, 0x3020) AM_READ_PORT("DSW2") AM_WRITEONLY AM_BASE(&matmania_scroll)
 	AM_RANGE(0x3030, 0x3030) AM_READ_PORT("DSW1") AM_WRITENOP /* ?? */
-	AM_RANGE(0x3050, 0x307f) AM_WRITE(matmania_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x3050, 0x307f) AM_WRITE(matmania_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( maniach_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x077f) AM_RAM
-	AM_RANGE(0x0780, 0x07df) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x0780, 0x07df) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x1000, 0x13ff) AM_RAM AM_BASE(&matmania_videoram2) AM_SIZE(&matmania_videoram2_size)
 	AM_RANGE(0x1400, 0x17ff) AM_RAM AM_BASE(&matmania_colorram2)
-	AM_RANGE(0x2000, 0x21ff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0x2200, 0x23ff) AM_RAM AM_BASE(&colorram)
+	AM_RANGE(0x2000, 0x21ff) AM_RAM AM_BASE(&matmania_videoram) AM_SIZE(&matmania_videoram_size)
+	AM_RANGE(0x2200, 0x23ff) AM_RAM AM_BASE(&matmania_colorram)
 	AM_RANGE(0x2400, 0x25ff) AM_RAM AM_BASE(&matmania_videoram3) AM_SIZE(&matmania_videoram3_size)
 	AM_RANGE(0x2600, 0x27ff) AM_RAM AM_BASE(&matmania_colorram3)
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("IN0") AM_WRITEONLY AM_BASE(&matmania_pageselect)
@@ -85,7 +85,7 @@ static ADDRESS_MAP_START( maniach_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3030, 0x3030) AM_READ_PORT("DSW1") AM_WRITENOP	/* ?? */
 	AM_RANGE(0x3040, 0x3040) AM_READWRITE(maniach_mcu_r,maniach_mcu_w)
 	AM_RANGE(0x3041, 0x3041) AM_READ(maniach_mcu_status_r)
-	AM_RANGE(0x3050, 0x307f) AM_WRITE(matmania_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0x3050, 0x307f) AM_WRITE(matmania_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -101,7 +101,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( maniach_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("ym", ym3526_w)
+	AM_RANGE(0x2000, 0x2001) AM_DEVWRITE("ymsnd", ym3526_w)
 	AM_RANGE(0x2002, 0x2002) AM_DEVWRITE("dac", dac_signed_w)
 	AM_RANGE(0x2004, 0x2004) AM_READ(soundlatch_r)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
@@ -357,7 +357,7 @@ static MACHINE_DRIVER_START( maniach )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3526, 3600000)
+	MDRV_SOUND_ADD("ymsnd", YM3526, 3600000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 

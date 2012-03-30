@@ -46,16 +46,16 @@ struct _emu_timer
 	emu_timer *				next;			/* next timer in order in the list */
 	emu_timer *				prev;			/* previous timer in order in the list */
 	timer_fired_func		callback;		/* callback function */
-	INT32 					param;			/* integer parameter */
+	INT32					param;			/* integer parameter */
 	void *					ptr;			/* pointer parameter */
 	const char *			file;			/* file that created the timer */
 	int 					line;			/* line number that created the timer */
 	const char *			func;			/* string name of the callback function */
-	UINT8 					enabled;		/* is the timer enabled? */
-	UINT8 					temporary;		/* is the timer temporary? */
-	attotime 				period;			/* the repeat frequency of the timer */
-	attotime 				start;			/* time when the timer was started */
-	attotime 				expire;			/* time when the timer will expire */
+	UINT8					enabled;		/* is the timer enabled? */
+	UINT8					temporary;		/* is the timer temporary? */
+	attotime				period;			/* the repeat frequency of the timer */
+	attotime				start;			/* time when the timer was started */
+	attotime				expire;			/* time when the timer will expire */
 };
 
 
@@ -64,7 +64,7 @@ typedef struct _timer_state timer_state;
 struct _timer_state
 {
 	emu_timer				*timer;			/* the backing timer */
-	void 					*ptr;			/* the pointer parameter passed to the timer callback */
+	void					*ptr;			/* the pointer parameter passed to the timer callback */
 
 	/* periodic timers only */
 	attotime				start_delay;	/* delay before the timer fires for the first time */
@@ -72,7 +72,7 @@ struct _timer_state
 	INT32					param;			/* the integer parameter passed to the timer callback */
 
 	/* scanline timers only */
-	UINT32 					first_time;		/* indicates that the system is starting */
+	UINT32					first_time;		/* indicates that the system is starting */
 };
 
 
@@ -91,9 +91,9 @@ struct _quantum_slot
 struct _timer_private
 {
 	/* list of active timers */
-	emu_timer 				timers[MAX_TIMERS]; /* actual timers */
+	emu_timer				timers[MAX_TIMERS]; /* actual timers */
 	emu_timer *				activelist;			/* head of the active list */
-	emu_timer *				freelist; 			/* head of the free list */
+	emu_timer *				freelist;			/* head of the free list */
 	emu_timer *				freelist_tail;		/* tail of the free list */
 
 	/* execution state */
@@ -105,9 +105,9 @@ struct _timer_private
 	attotime				callback_timer_expire_time; /* the original expiration time */
 
 	/* scheduling quanta */
-	quantum_slot 			quantum_list[MAX_QUANTA]; /* list of scheduling quanta */
+	quantum_slot			quantum_list[MAX_QUANTA]; /* list of scheduling quanta */
 	quantum_slot *			quantum_current;	/* current minimum quantum */
-	attoseconds_t 			quantum_minimum;	/* duration of minimum quantum */
+	attoseconds_t			quantum_minimum;	/* duration of minimum quantum */
 };
 
 
@@ -644,6 +644,8 @@ INLINE emu_timer *_timer_alloc_common(running_machine *machine, timer_fired_func
 	/* if we're not temporary, register ourselves with the save state system */
 	if (!temp)
 	{
+		if (!state_save_registration_allowed(machine))
+			fatalerror("timer_alloc() called after save state registration closed! (file %s, line %d)\n", file, line);
 		timer_register_save(timer);
 		restrack_register_object(OBJTYPE_TIMER, timer, 0, file, line);
 	}

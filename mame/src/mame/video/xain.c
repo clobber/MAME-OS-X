@@ -34,7 +34,7 @@
 
 UINT8 *xain_charram, *xain_bgram0, *xain_bgram1, xain_pri;
 
-static tilemap *char_tilemap, *bgram0_tilemap, *bgram1_tilemap;
+static tilemap_t *char_tilemap, *bgram0_tilemap, *bgram1_tilemap;
 
 
 /***************************************************************************
@@ -170,9 +170,10 @@ WRITE8_HANDLER( xain_flipscreen_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = 0; offs < spriteram_size;offs += 4)
+	for (offs = 0; offs < machine->generic.spriteram_size;offs += 4)
 	{
 		int sx,sy,flipx,flipy;
 		int attr = spriteram[offs+1];

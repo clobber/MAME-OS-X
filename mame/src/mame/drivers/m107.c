@@ -25,8 +25,8 @@ confirmed for m107 games as well.
 
 #include "driver.h"
 #include "cpu/nec/nec.h"
-#include "m107.h"
-#include "iremipt.h"
+#include "includes/m107.h"
+#include "includes/iremipt.h"
 #include "machine/irem_cpu.h"
 #include "sound/2151intf.h"
 #include "sound/iremga20.h"
@@ -51,7 +51,7 @@ static WRITE16_HANDLER( bankswitch_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		UINT8 *RAM = memory_region(space->machine, "maincpu");
-		memory_set_bankptr(space->machine, 1,&RAM[0x100000 + ((data&0x7)*0x10000)]);
+		memory_set_bankptr(space->machine, "bank1",&RAM[0x100000 + ((data&0x7)*0x10000)]);
 	}
 }
 
@@ -96,8 +96,8 @@ static WRITE16_HANDLER( m107_coincounter_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_counter_w(space->machine, 0,data & 0x01);
+		coin_counter_w(space->machine, 1,data & 0x02);
 	}
 }
 
@@ -163,11 +163,11 @@ static WRITE16_HANDLER( m107_sound_status_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x9ffff) AM_ROM
-	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK(1)
+	AM_RANGE(0xa0000, 0xbffff) AM_ROMBANK("bank1")
 	AM_RANGE(0xd0000, 0xdffff) AM_RAM_WRITE(m107_vram_w) AM_BASE(&m107_vram_data)
 	AM_RANGE(0xe0000, 0xeffff) AM_RAM /* System ram */
-	AM_RANGE(0xf8000, 0xf8fff) AM_RAM AM_BASE(&spriteram16)
-	AM_RANGE(0xf9000, 0xf9fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xf8000, 0xf8fff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0xf9000, 0xf9fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -194,7 +194,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x9ff00, 0x9ffff) AM_WRITENOP /* Irq controller? */
 	AM_RANGE(0xa0000, 0xa3fff) AM_RAM
 	AM_RANGE(0xa8000, 0xa803f) AM_DEVREADWRITE8("irem", irem_ga20_r, irem_ga20_w, 0x00ff)
-	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0xa8040, 0xa8043) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0xa8044, 0xa8045) AM_READWRITE(m107_soundlatch_r, m107_sound_irq_ack_w)
 	AM_RANGE(0xa8046, 0xa8047) AM_WRITE(m107_sound_status_w)
 	AM_RANGE(0xffff0, 0xfffff) AM_ROM
@@ -466,7 +466,7 @@ static MACHINE_DRIVER_START( firebarr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 14318180/4)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 14318180/4)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.40)
@@ -630,7 +630,7 @@ static DRIVER_INIT( firebarr )
 	UINT8 *RAM = memory_region(machine, "maincpu");
 
 	memcpy(RAM + 0xffff0, RAM + 0x7fff0, 0x10); /* Start vector */
-	memory_set_bankptr(machine, 1, &RAM[0xa0000]); /* Initial bank */
+	memory_set_bankptr(machine, "bank1", &RAM[0xa0000]); /* Initial bank */
 
 	RAM = memory_region(machine, "soundcpu");
 	memcpy(RAM + 0xffff0,RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */
@@ -644,7 +644,7 @@ static DRIVER_INIT( dsoccr94 )
 	UINT8 *RAM = memory_region(machine, "maincpu");
 
 	memcpy(RAM + 0xffff0, RAM + 0x7fff0, 0x10); /* Start vector */
-	memory_set_bankptr(machine, 1, &RAM[0xa0000]); /* Initial bank */
+	memory_set_bankptr(machine, "bank1", &RAM[0xa0000]); /* Initial bank */
 
 	RAM = memory_region(machine, "soundcpu");
 	memcpy(RAM + 0xffff0, RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */
@@ -658,7 +658,7 @@ static DRIVER_INIT( wpksoc )
 	UINT8 *RAM = memory_region(machine, "maincpu");
 
 	memcpy(RAM + 0xffff0, RAM + 0x7fff0, 0x10); /* Start vector */
-	memory_set_bankptr(machine, 1, &RAM[0xa0000]); /* Initial bank */
+	memory_set_bankptr(machine, "bank1", &RAM[0xa0000]); /* Initial bank */
 
 	RAM = memory_region(machine, "soundcpu");
 	memcpy(RAM + 0xffff0, RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */

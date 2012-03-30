@@ -693,7 +693,7 @@ static void reset_reset(running_machine *machine)
 			cputag_set_input_line(machine, "sub", INPUT_LINE_HALT, ASSERT_LINE);
 	}
 	if(changed & 4)
-		devtag_reset(machine, "ym");
+		devtag_reset(machine, "ymsnd");
 	prev_resetcontrol = resetcontrol;
 }
 
@@ -713,8 +713,8 @@ static void reset_bank(running_machine *machine)
 {
 	if (memory_region(machine, "romboard"))
 	{
-		memory_set_bank(machine, 1, curbank & 15);
-		memory_set_bank(machine, 2, curbank & 15);
+		memory_set_bank(machine, "bank1", curbank & 15);
+		memory_set_bank(machine, "bank2", curbank & 15);
 	}
 }
 
@@ -790,24 +790,24 @@ static UINT16 irq_timera;
 static UINT8  irq_timerb;
 static UINT8  irq_allow0, irq_allow1;
 static int    irq_timer_pend0, irq_timer_pend1, irq_yms, irq_vblank, irq_sprite;
-static emu_timer *irq_timer, *irq_timer_clear;
+static const device_config *irq_timer, *irq_timer_clear;
 
-static TIMER_CALLBACK( irq_timer_cb )
+static TIMER_DEVICE_CALLBACK( irq_timer_cb )
 {
 	irq_timer_pend0 = irq_timer_pend1 = 1;
 	if(irq_allow0 & (1 << IRQ_TIMER))
-		cputag_set_input_line(machine, "maincpu", IRQ_TIMER+1, ASSERT_LINE);
+		cputag_set_input_line(timer->machine, "maincpu", IRQ_TIMER+1, ASSERT_LINE);
 	if(irq_allow1 & (1 << IRQ_TIMER))
-		cputag_set_input_line(machine, "sub", IRQ_TIMER+1, ASSERT_LINE);
+		cputag_set_input_line(timer->machine, "sub", IRQ_TIMER+1, ASSERT_LINE);
 }
 
-static TIMER_CALLBACK( irq_timer_clear_cb )
+static TIMER_DEVICE_CALLBACK( irq_timer_clear_cb )
 {
 	irq_sprite = irq_vblank = 0;
-	cputag_set_input_line(machine, "maincpu", IRQ_VBLANK+1, CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", IRQ_SPRITE+1, CLEAR_LINE);
-	cputag_set_input_line(machine, "sub", IRQ_VBLANK+1, CLEAR_LINE);
-	cputag_set_input_line(machine, "sub", IRQ_SPRITE+1, CLEAR_LINE);
+	cputag_set_input_line(timer->machine, "maincpu", IRQ_VBLANK+1, CLEAR_LINE);
+	cputag_set_input_line(timer->machine, "maincpu", IRQ_SPRITE+1, CLEAR_LINE);
+	cputag_set_input_line(timer->machine, "sub", IRQ_VBLANK+1, CLEAR_LINE);
+	cputag_set_input_line(timer->machine, "sub", IRQ_SPRITE+1, CLEAR_LINE);
 }
 
 static void irq_init(running_machine *machine)
@@ -820,8 +820,8 @@ static void irq_init(running_machine *machine)
 	irq_timer_pend1 = 0;
 	irq_vblank = 0;
 	irq_sprite = 0;
-	irq_timer = timer_alloc(machine, irq_timer_cb, NULL);
-	irq_timer_clear = timer_alloc(machine, irq_timer_clear_cb, NULL);
+	irq_timer = devtag_get_device(machine, "irq_timer");
+	irq_timer_clear = devtag_get_device(machine, "irq_timer_clear");
 }
 
 static void irq_timer_reset(void)
@@ -829,7 +829,7 @@ static void irq_timer_reset(void)
 	int freq = (irq_timerb << 12) | irq_timera;
 	freq &= 0x1fff;
 
-	timer_adjust_periodic(irq_timer, ATTOTIME_IN_HZ(freq), 0, ATTOTIME_IN_HZ(freq));
+	timer_device_adjust_periodic(irq_timer, ATTOTIME_IN_HZ(freq), 0, ATTOTIME_IN_HZ(freq));
 	logerror("New timer frequency: %0d [%02x %04x]\n", freq, irq_timerb, irq_timera);
 }
 
@@ -916,7 +916,7 @@ static INTERRUPT_GEN(irq_vbl)
 		irq_vblank = 1;
 	}
 
-	timer_adjust_oneshot(irq_timer_clear, ATTOTIME_IN_HZ(VIDEO_CLOCK/2/656.0), 0);
+	timer_device_adjust_oneshot(irq_timer_clear, ATTOTIME_IN_HZ(VIDEO_CLOCK/2/656.0), 0);
 
 	mask = 1 << irq;
 
@@ -995,7 +995,7 @@ fc-ff ramhi
 
 static ADDRESS_MAP_START( system24_cpu1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_MIRROR(0x040000) AM_ROM AM_REGION("maincpu", 0)
-	AM_RANGE(0x080000, 0x0bffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x080000, 0x0bffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x100000, 0x13ffff) AM_MIRROR(0x0c0000) AM_ROM AM_REGION("maincpu", 0)
 	AM_RANGE(0x200000, 0x20ffff) AM_MIRROR(0x110000) AM_READWRITE(sys24_tile_r, sys24_tile_w)
 	AM_RANGE(0x220000, 0x220001) AM_MIRROR(0x11fffe) AM_WRITENOP		/* Horizontal split position (ABSEL) */
@@ -1003,23 +1003,23 @@ static ADDRESS_MAP_START( system24_cpu1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x260000, 0x260001) AM_MIRROR(0x10fffe) AM_WRITENOP		/* Frame trigger position (XVOUT) */
 	AM_RANGE(0x270000, 0x270001) AM_MIRROR(0x10fffe) AM_WRITENOP		/* Synchronization mode */
 	AM_RANGE(0x280000, 0x29ffff) AM_MIRROR(0x160000) AM_READWRITE(sys24_char_r, sys24_char_w)
-	AM_RANGE(0x400000, 0x403fff) AM_MIRROR(0x1f8000) AM_READWRITE(system24temp_sys16_paletteram1_r, system24temp_sys16_paletteram1_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x400000, 0x403fff) AM_MIRROR(0x1f8000) AM_READWRITE(system24temp_sys16_paletteram1_r, system24temp_sys16_paletteram1_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x404000, 0x40401f) AM_MIRROR(0x1fbfe0) AM_READWRITE(sys24_mixer_r, sys24_mixer_w)
 	AM_RANGE(0x600000, 0x63ffff) AM_MIRROR(0x180000) AM_READWRITE(sys24_sprite_r, sys24_sprite_w)
 	AM_RANGE(0x800000, 0x80007f) AM_MIRROR(0x1ffe00) AM_READWRITE(system24temp_sys16_io_r, system24temp_sys16_io_w)
-	AM_RANGE(0x800100, 0x800103) AM_MIRROR(0x1ffe00) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0x800100, 0x800103) AM_MIRROR(0x1ffe00) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0xa00000, 0xa00007) AM_MIRROR(0x0ffff8) AM_READWRITE(irq_r, irq_w)
 	AM_RANGE(0xb00000, 0xb00007) AM_MIRROR(0x07fff0) AM_READWRITE(fdc_r, fdc_w)
 	AM_RANGE(0xb00008, 0xb0000f) AM_MIRROR(0x07fff0) AM_READWRITE(fdc_status_r, fdc_ctrl_w)
-	AM_RANGE(0xb80000, 0xbbffff) AM_ROMBANK(1)
+	AM_RANGE(0xb80000, 0xbbffff) AM_ROMBANK("bank1")
 	AM_RANGE(0xbc0000, 0xbc0001) AM_MIRROR(0x03fff8) AM_READWRITE(curbank_r, curbank_w)
 	AM_RANGE(0xbc0006, 0xbc0007) AM_MIRROR(0x03fff8) AM_READWRITE(mlatch_r, mlatch_w)
 	AM_RANGE(0xc00000, 0xc00011) AM_MIRROR(0x07ffe0) AM_READWRITE(hotrod3_ctrl_r, hotrod3_ctrl_w)
-	AM_RANGE(0xc80000, 0xcbffff) AM_ROMBANK(2)
+	AM_RANGE(0xc80000, 0xcbffff) AM_ROMBANK("bank2")
 	AM_RANGE(0xcc0000, 0xcc0001) AM_MIRROR(0x03fff8) AM_READWRITE(curbank_r, curbank_w)
 	AM_RANGE(0xcc0006, 0xcc0007) AM_MIRROR(0x03fff8) AM_READWRITE(mlatch_r, mlatch_w)
-	AM_RANGE(0xf00000, 0xf3ffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(2)
-	AM_RANGE(0xf80000, 0xfbffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf00000, 0xf3ffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xf80000, 0xfbffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -1031,8 +1031,8 @@ ADDRESS_MAP_END
  *************************************/
 
 static ADDRESS_MAP_START( system24_cpu2_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(2) AM_BASE(&s24_mainram1)
-	AM_RANGE(0x080000, 0x0bffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x000000, 0x03ffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share2") AM_BASE(&s24_mainram1)
+	AM_RANGE(0x080000, 0x0bffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x100000, 0x13ffff) AM_MIRROR(0x0c0000) AM_ROM AM_REGION("maincpu", 0)
 	AM_RANGE(0x200000, 0x20ffff) AM_MIRROR(0x110000) AM_READWRITE(sys24_tile_r, sys24_tile_w)
 	AM_RANGE(0x220000, 0x220001) AM_MIRROR(0x11fffe) AM_WRITENOP		/* Horizontal split position (ABSEL) */
@@ -1044,19 +1044,19 @@ static ADDRESS_MAP_START( system24_cpu2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x404000, 0x40401f) AM_MIRROR(0x1fbfe0) AM_READWRITE(sys24_mixer_r, sys24_mixer_w)
 	AM_RANGE(0x600000, 0x63ffff) AM_MIRROR(0x180000) AM_READWRITE(sys24_sprite_r, sys24_sprite_w)
 	AM_RANGE(0x800000, 0x80007f) AM_MIRROR(0x1ffe00) AM_READWRITE(system24temp_sys16_io_r, system24temp_sys16_io_w)
-	AM_RANGE(0x800100, 0x800103) AM_MIRROR(0x1ffe00) AM_DEVREADWRITE8("ym", ym2151_r, ym2151_w, 0x00ff)
+	AM_RANGE(0x800100, 0x800103) AM_MIRROR(0x1ffe00) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0xa00000, 0xa00007) AM_MIRROR(0x0ffff8) AM_READWRITE(irq_r, irq_w)
 	AM_RANGE(0xb00000, 0xb00007) AM_MIRROR(0x07fff0) AM_READWRITE(fdc_r, fdc_w)
 	AM_RANGE(0xb00008, 0xb0000f) AM_MIRROR(0x07fff0) AM_READWRITE(fdc_status_r, fdc_ctrl_w)
-	AM_RANGE(0xb80000, 0xbbffff) AM_ROMBANK(1)
+	AM_RANGE(0xb80000, 0xbbffff) AM_ROMBANK("bank1")
 	AM_RANGE(0xbc0000, 0xbc0001) AM_MIRROR(0x03fff8) AM_READWRITE(curbank_r, curbank_w)
 	AM_RANGE(0xbc0006, 0xbc0007) AM_MIRROR(0x03fff8) AM_READWRITE(mlatch_r, mlatch_w)
 	AM_RANGE(0xc00000, 0xc00011) AM_MIRROR(0x07ffe0) AM_READWRITE(hotrod3_ctrl_r, hotrod3_ctrl_w)
-	AM_RANGE(0xc80000, 0xcbffff) AM_ROMBANK(2)
+	AM_RANGE(0xc80000, 0xcbffff) AM_ROMBANK("bank2")
 	AM_RANGE(0xcc0000, 0xcc0001) AM_MIRROR(0x03fff8) AM_READWRITE(curbank_r, curbank_w)
 	AM_RANGE(0xcc0006, 0xcc0007) AM_MIRROR(0x03fff8) AM_READWRITE(mlatch_r, mlatch_w)
-	AM_RANGE(0xf00000, 0xf3ffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(2)
-	AM_RANGE(0xf80000, 0xfbffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xf00000, 0xf3ffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xf80000, 0xfbffff) AM_MIRROR(0x040000) AM_RAM AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -1082,8 +1082,8 @@ static MACHINE_START( system24 )
 	UINT8 *usr1 = memory_region(machine, "romboard");
 	if (usr1)
 	{
-		memory_configure_bank(machine, 1, 0, 16, usr1, 0x40000);
-		memory_configure_bank(machine, 2, 0, 16, usr1, 0x40000);
+		memory_configure_bank(machine, "bank1", 0, 16, usr1, 0x40000);
+		memory_configure_bank(machine, "bank2", 0, 16, usr1, 0x40000);
 	}
 }
 
@@ -1107,7 +1107,7 @@ static MACHINE_RESET( system24 )
 static INPUT_PORTS_START( system24_P1_P2 )
 	PORT_START("P1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
- 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE2 ) //enabled with "Separate"
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
@@ -1720,7 +1720,7 @@ static INPUT_PORTS_START( gground )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(3)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE4 ) //enabled with "Separate"
- 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(3)
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(3)
@@ -1787,6 +1787,9 @@ static MACHINE_DRIVER_START( system24 )
 	MDRV_MACHINE_START(system24)
 	MDRV_MACHINE_RESET(system24)
 
+	MDRV_TIMER_ADD("irq_timer", irq_timer_cb)
+	MDRV_TIMER_ADD("irq_timer_clear", irq_timer_clear_cb)
+
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -1800,7 +1803,7 @@ static MACHINE_DRIVER_START( system24 )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)

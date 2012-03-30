@@ -7,7 +7,7 @@
 #include "driver.h"
 #include "profiler.h"
 #include "cpu/tms34010/tms34010.h"
-#include "midyunit.h"
+#include "includes/midyunit.h"
 
 
 /* compile-time options */
@@ -50,8 +50,8 @@ static UINT16	dma_register[16];
 static struct
 {
 	UINT32		offset;			/* source offset, in bits */
-	INT32 		rowbytes;		/* source bytes to skip each row */
-	INT32 		xpos;			/* x position, clipped */
+	INT32		rowbytes;		/* source bytes to skip each row */
+	INT32		xpos;			/* x position, clipped */
 	INT32		ypos;			/* y position, clipped */
 	INT32		width;			/* horizontal pixel count */
 	INT32		height;			/* vertical pixel count */
@@ -260,8 +260,8 @@ WRITE16_HANDLER( midyunit_paletteram_w )
 {
 	int newword;
 
-	COMBINE_DATA(&paletteram16[offset]);
-	newword = paletteram16[offset];
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
+	newword = space->machine->generic.paletteram.u16[offset];
 	palette_set_color_rgb(space->machine, offset & palette_mask, pal5bit(newword >> 10), pal5bit(newword >> 5), pal5bit(newword >> 0));
 }
 

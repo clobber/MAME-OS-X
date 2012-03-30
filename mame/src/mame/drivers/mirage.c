@@ -34,15 +34,14 @@ MR_01-.3A    [a0b758aa]
 
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
-#include "decocrpt.h"
-#include "decoprot.h"
-#include "deco16ic.h"
+#include "includes/decocrpt.h"
+#include "includes/decoprot.h"
+#include "includes/deco16ic.h"
 #include "sound/okim6295.h"
-
-#include "deco16ic.h"
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect, int pri)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 
 	for (offs = 0;offs < 0x400;offs += 4)
@@ -177,8 +176,8 @@ static ADDRESS_MAP_START( mirage_map, ADDRESS_SPACE_PROGRAM, 16 )
 	/* linescroll */
 	AM_RANGE(0x110000, 0x110bff) AM_RAM AM_BASE(&deco16_pf1_rowscroll)
 	AM_RANGE(0x112000, 0x112bff) AM_RAM AM_BASE(&deco16_pf2_rowscroll)
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE(&spriteram16)
-	AM_RANGE(0x130000, 0x1307ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x130000, 0x1307ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x140000, 0x14000f) AM_DEVREADWRITE8("oki_sfx", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0x150000, 0x15000f) AM_DEVREADWRITE8("oki_bgm", okim6295_r, okim6295_w, 0x00ff)
 //  AM_RANGE(0x140006, 0x140007) AM_READ(random_readers)
@@ -360,7 +359,7 @@ ROM_START( mirage )
 	ROM_LOAD( "mbl-00.7a", 0x000000, 0x100000, CRC(2e258b7b) SHA1(2dbd7d16a1eda97ae3de149b67e80e511aa9d0ba) )
 
 	ROM_REGION( 0x400000, "gfx2", 0 ) /* Sprites */
-  	ROM_LOAD16_BYTE( "mbl-01.11a", 0x000001, 0x200000, CRC(895be69a) SHA1(541d8f37fb4cf99312b80a0eb0d729fbbeab5f4f) )
+	ROM_LOAD16_BYTE( "mbl-01.11a", 0x000001, 0x200000, CRC(895be69a) SHA1(541d8f37fb4cf99312b80a0eb0d729fbbeab5f4f) )
 	ROM_LOAD16_BYTE( "mbl-02.12a", 0x000000, 0x200000, CRC(474f6104) SHA1(ff81b32b90192c3d5f27c436a9246aa6caaeeeee) )
 
 	ROM_REGION( 0x200000, "oki_bgm_data", 0 )

@@ -95,11 +95,11 @@ static WRITE16_HANDLER( splash_coin_w )
 		{
 			case 0x00:	/* Coin Lockouts */
 			case 0x01:
-				coin_lockout_w( (offset >> 3) & 0x01, (data & 0x0400) >> 8);
+				coin_lockout_w( space->machine, (offset >> 3) & 0x01, (data & 0x0400) >> 8);
 				break;
 			case 0x02:	/* Coin Counters */
 			case 0x03:
-				coin_counter_w( (offset >> 3) & 0x01, (data & 0x0100) >> 8);
+				coin_counter_w( space->machine, (offset >> 3) & 0x01, (data & 0x0100) >> 8);
 				break;
 		}
 	}
@@ -117,7 +117,7 @@ static ADDRESS_MAP_START( splash_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x8817ff) AM_RAM_WRITE(splash_vram_w) AM_BASE(&splash_videoram)	/* Video RAM */
 	AM_RANGE(0x881800, 0x881803) AM_RAM AM_BASE(&splash_vregs)							/* Scroll registers */
 	AM_RANGE(0x881804, 0x881fff) AM_RAM													/* Work RAM */
-	AM_RANGE(0x8c0000, 0x8c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)/* Palette is xRRRRxGGGGxBBBBx */
+	AM_RANGE(0x8c0000, 0x8c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)/* Palette is xRRRRxGGGGxBBBBx */
 	AM_RANGE(0x900000, 0x900fff) AM_RAM AM_BASE(&splash_spriteram)						/* Sprite RAM */
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM													/* Work RAM */
 ADDRESS_MAP_END
@@ -138,7 +138,7 @@ static ADDRESS_MAP_START( splash_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd800, 0xd800) AM_WRITE(splash_adpcm_data_w)				/* ADPCM data for the MSM5205 chip */
 //  AM_RANGE(0xe000, 0xe000) AM_WRITENOP                                /* ??? */
 	AM_RANGE(0xe800, 0xe800) AM_READ(soundlatch_r)						/* Sound latch */
-	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ym", ym3812_r,ym3812_w)	/* YM3812 */
+	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ymsnd", ym3812_r,ym3812_w)	/* YM3812 */
 	AM_RANGE(0xf800, 0xffff) AM_RAM										/* RAM */
 ADDRESS_MAP_END
 
@@ -166,7 +166,7 @@ static ADDRESS_MAP_START( roldfrog_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x8817ff) AM_RAM_WRITE(splash_vram_w) AM_BASE(&splash_videoram)	/* Video RAM */
 	AM_RANGE(0x881800, 0x881803) AM_RAM AM_BASE(&splash_vregs)							/* Scroll registers */
 	AM_RANGE(0x881804, 0x881fff) AM_RAM													/* Work RAM */
-	AM_RANGE(0x8c0000, 0x8c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)/* Palette is xRRRRxGGGGxBBBBx */
+	AM_RANGE(0x8c0000, 0x8c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)/* Palette is xRRRRxGGGGxBBBBx */
 	AM_RANGE(0xa00000, 0xa00001) AM_READ(roldfrog_bombs_r)
 	AM_RANGE(0xd00000, 0xd00fff) AM_RAM AM_BASE(&splash_spriteram)						/* Sprite RAM */
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITEONLY AM_BASE(&roldfrog_bitmap_mode)			/* Bitmap Mode? */
@@ -182,7 +182,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( roldfrog_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x12, 0x13) AM_DEVWRITE("ym", ym2203_w)
+	AM_RANGE(0x12, 0x13) AM_DEVWRITE("ymsnd", ym2203_w)
 	AM_RANGE(0x40, 0x40) AM_NOP	/* NMI ack */
 	AM_RANGE(0x70, 0x70) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -200,7 +200,7 @@ static ADDRESS_MAP_START( funystrp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x880000, 0x8817ff) AM_RAM_WRITE(splash_vram_w) AM_BASE(&splash_videoram)	/* Video RAM */
 	AM_RANGE(0x881800, 0x881803) AM_RAM AM_BASE(&splash_vregs)							/* Scroll registers */
 	AM_RANGE(0x881804, 0x881fff) AM_RAM													/* Work RAM */
-	AM_RANGE(0x8c0000, 0x8c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)/* Palette is xRRRRxGGGGxBBBBx */
+	AM_RANGE(0x8c0000, 0x8c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)/* Palette is xRRRRxGGGGxBBBBx */
 	AM_RANGE(0xd00000, 0xd01fff) AM_RAM AM_BASE(&splash_spriteram)						/* Sprite RAM */
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM													/* Work RAM */
 ADDRESS_MAP_END
@@ -421,7 +421,7 @@ static MACHINE_DRIVER_START( splash )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	MDRV_SOUND_ADD("msm", MSM5205, 384000)
@@ -475,7 +475,7 @@ static MACHINE_DRIVER_START( roldfrog )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.60)
 	MDRV_SOUND_ROUTE(1, "mono", 0.60)
@@ -514,7 +514,7 @@ static MACHINE_DRIVER_START( funystrp )
 	/* sound hardware */
 //  MDRV_SPEAKER_STANDARD_MONO("mono")
 
-//  MDRV_SOUND_ADD("ym", YM3812, 3000000)
+//  MDRV_SOUND_ADD("ymsnd", YM3812, 3000000)
 //  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 //  MDRV_SOUND_ADD("msm", MSM5205, 384000)

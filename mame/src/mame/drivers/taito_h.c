@@ -139,15 +139,14 @@ some kind of zoom table?
 
 ****************************************************************************/
 
-
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "audio/taitosnd.h"
+#include "machine/taitoio.h"
 #include "video/taitoic.h"
 #include "sound/2610intf.h"
-
 
 
 /***************************************************************************
@@ -158,9 +157,6 @@ some kind of zoom table?
 
 static UINT16 *taitoh_68000_mainram;
 
-VIDEO_START( syvalion );
-VIDEO_START( recordbr );
-VIDEO_START( dleague );
 VIDEO_UPDATE( syvalion );
 VIDEO_UPDATE( recordbr );
 VIDEO_UPDATE( dleague );
@@ -199,7 +195,8 @@ static READ8_HANDLER( syvalion_input_bypass_r )
 {
 	/* Bypass TC0220IOC controller for analog input */
 
-	UINT8	port = TC0220IOC_port_r(space,0);	/* read port number */
+	const device_config *tc0220ioc = devtag_get_device(space->machine, "tc0220ioc");
+	UINT8	port = tc0220ioc_port_r(tc0220ioc, 0);	/* read port number */
 
 	switch( port )
 	{
@@ -240,7 +237,7 @@ static READ8_HANDLER( syvalion_input_bypass_r )
 				return 0x00;
 
 		default:
-			return TC0220IOC_portreg_r( space,offset );
+			return tc0220ioc_portreg_r(tc0220ioc, offset);
 	}
 }
 
@@ -249,7 +246,7 @@ static INT32 banknum;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
@@ -268,48 +265,48 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 static ADDRESS_MAP_START( syvalion_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE(&taitoh_68000_mainram)
-	AM_RANGE(0x200000, 0x200001) AM_READWRITE8(syvalion_input_bypass_r, TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x200000, 0x200001) AM_READ8(syvalion_input_bypass_r, 0x00ff) AM_DEVWRITE8("tc0220ioc", tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x300002, 0x300003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
-	AM_RANGE(0x400000, 0x420fff) AM_READWRITE(TC0080VCO_word_r, TC0080VCO_word_w)
-	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x400000, 0x420fff) AM_DEVREADWRITE("tc0080vco", tc0080vco_word_r, tc0080vco_word_w)
+	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( recordbr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE(&taitoh_68000_mainram)
-	AM_RANGE(0x200000, 0x200001) AM_READWRITE8(TC0220IOC_portreg_r, TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x200002, 0x200003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x200000, 0x200001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x200002, 0x200003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x300002, 0x300003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
-	AM_RANGE(0x400000, 0x420fff) AM_READWRITE(TC0080VCO_word_r, TC0080VCO_word_w)
-	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x400000, 0x420fff) AM_DEVREADWRITE("tc0080vco", tc0080vco_word_r, tc0080vco_word_w)
+	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( dleague_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x05ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_MIRROR(0x010000) AM_RAM AM_BASE(&taitoh_68000_mainram)
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x200000, 0x20000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300001) AM_READNOP AM_WRITE8(taitosound_port_w, 0x00ff)
 	AM_RANGE(0x300002, 0x300003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
-	AM_RANGE(0x400000, 0x420fff) AM_READWRITE(TC0080VCO_word_r, TC0080VCO_word_w)
-	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x400000, 0x420fff) AM_DEVREADWRITE("tc0080vco", tc0080vco_word_r, tc0080vco_word_w)
+	AM_RANGE(0x500800, 0x500fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x600000, 0x600001) AM_WRITENOP	/* ?? writes zero once per frame */
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITENOP		/* pan control */
 	AM_RANGE(0xea00, 0xea00) AM_READNOP
-	AM_RANGE(0xee00, 0xee00) AM_WRITENOP 		/* ? */
-	AM_RANGE(0xf000, 0xf000) AM_WRITENOP 		/* ? */
+	AM_RANGE(0xee00, 0xee00) AM_WRITENOP		/* ? */
+	AM_RANGE(0xf000, 0xf000) AM_WRITENOP		/* ? */
 	AM_RANGE(0xf200, 0xf200) AM_WRITE(sound_bankswitch_w)
 ADDRESS_MAP_END
 
@@ -544,6 +541,26 @@ static MACHINE_START( taitoh )
 }
 
 
+static const tc0080vco_interface syvalion_tc0080vco_intf =
+{
+	0, 1,	/* gfxnum, txnum */
+	1, 1, -2,
+	1
+};
+
+static const tc0080vco_interface recordbr_tc0080vco_intf =
+{
+	0, 1,	/* gfxnum, txnum */
+	1, 1, -2,
+	0
+};
+
+static const tc0220ioc_interface taitoh_io_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
 static MACHINE_DRIVER_START( syvalion )
 
 	/* basic machine hardware */
@@ -559,6 +576,8 @@ static MACHINE_DRIVER_START( syvalion )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoh_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -570,13 +589,14 @@ static MACHINE_DRIVER_START( syvalion )
 	MDRV_GFXDECODE(syvalion)
 	MDRV_PALETTE_LENGTH(33*16)
 
-	MDRV_VIDEO_START(syvalion)
 	MDRV_VIDEO_UPDATE(syvalion)
+
+	MDRV_TC0080VCO_ADD("tc0080vco", syvalion_tc0080vco_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -599,6 +619,8 @@ static MACHINE_DRIVER_START( recordbr )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoh_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -610,13 +632,14 @@ static MACHINE_DRIVER_START( recordbr )
 	MDRV_GFXDECODE(recordbr)
 	MDRV_PALETTE_LENGTH(32*16)
 
-	MDRV_VIDEO_START(recordbr)
 	MDRV_VIDEO_UPDATE(recordbr)
+
+	MDRV_TC0080VCO_ADD("tc0080vco", recordbr_tc0080vco_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -639,6 +662,8 @@ static MACHINE_DRIVER_START( dleague )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoh_io_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -650,13 +675,14 @@ static MACHINE_DRIVER_START( dleague )
 	MDRV_GFXDECODE(dleague)
 	MDRV_PALETTE_LENGTH(33*16)
 
-	MDRV_VIDEO_START(dleague)
 	MDRV_VIDEO_UPDATE(dleague)
+
+	MDRV_TC0080VCO_ADD("tc0080vco", recordbr_tc0080vco_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
@@ -699,10 +725,10 @@ ROM_START( syvalion )
 	ROM_LOAD16_BYTE( "b51-05.bin", 0x340000, 0x20000, CRC(47976ae9) SHA1(a2b19a39d8968b886412a85c082806917e02d9fd) )
 	ROM_LOAD16_BYTE( "b51-01.bin", 0x340001, 0x20000, CRC(8dab004a) SHA1(1772cdcb9d0ca5ebf429f371c041b9ae12fafcd0) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* samples */
 	ROM_LOAD( "b51-18.bin", 0x00000, 0x80000, CRC(8b23ac83) SHA1(340b9e7f09c1809a332b41d3fb579f5f8cd6367f) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* samples */
 	ROM_LOAD( "b51-17.bin", 0x00000, 0x80000, CRC(d85096aa) SHA1(dac39ed182e9eda06575f1667c4c1ff9a4a56599) )
 ROM_END
 
@@ -727,10 +753,10 @@ ROM_START( recordbr )
 	ROM_LOAD16_BYTE( "b56-01.bin", 0x300000, 0x20000, CRC(766b7260) SHA1(f7d7176af614f06e8c66e890e4d194ffb6f7af73) )
 	ROM_LOAD16_BYTE( "b56-05.bin", 0x300001, 0x20000, CRC(ed390378) SHA1(0275e5ead206028bfcff7ecbe11c7ab961e648ea) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* samples */
 	ROM_LOAD( "b56-09.bin", 0x00000, 0x80000, CRC(7fd9ee68) SHA1(edc4455b3f6a6f30f418d03c6e53af875542a325) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* samples */
 	ROM_LOAD( "b56-10.bin", 0x00000, 0x80000, CRC(de1bce59) SHA1(aa3aea30d6f53e60d9a0d4ec767e1b261d5efc8a) )
 
 	ROM_REGION( 0x02000, "user1", 0 ) /* zoom table / mixing? */
@@ -758,10 +784,10 @@ ROM_START( gogold )
 	ROM_LOAD16_BYTE( "b56-01.bin", 0x300000, 0x20000, CRC(766b7260) SHA1(f7d7176af614f06e8c66e890e4d194ffb6f7af73) )
 	ROM_LOAD16_BYTE( "b56-05.bin", 0x300001, 0x20000, CRC(ed390378) SHA1(0275e5ead206028bfcff7ecbe11c7ab961e648ea) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* samples */
 	ROM_LOAD( "b56-09.bin", 0x00000, 0x80000, CRC(7fd9ee68) SHA1(edc4455b3f6a6f30f418d03c6e53af875542a325) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* samples */
 	ROM_LOAD( "b56-10.bin", 0x00000, 0x80000, CRC(de1bce59) SHA1(aa3aea30d6f53e60d9a0d4ec767e1b261d5efc8a) )
 
 	ROM_REGION( 0x02000, "user1", 0 ) /* zoom table / mixing? */
@@ -796,7 +822,7 @@ ROM_START( dleague )
 	ROM_REGION( 0x02000, "user1", 0 ) /* zoom table / mixing? */
 	ROM_LOAD( "c02-18.22", 0x00000, 0x02000, CRC(c88f0bbe) SHA1(18c87c744fbeca35d13033e50f62e5383eb4ec2c) )
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* samples */
 	ROM_LOAD( "c02-01.31", 0x00000, 0x80000, CRC(d5a3d1aa) SHA1(544f807015b5d854a4d8cb73e4dbae4b953fd440) )
 ROM_END
 

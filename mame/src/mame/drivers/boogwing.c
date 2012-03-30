@@ -81,9 +81,9 @@
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
-#include "decocrpt.h"
-#include "deco16ic.h"
-#include "decoprot.h"
+#include "includes/decocrpt.h"
+#include "includes/deco16ic.h"
+#include "includes/decoprot.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 
@@ -100,9 +100,9 @@ static ADDRESS_MAP_START( boogwing_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x220002, 0x22000f) AM_NOP
 
 	AM_RANGE(0x240000, 0x240001) AM_WRITE(buffer_spriteram16_w)
-	AM_RANGE(0x242000, 0x2427ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x242000, 0x2427ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x244000, 0x244001) AM_WRITE(buffer_spriteram16_2_w)
-	AM_RANGE(0x246000, 0x2467ff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size)
+	AM_RANGE(0x246000, 0x2467ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 
 	AM_RANGE(0x24e6c0, 0x24e6c1) AM_READ_PORT("DSW")
 	AM_RANGE(0x24e138, 0x24e139) AM_READ_PORT("SYSTEM")
@@ -124,7 +124,7 @@ static ADDRESS_MAP_START( boogwing_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x280000, 0x28000f) AM_NOP // ?
 	AM_RANGE(0x282000, 0x282001) AM_NOP // Palette setup?
 	AM_RANGE(0x282008, 0x282009) AM_WRITE(deco16_palette_dma_w)
-	AM_RANGE(0x284000, 0x285fff) AM_WRITE(deco16_buffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x284000, 0x285fff) AM_WRITE(deco16_buffered_palette_w) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE(0x3c0000, 0x3c004f) AM_RAM // ?
 ADDRESS_MAP_END
@@ -133,11 +133,11 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP
-	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
 	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -323,7 +323,7 @@ static MACHINE_DRIVER_START( boogwing )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)

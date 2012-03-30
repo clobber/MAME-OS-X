@@ -47,9 +47,11 @@ static WRITE8_HANDLER( srumbler_bankswitch_w )
 	for (i = 0x05;i < 0x10;i++)
 	{
 		int bank = ((prom1[i] & 0x03) << 4) | (prom2[i] & 0x0f);
+		char bankname[10];
 		/* bit 2 of prom1 selects ROM or RAM - not supported */
 
-		memory_set_bankptr(space->machine, i+1,&ROM[bank*0x1000]);
+		sprintf(bankname, "%04x", i*0x1000);
+		memory_set_bankptr(space->machine, bankname,&ROM[bank*0x1000]);
 	}
 }
 
@@ -80,7 +82,7 @@ Ignore the warnings about writing to unmapped memory.
 
 static ADDRESS_MAP_START( srumbler_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1dff) AM_RAM  /* RAM (of 1 sort or another) */
-	AM_RANGE(0x1e00, 0x1fff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x1e00, 0x1fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x2000, 0x3fff) AM_RAM_WRITE(srumbler_background_w) AM_BASE(&srumbler_backgroundram)
 	AM_RANGE(0x4008, 0x4008) AM_READ_PORT("SYSTEM") AM_WRITE(srumbler_bankswitch_w)
 	AM_RANGE(0x4009, 0x4009) AM_READ_PORT("P1") AM_WRITE(srumbler_4009_w)
@@ -89,19 +91,19 @@ static ADDRESS_MAP_START( srumbler_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x400c, 0x400c) AM_READ_PORT("DSW2")
 	AM_RANGE(0x400a, 0x400d) AM_WRITE(srumbler_scroll_w)
 	AM_RANGE(0x400e, 0x400e) AM_WRITE(soundlatch_w)
-	AM_RANGE(0x5000, 0x5fff) AM_ROMBANK(6)	AM_WRITE(srumbler_foreground_w) AM_BASE(&srumbler_foregroundram) /* Banked ROM */
-	AM_RANGE(0x6000, 0x6fff) AM_ROMBANK(7)	/* Banked ROM */
-	AM_RANGE(0x6000, 0x6fff) AM_WRITENOP 	/* Video RAM 2 ??? (not used) */
-	AM_RANGE(0x7000, 0x7fff) AM_ROMBANK(8)	/* Banked ROM */
-	AM_RANGE(0x7000, 0x73ff) AM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0x8000, 0x8fff) AM_ROMBANK(9)	/* Banked ROM */
-	AM_RANGE(0x9000, 0x9fff) AM_ROMBANK(10)	/* Banked ROM */
-	AM_RANGE(0xa000, 0xafff) AM_ROMBANK(11)	/* Banked ROM */
-	AM_RANGE(0xb000, 0xbfff) AM_ROMBANK(12)	/* Banked ROM */
-	AM_RANGE(0xc000, 0xcfff) AM_ROMBANK(13)	/* Banked ROM */
-	AM_RANGE(0xd000, 0xdfff) AM_ROMBANK(14)	/* Banked ROM */
-	AM_RANGE(0xe000, 0xefff) AM_ROMBANK(15)	/* Banked ROM */
-	AM_RANGE(0xf000, 0xffff) AM_ROMBANK(16)	/* Banked ROM */
+	AM_RANGE(0x5000, 0x5fff) AM_ROMBANK("5000")	AM_WRITE(srumbler_foreground_w) AM_BASE(&srumbler_foregroundram) /* Banked ROM */
+	AM_RANGE(0x6000, 0x6fff) AM_ROMBANK("6000")	/* Banked ROM */
+	AM_RANGE(0x6000, 0x6fff) AM_WRITENOP	/* Video RAM 2 ??? (not used) */
+	AM_RANGE(0x7000, 0x7fff) AM_ROMBANK("7000")	/* Banked ROM */
+	AM_RANGE(0x7000, 0x73ff) AM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x8000, 0x8fff) AM_ROMBANK("8000")	/* Banked ROM */
+	AM_RANGE(0x9000, 0x9fff) AM_ROMBANK("9000")	/* Banked ROM */
+	AM_RANGE(0xa000, 0xafff) AM_ROMBANK("a000")	/* Banked ROM */
+	AM_RANGE(0xb000, 0xbfff) AM_ROMBANK("b000")	/* Banked ROM */
+	AM_RANGE(0xc000, 0xcfff) AM_ROMBANK("c000")	/* Banked ROM */
+	AM_RANGE(0xd000, 0xdfff) AM_ROMBANK("d000")	/* Banked ROM */
+	AM_RANGE(0xe000, 0xefff) AM_ROMBANK("e000")	/* Banked ROM */
+	AM_RANGE(0xf000, 0xffff) AM_ROMBANK("f000")	/* Banked ROM */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( srumbler_sound_map, ADDRESS_SPACE_PROGRAM, 8 )

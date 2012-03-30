@@ -139,8 +139,8 @@ static ADDRESS_MAP_START( pow_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0f0008, 0x0f0009) AM_READ_PORT("DSW2")
 //  AM_RANGE(0x0f0008, 0x0f0009) AM_WRITENOP    /* ?? */
 	AM_RANGE(0x100000, 0x100fff) AM_READWRITE(pow_fg_videoram_r, pow_fg_videoram_w) AM_MIRROR(0x1000) AM_BASE(&pow_fg_videoram)	// 8-bit
-	AM_RANGE(0x200000, 0x207fff) AM_READWRITE(pow_spriteram_r, pow_spriteram_w) AM_BASE(&spriteram16)	// only partially populated
-	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(pow_paletteram16_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x207fff) AM_READWRITE(pow_spriteram_r, pow_spriteram_w) AM_BASE_GENERIC(spriteram)	// only partially populated
+	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(pow_paletteram16_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( searchar_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -159,10 +159,10 @@ static ADDRESS_MAP_START( searchar_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0f0000, 0x0f0001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0f0008, 0x0f0009) AM_READ_PORT("DSW2")
 	AM_RANGE(0x0f8000, 0x0f8001) AM_READ(sound_status_r)
-	AM_RANGE(0x100000, 0x107fff) AM_READWRITE(pow_spriteram_r, pow_spriteram_w) AM_BASE(&spriteram16)	// only partially populated
+	AM_RANGE(0x100000, 0x107fff) AM_READWRITE(pow_spriteram_r, pow_spriteram_w) AM_BASE_GENERIC(spriteram)	// only partially populated
 	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(searchar_fg_videoram_w) AM_MIRROR(0x1000) AM_BASE(&pow_fg_videoram) /* Mirror is used by Ikari 3 */
-	AM_RANGE(0x300000, 0x33ffff) AM_ROMBANK(1) /* Extra code bank */
-	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(pow_paletteram16_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x300000, 0x33ffff) AM_ROMBANK("bank1") /* Extra code bank */
+	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(pow_paletteram16_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 /******************************************************************************/
@@ -187,8 +187,8 @@ static WRITE8_DEVICE_HANDLER( D7759_upd_reset_w )
 
 static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ym", ym3812_status_port_r, ym3812_control_port_w)
-	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ym", ym3812_write_port_w)
+	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ymsnd", ym3812_status_port_r, ym3812_control_port_w)
+	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ymsnd", ym3812_write_port_w)
 	AM_RANGE(0x40, 0x40) AM_DEVWRITE("upd", D7759_write_port_0_w)
 	AM_RANGE(0x80, 0x80) AM_DEVWRITE("upd", D7759_upd_reset_w)
 ADDRESS_MAP_END
@@ -625,7 +625,7 @@ static MACHINE_DRIVER_START( pow )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, XTAL_8MHz/2) /* verified on pcb  */
+	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_8MHz/2) /* verified on pcb  */
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
@@ -1010,7 +1010,7 @@ ROM_END
 
 static DRIVER_INIT( searchar )
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1"));
 }
 
 /******************************************************************************/

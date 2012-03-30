@@ -39,7 +39,7 @@ This is not a bug (real machine behaves the same).
 #include "cpu/z80/z80.h"
 #include "cpu/mips/r3000.h"
 #include "sound/st0016.h"
-#include "st0016.h"
+#include "includes/st0016.h"
 
 #define DEBUG_CHAR
 static UINT32 databank;
@@ -148,23 +148,23 @@ static VIDEO_UPDATE( srmp5 )
 						for(ys=0;ys<=sizey;ys++)
 						{
 							ys2 = (sprite_sublist[SPRITE_PALETTE] & 0x4000) ? ys : (sizey - ys);
-		 					for(xs=0;xs<=sizex;xs++)
-		 					{
-		 						UINT8 pen=pixels[address&(0x100000-1)];
-		 						xs2 = (sprite_sublist[SPRITE_PALETTE] & 0x8000) ? (sizex - xs) : xs;
-		 						if(pen)
-		 						{
-		 							if(xb+xs2<=visarea->max_x && xb+xs2>=visarea->min_x && yb+ys2<=visarea->max_y && yb+ys2>=visarea->min_y )
-		 							{
-		 								UINT16 pixdata=palram[pen+((sprite_sublist[SPRITE_PALETTE]&0xff)<<8)];
-		 								*BITMAP_ADDR32(bitmap, yb+ys2, xb+xs2) = ((pixdata&0x7c00)>>7) | ((pixdata&0x3e0)<<6) | ((pixdata&0x1f)<<19);
-		 							}
-		 						}
-		 						++address;
-		 					}
-		 				}
-		 			}
-		 		}
+							for(xs=0;xs<=sizex;xs++)
+							{
+								UINT8 pen=pixels[address&(0x100000-1)];
+								xs2 = (sprite_sublist[SPRITE_PALETTE] & 0x8000) ? (sizex - xs) : xs;
+								if(pen)
+								{
+									if(xb+xs2<=visarea->max_x && xb+xs2>=visarea->min_x && yb+ys2<=visarea->max_y && yb+ys2>=visarea->min_y )
+									{
+										UINT16 pixdata=palram[pen+((sprite_sublist[SPRITE_PALETTE]&0xff)<<8)];
+										*BITMAP_ADDR32(bitmap, yb+ys2, xb+xs2) = ((pixdata&0x7c00)>>7) | ((pixdata&0x3e0)<<6) | ((pixdata&0x1f)<<19);
+									}
+								}
+								++address;
+							}
+						}
+					}
+				}
 				sprite_sublist+=SPRITE_SUBLIST_ENTRY_LENGTH;
 				--sublist_length;
 			}
@@ -299,7 +299,7 @@ static WRITE32_HANDLER(srmp5_vidregs_w)
 static ADDRESS_MAP_START( srmp5_mem, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_RAM //maybe 0 - 2fffff ?
 	AM_RANGE(0x002f0000, 0x002f7fff) AM_RAM
-	AM_RANGE(0x01000000, 0x01000003) AM_WRITE(SMH_RAM)  // 0xaa .. watchdog ?
+	AM_RANGE(0x01000000, 0x01000003) AM_WRITEONLY  // 0xaa .. watchdog ?
 	AM_RANGE(0x01800000, 0x01800003) AM_RAM //?1
 	AM_RANGE(0x01800004, 0x01800007) AM_READ_PORT("DSW1")
 	AM_RANGE(0x01800008, 0x0180000b) AM_READ_PORT("DSW2")
@@ -321,16 +321,16 @@ static ADDRESS_MAP_START( srmp5_mem, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x0a180000, 0x0a18011f) AM_READWRITE(srmp5_vidregs_r, srmp5_vidregs_w)
 	AM_RANGE(0x0a200000, 0x0a3fffff) AM_READWRITE(tileram_r, tileram_w)
 
-	AM_RANGE(0x1eff0000, 0x1eff001f) AM_WRITE(SMH_RAM)
+	AM_RANGE(0x1eff0000, 0x1eff001f) AM_WRITEONLY
 	AM_RANGE(0x1eff003c, 0x1eff003f) AM_READNOP
-	AM_RANGE(0x1fc00000, 0x1fdfffff) AM_READ(SMH_ROM) AM_WRITE(SMH_ROM) AM_REGION("user1", 0)
-	AM_RANGE(0x2fc00000, 0x2fdfffff) AM_READ(SMH_ROM) AM_WRITE(SMH_ROM) AM_REGION("user1", 0)
+	AM_RANGE(0x1fc00000, 0x1fdfffff) AM_ROM AM_REGION("user1", 0)
+	AM_RANGE(0x2fc00000, 0x2fdfffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( st0016_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
@@ -541,7 +541,7 @@ static MACHINE_DRIVER_START( srmp5 )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("st", ST0016, 0)
+	MDRV_SOUND_ADD("stsnd", ST0016, 0)
 	MDRV_SOUND_CONFIG(st0016_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)

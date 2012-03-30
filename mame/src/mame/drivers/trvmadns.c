@@ -64,7 +64,7 @@ Technology = NMOS
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 static UINT8 *trvmadns_gfxram;
 static UINT8 *trvmadns_tileram;
 static int old_data;
@@ -77,6 +77,7 @@ static WRITE8_HANDLER( trvmadns_banking_w )
 
 	if((data & 0xf0) == 0xa0)
 	{
+		/* FIXME: selects GFX char RAM bank here */
 	}
 	else if((data & 0xf0) == 0x80 || (data & 0xf0) == 0x90)
 	{
@@ -96,8 +97,8 @@ static WRITE8_HANDLER( trvmadns_banking_w )
 
 		address |= (data & 0x10) ? 0x10000 : 0;
 
-		memory_set_bankptr(space->machine, 1, &rom[address]);
-		memory_set_bankptr(space->machine, 2, &rom[address + 0x1000]);
+		memory_set_bankptr(space->machine, "bank1", &rom[address]);
+		memory_set_bankptr(space->machine, "bank2", &rom[address + 0x1000]);
 	}
 	else
 	{
@@ -136,7 +137,7 @@ static WRITE8_HANDLER( trvmadns_banking_w )
 
 //      logerror("add = %X\n",address);
 
-		memory_set_bankptr(space->machine, 1, &rom[address]);
+		memory_set_bankptr(space->machine, "bank1", &rom[address]);
 	}
 }
 
@@ -146,21 +147,20 @@ static WRITE8_HANDLER( trvmadns_gfxram_w )
 	gfx_element_mark_dirty(space->machine->gfx[0], offset/16);
 }
 
-#ifdef UNUSED_FUNCTION
-//WRONG!
 static WRITE8_HANDLER( trvmadns_palette_w )
 {
-	int r, g, b;
+	int r,g,b,datax;
+	space->machine->generic.paletteram.u8[offset] = data;
+	offset>>=1;
+	datax=space->machine->generic.paletteram.u8[offset*2+1]+256*space->machine->generic.paletteram.u8[offset*2];
 
-	paletteram[offset] = data;
+	b = (((datax & 0x0007)>>0) | ((datax & 0x0200)>>6)) ^ 0xf;
+	r = (((datax & 0x0038)>>3) | ((datax & 0x0400)>>7)) ^ 0xf;
+	g = (((datax & 0x01c0)>>6) | ((datax & 0x0800)>>8)) ^ 0xf;
 
-	r = paletteram[offset & ~1] & 0xf;
-	g = (paletteram[offset | 1] & 0xf0) >> 4;
-	b = paletteram[offset | 1] & 0xf;
-
-	palette_set_color_rgb(space->machine, offset >> 1, pal4bit(r), pal4bit(g), pal4bit(b));
+	palette_set_color_rgb(space->machine, offset, pal4bit(r), pal4bit(g), pal4bit(b));
 }
-#endif
+
 
 static WRITE8_HANDLER( w2 )
 {
@@ -198,19 +198,19 @@ static WRITE8_HANDLER( trvmadns_tileram_w )
 
 static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x6fff) AM_READ(SMH_BANK(1))
-	AM_RANGE(0x7000, 0x7fff) AM_READ(SMH_BANK(2))
+	AM_RANGE(0x6000, 0x6fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x7000, 0x7fff) AM_ROMBANK("bank2")
 	AM_RANGE(0x6000, 0x7fff) AM_WRITE(trvmadns_gfxram_w) AM_BASE(&trvmadns_gfxram)
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xc000, 0xc01f) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_le_w) AM_BASE(&paletteram)
-	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(trvmadns_tileram_w) AM_BASE(&trvmadns_tileram)
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM_WRITE(trvmadns_tileram_w) AM_BASE(&trvmadns_tileram)
+	AM_RANGE(0xc000, 0xc01f) AM_RAM_WRITE(trvmadns_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(w2)//NOP
 	AM_RANGE(0xe004, 0xe004) AM_WRITE(w3)//NOP
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("IN0")
 	AM_RANGE(0x80, 0x80) AM_WRITE(trvmadns_banking_w)
 ADDRESS_MAP_END
@@ -251,29 +251,68 @@ static TILE_GET_INFO( get_bg_tile_info )
 	color = (attr & 0x18) >> 3;
 	flag = TILE_FLIPXY((attr & 0x06) >> 1);
 
-	if((~attr & 0x20) || (~attr & 0x40))
-		flag |= TILE_FORCE_LAYER0;
+//  if((~attr & 0x20) || (~attr & 0x40))
+//      flag |= TILE_FORCE_LAYER0;
 
 	//0x20? tile transparent pen 1?
 	//0x40? tile transparent pen 1?
 
 	SET_TILE_INFO(0,tile,color,flag);
+
+	tileinfo->category = (attr & 0x20)>>5;
 }
 
 static VIDEO_START( trvmadns )
 {
 	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 
-	tilemap_set_transparent_pen(bg_tilemap,1);
+//  tilemap_set_transparent_pen(fg_tilemap,1);
 
 	gfx_element_set_source(machine->gfx[0], trvmadns_gfxram);
 }
 
 static VIDEO_UPDATE( trvmadns )
 {
+	int x,y,count;
+	const gfx_element *gfx = screen->machine->gfx[0];
+
 	bitmap_fill(bitmap,cliprect,0xd);
 
-	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	count = 0;
+
+	for (y=0;y<32;y++)
+	{
+		for (x=0;x<32;x++)
+		{
+			int attr = trvmadns_tileram[count*2+0];
+			int tile = trvmadns_tileram[count*2+1] | ((attr & 0x01) << 8);
+			int color = (attr & 0x18) >> 3;
+			int flipx = attr & 4;
+			int flipy = attr & 2;
+
+			if(!(attr & 0x20))
+				drawgfx_opaque(bitmap,cliprect,gfx,tile,color,flipx,flipy,(x*8),(y*8));
+			count++;
+		}
+	}
+
+	count = 0;
+
+	for (y=0;y<32;y++)
+	{
+		for (x=0;x<32;x++)
+		{
+			int attr = trvmadns_tileram[count*2+0];
+			int tile = trvmadns_tileram[count*2+1] | ((attr & 0x01) << 8);
+			int color = (attr & 0x18) >> 3;
+			int flipx = attr & 4;
+			int flipy = attr & 2;
+
+			if(attr & 0x20)
+				drawgfx_transpen(bitmap,cliprect,gfx,tile,color,flipx,flipy,(x*8),(y*8),1);
+			count++;
+		}
+	}
 
 	return 0;
 }
@@ -308,7 +347,7 @@ static MACHINE_DRIVER_START( trvmadns )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 10000000/2/4) //?
+	MDRV_SOUND_ADD("aysnd", AY8910, 10000000/2/4) //?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

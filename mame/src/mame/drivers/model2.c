@@ -64,6 +64,7 @@
 UINT32 *model2_bufferram, *model2_colorxlat;
 static UINT32 *model2_workram, *model2_backup1, *model2_backup2;
 UINT32 *model2_textureram0, *model2_textureram1, *model2_lumaram;
+UINT32 *model2_paletteram32;
 static UINT32 model2_intreq;
 static UINT32 model2_intena;
 static UINT32 model2_coproctl, model2_coprocnt, model2_geoctl, model2_geocnt;
@@ -71,7 +72,7 @@ static UINT16 *model2_soundram = NULL;
 
 static UINT32 model2_timervals[4], model2_timerorig[4];
 static int      model2_timerrun[4];
-static emu_timer *model2_timers[4];
+static const device_config *model2_timers[4];
 static int model2_ctrlmode;
 static int analog_channel;
 
@@ -242,8 +243,6 @@ static void copro_fifoout_push(const device_config *device, UINT32 data)
 
 static NVRAM_HANDLER( model2 )
 {
-	NVRAM_HANDLER_CALL(93C46);
-
 	if (read_or_write)
 	{
 		mame_fwrite(file, model2_backup1, 0x3fff);
@@ -270,7 +269,7 @@ static READ32_HANDLER( timers_r )
 	if (model2_timerrun[offset])
 	{
 		// get elapsed time, convert to units of 25 MHz
-		UINT32 cur = attotime_to_double(attotime_mul(timer_timeelapsed(model2_timers[offset]), 25000000));
+		UINT32 cur = attotime_to_double(attotime_mul(timer_device_timeelapsed(model2_timers[offset]), 25000000));
 
 		// subtract units from starting value
 		model2_timervals[offset] = model2_timerorig[offset] - cur;
@@ -288,21 +287,21 @@ static WRITE32_HANDLER( timers_w )
 
 	model2_timerorig[offset] = model2_timervals[offset];
 	period = attotime_mul(ATTOTIME_IN_HZ(25000000), model2_timerorig[offset]);
-	timer_adjust_oneshot(model2_timers[offset], period, 0);
+	timer_device_adjust_oneshot(model2_timers[offset], period, 0);
 	model2_timerrun[offset] = 1;
 }
 
-static TIMER_CALLBACK( model2_timer_cb )
+static TIMER_DEVICE_CALLBACK( model2_timer_cb )
 {
 	int tnum = (int)(FPTR)ptr;
 	int bit = tnum + 2;
 
-	timer_adjust_oneshot(model2_timers[tnum], attotime_never, 0);
+	timer_device_adjust_oneshot(model2_timers[tnum], attotime_never, 0);
 
 	model2_intreq |= (1<<bit);
 	if (model2_intena & (1<<bit))
 	{
-		cputag_set_input_line(machine, "maincpu", I960_IRQ2, ASSERT_LINE);
+		cputag_set_input_line(timer->machine, "maincpu", I960_IRQ2, ASSERT_LINE);
 	}
 
 	model2_timervals[tnum] = 0;
@@ -329,11 +328,12 @@ static MACHINE_RESET(model2_common)
 
 	model2_timerrun[0] = model2_timerrun[1] = model2_timerrun[2] = model2_timerrun[3] = 0;
 
+	model2_timers[0] = devtag_get_device(machine, "timer0");
+	model2_timers[1] = devtag_get_device(machine, "timer1");
+	model2_timers[2] = devtag_get_device(machine, "timer2");
+	model2_timers[3] = devtag_get_device(machine, "timer3");
 	for (i=0; i<4; i++)
-	{
-		model2_timers[i] = timer_alloc(machine, model2_timer_cb, (void*)(FPTR)i);
-		timer_adjust_oneshot(model2_timers[i], attotime_never, 0);
-	}
+		timer_device_adjust_oneshot(model2_timers[i], attotime_never, 0);
 }
 
 static MACHINE_RESET(model2o)
@@ -348,8 +348,8 @@ static MACHINE_RESET(model2o)
 
 static MACHINE_RESET(model2_scsp)
 {
-	memory_set_bankptr(machine, 4, memory_region(machine, "scsp") + 0x200000);
-	memory_set_bankptr(machine, 5, memory_region(machine, "scsp") + 0x600000);
+	memory_set_bankptr(machine, "bank4", memory_region(machine, "scsp") + 0x200000);
+	memory_set_bankptr(machine, "bank5", memory_region(machine, "scsp") + 0x600000);
 
 	// copy the 68k vector table into RAM
 	memcpy(model2_soundram, memory_region(machine, "audiocpu") + 0x80000, 16);
@@ -397,21 +397,22 @@ static void chcolor(running_machine *machine, pen_t color, UINT16 data)
 
 static WRITE32_HANDLER( pal32_w )
 {
-	COMBINE_DATA(paletteram32 + offset);
+	COMBINE_DATA(model2_paletteram32 + offset);
 	if(ACCESSING_BITS_0_15)
-		chcolor(space->machine, offset * 2, paletteram32[offset]);
+		chcolor(space->machine, offset * 2, model2_paletteram32[offset]);
 	if(ACCESSING_BITS_16_31)
-		chcolor(space->machine, offset * 2 + 1, paletteram32[offset] >> 16);
+		chcolor(space->machine, offset * 2 + 1, model2_paletteram32[offset] >> 16);
 }
 
 static WRITE32_HANDLER( ctrl0_w )
 {
 	if(ACCESSING_BITS_0_7)
 	{
+		const device_config *device = devtag_get_device(space->machine, "eeprom");
 		model2_ctrlmode = data & 0x01;
-		eeprom_write_bit(data & 0x20);
-		eeprom_set_clock_line((data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
-		eeprom_set_cs_line((data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_write_bit(device, data & 0x20);
+		eeprom_set_clock_line(device, (data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
+		eeprom_set_cs_line(device, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
 	}
 }
 
@@ -450,7 +451,7 @@ static CUSTOM_INPUT( _1c00000_r )
 	else
 	{
 		ret &= ~0x0030;
-		return ret | 0x00d0 | (eeprom_read_bit() << 5);
+		return ret | 0x00d0 | (eeprom_read_bit(devtag_get_device(field->port->machine, "eeprom")) << 5);
 	}
 }
 
@@ -1241,7 +1242,7 @@ static ADDRESS_MAP_START( model2_base_mem, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x01100000, 0x0110ffff) AM_READWRITE(sys24_tile32_r, sys24_tile32_w) AM_MIRROR(0x10000)
 	AM_RANGE(0x01180000, 0x011fffff) AM_READWRITE(sys24_char32_r, sys24_char32_w) AM_MIRROR(0x100000)
 
-	AM_RANGE(0x01800000, 0x01803fff) AM_RAM_WRITE(pal32_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x01800000, 0x01803fff) AM_RAM_WRITE(pal32_w) AM_BASE(&model2_paletteram32)
 	AM_RANGE(0x01810000, 0x0181bfff) AM_RAM AM_BASE(&model2_colorxlat)
 	AM_RANGE(0x0181c000, 0x0181c003) AM_WRITE(model2_3d_zclip_w)
 	AM_RANGE(0x01a10000, 0x01a1ffff) AM_READWRITE(network_r, network_w)
@@ -1253,8 +1254,8 @@ static ADDRESS_MAP_START( model2_base_mem, ADDRESS_SPACE_PROGRAM, 32 )
 
 	AM_RANGE(0x10000000, 0x101fffff) AM_WRITE(mode_w)
 
-	AM_RANGE(0x11600000, 0x1167ffff) AM_RAM	AM_SHARE(1) // framebuffer (last bronx)
-	AM_RANGE(0x11680000, 0x116fffff) AM_RAM	AM_SHARE(1) // FB mirror
+	AM_RANGE(0x11600000, 0x1167ffff) AM_RAM	AM_SHARE("share1") // framebuffer (last bronx)
+	AM_RANGE(0x11680000, 0x116fffff) AM_RAM	AM_SHARE("share1") // FB mirror
 ADDRESS_MAP_END
 
 /* original Model 2 overrides */
@@ -1699,7 +1700,7 @@ static ADDRESS_MAP_START( model1_snd, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc50000, 0xc50001) AM_DEVWRITE( "sega1", m1_snd_mpcm_bnk_w )
 	AM_RANGE(0xc60000, 0xc60007) AM_DEVREADWRITE8( "sega2", multipcm_r, multipcm_w, 0x00ff )
 	AM_RANGE(0xc70000, 0xc70001) AM_DEVWRITE( "sega2", m1_snd_mpcm_bnk_w )
-	AM_RANGE(0xd00000, 0xd00007) AM_DEVREADWRITE8( "ym", ym3438_r, ym3438_w, 0x00ff )
+	AM_RANGE(0xd00000, 0xd00007) AM_DEVREADWRITE8( "ymsnd", ym3438_r, ym3438_w, 0x00ff )
 	AM_RANGE(0xf00000, 0xf0ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1713,13 +1714,13 @@ static WRITE16_HANDLER( model2snd_ctrl )
 		UINT8 *snd = memory_region(space->machine, "scsp");
 		if (data & 0x20)
 		{
-	  		memory_set_bankptr(space->machine, 4, snd + 0x200000);
-			memory_set_bankptr(space->machine, 5, snd + 0x600000);
+			memory_set_bankptr(space->machine, "bank4", snd + 0x200000);
+			memory_set_bankptr(space->machine, "bank5", snd + 0x600000);
 		}
 		else
 		{
-			memory_set_bankptr(space->machine, 4, snd + 0x800000);
-			memory_set_bankptr(space->machine, 5, snd + 0xa00000);
+			memory_set_bankptr(space->machine, "bank4", snd + 0x800000);
+			memory_set_bankptr(space->machine, "bank5", snd + 0xa00000);
 		}
 	}
 }
@@ -1730,8 +1731,8 @@ static ADDRESS_MAP_START( model2_snd, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(model2snd_ctrl)
 	AM_RANGE(0x600000, 0x67ffff) AM_ROM AM_REGION("audiocpu", 0x80000)
 	AM_RANGE(0x800000, 0x9fffff) AM_ROM AM_REGION("scsp", 0)
-	AM_RANGE(0xa00000, 0xdfffff) AM_READ(SMH_BANK(4))
-	AM_RANGE(0xe00000, 0xffffff) AM_READ(SMH_BANK(5))
+	AM_RANGE(0xa00000, 0xdfffff) AM_ROMBANK("bank4")
+	AM_RANGE(0xe00000, 0xffffff) AM_ROMBANK("bank5")
 ADDRESS_MAP_END
 
 static int scsp_last_line = 0;
@@ -1830,7 +1831,7 @@ static const mb86233_cpu_core tgp_config =
 static MACHINE_DRIVER_START( model2o )
 	MDRV_CPU_ADD("maincpu", I960, 25000000)
 	MDRV_CPU_PROGRAM_MAP(model2o_mem)
- 	MDRV_CPU_VBLANK_INT_HACK(model2_interrupt,2)
+	MDRV_CPU_VBLANK_INT_HACK(model2_interrupt,2)
 
 	MDRV_CPU_ADD("audiocpu", M68000, 10000000)
 	MDRV_CPU_PROGRAM_MAP(model1_snd)
@@ -1840,7 +1841,18 @@ static MACHINE_DRIVER_START( model2o )
 	MDRV_CPU_PROGRAM_MAP(copro_tgp_map)
 
 	MDRV_MACHINE_RESET(model2o)
+
+	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_NVRAM_HANDLER( model2 )
+
+	MDRV_TIMER_ADD("timer0", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)0)
+	MDRV_TIMER_ADD("timer1", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)1)
+	MDRV_TIMER_ADD("timer2", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)2)
+	MDRV_TIMER_ADD("timer3", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)3)
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK )
 
@@ -1858,7 +1870,7 @@ static MACHINE_DRIVER_START( model2o )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3438, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM3438, 8000000)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 
@@ -1875,7 +1887,7 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( model2a )
 	MDRV_CPU_ADD("maincpu", I960, 25000000)
 	MDRV_CPU_PROGRAM_MAP(model2a_crx_mem)
- 	MDRV_CPU_VBLANK_INT_HACK(model2_interrupt,2)
+	MDRV_CPU_VBLANK_INT_HACK(model2_interrupt,2)
 
 	MDRV_CPU_ADD("audiocpu", M68000, 12000000)
 	MDRV_CPU_PROGRAM_MAP(model2_snd)
@@ -1885,7 +1897,18 @@ static MACHINE_DRIVER_START( model2a )
 	MDRV_CPU_PROGRAM_MAP(copro_tgp_map)
 
 	MDRV_MACHINE_RESET(model2)
+
+	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_NVRAM_HANDLER( model2 )
+
+	MDRV_TIMER_ADD("timer0", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)0)
+	MDRV_TIMER_ADD("timer1", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)1)
+	MDRV_TIMER_ADD("timer2", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)2)
+	MDRV_TIMER_ADD("timer3", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)3)
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK )
 
@@ -1919,7 +1942,7 @@ static const sharc_config sharc_cfg =
 static MACHINE_DRIVER_START( model2b )
 	MDRV_CPU_ADD("maincpu", I960, 25000000)
 	MDRV_CPU_PROGRAM_MAP(model2b_crx_mem)
- 	MDRV_CPU_VBLANK_INT_HACK(model2_interrupt,2)
+	MDRV_CPU_VBLANK_INT_HACK(model2_interrupt,2)
 
 	MDRV_CPU_ADD("audiocpu", M68000, 12000000)
 	MDRV_CPU_PROGRAM_MAP(model2_snd)
@@ -1935,7 +1958,18 @@ static MACHINE_DRIVER_START( model2b )
 	MDRV_QUANTUM_TIME(HZ(18000))
 
 	MDRV_MACHINE_RESET(model2b)
+
+	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_NVRAM_HANDLER( model2 )
+
+	MDRV_TIMER_ADD("timer0", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)0)
+	MDRV_TIMER_ADD("timer1", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)1)
+	MDRV_TIMER_ADD("timer2", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)2)
+	MDRV_TIMER_ADD("timer3", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)3)
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK )
 
@@ -1963,13 +1997,24 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( model2c )
 	MDRV_CPU_ADD("maincpu", I960, 25000000)
 	MDRV_CPU_PROGRAM_MAP(model2c_crx_mem)
- 	MDRV_CPU_VBLANK_INT_HACK(model2c_interrupt,3)
+	MDRV_CPU_VBLANK_INT_HACK(model2c_interrupt,3)
 
 	MDRV_CPU_ADD("audiocpu", M68000, 12000000)
 	MDRV_CPU_PROGRAM_MAP(model2_snd)
 
 	MDRV_MACHINE_RESET(model2c)
+
+	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_NVRAM_HANDLER( model2 )
+
+	MDRV_TIMER_ADD("timer0", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)0)
+	MDRV_TIMER_ADD("timer1", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)1)
+	MDRV_TIMER_ADD("timer2", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)2)
+	MDRV_TIMER_ADD("timer3", model2_timer_cb)
+	MDRV_TIMER_PTR((FPTR)3)
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK )
 

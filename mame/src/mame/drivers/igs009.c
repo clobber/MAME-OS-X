@@ -26,7 +26,7 @@ NVRAM   :   Battery for main RAM
 ***************************************************************************/
 
 
-static tilemap *gp98_reel1_tilemap;
+static tilemap_t *gp98_reel1_tilemap;
 static UINT8 *gp98_reel1_ram;
 
 static WRITE8_HANDLER( gp98_reel1_ram_w )
@@ -58,7 +58,7 @@ static TILE_GET_INFO( get_gp98_reel1_tile_info )
 			0);
 }
 
-static tilemap *gp98_reel2_tilemap;
+static tilemap_t *gp98_reel2_tilemap;
 static UINT8 *gp98_reel2_ram;
 
 static WRITE8_HANDLER( gp98_reel2_ram_w )
@@ -90,7 +90,7 @@ static TILE_GET_INFO( get_gp98_reel2_tile_info )
 }
 
 
-static tilemap *gp98_reel3_tilemap;
+static tilemap_t *gp98_reel3_tilemap;
 static UINT8 *gp98_reel3_ram;
 
 static WRITE8_HANDLER( gp98_reel3_ram_w )
@@ -122,7 +122,7 @@ static TILE_GET_INFO( get_gp98_reel3_tile_info )
 }
 
 
-static tilemap *gp98_reel4_tilemap;
+static tilemap_t *gp98_reel4_tilemap;
 static UINT8 *gp98_reel4_ram;
 
 static WRITE8_HANDLER( gp98_reel4_ram_w )
@@ -159,7 +159,7 @@ static TILE_GET_INFO( get_gp98_reel4_tile_info )
 static UINT8   *fg_tile_ram, *fg_color_ram;
 static UINT8   *bg_scroll, *bg_scroll2;
 
-static tilemap *fg_tilemap;
+static tilemap_t *fg_tilemap;
 
 static int video_enable;
 
@@ -327,12 +327,12 @@ static WRITE8_HANDLER( jingbell_nmi_and_coins_w )
 //      popmessage("%02x",data);
 	}
 
-	coin_counter_w(0,		data & 0x01);	// coin_a
-	coin_counter_w(1,		data & 0x04);	// coin_c
-	coin_counter_w(2,		data & 0x08);	// key in
-	coin_counter_w(3,		data & 0x10);	// coin out mech
+	coin_counter_w(space->machine, 0,		data & 0x01);	// coin_a
+	coin_counter_w(space->machine, 1,		data & 0x04);	// coin_c
+	coin_counter_w(space->machine, 2,		data & 0x08);	// key in
+	coin_counter_w(space->machine, 3,		data & 0x10);	// coin out mech
 
-	set_led_status(6,		data & 0x40);	// led for coin out / hopper active
+	set_led_status(space->machine, 6,		data & 0x40);	// led for coin out / hopper active
 
 	nmi_enable = data;	//  data & 0x80     // nmi enable?
 
@@ -342,8 +342,8 @@ static WRITE8_HANDLER( jingbell_nmi_and_coins_w )
 
 static WRITE8_HANDLER( jingbell_video_and_leds_w )
 {
-	set_led_status(4,	  data & 0x01);	// start?
-	set_led_status(5,	  data & 0x04);	// l_bet?
+	set_led_status(space->machine, 4,	  data & 0x01);	// start?
+	set_led_status(space->machine, 5,	  data & 0x04);	// l_bet?
 
 	video_enable	=	  data & 0x40;
 	hopper			=	(~data)& 0x80;
@@ -354,10 +354,10 @@ static WRITE8_HANDLER( jingbell_video_and_leds_w )
 
 static WRITE8_HANDLER( jingbell_leds_w )
 {
-	set_led_status(0, data & 0x01);	// stop_1
-	set_led_status(1, data & 0x02);	// stop_2
-	set_led_status(2, data & 0x04);	// stop_3
-	set_led_status(3, data & 0x08);	// stop
+	set_led_status(space->machine, 0, data & 0x01);	// stop_1
+	set_led_status(space->machine, 1, data & 0x02);	// stop_2
+	set_led_status(space->machine, 2, data & 0x04);	// stop_3
+	set_led_status(space->machine, 3, data & 0x08);	// stop
 	// data & 0x10?
 
 	out[2] = data;
@@ -409,7 +409,7 @@ static READ8_HANDLER( jingbell_magic_r )
 
 static ADDRESS_MAP_START( jingbell_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x00000, 0x0f3ff ) AM_ROM
-	AM_RANGE( 0x0f400, 0x0ffff ) AM_RAM AM_BASE( &generic_nvram ) AM_SIZE( &generic_nvram_size )
+	AM_RANGE( 0x0f400, 0x0ffff ) AM_RAM AM_BASE_SIZE_GENERIC( nvram )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( jingbell_portmap, ADDRESS_SPACE_IO, 8 )
@@ -417,8 +417,8 @@ static ADDRESS_MAP_START( jingbell_portmap, ADDRESS_SPACE_IO, 8 )
 
 	AM_RANGE( 0x1000, 0x11ff ) AM_RAM_WRITE( bg_scroll_w ) AM_BASE( &bg_scroll )
 
-	AM_RANGE( 0x2000, 0x23ff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE( 0x2400, 0x27ff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE( 0x2000, 0x23ff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE( 0x2400, 0x27ff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 
 	AM_RANGE( 0x3000, 0x33ff ) AM_RAM_WRITE( gp98_reel1_ram_w )  AM_BASE( &gp98_reel1_ram )
 	AM_RANGE( 0x3400, 0x37ff ) AM_RAM_WRITE( gp98_reel2_ram_w )  AM_BASE( &gp98_reel2_ram )
@@ -438,7 +438,7 @@ static ADDRESS_MAP_START( jingbell_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x6492, 0x6492 ) AM_WRITE( jingbell_leds_w )
 	AM_RANGE( 0x64a0, 0x64a0 ) AM_READ_PORT( "BUTTONS2" )
 
-	AM_RANGE( 0x64b0, 0x64b1 ) AM_DEVWRITE( "ym", ym2413_w )
+	AM_RANGE( 0x64b0, 0x64b1 ) AM_DEVWRITE( "ymsnd", ym2413_w )
 
 	AM_RANGE( 0x64c0, 0x64c0 ) AM_DEVREADWRITE( "oki", okim6295_r, okim6295_w )
 
@@ -657,7 +657,7 @@ static MACHINE_DRIVER_START( jingbell )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_12MHz / 12)

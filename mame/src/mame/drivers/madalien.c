@@ -10,7 +10,7 @@
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
 #include "video/mc6845.h"
-#include "madalien.h"
+#include "includes/madalien.h"
 
 
 #define SOUND_CLOCK XTAL_4MHz
@@ -89,16 +89,16 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x8000, 0x8000) AM_MIRROR(0x0ff0) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x8001, 0x8001) AM_MIRROR(0x0ff0) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
-	AM_RANGE(0x8004, 0x8004) AM_MIRROR(0x0ff0) AM_WRITE(SMH_RAM) AM_BASE(&madalien_video_control)
+	AM_RANGE(0x8004, 0x8004) AM_MIRROR(0x0ff0) AM_WRITEONLY AM_BASE(&madalien_video_control)
 	AM_RANGE(0x8005, 0x8005) AM_MIRROR(0x0ff0) AM_WRITE(madalien_output_w)
 	AM_RANGE(0x8006, 0x8006) AM_MIRROR(0x0ff0) AM_READWRITE(soundlatch2_r, madalien_sound_command_w)
-	AM_RANGE(0x8008, 0x8008) AM_MIRROR(0x07f0) AM_READWRITE(shift_r, SMH_RAM) AM_BASE(&shift_hi)
-	AM_RANGE(0x8009, 0x8009) AM_MIRROR(0x07f0) AM_READWRITE(shift_rev_r, SMH_RAM) AM_BASE(&shift_lo)
-	AM_RANGE(0x800b, 0x800b) AM_MIRROR(0x07f0) AM_WRITE(SMH_RAM) AM_BASE(&madalien_video_flags)
-	AM_RANGE(0x800c, 0x800c) AM_MIRROR(0x07f0) AM_WRITE(SMH_RAM) AM_BASE(&madalien_headlight_pos)
-	AM_RANGE(0x800d, 0x800d) AM_MIRROR(0x07f0) AM_WRITE(SMH_RAM) AM_BASE(&madalien_edge1_pos)
-	AM_RANGE(0x800e, 0x800e) AM_MIRROR(0x07f0) AM_WRITE(SMH_RAM) AM_BASE(&madalien_edge2_pos)
-	AM_RANGE(0x800f, 0x800f) AM_MIRROR(0x07f0) AM_WRITE(SMH_RAM) AM_BASE(&madalien_scroll)
+	AM_RANGE(0x8008, 0x8008) AM_MIRROR(0x07f0) AM_RAM_READ(shift_r) AM_BASE(&shift_hi)
+	AM_RANGE(0x8009, 0x8009) AM_MIRROR(0x07f0) AM_RAM_READ(shift_rev_r) AM_BASE(&shift_lo)
+	AM_RANGE(0x800b, 0x800b) AM_MIRROR(0x07f0) AM_WRITEONLY AM_BASE(&madalien_video_flags)
+	AM_RANGE(0x800c, 0x800c) AM_MIRROR(0x07f0) AM_WRITEONLY AM_BASE(&madalien_headlight_pos)
+	AM_RANGE(0x800d, 0x800d) AM_MIRROR(0x07f0) AM_WRITEONLY AM_BASE(&madalien_edge1_pos)
+	AM_RANGE(0x800e, 0x800e) AM_MIRROR(0x07f0) AM_WRITEONLY AM_BASE(&madalien_edge2_pos)
+	AM_RANGE(0x800f, 0x800f) AM_MIRROR(0x07f0) AM_WRITEONLY AM_BASE(&madalien_scroll)
 
 	AM_RANGE(0x9000, 0x9000) AM_MIRROR(0x0ff0) AM_READ_PORT("PLAYER1")
 	AM_RANGE(0x9001, 0x9001) AM_MIRROR(0x0ff0) AM_READ_PORT("DSW")
@@ -112,7 +112,7 @@ static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x1c00) AM_RAM
 	AM_RANGE(0x6000, 0x6003) AM_MIRROR(0x1ffc) AM_RAM /* unknown device in an epoxy block, might be tilt detection */
 	AM_RANGE(0x8000, 0x8000) AM_MIRROR(0x1ffc) AM_READ(madalien_sound_command_r)
-	AM_RANGE(0x8000, 0x8001) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x8000, 0x8001) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x8002, 0x8002) AM_MIRROR(0x1ffc) AM_WRITE(soundlatch2_w)
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -188,7 +188,7 @@ static MACHINE_DRIVER_START( madalien )
 	/* audio hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, SOUND_CLOCK / 4)
+	MDRV_SOUND_ADD("aysnd", AY8910, SOUND_CLOCK / 4)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
 	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 1)

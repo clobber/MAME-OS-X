@@ -1,5 +1,5 @@
 #include "driver.h"
-#include "deco16ic.h"
+#include "includes/deco16ic.h"
 
 UINT16* pcktgaldb_fgram;
 UINT16* pcktgaldb_sprites;
@@ -7,6 +7,7 @@ UINT16* pcktgaldb_sprites;
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs;
 	int flipscreen=!flip_screen_get(machine);
 

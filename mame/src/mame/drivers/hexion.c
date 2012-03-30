@@ -83,7 +83,7 @@ Notes:
 #include "deprecat.h"
 #include "sound/okim6295.h"
 #include "sound/k051649.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
 
 VIDEO_START( hexion );
 VIDEO_UPDATE( hexion );
@@ -101,8 +101,8 @@ static WRITE8_HANDLER( coincntr_w )
 //logerror("%04x: coincntr_w %02x\n",cpu_get_pc(space->cpu),data);
 
 	/* bits 0/1 = coin counters */
-	coin_counter_w(0,data & 0x01);
-	coin_counter_w(1,data & 0x02);
+	coin_counter_w(space->machine, 0,data & 0x01);
+	coin_counter_w(space->machine, 1,data & 0x02);
 
 	/* bit 5 = flip screen */
 	flip_screen_set(space->machine, data & 0x20);
@@ -115,7 +115,7 @@ if ((data & 0xdc) != 0x10) popmessage("coincntr %02x",data);
 
 static ADDRESS_MAP_START( hexion_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0x9fff) AM_ROMBANK("bank1")
 	AM_RANGE(0xa000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xdffe) AM_READWRITE(hexion_bankedram_r, hexion_bankedram_w)
 	AM_RANGE(0xdfff, 0xdfff) AM_WRITE(hexion_bankctrl_w)

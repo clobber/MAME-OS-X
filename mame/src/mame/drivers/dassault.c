@@ -124,7 +124,7 @@ Dip locations verified with US conversion kit manual.
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
-#include "deco16ic.h"
+#include "includes/deco16ic.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
@@ -161,7 +161,7 @@ static READ16_HANDLER( dassault_control_r )
 
 static WRITE16_HANDLER( dassault_control_w )
 {
-	coin_counter_w(0,data&1);
+	coin_counter_w(space->machine, 0,data&1);
 	if (data&0xfffe)
 		logerror("Coin cointrol %04x\n",data);
 }
@@ -213,7 +213,7 @@ static READ16_HANDLER( shared_ram_r )
 static ADDRESS_MAP_START( dassault_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(deco16_nonbuffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(deco16_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
 
 	AM_RANGE(0x140004, 0x140007) AM_WRITENOP /* ? */
 	AM_RANGE(0x180000, 0x180001) AM_WRITE(dassault_sound_w)
@@ -225,16 +225,16 @@ static ADDRESS_MAP_START( dassault_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
 	AM_RANGE(0x202000, 0x203fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
-	AM_RANGE(0x212000, 0x212fff) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf2_rowscroll)
-	AM_RANGE(0x220000, 0x22000f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf12_control)
+	AM_RANGE(0x212000, 0x212fff) AM_WRITEONLY AM_BASE(&deco16_pf2_rowscroll)
+	AM_RANGE(0x220000, 0x22000f) AM_WRITEONLY AM_BASE(&deco16_pf12_control)
 
 	AM_RANGE(0x240000, 0x240fff) AM_RAM_WRITE(deco16_pf3_data_w) AM_BASE(&deco16_pf3_data)
 	AM_RANGE(0x242000, 0x242fff) AM_RAM_WRITE(deco16_pf4_data_w) AM_BASE(&deco16_pf4_data)
-	AM_RANGE(0x252000, 0x252fff) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf4_rowscroll)
-	AM_RANGE(0x260000, 0x26000f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf34_control)
+	AM_RANGE(0x252000, 0x252fff) AM_WRITEONLY AM_BASE(&deco16_pf4_rowscroll)
+	AM_RANGE(0x260000, 0x26000f) AM_WRITEONLY AM_BASE(&deco16_pf34_control)
 
 	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_BASE(&dassault_ram) /* Main ram */
-	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size) /* Spriteram (2nd) */
+	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2) /* Spriteram (2nd) */
 	AM_RANGE(0x3feffc, 0x3fefff) AM_READWRITE(dassault_irq_r, dassault_irq_w)
 	AM_RANGE(0x3fe000, 0x3fefff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&shared_ram) /* Shared ram */
 ADDRESS_MAP_END
@@ -247,7 +247,7 @@ static ADDRESS_MAP_START( dassault_sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x100004, 0x100005) AM_READ(dassault_sub_control_r)
 
 	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_BASE(&dassault_ram2) /* Sub cpu ram */
-	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size) /* Sprite ram */
+	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* Sprite ram */
 	AM_RANGE(0x3feffc, 0x3fefff) AM_READWRITE(dassault_irq_r, dassault_irq_w)
 	AM_RANGE(0x3fe000, 0x3fefff) AM_READWRITE(shared_ram_r, shared_ram_w)
 ADDRESS_MAP_END
@@ -261,7 +261,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
 	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END

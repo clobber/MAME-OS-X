@@ -157,10 +157,9 @@ OSC3: 48.384MHz
 
 #include "driver.h"
 #include "deprecat.h"
-#include "machine/eeprom.h"
-#include "namconb1.h"
-#include "namcos2.h"
-#include "namcoic.h"
+#include "includes/namconb1.h"
+#include "includes/namcos2.h"
+#include "includes/namcoic.h"
 #include "cpu/i960/i960.h"
 #include "cpu/m37710/m37710.h"
 #include "sound/c352.h"
@@ -199,24 +198,24 @@ static WRITE32_HANDLER( namcofl_sysreg_w )
 	{
 		if (data == 0)	// RAM at 00000000, ROM at 10000000
 		{
-			memory_set_bankptr(space->machine,  1, namcofl_workram );
-			memory_set_bankptr(space->machine,  2, memory_region(space->machine, "maincpu") );
+			memory_set_bankptr(space->machine,  "bank1", namcofl_workram );
+			memory_set_bankptr(space->machine,  "bank2", memory_region(space->machine, "maincpu") );
 		}
 		else		// ROM at 00000000, RAM at 10000000
 		{
-			memory_set_bankptr(space->machine,  1, memory_region(space->machine, "maincpu") );
-			memory_set_bankptr(space->machine,  2, namcofl_workram );
+			memory_set_bankptr(space->machine,  "bank1", memory_region(space->machine, "maincpu") );
+			memory_set_bankptr(space->machine,  "bank2", namcofl_workram );
 		}
 	}
 }
 
 static WRITE32_HANDLER( namcofl_paletteram_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
 
 	if ((offset == 0x1808/4) && ACCESSING_BITS_16_31)
 	{
-		UINT16 v = paletteram32[offset] >> 16;
+		UINT16 v = space->machine->generic.paletteram.u32[offset] >> 16;
 		UINT16 triggerscanline=(((v>>8)&0xff)|((v&0xff)<<8))-(32+1);
 
 		timer_adjust_oneshot(raster_interrupt_timer, video_screen_get_time_until_pos(space->machine->primary_screen, triggerscanline, 0), 0);
@@ -237,15 +236,15 @@ static WRITE32_HANDLER( namcofl_share_w )
 }
 
 static ADDRESS_MAP_START( namcofl_mem, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x000fffff) AM_READWRITE(SMH_BANK(1), SMH_BANK(1))
-	AM_RANGE(0x10000000, 0x100fffff) AM_READWRITE(SMH_BANK(2), SMH_BANK(2))
+	AM_RANGE(0x00000000, 0x000fffff) AM_RAMBANK("bank1")
+	AM_RANGE(0x10000000, 0x100fffff) AM_RAMBANK("bank2")
 	AM_RANGE(0x20000000, 0x201fffff) AM_ROM AM_REGION("user1", 0)	/* data */
-	AM_RANGE(0x30000000, 0x30001fff) AM_RAM	AM_BASE(&generic_nvram32) AM_SIZE(&generic_nvram_size) /* nvram */
+	AM_RANGE(0x30000000, 0x30001fff) AM_RAM	AM_BASE_SIZE_GENERIC(nvram) /* nvram */
 	AM_RANGE(0x30100000, 0x30100003) AM_WRITE(namcofl_spritebank_w)
 	AM_RANGE(0x30284000, 0x3028bfff) AM_READWRITE(namcofl_share_r, namcofl_share_w)
 	AM_RANGE(0x30300000, 0x30303fff) AM_RAM /* COMRAM */
 	AM_RANGE(0x30380000, 0x303800ff) AM_READ( fl_network_r )	/* network registers */
-	AM_RANGE(0x30400000, 0x3040ffff) AM_RAM_WRITE(namcofl_paletteram_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x30400000, 0x3040ffff) AM_RAM_WRITE(namcofl_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x30800000, 0x3080ffff) AM_READWRITE(namco_tilemapvideoram32_le_r, namco_tilemapvideoram32_le_w )
 	AM_RANGE(0x30a00000, 0x30a0003f) AM_READWRITE(namco_tilemapcontrol32_le_r, namco_tilemapcontrol32_le_w )
 	AM_RANGE(0x30c00000, 0x30c1ffff) AM_READWRITE(namco_rozvideoram32_le_r,namco_rozvideoram32_le_w)
@@ -725,8 +724,8 @@ static void namcofl_common_init(running_machine *machine)
 {
 	namcofl_workram = auto_alloc_array(machine, UINT32, 0x100000/4);
 
-	memory_set_bankptr(machine,  1, memory_region(machine, "maincpu") );
-	memory_set_bankptr(machine,  2, namcofl_workram );
+	memory_set_bankptr(machine,  "bank1", memory_region(machine, "maincpu") );
+	memory_set_bankptr(machine,  "bank2", namcofl_workram );
 }
 
 static DRIVER_INIT(speedrcr)

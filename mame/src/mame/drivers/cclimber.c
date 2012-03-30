@@ -191,6 +191,14 @@ TODO:
 2008-07
 Dip location verified from manual for: cclimber, guzzler, swimmer
 
+ Cannon Ball
+ -----------
+
+ The Cannon Ball bootlegs on this Falcon (Crazy Kong) hardware don't correctly
+ handle the protection device found on the original pacman hardware conversion,
+ this causes them to crash after the a few rounds - confirmed on an original PCB.
+ They clearly weren't tested properly by the bootleggers.
+
 ***************************************************************************/
 
 #include "driver.h"
@@ -242,7 +250,7 @@ static WRITE8_HANDLER(toprollr_rombank_w)
 	toprollr_rombank |= (data & 1) << offset;
 
 	if (toprollr_rombank < 3)
-		memory_set_bank(space->machine, 1, toprollr_rombank);
+		memory_set_bank(space->machine, "bank1", toprollr_rombank);
 }
 
 
@@ -283,7 +291,7 @@ static ADDRESS_MAP_START( cclimber_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x9800, 0x9bff) AM_RAM  /* not used, but initialized */
 	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
 	AM_RANGE(0xa003, 0xa003) AM_WRITE(interrupt_enable_w) //used by Crazy Kong Bootleg with alt levels and speed up
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(cclimber_sample_trigger_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2") AM_WRITE(cclimber_sample_rate_w)
@@ -296,8 +304,8 @@ static ADDRESS_MAP_START( cannonb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6bff) AM_RAM
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
-	AM_RANGE(0x8800, 0x88ff) AM_READWRITE(SMH_NOP, SMH_RAM) AM_BASE(&cclimber_bigsprite_videoram) /* must not return what's written (game will reset after coin insert if it returns 0xff)*/
-//  AM_RANGE(0x8900, 0x8bff) AM_WRITE(SMH_RAM)  /* not used, but initialized */
+	AM_RANGE(0x8800, 0x88ff) AM_READNOP AM_WRITEONLY AM_BASE(&cclimber_bigsprite_videoram) /* must not return what's written (game will reset after coin insert if it returns 0xff)*/
+//  AM_RANGE(0x8900, 0x8bff) AM_WRITEONLY  /* not used, but initialized */
 	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&cclimber_videoram)
 	/* 9800-9bff and 9c00-9fff share the same RAM, interleaved */
 	/* (9800-981f for scroll, 9c20-9c3f for color RAM, and so on) */
@@ -319,17 +327,17 @@ static ADDRESS_MAP_START( swimmer_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x88ff) AM_MIRROR(0x0100) AM_RAM AM_BASE(&cclimber_bigsprite_videoram)
 	AM_RANGE(0x9000, 0x93ff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&cclimber_videoram)
-	AM_RANGE(0x9800, 0x981f) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_column_scroll)
-	AM_RANGE(0x9880, 0x989f) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_spriteram)
-	AM_RANGE(0x98fc, 0x98ff) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_bigsprite_control)
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE(&cclimber_column_scroll)
+	AM_RANGE(0x9880, 0x989f) AM_WRITEONLY AM_BASE(&cclimber_spriteram)
+	AM_RANGE(0x98fc, 0x98ff) AM_WRITEONLY AM_BASE(&cclimber_bigsprite_control)
 	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P2") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_flip_screen)
-	AM_RANGE(0xa003, 0xa003) AM_WRITE(SMH_RAM) AM_BASE(&swimmer_side_background_enabled)
-	AM_RANGE(0xa004, 0xa004) AM_WRITE(SMH_RAM) AM_BASE(&swimmer_palettebank)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&swimmer_side_background_enabled)
+	AM_RANGE(0xa004, 0xa004) AM_WRITEONLY AM_BASE(&swimmer_palettebank)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P1") AM_WRITE(swimmer_sh_soundlatch_w)
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW1")
-	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("DSW2") AM_WRITE(SMH_RAM) AM_BASE(&swimmer_background_color)
+	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("DSW2") AM_WRITEONLY AM_BASE(&swimmer_background_color)
 	AM_RANGE(0xb880, 0xb880) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM					/* ??? used by Guzzler */
 	AM_RANGE(0xe000, 0xffff) AM_ROM					/* Guzzler only */
@@ -350,7 +358,7 @@ static ADDRESS_MAP_START( yamato_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x9800, 0x9bff) AM_RAM  /* not used, but initialized */
 	AM_RANGE(0x9c00, 0x9fff) AM_RAM_WRITE(cclimber_colorram_w) AM_BASE(&cclimber_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2")
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW")
 	AM_RANGE(0xb800, 0xb800) AM_READ_PORT("COIN")
@@ -358,7 +366,7 @@ static ADDRESS_MAP_START( yamato_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( toprollr_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x5fff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0x0000, 0x5fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x6000, 0x6bff) AM_RAM
 	AM_RANGE(0x8800, 0x88ff) AM_RAM AM_BASE(&cclimber_bigsprite_videoram)
 	AM_RANGE(0x8c00, 0x8fff) AM_RAM AM_BASE(&toprollr_bg_videoram)
@@ -369,7 +377,7 @@ static ADDRESS_MAP_START( toprollr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x99dc, 0x99df) AM_RAM AM_BASE(&cclimber_bigsprite_control)
 	AM_RANGE(0x9c00, 0x9fff) AM_RAM AM_BASE(&cclimber_colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(interrupt_enable_w)
-	AM_RANGE(0xa001, 0xa002) AM_WRITE(SMH_RAM) AM_BASE(&cclimber_flip_screen)
+	AM_RANGE(0xa001, 0xa002) AM_WRITEONLY AM_BASE(&cclimber_flip_screen)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(cclimber_sample_trigger_w)
 	AM_RANGE(0xa005, 0xa006) AM_WRITE(toprollr_rombank_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("P2") AM_WRITE(cclimber_sample_rate_w)
@@ -381,8 +389,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( cclimber_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x08, 0x09) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x08, 0x09) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( yamato_portmap, ADDRESS_SPACE_IO, 8 )
@@ -630,7 +638,7 @@ static INPUT_PORTS_START( swimmer )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 )
-  	PORT_BIT( 0xe0, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_BIT( 0xe0, IP_ACTIVE_HIGH, IPT_UNUSED )
 
 	PORT_START("P2")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
@@ -638,7 +646,7 @@ static INPUT_PORTS_START( swimmer )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_COCKTAIL
-  	PORT_BIT( 0xe0, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_BIT( 0xe0, IP_ACTIVE_HIGH, IPT_UNUSED )
 
 	PORT_START("DSW1")
 	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW A:!1,!2")
@@ -660,7 +668,7 @@ static INPUT_PORTS_START( swimmer )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 1C_3C ) )
-  	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_6C ) )
 
 	PORT_START("DSW2")
 	PORT_BIT( 0x03, IP_ACTIVE_HIGH, IPT_UNUSED )
@@ -1006,7 +1014,7 @@ static MACHINE_DRIVER_START( cclimber )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/3/2/2)
+	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/3/2/2)
 	MDRV_SOUND_CONFIG(cclimber_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -1079,18 +1087,18 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( swimmer )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
+    MDRV_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)    /* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(swimmer_map)
 	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_CPU_ADD("audiocpu", Z80,4000000/2)
+    MDRV_CPU_ADD("audiocpu", Z80,XTAL_4MHz/2)  /* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(swimmer_audio_map)
 	MDRV_CPU_IO_MAP(swimmer_audio_portmap)
 	MDRV_CPU_PERIODIC_INT(nmi_line_pulse, (double)4000000/16384) /* IRQs are triggered by the main CPU */
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
+    MDRV_SCREEN_REFRESH_RATE(60.57) /* verified on pcb */
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(32*8, 32*8)
@@ -1105,10 +1113,10 @@ static MACHINE_DRIVER_START( swimmer )
 
 	/* audio hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay1", AY8910, 4000000/2)
+    MDRV_SOUND_ADD("ay1", AY8910, XTAL_4MHz/2)  /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 4000000/2)
+    MDRV_SOUND_ADD("ay2", AY8910, XTAL_4MHz/2)  /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_DRIVER_END
 
@@ -1643,14 +1651,16 @@ ROM_START( cannonb )
 	ROM_LOAD( "canballs.5f",  0x1000, 0x1000, CRC(3e0dacdd) SHA1(cdd3684a6962f2fb582b8a415383c06a5e5059dd) )
 	ROM_LOAD( "canballs.5h",  0x2000, 0x1000, CRC(e18a836b) SHA1(19b90a55db82914c5db18486e05d9f59aba1b442) )
 	ROM_LOAD( "canballs.5k",  0x3000, 0x0800, CRC(6ed3cbf4) SHA1(070ba61dc97df6be8004f7e052a4cef836234888) )
-	ROM_LOAD( "canballs.5m",  0x4000, 0x1000, CRC(4f0088ab) SHA1(a8009f5b8517ba4d84fbc483b199f2514f24eae8) )
-	ROM_LOAD( "canballs.5n",  0x5000, 0x1000, CRC(91570033) SHA1(7cd7fe9541da36c3919324bc65e6db1d1ca635e0) )
 
-	ROM_REGION( 0x4000, "gfx1", 0 )
-	ROM_LOAD( "canballs.11n", 0x0000, 0x1000, CRC(a95b8e03) SHA1(e78125023e1af6de292292b875b45401b2173ca9) )
-	ROM_LOAD( "canballs.11l", 0x1000, 0x1000, CRC(060b044c) SHA1(3121f07adb661663a2303085eea1b662968f8f98) )
-	ROM_LOAD( "canballs.11k", 0x2000, 0x1000, CRC(dbbe8263) SHA1(efe4bba25a03261bc8309e6d83d5600def875b0c) )
-	ROM_LOAD( "canballs.11h", 0x3000, 0x1000, CRC(8043bc1a) SHA1(bd2f3dfe26cf8d987d9ecaa41eac4bdc4e16a692) )
+	ROM_REGION( 0x4000, "gfx1", 0 ) // using gfx roms from other sets because the ones in this set were bad
+	ROM_LOAD( "cb10.bin",   0x0000, 0x0800, CRC(602a6c2d) SHA1(788f83bcb0667d8a42c209f3d51708d496be58df) )
+	/* 0x0800-0x0fff - empty */
+	ROM_CONTINUE(           0x1000, 0x0800 )
+	/* 0x1800-0x0fff - empty */
+	ROM_LOAD( "cb9.bin",    0x2000, 0x0800, CRC(2d036026) SHA1(b6eada3e67edd7db59d9ca823b798cd20f0afca9) )
+	/* 0x2800-0x0fff - empty */
+	ROM_CONTINUE(           0x3000, 0x0800 )
+	/* 0x3800-0x0fff - empty */
 
 	ROM_REGION( 0x1000, "gfx2", 0 )
 	ROM_LOAD( "canballs.11c", 0x0000, 0x0800, CRC(d1352c31) SHA1(da726a63a8be830d695afeddc1717749af8c9d47) )
@@ -1664,6 +1674,14 @@ ROM_START( cannonb )
 	ROM_REGION( 0x2000, "samples", 0 )	/* samples */
 	ROM_LOAD( "canballs.5s",  0x0000, 0x1000, CRC(5f0bcdfb) SHA1(7f79bf6de117348f606696ed7ea1937bbf926612) )
 	ROM_LOAD( "canballs.5p",  0x1000, 0x1000, CRC(9003ffbd) SHA1(fd016056aabc23957643f37230f03842294f795e) )
+
+	ROM_REGION( 0x6000, "unused", 0 )	/* unused roms, don't seem to belong to this game, can probably remove them later */
+	ROM_LOAD( "canballs.5m",  0x0000, 0x1000, CRC(4f0088ab) SHA1(a8009f5b8517ba4d84fbc483b199f2514f24eae8) ) // patched 'le bagnard' cod rom
+	ROM_LOAD( "canballs.5n",  0x1000, 0x1000, CRC(91570033) SHA1(7cd7fe9541da36c3919324bc65e6db1d1ca635e0) ) // ?
+	ROM_LOAD( "canballs.11l", 0x2000, 0x1000, CRC(060b044c) SHA1(3121f07adb661663a2303085eea1b662968f8f98) ) // 'le bagnard gfx'
+	ROM_LOAD( "canballs.11h", 0x3000, 0x1000, CRC(8043bc1a) SHA1(bd2f3dfe26cf8d987d9ecaa41eac4bdc4e16a692) ) // 'le bagnard gfx'
+	ROM_LOAD( "canballs.11n", 0x4000, 0x1000, CRC(a95b8e03) SHA1(e78125023e1af6de292292b875b45401b2173ca9) ) // probably just bad dump (missing sprite data)
+	ROM_LOAD( "canballs.11k", 0x5000, 0x1000, CRC(dbbe8263) SHA1(efe4bba25a03261bc8309e6d83d5600def875b0c) ) // probably just bad dump (missing sprite data)
 ROM_END
 
 ROM_START( cannonb2 )
@@ -1695,6 +1713,37 @@ ROM_START( cannonb2 )
 	ROM_REGION( 0x2000, "samples", 0 )	/* samples */
 	ROM_LOAD( "cb6.bin",    0x0000, 0x1000, CRC(5f0bcdfb) SHA1(7f79bf6de117348f606696ed7ea1937bbf926612) )
 	ROM_LOAD( "cb5.bin",    0x1000, 0x1000, CRC(9003ffbd) SHA1(fd016056aabc23957643f37230f03842294f795e) )
+ROM_END
+
+ROM_START( cannonb3 )
+	ROM_REGION( 0x11000, "maincpu", 0 )
+	ROM_LOAD( "1 pos e5  2532.bin",  0x0000, 0x1000, CRC(4b482e80) SHA1(4c0e52016ed760d399e8d49f600d38c1b6ccf256) )
+	ROM_LOAD( "2 pos f5  2532.bin",  0x1000, 0x1000, CRC(1fa050af) SHA1(00244e19aee14ce980697136cddb6cb72a4d80da) )
+	ROM_LOAD( "3 pos h5  2532.bin",  0x2000, 0x1000, CRC(e18a836b) SHA1(19b90a55db82914c5db18486e05d9f59aba1b442) )
+	ROM_LOAD( "4 pos k5  2716.bin",  0x3000, 0x0800, CRC(58e04f41) SHA1(d1d0adb36bd509928c0e1a3a0ee9ba296aa530ab) )
+
+	ROM_REGION( 0x4000, "gfx1", 0 )
+	ROM_LOAD( "b pos n11  2532.bin",   0x0000, 0x0800, CRC(602a6c2d) SHA1(788f83bcb0667d8a42c209f3d51708d496be58df) )
+	/* 0x0800-0x0fff - empty */
+	ROM_CONTINUE(           0x1000, 0x0800 )
+	/* 0x1800-0x0fff - empty */
+	ROM_LOAD( "a pos k11  2532.bin",    0x2000, 0x0800, CRC(2d036026) SHA1(b6eada3e67edd7db59d9ca823b798cd20f0afca9) )
+	/* 0x2800-0x0fff - empty */
+	ROM_CONTINUE(           0x3000, 0x0800 )
+	/* 0x3800-0x0fff - empty */
+
+	ROM_REGION( 0x1000, "gfx2", 0 )
+	ROM_LOAD( "ck2 pos c11  2716.bin", 0x0000, 0x0800, CRC(d1352c31) SHA1(da726a63a8be830d695afeddc1717749af8c9d47) )
+	ROM_LOAD( "ck1 pos a11  2716.bin", 0x0800, 0x0800, CRC(a7a2fdbd) SHA1(529865f8bbfbdbbf34ac39c70ef17e6d5bd0f845) )
+
+	ROM_REGION( 0x0060, "proms", 0 )
+	ROM_LOAD( "c pos v6  n82s123n.bin",      0x0000, 0x0020, CRC(b3fc1505) SHA1(5b94adde0428a26b815c7eb9b3f3716470d349c7) )
+	ROM_LOAD( "b pos u6  n82s123n.bin",      0x0020, 0x0020, CRC(a758b567) SHA1(d188c90dba10fe3abaae92488786b555b35218c5) )
+	ROM_LOAD( "a pos t6  n82s123n.bin",      0x0040, 0x0020, CRC(676b3166) SHA1(29b9434cd34d43ea5664e436e2a24b54f8d88aac) )
+
+	ROM_REGION( 0x2000, "samples", 0 )	/* samples */
+	ROM_LOAD( "ck14 pos s5  2532.bin",  0x0000, 0x1000, CRC(5f0bcdfb) SHA1(7f79bf6de117348f606696ed7ea1937bbf926612) )
+	ROM_LOAD( "ck13 pos r5  2532.bin",  0x1000, 0x1000, CRC(9003ffbd) SHA1(fd016056aabc23957643f37230f03842294f795e) )
 ROM_END
 
 ROM_START( swimmer )
@@ -1955,8 +2004,9 @@ GAME( 198?, ckongb,   ckong,    cclimber, ckongb,   ckongb,   ROT270, "bootleg",
 GAME( 1981, rpatrol,  0,        cclimber, rpatrol,  0,        ROT0,   "Orca", "River Patrol (Orca)", 0 )
 GAME( 1981, rpatrolb, rpatrol,  cclimber, rpatrol,  0,        ROT0,   "bootleg", "River Patrol (bootleg)", 0 )
 GAME( 1981, silvland, rpatrol,  cclimber, rpatrol,  0,        ROT0,   "Falcon", "Silver Land", 0 )
-GAME( 1985, cannonb,  cannonbp, cannonb,  cannonb,  cannonb,  ROT90,  "Soft", "Cannon Ball (bootleg on Crazy Climber hardware, set 1)" , GAME_IMPERFECT_GRAPHICS )
-GAME( 1985, cannonb2, cannonbp, cannonb,  cannonb,  cannonb2, ROT90,  "TV Game Gruenberg", "Cannon Ball (bootleg on Crazy Climber hardware, set 2)", 0 )
+GAME( 1985, cannonb,  cannonbp, cannonb,  cannonb,  cannonb,  ROT90,  "Soft", "Cannon Ball (bootleg on Crazy Kong hardware) (set 1, buggy)" , GAME_IMPERFECT_GRAPHICS ) // bootleggers missed protection after bonus game
+GAME( 1985, cannonb2, cannonbp, cannonb,  cannonb,  cannonb2, ROT90,  "TV Game Gruenberg", "Cannon Ball (bootleg on Crazy Kong hardware) (set 2, buggy)", 0 ) // bootleggers missed protection after bonus game
+GAME( 1985, cannonb3, cannonbp, cannonb,  cannonb,  cannonb2, ROT90,  "Soft", "Cannon Ball (bootleg on Crazy Kong hardware) (set 3, no bonus game)", 0 ) // the bonus game is patched out, thus avoiding the protection issue
 GAME( 1982, swimmer,  0,        swimmer,  swimmer,  0,        ROT0,   "Tehkan", "Swimmer (set 1)", 0 )
 GAME( 1982, swimmera, swimmer,  swimmer,  swimmer,  0,        ROT0,   "Tehkan", "Swimmer (set 2)", 0 )
 GAME( 1982, swimmerb, swimmer,  swimmer,  swimmerb, 0,        ROT0,   "Tehkan", "Swimmer (set 3)", 0 )

@@ -65,7 +65,7 @@
 #include "cpu/m6502/m6502.h"
 #include "sound/dac.h"
 #include "sound/2151intf.h"
-#include "exterm.h"
+#include "includes/exterm.h"
 
 
 
@@ -78,34 +78,10 @@
 static UINT8 aimpos[2];
 static UINT8 trackball_old[2];
 
-static emu_timer *sound_nmi_timer;
 static UINT8 master_sound_latch;
 static UINT8 slave_sound_latch;
 static UINT8 sound_control;
 static UINT8 dac_value[2];
-
-
-
-/*************************************
- *
- *  Prototypes
- *
- *************************************/
-
-static TIMER_CALLBACK( master_sound_nmi_callback );
-
-
-
-/*************************************
- *
- *  System init
- *
- *************************************/
-
-static MACHINE_RESET( exterm )
-{
-	sound_nmi_timer = timer_alloc(machine, master_sound_nmi_callback, NULL);
-}
 
 
 
@@ -201,8 +177,8 @@ static WRITE16_HANDLER( exterm_output_port_0_w )
 			cputag_set_input_line(space->machine, "slave", INPUT_LINE_RESET, PULSE_LINE);
 
 		/* Bits 14-15 = Coin counters */
-		coin_counter_w(0, data & 0x8000);
-		coin_counter_w(1, data & 0x4000);
+		coin_counter_w(space->machine, 0, data & 0x8000);
+		coin_counter_w(space->machine, 1, data & 0x4000);
 	}
 
 	COMBINE_DATA(&last);
@@ -232,11 +208,11 @@ static WRITE16_HANDLER( sound_latch_w )
  *
  *************************************/
 
-static TIMER_CALLBACK( master_sound_nmi_callback )
+static TIMER_DEVICE_CALLBACK( master_sound_nmi_callback )
 {
 	/* bit 0 of the sound control determines if the NMI is actually delivered */
 	if (sound_control & 0x01)
-		cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(timer->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -253,7 +229,7 @@ static WRITE8_HANDLER( sound_nmi_rate_w )
 	/* this value is latched into up-counters, which are clocked at the */
 	/* input clock / 256 */
 	attotime nmi_rate = attotime_mul(ATTOTIME_IN_HZ(4000000), 4096 * (256 - data));
-	timer_adjust_periodic(sound_nmi_timer, nmi_rate, 0, nmi_rate);
+	timer_device_adjust_periodic(devtag_get_device(space->machine, "snd_nmi_timer"), nmi_rate, 0, nmi_rate);
 }
 
 
@@ -320,8 +296,8 @@ static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x01500000, 0x0153ffff) AM_MIRROR(0xfc000000) AM_WRITE(exterm_output_port_0_w)
 	AM_RANGE(0x01580000, 0x015bffff) AM_MIRROR(0xfc000000) AM_WRITE(sound_latch_w)
 	AM_RANGE(0x015c0000, 0x015fffff) AM_MIRROR(0xfc000000) AM_WRITE(watchdog_reset16_w)
-	AM_RANGE(0x01800000, 0x01807fff) AM_MIRROR(0xfc7f8000) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x02800000, 0x02807fff) AM_MIRROR(0xfc7f8000) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x01800000, 0x01807fff) AM_MIRROR(0xfc7f8000) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x02800000, 0x02807fff) AM_MIRROR(0xfc7f8000) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x03000000, 0x03ffffff) AM_MIRROR(0xfc000000) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
 
@@ -342,7 +318,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_MIRROR(0x1800) AM_RAM
-	AM_RANGE(0x4000, 0x5fff) AM_DEVWRITE("ym", ym2151_data_latch_w)
+	AM_RANGE(0x4000, 0x5fff) AM_DEVWRITE("ymsnd", ym2151_data_latch_w)
 	AM_RANGE(0x6000, 0x67ff) AM_WRITE(sound_nmi_rate_w)
 	AM_RANGE(0x6800, 0x6fff) AM_READ(sound_master_latch_r)
 	AM_RANGE(0x7000, 0x77ff) AM_READ(sound_nmi_to_slave_r)
@@ -488,8 +464,9 @@ static MACHINE_DRIVER_START( exterm )
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MDRV_MACHINE_RESET(exterm)
 	MDRV_NVRAM_HANDLER(generic_0fill)
+
+	MDRV_TIMER_ADD("snd_nmi_timer", master_sound_nmi_callback)
 
 	/* video hardware */
 	MDRV_PALETTE_LENGTH(2048+32768)
@@ -507,7 +484,7 @@ static MACHINE_DRIVER_START( exterm )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MDRV_SOUND_ADD("ym", YM2151, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

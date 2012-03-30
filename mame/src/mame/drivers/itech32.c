@@ -352,7 +352,7 @@ Notes:
 #include "cpu/m68000/m68000.h"
 #include "machine/6522via.h"
 #include "machine/ticket.h"
-#include "itech32.h"
+#include "includes/itech32.h"
 #include "sound/es5506.h"
 #include "machine/timekpr.h"
 #include "devconv.h"
@@ -392,7 +392,7 @@ static UINT32 *tms1_boot;
 static UINT8 tms_spinning[2];
 
 #define START_TMS_SPINNING(n)			do { cpu_spinuntil_trigger(space->cpu, 7351 + n); tms_spinning[n] = 1; } while (0)
-#define STOP_TMS_SPINNING(machine, n)  	do { cpuexec_trigger(machine, 7351 + n); tms_spinning[n] = 0; } while (0)
+#define STOP_TMS_SPINNING(machine, n)	do { cpuexec_trigger(machine, 7351 + n); tms_spinning[n] = 0; } while (0)
 
 
 
@@ -468,9 +468,6 @@ static MACHINE_RESET( itech32 )
 	sound_data = 0;
 	sound_return = 0;
 	sound_int_state = 0;
-
-	/* reset the ticket dispenser */
-	ticket_dispenser_init(machine, 200, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_HIGH);
 }
 
 
@@ -655,7 +652,7 @@ static READ32_HANDLER( gtclass_prot_result_r )
 
 static WRITE8_HANDLER( sound_bank_w )
 {
-	memory_set_bankptr(space->machine, 1, &memory_region(space->machine, "soundcpu")[0x10000 + data * 0x4000]);
+	memory_set_bankptr(space->machine, "bank1", &memory_region(space->machine, "soundcpu")[0x10000 + data * 0x4000]);
 }
 
 
@@ -732,17 +729,17 @@ static WRITE8_DEVICE_HANDLER( drivedge_portb_out )
 	/* bit 4 controls the ticket dispenser */
 	/* bit 5 controls the coin counter */
 	/* bit 6 controls the diagnostic sound LED */
-	set_led_status(1, data & 0x01);
-	set_led_status(2, data & 0x02);
-	set_led_status(3, data & 0x04);
-	ticket_dispenser_w(space, 0, (data & 0x10) << 3);
-	coin_counter_w(0, (data & 0x20) >> 5);
+	set_led_status(space->machine, 1, data & 0x01);
+	set_led_status(space->machine, 2, data & 0x02);
+	set_led_status(space->machine, 3, data & 0x04);
+	ticket_dispenser_w(devtag_get_device(device->machine, "ticket"), 0, (data & 0x10) << 3);
+	coin_counter_w(space->machine, 0, (data & 0x20) >> 5);
 }
 
 
 static WRITE8_DEVICE_HANDLER( drivedge_turbo_light )
 {
-	set_led_status(0, data);
+	set_led_status(device->machine, 0, data);
 }
 
 
@@ -754,8 +751,8 @@ static WRITE8_DEVICE_HANDLER( pia_portb_out )
 	/* bit 4 controls the ticket dispenser */
 	/* bit 5 controls the coin counter */
 	/* bit 6 controls the diagnostic sound LED */
-	ticket_dispenser_w(space, 0, (data & 0x10) << 3);
-	coin_counter_w(0, (data & 0x20) >> 5);
+	ticket_dispenser_w(devtag_get_device(device->machine, "ticket"), 0, (data & 0x10) << 3);
+	coin_counter_w(space->machine, 0, (data & 0x20) >> 5);
 }
 
 
@@ -961,7 +958,7 @@ static ADDRESS_MAP_START( timekill_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x078000, 0x078001) AM_WRITE(sound_data_w)
 	AM_RANGE(0x080000, 0x08007f) AM_READWRITE(itech32_video_r, itech32_video_w) AM_BASE(&itech32_video)
 	AM_RANGE(0x0a0000, 0x0a0001) AM_WRITE(int1_ack_w)
-	AM_RANGE(0x0c0000, 0x0c7fff) AM_RAM_WRITE(timekill_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0c0000, 0x0c7fff) AM_RAM_WRITE(timekill_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x100000, 0x17ffff) AM_ROM AM_REGION("user1", 0) AM_BASE(&main_rom)
 ADDRESS_MAP_END
 
@@ -979,7 +976,7 @@ static ADDRESS_MAP_START( bloodstm_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x480000, 0x480001) AM_WRITE(sound_data_w)
 	AM_RANGE(0x500000, 0x5000ff) AM_READWRITE(bloodstm_video_r, bloodstm_video_w) AM_BASE(&itech32_video)
-	AM_RANGE(0x580000, 0x59ffff) AM_RAM_WRITE(bloodstm_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x580000, 0x59ffff) AM_RAM_WRITE(bloodstm_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x700000, 0x700001) AM_WRITE(bloodstm_plane_w)
 	AM_RANGE(0x780000, 0x780001) AM_READ_PORT("EXTRA")
 	AM_RANGE(0x800000, 0x87ffff) AM_MIRROR(0x780000) AM_ROM AM_REGION("user1", 0) AM_BASE(&main_rom)
@@ -1039,31 +1036,31 @@ AM_RANGE(0x000c00, 0x007fff) AM_MIRROR(0x40000) AM_READWRITE(test2_r, test2_w)
 	AM_RANGE(0x084000, 0x084003) AM_READWRITE(sound_data32_r, sound_data32_w)
 //  AM_RANGE(0x086000, 0x08623f) AM_RAM -- networking -- first 0x40 bytes = our data, next 0x40*8 bytes = their data, r/w on IRQ2
 	AM_RANGE(0x088000, 0x088003) AM_READ(drivedge_steering_r)
-	AM_RANGE(0x08a000, 0x08a003) AM_READWRITE(drivedge_gas_r, SMH_NOP)
+	AM_RANGE(0x08a000, 0x08a003) AM_READ(drivedge_gas_r) AM_WRITENOP
 	AM_RANGE(0x08c000, 0x08c003) AM_READ_PORT("8c000")
 	AM_RANGE(0x08e000, 0x08e003) AM_READ_PORT("8e000") AM_WRITENOP
 	AM_RANGE(0x100000, 0x10000f) AM_WRITE(drivedge_zbuf_control_w) AM_BASE(&drivedge_zbuf_control)
 	AM_RANGE(0x180000, 0x180003) AM_WRITE(drivedge_color0_w)
-	AM_RANGE(0x1a0000, 0x1bffff) AM_RAM_WRITE(drivedge_paletteram_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x1a0000, 0x1bffff) AM_RAM_WRITE(drivedge_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x1c0000, 0x1c0003) AM_WRITENOP
 	AM_RANGE(0x1e0000, 0x1e0113) AM_READWRITE(itech020_video_r, itech020_video_w) AM_BASE((UINT32 **)&itech32_video)
 	AM_RANGE(0x1e4000, 0x1e4003) AM_WRITE(tms_reset_assert_w)
 	AM_RANGE(0x1ec000, 0x1ec003) AM_WRITE(tms_reset_clear_w)
 	AM_RANGE(0x200000, 0x200003) AM_READ_PORT("200000")
-	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(tms1_68k_ram_w) AM_SHARE(1)
-	AM_RANGE(0x300000, 0x300fff) AM_RAM_WRITE(tms2_68k_ram_w) AM_SHARE(2)
+	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(tms1_68k_ram_w) AM_SHARE("share1")
+	AM_RANGE(0x300000, 0x300fff) AM_RAM_WRITE(tms2_68k_ram_w) AM_SHARE("share2")
 	AM_RANGE(0x380000, 0x380003) AM_WRITENOP // AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x600000, 0x607fff) AM_ROM AM_REGION("user1", 0) AM_BASE((UINT32 **)&main_rom)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( drivedge_tms1_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x001fff) AM_RAM AM_BASE(&tms1_boot)
-	AM_RANGE(0x008000, 0x0083ff) AM_MIRROR(0x400) AM_RAM_WRITE(tms1_trigger_w) AM_SHARE(1) AM_BASE(&tms1_ram)
+	AM_RANGE(0x008000, 0x0083ff) AM_MIRROR(0x400) AM_RAM_WRITE(tms1_trigger_w) AM_SHARE("share1") AM_BASE(&tms1_ram)
 	AM_RANGE(0x080000, 0x0bffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( drivedge_tms2_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x008000, 0x0083ff) AM_MIRROR(0x8400) AM_RAM_WRITE(tms2_trigger_w) AM_SHARE(2) AM_BASE(&tms2_ram)
+	AM_RANGE(0x008000, 0x0083ff) AM_MIRROR(0x8400) AM_RAM_WRITE(tms2_trigger_w) AM_SHARE("share2") AM_BASE(&tms2_ram)
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1082,11 +1079,11 @@ static ADDRESS_MAP_START( itech020_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x480000, 0x480003) AM_WRITE(sound_data32_w)
 	AM_RANGE(0x500000, 0x5000ff) AM_READWRITE(itech020_video_r, itech020_video_w) AM_BASE((UINT32 **)&itech32_video)
 	AM_RANGE(0x578000, 0x57ffff) AM_READNOP				/* touched by protection */
-	AM_RANGE(0x580000, 0x59ffff) AM_RAM_WRITE(itech020_paletteram_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x580000, 0x59ffff) AM_RAM_WRITE(itech020_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x600000, 0x603fff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 /* ? */	AM_RANGE(0x61ff00, 0x61ffff) AM_WRITENOP			/* Unknown Writes */
-	AM_RANGE(0x680000, 0x680003) AM_READWRITE(itech020_prot_result_r, SMH_NOP)
-/* ! */	AM_RANGE(0x680800, 0x68083f) AM_RAM_WRITE(SMH_NOP) /* Serial DUART Channel A/B & Top LED sign - To Do! */
+	AM_RANGE(0x680000, 0x680003) AM_READ(itech020_prot_result_r) AM_WRITENOP
+/* ! */	AM_RANGE(0x680800, 0x68083f) AM_READONLY AM_WRITENOP /* Serial DUART Channel A/B & Top LED sign - To Do! */
 	AM_RANGE(0x700000, 0x700003) AM_WRITE(itech020_plane_w)
 	AM_RANGE(0x800000, 0xbfffff) AM_ROM AM_REGION("user1", 0) AM_BASE((UINT32 **)&main_rom)
 ADDRESS_MAP_END
@@ -1108,7 +1105,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x1000) AM_WRITENOP	/* noisy */
 	AM_RANGE(0x1400, 0x140f) AM_DEVREADWRITE("via6522_0", via_r, via_w)
 	AM_RANGE(0x2000, 0x3fff) AM_RAM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -1119,9 +1116,9 @@ static ADDRESS_MAP_START( sound_020_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0800, 0x083f) AM_MIRROR(0x80) AM_DEVREADWRITE("ensoniq", es5506_r, es5506_w)
 	AM_RANGE(0x0c00, 0x0c00) AM_WRITE(sound_bank_w)
 	AM_RANGE(0x1400, 0x1400) AM_WRITE(firq_clear_w)
-	AM_RANGE(0x1800, 0x1800) AM_READWRITE(sound_data_buffer_r, SMH_NOP)
+	AM_RANGE(0x1800, 0x1800) AM_READ(sound_data_buffer_r) AM_WRITENOP
 	AM_RANGE(0x2000, 0x3fff) AM_RAM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -1737,6 +1734,8 @@ static MACHINE_DRIVER_START( timekill )
 
 	MDRV_MACHINE_RESET(itech32)
 	MDRV_NVRAM_HANDLER(itech32)
+
+	MDRV_TICKET_DISPENSER_ADD("ticket", 200, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_HIGH)
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -3939,8 +3938,9 @@ static DRIVER_INIT( wcbowl )
 
 	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x680000, 0x680001, 0, 0, trackball_r);
 
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x578000, 0x57ffff, 0, 0, (read16_space_func)SMH_NOP);
-	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x680080, 0x680081, 0, 0, wcbowl_prot_result_r, (write16_space_func)SMH_NOP);
+	memory_nop_read(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x578000, 0x57ffff, 0, 0);
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x680080, 0x680081, 0, 0, wcbowl_prot_result_r);
+	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x680080, 0x680081, 0, 0);
 }
 
 
@@ -4122,34 +4122,34 @@ Label1  bne.s       Label1          ; Infinite loop if result isn't 0x80
  *
  *************************************/
 
-GAME( 1992, timekill, 0,        timekill, timekill, timekill, ROT0, "Strata/Incredible Technologies", "Time Killers (v1.32)", 0 )
+GAME( 1992, timekill,    0,        timekill, timekill, timekill, ROT0, "Strata/Incredible Technologies", "Time Killers (v1.32)", 0 )
 GAME( 1992, timekill131, timekill, timekill, timekill, timekill, ROT0, "Strata/Incredible Technologies", "Time Killers (v1.31)", 0 )
-GAME( 1993, hardyard, 0,        bloodstm, hardyard, hardyard, ROT0, "Strata/Incredible Technologies", "Hard Yardage (v1.20)", 0 )
-GAME( 1993, hardyard10, hardyard, bloodstm, hardyard, hardyard, ROT0, "Strata/Incredible Technologies", "Hard Yardage (v1.00)", 0 )
-GAME( 1994, bloodstm, 0,        bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v2.22)", 0 )
-GAME( 1994, bloodstm22, bloodstm, bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v2.20)", 0 )
-GAME( 1994, bloodstm21, bloodstm, bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v2.10)", 0 )
-GAME( 1994, bloodstm11, bloodstm, bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v1.10)", 0 )
-GAME( 1994, pairs,    0,        bloodstm, pairs,    bloodstm, ROT0, "Strata/Incredible Technologies", "Pairs (V1.2, 09/30/94)", 0 )
-GAME( 1994, pairsa,   pairs,    bloodstm, pairs,    bloodstm, ROT0, "Strata/Incredible Technologies", "Pairs (09/07/94)", 0 )
-GAME( 1994, hotmemry, pairs,    bloodstm, pairs,    bloodstm, ROT0, "Tuning/Incredible Technologies", "Hot Memory (V1.2, Germany)", 0 )
-GAME( 1994, drivedge, 0,        drivedge, drivedge, drivedge, ROT0, "Strata/Incredible Technologies", "Driver's Edge", GAME_IMPERFECT_GRAPHICS )
-GAME( 1995, wcbowl,   0,        sftm,     wcbowln,  wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.66)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
-GAME( 1995, wcbowl165, wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.65)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
-GAME( 1995, wcbowl161, wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.61)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
-GAME( 1995, wcbowl16,  wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.6)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
-GAME( 1995, wcbowl15,  wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",        "World Class Bowling (v1.5)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
-GAME( 1995, wcbowl13,  wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",        "World Class Bowling (v1.3)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
-GAME( 1995, wcbowl12,  wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",        "World Class Bowling (v1.2)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
-GAME( 1995, sftm,     0,        sftm,     sftm,     sftm,     ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.12)" , 0) /* PIC 16C54 labeled as ITSF-1 */
-GAME( 1995, sftm111,  sftm,     sftm,     sftm,     sftm110,  ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.11)" , 0) /* PIC 16C54 labeled as ITSF-1 */
-GAME( 1995, sftm110,  sftm,     sftm,     sftm,     sftm110,  ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.10)" , 0) /* PIC 16C54 labeled as ITSF-1 */
-GAME( 1995, sftmj,    sftm,     sftm,     sftm,     sftm,     ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.12N, Japan)" , 0) /* PIC 16C54 labeled as ITSF-1 */
-GAME( 1997, shufshot, 0,        sftm,     shufshot, shufshot, ROT0, "Strata/Incredible Technologies", "Shuffleshot (v1.40)" , 0) /* PIC 16C54 labeled as ITSHF-1 */
+GAME( 1993, hardyard,    0,        bloodstm, hardyard, hardyard, ROT0, "Strata/Incredible Technologies", "Hard Yardage (v1.20)", 0 )
+GAME( 1993, hardyard10,  hardyard, bloodstm, hardyard, hardyard, ROT0, "Strata/Incredible Technologies", "Hard Yardage (v1.00)", 0 )
+GAME( 1994, bloodstm,    0,        bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v2.22)", 0 )
+GAME( 1994, bloodstm22,  bloodstm, bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v2.20)", 0 )
+GAME( 1994, bloodstm21,  bloodstm, bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v2.10)", 0 )
+GAME( 1994, bloodstm11,  bloodstm, bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies", "Blood Storm (v1.10)", 0 )
+GAME( 1994, pairs,       0,        bloodstm, pairs,    bloodstm, ROT0, "Strata/Incredible Technologies", "Pairs (V1.2, 09/30/94)", 0 )
+GAME( 1994, pairsa,      pairs,    bloodstm, pairs,    bloodstm, ROT0, "Strata/Incredible Technologies", "Pairs (09/07/94)", 0 )
+GAME( 1994, hotmemry,    pairs,    bloodstm, pairs,    bloodstm, ROT0, "Tuning/Incredible Technologies", "Hot Memory (V1.2, Germany)", 0 )
+GAME( 1994, drivedge,    0,        drivedge, drivedge, drivedge, ROT0, "Strata/Incredible Technologies", "Driver's Edge", GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, wcbowl,      0,        sftm,     wcbowln,  wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.66)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
+GAME( 1995, wcbowl165,   wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.65)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
+GAME( 1995, wcbowl161,   wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.61)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
+GAME( 1995, wcbowl16,    wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",        "World Class Bowling (v1.6)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
+GAME( 1995, wcbowl15,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",        "World Class Bowling (v1.5)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
+GAME( 1995, wcbowl13,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",        "World Class Bowling (v1.3)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
+GAME( 1995, wcbowl12,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",        "World Class Bowling (v1.2)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
+GAME( 1995, sftm,        0,        sftm,     sftm,     sftm,     ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.12)" , 0) /* PIC 16C54 labeled as ITSF-1 */
+GAME( 1995, sftm111,     sftm,     sftm,     sftm,     sftm110,  ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.11)" , 0) /* PIC 16C54 labeled as ITSF-1 */
+GAME( 1995, sftm110,     sftm,     sftm,     sftm,     sftm110,  ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.10)" , 0) /* PIC 16C54 labeled as ITSF-1 */
+GAME( 1995, sftmj,       sftm,     sftm,     sftm,     sftm,     ROT0, "Capcom/Incredible Technologies", "Street Fighter: The Movie (v1.12N, Japan)" , 0) /* PIC 16C54 labeled as ITSF-1 */
+GAME( 1997, shufshot,    0,        sftm,     shufshot, shufshot, ROT0, "Strata/Incredible Technologies", "Shuffleshot (v1.40)" , 0) /* PIC 16C54 labeled as ITSHF-1 */
 GAME( 1997, shufshot139, shufshot, sftm,     shufshot, shufshot, ROT0, "Strata/Incredible Technologies", "Shuffleshot (v1.39)" , 0) /* PIC 16C54 labeled as ITSHF-1 */
 GAME( 1997, shufshot137, shufshot, sftm,     shufbowl, shufshot, ROT0, "Strata/Incredible Technologies", "Shuffleshot (v1.37)" , 0) /* PIC 16C54 labeled as ITSHF-1 */
-GAME( 1997, wcbowl140, wcbowldx, tourny,   wcbowldx, wcbowlt,  ROT0, "Incredible Technologies",        "World Class Bowling Tournament (v1.40)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
-GAME( 1999, wcbowldx, 0,        sftm,     wcbowldx, shufshot, ROT0, "Incredible Technologies",        "World Class Bowling Deluxe (v2.00)" , 0) /* PIC 16C54 labeled as ITBWL-4 */
+GAME( 1997, wcbowl140,   wcbowldx, tourny,   wcbowldx, wcbowlt,  ROT0, "Incredible Technologies",        "World Class Bowling Tournament (v1.40)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
+GAME( 1999, wcbowldx,    0,        sftm,     wcbowldx, shufshot, ROT0, "Incredible Technologies",        "World Class Bowling Deluxe (v2.00)" , 0) /* PIC 16C54 labeled as ITBWL-4 */
 
 /*
     The following naming conventions are used:

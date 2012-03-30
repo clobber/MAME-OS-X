@@ -25,7 +25,7 @@
  * 256VF is not being used, so counting is from 248...255, 0...255, ....
  */
 
-#define MASTER_CLOCK		 	XTAL_61_44MHz
+#define MASTER_CLOCK			XTAL_61_44MHz
 #define CLOCK_1H				(MASTER_CLOCK / 5 / 4)
 #define CLOCK_16H				(CLOCK_1H / 16)
 #define CLOCK_1VF				((CLOCK_16H) / 12 / 2)
@@ -73,24 +73,30 @@ typedef struct _dkong_state dkong_state;
 struct _dkong_state
 {
 	/* memory pointers */
+	UINT8 *           video_ram;
+	UINT8 *           sprite_ram;
+	size_t            sprite_ram_size;
 
+	/* devices */
+	const device_config *dev_n2a03a;
+	const device_config *dev_n2a03b;
+	const device_config *dev_vp2;		/* virtual port 2 */
+	const device_config *dev_6h;
+
+#if 0
 	/* machine states */
 	UINT8	hardware_type;
 
 	/* sound state */
 	const UINT8 *			snd_rom;
-	const device_config *	dev_vp2;		/* virtual port 2 */
 
 	/* video state */
-	tilemap *bg_tilemap;
+	tilemap_t *bg_tilemap;
 
 	bitmap_t *		bg_bits;
 	const UINT8 *	color_codes;
 	emu_timer *		scanline_timer;
-	INT8 			vidhw;			/* Selected video hardware RS Conversion / TKG04 */
-	UINT8 *			video_ram;
-	UINT8 *			sprite_ram;
-	size_t 			sprite_ram_size;
+	INT8			vidhw;			/* Selected video hardware RS Conversion / TKG04 */
 
 	/* radar scope */
 
@@ -103,7 +109,7 @@ struct _dkong_state
 	UINT8	rflip_sig;
 	UINT8	star_ff;
 	UINT8	blue_level;
-	double 	cd4049_a;
+	double	cd4049_a;
 	double	cd4049_b;
 
 	/* Specific states */
@@ -121,11 +127,58 @@ struct _dkong_state
 	UINT16	grid_col;
 	UINT8	sprite_bank;
 	UINT8	dma_latch;
-	UINT8 	flip;
+	UINT8	flip;
 
 	/* reverse address lookup map - hunchbkd */
 	INT16 rev_map[0x200];
+#endif
+	/* machine states */
+	UINT8	            hardware_type;
 
+	/* sound state */
+	const UINT8       *snd_rom;
+
+	/* video state */
+	tilemap_t           *bg_tilemap;
+
+	bitmap_t          *bg_bits;
+	const UINT8 *     color_codes;
+	emu_timer *       scanline_timer;
+	INT8              vidhw;			/* Selected video hardware RS Conversion / TKG04 */
+
+	/* radar scope */
+
+	UINT8 *           gfx4;
+	UINT8 *           gfx3;
+	int               gfx3_len;
+
+	UINT8             sig30Hz;
+	UINT8             grid_sig;
+	UINT8             rflip_sig;
+	UINT8             star_ff;
+	UINT8             blue_level;
+	double            cd4049_a;
+	double            cd4049_b;
+
+	/* Specific states */
+	INT8              decrypt_counter;
+
+	/* 2650 protection */
+	UINT8             protect_type;
+	UINT8             hunchloopback;
+	UINT8             prot_cnt;
+	UINT8             main_fo;
+
+	/* Save state relevant */
+	UINT8             gfx_bank, palette_bank;
+	UINT8             grid_on;
+	UINT16	      grid_col;
+	UINT8             sprite_bank;
+	UINT8             dma_latch;
+	UINT8             flip;
+
+	/* reverse address lookup map - hunchbkd */
+	INT16             rev_map[0x200];
 };
 
 /*----------- defined in video/dkong.c -----------*/

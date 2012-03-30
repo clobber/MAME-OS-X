@@ -14,7 +14,7 @@
 #include "cpu/nec/nec.h"
 #include "sound/2203intf.h"
 #include "sound/flt_vol.h"
-#include "lockon.h"
+#include "includes/lockon.h"
 
 #define V30_GND_ADDR	((lockon_ctrl_reg & 0x3) << 16)
 #define V30_OBJ_ADDR	((lockon_ctrl_reg & 0x18) << 13)
@@ -164,7 +164,7 @@ static ADDRESS_MAP_START( main_v30, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0c000, 0x0cfff) AM_WRITE(lockon_fb_clut_w)
 	AM_RANGE(0x0e000, 0x0e001) AM_WRITE(inten_w)
 	AM_RANGE(0x0f000, 0x0f001) AM_WRITE(emres_w)
-	AM_RANGE(0x10000, 0x1ffff) AM_READWRITE(SMH_NOP, tst_w)
+	AM_RANGE(0x10000, 0x1ffff) AM_READNOP AM_WRITE(tst_w)
 	AM_RANGE(0x20000, 0x2ffff) AM_READWRITE(main_z80_r, main_z80_w)
 	AM_RANGE(0x30000, 0x3ffff) AM_READWRITE(main_gnd_r, main_gnd_w)
 	AM_RANGE(0x40000, 0x4ffff) AM_READWRITE(main_obj_r, main_obj_w)
@@ -201,13 +201,13 @@ static ADDRESS_MAP_START( sound_prg, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
 	AM_RANGE(0x7000, 0x7000) AM_WRITE(sound_vol)
-	AM_RANGE(0x7400, 0x7403) AM_READWRITE(adc_r, SMH_NOP)
+	AM_RANGE(0x7400, 0x7403) AM_READ(adc_r) AM_WRITENOP
 	AM_RANGE(0x7800, 0x7fff) AM_MIRROR(0x8000) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x02, 0x02) AM_NOP
 ADDRESS_MAP_END
 
@@ -257,15 +257,15 @@ static INPUT_PORTS_START( lockon )
 	PORT_DIPSETTING(      0x0500, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(      0x0700, DEF_STR( Free_Play ) )
 
- 	PORT_DIPNAME( 0x3800, 0x0000, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW2:4,5,6")
- 	PORT_DIPSETTING(      0x3000, DEF_STR( 4C_1C ) )
- 	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
- 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
- 	PORT_DIPSETTING(      0x1000, DEF_STR( 1C_2C ) )
- 	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_3C ) )
- 	PORT_DIPSETTING(      0x2800, DEF_STR( 1C_4C ) )
- 	PORT_DIPSETTING(      0x1800, DEF_STR( 1C_5C ) )
- 	PORT_DIPSETTING(      0x3800, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0x3800, 0x0000, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW2:4,5,6")
+	PORT_DIPSETTING(      0x3000, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(      0x1000, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(      0x2800, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(      0x1800, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(      0x3800, DEF_STR( 1C_6C ) )
 
 	/*
         Wire jumper beside the dipswitches on PCB TF011.
@@ -318,15 +318,15 @@ static INPUT_PORTS_START( lockone )
 	PORT_DIPSETTING(      0x0400, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(      0x0500, DEF_STR( 1C_3C ) )
 
- 	PORT_DIPNAME( 0x0800, 0x0000, "Buy-In" )
- 	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
- 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x0800, 0x0000, "Buy-In" )
+	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
 
 	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unused ) )
 	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On )  )
 	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unused ) )
- 	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On )  )
 INPUT_PORTS_END
 
@@ -430,12 +430,12 @@ static void ym2203_irq(const device_config *device, int irq)
 
 static WRITE8_DEVICE_HANDLER( ym2203_out_b )
 {
-	coin_counter_w(0, data & 0x80);
-	coin_counter_w(1, data & 0x40);
-	coin_counter_w(2, data & 0x20);
+	coin_counter_w(device->machine, 0, data & 0x80);
+	coin_counter_w(device->machine, 1, data & 0x40);
+	coin_counter_w(device->machine, 2, data & 0x20);
 
 	/* 'Lock-On' lamp */
-	set_led_status(1, !(data & 0x10));
+	set_led_status(device->machine, 1, !(data & 0x10));
 }
 
 static const ym2203_interface ym2203_config =
@@ -491,7 +491,7 @@ static MACHINE_DRIVER_START( lockon )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2203, XTAL_16MHz / 4)
+	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_16MHz / 4)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.40)

@@ -33,8 +33,8 @@
 #include "cpu/mcs51/mcs51.h"
 #include "deprecat.h"
 #include "machine/segaic16.h"
-#include "system16.h"
-#include "genesis.h"
+#include "includes/system16.h"
+#include "includes/genesis.h"
 #include "sound/2612intf.h"
 #include "sound/rf5c68.h"
 
@@ -92,43 +92,43 @@ static WRITE16_HANDLER( rom_5987_bank_w );
 
 static const segaic16_memory_map_entry rom_171_shad_info[] =
 {
-	{ 0x3d/2, 0x00000, 0x04000, 0xffc000,      ~0, misc_io_r,                       misc_io_w,                        NULL,                  "I/O space" },
-	{ 0x39/2, 0x00000, 0x02000, 0xffe000,      ~0, (read16_space_func)SMH_BANK(10), segaic16_paletteram_w,            &paletteram16,         "color RAM" },
-	{ 0x35/2, 0x00000, 0x10000, 0xfe0000,      ~0, (read16_space_func)SMH_BANK(11), segaic16_tileram_0_w,             &segaic16_tileram_0,   "tile RAM" },
-	{ 0x35/2, 0x10000, 0x01000, 0xfef000,      ~0, (read16_space_func)SMH_BANK(12), segaic16_textram_0_w,             &segaic16_textram_0,   "text RAM" },
-	{ 0x31/2, 0x00000, 0x00800, 0xfff800,      ~0, (read16_space_func)SMH_BANK(13), (write16_space_func)SMH_BANK(13), &segaic16_spriteram_0, "object RAM" },
-	{ 0x2d/2, 0x00000, 0x04000, 0xffc000,      ~0, (read16_space_func)SMH_BANK(14), (write16_space_func)SMH_BANK(14), &workram,              "work RAM" },
-	{ 0x29/2, 0x00000, 0x10000, 0xff0000,      ~0, NULL,                            NULL,                             NULL,                  "????" },
-	{ 0x25/2, 0x00000, 0x00010, 0xfffff0,      ~0, genesis_vdp_r,                   genesis_vdp_w,                    NULL,                  "VDP" },
-	{ 0x21/2, 0x00000, 0x80000, 0xf80000, 0x00000, (read16_space_func)SMH_BANK(17), (write16_space_func)SMH_UNMAP,    NULL,                  "ROM 0" },
+	{ 0x3d/2, 0x00000, 0x04000, 0xffc000,      ~0, misc_io_r,     NULL,     misc_io_w,             NULL,     NULL,                  "I/O space" },
+	{ 0x39/2, 0x00000, 0x02000, 0xffe000,      ~0, NULL,          "bank10", segaic16_paletteram_w, NULL,     &segaic16_paletteram,  "color RAM" },
+	{ 0x35/2, 0x00000, 0x10000, 0xfe0000,      ~0, NULL,          "bank11", segaic16_tileram_0_w,  NULL,     &segaic16_tileram_0,   "tile RAM" },
+	{ 0x35/2, 0x10000, 0x01000, 0xfef000,      ~0, NULL,          "bank12", segaic16_textram_0_w,  NULL,     &segaic16_textram_0,   "text RAM" },
+	{ 0x31/2, 0x00000, 0x00800, 0xfff800,      ~0, NULL,          "bank13", NULL,                  "bank13", &segaic16_spriteram_0, "object RAM" },
+	{ 0x2d/2, 0x00000, 0x04000, 0xffc000,      ~0, NULL,          "bank14", NULL,                  "bank14", &workram,              "work RAM" },
+	{ 0x29/2, 0x00000, 0x10000, 0xff0000,      ~0, NULL,          NULL,     NULL,                  NULL,     NULL,                  "????" },
+	{ 0x25/2, 0x00000, 0x00010, 0xfffff0,      ~0, genesis_vdp_r, NULL,     genesis_vdp_w,         NULL,     NULL,                  "VDP" },
+	{ 0x21/2, 0x00000, 0x80000, 0xf80000, 0x00000, NULL,          "bank17", NULL,                  NULL,     NULL,                  "ROM 0" },
 	{ 0 }
 };
 
 static const segaic16_memory_map_entry rom_171_5874_info[] =
 {
-	{ 0x3d/2, 0x00000, 0x04000, 0xffc000,      ~0, misc_io_r,                       misc_io_w,                        NULL,                  "I/O space" },
-	{ 0x39/2, 0x00000, 0x02000, 0xffe000,      ~0, (read16_space_func)SMH_BANK(10), segaic16_paletteram_w,            &paletteram16,         "color RAM" },
-	{ 0x35/2, 0x00000, 0x10000, 0xfe0000,      ~0, (read16_space_func)SMH_BANK(11), segaic16_tileram_0_w,             &segaic16_tileram_0,   "tile RAM" },
-	{ 0x35/2, 0x10000, 0x01000, 0xfef000,      ~0, (read16_space_func)SMH_BANK(12), segaic16_textram_0_w,             &segaic16_textram_0,   "text RAM" },
-	{ 0x31/2, 0x00000, 0x00800, 0xfff800,      ~0, (read16_space_func)SMH_BANK(13), (write16_space_func)SMH_BANK(13), &segaic16_spriteram_0, "object RAM" },
-	{ 0x2d/2, 0x00000, 0x04000, 0xffc000,      ~0, (read16_space_func)SMH_BANK(14), (write16_space_func)SMH_BANK(14), &workram,              "work RAM" },
-	{ 0x29/2, 0x00000, 0x00010, 0xfffff0,      ~0, genesis_vdp_r,                   genesis_vdp_w,                    NULL,                  "VDP" },
-	{ 0x25/2, 0x00000, 0x80000, 0xf80000, 0x80000, (read16_space_func)SMH_BANK(16), (write16_space_func)SMH_UNMAP,    NULL,                  "ROM 1" },
-	{ 0x21/2, 0x00000, 0x80000, 0xf80000, 0x00000, (read16_space_func)SMH_BANK(17), (write16_space_func)SMH_UNMAP,    NULL,                  "ROM 0" },
+	{ 0x3d/2, 0x00000, 0x04000, 0xffc000,      ~0, misc_io_r,     NULL,     misc_io_w,             NULL,     NULL,                  "I/O space" },
+	{ 0x39/2, 0x00000, 0x02000, 0xffe000,      ~0, NULL,          "bank10", segaic16_paletteram_w, NULL,     &segaic16_paletteram,  "color RAM" },
+	{ 0x35/2, 0x00000, 0x10000, 0xfe0000,      ~0, NULL,          "bank11", segaic16_tileram_0_w,  NULL,     &segaic16_tileram_0,   "tile RAM" },
+	{ 0x35/2, 0x10000, 0x01000, 0xfef000,      ~0, NULL,          "bank12", segaic16_textram_0_w,  NULL,     &segaic16_textram_0,   "text RAM" },
+	{ 0x31/2, 0x00000, 0x00800, 0xfff800,      ~0, NULL,          "bank13", NULL,                  "bank13", &segaic16_spriteram_0, "object RAM" },
+	{ 0x2d/2, 0x00000, 0x04000, 0xffc000,      ~0, NULL,          "bank14", NULL,                  "bank14", &workram,              "work RAM" },
+	{ 0x29/2, 0x00000, 0x00010, 0xfffff0,      ~0, genesis_vdp_r, NULL,     genesis_vdp_w,         NULL,     NULL,                  "VDP" },
+	{ 0x25/2, 0x00000, 0x80000, 0xf80000, 0x80000, NULL,          "bank16", NULL,                  NULL,     NULL,                  "ROM 1" },
+	{ 0x21/2, 0x00000, 0x80000, 0xf80000, 0x00000, NULL,          "bank17", NULL,                  NULL,     NULL,                  "ROM 0" },
 	{ 0 }
 };
 
 static const segaic16_memory_map_entry rom_171_5987_info[] =
 {
-	{ 0x3d/2, 0x00000, 0x04000, 0xffc000,      ~0, misc_io_r,                       misc_io_w,                        NULL,                  "I/O space" },
-	{ 0x39/2, 0x00000, 0x02000, 0xffe000,      ~0, (read16_space_func)SMH_BANK(10), segaic16_paletteram_w,            &paletteram16,         "color RAM" },
-	{ 0x35/2, 0x00000, 0x10000, 0xfe0000,      ~0, (read16_space_func)SMH_BANK(11), segaic16_tileram_0_w,             &segaic16_tileram_0,   "tile RAM" },
-	{ 0x35/2, 0x10000, 0x01000, 0xfef000,      ~0, (read16_space_func)SMH_BANK(12), segaic16_textram_0_w,             &segaic16_textram_0,   "text RAM" },
-	{ 0x31/2, 0x00000, 0x00800, 0xfff800,      ~0, (read16_space_func)SMH_BANK(13), (write16_space_func)SMH_BANK(13), &segaic16_spriteram_0, "object RAM" },
-	{ 0x2d/2, 0x00000, 0x04000, 0xffc000,      ~0, (read16_space_func)SMH_BANK(14), (write16_space_func)SMH_BANK(14), &workram,              "work RAM" },
-	{ 0x29/2, 0x00000, 0x00010, 0xfffff0,      ~0, genesis_vdp_r,                   genesis_vdp_w,                    NULL,                  "VDP" },
-	{ 0x25/2, 0x00000, 0x80000, 0xf80000, 0x80000, (read16_space_func)SMH_BANK(16), rom_5987_bank_w,                  NULL,                  "ROM 1/banking" },
-	{ 0x21/2, 0x00000, 0x100000,0xf00000, 0x00000, (read16_space_func)SMH_BANK(17), (write16_space_func)SMH_UNMAP,    NULL,                  "ROM 0" },
+	{ 0x3d/2, 0x00000, 0x04000, 0xffc000,      ~0, misc_io_r,     NULL,     misc_io_w,             NULL,     NULL,                  "I/O space" },
+	{ 0x39/2, 0x00000, 0x02000, 0xffe000,      ~0, NULL,          "bank10", segaic16_paletteram_w, NULL,     &segaic16_paletteram,  "color RAM" },
+	{ 0x35/2, 0x00000, 0x10000, 0xfe0000,      ~0, NULL,          "bank11", segaic16_tileram_0_w,  NULL,     &segaic16_tileram_0,   "tile RAM" },
+	{ 0x35/2, 0x10000, 0x01000, 0xfef000,      ~0, NULL,          "bank12", segaic16_textram_0_w,  NULL,     &segaic16_textram_0,   "text RAM" },
+	{ 0x31/2, 0x00000, 0x00800, 0xfff800,      ~0, NULL,          "bank13", NULL,                  "bank13", &segaic16_spriteram_0, "object RAM" },
+	{ 0x2d/2, 0x00000, 0x04000, 0xffc000,      ~0, NULL,          "bank14", NULL,                  "bank14", &workram,              "work RAM" },
+	{ 0x29/2, 0x00000, 0x00010, 0xfffff0,      ~0, genesis_vdp_r, NULL,     genesis_vdp_w,         NULL,     NULL,                  "VDP" },
+	{ 0x25/2, 0x00000, 0x80000, 0xf80000, 0x80000, NULL,          "bank16", rom_5987_bank_w,       NULL,     NULL,                  "ROM 1/banking" },
+	{ 0x21/2, 0x00000, 0x100000,0xf00000, 0x00000, NULL,          "bank17", NULL,                  NULL,     NULL,                  "ROM 0" },
 	{ 0 }
 };
 
@@ -168,7 +168,7 @@ static void system18_generic_init(running_machine *machine, int _rom_board)
 
 	/* allocate memory for regions not autmatically assigned */
 	segaic16_spriteram_0 = auto_alloc_array(machine, UINT16, 0x00800/2);
-	paletteram16         = auto_alloc_array(machine, UINT16, 0x04000/2);
+	segaic16_paletteram  = auto_alloc_array(machine, UINT16, 0x04000/2);
 	segaic16_tileram_0   = auto_alloc_array(machine, UINT16, 0x10000/2);
 	segaic16_textram_0   = auto_alloc_array(machine, UINT16, 0x01000/2);
 	workram              = auto_alloc_array(machine, UINT16, 0x04000/2);
@@ -291,10 +291,10 @@ static WRITE16_HANDLER( io_chip_w )
 			segaic16_sprites_set_flip(space->machine, 0, data & 0x20);
 /* These are correct according to cgfm's docs, but mwalker and ddcrew both
    enable the lockout and never turn it off
-            coin_lockout_w(1, data & 0x08);
-            coin_lockout_w(0, data & 0x04); */
-			coin_counter_w(1, data & 0x02);
-			coin_counter_w(0, data & 0x01);
+            coin_lockout_w(space->machine, 1, data & 0x08);
+            coin_lockout_w(space->machine, 0, data & 0x04); */
+			coin_counter_w(space->machine, 1, data & 0x02);
+			coin_counter_w(space->machine, 0, data & 0x01);
 			break;
 
 		/* tile banking */
@@ -554,7 +554,7 @@ static WRITE16_HANDLER( wwally_custom_io_w )
 
 static WRITE8_HANDLER( soundbank_w )
 {
-	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "soundcpu") + 0x10000 + 0x2000 * data);
+	memory_set_bankptr(space->machine, "bank1", memory_region(space->machine, "soundcpu") + 0x10000 + 0x2000 * data);
 }
 
 
@@ -604,9 +604,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x9fff) AM_ROM AM_REGION("soundcpu", 0x10000)
-	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK(1)
-	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x0ff0) AM_DEVWRITE("rf", rf5c68_w)
-	AM_RANGE(0xd000, 0xdfff) AM_DEVREADWRITE("rf", rf5c68_mem_r, rf5c68_mem_w)
+	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xc00f) AM_MIRROR(0x0ff0) AM_DEVWRITE("rfsnd", rf5c68_w)
+	AM_RANGE(0xd000, 0xdfff) AM_DEVREADWRITE("rfsnd", rf5c68_mem_r, rf5c68_mem_w)
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -845,7 +845,7 @@ static INPUT_PORTS_START( bloxeed )
 	PORT_DIPSETTING(    0x00, "D" )		/* 2 Start / 1 Continue | 2 Start / 2 Continue */
 	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SWB:4")
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
- 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SWB:5,6")
 	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
@@ -1061,8 +1061,8 @@ static INPUT_PORTS_START( lghost )
 	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SWB:3,4,5")
 	PORT_DIPSETTING(    0x0c, DEF_STR( Easiest ) )
 	PORT_DIPSETTING(    0x14, DEF_STR( Easier ) )
- 	PORT_DIPSETTING(    0x18, DEF_STR( Easy ) )
- 	PORT_DIPSETTING(    0x1c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Harder ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hardest ) )
@@ -1293,7 +1293,7 @@ static MACHINE_DRIVER_START( system18 )
 	MDRV_SOUND_ADD("ym2", YM3438, 8000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MDRV_SOUND_ADD("rf", RF5C68, 10000000)
+	MDRV_SOUND_ADD("rfsnd", RF5C68, 10000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

@@ -411,61 +411,61 @@ int getstar_id;
 static ADDRESS_MAP_START( perfrman_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x880f) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x8810, 0x8fff) AM_RAMBANK(1) /* Shared RAM with sound CPU */
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0x9800, 0x9fff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x8800, 0x880f) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x8810, 0x8fff) AM_RAMBANK("bank1") /* Shared RAM with sound CPU */
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&slapfight_videoram)
+	AM_RANGE(0x9800, 0x9fff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tigerh_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xc810, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&slapfight_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE(&slapfight_scrollx_lo)
 	AM_RANGE(0xe801, 0xe801) AM_WRITEONLY AM_BASE(&slapfight_scrollx_hi)
 	AM_RANGE(0xe802, 0xe802) AM_WRITEONLY AM_BASE(&slapfight_scrolly)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(slapfight_fixram_w) AM_BASE(&slapfight_videoram) AM_SIZE(&slapfight_videoram_size)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(slapfight_fixcol_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(slapfight_fixram_w) AM_BASE(&slapfight_fixvideoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(slapfight_fixcol_w) AM_BASE(&slapfight_fixcolorram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( slapfght_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xc810, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&slapfight_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE(&slapfight_scrollx_lo)
 	AM_RANGE(0xe801, 0xe801) AM_WRITEONLY AM_BASE(&slapfight_scrollx_hi)
 	AM_RANGE(0xe802, 0xe802) AM_WRITEONLY AM_BASE(&slapfight_scrolly)
 //  AM_RANGE(0xe803, 0xe803) AM_READ(mcu_r) // MCU lives here
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(slapfight_fixram_w) AM_BASE(&slapfight_videoram) AM_SIZE(&slapfight_videoram_size)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(slapfight_fixcol_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(slapfight_fixram_w) AM_BASE(&slapfight_fixvideoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(slapfight_fixcol_w) AM_BASE(&slapfight_fixcolorram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( slapbtuk_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xc810, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(slapfight_videoram_w) AM_BASE(&slapfight_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(slapfight_colorram_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE(&slapfight_scrollx_hi)
 	AM_RANGE(0xe802, 0xe802) AM_WRITEONLY AM_BASE(&slapfight_scrolly)
 	AM_RANGE(0xe803, 0xe803) AM_WRITEONLY AM_BASE(&slapfight_scrollx_lo)
 //  AM_RANGE(0xe803, 0xe803) AM_READ(getstar_e803_r)
 	AM_RANGE(0xec00, 0xefff) AM_ROM // it reads a copy of the logo from here!
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(slapfight_fixram_w) AM_BASE(&slapfight_videoram) AM_SIZE(&slapfight_videoram_size)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(slapfight_fixcol_w) AM_BASE(&slapfight_colorram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(slapfight_fixram_w) AM_BASE(&slapfight_fixvideoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(slapfight_fixcol_w) AM_BASE(&slapfight_fixcolorram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( slapfght_io_map, ADDRESS_SPACE_IO, 8 )
@@ -518,8 +518,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( perfrman_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x8800, 0x880f) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x8810, 0x8fff) AM_RAMBANK(1) /* Shared RAM with main CPU */
+	AM_RANGE(0x8800, 0x880f) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x8810, 0x8fff) AM_RAMBANK("bank1") /* Shared RAM with main CPU */
 	AM_RANGE(0xa080, 0xa080) AM_DEVWRITE("ay1", ay8910_address_w)
 	AM_RANGE(0xa081, 0xa081) AM_DEVREAD("ay1", ay8910_r)
 	AM_RANGE(0xa082, 0xa082) AM_DEVWRITE("ay1", ay8910_data_w)
@@ -540,7 +540,7 @@ static ADDRESS_MAP_START( slapfght_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa092, 0xa092) AM_DEVWRITE("ay2", ay8910_data_w)
 	AM_RANGE(0xa0e0, 0xa0e0) AM_WRITE(getstar_sh_intenable_w) /* maybe a0f0 also -LE */
 //  AM_RANGE(0xa0f0, 0xa0f0) AM_WRITENOP
-	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE(1)
+	AM_RANGE(0xc800, 0xc80f) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xc810, 0xcfff) AM_RAM
 	AM_RANGE(0xd000, 0xffff) AM_RAM
 ADDRESS_MAP_END
@@ -1860,7 +1860,7 @@ GAME( 1985, perfrmanu,perfrman, perfrman, perfrman, 0,        ROT270, "[Toaplan]
 GAME( 1985, tigerh,   0,        tigerh,   tigerh,   tigerh,   ROT270, "Taito America Corp.", "Tiger Heli (US)", GAME_NO_COCKTAIL )
 GAME( 1985, tigerhj,  tigerh,   tigerh,   tigerh,   tigerh,   ROT270, "Taito",   "Tiger Heli (Japan)", GAME_NO_COCKTAIL )
 GAME( 1985, tigerhb1, tigerh,   tigerhb,  tigerh,   tigerhb,  ROT270, "bootleg", "Tiger Heli (bootleg set 1)", GAME_NO_COCKTAIL )
-GAME( 1985, tigerhb2, tigerh, 	tigerhb,  tigerh,   0,        ROT270, "bootleg", "Tiger Heli (bootleg set 2)", GAME_NO_COCKTAIL )
+GAME( 1985, tigerhb2, tigerh,	tigerhb,  tigerh,   0,        ROT270, "bootleg", "Tiger Heli (bootleg set 2)", GAME_NO_COCKTAIL )
 GAME( 1985, tigerhb3, tigerh,	tigerhb,  tigerh,   0,        ROT270, "bootleg", "Tiger Heli (bootleg set 3)", GAME_NO_COCKTAIL )
 GAME( 1986, slapfigh, 0,        slapfigh, slapfigh, slapfigh, ROT270, "Taito",   "Slap Fight (set 1)", GAME_NOT_WORKING | GAME_NO_COCKTAIL )
 GAME( 1986, slapfigha,slapfigh, slapfigh, slapfigh, slapfigh, ROT270, "Taito",   "Slap Fight (set 2)", GAME_NOT_WORKING | GAME_NO_COCKTAIL )

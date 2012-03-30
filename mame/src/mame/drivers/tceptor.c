@@ -11,7 +11,7 @@
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m68000/m68000.h"
-#include "namcoic.h"
+#include "includes/namcoic.h"
 #include "sound/dac.h"
 #include "sound/2151intf.h"
 #include "sound/namco.h"
@@ -188,7 +188,7 @@ static ADDRESS_MAP_START( m6809_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4f03, 0x4f03) AM_READ_PORT("STICKY")			// analog input (up/down)
 	AM_RANGE(0x4f00, 0x4f03) AM_WRITENOP				// analog input control?
 	AM_RANGE(0x5000, 0x5006) AM_WRITE(tceptor_bg_scroll_w)	// bg scroll
-	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_SHARE(1) AM_BASE(&m68k_shared_ram) // COM RAM
+	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_SHARE("share1") AM_BASE(&m68k_shared_ram) // COM RAM
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(m6809_irq_disable_w)
 	AM_RANGE(0x8800, 0x8800) AM_WRITE(m6809_irq_enable_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
@@ -196,22 +196,22 @@ ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( m6502_a_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0x0100, 0x01ff) AM_RAM
 	AM_RANGE(0x0200, 0x02ff) AM_RAM
 	AM_RANGE(0x0300, 0x030f) AM_RAM
-	AM_RANGE(0x2000, 0x2001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
-	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_SHARE(3)
-	AM_RANGE(0x3c01, 0x3c01) AM_WRITE(SMH_RAM)
+	AM_RANGE(0x2000, 0x2001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x3000, 0x30ff) AM_RAM AM_SHARE("share3")
+	AM_RANGE(0x3c01, 0x3c01) AM_WRITEONLY
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( m6502_b_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0x0100, 0x01ff) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("dac", voice_w)			// voice data
-	AM_RANGE(0x5000, 0x5000) AM_WRITE(SMH_RAM)			// voice ctrl??
+	AM_RANGE(0x5000, 0x5000) AM_WRITEONLY			// voice ctrl??
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -220,11 +220,11 @@ static ADDRESS_MAP_START( m68k_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM			// M68K ERROR 1
 	AM_RANGE(0x100000, 0x10ffff) AM_ROM			// not sure
 	AM_RANGE(0x200000, 0x203fff) AM_RAM			// M68K ERROR 0
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(SMH_RAM)
-	AM_RANGE(0x400000, 0x4001ff) AM_WRITE(SMH_RAM) AM_BASE(&tceptor_sprite_ram)
+	AM_RANGE(0x300000, 0x300001) AM_WRITEONLY
+	AM_RANGE(0x400000, 0x4001ff) AM_WRITEONLY AM_BASE(&tceptor_sprite_ram)
 	AM_RANGE(0x500000, 0x51ffff) AM_WRITE(namco_road16_w)
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(m68k_irq_enable_w)	// not sure
-	AM_RANGE(0x700000, 0x703fff) AM_READWRITE(m68k_shared_word_r, m68k_shared_word_w) AM_SHARE(1)
+	AM_RANGE(0x700000, 0x703fff) AM_READWRITE(m68k_shared_word_r, m68k_shared_word_w) AM_SHARE("share1")
 ADDRESS_MAP_END
 
 
@@ -234,7 +234,7 @@ static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_BASE(&namco_wavedata)
 	AM_RANGE(0x1400, 0x154d) AM_RAM
 	AM_RANGE(0x17c0, 0x17ff) AM_RAM
-	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_SHARE(3)
+	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_SHARE("share3")
 	AM_RANGE(0x2100, 0x2100) AM_READ(dsw0_r)
 	AM_RANGE(0x2101, 0x2101) AM_READ(dsw1_r)
 	AM_RANGE(0x2200, 0x2200) AM_READ(input0_r)
@@ -243,14 +243,14 @@ static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8800, 0x8800) AM_WRITE(mcu_irq_enable_w)
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xdfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	// Battery Backup
+	AM_RANGE(0xc800, 0xdfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// Battery Backup
 	AM_RANGE(0xf000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READWRITE(readFF, SMH_NOP)
-	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READWRITE(readFF, SMH_NOP)
+	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ(readFF) AM_WRITENOP
+	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READ(readFF) AM_WRITENOP
 ADDRESS_MAP_END
 
 
@@ -382,7 +382,7 @@ static MACHINE_DRIVER_START( tceptor )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 49152000/32)
 	MDRV_CPU_PROGRAM_MAP(m6809_map)
-	MDRV_CPU_VBLANK_INT("2d", m6809_vb_interrupt)
+	MDRV_CPU_VBLANK_INT("2dscreen", m6809_vb_interrupt)
 
 	MDRV_CPU_ADD("audiocpu", M65C02, 49152000/24)
 	MDRV_CPU_PROGRAM_MAP(m6502_a_map)
@@ -392,12 +392,12 @@ static MACHINE_DRIVER_START( tceptor )
 
 	MDRV_CPU_ADD("sub", M68000, 49152000/4)
 	MDRV_CPU_PROGRAM_MAP(m68k_map)
-	MDRV_CPU_VBLANK_INT("2d", m68k_vb_interrupt)
+	MDRV_CPU_VBLANK_INT("2dscreen", m68k_vb_interrupt)
 
 	MDRV_CPU_ADD("mcu", HD63701, 49152000/8)	/* or compatible 6808 with extra instructions */
 	MDRV_CPU_PROGRAM_MAP(mcu_map)
 	MDRV_CPU_IO_MAP(mcu_io_map)
-	MDRV_CPU_VBLANK_INT("2d", mcu_vb_interrupt)
+	MDRV_CPU_VBLANK_INT("2dscreen", mcu_vb_interrupt)
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
@@ -411,7 +411,7 @@ static MACHINE_DRIVER_START( tceptor )
 	MDRV_PALETTE_LENGTH(4096)
 	MDRV_DEFAULT_LAYOUT(layout_horizont)
 
-	MDRV_SCREEN_ADD("2d", RASTER)
+	MDRV_SCREEN_ADD("2dscreen", RASTER)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_REFRESH_RATE(60.606060)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
@@ -441,7 +441,7 @@ static MACHINE_DRIVER_START( tceptor )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 14318180/4)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 14318180/4)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 

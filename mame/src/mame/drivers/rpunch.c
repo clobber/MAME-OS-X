@@ -244,9 +244,9 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xfffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x04ffff) AM_RAM AM_BASE(&rpunch_bitmapram) AM_SIZE(&rpunch_bitmapram_size)
-	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE(&spriteram16)
-	AM_RANGE(0x080000, 0x083fff) AM_RAM_WRITE(rpunch_videoram_w) AM_BASE(&videoram16) AM_SIZE(&videoram_size)
-	AM_RANGE(0x0a0000, 0x0a07ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x060000, 0x060fff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x080000, 0x083fff) AM_RAM_WRITE(rpunch_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
+	AM_RANGE(0x0a0000, 0x0a07ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0c0000, 0x0c0007) AM_WRITE(rpunch_scrollreg_w)
 	AM_RANGE(0x0c0008, 0x0c0009) AM_WRITE(rpunch_crtc_data_w)
 	AM_RANGE(0x0c000c, 0x0c000d) AM_WRITE(rpunch_videoreg_w)
@@ -270,7 +270,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xf200, 0xf200) AM_READ(sound_command_r)
 	AM_RANGE(0xf400, 0xf400) AM_DEVWRITE("upd", upd_control_w)
 	AM_RANGE(0xf600, 0xf600) AM_DEVWRITE("upd", upd_data_w)
@@ -506,7 +506,7 @@ static MACHINE_DRIVER_START( rpunch )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, MASTER_CLOCK/4)
+	MDRV_SOUND_ADD("ymsnd", YM2151, MASTER_CLOCK/4)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 0.50)

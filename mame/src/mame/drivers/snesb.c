@@ -8,6 +8,7 @@
     - Killer Instinct
     - Final Fight 2
     - Sonic Blast Man 2
+    - Iron (bootleg of Iron Commando)
 
     Not dumped:
     - Final Fight 3
@@ -78,7 +79,63 @@ TODO:
 
     Data lines of eproms are bitswapped.
 
+***************************************************************************
+
+Iron PCB (same as Final Fight 2?)
+ ______________________________________________________________________________________________
+|                                                                                              |
+|     _____________              XTAL1                    XTAL2                                |
+|    |             |             21.47727Mhz              24.576Mhz          _______           |
+|    |             |                                                        |86A619 |          |
+|    |   LATTICE   |                                                        |_______|          |
+|    |pLSL1024_60LJ|                                                                           |
+|    |   B611S01   |                                                         _______________   |
+|    |             |                       _________        _________       |               |  |
+|    |             |         ______       | 86A621  |      | 86A537  |      |HM65256BLP_12  |  |
+|    |             |        |      |      |  JDCF   |      |  JDCF   |      |   01002990    |  |
+|    |_____________|        |86A623|      |         |      |         |      |_______________|  |
+|                           | JDCF |      |_________|      |_________|       _______________   |
+|  ___________________      |      |                                        |               |  |
+| |4.C11              |     |      |                                        |HM65256BLP_12  |  |
+| |                   |     |______|                                        |   01002990    |  |
+| |AM27C020           |                                                     |_______________|  |
+| |___________________|                      ______           ______                           |
+|  ___________________                      |      |         |      |        _______________   |
+| |5.C10              |      ______         |86A617|         |86A618|       |               |  |
+| |                   |     |      |        | JDCF |         | JDCF |       | KM62256BLP_10 |  |
+| |27C4001            |     |86A540|        |      |         |      |       |  210Y  KOREA  |  |
+| |___________________|     | JDKF |        |      |         |      |       |_______________|  |
+|  ___________________      |      |        |______|         |______|        _______________   |
+| |6.C09              |     |      |                                        |               |  |
+| |                   |     |______|                                        | KM62256BLP_10 |  |
+| |27C4001            |                                                     |  210Y  KOREA  |  |
+| |___________________|                  ________     ________              |_______________|  |
+|                                       |D41464C |   |D41464C |                                |
+|  _______                              |________|   |________|                                |
+| | GL324 |                                                        ________    ________        |
+| |_______|                              ________     ________    |  DIP1  |  |  DIP2  |       |
+|                                       |D41464C |   |D41464C |   |1      8|  |1      8|       |
+|                                       |________|   |________|   |________|  |________|       |
+|                                                                                              |
+|                                           ______   _________    _________    _________       |
+|                                          |74LS14| |74LS245N |  |74LS245N |  |74LS245B |      |
+|                                          |______| |_________|  |_________|  |_________|      |
+|                                                                                              |
+|                                           ______     ______      ______       ______         |
+|                                          |GD4021|   |CD4021|    |CD4021|     |CD4021|        |
+|                                          |______|   |______|    |______|     |______|        |
+|                                                                                              |
+|                  _____ 1                                           28 _____                  |
+|                 |     || | | | | | | | | | | | | | | | | | | | | | | |     |                 |
+|                 |     || | | | | | | | | | | | | | | | | | | | | | | |     |                 |
+|_________________|     |______________________________________________|     |_________________|
+
+
 ***************************************************************************/
+
+
+
+
 #include "driver.h"
 #include "cpu/spc700/spc700.h"
 #include "cpu/g65816/g65816.h"
@@ -134,7 +191,7 @@ static READ8_HANDLER(sb2b_75bd37_r)
 {
 	/* protection check */
 	static UINT8 cnt=0;
- 	return ++cnt;
+	return ++cnt;
 }
 
 static READ8_HANDLER(sb2b_6a6xxx_r)
@@ -157,12 +214,12 @@ static READ8_HANDLER(sb2b_6a6xxx_r)
 
 static READ8_HANDLER(sb2b_770071_r)
 {
- 	return input_port_read(space->machine, "DSW");
+	return input_port_read(space->machine, "DSW");
 }
 
 static READ8_HANDLER(sb2b_770079_r)
 {
- 	return input_port_read(space->machine, "COIN");
+	return input_port_read(space->machine, "COIN");
 }
 
 static READ8_HANDLER(sb2b_7xxx_r)
@@ -170,13 +227,33 @@ static READ8_HANDLER(sb2b_7xxx_r)
 	return snes_ram[0xc07000 + offset];
 }
 
+/* Iron */
+
+static READ8_HANDLER(iron_770071_r)
+{
+	return input_port_read(space->machine, "DSW1");
+}
+
+static READ8_HANDLER(iron_770073_r)
+{
+	return input_port_read(space->machine, "DSW2");
+}
+
+static READ8_HANDLER(iron_770079_r)
+{
+	return input_port_read(space->machine, "COIN");
+}
+
+
+
+
 static ADDRESS_MAP_START( snesb_map, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE(0x000000, 0x2fffff) AM_READWRITE(snes_r_bank1, snes_w_bank1)	/* I/O and ROM (repeats for each bank) */
 	AM_RANGE(0x300000, 0x3fffff) AM_READWRITE(snes_r_bank2, snes_w_bank2)	/* I/O and ROM (repeats for each bank) */
-	AM_RANGE(0x400000, 0x5fffff) AM_READWRITE(snes_r_bank3, SMH_ROM)	/* ROM (and reserved in Mode 20) */
+	AM_RANGE(0x400000, 0x5fffff) AM_READ(snes_r_bank3)						/* ROM (and reserved in Mode 20) */
 	AM_RANGE(0x600000, 0x6fffff) AM_READWRITE(snes_r_bank4, snes_w_bank4)	/* used by Mode 20 DSP-1 */
 	AM_RANGE(0x700000, 0x7dffff) AM_READWRITE(snes_r_bank5, snes_w_bank5)
-	AM_RANGE(0x7e0000, 0x7fffff) AM_RAM					/* 8KB Low RAM, 24KB High RAM, 96KB Expanded RAM */
+	AM_RANGE(0x7e0000, 0x7fffff) AM_RAM										/* 8KB Low RAM, 24KB High RAM, 96KB Expanded RAM */
 	AM_RANGE(0x800000, 0xbfffff) AM_READWRITE(snes_r_bank6, snes_w_bank6)	/* Mirror and ROM */
 	AM_RANGE(0xc00000, 0xffffff) AM_READWRITE(snes_r_bank7, snes_w_bank7)	/* Mirror and ROM */
 ADDRESS_MAP_END
@@ -541,6 +618,129 @@ static INPUT_PORTS_START( sblast2b )
 
 INPUT_PORTS_END
 
+
+static INPUT_PORTS_START( iron )
+	PORT_START("PAD1L")		/* IN 0 : Joypad 1 - L */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P1 Button A") PORT_PLAYER(1)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P1 Button X") PORT_PLAYER(1)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P1 Button L") PORT_PLAYER(1)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P1 Button R") PORT_PLAYER(1)
+	PORT_START("PAD1H")		/* IN 1 : Joypad 1 - H */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P1 Button B") PORT_PLAYER(1)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P1 Button Y") PORT_PLAYER(1)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE1 ) PORT_NAME("P1 Select")
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START1 ) PORT_NAME("P1 Start")
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(1)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(1)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
+
+	PORT_START("PAD2L")		/* IN 2 : Joypad 2 - L */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P2 Button A") PORT_PLAYER(2)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P2 Button X") PORT_PLAYER(2)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P2 Button L") PORT_PLAYER(2)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P2 Button R") PORT_PLAYER(2)
+	PORT_START("PAD2H")		/* IN 3 : Joypad 2 - H */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P2 Button B") PORT_PLAYER(2)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P2 Button Y") PORT_PLAYER(2)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE2 ) PORT_NAME("P2 Select")
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START2 ) PORT_NAME("P2 Start")
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
+
+	PORT_START("PAD3L")		/* IN 4 : Joypad 3 - L */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P3 Button A") PORT_PLAYER(3)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P3 Button X") PORT_PLAYER(3)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P3 Button L") PORT_PLAYER(3)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P3 Button R") PORT_PLAYER(3)
+	PORT_START("PAD3H")		/* IN 5 : Joypad 3 - H */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P3 Button B") PORT_PLAYER(3)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P3 Button Y") PORT_PLAYER(3)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE3 ) PORT_NAME("P3 Select")
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START3 ) PORT_NAME("P3 Start")
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(3)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(3)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(3)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(3)
+
+	PORT_START("PAD4L")		/* IN 6 : Joypad 4 - L */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_NAME("P4 Button A") PORT_PLAYER(4)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_NAME("P4 Button X") PORT_PLAYER(4)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON5 ) PORT_NAME("P4 Button L") PORT_PLAYER(4)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_NAME("P4 Button R") PORT_PLAYER(4)
+	PORT_START("PAD4H")		/* IN 7 : Joypad 4 - H */
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("P4 Button B") PORT_PLAYER(4)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("P4 Button Y") PORT_PLAYER(4)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SERVICE4 ) PORT_NAME("P4 Select")
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START4 ) PORT_NAME("P4 Start")
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(4)
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(4)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(4)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(4)
+
+	PORT_START("INTERNAL")		/* IN 8 : Internal switches */
+	PORT_DIPNAME( 0x1, 0x1, "Enforce 32 sprites/line" )
+	PORT_DIPSETTING(   0x0, DEF_STR( No )  )
+	PORT_DIPSETTING(   0x1, DEF_STR( Yes ) )
+
+#ifdef MAME_DEBUG
+	PORT_START("DEBUG1")	/* IN 9 : debug switches */
+	PORT_DIPNAME( 0x3, 0x0, "Browse tiles" )
+	PORT_DIPSETTING(   0x0, DEF_STR( Off ) )
+	PORT_DIPSETTING(   0x1, "2bpl"  )
+	PORT_DIPSETTING(   0x2, "4bpl"  )
+	PORT_DIPSETTING(   0x3, "8bpl"  )
+	PORT_DIPNAME( 0xc, 0x0, "Browse maps" )
+	PORT_DIPSETTING(   0x0, DEF_STR( Off ) )
+	PORT_DIPSETTING(   0x4, "2bpl"  )
+	PORT_DIPSETTING(   0x8, "4bpl"  )
+	PORT_DIPSETTING(   0xc, "8bpl"  )
+
+	PORT_START("DEBUG2")	/* IN 10 : debug switches */
+	PORT_BIT( 0x1, IP_ACTIVE_HIGH, IPT_BUTTON7 ) PORT_NAME("Toggle BG 1") PORT_PLAYER(2)
+	PORT_BIT( 0x2, IP_ACTIVE_HIGH, IPT_BUTTON8 ) PORT_NAME("Toggle BG 2") PORT_PLAYER(2)
+	PORT_BIT( 0x4, IP_ACTIVE_HIGH, IPT_BUTTON9 ) PORT_NAME("Toggle BG 3") PORT_PLAYER(2)
+	PORT_BIT( 0x8, IP_ACTIVE_HIGH, IPT_BUTTON10 ) PORT_NAME("Toggle BG 4") PORT_PLAYER(2)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON7 ) PORT_NAME("Toggle Objects") PORT_PLAYER(3)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON8 ) PORT_NAME("Toggle Main/Sub") PORT_PLAYER(3)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON9 ) PORT_NAME("Toggle Back col") PORT_PLAYER(3)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON10 ) PORT_NAME("Toggle Windows") PORT_PLAYER(3)
+
+	PORT_START("DEBUG3")	/* IN 11 : debug input */
+	PORT_BIT( 0x1, IP_ACTIVE_HIGH, IPT_BUTTON9 ) PORT_NAME("Pal prev")
+	PORT_BIT( 0x2, IP_ACTIVE_HIGH, IPT_BUTTON10 ) PORT_NAME("Pal next")
+	PORT_BIT( 0x4, IP_ACTIVE_HIGH, IPT_BUTTON7 ) PORT_NAME("Toggle Transparency") PORT_PLAYER(4)
+#endif
+
+	PORT_START("DSW1")	/* IN 12 : dip-switches */
+	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW1:1" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW1:2" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW1:3" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW1:4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW1:5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "SW1:6" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x40, "SW1:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x80, "SW1:8" )
+
+	PORT_START("DSW2")	/* IN 13 : dip-switches */
+	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW2:1" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW2:2" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW2:3" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW2:4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW2:5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "SW2:6" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x40, "SW2:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x80, "SW2:8" )
+
+	PORT_START("COIN")	/* IN 14 : coins */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+
+INPUT_PORTS_END
+
+
 static MACHINE_DRIVER_START( kinstb )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", G65816, 3580000)	/* 2.68Mhz, also 3.58Mhz */
@@ -655,42 +855,42 @@ static DRIVER_INIT( sblast2b )
 	UINT8 *dst = memory_region(machine, "user3");
 	for (i=0; i<0x80000*3; i++)
     {
-       	cipherText = src[i];
-       	plainText = data_substitution0[cipherText&0xf]|data_substitution1[cipherText>>4];
-   		newAddress = (address_substitution_high[i>>15]<<15)|(i&0x7fc0)|(address_substitution_low[i&0x3f]);
+    	cipherText = src[i];
+    	plainText = data_substitution0[cipherText&0xf]|data_substitution1[cipherText>>4];
+		newAddress = (address_substitution_high[i>>15]<<15)|(i&0x7fc0)|(address_substitution_low[i&0x3f]);
 
 		if(newAddress<0x10000)
-	 	{
-	 		plainText = BITSWAP8(plainText, 6,3,5,4,2,0,7,1) ^ 0xff;
-	 	}
+		{
+			plainText = BITSWAP8(plainText, 6,3,5,4,2,0,7,1) ^ 0xff;
+		}
 		else
-	 	if(newAddress<0x20000)
-	 	{
-	 		plainText =	BITSWAP8(plainText, 4,0,7,6,3,1,2,5) ^ 0xff;
-	 	}
-	 	else
-	 	if(newAddress<0x30000)
-	 	{
-	 		plainText =	BITSWAP8(plainText, 5,7,6,1,4,3,0,2);
-	 	}
-	 	else
-	 	if(newAddress<0x40000)
-	 	{
-	 		plainText = BITSWAP8(plainText, 3,1,2,0,5,6,4,7) ^ 0xff;
-	 	}
+		if(newAddress<0x20000)
+		{
+			plainText =	BITSWAP8(plainText, 4,0,7,6,3,1,2,5) ^ 0xff;
+		}
+		else
+		if(newAddress<0x30000)
+		{
+			plainText =	BITSWAP8(plainText, 5,7,6,1,4,3,0,2);
+		}
+		else
+		if(newAddress<0x40000)
+		{
+			plainText = BITSWAP8(plainText, 3,1,2,0,5,6,4,7) ^ 0xff;
+		}
         dst[newAddress] = plainText;
     }
 
- 	/*  boot vector */
+	/*  boot vector */
     dst[0xfffc]=0xc0;
     dst[0xfffd]=0x7a;
 
-   	/*  protection checks */
- 	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x75bd37, 0x75bd37, 0, 0, sb2b_75bd37_r);
-  	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6a6000, 0x6a6fff, 0, 0, sb2b_6a6xxx_r);
+	/*  protection checks */
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x75bd37, 0x75bd37, 0, 0, sb2b_75bd37_r);
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6a6000, 0x6a6fff, 0, 0, sb2b_6a6xxx_r);
 
-  	/* extra inputs */
-   	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770071, 0x770071, 0, 0, sb2b_770071_r);
+	/* extra inputs */
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770071, 0x770071, 0, 0, sb2b_770071_r);
     memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770079, 0x770079, 0, 0, sb2b_770079_r);
 
     /* handler to read boot code */
@@ -698,6 +898,32 @@ static DRIVER_INIT( sblast2b )
 
 	DRIVER_INIT_CALL(snes_hirom);
 }
+
+static DRIVER_INIT( iron )
+{
+	INT32 i;
+	UINT8 *rom = memory_region(machine, "user3");
+
+	for(i=0;i<0x140000;i++)
+	{
+		if(i<0x80000)
+		{
+			rom[i]=BITSWAP8(rom[i]^0xff,2,7,1,6,3,0,5,4);
+		}
+		else
+		{
+			rom[i]=BITSWAP8(rom[i],6,3,0,5,1,4,7,2);
+		}
+	}
+
+	/* extra inputs */
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770071, 0x770071, 0, 0, iron_770071_r);
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770073, 0x770073, 0, 0, iron_770073_r);
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770079, 0x770079, 0, 0, iron_770079_r);
+
+	DRIVER_INIT_CALL(snes);
+}
+
 
 ROM_START( kinstb )
 	ROM_REGION( 0x400000, "user3", 0 )
@@ -753,7 +979,18 @@ ROM_START( ffight2b )
 	ROM_LOAD("spc700.rom", 0, 0x40, CRC(44bb3a40) SHA1(97e352553e94242ae823547cd853eecda55c20f0) )
 
 	ROM_REGION(0x800,           "user6", ROMREGION_ERASEFF)
+ROM_END
 
+ROM_START( iron )
+	ROM_REGION( 0x400000, "user3", 0 )
+	ROM_LOAD( "6.c09.bin", 0x000000, 0x080000, CRC(50ea1457) SHA1(092f9a0e34deeb090b8c88553be3b1596ded60ef) )
+	ROM_LOAD( "5.c10.bin", 0x080000, 0x080000, CRC(0c3a0b5b) SHA1(1e8ab860689137e0e94731f1af2cfc561492b5bd) )
+	ROM_LOAD( "4.c11.bin", 0x100000, 0x040000, CRC(2aa417c7) SHA1(24b375e5bbd4be5dcd31b63ea98fbbadd53d543e) )
+
+	ROM_REGION(0x100,           "user5", 0)
+	ROM_LOAD("spc700.rom", 0, 0x40, CRC(44bb3a40) SHA1(97e352553e94242ae823547cd853eecda55c20f0) )
+
+	ROM_REGION(0x800,           "user6", ROMREGION_ERASEFF)
 ROM_END
 
 ROM_START( sblast2b )
@@ -774,3 +1011,4 @@ ROM_END
 GAME( 199?, kinstb,       0,     kinstb,	     kinstb,    kinstb,		ROT0, "bootleg",	"Killer Instinct (SNES bootleg)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1996, ffight2b,     0,     kinstb,	     ffight2b,  ffight2b,	ROT0, "bootleg",	"Final Fight 2 (SNES bootleg)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, sblast2b,     0,     kinstb,	     sblast2b,  sblast2b,	ROT0, "bootleg",	"Sonic Blast Man 2 Special Turbo (SNES bootleg)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS)
+GAME( 1996, iron,         0,     kinstb,	     iron,      iron,		ROT0, "bootleg",	"Iron (SNES bootleg)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )

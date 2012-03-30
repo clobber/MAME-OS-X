@@ -173,11 +173,10 @@ Atomiswave ROM board specs from Cah4e3 @ http://cah4e3.wordpress.com/2009/07/26/
 #include "driver.h"
 #include "eminline.h"
 #include "profiler.h"
-#include "machine/eeprom.h"
 #include "machine/x76f100.h"
 #include "cdrom.h"
 #include "includes/naomi.h"
-#include "naomibd.h"
+#include "includes/naomibd.h"
 
 #define NAOMIBD_FLAG_AUTO_ADVANCE	(8)	// address auto-advances on read
 #define NAOMIBD_FLAG_SPECIAL_MODE	(4)	// used to access protection registers
@@ -289,6 +288,7 @@ static const naomibd_config_table naomibd_translate_tbl[] =
 	{ "crzytaxi", 0,{ 0x0219, 0, 0, 0xffffffff, 0xffffffff, 0xffffffff } },
 	{ "jambo",    0,{ 0x0223, 0, 0, 0xffffffff, 0xffffffff, 0xffffffff } },
 	{ "18wheelr", 0,{ 0x1502, 0, 0, 0xffffffff, 0xffffffff, 0xffffffff } },
+	{ "sgtetris", 0,{ 0x1234, 0, 0, 0xffffffff, 0xffffffff, 0xffffffff } },
 };
 
 /***************************************************************************
@@ -429,7 +429,7 @@ READ64_DEVICE_HANDLER( naomibd_r )
 				printf("naomibd: PIO read count %x\n", v->prot_pio_count);
 				#endif
 
-			 	if (v->prot_reverse_bytes)
+				if (v->prot_reverse_bytes)
 				{
 					ret = (UINT64)(prot[byte_offset+1] | (prot[byte_offset]<<8));
 				}
@@ -1035,7 +1035,7 @@ static DEVICE_START( naomibd )
 	}
 
 	/* set the type */
-	v->index = device_list_index(device->machine->config->devicelist, device->type, device->tag);
+	v->index = device_list_index(&device->machine->config->devicelist, device->type, device->tag);
 	v->type = config->type;
 
 	/* initialize some registers */

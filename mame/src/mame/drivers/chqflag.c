@@ -15,13 +15,13 @@ Dip locations and recommended settings verified with manual
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "cpu/konami/konami.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "sound/2151intf.h"
 #include "sound/k007232.h"
 
 #include "chqflag.lh"
 
-static int K051316_readroms;
+static int k051316_readroms;
 
 static WRITE8_DEVICE_HANDLER( k007232_extvolume_w );
 
@@ -29,45 +29,51 @@ static WRITE8_DEVICE_HANDLER( k007232_extvolume_w );
 VIDEO_START( chqflag );
 VIDEO_UPDATE( chqflag );
 
+extern void chqflag_sprite_callback(running_machine *machine, int *code,int *color,int *priority,int *shadow);
+extern void chqflag_zoom_callback_0(running_machine *machine, int *code,int *color,int *flags);
+extern void chqflag_zoom_callback_1(running_machine *machine, int *code,int *color,int *flags);
 
 static INTERRUPT_GEN( chqflag_interrupt )
 {
+	const device_config *k051960 = devtag_get_device(device->machine, "k051960");
 	if (cpu_getiloops(device) == 0)
 	{
-		if (K051960_is_IRQ_enabled())
+		if (k051960_is_irq_enabled(k051960))
 			cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 	}
 	else if (cpu_getiloops(device) % 2)
 	{
-		if (K051960_is_NMI_enabled())
+		if (k051960_is_nmi_enabled(k051960))
 			cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static WRITE8_HANDLER( chqflag_bankswitch_w )
 {
+	const device_config *k051316_1 = devtag_get_device(space->machine, "k051316_1");
 	int bankaddress;
 	UINT8 *RAM = memory_region(space->machine, "maincpu");
 
 	/* bits 0-4 = ROM bank # (0x00-0x11) */
 	bankaddress = 0x10000 + (data & 0x1f)*0x4000;
-	memory_set_bankptr(space->machine, 4,&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank4",&RAM[bankaddress]);
 
 	/* bit 5 = memory bank select */
 	if (data & 0x20)
 	{
-		memory_install_readwrite8_handler(space, 0x1800, 0x1fff, 0, 0, (read8_space_func)SMH_BANK(5), paletteram_xBBBBBGGGGGRRRRR_be_w);
-		memory_set_bankptr(space->machine, 5, paletteram);
+		memory_install_read_bank(space, 0x1800, 0x1fff, 0, 0, "bank5");
+		memory_install_write8_handler(space, 0x1800, 0x1fff, 0, 0, paletteram_xBBBBBGGGGGRRRRR_be_w);
+		memory_set_bankptr(space->machine, "bank5", space->machine->generic.paletteram.v);
 
-		if (K051316_readroms)
-			memory_install_readwrite8_handler(space, 0x1000, 0x17ff, 0, 0, K051316_rom_0_r, K051316_0_w);	/* 051316 #1 (ROM test) */
+		if (k051316_readroms)
+			memory_install_readwrite8_device_handler(space, k051316_1, 0x1000, 0x17ff, 0, 0, k051316_rom_r, k051316_w);	/* 051316 #1 (ROM test) */
 		else
-			memory_install_readwrite8_handler(space, 0x1000, 0x17ff, 0, 0, K051316_0_r, K051316_0_w);		/* 051316 #1 */
+			memory_install_readwrite8_device_handler(space, k051316_1, 0x1000, 0x17ff, 0, 0, k051316_r, k051316_w);		/* 051316 #1 */
 	}
 	else
 	{
-		memory_install_readwrite8_handler(space, 0x1000, 0x17ff, 0, 0, (read8_space_func)SMH_BANK(1), (write8_space_func)SMH_BANK(1));				/* RAM */
-		memory_install_readwrite8_handler(space, 0x1800, 0x1fff, 0, 0, (read8_space_func)SMH_BANK(2), (write8_space_func)SMH_BANK(2));				/* RAM */
+		memory_install_readwrite_bank(space, 0x1000, 0x17ff, 0, 0, "bank1");				/* RAM */
+		memory_install_readwrite_bank(space, 0x1800, 0x1fff, 0, 0, "bank2");				/* RAM */
 	}
 
 	/* other bits unknown/unused */
@@ -75,18 +81,19 @@ static WRITE8_HANDLER( chqflag_bankswitch_w )
 
 static WRITE8_HANDLER( chqflag_vreg_w )
 {
+	const device_config *k051316_2 = devtag_get_device(space->machine, "k051316_2");
 	static int last;
 
 	/* bits 0 & 1 = coin counters */
-	coin_counter_w(1,data & 0x01);
-	coin_counter_w(0,data & 0x02);
+	coin_counter_w(space->machine, 1, data & 0x01);
+	coin_counter_w(space->machine, 0, data & 0x02);
 
 	/* bit 4 = enable rom reading thru K051316 #1 & #2 */
-	K051316_readroms = (data & 0x10);
-	if (K051316_readroms)
-		memory_install_read8_handler(space, 0x2800, 0x2fff, 0, 0, K051316_rom_1_r);	/* 051316 (ROM test) */
+	k051316_readroms = (data & 0x10);
+	if (k051316_readroms)
+		memory_install_read8_device_handler(space, k051316_2, 0x2800, 0x2fff, 0, 0, k051316_rom_r);	/* 051316 (ROM test) */
 	else
-		memory_install_read8_handler(space, 0x2800, 0x2fff, 0, 0, K051316_1_r);		/* 051316 */
+		memory_install_read8_device_handler(space, k051316_2, 0x2800, 0x2fff, 0, 0, k051316_r);		/* 051316 */
 
 	/* Bits 3-7 probably control palette dimming in a similar way to TMNT2/Sunset Riders, */
 	/* however I don't have enough evidence to determine the exact behaviour. */
@@ -149,11 +156,11 @@ static WRITE8_HANDLER( chqflag_sh_irqtrigger_w )
 
 static ADDRESS_MAP_START( chqflag_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM												/* RAM */
-	AM_RANGE(0x1000, 0x17ff) AM_RAMBANK(1)										/* banked RAM (RAM/051316 (chip 1)) */
-	AM_RANGE(0x1800, 0x1fff) AM_RAMBANK(2)										/* palette + RAM */
-	AM_RANGE(0x2000, 0x2007) AM_READWRITE(K051937_r, K051937_w)					/* Sprite control registers */
-	AM_RANGE(0x2400, 0x27ff) AM_READWRITE(K051960_r, K051960_w)					/* Sprite RAM */
-	AM_RANGE(0x2800, 0x2fff) AM_READWRITE(SMH_BANK(3), K051316_1_w)				/* 051316 zoom/rotation (chip 2) */
+	AM_RANGE(0x1000, 0x17ff) AM_RAMBANK("bank1")								/* banked RAM (RAM/051316 (chip 1)) */
+	AM_RANGE(0x1800, 0x1fff) AM_RAMBANK("bank2")								/* palette + RAM */
+	AM_RANGE(0x2000, 0x2007) AM_DEVREADWRITE("k051960", k051937_r, k051937_w)					/* Sprite control registers */
+	AM_RANGE(0x2400, 0x27ff) AM_DEVREADWRITE("k051960", k051960_r, k051960_w)					/* Sprite RAM */
+	AM_RANGE(0x2800, 0x2fff) AM_READ_BANK("bank3") AM_DEVWRITE("k051316_2", k051316_w)		/* 051316 zoom/rotation (chip 2) */
 	AM_RANGE(0x3000, 0x3000) AM_WRITE(soundlatch_w)								/* sound code # */
 	AM_RANGE(0x3001, 0x3001) AM_WRITE(chqflag_sh_irqtrigger_w)					/* cause interrupt on audio CPU */
 	AM_RANGE(0x3002, 0x3002) AM_WRITE(chqflag_bankswitch_w)						/* bankswitch control */
@@ -163,13 +170,13 @@ static ADDRESS_MAP_START( chqflag_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x3201, 0x3201) AM_READ_PORT("IN0")								/* DIPSW #3, SW 4 */
 	AM_RANGE(0x3203, 0x3203) AM_READ_PORT("DSW2")								/* DIPSW #2 */
 	AM_RANGE(0x3300, 0x3300) AM_WRITE(watchdog_reset_w)							/* watchdog timer */
-	AM_RANGE(0x3400, 0x341f) AM_READWRITE(K051733_r, K051733_w)					/* 051733 (protection) */
-	AM_RANGE(0x3500, 0x350f) AM_WRITE(K051316_ctrl_0_w)							/* 051316 control registers (chip 1) */
-	AM_RANGE(0x3600, 0x360f) AM_WRITE(K051316_ctrl_1_w)							/* 051316 control registers (chip 2) */
+	AM_RANGE(0x3400, 0x341f) AM_DEVREADWRITE("k051733", k051733_r, k051733_w)					/* 051733 (protection) */
+	AM_RANGE(0x3500, 0x350f) AM_DEVWRITE("k051316_1", k051316_ctrl_w)							/* 051316 control registers (chip 1) */
+	AM_RANGE(0x3600, 0x360f) AM_DEVWRITE("k051316_2", k051316_ctrl_w)							/* 051316 control registers (chip 2) */
 	AM_RANGE(0x3700, 0x3700) AM_WRITE(select_analog_ctrl_w)						/* select accelerator/wheel */
 	AM_RANGE(0x3701, 0x3701) AM_READ_PORT("IN2")								/* Brake + Shift + ? */
 	AM_RANGE(0x3702, 0x3702) AM_READWRITE(analog_read_r, select_analog_ctrl_w)	/* accelerator/wheel */
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(4)										/* banked ROM */
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank4")										/* banked ROM */
 	AM_RANGE(0x8000, 0xffff) AM_ROM												/* ROM */
 ADDRESS_MAP_END
 
@@ -195,7 +202,7 @@ static ADDRESS_MAP_START( chqflag_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa000, 0xa00d) AM_DEVREADWRITE("konami1", k007232_r, k007232_w)	/* 007232 (chip 1) */
 	AM_RANGE(0xa01c, 0xa01c) AM_DEVWRITE("konami2", k007232_extvolume_w)	/* extra volume, goes to the 007232 w/ A11 */
 	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("konami2", k007232_r, k007232_w)	/* 007232 (chip 2) */
-	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)	/* YM2151 */
+	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)	/* YM2151 */
 	AM_RANGE(0xd000, 0xd000) AM_READ(soundlatch_r)			/* soundlatch_r */
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch2_r)         /* engine sound volume */
 	AM_RANGE(0xf000, 0xf000) AM_WRITENOP					/* ??? */
@@ -325,6 +332,30 @@ static const k007232_interface k007232_interface_2 =
 	volume_callback1
 };
 
+static const k051960_interface chqflag_k051960_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	chqflag_sprite_callback
+};
+
+static const k051316_interface chqflag_k051316_intf_1 =
+{
+	"gfx2", 1,
+	4, FALSE, 0,
+	0, 7, 0,
+	chqflag_zoom_callback_0
+};
+
+static const k051316_interface chqflag_k051316_intf_2 =
+{
+	"gfx3", 2,
+	8, TRUE, 0xc0,
+	1, 0, 0,
+	chqflag_zoom_callback_1
+};
+
 static MACHINE_DRIVER_START( chqflag )
 
 	/* basic machine hardware */
@@ -352,10 +383,15 @@ static MACHINE_DRIVER_START( chqflag )
 	MDRV_VIDEO_START(chqflag)
 	MDRV_VIDEO_UPDATE(chqflag)
 
+	MDRV_K051960_ADD("k051960", chqflag_k051960_intf)
+	MDRV_K051316_ADD("k051316_1", chqflag_k051316_intf_1)
+	MDRV_K051316_ADD("k051316_2", chqflag_k051316_intf_2)
+	MDRV_K051733_ADD("k051733")
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
@@ -383,7 +419,7 @@ ROM_START( chqflag )
 	ROM_REGION( 0x10000, "audiocpu", 0 )	/* 64k for the SOUND CPU */
 	ROM_LOAD( "717e01",		0x000000, 0x008000, CRC(966b8ba8) SHA1(ab7448cb61fa5922b1d8ae5f0d0f42d734ed4f93) )
 
-    ROM_REGION( 0x100000, "gfx1", 0 )	/* graphics (addressable by the main CPU) */
+	ROM_REGION( 0x100000, "gfx1", 0 )	/* graphics (addressable by the main CPU) */
 	ROM_LOAD( "717e04",		0x000000, 0x080000, CRC(1a50a1cc) SHA1(bc16fab84c637ed124e37b115ddc0149560b727d) )	/* sprites */
 	ROM_LOAD( "717e05",		0x080000, 0x080000, CRC(46ccb506) SHA1(3ed1f54744fc5cdc0f48e42f250c366267a8199a) )	/* sprites */
 
@@ -413,7 +449,7 @@ ROM_START( chqflagj )
 	ROM_REGION( 0x10000, "audiocpu", 0 )	/* 64k for the SOUND CPU */
 	ROM_LOAD( "717e01",		0x000000, 0x008000, CRC(966b8ba8) SHA1(ab7448cb61fa5922b1d8ae5f0d0f42d734ed4f93) )
 
-    ROM_REGION( 0x100000, "gfx1", 0 )	/* graphics (addressable by the main CPU) */
+	ROM_REGION( 0x100000, "gfx1", 0 )	/* graphics (addressable by the main CPU) */
 	ROM_LOAD( "717e04",		0x000000, 0x080000, CRC(1a50a1cc) SHA1(bc16fab84c637ed124e37b115ddc0149560b727d) )	/* sprites */
 	ROM_LOAD( "717e05",		0x080000, 0x080000, CRC(46ccb506) SHA1(3ed1f54744fc5cdc0f48e42f250c366267a8199a) )	/* sprites */
 
@@ -438,9 +474,7 @@ ROM_END
 static DRIVER_INIT( chqflag )
 {
 	UINT8 *RAM = memory_region(machine, "maincpu");
-
-	konami_rom_deinterleave_2(machine, "gfx1");
-	paletteram = &RAM[0x58000];
+	machine->generic.paletteram.u8 = &RAM[0x58000];
 }
 
 GAMEL( 1988, chqflag,        0, chqflag, chqflag, chqflag, ROT90, "Konami", "Chequered Flag", GAME_UNEMULATED_PROTECTION | GAME_IMPERFECT_SOUND, layout_chqflag )

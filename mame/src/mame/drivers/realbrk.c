@@ -45,7 +45,7 @@ To Do:
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
 #include "machine/tmp68301.h"
-#include "realbrk.h"
+#include "includes/realbrk.h"
 #include "sound/2413intf.h"
 #include "sound/ymz280b.h"
 
@@ -157,32 +157,32 @@ static WRITE16_HANDLER( backup_ram_w )
 /*Basic memory map for this HW*/
 static ADDRESS_MAP_START( base_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM							    			// ROM
-	AM_RANGE(0x200000, 0x203fff) AM_RAM                   AM_BASE(&spriteram16)	// Sprites
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(SMH_RAM,paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16	)	// Palette
-	AM_RANGE(0x600000, 0x601fff) AM_READWRITE(SMH_RAM,realbrk_vram_0_w) AM_BASE(&realbrk_vram_0	)	// Background   (0)
-	AM_RANGE(0x602000, 0x603fff) AM_READWRITE(SMH_RAM,realbrk_vram_1_w) AM_BASE(&realbrk_vram_1	)	// Background   (1)
-	AM_RANGE(0x604000, 0x604fff) AM_READWRITE(SMH_RAM,realbrk_vram_2_w) AM_BASE(&realbrk_vram_2	)	// Text         (2)
-	AM_RANGE(0x606000, 0x60600f) AM_READWRITE(SMH_RAM,realbrk_vregs_w) AM_BASE(&realbrk_vregs 	)	// Scroll + Video Regs
-	AM_RANGE(0x605000, 0x61ffff) AM_RAM							               	//
+	AM_RANGE(0x200000, 0x203fff) AM_RAM                   AM_BASE_GENERIC(spriteram)	// Sprites
+	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram	)	// Palette
+	AM_RANGE(0x600000, 0x601fff) AM_RAM_WRITE(realbrk_vram_0_w) AM_BASE(&realbrk_vram_0	)	// Background   (0)
+	AM_RANGE(0x602000, 0x603fff) AM_RAM_WRITE(realbrk_vram_1_w) AM_BASE(&realbrk_vram_1	)	// Background   (1)
+	AM_RANGE(0x604000, 0x604fff) AM_RAM_WRITE(realbrk_vram_2_w) AM_BASE(&realbrk_vram_2	)	// Text         (2)
+	AM_RANGE(0x606000, 0x60600f) AM_RAM_WRITE(realbrk_vregs_w) AM_BASE(&realbrk_vregs	)	// Scroll + Video Regs
+	AM_RANGE(0x605000, 0x61ffff) AM_RAM							            	//
 	AM_RANGE(0x800000, 0x800003) AM_DEVREADWRITE8("ymz", ymz280b_r, ymz280b_w, 0xff00)	// YMZ280
-	AM_RANGE(0xfe0000, 0xfeffff) AM_RAM						                 	// RAM
-	AM_RANGE(0xfffc00, 0xffffff) AM_READWRITE(SMH_RAM,tmp68301_regs_w) AM_BASE(&tmp68301_regs	)	// TMP68301 Registers
+	AM_RANGE(0xfe0000, 0xfeffff) AM_RAM						                	// RAM
+	AM_RANGE(0xfffc00, 0xffffff) AM_RAM_WRITE(tmp68301_regs_w) AM_BASE(&tmp68301_regs	)	// TMP68301 Registers
 ADDRESS_MAP_END
 
 /*realbrk specific memory map*/
 static ADDRESS_MAP_START( realbrk_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_IMPORT_FROM(base_mem)
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0x00ff)	//
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)	//
 	AM_RANGE(0xc00000, 0xc00001) AM_READ_PORT("IN0")							// P1 & P2 (Inputs)
 	AM_RANGE(0xc00002, 0xc00003) AM_READ_PORT("IN1")							// Coins
-	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(realbrk_dsw_r,SMH_RAM) AM_BASE(&realbrk_dsw_select)	// DSW select
+	AM_RANGE(0xc00004, 0xc00005) AM_RAM_READ(realbrk_dsw_r) AM_BASE(&realbrk_dsw_select)	// DSW select
 	AM_RANGE(0xff0000, 0xfffbff) AM_RAM											// RAM
 	AM_RANGE(0xfffd0a, 0xfffd0b) AM_WRITE(realbrk_flipscreen_w				)	// Hack! Parallel port data register
 ADDRESS_MAP_END
 
 /*pkgnsh specific memory map*/
 static ADDRESS_MAP_START( pkgnsh_mem, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0xff00	)	// YM2413
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0xff00	)	// YM2413
 	AM_RANGE(0xc00000, 0xc00013) AM_READ(pkgnsh_input_r		        )	// P1 & P2 (Inputs)
 	AM_RANGE(0xff0000, 0xfffbff) AM_READWRITE(backup_ram_r,backup_ram_w) AM_BASE(&backup_ram)	// RAM
 	AM_IMPORT_FROM(base_mem)
@@ -190,21 +190,21 @@ ADDRESS_MAP_END
 
 /*pkgnshdx specific memory map*/
 static ADDRESS_MAP_START( pkgnshdx_mem, ADDRESS_SPACE_PROGRAM, 16)
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0x00ff)	//
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)	//
 	AM_RANGE(0xc00000, 0xc00013) AM_READ(pkgnshdx_input_r		        )	// P1 & P2 (Inputs)
-	AM_RANGE(0xc00004, 0xc00005) AM_WRITE(SMH_RAM) AM_BASE(&realbrk_dsw_select) // DSW select
+	AM_RANGE(0xc00004, 0xc00005) AM_WRITEONLY AM_BASE(&realbrk_dsw_select) // DSW select
 	AM_RANGE(0xff0000, 0xfffbff) AM_READWRITE(backup_ram_dx_r,backup_ram_w) AM_BASE(&backup_ram)	// RAM
 	AM_IMPORT_FROM(base_mem)
 ADDRESS_MAP_END
 
 /*dai2kaku specific memory map*/
 static ADDRESS_MAP_START( dai2kaku_mem, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x605000, 0x6053ff) AM_READWRITE(SMH_RAM,SMH_RAM) AM_BASE(&realbrk_vram_0ras)	// rasterinfo   (0)
-	AM_RANGE(0x605400, 0x6057ff) AM_READWRITE(SMH_RAM,SMH_RAM) AM_BASE(&realbrk_vram_1ras)	// rasterinfo   (1)
-	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ym", ym2413_w, 0x00ff)	//
+	AM_RANGE(0x605000, 0x6053ff) AM_RAM AM_BASE(&realbrk_vram_0ras)	// rasterinfo   (0)
+	AM_RANGE(0x605400, 0x6057ff) AM_RAM AM_BASE(&realbrk_vram_1ras)	// rasterinfo   (1)
+	AM_RANGE(0x800008, 0x80000b) AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)	//
 	AM_RANGE(0xc00000, 0xc00001) AM_READ_PORT("IN0")							// P1 & P2 (Inputs)
 	AM_RANGE(0xc00002, 0xc00003) AM_READ_PORT("IN1")							// Coins
-	AM_RANGE(0xc00004, 0xc00005) AM_READWRITE(realbrk_dsw_r,SMH_RAM) AM_BASE(&realbrk_dsw_select)	// DSW select
+	AM_RANGE(0xc00004, 0xc00005) AM_RAM_READ(realbrk_dsw_r) AM_BASE(&realbrk_dsw_select)	// DSW select
 	AM_RANGE(0xff0000, 0xfffbff) AM_RAM											// RAM
 	AM_RANGE(0xfffd0a, 0xfffd0b) AM_WRITE(dai2kaku_flipscreen_w				)	// Hack! Parallel port data register
 	AM_IMPORT_FROM(base_mem)
@@ -680,6 +680,7 @@ static MACHINE_DRIVER_START( realbrk )
 	MDRV_CPU_PROGRAM_MAP(realbrk_mem)
 	MDRV_CPU_VBLANK_INT("screen", realbrk_interrupt)
 
+	MDRV_MACHINE_START( tmp68301 )
 	MDRV_MACHINE_RESET( tmp68301 )
 
 	/* video hardware */
@@ -703,7 +704,7 @@ static MACHINE_DRIVER_START( realbrk )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END

@@ -10,7 +10,7 @@
 void init_konami_cgboard(running_machine *machine, int board_id, int type);
 void set_cgboard_id(int board_id);
 int get_cgboard_id(void);
-void set_cgboard_texture_bank(running_machine *machine, int board, int bank, UINT8 *rom);
+void set_cgboard_texture_bank(running_machine *machine, int board, const char *bank, UINT8 *rom);
 
 READ32_HANDLER( cgboard_dsp_comm_r_ppc );
 WRITE32_HANDLER( cgboard_dsp_comm_w_ppc );
@@ -26,7 +26,6 @@ WRITE32_HANDLER( cgboard_1_comm_sharc_w );
 READ32_HANDLER( cgboard_1_shared_sharc_r );
 WRITE32_HANDLER( cgboard_1_shared_sharc_w );
 
-void K033906_init(running_machine *machine);
 READ32_HANDLER(K033906_0_r);
 WRITE32_HANDLER(K033906_0_w);
 READ32_HANDLER(K033906_1_r);

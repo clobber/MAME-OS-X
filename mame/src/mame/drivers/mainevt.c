@@ -23,23 +23,29 @@ Notes:
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/hd6309/hd6309.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2151intf.h"
 #include "sound/k007232.h"
 #include "sound/upd7759.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
 
 VIDEO_UPDATE( mainevt );
 VIDEO_UPDATE( dv );
 VIDEO_START( mainevt );
 VIDEO_START( dv );
 
+extern void mainevt_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
+extern void dv_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
+extern void mainevt_sprite_callback(running_machine *machine, int *code,int *color,int *priority_mask,int *shadow);
+extern void dv_sprite_callback(running_machine *machine, int *code,int *color,int *priority,int *shadow);
 
 
 static INTERRUPT_GEN( mainevt_interrupt )
 {
-	if (K052109_is_IRQ_enabled())
+	const device_config *k052109 = devtag_get_device(device->machine, "k052109");
+
+	if (k052109_is_irq_enabled(k052109))
 		irq0_line_hold(device);
 }
 
@@ -60,18 +66,19 @@ static INTERRUPT_GEN( dv_interrupt )
 
 static WRITE8_HANDLER( mainevt_bankswitch_w )
 {
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
 	UINT8 *RAM = memory_region(space->machine, "maincpu");
 	int bankaddress;
 
 	/* bit 0-1 ROM bank select */
 	bankaddress = 0x10000 + (data & 0x03) * 0x2000;
-	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, "bank1",&RAM[bankaddress]);
 
 	/* TODO: bit 5 = select work RAM or palette? */
 //  palette_selected = data & 0x20;
 
 	/* bit 6 = enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(k052109, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 7 = NINITSET (unknown) */
 
@@ -80,12 +87,12 @@ static WRITE8_HANDLER( mainevt_bankswitch_w )
 
 static WRITE8_HANDLER( mainevt_coin_w )
 {
-	coin_counter_w(0,data & 0x10);
-	coin_counter_w(1,data & 0x20);
-	set_led_status(0,data & 0x01);
-	set_led_status(1,data & 0x02);
-	set_led_status(2,data & 0x04);
-	set_led_status(3,data & 0x08);
+	coin_counter_w(space->machine, 0,data & 0x10);
+	coin_counter_w(space->machine, 1,data & 0x20);
+	set_led_status(space->machine, 0,data & 0x01);
+	set_led_status(space->machine, 1,data & 0x02);
+	set_led_status(space->machine, 2,data & 0x04);
+	set_led_status(space->machine, 3,data & 0x08);
 }
 
 static WRITE8_HANDLER( mainevt_sh_irqtrigger_w )
@@ -139,6 +146,37 @@ static WRITE8_DEVICE_HANDLER( dv_sh_bankswitch_w )
 	k007232_set_bank( device, bank_A, bank_B );
 }
 
+static READ8_HANDLER( k052109_051960_r )
+{
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+
+	if (k052109_get_rmrd_line(k052109) == CLEAR_LINE)
+	{
+		if (offset >= 0x3800 && offset < 0x3808)
+			return k051937_r(k051960, offset - 0x3800);
+		else if (offset < 0x3c00)
+			return k052109_r(k052109, offset);
+		else
+			return k051960_r(k051960, offset - 0x3c00);
+	}
+	else
+		return k052109_r(k052109, offset);
+}
+
+static WRITE8_HANDLER( k052109_051960_w )
+{
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+
+	if (offset >= 0x3800 && offset < 0x3808)
+		k051937_w(k051960, offset - 0x3800, data);
+	else if (offset < 0x3c00)
+		k052109_w(k052109, offset, data);
+	else
+		k051960_w(k051960, offset - 0x3c00, data);
+}
+
 
 static ADDRESS_MAP_START( mainevt_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f80, 0x1f80) AM_WRITE(mainevt_bankswitch_w)
@@ -156,12 +194,12 @@ static ADDRESS_MAP_START( mainevt_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f9a, 0x1f9a) AM_READ_PORT("P4")
 	AM_RANGE(0x1f9b, 0x1f9b) AM_READ_PORT("DSW2")
 
-	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(K052109_051960_r,K052109_051960_w)
+	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 
 	AM_RANGE(0x4000, 0x5dff) AM_RAM
-	AM_RANGE(0x5e00, 0x5fff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
-	AM_RANGE(0x8000, 0xffff) AM_READ(SMH_ROM)
+	AM_RANGE(0x5e00, 0x5fff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
@@ -178,13 +216,13 @@ static ADDRESS_MAP_START( devstors_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1f97, 0x1f97) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1f98, 0x1f98) AM_READ_PORT("DSW3")
 	AM_RANGE(0x1f9b, 0x1f9b) AM_READ_PORT("DSW2")
-	AM_RANGE(0x1fa0, 0x1fbf) AM_READWRITE(K051733_r,K051733_w)
+	AM_RANGE(0x1fa0, 0x1fbf) AM_DEVREADWRITE("k051733", k051733_r, k051733_w)
 
-	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(K052109_051960_r,K052109_051960_w)
+	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 
 	AM_RANGE(0x4000, 0x5dff) AM_RAM
-	AM_RANGE(0x5e00, 0x5fff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x5e00, 0x5fff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -205,7 +243,7 @@ static ADDRESS_MAP_START( devstors_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x83ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("konami", k007232_r,k007232_w)
-	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
+	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0xe000, 0xe000) AM_WRITE(devstor_sh_irqcontrol_w)
 	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("konami", dv_sh_bankswitch_w)
 ADDRESS_MAP_END
@@ -259,7 +297,7 @@ static INPUT_PORTS_START( mainevt )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" )		/* Listed as "Unused" */
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )		/* Listed as "Unused" */
 
- 	PORT_START("DSW2")
+	PORT_START("DSW2")
 	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:1" )		/* Listed as "Unused" */
 	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:2" )		/* Listed as "Unused" */
 	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW2:3" )		/* Listed as "Unused" */
@@ -354,7 +392,7 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( devstor2 )
 	PORT_INCLUDE( devstors )
 
- 	PORT_MODIFY("DSW2")
+	PORT_MODIFY("DSW2")
 	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SW2:3")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
@@ -371,6 +409,22 @@ static void volume_callback(const device_config *device, int v)
 static const k007232_interface k007232_config =
 {
 	volume_callback	/* external port callback */
+};
+
+static const k052109_interface mainevt_k052109_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	mainevt_tile_callback
+};
+
+static const k051960_interface mainevt_k051960_intf =
+{
+	"gfx2", 1,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	mainevt_sprite_callback
 };
 
 static MACHINE_DRIVER_START( mainevt )
@@ -399,6 +453,9 @@ static MACHINE_DRIVER_START( mainevt )
 	MDRV_VIDEO_START(mainevt)
 	MDRV_VIDEO_UPDATE(mainevt)
 
+	MDRV_K052109_ADD("k052109", mainevt_k052109_intf)
+	MDRV_K051960_ADD("k051960", mainevt_k051960_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
@@ -411,6 +468,22 @@ static MACHINE_DRIVER_START( mainevt )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 
+
+static const k052109_interface dv_k052109_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	dv_tile_callback
+};
+
+static const k051960_interface dv_k051960_intf =
+{
+	"gfx2", 1,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	dv_sprite_callback
+};
 
 static MACHINE_DRIVER_START( devstors )
 
@@ -438,10 +511,14 @@ static MACHINE_DRIVER_START( devstors )
 	MDRV_VIDEO_START(dv)
 	MDRV_VIDEO_UPDATE(dv)
 
+	MDRV_K052109_ADD("k052109", dv_k052109_intf)
+	MDRV_K051960_ADD("k051960", dv_k051960_intf)
+	MDRV_K051733_ADD("k051733")
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
 	MDRV_SOUND_ROUTE(0, "mono", 0.30)
 	MDRV_SOUND_ROUTE(1, "mono", 0.30)
 
@@ -604,7 +681,7 @@ ROM_START( devstors )
 	ROM_LOAD( "63s141n.k14", 0x0000, 0x0100, CRC(d3620106) SHA1(528a0a34754902d0f262a9619c6105da6de99354) )	/* priority encoder (not used) */
 
 	ROM_REGION( 0x80000, "konami", 0 )	/* 512k for 007232 samples */
- 	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
+	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
 ROM_END
 
 ROM_START( devstors2 )
@@ -629,7 +706,7 @@ ROM_START( devstors2 )
 	ROM_LOAD( "63s141n.k14", 0x0000, 0x0100, CRC(d3620106) SHA1(528a0a34754902d0f262a9619c6105da6de99354) )	/* priority encoder (not used) */
 
 	ROM_REGION( 0x80000, "konami", 0 )	/* 512k for 007232 samples */
- 	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
+	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
 ROM_END
 
 ROM_START( devstors3 )
@@ -654,7 +731,7 @@ ROM_START( devstors3 )
 	ROM_LOAD( "63s141n.k14", 0x0000, 0x0100, CRC(d3620106) SHA1(528a0a34754902d0f262a9619c6105da6de99354) )	/* priority encoder (not used) */
 
 	ROM_REGION( 0x80000, "konami", 0 )	/* 512k for 007232 samples */
- 	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
+	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
 ROM_END
 
 ROM_START( garuka )
@@ -679,24 +756,16 @@ ROM_START( garuka )
 	ROM_LOAD( "63s141n.k14", 0x0000, 0x0100, CRC(d3620106) SHA1(528a0a34754902d0f262a9619c6105da6de99354) )	/* priority encoder (not used) */
 
 	ROM_REGION( 0x80000, "konami", 0 )	/* 512k for 007232 samples */
- 	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
+	ROM_LOAD( "890f03.d4",  0x00000, 0x80000, CRC(19065031) SHA1(12c47fbe28f85fa2f901fe52601188a5e9633f22) )
 ROM_END
 
 
 
-static DRIVER_INIT( mainevt )
-{
-	konami_rom_deinterleave_2(machine, "gfx1");
-	konami_rom_deinterleave_2(machine, "gfx2");
-}
-
-
-
-GAME( 1988, mainevt,  0,        mainevt,  mainevt,  mainevt, ROT0,  "Konami", "The Main Event (4 Players ver. Y)", 0 )
-GAME( 1988, mainevto, mainevt,  mainevt,  mainevt,  mainevt, ROT0,  "Konami", "The Main Event (4 Players ver. F)", 0 )
-GAME( 1988, mainevt2p,mainevt,  mainevt,  mainev2p, mainevt, ROT0,  "Konami", "The Main Event (2 Players ver. X)", 0 )
-GAME( 1988, ringohja, mainevt,  mainevt,  mainev2p, mainevt, ROT0,  "Konami", "Ring no Ohja (Japan 2 Players ver. N)", 0 )
-GAME( 1988, devstors, 0,        devstors, devstors, mainevt, ROT90, "Konami", "Devastators (ver. Z)", 0 )
-GAME( 1988, devstors2,devstors, devstors, devstor2, mainevt, ROT90, "Konami", "Devastators (ver. X)", 0 )
-GAME( 1988, devstors3,devstors, devstors, devstors, mainevt, ROT90, "Konami", "Devastators (ver. V)", 0 )
-GAME( 1988, garuka,   devstors, devstors, devstor2, mainevt, ROT90, "Konami", "Garuka (Japan ver. W)", 0 )
+GAME( 1988, mainevt,  0,        mainevt,  mainevt,  0, ROT0,  "Konami", "The Main Event (4 Players ver. Y)", 0 )
+GAME( 1988, mainevto, mainevt,  mainevt,  mainevt,  0, ROT0,  "Konami", "The Main Event (4 Players ver. F)", 0 )
+GAME( 1988, mainevt2p,mainevt,  mainevt,  mainev2p, 0, ROT0,  "Konami", "The Main Event (2 Players ver. X)", 0 )
+GAME( 1988, ringohja, mainevt,  mainevt,  mainev2p, 0, ROT0,  "Konami", "Ring no Ohja (Japan 2 Players ver. N)", 0 )
+GAME( 1988, devstors, 0,        devstors, devstors, 0, ROT90, "Konami", "Devastators (ver. Z)", 0 )
+GAME( 1988, devstors2,devstors, devstors, devstor2, 0, ROT90, "Konami", "Devastators (ver. X)", 0 )
+GAME( 1988, devstors3,devstors, devstors, devstors, 0, ROT90, "Konami", "Devastators (ver. V)", 0 )
+GAME( 1988, garuka,   devstors, devstors, devstor2, 0, ROT90, "Konami", "Garuka (Japan ver. W)", 0 )

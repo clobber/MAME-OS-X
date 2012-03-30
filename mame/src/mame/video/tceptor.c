@@ -4,7 +4,7 @@
  */
 
 #include "driver.h"
-#include "namcoic.h"
+#include "includes/namcoic.h"
 
 #define TX_TILE_OFFSET_CENTER	(32 * 2)
 #define TX_TILE_OFFSET_RIGHT	(32 * 0 + 2)
@@ -23,10 +23,10 @@ static int sprite16;
 static int sprite32;
 static int bg;
 
-static tilemap *tx_tilemap;
+static tilemap_t *tx_tilemap;
 
-static tilemap *bg1_tilemap;
-static tilemap *bg2_tilemap;
+static tilemap_t *bg1_tilemap;
+static tilemap_t *bg2_tilemap;
 
 static INT32 bg1_scroll_x, bg1_scroll_y;
 static INT32 bg2_scroll_x, bg2_scroll_y;
@@ -534,7 +534,7 @@ VIDEO_UPDATE( tceptor )
 	int pri;
 	int bg_center = 144 - ((((bg1_scroll_x + bg2_scroll_x ) & 0x1ff) - 288) / 2);
 
-	const device_config *_2d_screen       = devtag_get_device(screen->machine, "2d");
+	const device_config *_2d_screen       = devtag_get_device(screen->machine, "2dscreen");
 	const device_config *_3d_left_screen  = devtag_get_device(screen->machine, "3dleft");
 	const device_config *_3d_right_screen = devtag_get_device(screen->machine, "3dright");
 

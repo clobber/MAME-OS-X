@@ -96,8 +96,8 @@ static int channel2_active;
 static int channel2_const;
 
 /* timer handling */
-static TIMER_CALLBACK( polyplay_timer_callback );
-static emu_timer* polyplay_timer;
+static TIMER_DEVICE_CALLBACK( polyplay_timer_callback );
+static const device_config* polyplay_timer;
 static WRITE8_HANDLER( polyplay_start_timer2 );
 static WRITE8_HANDLER( polyplay_sound_channel );
 
@@ -123,7 +123,7 @@ static MACHINE_RESET( polyplay )
 	polyplay_set_channel2(0);
 	polyplay_play_channel2(machine, 0);
 
-	polyplay_timer = timer_alloc(machine, polyplay_timer_callback, NULL);
+	polyplay_timer = devtag_get_device(machine, "timer");
 }
 
 
@@ -156,7 +156,7 @@ static ADDRESS_MAP_START( polyplay_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1000, 0x8fff) AM_ROM
 	AM_RANGE(0xe800, 0xebff) AM_ROM AM_REGION("gfx1", 0)
 	AM_RANGE(0xec00, 0xf7ff) AM_RAM_WRITE(polyplay_characterram_w) AM_BASE(&polyplay_characterram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 
@@ -234,10 +234,10 @@ static WRITE8_HANDLER( polyplay_sound_channel )
 static WRITE8_HANDLER( polyplay_start_timer2 )
 {
 	if (data == 0x03)
-		timer_adjust_oneshot(polyplay_timer, attotime_never, 0);
+		timer_device_adjust_oneshot(polyplay_timer, attotime_never, 0);
 
 	if (data == 0xb5)
-		timer_adjust_periodic(polyplay_timer, ATTOTIME_IN_HZ(40), 0, ATTOTIME_IN_HZ(40));
+		timer_device_adjust_periodic(polyplay_timer, ATTOTIME_IN_HZ(40), 0, ATTOTIME_IN_HZ(40));
 }
 
 static READ8_HANDLER( polyplay_random_read )
@@ -286,6 +286,9 @@ static MACHINE_DRIVER_START( polyplay )
 	MDRV_CPU_VBLANK_INT("screen", coin_interrupt)
 
 	MDRV_MACHINE_RESET(polyplay)
+
+	MDRV_TIMER_ADD("timer", polyplay_timer_callback)
+
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -354,9 +357,9 @@ ROM_START( polyplay )
 ROM_END
 
 
-static TIMER_CALLBACK( polyplay_timer_callback )
+static TIMER_DEVICE_CALLBACK( polyplay_timer_callback )
 {
-	cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, 0x4c);
+	cputag_set_input_line_and_vector(timer->machine, "maincpu", 0, HOLD_LINE, 0x4c);
 }
 
 /* game driver */

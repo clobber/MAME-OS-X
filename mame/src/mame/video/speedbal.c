@@ -11,7 +11,7 @@
 UINT8 *speedbal_background_videoram;
 UINT8 *speedbal_foreground_videoram;
 
-static tilemap *bg_tilemap, *fg_tilemap;
+static tilemap_t *bg_tilemap, *fg_tilemap;
 
 static TILE_GET_INFO( get_tile_info_bg )
 {
@@ -84,11 +84,12 @@ WRITE8_HANDLER( speedbal_background_videoram_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int x,y,code,color,offset,flipx,flipy;
 
 	/* Drawing sprites: 64 in total */
 
-	for (offset = 0;offset < spriteram_size;offset += 4)
+	for (offset = 0;offset < machine->generic.spriteram_size;offset += 4)
 	{
 		if(!(spriteram[offset + 2] & 0x80))
 			continue;

@@ -32,18 +32,18 @@ typedef struct _crosshair_global crosshair_global;
 struct _crosshair_global
 {
 	UINT8				usage;					/* true if any crosshairs are used */
-	UINT8 				used[MAX_PLAYERS];		/* usage per player */
-	UINT8 				mode[MAX_PLAYERS];		/* visibility mode per player */
-	UINT8 				visible[MAX_PLAYERS];	/* visibility per player */
+	UINT8				used[MAX_PLAYERS];		/* usage per player */
+	UINT8				mode[MAX_PLAYERS];		/* visibility mode per player */
+	UINT8				visible[MAX_PLAYERS];	/* visibility per player */
 	bitmap_t *			bitmap[MAX_PLAYERS];	/* bitmap per player */
 	render_texture *	texture[MAX_PLAYERS];	/* texture per player */
 	const device_config *screen[MAX_PLAYERS];	/* the screen on which this player's crosshair is drawn */
-	float 				x[MAX_PLAYERS];			/* current X position */
+	float				x[MAX_PLAYERS];			/* current X position */
 	float				y[MAX_PLAYERS];			/* current Y position */
-	float 				last_x[MAX_PLAYERS];	/* last X position */
+	float				last_x[MAX_PLAYERS];	/* last X position */
 	float				last_y[MAX_PLAYERS];	/* last Y position */
 	UINT8				fade;					/* color fading factor */
-	UINT8 				animation_counter;		/* animation frame index */
+	UINT8				animation_counter;		/* animation frame index */
 	UINT16				auto_time;				/* time in seconds to turn invisible */
 	UINT16				time[MAX_PLAYERS];		/* time since last movement */
 	char				name[MAX_PLAYERS][CROSSHAIR_PIC_NAME_LENGTH + 1];	/* name of crosshair png file */
@@ -220,7 +220,7 @@ void crosshair_init(running_machine *machine)
 	global.auto_time = CROSSHAIR_VISIBILITY_AUTOTIME_DEFAULT;
 
 	/* determine who needs crosshairs */
-	for (port = machine->portconfig; port != NULL; port = port->next)
+	for (port = machine->portlist.head; port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->crossaxis != CROSSHAIR_AXIS_NONE)
 			{

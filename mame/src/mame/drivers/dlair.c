@@ -107,7 +107,7 @@ static int serial_receive(const device_config *device, int channel)
 static Z80CTC_INTERFACE( ctc_intf )
 {
 	0,              	/* timer disables */
-	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),  	/* interrupt handler */
+	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_IRQ0),	/* interrupt handler */
 	DEVCB_NULL,			/* ZC/TO0 callback */
 	DEVCB_NULL,         /* ZC/TO1 callback */
 	DEVCB_NULL          /* ZC/TO2 callback */
@@ -167,7 +167,7 @@ static VIDEO_UPDATE( dleuro )
 	for (y = 0; y < 32; y++)
 		for (x = 0; x < 32; x++)
 		{
-			UINT8 *base = &videoram[y * 64 + x * 2 + 1];
+			UINT8 *base = &screen->machine->generic.videoram.u8[y * 64 + x * 2 + 1];
 			drawgfx_opaque(bitmap, cliprect, screen->machine->gfx[0], base[0], base[1], 0, 0, 10 * x, 16 * y);
 		}
 
@@ -238,7 +238,7 @@ static WRITE8_HANDLER( misc_w )
 	UINT8 diff = data ^ last_misc;
 	last_misc = data;
 
-	coin_counter_w(0, (~data >> 4) & 1);
+	coin_counter_w(space->machine, 0, (~data >> 4) & 1);
 
 	/* on bit 5 going low, push the data out to the laserdisc player */
 	if ((diff & 0x20) && !(data & 0x20))
@@ -264,8 +264,8 @@ static WRITE8_HANDLER( dleuro_misc_w )
 	UINT8 diff = data ^ last_misc;
 	last_misc = data;
 
-	coin_counter_w(1, (~data >> 3) & 1);
-	coin_counter_w(0, (~data >> 4) & 1);
+	coin_counter_w(space->machine, 1, (~data >> 3) & 1);
+	coin_counter_w(space->machine, 0, (~data >> 4) & 1);
 
 	/* on bit 5 going low, push the data out to the laserdisc player */
 	if ((diff & 0x20) && !(data & 0x20))
@@ -376,13 +376,13 @@ static WRITE8_DEVICE_HANDLER( sio_w )
 static ADDRESS_MAP_START( dlus_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 	AM_RANGE(0xa000, 0xa7ff) AM_MIRROR(0x1800) AM_RAM
-	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x1fc7) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xc000, 0xc000) AM_MIRROR(0x1fc7) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc008, 0xc008) AM_MIRROR(0x1fc7) AM_READ_PORT("CONTROLS")
 	AM_RANGE(0xc010, 0xc010) AM_MIRROR(0x1fc7) AM_READ_PORT("SERVICE")
 	AM_RANGE(0xc020, 0xc020) AM_MIRROR(0x1fc7) AM_READ(laserdisc_r)
-	AM_RANGE(0xe000, 0xe000) AM_MIRROR(0x1fc7) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0xe000, 0xe000) AM_MIRROR(0x1fc7) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0xe008, 0xe008) AM_MIRROR(0x1fc7) AM_WRITE(misc_w)
-	AM_RANGE(0xe010, 0xe010) AM_MIRROR(0x1fc7) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0xe010, 0xe010) AM_MIRROR(0x1fc7) AM_DEVWRITE("aysnd", ay8910_address_w)
 	AM_RANGE(0xe020, 0xe020) AM_MIRROR(0x1fc7) AM_WRITE(laserdisc_w)
 	AM_RANGE(0xe030, 0xe037) AM_MIRROR(0x1fc0) AM_WRITE(led_den2_w)
 	AM_RANGE(0xe038, 0xe03f) AM_MIRROR(0x1fc0) AM_WRITE(led_den1_w)
@@ -400,7 +400,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( dleuro_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 	AM_RANGE(0xa000, 0xa7ff) AM_MIRROR(0x1800) AM_RAM
-	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_RAM AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xe000, 0xe000) AM_MIRROR(0x1f47) // WT LED 1
 	AM_RANGE(0xe008, 0xe008) AM_MIRROR(0x1f47) // WT LED 2
 	AM_RANGE(0xe010, 0xe010) AM_MIRROR(0x1f47) AM_WRITE(led_den1_w)			// WT EXT LED 1
@@ -708,7 +708,7 @@ static MACHINE_DRIVER_START( dlair_base )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK_US/8)
+	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK_US/8)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.33)
 

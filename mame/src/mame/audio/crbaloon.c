@@ -7,7 +7,7 @@
 ***************************************************************************/
 
 #include "driver.h"
-#include "crbaloon.h"
+#include "includes/crbaloon.h"
 #include "sound/sn76477.h"
 #include "sound/discrete.h"
 
@@ -97,8 +97,8 @@ static DISCRETE_SOUND_START(crbaloon)
 	DISCRETE_INPUT_LOGIC(CRBALOON_MUSIC_EN)
 	DISCRETE_INPUT_DATA (CRBALOON_MUSIC_DATA)
 
-	DISCRETE_ADJUSTMENT_TAG(CRBALOON_VR2, 0, 0.5, DISC_LINADJ, "VR2")
-	DISCRETE_ADJUSTMENT_TAG(CRBALOON_VR3, 0, 1,   DISC_LINADJ, "VR3")
+	DISCRETE_ADJUSTMENT(CRBALOON_VR2, 0, 0.5, DISC_LINADJ, "VR2")
+	DISCRETE_ADJUSTMENT(CRBALOON_VR3, 0, 1,   DISC_LINADJ, "VR3")
 
 	/************************************************
     * Laugh is a VCO modulated by a constant
@@ -171,7 +171,7 @@ MACHINE_DRIVER_START( crbaloon_audio )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76477, 0)
+	MDRV_SOUND_ADD("snsnd", SN76477, 0)
 	MDRV_SOUND_CONFIG(crbaloon_sn76477_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
 

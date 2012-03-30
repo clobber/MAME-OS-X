@@ -31,7 +31,7 @@
 #include "cpu/m6502/m6502.h"
 #include "deprecat.h"
 #include "sound/discrete.h"
-#include "avalnche.h"
+#include "includes/avalnche.h"
 
 #include "avalnche.lh"
 
@@ -58,26 +58,24 @@ static INTERRUPT_GEN( avalnche_interrupt )
  *
  *************************************/
 
-static UINT8 avalance_video_inverted;
-
-
 static VIDEO_UPDATE( avalnche )
 {
+	avalnche_state *state = (avalnche_state *)screen->machine->driver_data;
 	offs_t offs;
 
-	for (offs = 0; offs < videoram_size; offs++)
+	for (offs = 0; offs < state->videoram_size; offs++)
 	{
 		int i;
 
 		UINT8 x = offs << 3;
 		int y = offs >> 5;
-		UINT8 data = videoram[offs];
+		UINT8 data = state->videoram[offs];
 
 		for (i = 0; i < 8; i++)
 		{
 			pen_t pen;
 
-			if (avalance_video_inverted)
+			if (state->avalance_video_inverted)
 				pen = (data & 0x80) ? RGB_WHITE : RGB_BLACK;
 			else
 				pen = (data & 0x80) ? RGB_BLACK : RGB_WHITE;
@@ -95,7 +93,8 @@ static VIDEO_UPDATE( avalnche )
 
 static WRITE8_HANDLER( avalance_video_invert_w )
 {
-	avalance_video_inverted = data & 0x01;
+	avalnche_state *state = (avalnche_state *)space->machine->driver_data;
+	state->avalance_video_inverted = data & 0x01;
 }
 
 
@@ -108,19 +107,19 @@ static WRITE8_HANDLER( avalance_video_invert_w )
 
 static WRITE8_HANDLER( avalance_credit_1_lamp_w )
 {
-	set_led_status(0, data & 0x01);
+	set_led_status(space->machine, 0, data & 0x01);
 }
 
 
 static WRITE8_HANDLER( avalance_credit_2_lamp_w )
 {
-	set_led_status(1, data & 0x01);
+	set_led_status(space->machine, 1, data & 0x01);
 }
 
 
 static WRITE8_HANDLER( avalance_start_lamp_w )
 {
-	set_led_status(2, data & 0x01);
+	set_led_status(space->machine, 2, data & 0x01);
 }
 
 
@@ -133,7 +132,7 @@ static WRITE8_HANDLER( avalance_start_lamp_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE_SIZE_MEMBER(avalnche_state, videoram, videoram_size)
 	AM_RANGE(0x2000, 0x2000) AM_MIRROR(0x0ffc) AM_READ_PORT("IN0")
 	AM_RANGE(0x2001, 0x2001) AM_MIRROR(0x0ffc) AM_READ_PORT("IN1")
 	AM_RANGE(0x2002, 0x2002) AM_MIRROR(0x0ffc) AM_READ_PORT("PADDLE")
@@ -217,12 +216,32 @@ INPUT_PORTS_END
  *
  *************************************/
 
+static MACHINE_START( avalnche )
+{
+	avalnche_state *state = (avalnche_state *)machine->driver_data;
+
+	state_save_register_global(machine, state->avalance_video_inverted);
+}
+
+static MACHINE_RESET( avalnche )
+{
+	avalnche_state *state = (avalnche_state *)machine->driver_data;
+
+	state->avalance_video_inverted = 0;
+}
+
 static MACHINE_DRIVER_START( avalnche )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(avalnche_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502,MASTER_CLOCK/16)	   /* clock input is the "2H" signal divided by two */
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT_HACK(avalnche_interrupt,8)
+
+	MDRV_MACHINE_START(avalnche)
+	MDRV_MACHINE_RESET(avalnche)
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(avalnche)
@@ -252,22 +271,22 @@ MACHINE_DRIVER_END
 
 ROM_START( avalnche )
 	ROM_REGION( 0x8000, "maincpu", 0 )
-	ROM_LOAD_NIB_HIGH( "30612.d2",     	0x6800, 0x0800, CRC(3f975171) SHA1(afe680865da97824f1ebade4c7a2ba5d7ee2cbab) )
-	ROM_LOAD_NIB_LOW ( "30615.d3",     	0x6800, 0x0800, CRC(3e1a86b4) SHA1(3ff4cffea5b7a32231c0996473158f24c3bbe107) )
-	ROM_LOAD_NIB_HIGH( "30613.e2",     	0x7000, 0x0800, CRC(47a224d3) SHA1(9feb7444a2e5a3d90a4fe78ae5d23c3a5039bfaa) )
-	ROM_LOAD_NIB_LOW ( "30616.e3",     	0x7000, 0x0800, CRC(f620f0f8) SHA1(7802b399b3469fc840796c3145b5f63781090956) )
-	ROM_LOAD_NIB_HIGH( "30611.c2",     	0x7800, 0x0800, CRC(0ad07f85) SHA1(5a1a873b14e63dbb69ee3686ba53f7ca831fe9d0) )
-	ROM_LOAD_NIB_LOW ( "30614.c3",     	0x7800, 0x0800, CRC(a12d5d64) SHA1(1647d7416bf9266d07f066d3797bda943e004d24) )
+	ROM_LOAD_NIB_HIGH( "30612.d2",  	0x6800, 0x0800, CRC(3f975171) SHA1(afe680865da97824f1ebade4c7a2ba5d7ee2cbab) )
+	ROM_LOAD_NIB_LOW ( "30615.d3",  	0x6800, 0x0800, CRC(3e1a86b4) SHA1(3ff4cffea5b7a32231c0996473158f24c3bbe107) )
+	ROM_LOAD_NIB_HIGH( "30613.e2",  	0x7000, 0x0800, CRC(47a224d3) SHA1(9feb7444a2e5a3d90a4fe78ae5d23c3a5039bfaa) )
+	ROM_LOAD_NIB_LOW ( "30616.e3",  	0x7000, 0x0800, CRC(f620f0f8) SHA1(7802b399b3469fc840796c3145b5f63781090956) )
+	ROM_LOAD_NIB_HIGH( "30611.c2",  	0x7800, 0x0800, CRC(0ad07f85) SHA1(5a1a873b14e63dbb69ee3686ba53f7ca831fe9d0) )
+	ROM_LOAD_NIB_LOW ( "30614.c3",  	0x7800, 0x0800, CRC(a12d5d64) SHA1(1647d7416bf9266d07f066d3797bda943e004d24) )
 ROM_END
 
 ROM_START( cascade )
 	ROM_REGION( 0x8000, "maincpu", 0 )
-	ROM_LOAD( "10005.1a",     	0x6800, 0x0400, CRC(54774594) SHA1(03e013b563675fb8a30bd69836466a353db9bfc7) )
-	ROM_LOAD( "10005.1b",     	0x6c00, 0x0400, CRC(fd9575ad) SHA1(ed0a1343d3c0456d458561256d5ee966b6c213f4) )
-	ROM_LOAD( "10005.2a",     	0x7000, 0x0400, CRC(12857c75) SHA1(e42fdee70bd19d6f60e88f106a49dbbd68c591cd) )
-	ROM_LOAD( "10005.2b",     	0x7400, 0x0400, CRC(26361698) SHA1(587cc6f0dc068a74aac41c2cb3336d70d2dd91e5) )
-	ROM_LOAD( "10005.3a",     	0x7800, 0x0400, CRC(d1f422ff) SHA1(65ecbf0a22ba340d6a1768ed029030bac9c19e0f) )
-	ROM_LOAD( "10005.3b",     	0x7c00, 0x0400, CRC(bb243d96) SHA1(3a387a8c50cd9b0db37d12b94dc9e260892dbf21) )
+	ROM_LOAD( "10005.1a",   	0x6800, 0x0400, CRC(54774594) SHA1(03e013b563675fb8a30bd69836466a353db9bfc7) )
+	ROM_LOAD( "10005.1b",   	0x6c00, 0x0400, CRC(fd9575ad) SHA1(ed0a1343d3c0456d458561256d5ee966b6c213f4) )
+	ROM_LOAD( "10005.2a",   	0x7000, 0x0400, CRC(12857c75) SHA1(e42fdee70bd19d6f60e88f106a49dbbd68c591cd) )
+	ROM_LOAD( "10005.2b",   	0x7400, 0x0400, CRC(26361698) SHA1(587cc6f0dc068a74aac41c2cb3336d70d2dd91e5) )
+	ROM_LOAD( "10005.3a",   	0x7800, 0x0400, CRC(d1f422ff) SHA1(65ecbf0a22ba340d6a1768ed029030bac9c19e0f) )
+	ROM_LOAD( "10005.3b",   	0x7c00, 0x0400, CRC(bb243d96) SHA1(3a387a8c50cd9b0db37d12b94dc9e260892dbf21) )
 ROM_END
 
 
@@ -278,5 +297,5 @@ ROM_END
  *
  *************************************/
 
-GAMEL( 1978, avalnche, 0,        avalnche, avalnche, 0, ROT0, "Atari", "Avalanche", 0, layout_avalnche )
-GAMEL( 1978, cascade,  avalnche, avalnche, cascade,  0, ROT0, "Sidam", "Cascade", 0, layout_avalnche )
+GAMEL( 1978, avalnche, 0,        avalnche, avalnche, 0, ROT0, "Atari",  "Avalanche", GAME_SUPPORTS_SAVE, layout_avalnche )
+GAMEL( 1978, cascade,  avalnche, avalnche, cascade,  0, ROT0, "Sidam",  "Cascade",   GAME_SUPPORTS_SAVE, layout_avalnche )

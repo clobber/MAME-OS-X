@@ -132,7 +132,9 @@
 *     Video Hardware     *
 *************************/
 
-static tilemap *bg_tilemap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *bg_tilemap;
 
 static WRITE8_HANDLER( miniboy7_videoram_w )
 {

@@ -9,7 +9,7 @@
 #include "cpu/m6809/m6809.h"
 #include "audio/williams.h"
 #include "audio/dcs.h"
-#include "midtunit.h"
+#include "includes/midtunit.h"
 
 
 /* compile-time constants */
@@ -30,16 +30,16 @@ static UINT8	chip_type;
 static UINT8	fake_sound_state;
 
 /* protection */
-static UINT8 	mk_prot_index;
-static UINT16 	mk2_prot_data;
+static UINT8	mk_prot_index;
+static UINT16	mk2_prot_data;
 
 static const UINT32 *nbajam_prot_table;
 static UINT16	nbajam_prot_queue[5];
 static UINT8	nbajam_prot_index;
 
 static const UINT8 *jdredd_prot_table;
-static UINT8 	jdredd_prot_index;
-static UINT8 	jdredd_prot_max;
+static UINT8	jdredd_prot_index;
+static UINT8	jdredd_prot_max;
 
 
 
@@ -79,7 +79,7 @@ WRITE16_HANDLER( midtunit_cmos_w )
 {
 	if (1)/*cmos_write_enable)*/
 	{
-		COMBINE_DATA(generic_nvram16+offset);
+		COMBINE_DATA(space->machine->generic.nvram.u16+offset);
 		cmos_write_enable = 0;
 	}
 	else
@@ -92,7 +92,7 @@ WRITE16_HANDLER( midtunit_cmos_w )
 
 READ16_HANDLER( midtunit_cmos_r )
 {
-	return generic_nvram16[offset];
+	return space->machine->generic.nvram.u16[offset];
 }
 
 
@@ -465,8 +465,7 @@ DRIVER_INIT( mktunit )
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b00000, 0x1b6ffff, 0, 0, mk_prot_r, mk_prot_w);
 
 	/* sound chip protection (hidden RAM) */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfb9c, 0xfbc6, 0, 0, (read8_space_func)SMH_BANK(9), (write8_space_func)SMH_BANK(9));
-	memory_set_bankptr(machine, 9, auto_alloc_array(machine, UINT8, 0x80));
+	memory_install_ram(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfb9c, 0xfbc6, 0, 0, NULL);
 }
 
 DRIVER_INIT( mkturbo )
@@ -498,10 +497,9 @@ static void init_nbajam_common(running_machine *machine, int te_protection)
 
 	/* sound chip protection (hidden RAM) */
 	if (!te_protection)
-		memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbaa, 0xfbd4, 0, 0, (read8_space_func)SMH_BANK(9), (write8_space_func)SMH_BANK(9));
+		memory_install_ram(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbaa, 0xfbd4, 0, 0, NULL);
 	else
-		memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbec, 0xfc16, 0, 0, (read8_space_func)SMH_BANK(9), (write8_space_func)SMH_BANK(9));
-	memory_set_bankptr(machine, 9, auto_alloc_array(machine, UINT8, 0x80));
+		memory_install_ram(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbec, 0xfc16, 0, 0, NULL);
 }
 
 DRIVER_INIT( nbajam )
@@ -520,14 +518,15 @@ DRIVER_INIT( jdreddp )
 	init_tunit_generic(machine, SOUND_ADPCM_LARGE);
 
 	/* looks like the watchdog needs to be disabled */
-	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01d81060, 0x01d8107f, 0, 0, (write16_space_func)SMH_NOP);
+	memory_nop_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01d81060, 0x01d8107f, 0, 0);
 
 	/* protection */
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1b00000, 0x1bfffff, 0, 0, jdredd_prot_r, jdredd_prot_w);
 
 	/* sound chip protection (hidden RAM) */
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbcf, 0xfbf9, 0, 0, (read8_space_func)SMH_BANK(7), (write8_space_func)SMH_BANK(9));
-	memory_set_bankptr(machine, 9, auto_alloc_array(machine, UINT8, 0x80));
+	memory_install_read_bank(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbcf, 0xfbf9, 0, 0, "bank7");
+	memory_install_write_bank(cputag_get_address_space(machine, "adpcm", ADDRESS_SPACE_PROGRAM), 0xfbcf, 0xfbf9, 0, 0, "bank9");
+	memory_set_bankptr(machine, "bank9", auto_alloc_array(machine, UINT8, 0x80));
 
 #if ENABLE_ALL_JDREDD_LEVELS
 	/* how about the final levels? */

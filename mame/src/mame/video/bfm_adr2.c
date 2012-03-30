@@ -118,8 +118,8 @@ int adder2_acia_triggered;		  // flag <>0, ACIA receive IRQ
 static UINT8 adder_ram[0xE80];				// normal RAM
 static UINT8 adder_screen_ram[2][0x1180];	// paged  display RAM
 
-static tilemap *tilemap0;  // tilemap screen0
-static tilemap *tilemap1;  // timemap screen1
+static tilemap_t *tilemap0;  // tilemap screen0
+static tilemap_t *tilemap1;  // timemap screen1
 
 UINT8 adder2_data_from_sc2;
 UINT8 adder2_data_to_sc2;
@@ -188,9 +188,9 @@ VIDEO_RESET( adder2 )
 	{
 		UINT8 *rom = memory_region(machine, "adder2");
 
-		memory_configure_bank(machine, 2, 0, 4, &rom[0x00000], 0x08000);
+		memory_configure_bank(machine, "bank2", 0, 4, &rom[0x00000], 0x08000);
 
-		memory_set_bank(machine, 2,0&0x03);
+		memory_set_bank(machine, "bank2",0&0x03);
 	}
 }
 
@@ -323,7 +323,7 @@ static WRITE8_HANDLER( normal_ram_w )
 
 static WRITE8_HANDLER( adder2_rom_page_w )
 {
-	memory_set_bank(space->machine, 2,data&0x03);
+	memory_set_bank(space->machine, "bank2",data&0x03);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -471,7 +471,7 @@ void adder2_decode_char_roms(running_machine *machine)
 ADDRESS_MAP_START( adder2_memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
 	AM_RANGE(0x0000, 0x0000) AM_WRITE(adder2_screen_page_w)		// screen access/display select
-	AM_RANGE(0x0000, 0x7FFF) AM_READ(SMH_BANK(2))				// 8k  paged ROM (4 pages)
+	AM_RANGE(0x0000, 0x7FFF) AM_ROMBANK("bank2")				// 8k  paged ROM (4 pages)
 	AM_RANGE(0x8000, 0x917F) AM_READWRITE(screen_ram_r, screen_ram_w)
 	AM_RANGE(0x9180, 0x9FFF) AM_READWRITE(normal_ram_r, normal_ram_w)
 

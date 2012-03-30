@@ -75,7 +75,6 @@ TO DO :
 UINT16 *stlforce_bg_videoram, *stlforce_mlow_videoram, *stlforce_mhigh_videoram, *stlforce_tx_videoram;
 UINT16 *stlforce_bg_scrollram, *stlforce_mlow_scrollram, *stlforce_mhigh_scrollram, *stlforce_vidattrram;
 UINT16 *stlforce_spriteram;
-static const UINT8 *default_eeprom;
 extern int stlforce_sprxoffs;
 
 VIDEO_START( stlforce );
@@ -85,13 +84,13 @@ WRITE16_HANDLER( stlforce_mhigh_videoram_w );
 WRITE16_HANDLER( stlforce_mlow_videoram_w );
 WRITE16_HANDLER( stlforce_bg_videoram_w );
 
-static WRITE16_HANDLER( eeprom_w )
+static WRITE16_DEVICE_HANDLER( eeprom_w )
 {
 	if( ACCESSING_BITS_0_7 )
 	{
-		eeprom_write_bit(data & 0x01);
-		eeprom_set_cs_line((data & 0x02) ? CLEAR_LINE : ASSERT_LINE );
-		eeprom_set_clock_line((data & 0x04) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_write_bit(device, data & 0x01);
+		eeprom_set_cs_line(device, (data & 0x02) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom_set_clock_line(device, (data & 0x04) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
@@ -111,13 +110,13 @@ static ADDRESS_MAP_START( stlforce_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x103400, 0x1037ff) AM_RAM AM_BASE(&stlforce_mlow_scrollram)
 	AM_RANGE(0x103800, 0x103bff) AM_RAM AM_BASE(&stlforce_mhigh_scrollram)
 	AM_RANGE(0x103c00, 0x103fff) AM_RAM AM_BASE(&stlforce_vidattrram)
-	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x104000, 0x104fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x105000, 0x107fff) AM_RAM /* unknown / ram */
 	AM_RANGE(0x108000, 0x108fff) AM_RAM AM_BASE(&stlforce_spriteram)
 	AM_RANGE(0x109000, 0x11ffff) AM_RAM
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("INPUT")
 	AM_RANGE(0x400002, 0x400003) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x400010, 0x400011) AM_WRITE(eeprom_w)
+	AM_RANGE(0x400010, 0x400011) AM_DEVWRITE("eeprom", eeprom_w)
 	AM_RANGE(0x400012, 0x400013) AM_DEVWRITE("oki", oki_bank_w)
 	AM_RANGE(0x40001e, 0x40001f) AM_WRITENOP // sprites buffer commands
 	AM_RANGE(0x410000, 0x410001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
@@ -149,7 +148,7 @@ static INPUT_PORTS_START( stlforce )
 	PORT_SERVICE_NO_TOGGLE( 0x0008, IP_ACTIVE_LOW )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_VBLANK )
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL) /* eeprom */
+	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit) /* eeprom */
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
@@ -193,54 +192,14 @@ static GFXDECODE_START( stlforce )
 	GFXDECODE_ENTRY( "gfx2", 0, stlforce_splayout, 0, 256  )
 GFXDECODE_END
 
-static const UINT8 stlforce_default_eeprom[128] = {
-	0x7e, 0x01, 0x00, 0x00, 0x01, 0x03, 0x05, 0x01, 0x01, 0x00, 0x4e, 0x20, 0x00, 0x00, 0x4a, 0x4d,
-	0x42, 0x00, 0x02, 0x01, 0x4e, 0x20, 0x00, 0x00, 0x4d, 0x41, 0x43, 0x00, 0x02, 0x01, 0x00, 0x64,
-	0x00, 0x00, 0x41, 0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x41, 0x41, 0x41, 0x00,
-	0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x41, 0x41, 0x41, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
-
-static const UINT8 twinbrat_default_eeprom[128] = {
-	0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x03,
-	0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1b,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3d,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6f
-};
-
-
-static NVRAM_HANDLER( stlforce )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_interface_93C46);
-		if (file)
-		{
-			eeprom_load(file);
-		}
-		else
-		{
-			eeprom_set_data(default_eeprom,128);
-		}
-	}
-}
 
 static MACHINE_DRIVER_START( stlforce )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("cpu", M68000, 15000000)
+	MDRV_CPU_ADD("maincpu", M68000, 15000000)
 	MDRV_CPU_PROGRAM_MAP(stlforce_map)
 	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_NVRAM_HANDLER(stlforce)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -267,14 +226,14 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( twinbrat )
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(stlforce)
-	MDRV_CPU_REPLACE("cpu", M68000, 14745600)
+	MDRV_CPU_REPLACE("maincpu", M68000, 14745600)
 
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(3*8, 45*8-1, 0*8, 30*8-1)
 MACHINE_DRIVER_END
 
 ROM_START( stlforce )
-	ROM_REGION( 0x80000, "cpu", 0 ) /* 68000 code */
+	ROM_REGION( 0x80000, "maincpu", 0 ) /* 68000 code */
 	ROM_LOAD16_BYTE( "stlforce.105", 0x00000, 0x20000, CRC(3ec804ca) SHA1(4efcf3321b7111644ac3ee0a83ad95d0571a4021) )
 	ROM_LOAD16_BYTE( "stlforce.104", 0x00001, 0x20000, CRC(69b5f429) SHA1(5bd20fad91a22f4d62f85a5190d72dd824ee26a5) )
 
@@ -293,6 +252,9 @@ ROM_START( stlforce )
 	/* only one bank */
 	ROM_REGION( 0x80000, "oki", 0 ) /* samples */
 	ROM_LOAD( "stlforce.u1", 0x00000, 0x80000, CRC(0a55edf1) SHA1(091f12e8110c62df22b370a2e710c930ba06e8ca) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "eeprom-stlforce.bin", 0x0000, 0x0080, CRC(3fb83951) SHA1(0cbf09751e46f100db847cf0594a4440126a7b6e) )
 ROM_END
 
 
@@ -336,7 +298,7 @@ Notes:
 
 
 ROM_START( twinbrat )
-	ROM_REGION( 0x40000, "cpu", 0 ) /* 68000 Code */
+	ROM_REGION( 0x40000, "maincpu", 0 ) /* 68000 Code */
 	ROM_LOAD16_BYTE( "2.u105", 0x00000, 0x20000, CRC(33a9bb82) SHA1(0f54239397c93e264b9b211f67bf626acf1246a9) )
 	ROM_LOAD16_BYTE( "3.u104", 0x00001, 0x20000, CRC(b1186a67) SHA1(502074063101885874db76ae707db1082313efcf) )
 
@@ -366,10 +328,13 @@ ROM_START( twinbrat )
 	ROM_COPY( "user1", 0x040000, 0x0a0000, 0x020000)
 	ROM_COPY( "user1", 0x000000, 0x0c0000, 0x020000)
 	ROM_COPY( "user1", 0x060000, 0x0e0000, 0x020000)
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "eeprom-twinbrat.bin", 0x0000, 0x0080, CRC(9366263d) SHA1(ff5155498ed0b349ecc1ce98a39566b642201cf2) )
 ROM_END
 
 ROM_START( twinbrata )
-	ROM_REGION( 0x40000, "cpu", 0 ) /* 68000 Code */
+	ROM_REGION( 0x40000, "maincpu", 0 ) /* 68000 Code */
 	ROM_LOAD16_BYTE( "2.bin", 0x00000, 0x20000, CRC(5e75f568) SHA1(f42d2a73d737e6b01dd049eea2a10fc8c8096d8f) )
 	ROM_LOAD16_BYTE( "3.bin", 0x00001, 0x20000, CRC(0e3fa9b0) SHA1(0148cc616eac84dc16415e1557ec6040d14392d4) )
 
@@ -399,18 +364,19 @@ ROM_START( twinbrata )
 	ROM_COPY( "user1", 0x040000, 0x0a0000, 0x020000)
 	ROM_COPY( "user1", 0x000000, 0x0c0000, 0x020000)
 	ROM_COPY( "user1", 0x060000, 0x0e0000, 0x020000)
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "eeprom-twinbrat.bin", 0x0000, 0x0080, CRC(9366263d) SHA1(ff5155498ed0b349ecc1ce98a39566b642201cf2) )
 ROM_END
 
 static DRIVER_INIT(stlforce)
 {
 	stlforce_sprxoffs = 0;
-	default_eeprom = stlforce_default_eeprom;
 }
 
 static DRIVER_INIT(twinbrat)
 {
 	stlforce_sprxoffs = 9;
-	default_eeprom = twinbrat_default_eeprom;
 }
 
 

@@ -320,14 +320,13 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "video/taitoic.h"
 #include "audio/taitosnd.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "includes/cchip.h"
 
-VIDEO_START( rainbow );
 VIDEO_START( jumping );
 
 VIDEO_UPDATE( rainbow );
@@ -356,7 +355,7 @@ static WRITE16_HANDLER( jumping_sound_w )
 static ADDRESS_MAP_START( rainbow_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x10c000, 0x10ffff) AM_RAM				/* main RAM */
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x201000, 0x203fff) AM_RAM				/* r/w in initial checks */
 	AM_RANGE(0x390000, 0x390003) AM_READ_PORT("DSWA")
 	AM_RANGE(0x3a0000, 0x3a0001) AM_WRITE(rainbow_spritectrl_w)
@@ -367,17 +366,17 @@ static ADDRESS_MAP_START( rainbow_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x8007ff) AM_READWRITE(rainbow_cchip_ram_r,rainbow_cchip_ram_w)
 	AM_RANGE(0x800802, 0x800803) AM_READWRITE(rainbow_cchip_ctrl_r,rainbow_cchip_ctrl_w)
 	AM_RANGE(0x800c00, 0x800c01) AM_WRITE(rainbow_cchip_bank_w)
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(PC080SN_word_0_r,PC080SN_word_0_w)
-	AM_RANGE(0xc20000, 0xc20003) AM_WRITE(PC080SN_yscroll_word_0_w)
-	AM_RANGE(0xc40000, 0xc40003) AM_WRITE(PC080SN_xscroll_word_0_w)
-	AM_RANGE(0xc50000, 0xc50003) AM_WRITE(PC080SN_ctrl_word_0_w)
-	AM_RANGE(0xd00000, 0xd03fff) AM_READWRITE(PC090OJ_word_0_r,PC090OJ_word_0_w)	/* sprite ram + other stuff */
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("pc080sn", pc080sn_word_r, pc080sn_word_w)
+	AM_RANGE(0xc20000, 0xc20003) AM_DEVWRITE("pc080sn", pc080sn_yscroll_word_w)
+	AM_RANGE(0xc40000, 0xc40003) AM_DEVWRITE("pc080sn", pc080sn_xscroll_word_w)
+	AM_RANGE(0xc50000, 0xc50003) AM_DEVWRITE("pc080sn", pc080sn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd03fff) AM_DEVREADWRITE("pc090oj", pc090oj_word_r, pc090oj_word_w)	/* sprite ram + other stuff */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( jumping_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x09ffff) AM_ROM
 	AM_RANGE(0x10c000, 0x10ffff) AM_RAM				/* main RAM */
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x201000, 0x203fff) AM_RAM				/* r/w in initial checks */
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("DSWA")
 	AM_RANGE(0x400002, 0x400003) AM_READ_PORT("DSWB")
@@ -387,12 +386,12 @@ static ADDRESS_MAP_START( jumping_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x3c0000, 0x3c0001) AM_WRITENOP		/* watchdog? */
 	AM_RANGE(0x400006, 0x400007) AM_WRITE(jumping_sound_w)
 	AM_RANGE(0x420000, 0x420001) AM_READNOP			/* read, but result not used */
-	AM_RANGE(0x430000, 0x430003) AM_WRITE(PC080SN_yscroll_word_0_w)
-	AM_RANGE(0x440000, 0x4407ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x430000, 0x430003) AM_DEVWRITE("pc080sn", pc080sn_yscroll_word_w)
+	AM_RANGE(0x440000, 0x4407ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x800000, 0x80ffff) AM_WRITENOP		/* original c-chip location (not used) */
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(PC080SN_word_0_r,PC080SN_word_0_w)
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("pc080sn", pc080sn_word_r, pc080sn_word_w)
 	AM_RANGE(0xc20000, 0xc20003) AM_WRITENOP		/* seems it is a leftover from rainbow: scroll y written here too */
-	AM_RANGE(0xc40000, 0xc40003) AM_WRITE(PC080SN_xscroll_word_0_w)
+	AM_RANGE(0xc40000, 0xc40003) AM_DEVWRITE("pc080sn", pc080sn_xscroll_word_w)
 	AM_RANGE(0xd00000, 0xd01fff) AM_RAM				/* original spriteram location, needed for Attract Mode */
 ADDRESS_MAP_END
 
@@ -406,7 +405,7 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( bankswitch_w )
 {
-	memory_set_bankptr(device->machine, 1, memory_region(device->machine, "audiocpu") + ((data - 1) & 3) * 0x4000 + 0x10000);
+	memory_set_bankptr(device->machine, "bank1", memory_region(device->machine, "audiocpu") + ((data - 1) & 3) * 0x4000 + 0x10000);
 }
 
 static READ8_HANDLER( jumping_latch_r )
@@ -417,9 +416,9 @@ static READ8_HANDLER( jumping_latch_r )
 
 static ADDRESS_MAP_START( rainbow_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0x9002, 0x9100) AM_READNOP
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_READWRITE(taitosound_slave_comm_r,taitosound_slave_comm_w)
@@ -648,6 +647,23 @@ static const ym2151_interface ym2151_config =
                       MACHINE DRIVERS
 ***********************************************************/
 
+static const pc080sn_interface rainbow_pc080sn_intf =
+{
+	1,	 /* gfxnum */
+	0, 0, 0, 0	/* x_offset, y_offset, y_invert, dblwidth */
+};
+
+static const pc080sn_interface jumping_pc080sn_intf =
+{
+	1,	 /* gfxnum */
+	0, 0, 1, 0	/* x_offset, y_offset, y_invert, dblwidth */
+};
+
+static const pc090oj_interface rainbow_pc090oj_intf =
+{
+	0, 0, 0, 0
+};
+
 static MACHINE_DRIVER_START( rainbow )
 
 	/* basic machine hardware */
@@ -671,13 +687,15 @@ static MACHINE_DRIVER_START( rainbow )
 	MDRV_GFXDECODE(rainbow)
 	MDRV_PALETTE_LENGTH(8192)
 
-	MDRV_VIDEO_START(rainbow)
 	MDRV_VIDEO_UPDATE(rainbow)
+
+	MDRV_PC080SN_ADD("pc080sn", rainbow_pc080sn_intf)
+	MDRV_PC090OJ_ADD("pc090oj", rainbow_pc090oj_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_16MHz/4) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_16MHz/4) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 0.50)
@@ -710,6 +728,8 @@ static MACHINE_DRIVER_START( jumping )
 
 	MDRV_VIDEO_START(jumping)
 	MDRV_VIDEO_UPDATE(jumping)
+
+	MDRV_PC080SN_ADD("pc080sn", jumping_pc080sn_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -765,7 +785,7 @@ ROM_START( rainbowo )
 	ROM_LOAD( "b22-01.2",             0x00000, 0x80000, CRC(b76c9168) SHA1(e924be0c8294b930488bb04583784254a840a52e) )	/* tiles */
 
 	ROM_REGION( 0xa0000, "gfx2", 0 )
-  	ROM_LOAD( "b22-02.5",             0x00000, 0x80000, CRC(1b87ecf0) SHA1(37a463184f4064fe0565367236e289d57639614c) )	/* sprites */
+	ROM_LOAD( "b22-02.5",             0x00000, 0x80000, CRC(1b87ecf0) SHA1(37a463184f4064fe0565367236e289d57639614c) )	/* sprites */
 	ROM_LOAD16_BYTE( "b22-12.7",      0x80000, 0x10000, CRC(67a76dc6) SHA1(626ee684eb3ea859c695ffe03344ccaa442da4af) )
 	ROM_LOAD16_BYTE( "b22-13.6",      0x80001, 0x10000, CRC(2fda099f) SHA1(a1e27a4497f6733608be924d69d965b19f725b99) )
 ROM_END
@@ -787,7 +807,7 @@ ROM_START( rainbowe )
 	ROM_LOAD( "b22-01.2",             0x00000, 0x80000, CRC(b76c9168) SHA1(e924be0c8294b930488bb04583784254a840a52e) )	/* tiles */
 
 	ROM_REGION( 0xa0000, "gfx2", 0 )
-  	ROM_LOAD( "b22-02.5",             0x00000, 0x80000, CRC(1b87ecf0) SHA1(37a463184f4064fe0565367236e289d57639614c) )	/* sprites */
+	ROM_LOAD( "b22-02.5",             0x00000, 0x80000, CRC(1b87ecf0) SHA1(37a463184f4064fe0565367236e289d57639614c) )	/* sprites */
 	ROM_LOAD16_BYTE( "b22-12.7",      0x80000, 0x10000, CRC(67a76dc6) SHA1(626ee684eb3ea859c695ffe03344ccaa442da4af) )
 	ROM_LOAD16_BYTE( "b22-13.6",      0x80001, 0x10000, CRC(2fda099f) SHA1(a1e27a4497f6733608be924d69d965b19f725b99) )
 ROM_END

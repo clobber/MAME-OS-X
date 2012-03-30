@@ -65,7 +65,7 @@ To Do:
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/tms32010/tms32010.h"
-#include "toaplan1.h"
+#include "includes/toaplan1.h"
 #include "sound/3812intf.h"
 
 
@@ -76,7 +76,7 @@ static ADDRESS_MAP_START( rallybik_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x040000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
-	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(rallybik_bcu_flipscreen_w)
 	AM_RANGE(0x100002, 0x100003) AM_READWRITE(toaplan1_tileram_offs_r, toaplan1_tileram_offs_w)
 	AM_RANGE(0x100004, 0x100007) AM_READWRITE(rallybik_tileram16_r, toaplan1_tileram16_w)
@@ -282,7 +282,7 @@ static ADDRESS_MAP_START( rallybik_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x30, 0x30) AM_WRITE(rallybik_coin_w)	/* Coin counter/lockout */
 	AM_RANGE(0x40, 0x40) AM_READ_PORT("DSWA")
 	AM_RANGE(0x50, 0x50) AM_READ_PORT("DSWB")
-	AM_RANGE(0x60, 0x61) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x60, 0x61) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x70, 0x70) AM_READ_PORT("TJUMP")
 ADDRESS_MAP_END
 
@@ -294,7 +294,7 @@ static ADDRESS_MAP_START( truxton_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x30, 0x30) AM_WRITE(toaplan1_coin_w)	/* Coin counter/lockout */
 	AM_RANGE(0x40, 0x40) AM_READ_PORT("DSWA")
 	AM_RANGE(0x50, 0x50) AM_READ_PORT("DSWB")
-	AM_RANGE(0x60, 0x61) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x60, 0x61) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x70, 0x70) AM_READ_PORT("TJUMP")
 ADDRESS_MAP_END
 
@@ -307,7 +307,7 @@ static ADDRESS_MAP_START( hellfire_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x40) AM_READ_PORT("P1")
 	AM_RANGE(0x50, 0x50) AM_READ_PORT("P2")
 	AM_RANGE(0x60, 0x60) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x70, 0x71) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( zerowing_sound_io_map, ADDRESS_SPACE_IO, 8 )
@@ -319,12 +319,12 @@ static ADDRESS_MAP_START( zerowing_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x80, 0x80) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x88, 0x88) AM_READ_PORT("TJUMP")
 	AM_RANGE(0xa0, 0xa0) AM_WRITE(toaplan1_coin_w)	/* Coin counter/lockout */
-	AM_RANGE(0xa8, 0xa9) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0xa8, 0xa9) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( demonwld_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x20, 0x20) AM_READ_PORT("TJUMP")
 	AM_RANGE(0x40, 0x40) AM_WRITE(toaplan1_coin_w)	/* Coin counter/lockout */
 	AM_RANGE(0x60, 0x60) AM_READ_PORT("SYSTEM")
@@ -336,7 +336,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( outzone_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x04, 0x04) AM_WRITE(toaplan1_coin_w)	/* Coin counter/lockout */
 	AM_RANGE(0x08, 0x08) AM_READ_PORT("DSWA")
 	AM_RANGE(0x0c, 0x0c) AM_READ_PORT("DSWB")
@@ -373,14 +373,14 @@ ADDRESS_MAP_END
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_PLAYER(player) options PORT_8WAY	\
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_PLAYER(player) options PORT_8WAY	\
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(player) options PORT_8WAY	\
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(player) options 					\
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(player) options 					\
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, button3 ) PORT_PLAYER(player) options 						\
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(player) options					\
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(player) options					\
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, button3 ) PORT_PLAYER(player) options						\
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
 #define  TOAPLAN1_SYSTEM_INPUTS						\
 	PORT_START("SYSTEM")						\
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SERVICE1 ) 	\
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SERVICE1 )	\
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_TILT )		\
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNKNOWN )	\
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 )		\
@@ -1212,7 +1212,7 @@ static GFXDECODE_START( rallybik )
 GFXDECODE_END
 
 static GFXDECODE_START( outzone )
-	GFXDECODE_ENTRY( "gfx1", 0x00000, vm_tilelayout, 	0, 64 )
+	GFXDECODE_ENTRY( "gfx1", 0x00000, vm_tilelayout,	0, 64 )
 	GFXDECODE_ENTRY( "gfx2", 0x00000, tilelayout,	64*16, 64 )
 GFXDECODE_END
 
@@ -1268,7 +1268,7 @@ static MACHINE_DRIVER_START( rallybik )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1308,7 +1308,7 @@ static MACHINE_DRIVER_START( truxton )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1348,7 +1348,7 @@ static MACHINE_DRIVER_START( hellfire )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1388,7 +1388,7 @@ static MACHINE_DRIVER_START( zerowing )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1432,7 +1432,7 @@ static MACHINE_DRIVER_START( demonwld )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1466,7 +1466,7 @@ static MACHINE_DRIVER_START( samesame )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1506,7 +1506,7 @@ static MACHINE_DRIVER_START( outzone )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
@@ -1540,7 +1540,7 @@ static MACHINE_DRIVER_START( vimana )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, XTAL_28MHz/8) /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_28MHz/8) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END

@@ -90,6 +90,9 @@ static UINT32 get_flags(i386_state *cpustate)
 	f |= cpustate->IF << 9;
 	f |= cpustate->DF << 10;
 	f |= cpustate->OF << 11;
+	f |= cpustate->IOP1 << 12;
+	f |= cpustate->IOP2 << 13;
+	f |= cpustate->NT << 14;
 	return (cpustate->eflags & 0xFFFF0000) | (f & 0xFFFF);
 }
 
@@ -104,6 +107,9 @@ static void set_flags(i386_state *cpustate, UINT32 f )
 	cpustate->IF = (f & 0x200) ? 1 : 0;
 	cpustate->DF = (f & 0x400) ? 1 : 0;
 	cpustate->OF = (f & 0x800) ? 1 : 0;
+	cpustate->IOP1 = (f & 0x1000) ? 1 : 0;
+	cpustate->IOP2 = (f & 0x2000) ? 1 : 0;
+	cpustate->NT = (f & 0x4000) ? 1 : 0;
 }
 
 static void sib_byte(i386_state *cpustate,UINT8 mod, UINT32* out_ea, UINT8* out_segment)
@@ -275,14 +281,14 @@ static void i386_trap(i386_state *cpustate,int irq, int irq_gate)
 	UINT32 v1, v2;
 	UINT32 offset;
 	UINT16 segment;
-	int entry = irq * (cpustate->sreg[CS].d ? 8 : 4);
+	int entry = irq * (PROTECTED_MODE ? 8 : 4);
 
 	/* Check if IRQ is out of IDTR's bounds */
 	if( entry > cpustate->idtr.limit ) {
 		fatalerror("I386 Interrupt: IRQ out of IDTR bounds (IRQ: %d, IDTR Limit: %d)", irq, cpustate->idtr.limit);
 	}
 
-	if( !cpustate->sreg[CS].d )
+	if( !(PROTECTED_MODE) )
 	{
 		/* 16-bit */
 		PUSH16(cpustate, get_flags(cpustate) & 0xffff );
@@ -306,15 +312,25 @@ static void i386_trap(i386_state *cpustate,int irq, int irq_gate)
 	{
 		int type;
 		/* 32-bit */
-		PUSH32(cpustate, get_flags(cpustate) & 0x00fcffff );
-		PUSH32(cpustate, cpustate->sreg[CS].selector );
-		PUSH32(cpustate, cpustate->eip );
 
 		v1 = READ32(cpustate, cpustate->idtr.base + entry );
 		v2 = READ32(cpustate, cpustate->idtr.base + entry + 4 );
 		offset = (v2 & 0xffff0000) | (v1 & 0xffff);
 		segment = (v1 >> 16) & 0xffff;
 		type = (v2>>8) & 0x1F;
+
+		if(type != 0x0e && type != 0x0f)  // if not 386 interrupt or trap gate
+		{
+			PUSH16(cpustate, get_flags(cpustate) & 0xffff );
+			PUSH16(cpustate, cpustate->sreg[CS].selector );
+			PUSH16(cpustate, cpustate->eip );
+		}
+		else
+		{
+			PUSH32(cpustate, get_flags(cpustate) & 0x00fcffff );
+			PUSH32(cpustate, cpustate->sreg[CS].selector );
+			PUSH32(cpustate, cpustate->eip );
+		}
 
 		cpustate->sreg[CS].selector = segment;
 		cpustate->eip = offset;
@@ -866,13 +882,13 @@ CPU_GET_INFO( i386 )
 		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_PAGE_SHIFT_PROGRAM: 	info->i = 12;					break;
+		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 12;					break;
 		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
 		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 
@@ -959,15 +975,15 @@ CPU_GET_INFO( i386 )
 		case CPUINFO_INT_REGISTER + I386_LDTR_FLAGS:	info->i = cpustate->ldtr.flags;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_SET_INFO:	      				info->setinfo = CPU_SET_INFO_NAME(i386);			break;
-		case CPUINFO_FCT_INIT:		      				info->init = CPU_INIT_NAME(i386);					break;
-		case CPUINFO_FCT_RESET:		      				info->reset = CPU_RESET_NAME(i386);				break;
-		case CPUINFO_FCT_EXECUTE:	      				info->execute = CPU_EXECUTE_NAME(i386);			break;
-		case CPUINFO_FCT_BURN:		      				info->burn = NULL;						break;
-		case CPUINFO_PTR_INSTRUCTION_COUNTER: 			info->icount = &cpustate->cycles;				break;
+		case CPUINFO_FCT_SET_INFO:	    				info->setinfo = CPU_SET_INFO_NAME(i386);			break;
+		case CPUINFO_FCT_INIT:		    				info->init = CPU_INIT_NAME(i386);					break;
+		case CPUINFO_FCT_RESET:		    				info->reset = CPU_RESET_NAME(i386);				break;
+		case CPUINFO_FCT_EXECUTE:	    				info->execute = CPU_EXECUTE_NAME(i386);			break;
+		case CPUINFO_FCT_BURN:		    				info->burn = NULL;						break;
+		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->cycles;				break;
 		case CPUINFO_FCT_TRANSLATE:						info->translate = CPU_TRANSLATE_NAME(i386);	break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(i386);			break;
-		case CPUINFO_FCT_DEBUG_INIT:					info->debug_init = CPU_DEBUG_INIT_NAME(i386); 	break;
+		case CPUINFO_FCT_DEBUG_INIT:					info->debug_init = CPU_DEBUG_INIT_NAME(i386);	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "I386");				break;
@@ -976,7 +992,7 @@ CPU_GET_INFO( i386 )
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);				break;
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Ville Linde"); break;
 
-		case CPUINFO_STR_FLAGS:	   						sprintf(info->s, "%08X", get_flags(cpustate));	break;
+		case CPUINFO_STR_FLAGS:							sprintf(info->s, "%08X", get_flags(cpustate));	break;
 
 		case CPUINFO_STR_REGISTER + I386_PC:			sprintf(info->s, "PC: %08X", cpustate->pc);		break;
 		case CPUINFO_STR_REGISTER + I386_EIP:			sprintf(info->s, "EIP: %08X", cpustate->eip);	break;
@@ -1128,7 +1144,7 @@ static CPU_SET_INFO( i486 )
 		case CPUINFO_INT_REGISTER + X87_ST6:			ST(6).f = info->i;						break;
 		case CPUINFO_INT_REGISTER + X87_ST7:			ST(7).f = info->i;						break;
 
-		default: 										CPU_SET_INFO_CALL(i386); 				break;
+		default:										CPU_SET_INFO_CALL(i386);				break;
 	}
 }
 
@@ -1137,10 +1153,10 @@ CPU_GET_INFO( i486 )
 	i386_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
-		case CPUINFO_FCT_SET_INFO:	      				info->setinfo = CPU_SET_INFO_NAME(i486);break;
-		case CPUINFO_FCT_INIT:		      				info->init = CPU_INIT_NAME(i486);		break;
-		case CPUINFO_FCT_RESET:		      				info->reset = CPU_RESET_NAME(i486);		break;
-		case CPUINFO_FCT_EXIT:		      				info->exit = CPU_EXIT_NAME(i486);		break;
+		case CPUINFO_FCT_SET_INFO:	    				info->setinfo = CPU_SET_INFO_NAME(i486);break;
+		case CPUINFO_FCT_INIT:		    				info->init = CPU_INIT_NAME(i486);		break;
+		case CPUINFO_FCT_RESET:		    				info->reset = CPU_RESET_NAME(i486);		break;
+		case CPUINFO_FCT_EXIT:		    				info->exit = CPU_EXIT_NAME(i486);		break;
 
 		case CPUINFO_INT_REGISTER + X87_CTRL:			info->i = cpustate->fpu_control_word;			break;
 		case CPUINFO_INT_REGISTER + X87_STATUS:			info->i = cpustate->fpu_status_word;			break;
@@ -1166,7 +1182,7 @@ CPU_GET_INFO( i486 )
 		case CPUINFO_STR_REGISTER + X87_ST6:			sprintf(info->s, "ST6: %f", ST(6).f);	break;
 		case CPUINFO_STR_REGISTER + X87_ST7:			sprintf(info->s, "ST7: %f", ST(7).f);	break;
 
-		default: 										CPU_GET_INFO_CALL(i386); 				break;
+		default:										CPU_GET_INFO_CALL(i386);				break;
 	}
 }
 
@@ -1259,7 +1275,7 @@ static CPU_SET_INFO( pentium )
 		case CPUINFO_INT_REGISTER + X87_ST6:			ST(6).f = info->i;						break;
 		case CPUINFO_INT_REGISTER + X87_ST7:			ST(7).f = info->i;						break;
 
-		default: 										CPU_SET_INFO_CALL(i386); 				break;
+		default:										CPU_SET_INFO_CALL(i386);				break;
 	}
 }
 
@@ -1268,10 +1284,10 @@ CPU_GET_INFO( pentium )
 	i386_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
-		case CPUINFO_FCT_SET_INFO:	      				info->setinfo = CPU_SET_INFO_NAME(pentium);	break;
-		case CPUINFO_FCT_INIT:		      				info->init = CPU_INIT_NAME(pentium);	break;
-		case CPUINFO_FCT_RESET:		      				info->reset = CPU_RESET_NAME(pentium);	break;
-		case CPUINFO_FCT_EXIT:		      				info->exit = CPU_EXIT_NAME(pentium);	break;
+		case CPUINFO_FCT_SET_INFO:	    				info->setinfo = CPU_SET_INFO_NAME(pentium);	break;
+		case CPUINFO_FCT_INIT:		    				info->init = CPU_INIT_NAME(pentium);	break;
+		case CPUINFO_FCT_RESET:		    				info->reset = CPU_RESET_NAME(pentium);	break;
+		case CPUINFO_FCT_EXIT:		    				info->exit = CPU_EXIT_NAME(pentium);	break;
 
 		case CPUINFO_INT_REGISTER + X87_CTRL:			info->i = cpustate->fpu_control_word;			break;
 		case CPUINFO_INT_REGISTER + X87_STATUS:			info->i = cpustate->fpu_status_word;			break;
@@ -1297,7 +1313,7 @@ CPU_GET_INFO( pentium )
 		case CPUINFO_STR_REGISTER + X87_ST6:			sprintf(info->s, "ST6: %f", ST(6).f);	break;
 		case CPUINFO_STR_REGISTER + X87_ST7:			sprintf(info->s, "ST7: %f", ST(7).f);	break;
 
-		default: 										CPU_GET_INFO_CALL(i386); 				break;
+		default:										CPU_GET_INFO_CALL(i386);				break;
 	}
 }
 
@@ -1390,7 +1406,7 @@ static CPU_SET_INFO( mediagx )
 		case CPUINFO_INT_REGISTER + X87_ST6:			ST(6).f = info->i;						break;
 		case CPUINFO_INT_REGISTER + X87_ST7:			ST(7).f = info->i;						break;
 
-		default: 										CPU_SET_INFO_CALL(i386); 				break;
+		default:										CPU_SET_INFO_CALL(i386);				break;
 	}
 }
 
@@ -1399,10 +1415,10 @@ CPU_GET_INFO( mediagx )
 	i386_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
-		case CPUINFO_FCT_SET_INFO:	      				info->setinfo = CPU_SET_INFO_NAME(mediagx);	break;
-		case CPUINFO_FCT_INIT:		      				info->init = CPU_INIT_NAME(mediagx);	break;
-		case CPUINFO_FCT_RESET:		      				info->reset = CPU_RESET_NAME(mediagx);	break;
-		case CPUINFO_FCT_EXIT:		      				info->exit = CPU_EXIT_NAME(mediagx);	break;
+		case CPUINFO_FCT_SET_INFO:	    				info->setinfo = CPU_SET_INFO_NAME(mediagx);	break;
+		case CPUINFO_FCT_INIT:		    				info->init = CPU_INIT_NAME(mediagx);	break;
+		case CPUINFO_FCT_RESET:		    				info->reset = CPU_RESET_NAME(mediagx);	break;
+		case CPUINFO_FCT_EXIT:		    				info->exit = CPU_EXIT_NAME(mediagx);	break;
 
 		case CPUINFO_INT_REGISTER + X87_CTRL:			info->i = cpustate->fpu_control_word;			break;
 		case CPUINFO_INT_REGISTER + X87_STATUS:			info->i = cpustate->fpu_status_word;			break;
@@ -1428,6 +1444,6 @@ CPU_GET_INFO( mediagx )
 		case CPUINFO_STR_REGISTER + X87_ST6:			sprintf(info->s, "ST6: %f", ST(6).f);	break;
 		case CPUINFO_STR_REGISTER + X87_ST7:			sprintf(info->s, "ST7: %f", ST(7).f);	break;
 
-		default: 										CPU_GET_INFO_CALL(i386); 				break;
+		default:										CPU_GET_INFO_CALL(i386);				break;
 	}
 }

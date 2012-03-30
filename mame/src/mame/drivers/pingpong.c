@@ -9,6 +9,9 @@ Ping Pong (c) 1985 Konami
 #include "deprecat.h"
 #include "sound/sn76496.h"
 
+extern UINT8 *pingpong_videoram;
+extern UINT8 *pingpong_colorram;
+
 extern WRITE8_HANDLER( pingpong_videoram_w );
 extern WRITE8_HANDLER( pingpong_colorram_w );
 
@@ -58,10 +61,11 @@ static WRITE8_HANDLER( cashquiz_question_bank_low_w )
 {
 	if(data >= 0x60 && data <= 0xdf)
 	{
-		int bank = data & 7;
+		static const char * const bankname[] = { "bank1", "bank2", "bank3", "bank4", "bank5", "bank6", "bank7", "bank8" };
+		const char *bank = bankname[data & 7];
 		int bankaddr = question_addr_high | ((data - 0x60) * 0x100);
 		UINT8 *questions = memory_region(space->machine, "user1") + bankaddr;
-		memory_set_bankptr(space->machine, bank + 1,questions);
+		memory_set_bankptr(space->machine, bank,questions);
 
 	}
 }
@@ -73,8 +77,8 @@ static WRITE8_HANDLER( coin_w )
 	intenable = data & 0x0c;
 
 	/* bit 0/1 = coin counters */
-	coin_counter_w(0,data & 1);
-	coin_counter_w(1,data & 2);
+	coin_counter_w(space->machine, 0,data & 1);
+	coin_counter_w(space->machine, 1,data & 2);
 
 	/* other bits unknown */
 }
@@ -93,10 +97,10 @@ static INTERRUPT_GEN( pingpong_interrupt )
 
 static ADDRESS_MAP_START( pingpong_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE(&pingpong_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE(&pingpong_videoram)
 	AM_RANGE(0x9000, 0x9002) AM_RAM
-	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x9053, 0x97ff) AM_RAM
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xa880, 0xa880) AM_READ_PORT("INPUTS")
@@ -104,20 +108,20 @@ static ADDRESS_MAP_START( pingpong_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa980, 0xa980) AM_READ_PORT("DSW2")
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(coin_w)	/* coin counters + irq enables */
 	AM_RANGE(0xa200, 0xa200) AM_WRITENOP		/* SN76496 data latch */
-	AM_RANGE(0xa400, 0xa400) AM_DEVWRITE("sn", sn76496_w)	/* trigger read */
+	AM_RANGE(0xa400, 0xa400) AM_DEVWRITE("snsnd", sn76496_w)	/* trigger read */
 	AM_RANGE(0xa600, 0xa600) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( merlinmm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x5400, 0x57ff) AM_RAM
 	AM_RANGE(0x6000, 0x6007) AM_WRITENOP /* solenoid writes */
 	AM_RANGE(0x7000, 0x7000) AM_READ_PORT("IN4")
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE(&colorram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(pingpong_colorram_w) AM_BASE(&pingpong_colorram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(pingpong_videoram_w) AM_BASE(&pingpong_videoram)
 	AM_RANGE(0x9000, 0x9002) AM_RAM
-	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x9003, 0x9052) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x9053, 0x97ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(coin_w)	/* irq enables */
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("IN0")
@@ -125,7 +129,7 @@ static ADDRESS_MAP_START( merlinmm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa100, 0xa100) AM_READ_PORT("IN2")
 	AM_RANGE(0xa180, 0xa180) AM_READ_PORT("IN3")
 	AM_RANGE(0xa200, 0xa200) AM_WRITENOP		/* SN76496 data latch */
-	AM_RANGE(0xa400, 0xa400) AM_DEVWRITE("sn", sn76496_w)	/* trigger read */
+	AM_RANGE(0xa400, 0xa400) AM_DEVWRITE("snsnd", sn76496_w)	/* trigger read */
 	AM_RANGE(0xa600, 0xa600) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
@@ -456,7 +460,7 @@ GFXDECODE_END
 static MACHINE_DRIVER_START( pingpong )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("cpu",Z80,18432000/6)		/* 3.072 MHz (probably) */
+	MDRV_CPU_ADD("maincpu",Z80,18432000/6)		/* 3.072 MHz (probably) */
 	MDRV_CPU_PROGRAM_MAP(pingpong_map)
 	MDRV_CPU_VBLANK_INT_HACK(pingpong_interrupt,16)	/* 1 IRQ + 8 NMI */
 
@@ -478,14 +482,14 @@ static MACHINE_DRIVER_START( pingpong )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76496, 18432000/8)
+	MDRV_SOUND_ADD("snsnd", SN76496, 18432000/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
 /* too fast! */
 static MACHINE_DRIVER_START( merlinmm )
 	MDRV_IMPORT_FROM( pingpong )
-	MDRV_CPU_MODIFY("cpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(merlinmm_map)
 	MDRV_CPU_VBLANK_INT_HACK(pingpong_interrupt,2)
 
@@ -500,7 +504,7 @@ MACHINE_DRIVER_END
 ***************************************************************************/
 
 ROM_START( pingpong )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "pp_e04.rom",   0x0000, 0x4000, CRC(18552f8f) SHA1(cb03659b5e8a68003e72182a20979384d829280f) )
 	ROM_LOAD( "pp_e03.rom",   0x4000, 0x4000, CRC(ae5f01e8) SHA1(f0d6a2c64822f2662fed3f601e279db18246f894) )
 
@@ -517,7 +521,7 @@ ROM_START( pingpong )
 ROM_END
 
 ROM_START( merlinmm )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "merlinmm.ic2", 0x0000, 0x4000, CRC(ea5b6590) SHA1(fdd5873c67761955e33260743cc45075dea34fb4) )
 
 	ROM_REGION( 0x2000, "gfx1", 0 )
@@ -533,7 +537,7 @@ ROM_START( merlinmm )
 ROM_END
 
 ROM_START( cashquiz )
-	ROM_REGION( 0x10000, "cpu", 0 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "cashqcv5.ic3", 0x0000, 0x4000, CRC(8e9e2bed) SHA1(1894d40f89226a810c703ce5e49fdfd64d70287f) )
 	/* 0x4000 - 0x7fff = extra hardware for question board */
 
@@ -570,7 +574,7 @@ ROM_END
 
 static DRIVER_INIT( merlinmm )
 {
-	UINT8 *ROM = memory_region(machine, "cpu");
+	UINT8 *ROM = memory_region(machine, "maincpu");
 	int i;
 
 	/* decrypt program code */
@@ -584,7 +588,7 @@ static DRIVER_INIT( cashquiz )
 	int i;
 
 	/* decrypt program code */
-	ROM = memory_region(machine, "cpu");
+	ROM = memory_region(machine, "maincpu");
 	for( i = 0; i < 0x4000; i++ )
 		ROM[i] = BITSWAP8(ROM[i],0,1,2,3,4,5,6,7);
 
@@ -594,22 +598,28 @@ static DRIVER_INIT( cashquiz )
 		ROM[i] = BITSWAP8(ROM[i],0,1,2,3,4,5,6,7);
 
 	/* questions banking handlers */
-	memory_install_write8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x4000, 0, 0, cashquiz_question_bank_high_w);
-	memory_install_write8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x4001, 0x4001, 0, 0, cashquiz_question_bank_low_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x4000, 0, 0, cashquiz_question_bank_high_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4001, 0x4001, 0, 0, cashquiz_question_bank_low_w);
 
 	// 8 independents banks for questions
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x50ff, 0, 0, (read8_space_func)SMH_BANK(1));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5100, 0x51ff, 0, 0, (read8_space_func)SMH_BANK(2));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5200, 0x52ff, 0, 0, (read8_space_func)SMH_BANK(3));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5300, 0x53ff, 0, 0, (read8_space_func)SMH_BANK(4));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5400, 0x54ff, 0, 0, (read8_space_func)SMH_BANK(5));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5500, 0x55ff, 0, 0, (read8_space_func)SMH_BANK(6));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5600, 0x56ff, 0, 0, (read8_space_func)SMH_BANK(7));
-	memory_install_read8_handler(cputag_get_address_space(machine, "cpu", ADDRESS_SPACE_PROGRAM), 0x5700, 0x57ff, 0, 0, (read8_space_func)SMH_BANK(8));
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5000, 0x50ff, 0, 0, "bank1");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5100, 0x51ff, 0, 0, "bank2");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5200, 0x52ff, 0, 0, "bank3");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5300, 0x53ff, 0, 0, "bank4");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5400, 0x54ff, 0, 0, "bank5");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5500, 0x55ff, 0, 0, "bank6");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5600, 0x56ff, 0, 0, "bank7");
+	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x5700, 0x57ff, 0, 0, "bank8");
 
 	// setup default banks
-	for(i = 0; i < 8; i++)
-		memory_set_bankptr(machine,  i+1, memory_region(machine, "user1") + 0x100*i );
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1") + 0x100*0 );
+	memory_set_bankptr(machine, "bank2", memory_region(machine, "user1") + 0x100*1 );
+	memory_set_bankptr(machine, "bank3", memory_region(machine, "user1") + 0x100*2 );
+	memory_set_bankptr(machine, "bank4", memory_region(machine, "user1") + 0x100*3 );
+	memory_set_bankptr(machine, "bank5", memory_region(machine, "user1") + 0x100*4 );
+	memory_set_bankptr(machine, "bank6", memory_region(machine, "user1") + 0x100*5 );
+	memory_set_bankptr(machine, "bank7", memory_region(machine, "user1") + 0x100*6 );
+	memory_set_bankptr(machine, "bank8", memory_region(machine, "user1") + 0x100*7 );
 }
 
 

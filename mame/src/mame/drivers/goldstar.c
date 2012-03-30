@@ -110,6 +110,8 @@
 
 static int dataoffset=0;
 
+extern UINT8 *goldstar_fg_atrram;
+extern UINT8 *goldstar_fg_vidram;
 extern UINT8 *goldstar_reel1_scroll, *goldstar_reel2_scroll, *goldstar_reel3_scroll;
 
 
@@ -168,11 +170,11 @@ static ADDRESS_MAP_START( goldstar_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xb7ff) AM_ROM
 	AM_RANGE(0xb800, 0xbfff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 	AM_RANGE(0xc000, 0xc7ff) AM_ROM
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
-	AM_RANGE(0xd800, 0xd9ff) AM_RAM AM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
+	AM_RANGE(0xd800, 0xd9ff) AM_RAM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xe800, 0xe9ff) AM_RAM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xf040, 0xf07f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
 	AM_RANGE(0xf080, 0xf0bf) AM_RAM AM_BASE(&goldstar_reel2_scroll)
 	AM_RANGE(0xf0c0, 0xf0ff) AM_RAM AM_BASE(&goldstar_reel3_scroll)
@@ -187,11 +189,11 @@ static ADDRESS_MAP_START( goldstar_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf810, 0xf810) AM_READ_PORT("UNK1")
 	AM_RANGE(0xf811, 0xf811) AM_READ_PORT("UNK2")
 	AM_RANGE(0xf820, 0xf820) AM_READ_PORT("DSW2")
-	AM_RANGE(0xf830, 0xf830) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0xf840, 0xf840) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0xf830, 0xf830) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xf840, 0xf840) AM_DEVWRITE("aysnd", ay8910_address_w)
 	AM_RANGE(0xfa00, 0xfa00) AM_WRITE(goldstar_fa00_w)
 	AM_RANGE(0xfb00, 0xfb00) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
-	AM_RANGE(0xfd00, 0xfdff) AM_READWRITE(SMH_RAM,paletteram_BBGGGRRR_w) AM_BASE(&paletteram)
+	AM_RANGE(0xfd00, 0xfdff) AM_RAM_WRITE(paletteram_BBGGGRRR_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfe00, 0xfe00) AM_READWRITE(protection_r,protection_w)
 ADDRESS_MAP_END
 
@@ -211,11 +213,11 @@ static ADDRESS_MAP_START( ncb3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xb7ff) AM_ROM
 	AM_RANGE(0xb800, 0xbfff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 	AM_RANGE(0xc000, 0xc7ff) AM_ROM
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
-	AM_RANGE(0xd800, 0xd9ff) AM_RAM AM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xe000, 0xe1ff) AM_RAM AM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
+	AM_RANGE(0xd800, 0xd9ff) AM_RAM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xe000, 0xe1ff) AM_RAM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xe800, 0xe9ff) AM_RAM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xf040, 0xf07f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
 	AM_RANGE(0xf080, 0xf0bf) AM_RAM AM_BASE(&goldstar_reel2_scroll)
 	AM_RANGE(0xf100, 0xf17f) AM_RAM AM_BASE(&goldstar_reel3_scroll) // moved compared to goldstar
@@ -225,11 +227,11 @@ static ADDRESS_MAP_START( ncb3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf822, 0xf822) AM_WRITE(goldstar_fa00_w) // hack (connected to ppi output port?, needed for colour banking)
 	AM_RANGE(0xf820, 0xf823) AM_DEVREADWRITE("ppi8255_2", ppi8255_r, ppi8255_w)	/* Input/Output Ports */
 
-	AM_RANGE(0xf830, 0xf830) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0xf840, 0xf840) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0xf830, 0xf830) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xf840, 0xf840) AM_DEVWRITE("aysnd", ay8910_address_w)
 //  AM_RANGE(0xf850, 0xf850) AM_WRITE(ncb3_p1_flip_w)   // need flip?
 //  AM_RANGE(0xf860, 0xf860) AM_WRITE(ncb3_p2_flip_w)   // need flip?
-	AM_RANGE(0xf870, 0xf870) AM_DEVWRITE("sn", sn76496_w)	/* guess... device is initialized, but doesn't seems to be used.*/
+	AM_RANGE(0xf870, 0xf870) AM_DEVWRITE("snsnd", sn76496_w)	/* guess... device is initialized, but doesn't seems to be used.*/
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( ncb3_readwriteport, ADDRESS_SPACE_IO, 8 )
@@ -285,12 +287,12 @@ static ADDRESS_MAP_START( cm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 
 
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
 
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM AM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xf200, 0xf3ff) AM_RAM AM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xf400, 0xf5ff) AM_RAM AM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xf600, 0xf7ff) AM_RAM
 
 	AM_RANGE(0xf800, 0xf87f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
@@ -307,12 +309,12 @@ static ADDRESS_MAP_START( nfm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 
 
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
 
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM AM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xf200, 0xf3ff) AM_RAM AM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xf400, 0xf5ff) AM_RAM AM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xf600, 0xf7ff) AM_RAM
 
 	AM_RANGE(0xf800, 0xf87f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
@@ -326,8 +328,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( cm_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x01, 0x01) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x01, 0x01) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x02, 0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* DIP switches */
 	AM_RANGE(0x10, 0x10) AM_WRITE (cm_outport0_w)	/* output port */
@@ -342,15 +344,15 @@ static ADDRESS_MAP_START( cmast91_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0x10, 0x13) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* DIP switches */
-	AM_RANGE(0x21, 0x21) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x22, 0x23) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x21, 0x21) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x22, 0x23) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( amcoe1_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x01, 0x01) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x01, 0x01) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x02, 0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* DIP switches */
 	AM_RANGE(0x10, 0x10) AM_WRITE (cm_outport0_w)	/* output port */
@@ -362,8 +364,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( amcoe2_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x01, 0x01) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
+	AM_RANGE(0x01, 0x01) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x02, 0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 	AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* DIP switches */
 	AM_RANGE(0x10, 0x10) AM_WRITE (cm_outport0_w)	/* output port */
@@ -381,11 +383,11 @@ static WRITE8_HANDLER( lucky8_outport_w )
 static ADDRESS_MAP_START( lucky8_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
-	AM_RANGE(0x9800, 0x99ff) AM_RAM AM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xa800, 0xa9ff) AM_RAM AM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
+	AM_RANGE(0x9800, 0x99ff) AM_RAM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xa000, 0xa1ff) AM_RAM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xa800, 0xa9ff) AM_RAM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xb040, 0xb07f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
 	AM_RANGE(0xb080, 0xb0bf) AM_RAM AM_BASE(&goldstar_reel2_scroll)
 	AM_RANGE(0xb100, 0xb17f) AM_RAM AM_BASE(&goldstar_reel3_scroll)
@@ -393,21 +395,21 @@ static ADDRESS_MAP_START( lucky8_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb800, 0xb803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0xb810, 0xb813) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0xb820, 0xb823) AM_DEVREADWRITE("ppi8255_2", ppi8255_r, ppi8255_w)	/* Input/Output Ports */
-	AM_RANGE(0xb830, 0xb830) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0xb840, 0xb840) AM_DEVWRITE("ay", ay8910_address_w)	/* no sound... only use both ports for DSWs */
+	AM_RANGE(0xb830, 0xb830) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xb840, 0xb840) AM_DEVWRITE("aysnd", ay8910_address_w)	/* no sound... only use both ports for DSWs */
 	AM_RANGE(0xb850, 0xb850) AM_WRITE(lucky8_outport_w)
-	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("sn", sn76496_w)	/* sound */
+	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("snsnd", sn76496_w)	/* sound */
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( kkojnoli_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM	/* definitelly no NVRAM */
-	AM_RANGE(0x8800, 0x8fff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
-	AM_RANGE(0x9800, 0x99ff) AM_RAM AM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xa800, 0xa9ff) AM_RAM AM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
+	AM_RANGE(0x9800, 0x99ff) AM_RAM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xa000, 0xa1ff) AM_RAM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xa800, 0xa9ff) AM_RAM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xb040, 0xb07f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
 	AM_RANGE(0xb080, 0xb0bf) AM_RAM AM_BASE(&goldstar_reel2_scroll)
 	AM_RANGE(0xb100, 0xb17f) AM_RAM AM_BASE(&goldstar_reel3_scroll)
@@ -418,7 +420,7 @@ static ADDRESS_MAP_START( kkojnoli_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb830, 0xb830) AM_WRITENOP		/* no ay8910 */
 	AM_RANGE(0xb840, 0xb840) AM_WRITENOP		/* no ay8910 */
 	AM_RANGE(0xb850, 0xb850) AM_WRITE(lucky8_outport_w)
-	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("sn", sn76496_w)	/* sound */
+	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("snsnd", sn76496_w)	/* sound */
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -442,32 +444,32 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( ladylinr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
-	AM_RANGE(0x9800, 0x99ff) AM_RAM AM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xa800, 0xa9ff) AM_RAM AM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
+	AM_RANGE(0x9800, 0x99ff) AM_RAM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xa000, 0xa1ff) AM_RAM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xa800, 0xa9ff) AM_RAM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xb040, 0xb07f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
 	AM_RANGE(0xb080, 0xb0bf) AM_RAM AM_BASE(&goldstar_reel2_scroll)
 	AM_RANGE(0xb100, 0xb17f) AM_RAM AM_BASE(&goldstar_reel3_scroll)
 
 	AM_RANGE(0xb800, 0xb803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0xb810, 0xb813) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* DSW bank */
-	AM_RANGE(0xb830, 0xb830) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0xb840, 0xb840) AM_DEVWRITE("ay", ay8910_address_w)	/* no sound... only use ports */
+	AM_RANGE(0xb830, 0xb830) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xb840, 0xb840) AM_DEVWRITE("aysnd", ay8910_address_w)	/* no sound... only use ports */
 	AM_RANGE(0xb850, 0xb850) AM_WRITENOP	/* just turn off the lamps, if exist */
-	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("sn", sn76496_w)	/* sound */
+	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("snsnd", sn76496_w)	/* sound */
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( wcat3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
-	AM_RANGE(0x9800, 0x99ff) AM_RAM AM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xa800, 0xa9ff) AM_RAM AM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
+	AM_RANGE(0x9800, 0x99ff) AM_RAM_WRITE(goldstar_reel1_ram_w) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xa000, 0xa1ff) AM_RAM_WRITE(goldstar_reel2_ram_w) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xa800, 0xa9ff) AM_RAM_WRITE(goldstar_reel3_ram_w) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xb040, 0xb07f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
 	AM_RANGE(0xb080, 0xb0bf) AM_RAM AM_BASE(&goldstar_reel2_scroll)
 	AM_RANGE(0xb100, 0xb17f) AM_RAM AM_BASE(&goldstar_reel3_scroll)
@@ -475,10 +477,10 @@ static ADDRESS_MAP_START( wcat3_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb800, 0xb803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0xb810, 0xb813) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0xb820, 0xb823) AM_DEVREADWRITE("ppi8255_2", ppi8255_r, ppi8255_w)	/* Input/Output Ports */
-	AM_RANGE(0xb830, 0xb830) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
-	AM_RANGE(0xb840, 0xb840) AM_DEVWRITE("ay", ay8910_address_w)	/* no sound... only use both ports for DSWs */
+	AM_RANGE(0xb830, 0xb830) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xb840, 0xb840) AM_DEVWRITE("aysnd", ay8910_address_w)	/* no sound... only use both ports for DSWs */
 	AM_RANGE(0xb850, 0xb850) AM_WRITE(lucky8_outport_w)
-	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("sn", sn76496_w)	/* sound */
+	AM_RANGE(0xb870, 0xb870) AM_DEVWRITE("snsnd", sn76496_w)	/* sound */
 //  AM_RANGE(0xc000, 0xc003) AM_DEVREADWRITE("ppi8255_3", ppi8255_r, ppi8255_w) /* Other PPI initialized? */
 	AM_RANGE(0xd000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xffff) AM_RAM
@@ -492,20 +494,20 @@ static READ8_HANDLER( unkch_unk_r )
 
 // scrolling is wrong / different
 static ADDRESS_MAP_START( unkch_map, ADDRESS_SPACE_PROGRAM, 8 )
- 	AM_RANGE(0x0000, 0x9fff) AM_ROM
- 	AM_RANGE(0xc000, 0xc1ff) AM_READWRITE(SMH_RAM,paletteram_xBBBBBGGGGGRRRRR_split1_w) AM_BASE(&paletteram)
- 	AM_RANGE(0xc800, 0xc9ff) AM_READWRITE(SMH_RAM,paletteram_xBBBBBGGGGGRRRRR_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x0000, 0x9fff) AM_ROM
+	AM_RANGE(0xc000, 0xc1ff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xc800, 0xc9ff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split2_w) AM_BASE_GENERIC(paletteram2)
 
- 	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM
 
 
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_WRITE(goldstar_fg_vidram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_WRITE(goldstar_fg_atrram_w) AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(goldstar_fg_vidram_w) AM_BASE(&goldstar_fg_vidram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(goldstar_fg_atrram_w) AM_BASE(&goldstar_fg_atrram)
 
-	AM_RANGE(0xf000, 0xf1ff) AM_RAM AM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
-	AM_RANGE(0xf200, 0xf3ff) AM_RAM AM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
-	AM_RANGE(0xf400, 0xf5ff) AM_RAM AM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
+	AM_RANGE(0xf000, 0xf1ff) AM_RAM_WRITE( goldstar_reel1_ram_w ) AM_BASE(&goldstar_reel1_ram)
+	AM_RANGE(0xf200, 0xf3ff) AM_RAM_WRITE( goldstar_reel2_ram_w ) AM_BASE(&goldstar_reel2_ram)
+	AM_RANGE(0xf400, 0xf5ff) AM_RAM_WRITE( goldstar_reel3_ram_w ) AM_BASE(&goldstar_reel3_ram)
 	AM_RANGE(0xf600, 0xf7ff) AM_RAM
 
 	AM_RANGE(0xf800, 0xf87f) AM_RAM AM_BASE(&goldstar_reel1_scroll)
@@ -518,8 +520,8 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( unkch_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-//  AM_RANGE(0x01, 0x01) AM_DEVREAD("ay", ay8910_r)
-//  AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
+//  AM_RANGE(0x01, 0x01) AM_DEVREAD("aysnd", ay8910_r)
+//  AM_RANGE(0x02, 0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 //  AM_RANGE(0x04, 0x07) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w) /* Input Ports */
 //  AM_RANGE(0x08, 0x0b) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w) /* DIP switches */
 //  AM_RANGE(0x10, 0x10) AM_WRITE (cm_outport0_w)   /* output port */
@@ -4684,7 +4686,7 @@ static MACHINE_DRIVER_START( goldstar )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -4720,7 +4722,7 @@ static MACHINE_DRIVER_START( goldstbl )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -4755,7 +4757,7 @@ static MACHINE_DRIVER_START( moonlght )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -4858,10 +4860,10 @@ static MACHINE_DRIVER_START( chrygld )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76489, PSG_CLOCK)
+	MDRV_SOUND_ADD("snsnd", SN76489, PSG_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -4901,10 +4903,10 @@ static MACHINE_DRIVER_START( ncb3 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76489, PSG_CLOCK)
+	MDRV_SOUND_ADD("snsnd", SN76489, PSG_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -4940,7 +4942,7 @@ static MACHINE_DRIVER_START( cm )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -4982,7 +4984,7 @@ static MACHINE_DRIVER_START( cmnobmp )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -5017,7 +5019,7 @@ static MACHINE_DRIVER_START( cmast91 )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -5054,10 +5056,10 @@ static MACHINE_DRIVER_START( lucky8 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76489, PSG_CLOCK)
+	MDRV_SOUND_ADD("snsnd", SN76489, PSG_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(lucky8_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -5096,7 +5098,7 @@ static MACHINE_DRIVER_START( kkojnoli )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76489, PSG_CLOCK)
+	MDRV_SOUND_ADD("snsnd", SN76489, PSG_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 MACHINE_DRIVER_END
@@ -5133,10 +5135,10 @@ static MACHINE_DRIVER_START( ladylinr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")//set up a standard mono speaker called 'mono'
 
-	MDRV_SOUND_ADD("sn", SN76489, PSG_CLOCK)
+	MDRV_SOUND_ADD("snsnd", SN76489, PSG_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ladylinr_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -5174,10 +5176,10 @@ static MACHINE_DRIVER_START( wcat3 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76489, PSG_CLOCK)
+	MDRV_SOUND_ADD("snsnd", SN76489, PSG_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(lucky8_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -5215,7 +5217,7 @@ static MACHINE_DRIVER_START( amcoe1 )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -5256,7 +5258,7 @@ static MACHINE_DRIVER_START( amcoe1a )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
@@ -5297,7 +5299,7 @@ static MACHINE_DRIVER_START( amcoe2 )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.00)	/* analyzed for clips */
 MACHINE_DRIVER_END
@@ -5332,7 +5334,7 @@ static MACHINE_DRIVER_START( nfm )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(cm_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.00)	/* analyzed for clips */
 MACHINE_DRIVER_END
@@ -5365,7 +5367,7 @@ static MACHINE_DRIVER_START( unkch )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, AY_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, AY_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
@@ -5962,6 +5964,188 @@ ROM_END
 
 /*
 
+this set is weird, apart from the MGRAISE.BIN it's a cherry master set, I'm assuming that somehow
+there is extra hardware which causes it to run a different game contained in that rom?
+
+the extra rom contains
+
+MEGA DOUBLE POKER TM        COPYRIGHT 1991
+
+as well as various
+
+COPYRIGHT (C) 1988-90-92 GERALD DUHAMEL
+
+strings spread across the rom
+
+------------------
+
+Blitz Video Poker
+1991
+
+Hardware for a real Video Poker Machine that was supposed to pay out $$$.
+
+Contains:
+
+1 X Z80 CPU
+2 X 6505s?
+1 GI AY-3-8910
+2 x 8255
+
+CH3      BIN        32,768  11-15-98  8:46a CH3.BIN
+MAST9    BIN        65,536  11-15-98  8:47a MAST9.BIN
+MAST5    BIN        32,768  11-15-98  8:48a MAST5.BIN
+MAST6    BIN        32,768  11-15-98  8:50a MAST6.BIN
+MAST7    BIN        32,768  11-15-98  8:50a MAST7.BIN
+MAST1    BIN         8,192  11-15-98  8:52a MAST1.BIN
+MAST2    BIN         8,192  11-15-98  8:53a MAST2.BIN
+MAST3    BIN         8,192  11-15-98  8:54a MAST3.BIN
+MAST4    BIN         8,192  11-15-98  8:55a MAST4.BIN
+MGRAISE  BIN       131,072  11-15-98  8:58a MGRAISE.BIN Sound Amp with 6502
+
+*/
+
+ROM_START( cmasterbv )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "ch3.bin",  0x0000, 0x1000, CRC(9af51e47) SHA1(ac002c218502430a3e45259776ca409d32d2d4e5) )
+	ROM_CONTINUE(0x4000,0x1000)
+	ROM_CONTINUE(0x3000,0x1000)
+	ROM_CONTINUE(0x7000,0x1000)
+	ROM_CONTINUE(0x1000,0x1000)
+	ROM_CONTINUE(0x6000,0x1000)
+	ROM_CONTINUE(0x2000,0x1000)
+	ROM_CONTINUE(0x5000,0x1000)
+
+	ROM_REGION( 0x20000, "extra", 0 ) // how do we use this?!!
+	ROM_LOAD( "mgraise.bin",  0x0000, 0x20000, CRC(019f37d4) SHA1(ab71fe0b41ff4415896a23f28b27a0e64950c68c) )
+
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "mast5.bin",  0x00000, 0x8000, CRC(19cc1d67) SHA1(47487f9362bfb36a32100ed772960628844462bf) )
+	ROM_LOAD( "mast6.bin",  0x08000, 0x8000, CRC(63b3df4e) SHA1(9bacd23da598805ec18ec5ad15cab95d71eb9262) )
+	ROM_LOAD( "mast7.bin",   0x10000, 0x8000, CRC(e39fff9c) SHA1(22fdc517fa478441622c6245cecb5728c5595757) )
+
+	ROM_REGION( 0x8000, "gfx2", 0 )
+	ROM_LOAD( "mast3.bin",  0x0000, 0x2000, CRC(8607ffd9) SHA1(9bc94715554aa2473ae2ed249a47f29c7886b3dc) )
+	ROM_LOAD( "mast4.bin",	0x2000, 0x2000, CRC(c32367be) SHA1(ff217021b9c58e23b2226f8b0a7f5da966225715) )
+	ROM_LOAD( "mast1.bin",  0x4000, 0x2000, CRC(6dfcb188) SHA1(22430429c798954d9d979e62699b58feae7fdbf4) )
+	ROM_LOAD( "mast2.bin",  0x6000, 0x2000, CRC(9678ead2) SHA1(e80aefa98b2363fe9e6b2415762695ace272e4d3) )
+
+	ROM_REGION( 0x10000, "user1", 0 ) // girl bitmaps
+	ROM_LOAD( "mast9.bin",  0x0000, 0x10000, CRC(e92443d3) SHA1(4b6ca4521841610054165f085ae05510e77af191) )
+
+	ROM_REGION( 0x200, "proms", 0 )
+	ROM_LOAD( "82s129.u84", 0x0000, 0x0100, CRC(0489b760) SHA1(78f8632b17a76335183c5c204cdec856988368b0) )
+	ROM_LOAD( "82s129.u70", 0x0100, 0x0100, CRC(21eb5b19) SHA1(9b8425bdb97f11f4855c998c7792c3291fd07470) )
+
+	ROM_REGION( 0x100, "proms2", 0 )
+	ROM_LOAD( "82s129.u46", 0x0000, 0x0100, CRC(50ec383b) SHA1(ae95b92bd3946b40134bcdc22708d5c6b0f4c23e) )
+ROM_END
+
+ROM_START( cmasterd )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "cherryb.rom",  0x0000, 0x1000, CRC(b6ab94f6) SHA1(6e74a2354d15aa1da6b8207e0413158d7cb52a44) )
+	ROM_CONTINUE(0x4000,0x1000)
+	ROM_CONTINUE(0x3000,0x1000)
+	ROM_CONTINUE(0x7000,0x1000)
+	ROM_CONTINUE(0x1000,0x1000)
+	ROM_CONTINUE(0x6000,0x1000)
+	ROM_CONTINUE(0x2000,0x1000)
+	ROM_CONTINUE(0x5000,0x1000)
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "u16.7", 0x00000,  0x8000, CRC(19cc1d67) SHA1(47487f9362bfb36a32100ed772960628844462bf) )
+	ROM_LOAD( "u11.6", 0x08000,  0x8000, CRC(63b3df4e) SHA1(9bacd23da598805ec18ec5ad15cab95d71eb9262) )
+	ROM_LOAD( "u4.5",  0x10000,  0x8000, CRC(e39fff9c) SHA1(22fdc517fa478441622c6245cecb5728c5595757) )
+
+	ROM_REGION( 0x8000, "gfx2", 0 )
+	ROM_LOAD( "u15.4",  0x0000,  0x2000, CRC(8607ffd9) SHA1(9bc94715554aa2473ae2ed249a47f29c7886b3dc) )
+	ROM_LOAD( "u10.3",  0x2000,  0x2000, CRC(c32367be) SHA1(ff217021b9c58e23b2226f8b0a7f5da966225715) )
+	ROM_LOAD( "u14.2",  0x4000,  0x2000, CRC(6dfcb188) SHA1(22430429c798954d9d979e62699b58feae7fdbf4) )
+	ROM_LOAD( "u9.1",	0x6000,  0x2000, CRC(9678ead2) SHA1(e80aefa98b2363fe9e6b2415762695ace272e4d3) )
+
+	ROM_REGION( 0x10000, "user1", 0 )
+	ROM_LOAD( "u53.8",  0x0000, 0x10000, CRC(e92443d3) SHA1(4b6ca4521841610054165f085ae05510e77af191) )
+
+	/* proms taken from cmv4, probably wrong  */
+	ROM_REGION( 0x200, "proms", 0 )
+	ROM_LOAD( "82s129.u84", 0x0000, 0x0100, CRC(0489b760) SHA1(78f8632b17a76335183c5c204cdec856988368b0) )
+	ROM_LOAD( "82s129.u70", 0x0100, 0x0100, CRC(21eb5b19) SHA1(9b8425bdb97f11f4855c998c7792c3291fd07470) )
+
+	ROM_REGION( 0x100, "proms2", 0 )
+	ROM_LOAD( "82s129.u46", 0x0000, 0x0100, CRC(50ec383b) SHA1(ae95b92bd3946b40134bcdc22708d5c6b0f4c23e) )
+ROM_END
+
+ROM_START( cmastere )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "cm33.rom",  0x0000, 0x1000, CRC(c3c3f7df) SHA1(47eda025859afebe64fd76e17e8390262fb40e0b) )
+	ROM_CONTINUE(0x4000,0x1000)
+	ROM_CONTINUE(0x3000,0x1000)
+	ROM_CONTINUE(0x7000,0x1000)
+	ROM_CONTINUE(0x1000,0x1000)
+	ROM_CONTINUE(0x6000,0x1000)
+	ROM_CONTINUE(0x2000,0x1000)
+	ROM_CONTINUE(0x5000,0x1000)
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "u16.7", 0x00000,  0x8000, CRC(19cc1d67) SHA1(47487f9362bfb36a32100ed772960628844462bf) )
+	ROM_LOAD( "u11.6", 0x08000,  0x8000, CRC(63b3df4e) SHA1(9bacd23da598805ec18ec5ad15cab95d71eb9262) )
+	ROM_LOAD( "u4.5",  0x10000,  0x8000, CRC(e39fff9c) SHA1(22fdc517fa478441622c6245cecb5728c5595757) )
+
+	ROM_REGION( 0x8000, "gfx2", 0 )
+	ROM_LOAD( "u15.4",  0x0000,  0x2000, CRC(8607ffd9) SHA1(9bc94715554aa2473ae2ed249a47f29c7886b3dc) )
+	ROM_LOAD( "u10.3",  0x2000,  0x2000, CRC(c32367be) SHA1(ff217021b9c58e23b2226f8b0a7f5da966225715) )
+	ROM_LOAD( "u14.2",  0x4000,  0x2000, CRC(6dfcb188) SHA1(22430429c798954d9d979e62699b58feae7fdbf4) )
+	ROM_LOAD( "u9.1",	0x6000,  0x2000, CRC(9678ead2) SHA1(e80aefa98b2363fe9e6b2415762695ace272e4d3) )
+
+	ROM_REGION( 0x10000, "user1", 0 )
+	ROM_LOAD( "u53.8",  0x0000, 0x10000, CRC(e92443d3) SHA1(4b6ca4521841610054165f085ae05510e77af191) )
+
+	/* proms taken from cmv4, probably wrong  */
+	ROM_REGION( 0x200, "proms", 0 )
+	ROM_LOAD( "82s129.u84", 0x0000, 0x0100, CRC(0489b760) SHA1(78f8632b17a76335183c5c204cdec856988368b0) )
+	ROM_LOAD( "82s129.u70", 0x0100, 0x0100, CRC(21eb5b19) SHA1(9b8425bdb97f11f4855c998c7792c3291fd07470) )
+
+	ROM_REGION( 0x100, "proms2", 0 )
+	ROM_LOAD( "82s129.u46", 0x0000, 0x0100, CRC(50ec383b) SHA1(ae95b92bd3946b40134bcdc22708d5c6b0f4c23e) )
+ROM_END
+
+ROM_START( cmasterf )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "cmbig55.rom",  0x0000, 0x1000, CRC(2cc4df7b) SHA1(ad5b8108913ff88fb435c8c12b47446575e1360e) )
+	ROM_CONTINUE(0x4000,0x1000)
+	ROM_CONTINUE(0x3000,0x1000)
+	ROM_CONTINUE(0x7000,0x1000)
+	ROM_CONTINUE(0x1000,0x1000)
+	ROM_CONTINUE(0x6000,0x1000)
+	ROM_CONTINUE(0x2000,0x1000)
+	ROM_CONTINUE(0x5000,0x1000)
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "u16.7", 0x00000,  0x8000, CRC(19cc1d67) SHA1(47487f9362bfb36a32100ed772960628844462bf) )
+	ROM_LOAD( "u11.6", 0x08000,  0x8000, CRC(63b3df4e) SHA1(9bacd23da598805ec18ec5ad15cab95d71eb9262) )
+	ROM_LOAD( "u4.5",  0x10000,  0x8000, CRC(e39fff9c) SHA1(22fdc517fa478441622c6245cecb5728c5595757) )
+
+	ROM_REGION( 0x8000, "gfx2", 0 )
+	ROM_LOAD( "u15.4",  0x0000,  0x2000, CRC(8607ffd9) SHA1(9bc94715554aa2473ae2ed249a47f29c7886b3dc) )
+	ROM_LOAD( "u10.3",  0x2000,  0x2000, CRC(c32367be) SHA1(ff217021b9c58e23b2226f8b0a7f5da966225715) )
+	ROM_LOAD( "u14.2",  0x4000,  0x2000, CRC(6dfcb188) SHA1(22430429c798954d9d979e62699b58feae7fdbf4) )
+	ROM_LOAD( "u9.1",	0x6000,  0x2000, CRC(9678ead2) SHA1(e80aefa98b2363fe9e6b2415762695ace272e4d3) )
+
+	ROM_REGION( 0x10000, "user1", 0 )
+	ROM_LOAD( "u53.8",  0x0000, 0x10000, CRC(e92443d3) SHA1(4b6ca4521841610054165f085ae05510e77af191) )
+
+	/* proms taken from cmv4, probably wrong  */
+	ROM_REGION( 0x200, "proms", 0 )
+	ROM_LOAD( "82s129.u84", 0x0000, 0x0100, CRC(0489b760) SHA1(78f8632b17a76335183c5c204cdec856988368b0) )
+	ROM_LOAD( "82s129.u70", 0x0100, 0x0100, CRC(21eb5b19) SHA1(9b8425bdb97f11f4855c998c7792c3291fd07470) )
+
+	ROM_REGION( 0x100, "proms2", 0 )
+	ROM_LOAD( "82s129.u46", 0x0000, 0x0100, CRC(50ec383b) SHA1(ae95b92bd3946b40134bcdc22708d5c6b0f4c23e) )
+ROM_END
+
+
+/*
+
 Cherry Master '91
 -----------------
 
@@ -6022,6 +6206,38 @@ ROM_START( cmast91 )
 	ROM_LOAD( "pld2.bin", 0x0200, 0x0104, NO_DUMP )
 	ROM_LOAD( "pld3.bin", 0x0400, 0x0104, NO_DUMP )
 	ROM_LOAD( "pld4.bin", 0x0600, 0x0104, NO_DUMP )
+ROM_END
+
+
+
+ROM_START( cmast92 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "cm9230d.rom",   0x00000, 0x01000, CRC(214a0a2d) SHA1(2d349e0888ac2da3df954517fdeb9214a3b17ae1) )
+	// I've not checked the rom loading yet
+	ROM_CONTINUE(0x1000,0x1000)
+	ROM_CONTINUE(0x4000,0x1000)
+	ROM_CONTINUE(0x5000,0x1000)
+	ROM_CONTINUE(0x2000,0x1000)
+	ROM_CONTINUE(0x3000,0x1000)
+	ROM_CONTINUE(0x6000,0x1000)
+	ROM_CONTINUE(0x7000,0x1000)
+	ROM_CONTINUE(0x8000,0x1000)
+	ROM_CONTINUE(0x9000,0x1000)
+	ROM_CONTINUE(0xa000,0x1000)
+	ROM_CONTINUE(0xb000,0x1000)
+	ROM_CONTINUE(0xc000,0x1000)
+	ROM_CONTINUE(0xd000,0x1000)
+	ROM_CONTINUE(0xe000,0x1000)
+	ROM_CONTINUE(0xf000,0x1000)
+
+	// we only have a program rom :-(
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "cherry master 92 graphics",	0x00000, 0x8000, NO_DUMP )
+	ROM_REGION( 0x20000, "gfx2", ROMREGION_ERASEFF )
+	ROM_REGION( 0x40000, "user1", ROMREGION_ERASEFF )
+	ROM_REGION( 0x300, "proms", ROMREGION_ERASEFF )
+	ROM_LOAD( "cherry master 92 proms",	0x00000, 0x100, NO_DUMP )
+	ROM_REGION( 0x100, "proms2", ROMREGION_ERASEFF )
 ROM_END
 
 /*
@@ -7986,14 +8202,14 @@ static DRIVER_INIT( schery97 )
 	{
 		UINT8 x = ROM[i];
 		switch(i & 0x12)
-     	{
-     		case 0x00: x = BITSWAP8(x^0x3e, 1,0,7,6,5,4,3,2); break;
-     		case 0x02: x = BITSWAP8(x^0x4d, 0,7,6,5,4,3,2,1); break;
-     		case 0x10: x = BITSWAP8(x^0x24, 2,1,0,7,6,5,4,3); break;
-     		case 0x12: x = BITSWAP8(x^0xbb, 4,3,2,1,0,7,6,5); break;
-     	}
+    	{
+    		case 0x00: x = BITSWAP8(x^0x3e, 1,0,7,6,5,4,3,2); break;
+    		case 0x02: x = BITSWAP8(x^0x4d, 0,7,6,5,4,3,2,1); break;
+    		case 0x10: x = BITSWAP8(x^0x24, 2,1,0,7,6,5,4,3); break;
+    		case 0x12: x = BITSWAP8(x^0xbb, 4,3,2,1,0,7,6,5); break;
+    	}
 
-     	ROM[i] = x;
+    	ROM[i] = x;
 	}
 
 	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x1d, 0x1d, 0, 0, fixedvala8_r);
@@ -8406,18 +8622,29 @@ GAME( 199?, cb3b,      ncb3,     cherrys,  ncb3,     cherrys,   ROT0, "Dyna",   
 // cherry master hardware has a rather different mem map, but is basically the same
 GAME( 198?, cmv801,    0,        cm,       cmv801,   cm,        ROT0, "Corsica",           "Cherry Master (Corsica, ver.8.01)",           0 ) /* says ED-96 where the manufacturer is on some games.. */
 
+// most of these are almost certainly bootlegs, with added features, hacked payouts etc. identifying which are
+// the original, unmodified dyna versions is almost impossible due to lack of documentation from back in the day,
+// even original boards almost always run modified sets
 GAME( 1992, cmv4,      0,        cm,       cmv4,     cmv4,      ROT0, "Dyna",              "Cherry Master (ver.4, set 1)",                0 )
 GAME( 1992, cmv4a,     cmv4,     cm,       cmv4,     cmv4,      ROT0, "Dyna",              "Cherry Master (ver.4, set 2)",                GAME_NOT_WORKING )	/* stealth game? */
 GAME( 1991, cmaster,   0,        cm,       cmaster,  0,         ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 1)",           0 )
 GAME( 1991, cmasterb,  cmaster,  cm,       cmasterb, cmv4,      ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 2)",           0 )
 GAME( 1991, cmasterc,  cmaster,  cmasterc, cmasterc, cmv4,      ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 3)",           0 )
+GAME( 1991, cmasterbv, cmaster,  cm,       cmasterb, cmv4,      ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 4, with Blitz Poker ROM?)", GAME_NOT_WORKING ) // Cherry Master works, but no idea how to use the Blitz ROM
+GAME( 1991, cmasterd,  cmaster,  cm,       cmasterb, cmv4,      ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 5)", 0 )
+GAME( 1991, cmastere,  cmaster,  cm,       cmasterb, cmv4,      ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 6)", 0 )
+GAME( 1991, cmasterf,  cmaster,  cm,       cmasterb, cmv4,      ROT0, "Dyna",              "Cherry Master I (ver.1.01, set 7)", 0 )
+
+
 GAME( 1991, cmast91,   0,        cmast91,  cmast91,  cmast91,   ROT0, "Dyna",              "Cherry Master '91 (ver.1.30)",                0 )
+
+GAME( 1992, cmast92,   0,        cmast91,  cmast91,  cmast91,   ROT0, "Dyna",              "Cherry Master '92",                GAME_NOT_WORKING ) // no gfx roms are dumped
 
 
 GAME( 1989, lucky8,    0,        lucky8,   lucky8,   0,         ROT0, "Wing Co.Ltd / GEI", "New Lucky 8 Lines (set 1)",                   0 )
 GAME( 1989, lucky8a,   lucky8,   lucky8,   lucky8a,  lucky8a,   ROT0, "Wing Co.Ltd / GEI", "New Lucky 8 Lines (set 2)",                   0 )
 GAME( 1989, lucky8b,   lucky8,   lucky8,   ns8lines, 0,         ROT0, "Wing Co.Ltd / GEI", "New Lucky 8 Lines (set 3, extended gfx)",     0 )
-GAME( 198?, ns8lines,  0,        lucky8,   ns8lines, 0,         ROT0, "Unknown",           "New Lucky 8 Lines / New Super 8 Lines",       0 )
+GAME( 198?, ns8lines,  0,        lucky8,   ns8lines, 0,         ROT0, "<unknown>",         "New Lucky 8 Lines / New Super 8 Lines",       0 )
 GAME( 198?, ladylinr,  0,        ladylinr, ladylinr, 0,         ROT0, "TAB Austria",       "Lady Liner",                                  0 )
 GAME( 198?, kkojnoli,  0,        kkojnoli, kkojnoli, 0,         ROT0, "south korean hack", "Kkoj Noli (Kill the Bees)",                   GAME_IMPERFECT_COLORS )
 GAME( 198?, wcat3,     0,        wcat3,    lucky8,   0,         ROT0, "E.A.I.",            "Wild Cat 3",                                  GAME_NOT_WORKING )

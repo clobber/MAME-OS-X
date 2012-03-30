@@ -10,7 +10,7 @@
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "exidy.h"
+#include "includes/exidy.h"
 #include "machine/74181.h"
 #include "sound/s14001a.h"
 #include "video/resnet.h"
@@ -20,7 +20,7 @@
 
 #define MASTER_CLOCK				(XTAL_10MHz)
 #define MAIN_CPU_CLOCK  			(MASTER_CLOCK / 4)
-#define PIXEL_CLOCK  				(MASTER_CLOCK / 2)
+#define PIXEL_CLOCK 				(MASTER_CLOCK / 2)
 #define S14001_CLOCK				(MASTER_CLOCK / 4)
 #define HTOTAL						(0x140)
 #define HBEND						(0x000)
@@ -63,7 +63,7 @@ static UINT8 nmi_enabled;			/* flip-flop made out of 2 NAND gates @ 1D */
 
 static READ8_HANDLER( led_on_r )
 {
-	set_led_status(0, 1);
+	set_led_status(space->machine, 0, 1);
 
 	return 0;
 }
@@ -71,13 +71,13 @@ static READ8_HANDLER( led_on_r )
 
 static WRITE8_HANDLER( led_on_w )
 {
-	set_led_status(0, 1);
+	set_led_status(space->machine, 0, 1);
 }
 
 
 static READ8_HANDLER( led_off_r )
 {
-	set_led_status(0, 0);
+	set_led_status(space->machine, 0, 0);
 
 	return 0;
 }
@@ -85,7 +85,7 @@ static READ8_HANDLER( led_off_r )
 
 static WRITE8_HANDLER( led_off_w )
 {
-	set_led_status(0, 0);
+	set_led_status(space->machine, 0, 0);
 }
 
 
@@ -294,7 +294,7 @@ static MACHINE_RESET( berzerk )
 {
 	irq_enabled = 0;
 	nmi_enabled = 0;
-	set_led_status(0, 0);
+	set_led_status(machine, 0, 0);
 	magicram_control = 0;
 
 	start_irq_timer(machine);
@@ -311,8 +311,8 @@ static MACHINE_RESET( berzerk )
 
 #define NUM_PENS	(0x10)
 
-#define LS181_12C 	(0)
-#define LS181_10C 	(1)
+#define LS181_12C	(0)
+#define LS181_10C	(1)
 
 
 static VIDEO_START( berzerk )
@@ -548,10 +548,10 @@ static SOUND_RESET(berzerk)
 
 static ADDRESS_MAP_START( berzerk_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
-	AM_RANGE(0x0800, 0x0bff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0800, 0x0bff) AM_MIRROR(0x0400) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x1000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&berzerk_videoram) AM_SIZE(&berzerk_videoram_size) AM_SHARE(1)
-	AM_RANGE(0x6000, 0x7fff) AM_RAM_WRITE(magicram_w) AM_SHARE(1)
+	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&berzerk_videoram) AM_SIZE(&berzerk_videoram_size) AM_SHARE("share1")
+	AM_RANGE(0x6000, 0x7fff) AM_RAM_WRITE(magicram_w) AM_SHARE("share1")
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x3800) AM_RAM AM_BASE(&berzerk_colorram)
 	AM_RANGE(0xc000, 0xffff) AM_NOP
 ADDRESS_MAP_END
@@ -559,11 +559,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( frenzy_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&berzerk_videoram) AM_SIZE(&berzerk_videoram_size) AM_SHARE(1)
-	AM_RANGE(0x6000, 0x7fff) AM_RAM_WRITE(magicram_w) AM_SHARE(1)
+	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&berzerk_videoram) AM_SIZE(&berzerk_videoram_size) AM_SHARE("share1")
+	AM_RANGE(0x6000, 0x7fff) AM_RAM_WRITE(magicram_w) AM_SHARE("share1")
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x3800) AM_RAM AM_BASE(&berzerk_colorram)
 	AM_RANGE(0xc000, 0xcfff) AM_ROM
-	AM_RANGE(0xf800, 0xfbff) AM_MIRROR(0x0400) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf800, 0xfbff) AM_MIRROR(0x0400) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 

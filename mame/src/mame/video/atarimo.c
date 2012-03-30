@@ -33,7 +33,7 @@ struct _atarimo_data
 	gfx_element			gfxelement[MAX_GFX_ELEMENTS]; /* local copy of graphics elements */
 	int					gfxgranularity[MAX_GFX_ELEMENTS];
 
-	bitmap_t 			*bitmap;			/* temporary bitmap to render to */
+	bitmap_t			*bitmap;			/* temporary bitmap to render to */
 
 	int					linked;				/* are the entries linked? */
 	int					split;				/* are entries split or together? */
@@ -72,9 +72,9 @@ struct _atarimo_data
 	int					maxperline;			/* maximum number of entries/line */
 
 	atarimo_mask		linkmask;			/* mask for the link */
-	atarimo_mask 		gfxmask;			/* mask for the graphics bank */
+	atarimo_mask		gfxmask;			/* mask for the graphics bank */
 	atarimo_mask		codemask;			/* mask for the code index */
-	atarimo_mask 		codehighmask;		/* mask for the upper code index */
+	atarimo_mask		codehighmask;		/* mask for the upper code index */
 	atarimo_mask		colormask;			/* mask for the color */
 	atarimo_mask		xposmask;			/* mask for the X position */
 	atarimo_mask		yposmask;			/* mask for the Y position */
@@ -84,9 +84,9 @@ struct _atarimo_data
 	atarimo_mask		vflipmask;			/* mask for the vertical flip */
 	atarimo_mask		prioritymask;		/* mask for the priority */
 	atarimo_mask		neighbormask;		/* mask for the neighbor */
-	atarimo_mask 		absolutemask;		/* mask for absolute coordinates */
+	atarimo_mask		absolutemask;		/* mask for absolute coordinates */
 
-	atarimo_mask 		specialmask;		/* mask for the special value */
+	atarimo_mask		specialmask;		/* mask for the special value */
 	int					specialvalue;		/* resulting value to indicate "special" */
 	atarimo_special_func specialcb;			/* callback routine for special entries */
 	int					codehighshift;		/* shift count for the upper code */
@@ -295,9 +295,9 @@ static void init_savestate(running_machine *machine, int index, atarimo_data *mo
 	state_save_register_item(machine, "atarimo", NULL, index, mo->dirtyheight);
 #endif
 
-	state_save_register_bitmap(machine, "atarimo", NULL, index, "bitmap", mo->bitmap);
+	state_save_register_bitmap(machine, "atarimo", NULL, index, "bitmap", mo->bitmap, __FILE__, __LINE__);
 
-	state_save_register_memory(machine, "atarimo", NULL, index, "spriteram", mo->spriteram, sizeof(atarimo_entry), mo->spriteramsize);
+	state_save_register_memory(machine, "atarimo", NULL, index, "spriteram", mo->spriteram, sizeof(atarimo_entry), mo->spriteramsize, __FILE__, __LINE__);
 
 	state_save_register_item_pointer(machine, "atarimo", NULL, index, mo->codelookup, round_to_powerof2(mo->codemask.mask));
 

@@ -147,7 +147,7 @@
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
-#include "turbo.h"
+#include "includes/turbo.h"
 #include "machine/segacrpt.h"
 #include "sound/samples.h"
 
@@ -343,9 +343,9 @@ static WRITE8_DEVICE_HANDLER( subroc3d_ppi0b_w )
 	/* bit 3 = NOUSE (n/c) */
 	/* bit 4 = FLIP (not really flip, just offset) */
 	turbo_state *state = (turbo_state *)device->machine->driver_data;
-	coin_counter_w(0, data & 0x01);
-	coin_counter_w(1, data & 0x02);
-	set_led_status(0, data & 0x04);
+	coin_counter_w(device->machine, 0, data & 0x01);
+	coin_counter_w(device->machine, 1, data & 0x02);
+	set_led_status(device->machine, 0, data & 0x04);
 	state->subroc3d_flip = (data >> 4) & 1;
 }
 
@@ -417,9 +417,9 @@ static WRITE8_DEVICE_HANDLER( buckrog_ppi1c_w )
 	/* bit   7 = NOUSE (BODY SONIC) */
 	turbo_state *state = (turbo_state *)device->machine->driver_data;
 	state->buckrog_obch = data & 0x07;
-	coin_counter_w(0, data & 0x10);
-	coin_counter_w(1, data & 0x20);
-	set_led_status(0, data & 0x40);
+	coin_counter_w(device->machine, 0, data & 0x10);
+	coin_counter_w(device->machine, 1, data & 0x20);
+	set_led_status(device->machine, 0, data & 0x40);
 }
 
 
@@ -657,13 +657,13 @@ static WRITE8_HANDLER( turbo_coin_and_lamp_w )
 	switch (offset & 7)
 	{
 		case 0:
-			coin_counter_w(0, data & 1);
+			coin_counter_w(space->machine, 0, data & 1);
 			break;
 		case 1:
-			coin_counter_w(1, data & 1);
+			coin_counter_w(space->machine, 1, data & 1);
 			break;
 		case 3:
-			set_led_status(0, data & 1);
+			set_led_status(space->machine, 0, data & 1);
 			break;
 	}
 }
@@ -773,7 +773,7 @@ static ADDRESS_MAP_START( subroc3d_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa802, 0xa802) AM_MIRROR(0x07fc) AM_READ_PORT("DSW2")					// INPUT 253
 	AM_RANGE(0xa803, 0xa803) AM_MIRROR(0x07fc) AM_READ_PORT("DSW3")					// INPUT 253
 	AM_RANGE(0xb000, 0xb7ff) AM_RAM 												// SCRATCH
-	AM_RANGE(0xb800, 0xbfff) 														// HANDLE CL
+	AM_RANGE(0xb800, 0xbfff)														// HANDLE CL
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(turbo_videoram_w) AM_BASE_MEMBER(turbo_state, videoram)	// FIX PAGE
 	AM_RANGE(0xe800, 0xe803) AM_MIRROR(0x07fc) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xf000, 0xf003) AM_MIRROR(0x07fc) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)

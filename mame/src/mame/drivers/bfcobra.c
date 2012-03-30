@@ -90,7 +90,7 @@
 /*
     Globals
 */
-static UINT8 bank[4];
+static UINT8 bank_data[4];
 static UINT8 *work_ram;
 static UINT8 *video_ram;
 static UINT8 h_scroll;
@@ -177,9 +177,9 @@ typedef union
 #define MODE_BITTOBYTE	0x04
 #define MODE_PALREMAP	0x10
 
-#define CMPFUNC_LT    	0x01
-#define CMPFUNC_EQ    	0x02
-#define CMPFUNC_GT    	0x04
+#define CMPFUNC_LT  	0x01
+#define CMPFUNC_EQ  	0x02
+#define CMPFUNC_GT  	0x04
 #define CMPFUNC_BEQ		0x08
 #define CMPFUNC_LOG0	0x10
 #define CMPFUNC_LOG1	0x20
@@ -389,9 +389,9 @@ INLINE UINT8* blitter_get_addr(running_machine *machine, UINT32 addr)
 	else if(addr < 0x20000)
 	{
 		addr &= 0xffff;
-		addr += (bank[0] & 1) ? 0x10000 : 0;
+		addr += (bank_data[0] & 1) ? 0x10000 : 0;
 
-		return (UINT8*)(memory_region(machine, "user1") + addr + ((bank[0] >> 1) * 0x20000));
+		return (UINT8*)(memory_region(machine, "user1") + addr + ((bank_data[0] >> 1) * 0x20000));
 	}
 	else if (addr >= 0x20000 && addr < 0x40000)
 	{
@@ -830,7 +830,7 @@ static READ8_HANDLER( chipset_r )
 		case 2:
 		case 3:
 		{
-			val = bank[offset];
+			val = bank_data[offset];
 			break;
 		}
 		case 6:
@@ -886,7 +886,7 @@ static WRITE8_HANDLER( chipset_w )
 				popmessage("%x: Unusual bank access (%x)\n", cpu_get_previouspc(space->cpu), data);
 
 			data &= 0x3f;
-			bank[offset] = data;
+			bank_data[offset] = data;
 			z80_bank(space->machine, offset, data);
 			break;
 		}
@@ -964,35 +964,30 @@ static WRITE8_HANDLER( chipset_w )
 
 INLINE void z80_bank(running_machine *machine, int num, int data)
 {
+	static const char * const bank_names[] = { "bank1", "bank2", "bank3" };
+
 	if (data < 0x08)
 	{
-		/* TODO: Don't need this table! */
-		static const UINT32 offs_table[2][8] =
-		{
-			{ 0x10000, 0x14000, 0x18000, 0x1c000, 0x00000, 0x04000, 0x08000, 0x0c000 },
-			{ 0x00000, 0x04000, 0x08000, 0x0c000, 0x10000, 0x14000, 0x18000, 0x1c000 }
-		};
+		UINT32 offset = ((bank_data[0] >> 1) * 0x20000) + ((0x4000 * data) ^ ((bank_data[0] & 1) ? 0 : 0x10000));
 
-		UINT32 offset = ((bank[0] >> 1) * 0x20000) + offs_table[bank[0] & 0x1][data];
-
-		memory_set_bankptr(machine, num, memory_region(machine, "user1") + offset);
+		memory_set_bankptr(machine, bank_names[num - 1], memory_region(machine, "user1") + offset);
 	}
 	else if (data < 0x10)
 	{
-		memory_set_bankptr(machine, num, &video_ram[(data - 0x08) * 0x4000]);
+		memory_set_bankptr(machine, bank_names[num - 1], &video_ram[(data - 0x08) * 0x4000]);
 	}
 	else
 	{
-		memory_set_bankptr(machine, num, &work_ram[(data - 0x10) * 0x4000]);
+		memory_set_bankptr(machine, bank_names[num - 1], &work_ram[(data - 0x10) * 0x4000]);
 	}
 }
 
 static WRITE8_HANDLER( rombank_w )
 {
-	bank[0] = data;
-	z80_bank(space->machine, 1, bank[1]);
-	z80_bank(space->machine, 2, bank[2]);
-	z80_bank(space->machine, 3, bank[3]);
+	bank_data[0] = data;
+	z80_bank(space->machine, 1, bank_data[1]);
+	z80_bank(space->machine, 2, bank_data[2]);
+	z80_bank(space->machine, 3, bank_data[3]);
 }
 
 
@@ -1292,7 +1287,7 @@ static MACHINE_RESET( bfcobra )
 		palette_set_color_rgb(machine, pal, pal3bit((pal>>5)&7), pal3bit((pal>>2)&7), pal2bit(pal&3));
 	}
 
-	bank[0] = 1;
+	bank_data[0] = 1;
 	memset(&ramdac, 0, sizeof(ramdac));
 	reset_fdc();
 
@@ -1306,10 +1301,10 @@ static MACHINE_RESET( bfcobra )
 ***************************************************************************/
 
 static ADDRESS_MAP_START( z80_prog_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK(4)
-	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK(1)
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(2)
-	AM_RANGE(0xc000, 0xffff) AM_RAMBANK(3)
+	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank4")
+	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK("bank1")
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank2")
+	AM_RANGE(0xc000, 0xffff) AM_RAMBANK("bank3")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( z80_io_map, ADDRESS_SPACE_IO, 8 )
@@ -1373,13 +1368,13 @@ static WRITE8_HANDLER( meter_w )
         is connected, the /FIRQ line will be pulsed.
     */
 	for (i = 0; i < 8; i++)
- 	{
+	{
 		if (changed & (1 << i))
 		{
 			Mechmtr_update(i, cycles, data & (1 << i) );
 			generic_pulse_irq_line(space->cpu, M6809_FIRQ_LINE);
 		}
- 	}
+	}
 }
 
 /* TODO */
@@ -1437,15 +1432,15 @@ static WRITE8_DEVICE_HANDLER( upd_w )
 }
 
 static ADDRESS_MAP_START( m6809_prog_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM	AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0x1fff) AM_RAM	AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0x2000, 0x2000) AM_RAM		// W 'B', 6F
 	AM_RANGE(0x2200, 0x2200) AM_RAM		// W 'F'
 	AM_RANGE(0x2600, 0x2600) AM_READWRITE(meter_r, meter_w)
 	AM_RANGE(0x2800, 0x2800) AM_RAM		// W
 	AM_RANGE(0x2A00, 0x2A02) AM_READWRITE(latch_r, latch_w)
 	AM_RANGE(0x2E00, 0x2E00) AM_READ(int_latch_r)
-	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("ay", ay8910_data_w)
-	AM_RANGE(0x3201, 0x3201) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x3201, 0x3201) AM_DEVWRITE("aysnd", ay8910_address_w)
 	AM_RANGE(0x3404, 0x3404) AM_DEVREADWRITE("acia6850_1", acia6850_stat_r, acia6850_ctrl_w)
 	AM_RANGE(0x3405, 0x3405) AM_DEVREADWRITE("acia6850_1", acia6850_data_r, acia6850_data_w)
 	AM_RANGE(0x3406, 0x3406) AM_DEVREADWRITE("acia6850_2", acia6850_stat_r, acia6850_ctrl_w)
@@ -1694,13 +1689,13 @@ static DRIVER_INIT( bfcobra )
 
 	init_ram(machine);
 
-	bank[0] = 1;
-	bank[1] = 0;
-	bank[2] = 0;
-	bank[3] = 0;
+	bank_data[0] = 1;
+	bank_data[1] = 0;
+	bank_data[2] = 0;
+	bank_data[3] = 0;
 
 	/* Fixed 16kB ROM region */
-	memory_set_bankptr(machine, 4, memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank4", memory_region(machine, "user1"));
 
 	/* TODO: Properly sort out the data ACIA */
 	data_r = 1;
@@ -1716,7 +1711,7 @@ static DRIVER_INIT( bfcobra )
 	state_save_register_global(machine, flip_22);
 	state_save_register_global(machine, z80_int);
 	state_save_register_global(machine, z80_inten);
-	state_save_register_global_array(machine, bank);
+	state_save_register_global_array(machine, bank_data);
 	state_save_register_global_pointer(machine, work_ram, 0xc0000);
 	state_save_register_global_pointer(machine, video_ram, 0x20000);
 }
@@ -1759,7 +1754,7 @@ static MACHINE_DRIVER_START( bfcobra )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, M6809_XTAL)
+	MDRV_SOUND_ADD("aysnd", AY8910, M6809_XTAL)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
 	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)

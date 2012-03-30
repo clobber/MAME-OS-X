@@ -113,7 +113,6 @@ static INT16 *dacr;
 static int dacl_ptr = 0;
 static int dacr_ptr = 0;
 
-static emu_timer *sound_timer;
 static UINT8 ad1847_regs[16];
 static UINT32 ad1847_sample_counter = 0;
 static UINT32 ad1847_sample_rate;
@@ -363,12 +362,12 @@ static WRITE32_HANDLER( disp_ctrl_w )
 
 static READ8_DEVICE_HANDLER(at_dma8237_2_r)
 {
-	return dma8237_r(device, offset / 2);
+	return i8237_r(device, offset / 2);
 }
 
 static WRITE8_DEVICE_HANDLER(at_dma8237_2_w)
 {
-	dma8237_w(device, offset / 2, data);
+	i8237_w(device, offset / 2, data);
 }
 
 
@@ -635,10 +634,10 @@ static void cx5510_pci_w(const device_config *busdevice, const device_config *de
 
 /* Analog Devices AD1847 Stereo DAC */
 
-static TIMER_CALLBACK( sound_timer_callback )
+static TIMER_DEVICE_CALLBACK( sound_timer_callback )
 {
 	ad1847_sample_counter = 0;
-	timer_adjust_oneshot(sound_timer, ATTOTIME_IN_MSEC(10), 0);
+	timer_device_adjust_oneshot(timer, ATTOTIME_IN_MSEC(10), 0);
 
 	dmadac_transfer(&dmadac[0], 1, 0, 1, dacl_ptr, dacl);
 	dmadac_transfer(&dmadac[1], 1, 0, 1, dacr_ptr, dacr);
@@ -726,6 +725,7 @@ static WRITE32_HANDLER( ad1847_w )
  *
  *************************************************************************/
 
+static int dma_channel;
 static UINT8 dma_offset[2][4];
 static UINT8 at_pages[0x10];
 
@@ -775,60 +775,62 @@ static WRITE8_HANDLER(at_page8_w)
 }
 
 
-static DMA8237_HRQ_CHANGED( pc_dma_hrq_changed )
+static WRITE_LINE_DEVICE_HANDLER( pc_dma_hrq_changed )
 {
 	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_HALT, state ? ASSERT_LINE : CLEAR_LINE);
 
 	/* Assert HLDA */
-	dma8237_set_hlda( device, state );
+	i8237_hlda_w( device, state );
 }
 
 
-static DMA8237_MEM_READ( pc_dma_read_byte )
+static READ8_HANDLER( pc_dma_read_byte )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	offs_t page_offset = (((offs_t) dma_offset[0][channel]) << 16)
+	offs_t page_offset = (((offs_t) dma_offset[0][dma_channel]) << 16)
 		& 0xFF0000;
 
 	return memory_read_byte(space, page_offset + offset);
 }
 
 
-static DMA8237_MEM_WRITE( pc_dma_write_byte )
+static WRITE8_HANDLER( pc_dma_write_byte )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	offs_t page_offset = (((offs_t) dma_offset[0][channel]) << 16)
+	offs_t page_offset = (((offs_t) dma_offset[0][dma_channel]) << 16)
 		& 0xFF0000;
 
 	memory_write_byte(space, page_offset + offset, data);
 }
 
-
-static const struct dma8237_interface dma8237_1_config =
+static void set_dma_channel(const device_config *device, int channel, int state)
 {
-	XTAL_14_31818MHz/3,
+	if (!state) dma_channel = channel;
+}
 
-	pc_dma_hrq_changed,
-	pc_dma_read_byte,
-	pc_dma_write_byte,
+static WRITE_LINE_DEVICE_HANDLER( pc_dack0_w ) { set_dma_channel(device, 0, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack1_w ) { set_dma_channel(device, 1, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack2_w ) { set_dma_channel(device, 2, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack3_w ) { set_dma_channel(device, 3, state); }
 
-	{ NULL, NULL, NULL, NULL },
-	{ NULL, NULL, NULL, NULL },
-	NULL
+static I8237_INTERFACE( dma8237_1_config )
+{
+	DEVCB_LINE(pc_dma_hrq_changed),
+	DEVCB_NULL,
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, pc_dma_read_byte),
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, pc_dma_write_byte),
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_LINE(pc_dack0_w), DEVCB_LINE(pc_dack1_w), DEVCB_LINE(pc_dack2_w), DEVCB_LINE(pc_dack3_w) }
 };
 
-
-static const struct dma8237_interface dma8237_2_config =
+static I8237_INTERFACE( dma8237_2_config )
 {
-	XTAL_14_31818MHz/3,
-
-	NULL,
-	NULL,
-	NULL,
-
-	{ NULL, NULL, NULL, NULL },
-	{ NULL, NULL, NULL, NULL },
-	NULL
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL }
 };
 
 
@@ -848,7 +850,7 @@ static ADDRESS_MAP_START( mediagx_map, ADDRESS_SPACE_PROGRAM, 32 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START(mediagx_io, ADDRESS_SPACE_IO, 32)
-	AM_RANGE(0x0000, 0x001f) AM_DEVREADWRITE8("dma8237_1", dma8237_r, dma8237_w, 0xffffffff)
+	AM_RANGE(0x0000, 0x001f) AM_DEVREADWRITE8("dma8237_1", i8237_r, i8237_w, 0xffffffff)
 	AM_RANGE(0x0020, 0x003f) AM_DEVREADWRITE8("pic8259_master", io20_r, io20_w, 0xffffffff)
 	AM_RANGE(0x0040, 0x005f) AM_DEVREADWRITE8("pit8254", pit8253_r, pit8253_w, 0xffffffff)
 	AM_RANGE(0x0060, 0x006f) AM_READWRITE(kbdc8042_32le_r,			kbdc8042_32le_w)
@@ -962,6 +964,9 @@ static MACHINE_START(mediagx)
 	mediagx_devices.pic8259_2 = devtag_get_device( machine, "pic8259_slave" );
 	mediagx_devices.dma8237_1 = devtag_get_device( machine, "dma8237_1" );
 	mediagx_devices.dma8237_2 = devtag_get_device( machine, "dma8237_2" );
+
+	dacl = auto_alloc_array(machine, INT16, 65536);
+	dacr = auto_alloc_array(machine, INT16, 65536);
 }
 
 static MACHINE_RESET(mediagx)
@@ -973,11 +978,7 @@ static MACHINE_RESET(mediagx)
 	memcpy(bios_ram, rom, 0x40000);
 	device_reset(cputag_get_cpu(machine, "maincpu"));
 
-	dacl = auto_alloc_array(machine, INT16, 65536);
-	dacr = auto_alloc_array(machine, INT16, 65536);
-
-	sound_timer = timer_alloc(machine, sound_timer_callback, NULL);
-	timer_adjust_oneshot(sound_timer, ATTOTIME_IN_MSEC(10), 0);
+	timer_device_adjust_oneshot(devtag_get_device(machine, "sound_timer"), ATTOTIME_IN_MSEC(10), 0);
 
 	dmadac[0] = devtag_get_device(machine, "dac1");
 	dmadac[1] = devtag_get_device(machine, "dac2");
@@ -1057,9 +1058,9 @@ static MACHINE_DRIVER_START(mediagx)
 
 	MDRV_PIT8254_ADD( "pit8254", mediagx_pit8254_config )
 
-	MDRV_DMA8237_ADD( "dma8237_1", dma8237_1_config )
+	MDRV_I8237_ADD( "dma8237_1", XTAL_14_31818MHz/3, dma8237_1_config )
 
-	MDRV_DMA8237_ADD( "dma8237_2", dma8237_2_config )
+	MDRV_I8237_ADD( "dma8237_2", XTAL_14_31818MHz/3, dma8237_2_config )
 
 	MDRV_PIC8259_ADD( "pic8259_master", mediagx_pic8259_1_config )
 
@@ -1067,9 +1068,11 @@ static MACHINE_DRIVER_START(mediagx)
 
 	MDRV_IDE_CONTROLLER_ADD("ide", ide_interrupt)
 
+	MDRV_TIMER_ADD("sound_timer", sound_timer_callback)
+
 	MDRV_NVRAM_HANDLER( mc146818 )
 
- 	/* video hardware */
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)

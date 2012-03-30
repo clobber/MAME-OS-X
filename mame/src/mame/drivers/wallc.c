@@ -52,7 +52,7 @@ Thanks to HIGHWAYMAN for providing info on how to get to these epoxies
 #include "video/resnet.h"
 #include "sound/ay8910.h"
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 
 /***************************************************************************
 
@@ -117,13 +117,13 @@ static PALETTE_INIT( wallc )
 
 static WRITE8_HANDLER( wallc_videoram_w )
 {
-	videoram[offset] = data;
+	space->machine->generic.videoram.u8[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	SET_TILE_INFO(0, videoram[tile_index] + 0x100, 1, 0);
+	SET_TILE_INFO(0, machine->generic.videoram.u8[tile_index] + 0x100, 1, 0);
 }
 
 static VIDEO_START( wallc )
@@ -139,12 +139,12 @@ static VIDEO_UPDATE( wallc )
 
 static WRITE8_HANDLER( wallc_coin_counter_w )
 {
-	coin_counter_w(0,data & 2);
+	coin_counter_w(space->machine, 0,data & 2);
 }
 
 static ADDRESS_MAP_START( wallc_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(wallc_videoram_w) AM_MIRROR(0xc00) AM_BASE(&videoram)	/* 2114, 2114 */
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(wallc_videoram_w) AM_MIRROR(0xc00) AM_BASE_GENERIC(videoram)	/* 2114, 2114 */
 	AM_RANGE(0xa000, 0xa3ff) AM_RAM		/* 2114, 2114 */
 
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW1")
@@ -155,8 +155,8 @@ static ADDRESS_MAP_START( wallc_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xb000) AM_WRITENOP
 	AM_RANGE(0xb100, 0xb100) AM_WRITE(wallc_coin_counter_w)
 	AM_RANGE(0xb200, 0xb200) AM_WRITENOP
-	AM_RANGE(0xb500, 0xb500) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0xb600, 0xb600) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0xb500, 0xb500) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0xb600, 0xb600) AM_DEVWRITE("aysnd", ay8910_data_w)
 ADDRESS_MAP_END
 
 
@@ -298,7 +298,7 @@ static MACHINE_DRIVER_START( wallc )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, 12288000 / 8)
+	MDRV_SOUND_ADD("aysnd", AY8910, 12288000 / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END
 

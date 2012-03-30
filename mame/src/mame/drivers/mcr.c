@@ -290,7 +290,7 @@
 #include "machine/z80sio.h"
 #include "audio/mcr.h"
 #include "sound/samples.h"
-#include "mcr.h"
+#include "includes/mcr.h"
 
 
 static UINT8 input_mux;
@@ -617,11 +617,11 @@ static WRITE8_HANDLER( demoderb_op4_w )
 static ADDRESS_MAP_START( cpu_90009_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
-	AM_RANGE(0x7000, 0x77ff) AM_MIRROR(0x0800) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xf000, 0xf1ff) AM_MIRROR(0x0200) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xf400, 0xf41f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf800, 0xf81f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split2_w) AM_BASE(&paletteram_2)
-	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(mcr_90009_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x7000, 0x77ff) AM_MIRROR(0x0800) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xf000, 0xf1ff) AM_MIRROR(0x0200) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf400, 0xf41f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf800, 0xf81f) AM_MIRROR(0x03e0) AM_WRITE(paletteram_xxxxRRRRBBBBGGGG_split2_w) AM_BASE_GENERIC(paletteram2)
+	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(mcr_90009_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports are verified from schematics */
@@ -646,9 +646,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( cpu_90010_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xe000, 0xe1ff) AM_MIRROR(0x1600) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xe800, 0xefff) AM_MIRROR(0x1000) AM_RAM_WRITE(mcr_90010_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x1800) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xe000, 0xe1ff) AM_MIRROR(0x1600) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xe800, 0xefff) AM_MIRROR(0x1000) AM_RAM_WRITE(mcr_90010_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports are verified from schematics */
@@ -673,10 +673,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( cpu_91490_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xe800, 0xe9ff) AM_MIRROR(0x0200) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mcr_91490_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
-	AM_RANGE(0xf800, 0xf87f) AM_MIRROR(0x0780) AM_WRITE(mcr_91490_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xe800, 0xe9ff) AM_MIRROR(0x0200) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(mcr_91490_videoram_w) AM_BASE_GENERIC(videoram) AM_SIZE_GENERIC(videoram)
+	AM_RANGE(0xf800, 0xf87f) AM_MIRROR(0x0780) AM_WRITE(mcr_91490_paletteram_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
 /* upper I/O map determined by PAL; only SSIO ports are verified from schematics */
@@ -918,20 +918,21 @@ static INPUT_PORTS_START( tron )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
 
 	PORT_START("SSIO.IP3")	/* DIPSW @ B3 */
-	PORT_DIPNAME( 0x01, 0x00, "Coin Meters" )				PORT_DIPLOCATION("SW1:1")
+	PORT_DIPNAME( 0x01, 0x00, "Coin Meters" )  PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x01, "1" )
 	PORT_DIPSETTING(    0x00, "2" )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("SW1:2")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )  PORT_DIPLOCATION("SW1:2")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Allow_Continue ) )  PORT_DIPLOCATION("SW1:3")
 	PORT_DIPSETTING(    0x04, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
 	PORT_DIPUNUSED_DIPLOC( 0x08, 0x00, "SW1:4" )
 	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "SW1:5" )
 	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "SW1:6" )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "SW1:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "SW1:8" )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
+
 	// According to the manual, SW1 is a bank of *10* switches (9 is unused and 10 is freeze)
 	// Where are the values for the other two bits read?
 
@@ -939,10 +940,62 @@ static INPUT_PORTS_START( tron )
 	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_REVERSE PORT_COCKTAIL
 
 	PORT_START("SSIO.DIP")
-	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
-	PORT_BIT( 0xe0, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
 INPUT_PORTS_END
+
+static INPUT_PORTS_START( tron3 )
+	PORT_START("SSIO.IP0")	/* J4 1-8 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_TILT )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
+
+	PORT_START("SSIO.IP1")	/* J4 10-13,15-18 */
+	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_CODE_DEC(KEYCODE_Z) PORT_CODE_INC(KEYCODE_X) PORT_REVERSE
+
+	PORT_START("SSIO.IP2")	/* J5 1-8 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
+//  PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
+//  PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
+//  PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
+//  PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
+
+	PORT_START("SSIO.IP3")	/* DIPSW @ B3 */
+	PORT_DIPNAME( 0x01, 0x00, "Coin Meters" )  PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Cabinet ) )  PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Cocktail ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Allow_Continue ) )  PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( No ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x00, "SW1:4" )
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "SW1:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "SW1:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "SW1:7" )
+//  PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
+
+	// According to the manual, SW1 is a bank of *10* switches (9 is unused and 10 is freeze)
+	// Where are the values for the other two bits read?
+
+	PORT_START("SSIO.IP4")	/* J6 1-8 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+//  PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_REVERSE PORT_COCKTAIL
+
+	PORT_START("SSIO.DIP")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+INPUT_PORTS_END
+
 
 
 /* verified from wiring diagram, plus DIP switches from manual */
@@ -2623,8 +2676,8 @@ GAME( 1981, shollow,  0,        mcr_90010,     shollow,  mcr_90010, ROT90, "Ball
 GAME( 1981, shollow2, shollow,  mcr_90010,     shollow,  mcr_90010, ROT90, "Bally Midway", "Satan's Hollow (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1982, tron,     0,        mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (8/9)", GAME_SUPPORTS_SAVE )
 GAME( 1982, tron2,    tron,     mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (6/25)", GAME_SUPPORTS_SAVE )
-GAME( 1982, tron3,    tron,     mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (6/17)", GAME_SUPPORTS_SAVE )
-GAME( 1982, tron4,    tron,     mcr_90010,     tron,     mcr_90010, ROT90, "Bally Midway", "Tron (6/15)", GAME_SUPPORTS_SAVE )
+GAME( 1982, tron3,    tron,     mcr_90010,     tron3,    mcr_90010, ROT90, "Bally Midway", "Tron (6/17)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1982, tron4,    tron,     mcr_90010,     tron3,    mcr_90010, ROT90, "Bally Midway", "Tron (6/15)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
 GAME( 1982, domino,   0,        mcr_90010,     domino,   mcr_90010, ROT0,  "Bally Midway", "Domino Man", GAME_SUPPORTS_SAVE )
 GAME( 1982, wacko,    0,        mcr_90010,     wacko,    wacko,     ROT0,  "Bally Midway", "Wacko", GAME_SUPPORTS_SAVE )
 GAME( 1984, twotigerc,twotiger, mcr_90010,     twotigrc, mcr_90010, ROT0,  "Bally Midway", "Two Tigers (Tron conversion)", GAME_SUPPORTS_SAVE )

@@ -169,22 +169,15 @@ Check gticlub.c for details on the bottom board.
 #include "cpu/sharc/sharc.h"
 #include "sound/k054539.h"
 #include "machine/konppc.h"
-#include "machine/konamiic.h"
 #include "machine/adc083x.h"
+#include "machine/k056230.h"
 #include "machine/eeprom.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "video/gticlub.h"
-
+#include "sound/k056800.h"
 
 static UINT8 led_reg0, led_reg1;
 
-
-// defined in drivers/gticlub.c
-extern READ8_HANDLER(K056230_r);
-extern WRITE8_HANDLER(K056230_w);
-extern UINT32 *lanc_ram;
-extern READ32_HANDLER(lanc_ram_r);
-extern WRITE32_HANDLER(lanc_ram_w);
 
 
 // defined in drivers/nwk-tr.c
@@ -229,47 +222,44 @@ static VIDEO_UPDATE( jetwave )
 
 static WRITE32_HANDLER( paletteram32_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
-	data = paletteram32[offset];
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
+	data = space->machine->generic.paletteram.u32[offset];
 	palette_set_color_rgb(space->machine, (offset * 2) + 0, pal5bit(data >> 26), pal5bit(data >> 21), pal5bit(data >> 16));
 	palette_set_color_rgb(space->machine, (offset * 2) + 1, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
 #define NUM_LAYERS	2
 
-static void game_tile_callback(int layer, int *code, int *color, int *flags)
+static void game_tile_callback(running_machine *machine, int layer, int *code, int *color, int *flags)
 {
 	*color += layer * 0x40;
 }
 
 static VIDEO_START( zr107 )
 {
-	static int scrolld[NUM_LAYERS][4][2] = {
-	 	{{ 0, 0}, {0, 0}, {0, 0}, {0, 0}},
-	 	{{ 0, 0}, {0, 0}, {0, 0}, {0, 0}}
-	};
+	const device_config *k056832 = devtag_get_device(machine, "k056832");
 
-	K056832_vh_start(machine, "gfx2", K056832_BPP_8, 1, scrolld, game_tile_callback, 0);
+	k056832_set_layer_offs(k056832, 0, -29, -27);
+	k056832_set_layer_offs(k056832, 1, -29, -27);
+	k056832_set_layer_offs(k056832, 2, -29, -27);
+	k056832_set_layer_offs(k056832, 3, -29, -27);
+	k056832_set_layer_offs(k056832, 4, -29, -27);
+	k056832_set_layer_offs(k056832, 5, -29, -27);
+	k056832_set_layer_offs(k056832, 6, -29, -27);
+	k056832_set_layer_offs(k056832, 7, -29, -27);
+
 	K001006_init(machine);
 	K001005_init(machine);
 }
 
 static VIDEO_UPDATE( zr107 )
 {
+	const device_config *k056832 = devtag_get_device(screen->machine, "k056832");
 	bitmap_fill(bitmap, cliprect, screen->machine->pens[0]);
 
-	K056832_set_LayerOffset(0, -29, -27);
-	K056832_set_LayerOffset(1, -29, -27);
-	K056832_set_LayerOffset(2, -29, -27);
-	K056832_set_LayerOffset(3, -29, -27);
-	K056832_set_LayerOffset(4, -29, -27);
-	K056832_set_LayerOffset(5, -29, -27);
-	K056832_set_LayerOffset(6, -29, -27);
-	K056832_set_LayerOffset(7, -29, -27);
-
-	K056832_tilemap_draw(screen->machine, bitmap, cliprect, 1, 0, 0);
+	k056832_tilemap_draw(k056832, bitmap, cliprect, 1, 0, 0);
 	K001005_draw(bitmap, cliprect);
-	K056832_tilemap_draw(screen->machine, bitmap, cliprect, 0, 0, 0);
+	k056832_tilemap_draw(k056832, bitmap, cliprect, 0, 0, 0);
 
 	draw_7segment_led(bitmap, 3, 3, led_reg0);
 	draw_7segment_led(bitmap, 9, 3, led_reg1);
@@ -280,17 +270,10 @@ static VIDEO_UPDATE( zr107 )
 
 /******************************************************************/
 
-static CUSTOM_INPUT( adcdo_r )
-{
-	const device_config *adc0838 = devtag_get_device(field->port->machine, "adc0838");
-	return adc083x_do_read(adc0838, 0);
-}
-
 static READ8_HANDLER( sysreg_r )
 {
 	UINT32 r = 0;
-	const device_config *adc0838 = devtag_get_device(space->machine, "adc0838");
-	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3" };
+	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3", "IN4" };
 
 	switch (offset)
 	{
@@ -298,17 +281,8 @@ static READ8_HANDLER( sysreg_r )
 		case 1:	/* I/O port 1 */
 		case 2:	/* I/O port 2 */
 		case 3:	/* System Port 0 */
-			r = input_port_read(space->machine, portnames[offset]);
-			break;
-
 		case 4:	/* System Port 1 */
-			/*
-                0x80 = PARAACK
-                0x40 = unused
-                0x20 = SARS (A/D busy flag)
-                0x10 = EEPDO (EEPROM DO)
-            */
-			r = (adc083x_sars_read(adc0838, 0) << 5) | (eeprom_read_bit() << 4);
+			r = input_port_read(space->machine, portnames[offset]);
 			break;
 
 		case 5:	/* Parallel data port */
@@ -319,8 +293,6 @@ static READ8_HANDLER( sysreg_r )
 
 static WRITE8_HANDLER( sysreg_w )
 {
-	const device_config *adc0838 = devtag_get_device(space->machine, "adc0838");
-
 	switch (offset)
 	{
 		case 0:	/* LED Register 0 */
@@ -346,9 +318,7 @@ static WRITE8_HANDLER( sysreg_w )
                 0x02 = EEPCLK
                 0x01 = EEPDI
             */
-			eeprom_write_bit((data & 0x01) ? 1 : 0);
-			eeprom_set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
-			eeprom_set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE);
+			input_port_write(space->machine, "EEPROMOUT", data & 0x07, 0xff);
 			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 			mame_printf_debug("System register 0 = %02X\n", data);
 			break;
@@ -369,9 +339,7 @@ static WRITE8_HANDLER( sysreg_w )
 			if (data & 0x40)	/* CG Board 0 IRQ Ack */
 				cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
 			set_cgboard_id((data >> 4) & 3);
-			adc083x_cs_write(adc0838, 0, (data >> 2) & 1);
-			adc083x_di_write(adc0838, 0, (data >> 1) & 1);
-			adc083x_clk_write(adc0838, 0, (data >> 0) & 1);
+			input_port_write(space->machine, "OUT4", data, 0xff);
 			mame_printf_debug("System register 1 = %02X\n", data);
 			break;
 
@@ -432,36 +400,36 @@ static MACHINE_START( zr107 )
 
 static ADDRESS_MAP_START( zr107_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_RAM	AM_BASE(&workram)	/* Work RAM */
-	AM_RANGE(0x74000000, 0x74003fff) AM_READWRITE(K056832_ram_long_r, K056832_ram_long_w)
-	AM_RANGE(0x74020000, 0x7402003f) AM_READWRITE(K056832_long_r, K056832_long_w)
+	AM_RANGE(0x74000000, 0x74003fff) AM_DEVREADWRITE("k056832", k056832_ram_long_r, k056832_ram_long_w)
+	AM_RANGE(0x74020000, 0x7402003f) AM_DEVREADWRITE("k056832", k056832_long_r, k056832_long_w)
 	AM_RANGE(0x74060000, 0x7406003f) AM_READWRITE(ccu_r, ccu_w)
-	AM_RANGE(0x74080000, 0x74081fff) AM_RAM_WRITE(paletteram32_w) AM_BASE(&paletteram32)
-	AM_RANGE(0x740a0000, 0x740a3fff) AM_READ(K056832_rom_long_r)
+	AM_RANGE(0x74080000, 0x74081fff) AM_RAM_WRITE(paletteram32_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x740a0000, 0x740a3fff) AM_DEVREAD("k056832", k056832_rom_long_r)
 	AM_RANGE(0x78000000, 0x7800ffff) AM_READWRITE(cgboard_dsp_shared_r_ppc, cgboard_dsp_shared_w_ppc)		/* 21N 21K 23N 23K */
 	AM_RANGE(0x78010000, 0x7801ffff) AM_WRITE(cgboard_dsp_shared_w_ppc)
 	AM_RANGE(0x78040000, 0x7804000f) AM_READWRITE(K001006_0_r, K001006_0_w)
 	AM_RANGE(0x780c0000, 0x780c0007) AM_READWRITE(cgboard_dsp_comm_r_ppc, cgboard_dsp_comm_w_ppc)
 	AM_RANGE(0x7e000000, 0x7e003fff) AM_READWRITE8(sysreg_r, sysreg_w, 0xffffffff)
-	AM_RANGE(0x7e008000, 0x7e009fff) AM_READWRITE8(K056230_r, K056230_w, 0xffffffff)				/* LANC registers */
-	AM_RANGE(0x7e00a000, 0x7e00bfff) AM_READWRITE(lanc_ram_r, lanc_ram_w) AM_BASE(&lanc_ram)		/* LANC Buffer RAM (27E) */
-	AM_RANGE(0x7e00c000, 0x7e00c007) AM_WRITE(K056800_host_w)
-	AM_RANGE(0x7e00c008, 0x7e00c00f) AM_READ(K056800_host_r)
-	AM_RANGE(0x7f800000, 0x7f9fffff) AM_ROM AM_SHARE(2)
-	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)	/* Program ROM */
+	AM_RANGE(0x7e008000, 0x7e009fff) AM_DEVREADWRITE8("k056230", k056230_r, k056230_w, 0xffffffff)				/* LANC registers */
+	AM_RANGE(0x7e00a000, 0x7e00bfff) AM_DEVREADWRITE("k056230", lanc_ram_r, lanc_ram_w)		/* LANC Buffer RAM (27E) */
+	AM_RANGE(0x7e00c000, 0x7e00c007) AM_DEVWRITE("k056800", k056800_host_w)
+	AM_RANGE(0x7e00c008, 0x7e00c00f) AM_DEVREAD("k056800", k056800_host_r)
+	AM_RANGE(0x7f800000, 0x7f9fffff) AM_ROM AM_SHARE("share2")
+	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")	/* Program ROM */
 ADDRESS_MAP_END
 
 
 static WRITE32_HANDLER( jetwave_palette_w )
 {
-	COMBINE_DATA(&paletteram32[offset]);
-	data = paletteram32[offset];
+	COMBINE_DATA(&space->machine->generic.paletteram.u32[offset]);
+	data = space->machine->generic.paletteram.u32[offset];
 	palette_set_color_rgb(space->machine, offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
 static ADDRESS_MAP_START( jetwave_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_MIRROR(0x80000000) AM_RAM		/* Work RAM */
 	AM_RANGE(0x74000000, 0x740000ff) AM_MIRROR(0x80000000) AM_READWRITE(K001604_reg_r, K001604_reg_w)
-	AM_RANGE(0x74010000, 0x7401ffff) AM_MIRROR(0x80000000) AM_RAM_WRITE(jetwave_palette_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x74010000, 0x7401ffff) AM_MIRROR(0x80000000) AM_RAM_WRITE(jetwave_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x74020000, 0x7403ffff) AM_MIRROR(0x80000000) AM_READWRITE(K001604_tile_r, K001604_tile_w)
 	AM_RANGE(0x74040000, 0x7407ffff) AM_MIRROR(0x80000000) AM_READWRITE(K001604_char_r, K001604_char_w)
 	AM_RANGE(0x78000000, 0x7800ffff) AM_MIRROR(0x80000000) AM_READWRITE(cgboard_dsp_shared_r_ppc, cgboard_dsp_shared_w_ppc)		/* 21N 21K 23N 23K */
@@ -470,13 +438,13 @@ static ADDRESS_MAP_START( jetwave_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x78080000, 0x7808000f) AM_MIRROR(0x80000000) AM_READWRITE(K001006_1_r, K001006_1_w)
 	AM_RANGE(0x780c0000, 0x780c0007) AM_MIRROR(0x80000000) AM_READWRITE(cgboard_dsp_comm_r_ppc, cgboard_dsp_comm_w_ppc)
 	AM_RANGE(0x7e000000, 0x7e003fff) AM_MIRROR(0x80000000) AM_READWRITE8(sysreg_r, sysreg_w, 0xffffffff)
-	AM_RANGE(0x7e008000, 0x7e009fff) AM_MIRROR(0x80000000) AM_READWRITE8(K056230_r, K056230_w, 0xffffffff)				/* LANC registers */
-	AM_RANGE(0x7e00a000, 0x7e00bfff) AM_MIRROR(0x80000000) AM_READWRITE(lanc_ram_r, lanc_ram_w)	 AM_BASE(&lanc_ram)	/* LANC Buffer RAM (27E) */
-	AM_RANGE(0x7e00c000, 0x7e00c007) AM_MIRROR(0x80000000) AM_WRITE(K056800_host_w)
-	AM_RANGE(0x7e00c008, 0x7e00c00f) AM_MIRROR(0x80000000) AM_READ(K056800_host_r)
+	AM_RANGE(0x7e008000, 0x7e009fff) AM_MIRROR(0x80000000) AM_DEVREADWRITE8("k056230", k056230_r, k056230_w, 0xffffffff)				/* LANC registers */
+	AM_RANGE(0x7e00a000, 0x7e00bfff) AM_MIRROR(0x80000000) AM_DEVREADWRITE("k056230", lanc_ram_r, lanc_ram_w)	/* LANC Buffer RAM (27E) */
+	AM_RANGE(0x7e00c000, 0x7e00c007) AM_MIRROR(0x80000000) AM_DEVWRITE("k056800", k056800_host_w)
+	AM_RANGE(0x7e00c008, 0x7e00c00f) AM_MIRROR(0x80000000) AM_DEVREAD("k056800", k056800_host_r)
 	AM_RANGE(0x7f000000, 0x7f3fffff) AM_MIRROR(0x80000000) AM_ROM AM_REGION("user2", 0)
-	AM_RANGE(0x7f800000, 0x7f9fffff) AM_MIRROR(0x80000000) AM_ROM AM_SHARE(2)
-	AM_RANGE(0x7fe00000, 0x7fffffff) AM_MIRROR(0x80000000) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)	/* Program ROM */
+	AM_RANGE(0x7f800000, 0x7f9fffff) AM_MIRROR(0x80000000) AM_ROM AM_SHARE("share2")
+	AM_RANGE(0x7fe00000, 0x7fffffff) AM_MIRROR(0x80000000) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")	/* Program ROM */
 ADDRESS_MAP_END
 
 
@@ -507,8 +475,8 @@ static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM		/* Work RAM */
 	AM_RANGE(0x200000, 0x2004ff) AM_READWRITE(dual539_r, dual539_w)
-	AM_RANGE(0x400000, 0x40000f) AM_WRITE(K056800_sound_w)
-	AM_RANGE(0x400010, 0x40001f) AM_READ(K056800_sound_r)
+	AM_RANGE(0x400000, 0x40000f) AM_DEVWRITE("k056800", k056800_sound_w)
+	AM_RANGE(0x400010, 0x40001f) AM_DEVREAD("k056800", k056800_sound_r)
 	AM_RANGE(0x580000, 0x580001) AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -541,7 +509,7 @@ ADDRESS_MAP_END
 /*****************************************************************************/
 
 
-static INPUT_PORTS_START( midnrun )
+static INPUT_PORTS_START( zr107 )
 	PORT_START("IN0")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )		// View switch
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )		// Shift up
@@ -555,7 +523,27 @@ static INPUT_PORTS_START( midnrun )
 
 	PORT_START("IN2")
 	PORT_BIT( 0x7f, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(adcdo_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("adc0838", adc083x_do_read)
+
+	PORT_START("IN4")
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) /* PARAACK */
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("adc0838",adc083x_sars_read)
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom",eeprom_read_bit)
+
+	PORT_START("EEPROMOUT")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+
+	PORT_START("OUT4")
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("adc0838", adc083x_cs_write)
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("adc0838", adc083x_di_write)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("adc0838", adc083x_clk_write)
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( midnrun )
+	PORT_INCLUDE( zr107 )
 
 	PORT_START("IN3")
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW )
@@ -586,20 +574,7 @@ static INPUT_PORTS_START( midnrun )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( windheat )
-	PORT_START("IN0")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )		// View switch
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )		// Shift up
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON3 )		// Shift down
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_TOGGLE		// AT/MT switch
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Service Button") PORT_CODE(KEYCODE_8)
-	PORT_BIT( 0x0b, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("IN1")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("IN2")
-	PORT_BIT( 0x7f, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(adcdo_r, NULL)
+	PORT_INCLUDE( zr107 )
 
 	PORT_START("IN3")
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW )
@@ -619,7 +594,7 @@ static INPUT_PORTS_START( windheat )
 	PORT_DIPSETTING( 0x00, "Twin" )
 
 	PORT_START("ANALOG1")		// Steering wheel
-	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(35) PORT_KEYDELTA(5) PORT_REVERSE
+	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(35) PORT_KEYDELTA(5)
 
 	PORT_START("ANALOG2")		// Acceleration pedal
 	PORT_BIT( 0xff, 0x00, IPT_PEDAL ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(35) PORT_KEYDELTA(5)
@@ -630,20 +605,7 @@ static INPUT_PORTS_START( windheat )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( jetwave )
-	PORT_START("IN0")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON3 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON4 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Service Button") PORT_CODE(KEYCODE_8)
-	PORT_BIT( 0x0b, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("IN1")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("IN2")
-	PORT_BIT( 0x7f, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(adcdo_r, NULL)
+	PORT_INCLUDE( zr107 )
 
 	PORT_START("IN3")
 	PORT_SERVICE_NO_TOGGLE( 0x80, IP_ACTIVE_LOW )
@@ -705,10 +667,43 @@ static double adc0838_callback( const device_config *device, UINT8 input )
 }
 
 
-static const adc0831_interface zr107_adc_interface = {
+static const adc083x_interface zr107_adc_interface = {
 	adc0838_callback
 };
 
+
+static TIMER_CALLBACK( irq_off )
+{
+	cputag_set_input_line(machine, "audiocpu", param, CLEAR_LINE);
+}
+
+static void sound_irq_callback( running_machine *machine, int irq )
+{
+	int line = (irq == 0) ? INPUT_LINE_IRQ1 : INPUT_LINE_IRQ2;
+
+	cputag_set_input_line(machine, "audiocpu", line, ASSERT_LINE);
+	timer_set(machine, ATTOTIME_IN_USEC(1), NULL, line, irq_off);
+}
+
+static const k056800_interface zr107_k056800_interface =
+{
+	sound_irq_callback
+};
+
+static const k056832_interface zr107_k056832_intf =
+{
+	"gfx2", 1,
+	K056832_BPP_8,
+	1, 0,
+	KONAMI_ROM_DEINTERLEAVE_NONE,
+	game_tile_callback, "none"
+};
+
+static const k056230_interface zr107_k056230_intf =
+{
+	"maincpu",
+	0
+};
 
 /* PowerPC interrupts
 
@@ -721,6 +716,7 @@ static INTERRUPT_GEN( zr107_vblank )
 {
 	cpu_set_input_line(device, INPUT_LINE_IRQ0, ASSERT_LINE);
 }
+
 static MACHINE_RESET( zr107 )
 {
 	cputag_set_input_line(machine, "dsp", INPUT_LINE_RESET, ASSERT_LINE);
@@ -742,11 +738,13 @@ static MACHINE_DRIVER_START( zr107 )
 
 	MDRV_QUANTUM_TIME(HZ(30000))
 
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_MACHINE_START(zr107)
 	MDRV_MACHINE_RESET(zr107)
 
- 	/* video hardware */
+	MDRV_K056230_ADD("k056230", zr107_k056230_intf)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
@@ -757,6 +755,10 @@ static MACHINE_DRIVER_START( zr107 )
 
 	MDRV_VIDEO_START(zr107)
 	MDRV_VIDEO_UPDATE(zr107)
+
+	MDRV_K056832_ADD("k056832", zr107_k056832_intf)
+
+	MDRV_K056800_ADD("k056800", zr107_k056800_interface)
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -789,11 +791,13 @@ static MACHINE_DRIVER_START( jetwave )
 
 	MDRV_QUANTUM_TIME(HZ(30000))
 
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_MACHINE_START(zr107)
 	MDRV_MACHINE_RESET(zr107)
 
- 	/* video hardware */
+	MDRV_K056230_ADD("k056230", zr107_k056230_intf)
+
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
@@ -804,6 +808,8 @@ static MACHINE_DRIVER_START( jetwave )
 
 	MDRV_VIDEO_START(jetwave)
 	MDRV_VIDEO_UPDATE(jetwave)
+
+	MDRV_K056800_ADD("k056800", zr107_k056800_interface)
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
@@ -822,18 +828,6 @@ MACHINE_DRIVER_END
 
 /*****************************************************************************/
 
-static TIMER_CALLBACK( irq_off )
-{
-	cputag_set_input_line(machine, "audiocpu", param, CLEAR_LINE);
-}
-
-static void sound_irq_callback(running_machine *machine, int irq)
-{
-	int line = (irq == 0) ? INPUT_LINE_IRQ1 : INPUT_LINE_IRQ2;
-	cputag_set_input_line(machine, "audiocpu", line, ASSERT_LINE);
-	timer_set(machine, ATTOTIME_IN_USEC(1), NULL, line, irq_off);
-}
-
 static void init_zr107(running_machine *machine)
 {
 	sharc_dataram = auto_alloc_array(machine, UINT32, 0x100000/4);
@@ -841,8 +835,6 @@ static void init_zr107(running_machine *machine)
 	ccu_vcth = ccu_vctl = 0;
 
 	K001005_preprocess_texture_data(memory_region(machine, "gfx1"), memory_region_length(machine, "gfx1"), 0);
-
-	K056800_init(machine, sound_irq_callback);
 }
 
 static DRIVER_INIT(zr107)

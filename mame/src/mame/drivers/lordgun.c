@@ -8,6 +8,7 @@
 
 
 CPU     :   68000
+Custom  :   IGS005, IGS006, IGS007, IGS008
 Sound   :   Z80 + M6295 [+ M6295] + YM3812
 NVRAM   :   93C46
 
@@ -32,7 +33,7 @@ To do:
 #include "machine/eeprom.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
-#include "lordgun.h"
+#include "includes/lordgun.h"
 
 
 static UINT16 *lordgun_priority_ram, lordgun_priority;
@@ -89,6 +90,7 @@ static WRITE8_DEVICE_HANDLER(fake2_w)
 
 static WRITE8_DEVICE_HANDLER( lordgun_eeprom_w )
 {
+	const device_config *eeprom = devtag_get_device(device->machine, "eeprom");
 	static UINT8 old;
 	int i;
 
@@ -98,7 +100,7 @@ static WRITE8_DEVICE_HANDLER( lordgun_eeprom_w )
 		logerror("%s - Unknown EEPROM bit written %02X\n",cpuexec_describe_context(device->machine),data);
 	}
 
-	coin_counter_w(0, data & 0x01);
+	coin_counter_w(device->machine, 0, data & 0x01);
 
 	// Update light guns positions
 	for (i = 0; i < 2; i++)
@@ -106,13 +108,13 @@ static WRITE8_DEVICE_HANDLER( lordgun_eeprom_w )
 			lordgun_update_gun(device->machine, i);
 
 	// latch the bit
-	eeprom_write_bit(data & 0x40);
+	eeprom_write_bit(eeprom, data & 0x40);
 
 	// reset line asserted: reset.
-	eeprom_set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE );
+	eeprom_set_cs_line(eeprom, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE );
 
 	// clock line asserted: write latch or select next bit to read
-	eeprom_set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE );
+	eeprom_set_clock_line(eeprom, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE );
 
 	lordgun_whitescreen = data & 0x80;
 
@@ -152,16 +154,16 @@ static ADDRESS_MAP_START( lordgun_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x314000, 0x317fff) AM_RAM_WRITE(lordgun_vram_2_w) AM_BASE(&lordgun_vram_2)	// DISPLAY
 	AM_RANGE(0x318000, 0x319fff) AM_RAM_WRITE(lordgun_vram_3_w) AM_BASE(&lordgun_vram_3)	// DISPLAY
 	AM_RANGE(0x31c000, 0x31c7ff) AM_RAM AM_BASE(&lordgun_scrollram)		// LINE
-	AM_RANGE(0x400000, 0x4007ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)	// ANIMATOR
-	AM_RANGE(0x500000, 0x500fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x502000, 0x502001) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_0)
-	AM_RANGE(0x502200, 0x502201) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_1)
-	AM_RANGE(0x502400, 0x502401) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_2)
-	AM_RANGE(0x502600, 0x502601) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_3)
-	AM_RANGE(0x502800, 0x502801) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_0)
-	AM_RANGE(0x502a00, 0x502a01) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_1)
-	AM_RANGE(0x502c00, 0x502c01) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_2)
-	AM_RANGE(0x502e00, 0x502e01) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_3)
+	AM_RANGE(0x400000, 0x4007ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// ANIMATOR
+	AM_RANGE(0x500000, 0x500fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x502000, 0x502001) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_0)
+	AM_RANGE(0x502200, 0x502201) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_1)
+	AM_RANGE(0x502400, 0x502401) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_2)
+	AM_RANGE(0x502600, 0x502601) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_3)
+	AM_RANGE(0x502800, 0x502801) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_0)
+	AM_RANGE(0x502a00, 0x502a01) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_1)
+	AM_RANGE(0x502c00, 0x502c01) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_2)
+	AM_RANGE(0x502e00, 0x502e01) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_3)
 	AM_RANGE(0x503000, 0x503001) AM_WRITE(lordgun_priority_w)
 	AM_RANGE(0x503800, 0x503801) AM_READ(lordgun_gun_0_x_r)
 	AM_RANGE(0x503a00, 0x503a01) AM_READ(lordgun_gun_1_x_r)
@@ -183,16 +185,16 @@ static ADDRESS_MAP_START( hfh_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x314000, 0x317fff) AM_RAM_WRITE(lordgun_vram_2_w) AM_BASE(&lordgun_vram_2)	// DISPLAY
 	AM_RANGE(0x318000, 0x319fff) AM_RAM_WRITE(lordgun_vram_3_w) AM_BASE(&lordgun_vram_3)	// DISPLAY
 	AM_RANGE(0x31c000, 0x31c7ff) AM_RAM AM_BASE(&lordgun_scrollram)		// LINE
-	AM_RANGE(0x400000, 0x4007ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)	// ANIMATOR
-	AM_RANGE(0x500000, 0x500fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x502000, 0x502001) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_0)
-	AM_RANGE(0x502200, 0x502201) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_1)
-	AM_RANGE(0x502400, 0x502401) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_2)
-	AM_RANGE(0x502600, 0x502601) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_x_3)
-	AM_RANGE(0x502800, 0x502801) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_0)
-	AM_RANGE(0x502a00, 0x502a01) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_1)
-	AM_RANGE(0x502c00, 0x502c01) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_2)
-	AM_RANGE(0x502e00, 0x502e01) AM_WRITE(SMH_RAM) AM_BASE(&lordgun_scroll_y_3)
+	AM_RANGE(0x400000, 0x4007ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// ANIMATOR
+	AM_RANGE(0x500000, 0x500fff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x502000, 0x502001) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_0)
+	AM_RANGE(0x502200, 0x502201) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_1)
+	AM_RANGE(0x502400, 0x502401) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_2)
+	AM_RANGE(0x502600, 0x502601) AM_WRITEONLY AM_BASE(&lordgun_scroll_x_3)
+	AM_RANGE(0x502800, 0x502801) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_0)
+	AM_RANGE(0x502a00, 0x502a01) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_1)
+	AM_RANGE(0x502c00, 0x502c01) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_2)
+	AM_RANGE(0x502e00, 0x502e01) AM_WRITEONLY AM_BASE(&lordgun_scroll_y_3)
 	AM_RANGE(0x503000, 0x503001) AM_WRITE(lordgun_priority_w)
 	AM_RANGE(0x504000, 0x504001) AM_WRITE(lordgun_soundlatch_w)
 	AM_RANGE(0x506000, 0x506007) AM_DEVREADWRITE("ppi8255_0", lordgun_ppi8255_r, lordgun_ppi8255_w)
@@ -220,11 +222,11 @@ static WRITE8_DEVICE_HANDLER( lordgun_okibank_w )
 }
 
 static ADDRESS_MAP_START( lordgun_soundio_map, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE( "ym", ym3812_w )
+	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE( "ymsnd", ym3812_w )
 	AM_RANGE(0x2000, 0x2000) AM_DEVREADWRITE( "oki", okim6295_r, okim6295_w )
 	AM_RANGE(0x3000, 0x3000) AM_READ( soundlatch2_r )
 	AM_RANGE(0x4000, 0x4000) AM_READ( soundlatch_r )
-	AM_RANGE(0x5000, 0x5000) AM_READ( SMH_NOP )
+	AM_RANGE(0x5000, 0x5000) AM_READNOP
 	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE( "oki", lordgun_okibank_w )
 ADDRESS_MAP_END
 
@@ -232,8 +234,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( hfh_soundio_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x3000, 0x3000) AM_READ( soundlatch2_r )
 	AM_RANGE(0x4000, 0x4000) AM_READ( soundlatch_r )
-	AM_RANGE(0x5000, 0x5000) AM_READ( SMH_NOP )
-	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE( "ym", ym3812_w )
+	AM_RANGE(0x5000, 0x5000) AM_READNOP
+	AM_RANGE(0x7000, 0x7001) AM_DEVWRITE( "ymsnd", ym3812_w )
 	AM_RANGE(0x7400, 0x7400) AM_DEVREADWRITE( "oki", okim6295_r, okim6295_w )
 	AM_RANGE(0x7800, 0x7800) AM_DEVREADWRITE( "oki2", okim6295_r, okim6295_w )
 ADDRESS_MAP_END
@@ -316,7 +318,7 @@ static INPUT_PORTS_START( lordgun )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_SERVICE_NO_TOGGLE( 0x40, IP_ACTIVE_LOW )
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE("eeprom", eeprom_read_bit)
 
 	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1   )
@@ -420,7 +422,7 @@ static MACHINE_DRIVER_START( lordgun )
 	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
 	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
 
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	MDRV_GFXDECODE(lordgun)
 
@@ -440,7 +442,7 @@ static MACHINE_DRIVER_START( lordgun )
 	// sound hardware
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3579545)
 	MDRV_SOUND_CONFIG(lordgun_ym3812_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
@@ -683,7 +685,7 @@ ROM_END
 
 /*
 
-    Huang Fei Hong
+    Huang Fei Hong (Alien Challenge?)
 
 */
 
@@ -717,5 +719,5 @@ ROM_END
 
 ***************************************************************************/
 
-GAME( 1994, lordgun, 0, lordgun, lordgun, lordgun, ROT0, "IGS", "Lord of Gun (USA)", GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )
-GAME( 199?, hfh,     0, hfh,     lordgun, 0,       ROT0, "IGS", "Huang Fei Hong",    GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1994, lordgun, 0, lordgun, lordgun, lordgun, ROT0, "IGS", "Lord of Gun (USA)",                 GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )
+GAME( 199?, hfh,     0, hfh,     lordgun, 0,       ROT0, "IGS", "Huang Fei Hong (Alien Challenge?)", GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )

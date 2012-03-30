@@ -191,7 +191,7 @@ Shark   Zame
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/tms32010/tms32010.h"
-#include "twincobr.h"
+#include "includes/twincobr.h"
 #include "sound/3812intf.h"
 
 
@@ -203,8 +203,8 @@ Shark   Zame
 static ADDRESS_MAP_START( main_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x02ffff) AM_ROM
 	AM_RANGE(0x030000, 0x033fff) AM_RAM		/* 68K and DSP shared RAM */
-	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x050000, 0x050dff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x050000, 0x050dff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x060000, 0x060001) AM_WRITE(twincobr_crtc_reg_sel_w)	/* 6845 CRT controller */
 	AM_RANGE(0x060002, 0x060003) AM_WRITE(twincobr_crtc_data_w)		/* 6845 CRT controller */
 	AM_RANGE(0x070000, 0x070003) AM_WRITE(twincobr_txscroll_w)	/* text layer scroll */
@@ -237,7 +237,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x10, 0x10) AM_READ_PORT("SYSTEM")			/* Twin Cobra - Coin/Start */
 	AM_RANGE(0x20, 0x20) AM_WRITE(twincobr_coin_w)		/* Twin Cobra coin count-lockout */
 	AM_RANGE(0x40, 0x40) AM_READ_PORT("DSWA")
@@ -740,7 +740,7 @@ static MACHINE_DRIVER_START( twincobr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 28000000/8)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 28000000/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END

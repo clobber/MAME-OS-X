@@ -32,7 +32,7 @@
 #include "driver.h"
 #include "video/vector.h"
 #include "cpu/ccpu/ccpu.h"
-#include "cinemat.h"
+#include "includes/cinemat.h"
 #include "rendlay.h"
 
 #include "armora.lh"
@@ -280,7 +280,7 @@ static READ8_HANDLER( qb3_frame_r )
 
 static WRITE8_HANDLER( qb3_ram_bank_w )
 {
-	memory_set_bank(space->machine, 1, cpu_get_reg(cputag_get_cpu(space->machine, "maincpu"), CCPU_P) & 3);
+	memory_set_bank(space->machine, "bank1", cpu_get_reg(cputag_get_cpu(space->machine, "maincpu"), CCPU_P) & 3);
 }
 
 
@@ -318,7 +318,7 @@ static ADDRESS_MAP_START( data_map, ADDRESS_SPACE_DATA, 16 )
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( data_map_qb3, ADDRESS_SPACE_DATA, 16 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAMBANK(1) AM_BASE(&rambase)
+	AM_RANGE(0x0000, 0x03ff) AM_RAMBANK("bank1") AM_BASE(&rambase)
 ADDRESS_MAP_END
 
 
@@ -363,8 +363,8 @@ static INPUT_PORTS_START( spacewar )
 	PORT_DIPNAME( 0x03, 0x00,  "Time" )
 	PORT_DIPSETTING(    0x03, "0:45/coin" )
 	PORT_DIPSETTING(    0x00, "1:00/coin" )
-	PORT_DIPSETTING( 	0x01, "1:30/coin" )
-	PORT_DIPSETTING( 	0x02, "2:00/coin" )
+	PORT_DIPSETTING(	0x01, "1:30/coin" )
+	PORT_DIPSETTING(	0x02, "2:00/coin" )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
@@ -1467,7 +1467,7 @@ static DRIVER_INIT( qb3 )
 	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x0f, 0x0f, 0, 0, qb3_frame_r);
 	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x00, 0x00, 0, 0, qb3_ram_bank_w);
 
-	memory_configure_bank(machine, 1, 0, 4, rambase, 0x100*2);
+	memory_configure_bank(machine, "bank1", 0, 4, rambase, 0x100*2);
 }
 
 

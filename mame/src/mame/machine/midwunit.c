@@ -8,7 +8,7 @@
 #include "cpu/tms34010/tms34010.h"
 #include "cpu/m6809/m6809.h"
 #include "audio/dcs.h"
-#include "midwunit.h"
+#include "includes/midwunit.h"
 #include "midwayic.h"
 
 
@@ -67,7 +67,7 @@ WRITE16_HANDLER( midwunit_cmos_w )
 {
 	if (cmos_write_enable)
 	{
-		COMBINE_DATA(generic_nvram16+offset);
+		COMBINE_DATA(space->machine->generic.nvram.u16+offset);
 		cmos_write_enable = 0;
 	}
 	else
@@ -80,13 +80,13 @@ WRITE16_HANDLER( midwunit_cmos_w )
 
 WRITE16_HANDLER( midxunit_cmos_w )
 {
-	COMBINE_DATA(generic_nvram16+offset);
+	COMBINE_DATA(space->machine->generic.nvram.u16+offset);
 }
 
 
 READ16_HANDLER( midwunit_cmos_r )
 {
-	return generic_nvram16[offset];
+	return space->machine->generic.nvram.u16[offset];
 }
 
 

@@ -20,12 +20,12 @@ Added dsw locations and verified factory setting based on Guru's notes
 
 #include "driver.h"
 #include "deprecat.h"
-#include "video/konamiic.h"
+#include "video/konicdev.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
 #include "sound/k007232.h"
-#include "konamipt.h"
+#include "includes/konamipt.h"
 
 extern UINT16 *gradius3_gfxram;
 extern int gradius3_priority;
@@ -34,44 +34,53 @@ READ16_HANDLER( gradius3_gfxrom_r );
 WRITE16_HANDLER( gradius3_gfxram_w );
 VIDEO_UPDATE( gradius3 );
 
+extern void gradius3_sprite_callback(running_machine *machine, int *code,int *color,int *priority_mask,int *shadow);
+extern void gradius3_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color,int *flags,int *priority);
 
 
 static READ16_HANDLER( K052109_halfword_r )
 {
-	return K052109_r(space,offset);
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+	return k052109_r(k052109, offset);
 }
 
 static WRITE16_HANDLER( K052109_halfword_w )
 {
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
 	if (ACCESSING_BITS_0_7)
-		K052109_w(space,offset,data & 0xff);
+		k052109_w(k052109, offset, data & 0xff);
 
 	/* is this a bug in the game or something else? */
 	if (!ACCESSING_BITS_0_7)
-		K052109_w(space,offset,(data >> 8) & 0xff);
+		k052109_w(k052109, offset, (data >> 8) & 0xff);
 //      logerror("%06x half %04x = %04x\n",cpu_get_pc(space->cpu),offset,data);
 }
 
 static READ16_HANDLER( K051937_halfword_r )
 {
-	return K051937_r(space,offset);
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+	return k051937_r(k051960, offset);
 }
 
 static WRITE16_HANDLER( K051937_halfword_w )
 {
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+
 	if (ACCESSING_BITS_0_7)
-		K051937_w(space,offset,data & 0xff);
+		k051937_w(k051960, offset, data & 0xff);
 }
 
 static READ16_HANDLER( K051960_halfword_r )
 {
-	return K051960_r(space,offset);
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+	return k051960_r(k051960, offset);
 }
 
 static WRITE16_HANDLER( K051960_halfword_w )
 {
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
 	if (ACCESSING_BITS_0_7)
-		K051960_w(space,offset,data & 0xff);
+		k051960_w(k051960, offset, data & 0xff);
 }
 
 
@@ -94,8 +103,8 @@ static WRITE16_HANDLER( cpuA_ctrl_w )
 		data >>= 8;
 
 		/* bits 0-1 are coin counters */
-		coin_counter_w(0,data & 0x01);
-		coin_counter_w(1,data & 0x02);
+		coin_counter_w(space->machine, 0,data & 0x01);
+		coin_counter_w(space->machine, 1,data & 0x02);
 
 		/* bit 2 selects layer priority */
 		gradius3_priority = data & 0x04;
@@ -174,7 +183,7 @@ static WRITE8_DEVICE_HANDLER( sound_bank_w )
 static ADDRESS_MAP_START( gradius3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM
-	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0c0000, 0x0c0001) AM_WRITE(cpuA_ctrl_w)	/* halt cpu B, irq enable, priority, coin counters, other? */
 	AM_RANGE(0x0c8000, 0x0c8001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x0c8002, 0x0c8003) AM_READ_PORT("P1")
@@ -186,9 +195,9 @@ static ADDRESS_MAP_START( gradius3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0e0000, 0x0e0001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x0e8000, 0x0e8001) AM_WRITE(sound_command_w)
 	AM_RANGE(0x0f0000, 0x0f0001) AM_WRITE(sound_irq_w)
-	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x14c000, 0x153fff) AM_READWRITE(K052109_halfword_r, K052109_halfword_w)
-	AM_RANGE(0x180000, 0x19ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_BASE(&gradius3_gfxram) AM_SHARE(2)
+	AM_RANGE(0x180000, 0x19ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_BASE(&gradius3_gfxram) AM_SHARE("share2")
 ADDRESS_MAP_END
 
 
@@ -196,9 +205,9 @@ static ADDRESS_MAP_START( gradius3_map2, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
 	AM_RANGE(0x140000, 0x140001) AM_WRITE(cpuB_irqenable_w)
-	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x24c000, 0x253fff) AM_READWRITE(K052109_halfword_r, K052109_halfword_w)
-	AM_RANGE(0x280000, 0x29ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_SHARE(2)
+	AM_RANGE(0x280000, 0x29ffff) AM_RAM_WRITE(gradius3_gfxram_w) AM_SHARE("share2")
 	AM_RANGE(0x2c0000, 0x2c000f) AM_READWRITE(K051937_halfword_r, K051937_halfword_w)
 	AM_RANGE(0x2c0800, 0x2c0fff) AM_READWRITE(K051960_halfword_r, K051960_halfword_w)
 	AM_RANGE(0x400000, 0x5fffff) AM_READ(gradius3_gfxrom_r)		/* gfx ROMs are mapped here, and copied to RAM */
@@ -210,7 +219,7 @@ static ADDRESS_MAP_START( gradius3_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xf000) AM_DEVWRITE("konami", sound_bank_w)				/* 007232 bankswitch */
 	AM_RANGE(0xf010, 0xf010) AM_READ(soundlatch_r)
 	AM_RANGE(0xf020, 0xf02d) AM_DEVREADWRITE("konami", k007232_r, k007232_w)
-	AM_RANGE(0xf030, 0xf031) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xf030, 0xf031) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -287,6 +296,22 @@ static const k007232_interface k007232_config =
 
 
 
+static const k052109_interface gradius3_k052109_intf =
+{
+	"gfx1", 0,
+	GRADIUS3_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_NONE,
+	gradius3_tile_callback
+};
+
+static const k051960_interface gradius3_k051960_intf =
+{
+	"gfx2", 1,
+	GRADIUS3_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	gradius3_sprite_callback
+};
+
 static MACHINE_DRIVER_START( gradius3 )
 
 	/* basic machine hardware */
@@ -321,10 +346,13 @@ static MACHINE_DRIVER_START( gradius3 )
 	MDRV_VIDEO_START(gradius3)
 	MDRV_VIDEO_UPDATE(gradius3)
 
+	MDRV_K052109_ADD("k052109", gradius3_k052109_intf)
+	MDRV_K051960_ADD("k051960", gradius3_k051960_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 
@@ -471,13 +499,7 @@ ROM_START( gradius3e )
 ROM_END
 
 
-static DRIVER_INIT( gradius3 )
-{
-	konami_rom_deinterleave_2(machine, "gfx2");
-}
 
-
-
-GAME( 1989, gradius3, 0,        gradius3, gradius3, gradius3, ROT0, "Konami", "Gradius III (Japan)", 0 )
-GAME( 1989, gradius3a, gradius3, gradius3, gradius3, gradius3, ROT0, "Konami", "Gradius III (Asia)", 0 )
-GAME( 1989, gradius3e, gradius3, gradius3, gradius3, gradius3, ROT0, "Konami", "Gradius III (World ?)", 0 )
+GAME( 1989, gradius3, 0,        gradius3, gradius3, 0, ROT0, "Konami", "Gradius III (Japan)", 0 )
+GAME( 1989, gradius3a, gradius3, gradius3, gradius3, 0, ROT0, "Konami", "Gradius III (Asia)", 0 )
+GAME( 1989, gradius3e, gradius3, gradius3, gradius3, 0, ROT0, "Konami", "Gradius III (World ?)", 0 )

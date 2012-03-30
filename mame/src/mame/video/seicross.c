@@ -10,7 +10,9 @@
 
 UINT8 *seicross_row_scroll;
 
-static tilemap *bg_tilemap;
+UINT8 *seicross_videoram;
+UINT8 *seicross_colorram;
+static tilemap_t *bg_tilemap;
 
 /***************************************************************************
 
@@ -58,7 +60,7 @@ PALETTE_INIT( seicross )
 
 WRITE8_HANDLER( seicross_videoram_w )
 {
-	videoram[offset] = data;
+	seicross_videoram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
@@ -69,8 +71,8 @@ WRITE8_HANDLER( seicross_colorram_w )
 	/* region. */
 	offset &= 0xffdf;
 
-	colorram[offset] = data;
-	colorram[offset + 0x20] = data;
+	seicross_colorram[offset] = data;
+	seicross_colorram[offset + 0x20] = data;
 
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 	tilemap_mark_tile_dirty(bg_tilemap, offset + 0x20);
@@ -78,9 +80,9 @@ WRITE8_HANDLER( seicross_colorram_w )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index] + ((colorram[tile_index] & 0x10) << 4);
-	int color = colorram[tile_index] & 0x0f;
-	int flags = ((colorram[tile_index] & 0x40) ? TILE_FLIPX : 0) | ((colorram[tile_index] & 0x80) ? TILE_FLIPY : 0);
+	int code = seicross_videoram[tile_index] + ((seicross_colorram[tile_index] & 0x10) << 4);
+	int color = seicross_colorram[tile_index] & 0x0f;
+	int flags = ((seicross_colorram[tile_index] & 0x40) ? TILE_FLIPX : 0) | ((seicross_colorram[tile_index] & 0x80) ? TILE_FLIPY : 0);
 
 	SET_TILE_INFO(0, code, color, flags);
 }
@@ -95,9 +97,11 @@ VIDEO_START( seicross )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
+	UINT8 *spriteram_2 = machine->generic.spriteram2.u8;
 	int offs;
 
-	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		int x = spriteram[offs + 3];
 		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
@@ -113,7 +117,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 					x-256,240-spriteram[offs + 2],0);
 	}
 
-	for (offs = spriteram_2_size - 4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram2_size - 4;offs >= 0;offs -= 4)
 	{
 		int x = spriteram_2[offs + 3];
 		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],

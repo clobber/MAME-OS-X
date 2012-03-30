@@ -26,14 +26,14 @@ static int pitnrun_scroll;
 static int pitnrun_char_bank;
 static int pitnrun_color_select;
 static bitmap_t *tmp_bitmap[4];
-static tilemap *bg, *fg;
+static tilemap_t *bg, *fg;
 UINT8* pitnrun_videoram2;
 
 
 static TILE_GET_INFO( get_tile_info1 )
 {
 	int code;
-	code = videoram[tile_index];
+	code = machine->generic.videoram.u8[tile_index];
 	SET_TILE_INFO(
 		0,
 		code,
@@ -54,7 +54,7 @@ static TILE_GET_INFO( get_tile_info2 )
 
 WRITE8_HANDLER( pitnrun_videoram_w )
 {
-	videoram[offset] = data;
+	space->machine->generic.videoram.u8[offset] = data;
 	tilemap_mark_all_tiles_dirty( fg );
 }
 
@@ -109,13 +109,13 @@ static void pitnrun_spotlights(running_machine *machine)
 	 for(y=0;y<128;y++)
 	  for(x=0;x<16;x++)
 	  {
-	  	datapix=ROM[128*16*i+x+y*16];
-	  	for(b=0;b<8;b++)
-	  	{
+		datapix=ROM[128*16*i+x+y*16];
+		for(b=0;b<8;b++)
+		{
 			*BITMAP_ADDR16(tmp_bitmap[i], y, x*8+(7-b)) = (datapix&1);
 			datapix>>=1;
 		}
- 	  }
+	  }
 }
 
 
@@ -179,6 +179,7 @@ VIDEO_START(pitnrun)
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int sx, sy, flipx, flipy, offs,pal;
 
 	for (offs = 0 ; offs < 0x100; offs+=4)
@@ -203,7 +204,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 		}
 
 		drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
- 			(spriteram[offs+1]&0x3f)+((spriteram[offs+2]&0x80)>>1)+((spriteram[offs+2]&0x40)<<1),
+			(spriteram[offs+1]&0x3f)+((spriteram[offs+2]&0x80)>>1)+((spriteram[offs+2]&0x40)<<1),
 			pal,
 			flipx,flipy,
 			sx,sy,0);

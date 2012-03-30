@@ -107,9 +107,9 @@
 #include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
-#include "decocrpt.h"
-#include "decoprot.h"
-#include "deco16ic.h"
+#include "includes/decocrpt.h"
+#include "includes/decoprot.h"
+#include "includes/deco16ic.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
 
@@ -165,8 +165,8 @@ static ADDRESS_MAP_START( rohga_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x3cc000, 0x3ccfff) AM_MIRROR(0x1000) AM_RAM AM_BASE(&deco16_pf3_rowscroll)
 	AM_RANGE(0x3ce000, 0x3cefff) AM_MIRROR(0x1000) AM_RAM AM_BASE(&deco16_pf4_rowscroll)
 
-	AM_RANGE(0x3d0000, 0x3d07ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x3e0000, 0x3e1fff) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x3d0000, 0x3d07ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x3e0000, 0x3e1fff) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x3f0000, 0x3f3fff) AM_RAM /* Main ram */
 ADDRESS_MAP_END
 
@@ -189,12 +189,12 @@ static ADDRESS_MAP_START( wizdfire_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x320002, 0x320003) AM_WRITENOP /* ? */
 	AM_RANGE(0x320004, 0x320005) AM_WRITE(wizdfire_irq_ack_w) /* VBL IRQ ack */
 
-	AM_RANGE(0x340000, 0x3407ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x340000, 0x3407ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x350000, 0x350001) AM_WRITE(buffer_spriteram16_w) /* Triggers DMA for spriteram */
-	AM_RANGE(0x360000, 0x3607ff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size)
+	AM_RANGE(0x360000, 0x3607ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0x370000, 0x370001) AM_WRITE(buffer_spriteram16_2_w) /* Triggers DMA for spriteram */
 
-	AM_RANGE(0x380000, 0x381fff) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x380000, 0x381fff) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x390008, 0x390009) AM_WRITE(deco16_palette_dma_w)
 
 	AM_RANGE(0xfe4000, 0xfe47ff) AM_READWRITE(deco16_104_prot_r,deco16_104_prot_w) AM_BASE(&deco16_prot_ram) /* Protection device */
@@ -221,12 +221,12 @@ static ADDRESS_MAP_START( nitrobal_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x320002, 0x320003) AM_WRITENOP /* ? */
 	AM_RANGE(0x320004, 0x320005) AM_WRITE(wizdfire_irq_ack_w) /* VBL IRQ ack */
 
-	AM_RANGE(0x340000, 0x3407ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x340000, 0x3407ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x350000, 0x350001) AM_WRITE(buffer_spriteram16_w) /* Triggers DMA for spriteram */
-	AM_RANGE(0x360000, 0x3607ff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size)
+	AM_RANGE(0x360000, 0x3607ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0x370000, 0x370001) AM_WRITE(buffer_spriteram16_2_w) /* Triggers DMA for spriteram */
 
-	AM_RANGE(0x380000, 0x381fff) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x380000, 0x381fff) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x390008, 0x390009) AM_WRITE(deco16_palette_dma_w)
 
 	AM_RANGE(0xfec000, 0xff3fff) AM_RAM
@@ -258,8 +258,8 @@ static ADDRESS_MAP_START( schmeisr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x3cc000, 0x3ccfff) AM_MIRROR(0x1000) AM_RAM AM_BASE(&deco16_pf3_rowscroll)
 	AM_RANGE(0x3ce000, 0x3cefff) AM_MIRROR(0x1000) AM_RAM AM_BASE(&deco16_pf4_rowscroll)
 
-	AM_RANGE(0x3d0000, 0x3d07ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x3e0000, 0x3e1fff) AM_MIRROR(0x2000) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x3d0000, 0x3d07ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x3e0000, 0x3e1fff) AM_MIRROR(0x2000) AM_RAM_WRITE(deco16_buffered_palette_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xff0000, 0xff7fff) AM_RAM /* Main ram */
 ADDRESS_MAP_END
 
@@ -269,11 +269,11 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( rohga_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP
-	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
+	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
 	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r,okim6295_w)
 	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r,okim6295_w)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -773,7 +773,7 @@ static MACHINE_DRIVER_START( rohga )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.78)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.78)
@@ -818,7 +818,7 @@ static MACHINE_DRIVER_START( wizdfire )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
@@ -863,7 +863,7 @@ static MACHINE_DRIVER_START( nitrobal )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
@@ -908,7 +908,7 @@ static MACHINE_DRIVER_START( schmeisr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, 32220000/9)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 32220000/9)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)

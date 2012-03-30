@@ -42,11 +42,12 @@ To do:
                               Tilemaps Access
 ***************************************************************************/
 
+static UINT8	*bishjan_colorram;
 static UINT8	*bishjan_videoram_1_lo,	*bishjan_videoram_1_hi;
 static UINT8	*bishjan_videoram_2_lo,	*bishjan_videoram_2_hi;
 
-static tilemap	*tmap_1;
-static tilemap	*tmap_2;
+static tilemap_t	*tmap_1;
+static tilemap_t	*tmap_2;
 
 static TILE_GET_INFO( get_tile_info_1 )	{	SET_TILE_INFO(0, (bishjan_videoram_1_hi[ tile_index ] << 8) + bishjan_videoram_1_lo[ tile_index ], 0, 0);	}
 static TILE_GET_INFO( get_tile_info_2 )	{	SET_TILE_INFO(0, (bishjan_videoram_2_hi[ tile_index ] << 8) + bishjan_videoram_2_lo[ tile_index ], 0, 0);	}
@@ -227,7 +228,7 @@ static VIDEO_START(bishjan)
 
 	bishjan_videoram_2_hi = auto_alloc_array(machine, UINT8, 0x80 * 0x40);
 
-	colorram = auto_alloc_array(machine, UINT8, 256*3);
+	bishjan_colorram = auto_alloc_array(machine, UINT8, 256*3);
 }
 
 static VIDEO_UPDATE( bishjan )
@@ -282,11 +283,11 @@ static WRITE8_HANDLER(colordac_w)
 			break;
 
 		case 1:
-			colorram[colordac_offs] = data;
+			bishjan_colorram[colordac_offs] = data;
 			palette_set_color_rgb(space->machine, colordac_offs/3,
-				pal6bit(colorram[(colordac_offs/3)*3+0]),
-				pal6bit(colorram[(colordac_offs/3)*3+1]),
-				pal6bit(colorram[(colordac_offs/3)*3+2])
+				pal6bit(bishjan_colorram[(colordac_offs/3)*3+0]),
+				pal6bit(bishjan_colorram[(colordac_offs/3)*3+1]),
+				pal6bit(bishjan_colorram[(colordac_offs/3)*3+2])
 			);
 			colordac_offs = (colordac_offs+1) % (256*3);
 			break;
@@ -357,7 +358,7 @@ static WRITE16_HANDLER( bishjan_coin_w )
 	{
 		// coin out         data & 0x01;
 		bishjan_hopper	=	data & 0x02;	// hopper
-		coin_counter_w( 1,	data & 0x10 );
+		coin_counter_w(space->machine, 1,	data & 0x10 );
 	}
 }
 
@@ -367,7 +368,7 @@ static ADDRESS_MAP_START( bishjan_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x000000, 0x07ffff ) AM_ROM AM_REGION("maincpu", 0)
 	AM_RANGE( 0x080000, 0x0fffff ) AM_ROM AM_REGION("maincpu", 0)
 
-	AM_RANGE( 0x200000, 0x207fff ) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)	// battery
+	AM_RANGE( 0x200000, 0x207fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// battery
 
 
 	// read lo (2)   (only half tilemap?)
@@ -490,7 +491,7 @@ static MACHINE_RESET( saklove )
 }
 
 static ADDRESS_MAP_START( saklove_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x00000, 0x07fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	// battery
+	AM_RANGE(0x00000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// battery
 
 	// read lo (2)   (only half tilemap?)
 	AM_RANGE(0x12000, 0x12fff) AM_READWRITE( bishjan_videoram_2_lo_r, bishjan_videoram_2_lo_w )
@@ -516,7 +517,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( saklove_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0020, 0x0020) AM_DEVREADWRITE( "oki", okim6295_r, okim6295_w )
-	AM_RANGE(0x0040, 0x0041) AM_DEVWRITE( "ym", ym3812_w )
+	AM_RANGE(0x0040, 0x0041) AM_DEVWRITE( "ymsnd", ym3812_w )
 
 	AM_RANGE(0x0060, 0x0062) AM_WRITE( colordac_w )
 
@@ -883,7 +884,7 @@ static MACHINE_DRIVER_START( saklove )
 	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("ym", YM3812, XTAL_12MHz / 4)	// ? chip and clock unknown
+	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_12MHz / 4)	// ? chip and clock unknown
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_DRIVER_END
 

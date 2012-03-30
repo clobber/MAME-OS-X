@@ -222,11 +222,11 @@ static void jantouki_sound_callback(const device_config *device, int state)
 
 static WRITE8_HANDLER( dynax_coincounter_0_w )
 {
-	coin_counter_w(0, data);
+	coin_counter_w(space->machine, 0, data);
 }
 static WRITE8_HANDLER( dynax_coincounter_1_w )
 {
-	coin_counter_w(1, data);
+	coin_counter_w(space->machine, 1, data);
 }
 
 static READ8_HANDLER( ret_ff )	{	return 0xff;	}
@@ -271,13 +271,13 @@ static WRITE8_HANDLER( hanamai_keyboard_w )
 static WRITE8_HANDLER( dynax_rombank_w )
 {
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
-	memory_set_bankptr(space->machine, 1,&ROM[0x08000+0x8000*(data & 0x0f)]);
+	memory_set_bankptr(space->machine, "bank1",&ROM[0x08000+0x8000*(data & 0x0f)]);
 }
 
 static WRITE8_HANDLER( jantouki_sound_rombank_w )
 {
 	UINT8 *ROM = memory_region(space->machine, "soundcpu");
-	memory_set_bankptr(space->machine, 2,&ROM[0x08000+0x8000*data]);
+	memory_set_bankptr(space->machine, "bank2",&ROM[0x08000+0x8000*data]);
 }
 
 
@@ -287,7 +287,7 @@ static WRITE8_HANDLER( hnoridur_rombank_w )
 {
 	UINT8 *ROM = memory_region(space->machine, "maincpu") + 0x10000 + 0x8000*data;
 //logerror("%04x: rom bank = %02x\n",cpu_get_pc(space->cpu),data);
-	memory_set_bankptr(space->machine, 1,ROM);
+	memory_set_bankptr(space->machine, "bank1",ROM);
 	hnoridur_bank = data;
 }
 
@@ -457,57 +457,57 @@ static WRITE8_HANDLER( yarunara_layer_half2_w )
 
 static ADDRESS_MAP_START( sprtmtch_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x6fff ) AM_ROM
-	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK(1)
+	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( hnoridur_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x6fff ) AM_ROM
-	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE( 0x8000, 0xffff ) AM_READWRITE(SMH_BANK(1), hnoridur_palette_w)
+	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE( 0x8000, 0xffff ) AM_READ_BANK("bank1") AM_WRITE(hnoridur_palette_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mcnpshnt_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x5fff ) AM_ROM
 	AM_RANGE( 0x6000, 0x6fff ) AM_RAM
-	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE( 0x8000, 0xffff ) AM_READWRITE(SMH_BANK(1), hnoridur_palette_w)
+	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE( 0x8000, 0xffff ) AM_READ_BANK("bank1") AM_WRITE(hnoridur_palette_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( nanajign_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x5fff ) AM_ROM
 	AM_RANGE( 0x6000, 0x6fff ) AM_RAM
-	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE( 0x8000, 0x80ff ) AM_WRITE(nanajign_palette_w	)
-	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK(1)
+	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mjdialq2_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0800, 0x0fff ) AM_RAM
-	AM_RANGE( 0x1000, 0x1fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE( 0x1000, 0x1fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE( 0x0000, 0x7fff ) AM_ROM
-	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK(1)
+	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( yarunara_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x5fff ) AM_ROM
 	AM_RANGE( 0x6000, 0x6fff ) AM_RAM
-	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK(1)
+	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK("bank1")
 	AM_RANGE( 0x8000, 0x81ff ) AM_WRITE(yarunara_palette_w	)	// Palette or RTC
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( jantouki_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x5fff ) AM_ROM
 	AM_RANGE( 0x6000, 0x6fff ) AM_RAM
-	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK(1)
+	AM_RANGE( 0x7000, 0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( jantouki_sound_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x6fff ) AM_ROM
 	AM_RANGE( 0x7000, 0x7fff ) AM_RAM
-	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK(2)
+	AM_RANGE( 0x8000, 0xffff ) AM_ROMBANK("bank2")
 ADDRESS_MAP_END
 
 
@@ -540,10 +540,10 @@ static ADDRESS_MAP_START( hanamai_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x74, 0x74 ) AM_WRITE		( dynax_blitter_ack_w		)	// Blitter IRQ Ack
 	AM_RANGE( 0x76, 0x76 ) AM_WRITE		( dynax_blit_palbank_w		)	// Layers Palettes (High Bit)
 	AM_RANGE( 0x77, 0x77 ) AM_WRITE		( hanamai_layer_half_w		)	// half of the interleaved layer to write to
-	AM_RANGE( 0x78, 0x79 ) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w	)	// 2 x DSW
-	AM_RANGE( 0x7a, 0x7b ) AM_DEVWRITE	( "ay", ay8910_address_data_w	)	// AY8910
-//  AM_RANGE( 0x7c, 0x7c ) AM_WRITE     ( SMH_NOP                  )   // CRT Controller
-//  AM_RANGE( 0x7d, 0x7d ) AM_WRITE     ( SMH_NOP                  )   //
+	AM_RANGE( 0x78, 0x79 ) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w	)	// 2 x DSW
+	AM_RANGE( 0x7a, 0x7b ) AM_DEVWRITE	( "aysnd", ay8910_address_data_w	)	// AY8910
+//  AM_RANGE( 0x7c, 0x7c ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x7d, 0x7d ) AM_WRITENOP   //
 	AM_RANGE( 0x7e, 0x7e ) AM_WRITE		( dynax_blit_romregion_w	)	// Blitter ROM bank
 ADDRESS_MAP_END
 
@@ -551,8 +551,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( hnoridur_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x01, 0x07 ) AM_WRITE	( dynax_blitter_rev2_w		)	// Blitter
-//  AM_RANGE( 0x10, 0x10 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
-//  AM_RANGE( 0x11, 0x11 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
+//  AM_RANGE( 0x10, 0x10 ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x11, 0x11 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x20, 0x20 ) AM_WRITE	( hanamai_keyboard_w		)	// keyboard row select
 	AM_RANGE( 0x21, 0x21 ) AM_READ_PORT	( "COINS"				)	// Coins
 	AM_RANGE( 0x22, 0x22 ) AM_READ	( hanamai_keyboard_1_r		)	// P2
@@ -560,12 +560,12 @@ static ADDRESS_MAP_START( hnoridur_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x24, 0x24 ) AM_READ_PORT	( "DSW1"				)	// DSW2
 	AM_RANGE( 0x25, 0x25 ) AM_READ_PORT	( "DSW3"				)	// DSW4
 	AM_RANGE( 0x26, 0x26 ) AM_READ_PORT	( "DSW2"				)	// DSW3
-	AM_RANGE( 0x30, 0x30 ) AM_DEVWRITE	( "msm", adpcm_reset_w 	)	// MSM5205 reset
+	AM_RANGE( 0x30, 0x30 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x32, 0x32 ) AM_WRITE	( adpcm_data_w				)	// MSM5205 data
-	AM_RANGE( 0x34, 0x35 ) AM_DEVWRITE( "ym", ym2413_w	)	//
-	AM_RANGE( 0x36, 0x36 ) AM_DEVREAD	( "ay", ay8910_r			)	// AY8910, DSW1
-	AM_RANGE( 0x38, 0x38 ) AM_DEVWRITE	( "ay", ay8910_data_w	)	// AY8910
-	AM_RANGE( 0x3a, 0x3a ) AM_DEVWRITE	( "ay", ay8910_address_w	)	//
+	AM_RANGE( 0x34, 0x35 ) AM_DEVWRITE( "ymsnd", ym2413_w	)	//
+	AM_RANGE( 0x36, 0x36 ) AM_DEVREAD	( "aysnd", ay8910_r			)	// AY8910, DSW1
+	AM_RANGE( 0x38, 0x38 ) AM_DEVWRITE	( "aysnd", ay8910_data_w	)	// AY8910
+	AM_RANGE( 0x3a, 0x3a ) AM_DEVWRITE	( "aysnd", ay8910_address_w	)	//
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE	( dynax_blit_pen_w			)	// Destination Pen
 	AM_RANGE( 0x41, 0x41 ) AM_WRITE	( dynax_blit_dest_w			)	// Destination Layer
 	AM_RANGE( 0x42, 0x42 ) AM_WRITE	( dynax_blit_palette01_w	)	// Layers Palettes
@@ -577,7 +577,7 @@ static ADDRESS_MAP_START( hnoridur_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x50, 0x50 ) AM_WRITE	( dynax_extra_scrollx_w		)	// screen scroll X
 	AM_RANGE( 0x51, 0x51 ) AM_WRITE	( dynax_extra_scrolly_w		)	// screen scroll Y
 	AM_RANGE( 0x54, 0x54 ) AM_WRITE	( hnoridur_rombank_w		)	// BANK ROM Select
-	AM_RANGE( 0x55, 0x55 ) AM_WRITE	( SMH_NOP					)	// ? VBlank IRQ Ack
+	AM_RANGE( 0x55, 0x55 ) AM_WRITENOP	// ? VBlank IRQ Ack
 	AM_RANGE( 0x56, 0x56 ) AM_WRITE	( dynax_vblank_ack_w		)	// VBlank IRQ Ack
 	AM_RANGE( 0x57, 0x57 ) AM_READ	( ret_ff					)	// ?
 	AM_RANGE( 0x60, 0x60 ) AM_WRITE	( dynax_flipscreen_w		)	// Flip Screen
@@ -599,7 +599,7 @@ static WRITE8_HANDLER( hjingi_bank_w )
 
 static WRITE8_HANDLER( hjingi_lockout_w )
 {
-	coin_lockout_w(0, (~data) & 0x01);
+	coin_lockout_w(space->machine, 0, (~data) & 0x01);
 }
 
 static UINT8 hjingi_hopper;
@@ -608,7 +608,7 @@ static WRITE8_HANDLER( hjingi_hopper_w )
 	hjingi_hopper = data & 0x01;
 }
 
-UINT8 hjingi_hopper_bit(running_machine *machine)
+static UINT8 hjingi_hopper_bit(running_machine *machine)
 {
 	return (hjingi_hopper && !(video_screen_get_frame_number(machine->primary_screen)%10)) ? 0 : (1<<6);
 }
@@ -624,16 +624,16 @@ static READ8_HANDLER( hjingi_keyboard_1_r )
 
 static ADDRESS_MAP_START( hjingi_mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x01ff ) AM_ROM
-	AM_RANGE( 0x0200, 0x1fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE( 0x0200, 0x1fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE( 0x2000, 0x7fff ) AM_ROM
-	AM_RANGE( 0x8000, 0xffff ) AM_READWRITE(SMH_BANK(1), hnoridur_palette_w)
+	AM_RANGE( 0x8000, 0xffff ) AM_READ_BANK("bank1") AM_WRITE(hnoridur_palette_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( hjingi_io_map, ADDRESS_SPACE_IO, 8 )	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x01, 0x07 ) AM_WRITE	( dynax_blitter_rev2_w		)	// Blitter
 
-//  AM_RANGE( 0x10, 0x10 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
-//  AM_RANGE( 0x11, 0x11 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
+//  AM_RANGE( 0x10, 0x10 ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x11, 0x11 ) AM_WRITENOP   // CRT Controller
 
 	AM_RANGE( 0x20, 0x20 ) AM_WRITE	( hanamai_keyboard_w		)	// keyboard row select
 	AM_RANGE( 0x21, 0x21 ) AM_READ_PORT	( "COINS"				)	// Coins
@@ -643,13 +643,13 @@ static ADDRESS_MAP_START( hjingi_io_map, ADDRESS_SPACE_IO, 8 )	ADDRESS_MAP_GLOBA
 	AM_RANGE( 0x25, 0x25 ) AM_READ_PORT	( "DSW3"				)	// DSW3
 	AM_RANGE( 0x26, 0x26 ) AM_READ_PORT	( "DSW2"				)	// DSW2
 
-	AM_RANGE( 0x30, 0x30 ) AM_DEVWRITE	( "msm", adpcm_reset_w 	)	// MSM5205 reset
+	AM_RANGE( 0x30, 0x30 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x32, 0x32 ) AM_WRITE	( adpcm_data_w				)	// MSM5205 data
-	AM_RANGE( 0x34, 0x35 ) AM_DEVWRITE( "ym", ym2413_w			)	//
+	AM_RANGE( 0x34, 0x35 ) AM_DEVWRITE( "ymsnd", ym2413_w			)	//
 
-	AM_RANGE( 0x36, 0x36 ) AM_DEVREAD	( "ay", ay8910_r		)	// AY8910, DSW1
-	AM_RANGE( 0x38, 0x38 ) AM_DEVWRITE	( "ay", ay8910_data_w	)	// AY8910
-	AM_RANGE( 0x3a, 0x3a ) AM_DEVWRITE	( "ay", ay8910_address_w)	//
+	AM_RANGE( 0x36, 0x36 ) AM_DEVREAD	( "aysnd", ay8910_r		)	// AY8910, DSW1
+	AM_RANGE( 0x38, 0x38 ) AM_DEVWRITE	( "aysnd", ay8910_data_w	)	// AY8910
+	AM_RANGE( 0x3a, 0x3a ) AM_DEVWRITE	( "aysnd", ay8910_address_w)	//
 
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE	( dynax_blit_pen_w			)	// Destination Pen
 	AM_RANGE( 0x41, 0x41 ) AM_WRITE	( dynax_blit_dest_w			)	// Destination Layer
@@ -747,7 +747,7 @@ static READ8_HANDLER( yarunara_input_r )
 static WRITE8_HANDLER( yarunara_rombank_w )
 {
 	UINT8 *rom = memory_region(space->machine, "maincpu") + 0x10000 + 0x8000 * data;
-	memory_set_bankptr(space->machine, 1, rom);
+	memory_set_bankptr(space->machine, "bank1", rom);
 
 	hnoridur_bank = data;
 }
@@ -781,9 +781,9 @@ static ADDRESS_MAP_START( yarunara_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x11, 0x17 ) AM_WRITE	( dynax_blitter_rev2_w		)	// Blitter
 	AM_RANGE( 0x20, 0x20 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x22, 0x22 ) AM_WRITE	( adpcm_data_w				)	// MSM5205 data
-	AM_RANGE( 0x24, 0x25 ) AM_DEVWRITE( "ym", ym2413_w	)	//
-	AM_RANGE( 0x28, 0x28 ) AM_DEVWRITE	( "ay", ay8910_data_w	)	// AY8910
-	AM_RANGE( 0x2a, 0x2a ) AM_DEVWRITE	( "ay", ay8910_address_w	)	//
+	AM_RANGE( 0x24, 0x25 ) AM_DEVWRITE( "ymsnd", ym2413_w	)	//
+	AM_RANGE( 0x28, 0x28 ) AM_DEVWRITE	( "aysnd", ay8910_data_w	)	// AY8910
+	AM_RANGE( 0x2a, 0x2a ) AM_DEVWRITE	( "aysnd", ay8910_address_w	)	//
 	AM_RANGE( 0x48, 0x48 ) AM_WRITE	( dynax_extra_scrollx_w		)	// screen scroll X
 	AM_RANGE( 0x49, 0x49 ) AM_WRITE	( dynax_extra_scrolly_w		)	// screen scroll Y
 	AM_RANGE( 0x4a, 0x4a ) AM_WRITE	( yarunara_rombank_w		)	// BANK ROM Select
@@ -810,8 +810,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mcnpshnt_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x01, 0x07 ) AM_WRITE	( dynax_blitter_rev2_w		)	// Blitter
-//  AM_RANGE( 0x10, 0x10 ) AM_WRITE ( SMH_NOP                  )   // CRT Controller
-//  AM_RANGE( 0x11, 0x11 ) AM_WRITE ( SMH_NOP                  )   // CRT Controller
+//  AM_RANGE( 0x10, 0x10 ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x11, 0x11 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x20, 0x20 ) AM_WRITE	( hanamai_keyboard_w		)	// keyboard row select
 	AM_RANGE( 0x21, 0x21 ) AM_READ_PORT	( "COINS"				)	// Coins
 	AM_RANGE( 0x22, 0x22 ) AM_READ	( hanamai_keyboard_1_r		)	// P2
@@ -820,9 +820,9 @@ static ADDRESS_MAP_START( mcnpshnt_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x26, 0x26 ) AM_READ_PORT	( "DSW1"				)	// DSW3
 	AM_RANGE( 0x30, 0x30 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x32, 0x32 ) AM_WRITE	( adpcm_data_w				)	// MSM5205 data
-	AM_RANGE( 0x34, 0x35 ) AM_DEVWRITE( "ym", ym2413_w	)	//
-	AM_RANGE( 0x38, 0x38 ) AM_DEVWRITE	( "ay", ay8910_data_w	)	// AY8910
-	AM_RANGE( 0x3a, 0x3a ) AM_DEVWRITE	( "ay", ay8910_address_w	)	//
+	AM_RANGE( 0x34, 0x35 ) AM_DEVWRITE( "ymsnd", ym2413_w	)	//
+	AM_RANGE( 0x38, 0x38 ) AM_DEVWRITE	( "aysnd", ay8910_data_w	)	// AY8910
+	AM_RANGE( 0x3a, 0x3a ) AM_DEVWRITE	( "aysnd", ay8910_address_w	)	//
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE	( dynax_blit_pen_w			)	// Destination Pen
 	AM_RANGE( 0x41, 0x41 ) AM_WRITE	( dynax_blit_dest_w			)	// Destination Layer
 	AM_RANGE( 0x42, 0x42 ) AM_WRITE	( dynax_blit_palette01_w	)	// Layers Palettes
@@ -848,9 +848,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sprtmtch_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x01, 0x07 ) AM_WRITE		( dynax_blitter_rev2_w		)	// Blitter
-	AM_RANGE( 0x10, 0x11 ) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w	)	// 2 x DSW
-//  AM_RANGE( 0x12, 0x12 ) AM_WRITE     ( SMH_NOP                   )   // CRT Controller
-//  AM_RANGE( 0x13, 0x13 ) AM_WRITE     ( SMH_NOP                   )   // CRT Controller
+	AM_RANGE( 0x10, 0x11 ) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w	)	// 2 x DSW
+//  AM_RANGE( 0x12, 0x12 ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x13, 0x13 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x20, 0x20 ) AM_READ_PORT	( "P1"						)	// P1
 	AM_RANGE( 0x21, 0x21 ) AM_READ_PORT	( "P2"						)	// P2
 	AM_RANGE( 0x22, 0x22 ) AM_READ_PORT	( "COINS"					)	// Coins
@@ -886,16 +886,16 @@ static ADDRESS_MAP_START( mjfriday_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x15, 0x15 ) AM_WRITE	( dynax_coincounter_1_w		)	//
 	AM_RANGE( 0x16, 0x17 ) AM_WRITE	( mjdialq2_layer_enable_w	)	// Layers Enable
 	AM_RANGE( 0x41, 0x47 ) AM_WRITE	( dynax_blitter_rev2_w		)	// Blitter
-//  AM_RANGE( 0x50, 0x50 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
-//  AM_RANGE( 0x51, 0x51 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
+//  AM_RANGE( 0x50, 0x50 ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x51, 0x51 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x60, 0x60 ) AM_WRITE	( hanamai_keyboard_w		)	// keyboard row select
 	AM_RANGE( 0x61, 0x61 ) AM_READ_PORT	( "COINS"				)	// Coins
 	AM_RANGE( 0x62, 0x62 ) AM_READ	( hanamai_keyboard_1_r		)	// P2
 	AM_RANGE( 0x63, 0x63 ) AM_READ	( hanamai_keyboard_0_r		)	// P1
 	AM_RANGE( 0x64, 0x64 ) AM_READ_PORT	( "DSW0"				)	// DSW
 	AM_RANGE( 0x67, 0x67 ) AM_READ_PORT	( "DSW1"				)	// DSW
-	AM_RANGE( 0x70, 0x71 ) AM_DEVWRITE ( "ym", ym2413_w )	//
-//  AM_RANGE( 0x80, 0x80 ) AM_WRITE ( SMH_NOP                   )   // IRQ ack?
+	AM_RANGE( 0x70, 0x71 ) AM_DEVWRITE ( "ymsnd", ym2413_w )	//
+//  AM_RANGE( 0x80, 0x80 ) AM_WRITENOP   // IRQ ack?
 ADDRESS_MAP_END
 
 
@@ -903,9 +903,9 @@ static ADDRESS_MAP_START( nanajign_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x00, 0x00 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x02, 0x02 ) AM_WRITE	( adpcm_data_w				)	// MSM5205 data
-	AM_RANGE( 0x04, 0x05 ) AM_DEVWRITE( "ym", ym2413_w	)	//
-	AM_RANGE( 0x08, 0x08 ) AM_DEVWRITE	( "ay", ay8910_data_w	)	// AY8910
-	AM_RANGE( 0x0a, 0x0a ) AM_DEVWRITE	( "ay", ay8910_address_w	)	//
+	AM_RANGE( 0x04, 0x05 ) AM_DEVWRITE( "ymsnd", ym2413_w	)	//
+	AM_RANGE( 0x08, 0x08 ) AM_DEVWRITE	( "aysnd", ay8910_data_w	)	// AY8910
+	AM_RANGE( 0x0a, 0x0a ) AM_DEVWRITE	( "aysnd", ay8910_address_w	)	//
 	AM_RANGE( 0x10, 0x10 ) AM_WRITE	( hanamai_keyboard_w		)	// keyboard row select
 	AM_RANGE( 0x11, 0x11 ) AM_READ_PORT	( "COINS"				)	// Coins
 	AM_RANGE( 0x12, 0x12 ) AM_READ	( hanamai_keyboard_1_r		)	// P2
@@ -913,7 +913,7 @@ static ADDRESS_MAP_START( nanajign_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x14, 0x14 ) AM_READ_PORT	( "DSW0"				)	// DSW1
 	AM_RANGE( 0x15, 0x15 ) AM_READ_PORT	( "DSW1"				)	// DSW2
 	AM_RANGE( 0x16, 0x16 ) AM_READ_PORT	( "DSW2"				)	// DSW3
-//  AM_RANGE( 0x20, 0x21 ) AM_WRITE ( SMH_NOP                   )   // CRT Controller
+//  AM_RANGE( 0x20, 0x21 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x31, 0x37 ) AM_WRITE	( dynax_blitter_rev2_w		)	// Blitter
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE	( dynax_coincounter_0_w		)	// Coin Counter
 	AM_RANGE( 0x50, 0x50 ) AM_WRITE	( dynax_flipscreen_w		)	// Flip Screen
@@ -968,13 +968,13 @@ static READ8_HANDLER( jantouki_blitter_busy_r )
 static WRITE8_HANDLER( jantouki_rombank_w )
 {
 	UINT8 *ROM = memory_region(space->machine, "maincpu");
-	memory_set_bankptr(space->machine, 1,&ROM[0x8000 + 0x8000*(data&0x0f)]);
-	set_led_status(0,data & 0x10);	// maybe
+	memory_set_bankptr(space->machine, "bank1",&ROM[0x8000 + 0x8000*(data&0x0f)]);
+	set_led_status(space->machine, 0,data & 0x10);	// maybe
 }
 
 static ADDRESS_MAP_START( jantouki_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-//  AM_RANGE( 0x40, 0x41 ) AM_WRITE ( SMH_NOP                  )   // CRT Controller
+//  AM_RANGE( 0x40, 0x41 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x48, 0x48 ) AM_WRITE	( jantouki_rombank_w		)	// BANK ROM Select
 	AM_RANGE( 0x49, 0x49 ) AM_WRITE	( jantouki_soundlatch_w		)	// To Sound CPU
 	AM_RANGE( 0x4a, 0x4a ) AM_READ	( jantouki_soundlatch_ack_r	)	// Soundlatch status
@@ -1031,9 +1031,9 @@ static ADDRESS_MAP_START( jantouki_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x00, 0x00 ) AM_WRITE		( jantouki_sound_rombank_w		)	// BANK ROM Select
 	AM_RANGE( 0x10, 0x10 ) AM_WRITE		( jantouki_sound_vblank_ack_w	)	// VBlank IRQ Ack
-	AM_RANGE( 0x21, 0x21 ) AM_DEVREAD	( "ay", ay8910_r			)	// AY8910
-	AM_RANGE( 0x22, 0x23 ) AM_DEVWRITE	( "ay", ay8910_data_address_w )	//
-	AM_RANGE( 0x28, 0x29 ) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)	//
+	AM_RANGE( 0x21, 0x21 ) AM_DEVREAD	( "aysnd", ay8910_r			)	// AY8910
+	AM_RANGE( 0x22, 0x23 ) AM_DEVWRITE	( "aysnd", ay8910_data_address_w )	//
+	AM_RANGE( 0x28, 0x29 ) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)	//
 	AM_RANGE( 0x30, 0x30 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE		( adpcm_data_w					)	// MSM5205 data
 	AM_RANGE( 0x50, 0x50 ) AM_READ		( jantouki_soundlatch_status_r	)	// Soundlatch status
@@ -1069,12 +1069,12 @@ static ADDRESS_MAP_START( mjelctrn_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x00, 0x00 ) AM_DEVWRITE	( "msm", adpcm_reset_w	)	// MSM5205 reset
 	AM_RANGE( 0x02, 0x02 ) AM_WRITE	( adpcm_data_w				)	// MSM5205 data
-	AM_RANGE( 0x04, 0x05 ) AM_DEVWRITE( "ym", ym2413_w	)	//
-	AM_RANGE( 0x08, 0x08 ) AM_DEVWRITE( "ay", ay8910_data_w	)	// AY8910
-	AM_RANGE( 0x0a, 0x0a ) AM_DEVWRITE( "ay", ay8910_address_w	)	//
+	AM_RANGE( 0x04, 0x05 ) AM_DEVWRITE( "ymsnd", ym2413_w	)	//
+	AM_RANGE( 0x08, 0x08 ) AM_DEVWRITE( "aysnd", ay8910_data_w	)	// AY8910
+	AM_RANGE( 0x0a, 0x0a ) AM_DEVWRITE( "aysnd", ay8910_address_w	)	//
 	AM_RANGE( 0x11, 0x12 ) AM_WRITE	( mjelctrn_blitter_ack_w	)	//?
-//  AM_RANGE( 0x20, 0x20 ) AM_WRITE ( SMH_NOP                  )   // CRT Controller
-//  AM_RANGE( 0x21, 0x21 ) AM_WRITE ( SMH_NOP                  )   // CRT Controller
+//  AM_RANGE( 0x20, 0x20 ) AM_WRITENOP   // CRT Controller
+//  AM_RANGE( 0x21, 0x21 ) AM_WRITENOP   // CRT Controller
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE	( dynax_coincounter_0_w		)	// Coin Counters
 	AM_RANGE( 0x41, 0x41 ) AM_WRITE	( dynax_coincounter_1_w		)	//
 	AM_RANGE( 0x60, 0x60 ) AM_WRITE	( dynax_extra_scrollx_w		)	// screen scroll X
@@ -1139,7 +1139,7 @@ static WRITE8_HANDLER( htengoku_coin_w )
 			// bit 0 = coin counter
 			// bit 1 = out counter
 			// bit 2 = hopper
-			coin_counter_w(0, data & 1);
+			coin_counter_w(space->machine, 0, data & 1);
 			htengoku_hopper = data & 0x04;
 #ifdef MAME_DEBUG
 //          popmessage("COINS %02x",data);
@@ -1185,7 +1185,7 @@ static READ8_HANDLER( htengoku_coin_r )
 static WRITE8_HANDLER( htengoku_rombank_w )
 {
 	UINT8 *rom = memory_region(space->machine, "maincpu") + 0x10000 + 0x8000 * (data & 0x7);
-	memory_set_bankptr(space->machine, 1, rom);
+	memory_set_bankptr(space->machine, "bank1", rom);
 
 	hnoridur_bank = data;
 }
@@ -1213,10 +1213,10 @@ static ADDRESS_MAP_START( htengoku_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x21, 0x21 ) AM_WRITE ( htengoku_coin_w			)	//
 	AM_RANGE( 0x22, 0x22 ) AM_READ	( htengoku_coin_r			)	//
 	AM_RANGE( 0x23, 0x23 ) AM_READ	( htengoku_input_r			)	//
-	AM_RANGE( 0x40, 0x40 ) AM_DEVWRITE	( "ay", ay8910_address_w	)	// AY8910
-	AM_RANGE( 0x42, 0x42 ) AM_DEVREAD  ( "ay", ay8910_r		)	//
-	AM_RANGE( 0x44, 0x44 ) AM_DEVWRITE	( "ay", ay8910_data_w)	//
-	AM_RANGE( 0x46, 0x47 ) AM_DEVWRITE( "ym", ym2413_w	)	//
+	AM_RANGE( 0x40, 0x40 ) AM_DEVWRITE	( "aysnd", ay8910_address_w	)	// AY8910
+	AM_RANGE( 0x42, 0x42 ) AM_DEVREAD  ( "aysnd", ay8910_r		)	//
+	AM_RANGE( 0x44, 0x44 ) AM_DEVWRITE	( "aysnd", ay8910_data_w)	//
+	AM_RANGE( 0x46, 0x47 ) AM_DEVWRITE( "ymsnd", ym2413_w	)	//
 	AM_RANGE( 0x80, 0x8f ) AM_DEVREADWRITE("rtc", msm6242_r, msm6242_w)	// 6242RTC
 	AM_RANGE( 0xa0, 0xa3 ) AM_WRITE ( ddenlovr_palette_base_w		)	// ddenlovr mixer chip
 	AM_RANGE( 0xa4, 0xa7 ) AM_WRITE ( ddenlovr_palette_mask_w		)
@@ -1268,8 +1268,8 @@ static WRITE8_HANDLER( tenkai_ip_w )
 	switch( tenkai_ipsel )
 	{
 		case 0x0c:
-			coin_counter_w(0, data & 0x01);
-			coin_counter_w(1, data & 0x02);
+			coin_counter_w(space->machine, 0, data & 0x01);
+			coin_counter_w(space->machine, 1, data & 0x02);
 			// bit 2?
 			// bit 3?
 //          popmessage("%02x",data);
@@ -1485,12 +1485,12 @@ static WRITE8_HANDLER( tenkai_blit_romregion_w )
 static ADDRESS_MAP_START( tenkai_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(  0x0000,  0x5fff ) AM_ROM
 	AM_RANGE(  0x6000,  0x6fff ) AM_RAM
-	AM_RANGE(  0x7000,  0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(  0x7000,  0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(  0x8000,  0xffff ) AM_READWRITE( tenkai_8000_r, tenkai_8000_w )
-	AM_RANGE( 0x10000, 0x10000 ) AM_DEVREAD ( "ay", ay8910_r			)	// AY8910
-	AM_RANGE( 0x10008, 0x10008 ) AM_DEVWRITE( "ay", ay8910_data_w	)	//
-	AM_RANGE( 0x10010, 0x10010 ) AM_DEVWRITE( "ay", ay8910_address_w	)	//
-	AM_RANGE( 0x10020, 0x10021 ) AM_DEVWRITE("ym", ym2413_w	)	//
+	AM_RANGE( 0x10000, 0x10000 ) AM_DEVREAD ( "aysnd", ay8910_r			)	// AY8910
+	AM_RANGE( 0x10008, 0x10008 ) AM_DEVWRITE( "aysnd", ay8910_data_w	)	//
+	AM_RANGE( 0x10010, 0x10010 ) AM_DEVWRITE( "aysnd", ay8910_address_w	)	//
+	AM_RANGE( 0x10020, 0x10021 ) AM_DEVWRITE("ymsnd", ym2413_w	)	//
 	AM_RANGE( 0x10040, 0x10040 ) AM_WRITE( dynax_blit_pen_w			)	// Destination Pen
 	AM_RANGE( 0x10044, 0x10044 ) AM_WRITE( tenkai_blit_dest_w		)	// Destination Layer
 	AM_RANGE( 0x10048, 0x10048 ) AM_WRITE( tenkai_blit_palette23_w	)	// Layers Palettes
@@ -1503,7 +1503,7 @@ static ADDRESS_MAP_START( tenkai_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x10068, 0x10068 ) AM_WRITE( yarunara_layer_half2_w	)	//
 	AM_RANGE( 0x1006c, 0x1006c ) AM_WRITE( tenkai_6c_w				)	// ?
 	AM_RANGE( 0x10070, 0x10070 ) AM_WRITE( tenkai_70_w				)	// ?
-	AM_RANGE( 0x1007c, 0x1007c ) AM_WRITE( SMH_NOP					)	// IRQ Ack? (0,2)
+	AM_RANGE( 0x1007c, 0x1007c ) AM_WRITENOP	// IRQ Ack? (0,2)
 	AM_RANGE( 0x100c0, 0x100c0 ) AM_WRITE( tenkai_ipsel_w			)
 	AM_RANGE( 0x100c1, 0x100c1 ) AM_WRITE( tenkai_ip_w				)
 	AM_RANGE( 0x100c2, 0x100c3 ) AM_READ ( tenkai_ip_r				)
@@ -1636,8 +1636,8 @@ static WRITE8_HANDLER( gekisha_8000_w )
 			case 0x8050:	// CRT controller
 			case 0x8051:	return;
 
-			case 0x8070:	ym2413_register_port_w(devtag_get_device(space->machine, "ym"), 0, data);	return;
-			case 0x8071:	ym2413_data_port_w    (devtag_get_device(space->machine, "ym"), 0, data);	return;
+			case 0x8070:	ym2413_register_port_w(devtag_get_device(space->machine, "ymsnd"), 0, data);	return;
+			case 0x8071:	ym2413_data_port_w    (devtag_get_device(space->machine, "ymsnd"), 0, data);	return;
 
 			case 0x8060:	keyb = data;	return;
 
@@ -1652,7 +1652,7 @@ static WRITE8_HANDLER( gekisha_8000_w )
 
 static ADDRESS_MAP_START( gekisha_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(  0x0000,  0x6fff ) AM_ROM
-	AM_RANGE(  0x7000,  0x7fff ) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(  0x7000,  0x7fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(  0x8000,  0xffff ) AM_READWRITE( gekisha_8000_r, gekisha_8000_w )
 ADDRESS_MAP_END
 
@@ -2679,7 +2679,7 @@ static INPUT_PORTS_START( yarunara )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )		// 1,6
-	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) ) 	// 3,4
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )	// 3,4
 	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )		// 5,2
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )	// 7,0
 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Flip_Screen ) )
@@ -2741,7 +2741,7 @@ static INPUT_PORTS_START( hanayara )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
 	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )		// 1,6
-	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) ) 	// 3,4
+	PORT_DIPSETTING(    0x0c, DEF_STR( Normal ) )	// 3,4
 	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )		// 5,2
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )	// 7,0
 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Flip_Screen ) )
@@ -3141,7 +3141,7 @@ static INPUT_PORTS_START( jantouki )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_MAHJONG_L )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_MAHJONG_PON )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
- 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("KEY4")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -4208,10 +4208,10 @@ static MACHINE_DRIVER_START( hanamai )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 22000000 / 8)
+	MDRV_SOUND_ADD("aysnd", AY8910, 22000000 / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2203, 22000000 / 8)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 22000000 / 8)
 	MDRV_SOUND_CONFIG(hanamai_ym2203_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
@@ -4264,11 +4264,11 @@ static MACHINE_DRIVER_START( hnoridur )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 22000000 / 16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 22000000 / 16)
 	MDRV_SOUND_CONFIG(hnoridur_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("msm", MSM5205, 384000)
@@ -4309,11 +4309,11 @@ static MACHINE_DRIVER_START( hjingi )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_22MHz / 16)
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_22MHz / 16)
 	MDRV_SOUND_CONFIG(hnoridur_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_3_579545MHz )
+	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_3_579545MHz )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("msm", MSM5205, XTAL_384kHz )
@@ -4366,7 +4366,7 @@ static MACHINE_DRIVER_START( sprtmtch )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 22000000 / 8)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 22000000 / 8)
 	MDRV_SOUND_CONFIG(sprtmtch_ym2203_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
@@ -4406,7 +4406,7 @@ static MACHINE_DRIVER_START( mjfriday )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2413, 24000000/6)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 24000000/6)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -4561,10 +4561,10 @@ static MACHINE_DRIVER_START( jantouki )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 22000000 / 8)
+	MDRV_SOUND_ADD("aysnd", AY8910, 22000000 / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2203, 22000000 / 8)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 22000000 / 8)
 	MDRV_SOUND_CONFIG(jantouki_ym2203_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.20)
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
@@ -4715,11 +4715,11 @@ static MACHINE_DRIVER_START( htengoku )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 20000000 / 16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 20000000 / 16)
 	MDRV_SOUND_CONFIG(htengoku_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	/* devices */
@@ -4776,11 +4776,11 @@ static MACHINE_DRIVER_START( tenkai )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, 22000000 / 16)
+	MDRV_SOUND_ADD("aysnd", AY8910, 22000000 / 16)
 	MDRV_SOUND_CONFIG(tenkai_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	/* devices */
@@ -4830,11 +4830,11 @@ static MACHINE_DRIVER_START( gekisha )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_24MHz / 16)	// ?
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_24MHz / 16)	// ?
 	MDRV_SOUND_CONFIG(tenkai_ay8910_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_24MHz / 8)	// ?
+	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_24MHz / 8)	// ?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

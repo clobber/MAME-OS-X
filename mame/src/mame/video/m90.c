@@ -31,7 +31,7 @@
 static UINT16 *m90_spriteram;
 UINT16 *m90_video_data;
 static UINT16 m90_video_control_data[8];
-static tilemap *pf1_layer,*pf2_layer,*pf1_wide_layer,*pf2_wide_layer;
+static tilemap_t *pf1_layer,*pf2_layer,*pf1_wide_layer,*pf2_wide_layer;
 
 INLINE void get_tile_info(running_machine *machine,tile_data *tileinfo,int tile_index,int layer,int page_mask)
 {
@@ -188,11 +188,12 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 static void bomblord_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs = 0, last_sprite = 0;
 	int x,y,sprite,colour,fx,fy;
 
 
-	while ((offs < spriteram_size/2) & (spriteram16[offs+0] != 0x8000))
+	while ((offs < machine->generic.spriteram_size/2) & (spriteram16[offs+0] != 0x8000))
 	{
 		last_sprite = offs;
 		offs += 4;
@@ -226,10 +227,11 @@ static void bomblord_draw_sprites(running_machine *machine, bitmap_t *bitmap,con
 
 static void dynablsb_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs = 0, last_sprite = 0;
 	int x,y,sprite,colour,fx,fy;
 
-	while ((offs < spriteram_size/2) & (spriteram16[offs+0] != 0xffff))
+	while ((offs < machine->generic.spriteram_size/2) & (spriteram16[offs+0] != 0xffff))
 	{
 		last_sprite = offs;
 		offs += 4;
@@ -266,7 +268,7 @@ WRITE16_HANDLER( m90_video_control_w )
 	COMBINE_DATA(&m90_video_control_data[offset]);
 }
 
-static void markdirty(tilemap *tmap,int page,offs_t offset)
+static void markdirty(tilemap_t *tmap,int page,offs_t offset)
 {
 	offset -= page * 0x2000;
 

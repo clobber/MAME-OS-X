@@ -209,7 +209,7 @@ static MACHINE_START( amazon )
 
 static ADDRESS_MAP_START( terracre_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x020000, 0x0201ff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x020000, 0x0201ff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x020200, 0x021fff) AM_RAM
 	AM_RANGE(0x022000, 0x022fff) AM_WRITE(amazon_background_w) AM_BASE(&amazon_videoram)
 	AM_RANGE(0x023000, 0x023fff) AM_RAM
@@ -221,12 +221,12 @@ static ADDRESS_MAP_START( terracre_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x026002, 0x026003) AM_WRITE(amazon_scrollx_w)
 	AM_RANGE(0x026004, 0x026005) AM_WRITE(amazon_scrolly_w)
 	AM_RANGE(0x02600c, 0x02600d) AM_WRITE(amazon_sound_w)
-	AM_RANGE(0x028000, 0x0287ff) AM_WRITE(amazon_foreground_w) AM_BASE(&videoram16)
+	AM_RANGE(0x028000, 0x0287ff) AM_WRITE(amazon_foreground_w) AM_BASE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( amazon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
-	AM_RANGE(0x040000, 0x0401ff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x040000, 0x0401ff) AM_RAM AM_BASE_GENERIC(spriteram)
 	AM_RANGE(0x040200, 0x040fff) AM_RAM
 	AM_RANGE(0x042000, 0x042fff) AM_WRITE(amazon_background_w) AM_BASE(&amazon_videoram)
 	AM_RANGE(0x044000, 0x044001) AM_READ_PORT("IN0")
@@ -237,7 +237,7 @@ static ADDRESS_MAP_START( amazon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x046002, 0x046003) AM_WRITE(amazon_scrollx_w)
 	AM_RANGE(0x046004, 0x046005) AM_WRITE(amazon_scrolly_w)
 	AM_RANGE(0x04600c, 0x04600d) AM_WRITE(amazon_sound_w)
-	AM_RANGE(0x050000, 0x050fff) AM_WRITE(amazon_foreground_w) AM_BASE(&videoram16)
+	AM_RANGE(0x050000, 0x050fff) AM_WRITE(amazon_foreground_w) AM_BASE_GENERIC(videoram)
 	AM_RANGE(0x070000, 0x070003) AM_READWRITE(amazon_protection_r, amazon_protection_w)
 ADDRESS_MAP_END
 
@@ -248,7 +248,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_3526_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ym", ym3526_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym3526_w)
 	AM_RANGE(0x02, 0x02) AM_DEVWRITE("dac1", dac_signed_w)
 	AM_RANGE(0x03, 0x03) AM_DEVWRITE("dac2", dac_signed_w)
 	AM_RANGE(0x04, 0x04) AM_READ(soundlatch_clear_r)
@@ -568,7 +568,7 @@ static MACHINE_DRIVER_START( amazon )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3526, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM3526, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("dac1", DAC, 0)
@@ -605,7 +605,7 @@ static MACHINE_DRIVER_START( ym3526 )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3526, 4000000)
+	MDRV_SOUND_ADD("ymsnd", YM3526, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("dac1", DAC, 0)

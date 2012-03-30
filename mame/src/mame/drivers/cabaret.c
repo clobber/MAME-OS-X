@@ -32,11 +32,11 @@ are the same of IGS.  AMT may be previous IGS name.
 
 
 static UINT8   *bg_tile_ram;
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 static UINT8   *bg_scroll;
 
 static UINT8   *fg_tile_ram, *fg_color_ram;
-static tilemap *fg_tilemap;
+static tilemap_t *fg_tilemap;
 
 static WRITE8_HANDLER( bg_scroll_w )
 {
@@ -118,12 +118,12 @@ static WRITE8_HANDLER( cabaret_nmi_and_coins_w )
 //      popmessage("%02x",data);
 	}
 
-	coin_counter_w(0,		data & 0x01);	// coin_a
-	coin_counter_w(1,		data & 0x04);	// coin_c
-	coin_counter_w(2,		data & 0x08);	// key in
-	coin_counter_w(3,		data & 0x10);	// coin out mech
+	coin_counter_w(space->machine, 0,		data & 0x01);	// coin_a
+	coin_counter_w(space->machine, 1,		data & 0x04);	// coin_c
+	coin_counter_w(space->machine, 2,		data & 0x08);	// key in
+	coin_counter_w(space->machine, 3,		data & 0x10);	// coin out mech
 
-	set_led_status(6,		data & 0x40);	// led for coin out / hopper active
+	set_led_status(space->machine, 6,		data & 0x40);	// led for coin out / hopper active
 
 	nmi_enable = data;	//  data & 0x80     // nmi enable?
 
@@ -151,13 +151,13 @@ static ADDRESS_MAP_START( cabaret_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE( 0x00a2, 0x00a2 ) AM_READ_PORT("DSW2")			/* DSW2 */
 	AM_RANGE( 0x00b0, 0x00b0 ) AM_READ_PORT("DSW3")			/* DSW3 */
 
-	AM_RANGE( 0x00e0, 0x00e1 ) AM_DEVWRITE( "ym", ym2413_w )
+	AM_RANGE( 0x00e0, 0x00e1 ) AM_DEVWRITE( "ymsnd", ym2413_w )
 
 	AM_RANGE( 0x2000, 0x27ff ) AM_RAM_WRITE( fg_tile_w )  AM_BASE( &fg_tile_ram )
 	AM_RANGE( 0x2800, 0x2fff ) AM_RAM_WRITE( fg_color_w ) AM_BASE( &fg_color_ram )
 
-	AM_RANGE( 0x3000, 0x37ff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE( &paletteram )
-	AM_RANGE( 0x3800, 0x3fff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE( &paletteram_2 )
+	AM_RANGE( 0x3000, 0x37ff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split1_w ) AM_BASE_GENERIC( paletteram )
+	AM_RANGE( 0x3800, 0x3fff ) AM_RAM_WRITE( paletteram_xBBBBBGGGGGRRRRR_split2_w ) AM_BASE_GENERIC( paletteram2 )
 
 	AM_RANGE( 0x1000, 0x103f ) AM_RAM_WRITE( bg_scroll_w ) AM_BASE( &bg_scroll )
 
@@ -328,7 +328,7 @@ static MACHINE_DRIVER_START( cabaret )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ym", YM2413, XTAL_3_579545MHz)
+	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

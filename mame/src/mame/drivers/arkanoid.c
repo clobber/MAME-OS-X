@@ -505,12 +505,9 @@ DIP locations verified for:
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "arkanoid.h"
+#include "includes/arkanoid.h"
 #include "sound/ay8910.h"
 #include "cpu/m6805/m6805.h"
-
-int arkanoid_bootleg_id;
-
 
 /***************************************************************************/
 
@@ -519,14 +516,14 @@ int arkanoid_bootleg_id;
 static ADDRESS_MAP_START( arkanoid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xd000, 0xd001) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xd001, 0xd001) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xd000, 0xd001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xd001, 0xd001) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xd008, 0xd008) AM_WRITE(arkanoid_d008_w)	/* gfx bank, flip screen etc. */
 	AM_RANGE(0xd00c, 0xd00c) AM_READ_PORT("SYSTEM")		/* 2 bits from the 68705 */
 	AM_RANGE(0xd010, 0xd010) AM_READ_PORT("BUTTONS") AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xd018, 0xd018) AM_READWRITE(arkanoid_Z80_mcu_r, arkanoid_Z80_mcu_w)  /* input from the 68705 */
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(arkanoid_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xe83f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(arkanoid_videoram_w) AM_BASE_MEMBER(arkanoid_state, videoram)
+	AM_RANGE(0xe800, 0xe83f) AM_RAM AM_BASE_SIZE_MEMBER(arkanoid_state, spriteram, spriteram_size)
 	AM_RANGE(0xe840, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xffff) AM_READNOP	/* fixes instant death in final level */
 ADDRESS_MAP_END
@@ -534,25 +531,25 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( bootleg_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xd000, 0xd000) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0xd001, 0xd001) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xd000, 0xd000) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0xd001, 0xd001) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
 	AM_RANGE(0xd008, 0xd008) AM_WRITE(arkanoid_d008_w)	/* gfx bank, flip screen etc. */
 	AM_RANGE(0xd00c, 0xd00c) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xd010, 0xd010) AM_READ_PORT("BUTTONS") AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xd018, 0xd018) AM_READ_PORT("MUX") AM_WRITENOP
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(arkanoid_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xe800, 0xe83f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(arkanoid_videoram_w) AM_BASE_MEMBER(arkanoid_state, videoram)
+	AM_RANGE(0xe800, 0xe83f) AM_RAM AM_BASE_SIZE_MEMBER(arkanoid_state, spriteram, spriteram_size)
 	AM_RANGE(0xe840, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xffff) AM_READNOP	/* fixes instant death in final level */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
-	AM_RANGE(0x0000, 0x0000) AM_READWRITE(arkanoid_68705_portA_r, arkanoid_68705_portA_w)
+	AM_RANGE(0x0000, 0x0000) AM_READWRITE(arkanoid_68705_port_a_r, arkanoid_68705_port_a_w)
 	AM_RANGE(0x0001, 0x0001) AM_READ_PORT("MUX")
-	AM_RANGE(0x0002, 0x0002) AM_READWRITE(arkanoid_68705_portC_r, arkanoid_68705_portC_w)
-	AM_RANGE(0x0004, 0x0004) AM_WRITE(arkanoid_68705_ddrA_w)
-	AM_RANGE(0x0006, 0x0006) AM_WRITE(arkanoid_68705_ddrC_w)
+	AM_RANGE(0x0002, 0x0002) AM_READWRITE(arkanoid_68705_port_c_r, arkanoid_68705_port_c_w)
+	AM_RANGE(0x0004, 0x0004) AM_WRITE(arkanoid_68705_ddr_a_w)
+	AM_RANGE(0x0006, 0x0006) AM_WRITE(arkanoid_68705_ddr_c_w)
 	AM_RANGE(0x0010, 0x007f) AM_RAM
 	AM_RANGE(0x0080, 0x07ff) AM_ROM
 ADDRESS_MAP_END
@@ -800,7 +797,56 @@ static const ay8910_interface ay8910_config =
 
 /* Machine Drivers */
 
+static MACHINE_START( arkanoid )
+{
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+
+	state->mcu = devtag_get_device(machine, "mcu");
+
+	state_save_register_global(machine, state->bootleg_cmd);
+
+	state_save_register_global(machine, state->paddle_select);
+	state_save_register_global(machine, state->z80write);
+	state_save_register_global(machine, state->fromz80);
+	state_save_register_global(machine, state->m68705write);
+	state_save_register_global(machine, state->toz80);
+
+	state_save_register_global(machine, state->port_a_in);
+	state_save_register_global(machine, state->port_a_out);
+	state_save_register_global(machine, state->ddr_a);
+
+	state_save_register_global(machine, state->port_c_out);
+	state_save_register_global(machine, state->ddr_c);
+
+	state_save_register_global(machine, state->gfxbank);
+	state_save_register_global(machine, state->palettebank);
+}
+
+static MACHINE_RESET( arkanoid )
+{
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+
+	state->port_a_in = 0;
+	state->port_a_out = 0;
+	state->z80write = 0;
+	state->m68705write = 0;
+
+	state->bootleg_cmd = 0;
+	state->paddle_select = 0;
+	state->fromz80 = 0;
+	state->toz80 = 0;
+	state->ddr_a = 0;
+	state->ddr_c = 0;
+	state->port_c_out = 0;
+	state->gfxbank = 0;
+	state->palettebank = 0;
+}
+
 static MACHINE_DRIVER_START( arkanoid )
+
+	/* driver data */
+	MDRV_DRIVER_DATA(arkanoid_state)
+
 	// basic machine hardware
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(arkanoid_map)
@@ -815,7 +861,6 @@ static MACHINE_DRIVER_START( arkanoid )
 	MDRV_MACHINE_RESET(arkanoid)
 
 	// video hardware
-
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
@@ -832,7 +877,7 @@ static MACHINE_DRIVER_START( arkanoid )
 	// sound hardware
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_12MHz/4/2) /* YM2149 clock is 3mhz, pin 26 is low so 3mhz/2 */
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_12MHz/4/2) /* YM2149 clock is 3mhz, pin 26 is low so 3mhz/2 */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 MACHINE_DRIVER_END
@@ -1043,6 +1088,28 @@ ROM_START( block2 )
 	ROM_LOAD( "a75-09.bpr",    0x0400, 0x0200, CRC(a7c6c277) SHA1(adaa003dcd981576ea1cc5f697d709b2d6b2ea29) )	/* blue component */
 ROM_END
 
+// this set has the same 'space invader' scrambled block gfx, and unknown (sound?) rom as the one above
+//  sadly no mention of what chip it might be for in the readme.
+ROM_START( arkbloc3 )
+	ROM_REGION( 0x18000, "maincpu", 0 )
+	ROM_LOAD( "blockbl.001",         0x00000, 0x8000, CRC(bf7197a0) SHA1(4fbc0cbc09d292ab0f2e4a35b30505b2f7e4dc0d) )
+	ROM_LOAD( "blockbl.002",         0x08000, 0x8000, CRC(29dbe452) SHA1(b99cb98549bddf1e673e2e715c80664001581f9f) )
+
+	ROM_REGION( 0x8000, "unknown", 0 )	/* is it more data or something else like sound or palette ? not Z80 code nor levels anyway */
+	ROM_LOAD( "blockbl.006",         0x00000, 0x8000, CRC(e336c219) SHA1(e1dce37727e7084a83e73f15a138312ab6224061) )
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "blockbl.003",   0x00000, 0x8000, CRC(6d2c6123) SHA1(26f32099d363ab2c8505722513638b827e49a8fc) )
+	ROM_LOAD( "blockbl.004",   0x08000, 0x8000, CRC(09a1f9d9) SHA1(c7e21aba6efb51c5501aa1428f6d9a817cb86555) )
+	ROM_LOAD( "blockbl.005",   0x10000, 0x8000, CRC(dfb9f7e2) SHA1(8d938ee6f8dcac0a564d5fa7cd5da34e0db07c71) )
+
+	// no proms were present in this set.. assumed to be the same
+	ROM_REGION( 0x0600, "proms", 0 )
+	ROM_LOAD( "a75-07.bpr",    0x0000, 0x0200, CRC(0af8b289) SHA1(6bc589e8a609b4cf450aebedc8ce02d5d45c970f) )	/* red component */
+	ROM_LOAD( "a75-08.bpr",    0x0200, 0x0200, CRC(abb002fb) SHA1(c14f56b8ef103600862e7930709d293b0aa97a73) )	/* green component */
+	ROM_LOAD( "a75-09.bpr",    0x0400, 0x0200, CRC(a7c6c277) SHA1(adaa003dcd981576ea1cc5f697d709b2d6b2ea29) )	/* blue component */
+ROM_END
+
 ROM_START( arkblock )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "ark-6.bin",    0x0000, 0x8000, CRC(0be015de) SHA1(f4209085b59d2c96a62ac9657c7bf097da55362b) )
@@ -1115,6 +1182,30 @@ ROM_START( arkgcbl )
 	ROM_REGION( 0x0200, "pal", 0 )
 	ROM_LOAD( "pal16r8.5f",   0x0000, 0x0104, CRC(36471917) SHA1(d0f295a94d480b44416e66be4b480b299aad5c3c) )
 ROM_END
+
+/* this one still has the original copyright intact */
+ROM_START( arkgcbla )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "k101.e7",        0x0000, 0x8000, CRC(892a556e) SHA1(10d1a92f8ab1b8184b05182a2de070b163a603e2) )
+	ROM_LOAD( "k102.f7",        0x8000, 0x8000, CRC(d208d05c) SHA1(0aa99a0cb8211e7b90d681c91cc77aa7078a0ccc) )
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "a75-03.rom",   0x00000, 0x8000, CRC(038b74ba) SHA1(ac053cc4908b4075f918748b89570e07a0ba5116) )
+	ROM_LOAD( "a75-04.rom",   0x08000, 0x8000, CRC(71fae199) SHA1(5d253c46ccf4cd2976a5fb8b8713f0f345443d06) )
+	ROM_LOAD( "a75-05.rom",   0x10000, 0x8000, CRC(c76374e2) SHA1(7520dd48de20db60a2038f134dcaa454988e7874) )
+
+	ROM_REGION( 0x0600, "proms", 0 )
+	ROM_LOAD( "82s129.5k",    0x0000, 0x0100, CRC(fa70b64d) SHA1(273669d05f793cf1ee0741b175be281307fa9b5e) )	/* red component   + */
+	ROM_LOAD( "82s129.5jk",   0x0100, 0x0100, CRC(cca69884) SHA1(fdcd66110c8eb901a401f8618821c7980946a511) )	/* red component   = a75-07.bpr*/
+	ROM_LOAD( "82s129.5l",    0x0200, 0x0100, CRC(3e4d2bf5) SHA1(c475887302dd137d6965769070b7d55f488c1b25) )	/* green component + */
+	ROM_LOAD( "82s129.5kl",   0x0300, 0x0100, CRC(085d625a) SHA1(26c96a1c1b7562fed84c31dd92fdf7829e96a9c7) )	/* green component = a75-08.bpr*/
+	ROM_LOAD( "82s129.5mn",   0x0400, 0x0100, CRC(0fe0b108) SHA1(fcf27619208922345a1e42b3a219b4274f66968d) )	/* blue component  + */
+	ROM_LOAD( "63s141.5m",    0x0500, 0x0100, CRC(5553f675) SHA1(c50255af8d99664b92e0bb34a527fd42ebf7e759) )	/* blue component  = a75-09.bpr*/
+
+	ROM_REGION( 0x0200, "pal", 0 )
+	ROM_LOAD( "pal16r8.5f",   0x0000, 0x0104, CRC(36471917) SHA1(d0f295a94d480b44416e66be4b480b299aad5c3c) )
+ROM_END
+
 
 ROM_START( paddle2 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -1195,24 +1286,27 @@ static void arkanoid_bootleg_init( running_machine *machine )
 
 static DRIVER_INIT( arkangc )
 {
-	arkanoid_bootleg_id = ARKANGC;
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	state->bootleg_id = ARKANGC;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkangc2 )
 {
-	arkanoid_bootleg_id = ARKANGC2;
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	state->bootleg_id = ARKANGC2;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( block2 )
 {
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
 	// the graphics on this bootleg have the data scrambled
 	int tile;
 	UINT8* srcgfx = memory_region(machine,"gfx1");
 	UINT8* buffer = alloc_array_or_die(UINT8, 0x18000);
 
-	for (tile=0;tile<0x3000;tile++)
+	for (tile = 0; tile < 0x3000; tile++)
 	{
 		int srctile;
 
@@ -1227,38 +1321,44 @@ static DRIVER_INIT( block2 )
 					 7,6,8,4,
 	                 3,2,1,0);
 
-		srctile = srctile^0xd4;
+		srctile = srctile ^ 0xd4;
 
-		memcpy(&buffer[tile*8], &srcgfx[srctile*8], 8);
+		memcpy(&buffer[tile * 8], &srcgfx[srctile * 8], 8);
 	}
 
-	memcpy(srcgfx,buffer,0x18000);
+	memcpy(srcgfx, buffer, 0x18000);
 
-	arkanoid_bootleg_id = BLOCK2;
+	free(buffer);
+
+	state->bootleg_id = BLOCK2;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkblock )
 {
-	arkanoid_bootleg_id = ARKBLOCK;
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	state->bootleg_id = ARKBLOCK;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkbloc2 )
 {
-	arkanoid_bootleg_id = ARKBLOC2;
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	state->bootleg_id = ARKBLOC2;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkgcbl )
 {
-	arkanoid_bootleg_id = ARKGCBL;
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	state->bootleg_id = ARKGCBL;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( paddle2 )
 {
-	arkanoid_bootleg_id = PADDLE2;
+	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	state->bootleg_id = PADDLE2;
 	arkanoid_bootleg_init(machine);
 }
 
@@ -1268,9 +1368,9 @@ static DRIVER_INIT( tetrsark )
 	UINT8 *ROM = memory_region(machine, "maincpu");
 	int x;
 
-	for (x=0;x<0x8000;x++)
+	for (x = 0; x < 0x8000; x++)
 	{
-		ROM[x]=ROM[x]^0x94;
+		ROM[x] = ROM[x] ^ 0x94;
 	}
 
 	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd008, 0xd008, 0, 0, tetrsark_d008_w );
@@ -1287,10 +1387,12 @@ GAME( 1986, arkmcubl,   arkanoid, arkanoid, arknoidj, 0,        ROT90, "bootleg"
 GAME( 1986, ark1ball,   arkanoid, arkanoid, ark1ball, 0,        ROT90, "bootleg", "Arkanoid (bootleg with MCU, harder)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkangc,    arkanoid, bootleg,  arkangc,  arkangc,  ROT90, "bootleg", "Arkanoid (Game Corporation bootleg, set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkangc2,   arkanoid, bootleg,  arkangc2, arkangc2, ROT90, "bootleg", "Arkanoid (Game Corporation bootleg, set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1986, block2,     arkanoid, bootleg,  block2,   block2,   ROT90, "bootleg", "Block 2 (S.P.A. CO. bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkblock,   arkanoid, bootleg,  arkangc,  arkblock, ROT90, "bootleg", "Block (Game Corporation bootleg, set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkbloc2,   arkanoid, bootleg,  arkangc,  arkbloc2, ROT90, "bootleg", "Block (Game Corporation bootleg, set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1986, arkgcbl,    arkanoid, bootleg,  arkgcbl,  arkgcbl,  ROT90, "bootleg", "Arkanoid (bootleg on Block hardware)", GAME_SUPPORTS_SAVE )
+GAME( 1986, arkbloc3,   arkanoid, bootleg,  block2,   block2,   ROT90, "bootleg", "Block (Game Corporation bootleg, set 3)", GAME_SUPPORTS_SAVE )// Both these sets have an extra unknown rom
+GAME( 1986, block2,     arkanoid, bootleg,  block2,   block2,   ROT90, "bootleg", "Block 2 (S.P.A. CO. bootleg)", GAME_SUPPORTS_SAVE )           //  and scrambled gfx roms with 'space invader' themed gfx
+GAME( 1986, arkgcbl,    arkanoid, bootleg,  arkgcbl,  arkgcbl,  ROT90, "bootleg", "Arkanoid (bootleg on Block hardware, set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, arkgcbla,   arkanoid, bootleg,  arkgcbl,  arkgcbl,  ROT90, "bootleg", "Arkanoid (bootleg on Block hardware, set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1988, paddle2,    arkanoid, bootleg,  paddle2,  paddle2,  ROT90, "bootleg", "Paddle 2 (bootleg on Block hardware)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkatayt,   arkanoid, bootleg,  arkatayt, 0,        ROT90, "bootleg", "Arkanoid (Tayto bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arktayt2,   arkanoid, bootleg,  arktayt2, 0,        ROT90, "bootleg", "Arkanoid (Tayto bootleg, harder)", GAME_SUPPORTS_SAVE )

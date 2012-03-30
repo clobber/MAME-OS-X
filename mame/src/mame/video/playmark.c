@@ -8,7 +8,7 @@ UINT16 *wbeachvl_rowscroll;
 
 static int bgscrollx,bgscrolly,bg_enable,bg_full_size;
 static int fgscrollx,fg_rowscroll_enable;
-static tilemap *tx_tilemap,*fg_tilemap,*bg_tilemap;
+static tilemap_t *tx_tilemap,*fg_tilemap,*bg_tilemap;
 
 static int xoffset = 0;
 static int yoffset = 0;
@@ -241,9 +241,9 @@ WRITE16_HANDLER( bigtwin_paletteram_w )
 {
 	int r,g,b,val;
 
-	COMBINE_DATA(&paletteram16[offset]);
+	COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 
-	val = paletteram16[offset];
+	val = space->machine->generic.paletteram.u16[offset];
 	r = (val >> 11) & 0x1e;
 	g = (val >>  7) & 0x1e;
 	b = (val >>  3) & 0x1e;
@@ -331,12 +331,13 @@ WRITE16_HANDLER( hrdtimes_scroll_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int codeshift)
 {
-	int offs, start_offset = spriteram_size/2 - 4;
+	int offs, start_offset = machine->generic.spriteram_size/2 - 4;
 	int height = machine->gfx[0]->height;
 	int colordiv = machine->gfx[0]->color_granularity / 16;
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 
 	// find the "end of list" to draw the sprites in reverse order
-	for (offs = 4;offs < spriteram_size/2;offs += 4)
+	for (offs = 4;offs < machine->generic.spriteram_size/2;offs += 4)
 	{
 		if (spriteram16[offs+3-4] == 0x2000) /* end of list marker */
 		{
@@ -362,7 +363,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 			pri = 2;
 
 		pdrawgfx_transpen(bitmap,cliprect,machine->gfx[0],
-		 		 code,
+				 code,
 				 color,
 				 flipx,0,
 				 sx + xoffset,sy + yoffset,

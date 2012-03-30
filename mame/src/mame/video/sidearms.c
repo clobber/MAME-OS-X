@@ -12,41 +12,43 @@ extern int sidearms_gameid;
 
 UINT8 *sidearms_bg_scrollx;
 UINT8 *sidearms_bg_scrolly;
+UINT8 *sidearms_videoram;
+UINT8 *sidearms_colorram;
 
 static UINT8 *tilerom;
 static int bgon, objon, staron, charon, flipon;
 static UINT32 hflop_74a_n, hcount_191, vcount_191, latch_374;
 
-static tilemap *bg_tilemap, *fg_tilemap;
+static tilemap_t *bg_tilemap, *fg_tilemap;
 
 WRITE8_HANDLER( sidearms_videoram_w )
 {
-	videoram[offset] = data;
+	sidearms_videoram[offset] = data;
 	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
 
 WRITE8_HANDLER( sidearms_colorram_w )
 {
-	colorram[offset] = data;
+	sidearms_colorram[offset] = data;
 	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
 
 WRITE8_HANDLER( sidearms_c804_w )
 {
 	/* bits 0 and 1 are coin counters */
-	coin_counter_w(0, data & 0x01);
-	coin_counter_w(1, data & 0x02);
+	coin_counter_w(space->machine, 0, data & 0x01);
+	coin_counter_w(space->machine, 1, data & 0x02);
 
 	/* bit 2 and 3 lock the coin chutes */
 	if (!sidearms_gameid || sidearms_gameid==3)
 	{
-		coin_lockout_w(0, !(data & 0x04));
-		coin_lockout_w(1, !(data & 0x08));
+		coin_lockout_w(space->machine, 0, !(data & 0x04));
+		coin_lockout_w(space->machine, 1, !(data & 0x08));
 	}
 	else
 	{
-		coin_lockout_w(0, data & 0x04);
-		coin_lockout_w(1, data & 0x08);
+		coin_lockout_w(space->machine, 0, data & 0x04);
+		coin_lockout_w(space->machine, 1, data & 0x08);
 	}
 
 	/* bit 4 resets the sound CPU */
@@ -128,8 +130,8 @@ static TILE_GET_INFO( get_philko_bg_tile_info )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int attr = colorram[tile_index];
-	int code = videoram[tile_index] + (attr<<2 & 0x300);
+	int attr = sidearms_colorram[tile_index];
+	int code = sidearms_videoram[tile_index] + (attr<<2 & 0x300);
 	int color = attr & 0x3f;
 
 	SET_TILE_INFO(0, code, color, 0);
@@ -173,6 +175,7 @@ VIDEO_START( sidearms )
 
 static void draw_sprites_region(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int start_offset, int end_offset )
 {
+	UINT8 *buffered_spriteram = machine->generic.buffered_spriteram.u8;
 	const gfx_element *gfx = machine->gfx[2];
 	int offs, attr, color, code, x, y, flipx, flipy;
 

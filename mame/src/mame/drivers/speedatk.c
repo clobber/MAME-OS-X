@@ -79,6 +79,8 @@ PS / PD :  key matrix
 #include "sound/ay8910.h"
 #include "video/mc6845.h"
 
+extern UINT8 *speedatk_videoram;
+extern UINT8 *speedatk_colorram;
 static UINT8 mux_data;
 static UINT8 km_status,coin_settings;
 
@@ -137,8 +139,8 @@ static READ8_HANDLER( key_matrix_r )
 			{
 				case 0x002: return 0x02;
 				case 0x001: return 0x01;
-		 		case 0x004: return 0x03;
-		 		case 0x008: return 0x04;
+				case 0x004: return 0x03;
+				case 0x008: return 0x04;
 				case 0x010: return 0x07;
 				case 0x020: return 0x08;
 				case 0x040: return 0x09;
@@ -189,8 +191,8 @@ static ADDRESS_MAP_START( speedatk_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x8000) AM_READWRITE(key_matrix_r,key_matrix_w)
 	AM_RANGE(0x8001, 0x8001) AM_READWRITE(key_matrix_status_r,key_matrix_status_w)
 	AM_RANGE(0x8800, 0x8fff) AM_RAM
-	AM_RANGE(0xa000, 0xa3ff) AM_RAM_WRITE(speedatk_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xb000, 0xb3ff) AM_RAM_WRITE(speedatk_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xa000, 0xa3ff) AM_RAM_WRITE(speedatk_videoram_w) AM_BASE(&speedatk_videoram)
+	AM_RANGE(0xb000, 0xb3ff) AM_RAM_WRITE(speedatk_colorram_w) AM_BASE(&speedatk_colorram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( speedatk_io, ADDRESS_SPACE_IO, 8 )
@@ -198,8 +200,8 @@ static ADDRESS_MAP_START( speedatk_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0x01, 0x01) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0x24, 0x24) AM_WRITE(watchdog_reset_w)  //watchdog
-	AM_RANGE(0x40, 0x40) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x40, 0x40) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	//what's 60-6f for? Seems used only in attract mode...
 ADDRESS_MAP_END
 
@@ -345,7 +347,7 @@ static MACHINE_DRIVER_START( speedatk )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/4) //divider is unknown
+	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/4) //divider is unknown
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
 MACHINE_DRIVER_END
@@ -363,8 +365,8 @@ ROM_START( speedatk )
 	ROM_REGION( 0x6000, "gfx2", 0 )
 	ROM_LOAD( "cb0-5",        0x0000, 0x2000, CRC(47a966e7) SHA1(fdaa0f88656afc431bae367679ce6298fa962e0f) )
 	ROM_LOAD( "cb0-6",        0x2000, 0x2000, CRC(cc1da937) SHA1(1697bb008bfa5c33a282bd470ac39c324eea7509) )
-	ROM_COPY( "gfx2",    	  0x0000, 0x4000, 0x1000 ) /* Fill the blank space with cards gfx */
-	ROM_COPY( "gfx1",    	  0x1000, 0x5000, 0x1000 ) /* Gfx from cb0-7 */
+	ROM_COPY( "gfx2",   	  0x0000, 0x4000, 0x1000 ) /* Fill the blank space with cards gfx */
+	ROM_COPY( "gfx1",   	  0x1000, 0x5000, 0x1000 ) /* Gfx from cb0-7 */
 
 	ROM_REGION( 0x0120, "proms", 0 )
 	ROM_LOAD( "cb1.bpr",      0x0000, 0x0020, CRC(a0176c23) SHA1(133fb9eef8a6595cac2dcd7edce4789899a59e84) ) /* color PROM */

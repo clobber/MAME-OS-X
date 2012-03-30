@@ -1311,13 +1311,12 @@ static void mips_update_scratchpad( const address_space *space )
 	}
 	else if( ( psxcpu->biu & BIU_DS ) == 0 )
 	{
-		memory_install_readwrite32_handler( space, 0x1f800000, 0x1f8003ff, 0, 0, psx_berr_r, (write32_space_func)SMH_NOP );
+		memory_install_read32_handler( space, 0x1f800000, 0x1f8003ff, 0, 0, psx_berr_r );
+		memory_nop_write( space, 0x1f800000, 0x1f8003ff, 0, 0 );
 	}
 	else
 	{
-		memory_install_readwrite32_handler( space, 0x1f800000, 0x1f8003ff, 0, 0, (read32_space_func)SMH_BANK(32), (write32_space_func)SMH_BANK(32) );
-
-		memory_set_bankptr(space->machine,  32, psxcpu->dcache );
+		memory_install_ram( space, 0x1f800000, 0x1f8003ff, 0, 0, psxcpu->dcache );
 	}
 }
 
@@ -6130,11 +6129,11 @@ CPU_GET_INFO( psxcpu )
 		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
 		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + PSXCPU_IRQ0:		info->i = (psxcpu->cp0r[ CP0_CAUSE ] & 0x400) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + PSXCPU_IRQ1:		info->i = (psxcpu->cp0r[ CP0_CAUSE ] & 0x800) ? ASSERT_LINE : CLEAR_LINE; break;

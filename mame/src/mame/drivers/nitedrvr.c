@@ -38,19 +38,19 @@
 #include "cpu/m6502/m6502.h"
 #include "machine/rescap.h"
 #include "sound/discrete.h"
-#include "nitedrvr.h"
+#include "includes/nitedrvr.h"
 
 /* Memory Map */
 
 static ADDRESS_MAP_START( nitedrvr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x100) // SCRAM
-	AM_RANGE(0x0200, 0x027f) AM_RAM_WRITE(nitedrvr_videoram_w) AM_MIRROR(0x180) AM_BASE(&videoram) // PFW
+	AM_RANGE(0x0200, 0x027f) AM_RAM_WRITE(nitedrvr_videoram_w) AM_MIRROR(0x180) AM_BASE_GENERIC(videoram) // PFW
 	AM_RANGE(0x0400, 0x05ff) AM_WRITE(nitedrvr_hvc_w) AM_BASE(&nitedrvr_hvc) // POSH, POSV, CHAR, Watchdog
 	AM_RANGE(0x0600, 0x07ff) AM_READ(nitedrvr_in0_r)
 	AM_RANGE(0x0800, 0x09ff) AM_READ(nitedrvr_in1_r)
 	AM_RANGE(0x0a00, 0x0bff) AM_WRITE(nitedrvr_out0_w)
 	AM_RANGE(0x0c00, 0x0dff) AM_WRITE(nitedrvr_out1_w)
-	AM_RANGE(0x8000, 0x807f) AM_RAM AM_MIRROR(0x380) AM_BASE(&videoram) // PFR
+	AM_RANGE(0x8000, 0x807f) AM_RAM AM_MIRROR(0x380) AM_BASE_GENERIC(videoram) // PFR
 	AM_RANGE(0x8400, 0x87ff) AM_READWRITE(nitedrvr_steering_reset_r, nitedrvr_steering_reset_w)
 	AM_RANGE(0x9000, 0x9fff) AM_ROM // ROM1-ROM2
 	AM_RANGE(0xfff0, 0xffff) AM_ROM // ROM2 for 6502 vectors
@@ -136,13 +136,15 @@ GFXDECODE_END
 
 static MACHINE_DRIVER_START( nitedrvr )
 	// basic machine hardware
-	MDRV_CPU_ADD("maincpu", M6502, 12096000/12) // 1 MHz
+	MDRV_CPU_ADD("maincpu", M6502, XTAL_12_096MHz/12) // 1 MHz
 	MDRV_CPU_PROGRAM_MAP(nitedrvr_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 	MDRV_WATCHDOG_VBLANK_INIT(3)
 
 	MDRV_MACHINE_START(nitedrvr)
 	MDRV_MACHINE_RESET(nitedrvr)
+
+	MDRV_TIMER_ADD_PERIODIC("crash_timer", nitedrvr_crash_toggle_callback, NSEC(PERIOD_OF_555_ASTABLE_NSEC(RES_K(180), 330, CAP_U(1))))
 
 	// video hardware
 

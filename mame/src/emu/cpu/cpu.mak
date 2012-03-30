@@ -90,7 +90,7 @@ CPUOBJS += $(CPUOBJ)/arm7/arm7.o
 DASMOBJS += $(CPUOBJ)/arm7/arm7dasm.o
 endif
 
-$(CPUOBJ)/arm/arm.o: 	$(CPUSRC)/arm/arm.c \
+$(CPUOBJ)/arm/arm.o:	$(CPUSRC)/arm/arm.c \
 						$(CPUSRC)/arm/arm.h
 
 $(CPUOBJ)/arm7/arm7.o:	$(CPUSRC)/arm7/arm7.c \
@@ -110,7 +110,7 @@ CPUOBJS += $(CPUOBJ)/se3208/se3208.o
 DASMOBJS += $(CPUOBJ)/se3208/se3208dis.o
 endif
 
-$(CPUOBJ)/se3208/se3208.o: 	$(CPUSRC)/se3208/se3208.c \
+$(CPUOBJ)/se3208/se3208.o:	$(CPUSRC)/se3208/se3208.c \
 							$(CPUSRC)/se3208/se3208.h
 
 
@@ -193,7 +193,7 @@ CPUOBJS += $(CPUOBJ)/dsp32/dsp32.o
 DASMOBJS += $(CPUOBJ)/dsp32/dsp32dis.o
 endif
 
-$(CPUOBJ)/dsp32/dsp32.o: 	$(CPUSRC)/dsp32/dsp32.c \
+$(CPUOBJ)/dsp32/dsp32.o:	$(CPUSRC)/dsp32/dsp32.c \
 							$(CPUSRC)/dsp32/dsp32.h
 
 
@@ -377,7 +377,7 @@ G65816DEPS = \
 $(CPUOBJ)/g65816/g65816.o:		$(CPUSRC)/g65816/g65816.c \
 								$(G65816DEPS)
 
-$(CPUOBJ)/g65816/g65816o0.o: 	$(CPUSRC)/g65816/g65816o0.c \
+$(CPUOBJ)/g65816/g65816o0.o:	$(CPUSRC)/g65816/g65816o0.c \
 								$(G65816DEPS)
 
 $(CPUOBJ)/g65816/g65816o1.o:	$(CPUSRC)/g65816/g65816o1.c \
@@ -425,7 +425,7 @@ $(CPUOBJ)/h83002/h8_16.o:		$(CPUSRC)/h83002/h8_16.c \
 								$(CPUSRC)/h83002/h8ops.h \
 								$(CPUSRC)/h83002/h8priv.h
 
-$(CPUOBJ)/h83002/h8disasm.o: 	$(CPUSRC)/h83002/h8disasm.c
+$(CPUOBJ)/h83002/h8disasm.o:	$(CPUSRC)/h83002/h8disasm.c
 
 $(CPUOBJ)/h83002/h8periph.o:	$(CPUSRC)/h83002/h8periph.c \
 								$(CPUSRC)/h83002/h8priv.h
@@ -446,7 +446,7 @@ $(CPUOBJ)/h83002/h8_8.o:		$(CPUSRC)/h83002/h8_8.c \
 								$(CPUSRC)/h83002/h8ops.h \
 								$(CPUSRC)/h83002/h8priv.h
 
-$(CPUOBJ)/h83002/h8disasm.o: 	$(CPUSRC)/h83002/h8disasm.c
+$(CPUOBJ)/h83002/h8disasm.o:	$(CPUSRC)/h83002/h8disasm.c
 
 $(CPUOBJ)/h83002/h8periph.o:	$(CPUSRC)/h83002/h8periph.c \
 								$(CPUSRC)/h83002/h8priv.h
@@ -543,6 +543,32 @@ endif
 $(CPUOBJ)/i4004/i4004.o:	$(CPUSRC)/i4004/i4004.c \
 							$(CPUSRC)/i4004/i4004.h
 
+
+#-------------------------------------------------
+# Intel 8008
+#-------------------------------------------------
+
+ifneq ($(filter I8008,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/i8008
+CPUOBJS += $(CPUOBJ)/i8008/i8008.o
+DASMOBJS += $(CPUOBJ)/i8008/8008dasm.o
+endif
+
+$(CPUOBJ)/i8008/i8008.o:	$(CPUSRC)/i8008/i8008.c \
+							$(CPUSRC)/i8008/i8008.h
+
+#-------------------------------------------------
+#  National Semiconductor SC/MP
+#-------------------------------------------------
+
+ifneq ($(filter SCMP,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/scmp
+CPUOBJS += $(CPUOBJ)/scmp/scmp.o
+DASMOBJS += $(CPUOBJ)/scmp/scmpdasm.o
+endif
+
+$(CPUOBJ)/scmp/scmp.o:		$(CPUSRC)/scmp/scmp.c \
+							$(CPUSRC)/scmp/scmp.h
 
 
 #-------------------------------------------------
@@ -763,6 +789,21 @@ $(CPUOBJ)/pic16c5x/pic16c5x.o:	$(CPUSRC)/pic16c5x/pic16c5x.c \
 
 
 #-------------------------------------------------
+# Microchip PIC16C62x
+#-------------------------------------------------
+
+ifneq ($(filter PIC16C62X,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/pic16c62x
+CPUOBJS += $(CPUOBJ)/pic16c62x/pic16c62x.o
+DASMOBJS += $(CPUOBJ)/pic16c62x/16c62xdsm.o
+endif
+
+$(CPUOBJ)/pic16c62x/pic16c62x.o:	$(CPUSRC)/pic16c62x/pic16c62x.c \
+								$(CPUSRC)/pic16c62x/pic16c62x.h
+
+
+
+#-------------------------------------------------
 # MIPS R3000 (MIPS I/II) series
 # MIPS R4000 (MIPS III/IV) series
 # Sony PlayStation CPU (R3000-based + GTE)
@@ -779,23 +820,23 @@ DASMOBJS += $(CPUOBJ)/mips/psxdasm.o
 endif
 
 $(CPUOBJ)/mips/r3000.o:	$(CPUSRC)/mips/r3000.c \
-						$(CPUSRC)/mips/r3000.h
+			$(CPUSRC)/mips/r3000.h
 
 $(CPUOBJ)/mips/mips3com.o:	$(CPUSRC)/mips/mips3.h \
-								$(CPUSRC)/mips/mips3com.h
+				$(CPUSRC)/mips/mips3com.h
 
 $(CPUOBJ)/mips/mips3fe.o:	$(CPUSRC)/mips/mips3.h \
-								$(CPUSRC)/mips/mips3com.h \
-								$(CPUSRC)/mips/mips3fe.h
+				$(CPUSRC)/mips/mips3com.h \
+				$(CPUSRC)/mips/mips3fe.h
 
-$(CPUOBJ)/mips/mips3drc.o:		$(CPUSRC)/mips/mips3drc.c \
-								$(CPUSRC)/mips/mips3.h \
-								$(CPUSRC)/mips/mips3com.h \
-								$(CPUSRC)/mips/mips3fe.h \
-								$(DRCDEPS)
+$(CPUOBJ)/mips/mips3drc.o:	$(CPUSRC)/mips/mips3drc.c \
+				$(CPUSRC)/mips/mips3.h \
+				$(CPUSRC)/mips/mips3com.h \
+				$(CPUSRC)/mips/mips3fe.h \
+				$(DRCDEPS)
 
 $(CPUOBJ)/mips/psx.o:	$(CPUSRC)/mips/psx.c \
-						$(CPUSRC)/mips/psx.h
+			$(CPUSRC)/mips/psx.h
 
 
 
@@ -976,7 +1017,7 @@ endif
 
 # rule to ensure we build the header before building the core CPU file
 $(CPUOBJ)/m68000/m68kcpu.o: 	$(CPUOBJ)/m68000/m68kops.c \
-								$(CPUSRC)/m68000/m68kcpu.h
+								$(CPUSRC)/m68000/m68kcpu.h $(CPUSRC)/m68000/m68kfpu.c $(CPUSRC)/m68000/m68kmmu.h
 
 
 
@@ -992,6 +1033,8 @@ endif
 
 $(CPUOBJ)/dsp56k/dsp56k.o:	$(CPUSRC)/dsp56k/dsp56k.c \
 							$(CPUSRC)/dsp56k/dsp56ops.c \
+							$(CPUSRC)/dsp56k/dsp56mem.c \
+							$(CPUSRC)/dsp56k/dsp56pcu.c \
 							$(CPUSRC)/dsp56k/dsp56k.h
 
 
@@ -1163,13 +1206,17 @@ $(CPUOBJ)/minx/minx.o:		$(CPUSRC)/minx/minx.c \
 
 ifneq ($(filter RSP,$(CPUS)),)
 OBJDIRS += $(CPUOBJ)/rsp
-CPUOBJS += $(CPUOBJ)/rsp/rsp.o
+CPUOBJS += $(CPUOBJ)/rsp/rspdrc.o	$(CPUOBJ)/rsp/rspfe.o	$(DRCOBJ)
 DASMOBJS += $(CPUOBJ)/rsp/rsp_dasm.o
 endif
 
-$(CPUOBJ)/rsp/rsp.o:	$(CPUSRC)/rsp/rsp.c \
-						$(CPUSRC)/rsp/rsp.h
+$(CPUOBJ)/rsp/rspdrc.o:	$(CPUSRC)/rsp/rspdrc.c \
+			$(CPUSRC)/rsp/rsp.h \
+			$(CPUSRC)/rsp/rspfe.h \
+			$(DRCDEPS)
 
+$(CPUOBJ)/rsp/rspfe.o:	$(CPUSRC)/rsp/rspfe.c \
+			$(CPUSRC)/rsp/rspfe.h
 
 
 #-------------------------------------------------
@@ -1279,7 +1326,7 @@ CPUOBJS += $(CPUOBJ)/avr8/avr8.o
 DASMOBJS += $(CPUOBJ)/avr8/avr8dasm.o
 endif
 
-$(CPUOBJ)/avr8/avr8.o: 	$(CPUSRC)/avr8/avr8.c \
+$(CPUOBJ)/avr8/avr8.o:	$(CPUSRC)/avr8/avr8.c \
 			$(CPUSRC)/avr8/avr8.h
 
 

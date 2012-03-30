@@ -360,8 +360,8 @@ static READ8_DEVICE_HANDLER( input_port_2_bit_r )
 
 static WRITE8_HANDLER( tempest_led_w )
 {
-	set_led_status(0, ~data & 0x02);
-	set_led_status(1, ~data & 0x01);
+	set_led_status(space->machine, 0, ~data & 0x02);
+	set_led_status(space->machine, 1, ~data & 0x01);
 	/* FLIP is bit 0x04 */
 	tempest_player_select = data & 0x04;
 }
@@ -369,9 +369,9 @@ static WRITE8_HANDLER( tempest_led_w )
 
 static WRITE8_HANDLER( tempest_coin_w )
 {
-	coin_counter_w(0, (data & 0x01));
-	coin_counter_w(1, (data & 0x02));
-	coin_counter_w(2, (data & 0x04));
+	coin_counter_w(space->machine, 0, (data & 0x01));
+	coin_counter_w(space->machine, 1, (data & 0x02));
+	coin_counter_w(space->machine, 2, (data & 0x04));
 	avg_set_flip_x(data & 0x08);
 	avg_set_flip_y(data & 0x10);
 }
@@ -386,12 +386,12 @@ static WRITE8_HANDLER( tempest_coin_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x080f) AM_WRITE(SMH_RAM) AM_BASE(&tempest_colorram)
+	AM_RANGE(0x0800, 0x080f) AM_WRITEONLY AM_BASE(&tempest_colorram)
 	AM_RANGE(0x0c00, 0x0c00) AM_READ_PORT("IN0")
 	AM_RANGE(0x0d00, 0x0d00) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0e00, 0x0e00) AM_READ_PORT("DSW2")
 	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
-	AM_RANGE(0x3000, 0x3fff) AM_READ(SMH_ROM)
+	AM_RANGE(0x3000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(tempest_coin_w)
 	AM_RANGE(0x4800, 0x4800) AM_WRITE(avgdvg_go_w)
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(wdclr_w)

@@ -20,7 +20,7 @@ static UINT32 stars_scrollx,stars_scrolly;
 
 static INT32 galaga_gfxbank; // used by catsbee
 
-static tilemap *tx_tilemap;
+static tilemap_t *tx_tilemap;
 
 /*
 Galaga star line and pixel locations pulled directly from
@@ -445,11 +445,6 @@ VIDEO_START( galaga )
 
 	galaga_gfxbank = 0;
 
-	spriteram   = galaga_ram1 + 0x380;
-	spriteram_2 = galaga_ram2 + 0x380;
-	spriteram_3 = galaga_ram3 + 0x380;
-
-
 	state_save_register_global_array(machine, galaga_starcontrol);
 	state_save_register_global(machine, stars_scrollx);
 	state_save_register_global(machine, stars_scrolly);
@@ -496,6 +491,9 @@ WRITE8_HANDLER ( gatsbee_bank_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = galaga_ram1 + 0x380;
+	UINT8 *spriteram_2 = galaga_ram2 + 0x380;
+	UINT8 *spriteram_3 = galaga_ram3 + 0x380;
 	int offs;
 
 
@@ -551,7 +549,7 @@ static void draw_stars(bitmap_t *bitmap, const rectangle *cliprect )
 
 	if ( galaga_starcontrol[5] == 1 )
 	{
-  		int star_cntr;
+		int star_cntr;
 		int set_a, set_b;
 
 		/* two sets of stars controlled by these bits */

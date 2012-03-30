@@ -79,7 +79,7 @@ TODO:
 #include "machine/6532riot.h"
 #include "machine/6522via.h"
 #include "sound/ay8910.h"
-#include "gameplan.h"
+#include "includes/gameplan.h"
 
 
 
@@ -116,7 +116,7 @@ static READ8_DEVICE_HANDLER( io_port_r )
 
 static WRITE8_DEVICE_HANDLER( coin_w )
 {
-	coin_counter_w(0, ~data & 1);
+	coin_counter_w(device->machine, 0, ~data & 1);
 }
 
 
@@ -140,7 +140,9 @@ static const via6522_interface via_1_interface =
 static WRITE8_DEVICE_HANDLER( audio_reset_w )
 {
 	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
-	cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+
+	cpu_set_input_line(state->audiocpu, INPUT_LINE_RESET, data ? CLEAR_LINE : ASSERT_LINE);
+
 	if (data == 0)
 	{
 		device_reset(state->riot);
@@ -182,7 +184,9 @@ static const via6522_interface via_2_interface =
 
 static WRITE_LINE_DEVICE_HANDLER( r6532_irq )
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0, state);
+	gameplan_state *gameplan = (gameplan_state *)device->machine->driver_data;
+
+	cpu_set_input_line(gameplan->audiocpu, 0, state);
 	if (state == ASSERT_LINE)
 		cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(10));
 }
@@ -203,37 +207,6 @@ static const riot6532_interface r6532_interface =
 	DEVCB_HANDLER(r6532_soundlatch_w),	/* port B write handler */
 	DEVCB_LINE(r6532_irq)				/* IRQ callback */
 };
-
-
-
-/*************************************
- *
- *  Start
- *
- *************************************/
-
-static MACHINE_START( gameplan )
-{
-	gameplan_state *state = (gameplan_state *)machine->driver_data;
-
-	state->riot = devtag_get_device(machine, "riot");
-
-	/* register for save states */
-	state_save_register_global(machine, state->current_port);
-}
-
-
-
-/*************************************
- *
- *  Reset
- *
- *************************************/
-
-static MACHINE_RESET( gameplan )
-{
-}
-
 
 
 /*************************************
@@ -261,9 +234,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( gameplan_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x1780) AM_RAM  /* 6532 internal RAM */
 	AM_RANGE(0x0800, 0x081f) AM_MIRROR(0x17e0) AM_DEVREADWRITE("riot", riot6532_r, riot6532_w)
-	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_MIRROR(0x1800) AM_ROM
 ADDRESS_MAP_END
 
@@ -272,9 +245,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( leprechn_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_MIRROR(0x1780) AM_RAM  /* 6532 internal RAM */
 	AM_RANGE(0x0800, 0x081f) AM_MIRROR(0x17e0) AM_DEVREADWRITE("riot", riot6532_r, riot6532_w)
-	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0xa000, 0xa000) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0xa001, 0xa001) AM_MIRROR(0x1ffc) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0xa002, 0xa002) AM_MIRROR(0x1ffc) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0xe000, 0xefff) AM_MIRROR(0x1000) AM_ROM
 ADDRESS_MAP_END
 
@@ -1006,6 +979,37 @@ static const ay8910_interface ay8910_config =
 };
 
 
+
+static MACHINE_START( gameplan )
+{
+	gameplan_state *state = (gameplan_state *)machine->driver_data;
+
+	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->riot = devtag_get_device(machine, "riot");
+	state->via_0 = devtag_get_device(machine, "via6522_0");
+	state->via_1 = devtag_get_device(machine, "via6522_1");
+	state->via_2 = devtag_get_device(machine, "via6522_2");
+
+	/* register for save states */
+	state_save_register_global(machine, state->current_port);
+	state_save_register_global(machine, state->video_x);
+	state_save_register_global(machine, state->video_y);
+	state_save_register_global(machine, state->video_command);
+	state_save_register_global(machine, state->video_data);
+}
+
+
+static MACHINE_RESET( gameplan )
+{
+	gameplan_state *state = (gameplan_state *)machine->driver_data;
+	state->current_port = 0;
+	state->video_x = 0;
+	state->video_y = 0;
+	state->video_command = 0;
+	state->video_data = 0;
+}
+
 static MACHINE_DRIVER_START( gameplan )
 
 	MDRV_DRIVER_DATA(gameplan_state)
@@ -1028,7 +1032,7 @@ static MACHINE_DRIVER_START( gameplan )
 	/* audio hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, GAMEPLAN_AY8910_CLOCK)
+	MDRV_SOUND_ADD("aysnd", AY8910, GAMEPLAN_AY8910_CLOCK)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 
@@ -1110,17 +1114,17 @@ ROM_END
 ROM_START( kaos )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "kaosab.g2",    0x9000, 0x0800, CRC(b23d858f) SHA1(e31fa657ace34130211a0b9fc0d115fd89bb20dd) )
-	ROM_CONTINUE(		   	  0xd000, 0x0800 )
+	ROM_CONTINUE(			  0xd000, 0x0800 )
 	ROM_LOAD( "kaosab.j2",    0x9800, 0x0800, CRC(4861e5dc) SHA1(96ca0b8625af3897bd4a50a45ea964715f9e4973) )
-	ROM_CONTINUE(		   	  0xd800, 0x0800 )
+	ROM_CONTINUE(			  0xd800, 0x0800 )
 	ROM_LOAD( "kaosab.j1",    0xa000, 0x0800, CRC(e055db3f) SHA1(099176629723c1a9bdc59f440339b2e8c38c3261) )
-	ROM_CONTINUE(		   	  0xe000, 0x0800 )
+	ROM_CONTINUE(			  0xe000, 0x0800 )
 	ROM_LOAD( "kaosab.g1",    0xa800, 0x0800, CRC(35d7c467) SHA1(6d5bfd29ff7b96fed4b24c899ddd380e47e52bc5) )
-	ROM_CONTINUE(		   	  0xe800, 0x0800 )
+	ROM_CONTINUE(			  0xe800, 0x0800 )
 	ROM_LOAD( "kaosab.f1",    0xb000, 0x0800, CRC(995b9260) SHA1(580896aa8b6f0618dc532a12d0795b0d03f7cadd) )
-	ROM_CONTINUE(		   	  0xf000, 0x0800 )
+	ROM_CONTINUE(			  0xf000, 0x0800 )
 	ROM_LOAD( "kaosab.e1",    0xb800, 0x0800, CRC(3da5202a) SHA1(6b5aaf44377415763aa0895c64765a4b82086f25) )
-	ROM_CONTINUE(		   	  0xf800, 0x0800 )
+	ROM_CONTINUE(			  0xf800, 0x0800 )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "kaossnd.e1",   0xe000, 0x0800, CRC(ab23d52a) SHA1(505f3e4a56e78a3913010f5484891f01c9831480) )
@@ -1197,8 +1201,8 @@ ROM_END
 GAME( 1980, killcom,  0,        gameplan, killcom,  0, ROT0,   "GamePlan (Centuri license)", "Killer Comet", GAME_SUPPORTS_SAVE )
 GAME( 1980, megatack, 0,        gameplan, megatack, 0, ROT0,   "GamePlan (Centuri license)", "Megatack", GAME_SUPPORTS_SAVE )
 GAME( 1981, challeng, 0,        gameplan, challeng, 0, ROT0,   "GamePlan (Centuri license)", "Challenger", GAME_SUPPORTS_SAVE )
-GAME( 1981, kaos,     0,        gameplan, kaos,     0, ROT270, "GamePlan", "Kaos", GAME_SUPPORTS_SAVE )
-GAME( 1982, leprechn, 0,        leprechn, leprechn, 0, ROT0,   "Tong Electronic", "Leprechaun", GAME_SUPPORTS_SAVE )
-GAME( 1982, potogold, leprechn, leprechn, potogold, 0, ROT0,   "GamePlan", "Pot of Gold", GAME_SUPPORTS_SAVE )
-GAME( 1982, leprechp, leprechn, leprechn, potogold, 0, ROT0,   "Tong Electronic", "Leprechaun (Pacific Polytechnical license)", GAME_SUPPORTS_SAVE )
-GAME( 1982, piratetr, 0,        leprechn, piratetr, 0, ROT0,   "Tong Electronic", "Pirate Treasure", GAME_SUPPORTS_SAVE )
+GAME( 1981, kaos,     0,        gameplan, kaos,     0, ROT270, "GamePlan",                   "Kaos", GAME_SUPPORTS_SAVE )
+GAME( 1982, leprechn, 0,        leprechn, leprechn, 0, ROT0,   "Tong Electronic",            "Leprechaun", GAME_SUPPORTS_SAVE )
+GAME( 1982, potogold, leprechn, leprechn, potogold, 0, ROT0,   "GamePlan",                   "Pot of Gold", GAME_SUPPORTS_SAVE )
+GAME( 1982, leprechp, leprechn, leprechn, potogold, 0, ROT0,   "Tong Electronic",            "Leprechaun (Pacific Polytechnical license)", GAME_SUPPORTS_SAVE )
+GAME( 1982, piratetr, 0,        leprechn, piratetr, 0, ROT0,   "Tong Electronic",            "Pirate Treasure", GAME_SUPPORTS_SAVE )

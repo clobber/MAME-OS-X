@@ -10,7 +10,7 @@
 #include "driver.h"
 #include "sound/sn76496.h"
 
-#include "genesis.h"
+#include "includes/genesis.h"
 
 
 static const device_config *genesis_screen;
@@ -371,9 +371,9 @@ WRITE16_HANDLER( genesis_vdp_w )
 			{
 				data &= mem_mask;
 				 if (ACCESSING_BITS_8_15)
-				 	data |= data >> 8;
+					data |= data >> 8;
 				 else
-				 	data |= data << 8;
+					data |= data << 8;
 			}
 			vdp_data_w(space->machine, data);
 			break;
@@ -384,9 +384,9 @@ WRITE16_HANDLER( genesis_vdp_w )
 			{
 				data &= mem_mask;
 				 if (ACCESSING_BITS_8_15)
-				 	data |= data >> 8;
+					data |= data >> 8;
 				 else
-				 	data |= data << 8;
+					data |= data << 8;
 			}
 			vdp_control_w(space, data);
 			break;
@@ -395,7 +395,7 @@ WRITE16_HANDLER( genesis_vdp_w )
 		case 0x09:
 		case 0x0a:
 		case 0x0b:
-			device = devtag_get_device(space->machine, "sn");
+			device = devtag_get_device(space->machine, "snsnd");
 			if (device != NULL && ACCESSING_BITS_0_7)
 				sn76496_w(device, 0, data & 0xff);
 			break;

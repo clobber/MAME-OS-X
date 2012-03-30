@@ -45,7 +45,7 @@ UINT16 *powerins_vram_1, *powerins_vctrl_1;
 //UINT16 *powerins_vregs;
 
 /* Variables only used here: */
-static tilemap *tilemap_0, *tilemap_1;
+static tilemap_t *tilemap_0, *tilemap_1;
 static int tile_bank;
 
 
@@ -89,7 +89,7 @@ WRITE16_HANDLER( powerins_paletteram16_w )
 	/*  RRRR GGGG BBBB RGBx */
 	/*  4321 4321 4321 000x */
 
-	UINT16 newword = COMBINE_DATA(&paletteram16[offset]);
+	UINT16 newword = COMBINE_DATA(&space->machine->generic.paletteram.u16[offset]);
 
 	int r = ((newword >> 11) & 0x1E ) | ((newword >> 3) & 0x01);
 	int g = ((newword >>  7) & 0x1E ) | ((newword >> 2) & 0x01);
@@ -145,7 +145,7 @@ WRITE16_HANDLER( powerins_vram_0_w )
 
 static TILEMAP_MAPPER( powerins_get_memory_offset_0 )
 {
-	return 	(col * TILES_PER_PAGE_Y) +
+	return	(col * TILES_PER_PAGE_Y) +
 
 			(row % TILES_PER_PAGE_Y) +
 			(row / TILES_PER_PAGE_Y) * (TILES_PER_PAGE * 16);
@@ -268,8 +268,8 @@ Offset:     Format:                 Value:
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
-	UINT16 *source = spriteram16 + 0x8000/2;
-	UINT16 *finish = spriteram16 + 0x9000/2;
+	UINT16 *source = machine->generic.spriteram.u16 + 0x8000/2;
+	UINT16 *finish = machine->generic.spriteram.u16 + 0x9000/2;
 
 	int screen_w = video_screen_get_width(machine->primary_screen);
 	int screen_h = video_screen_get_height(machine->primary_screen);
@@ -299,11 +299,15 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 		/* Handle flip_screen. Apply a global offset of 32 pixels along x too */
 
 		if (flip_screen_get(machine))
-		{	sx = screen_w - sx - dimx*16 - 32;	flipx = !flipx;
+		{
+			sx = screen_w - sx - dimx*16 - 32;	flipx = !flipx;
 			sy = screen_h - sy - dimy*16;		flipy = !flipy;
-			code += dimx*dimy-1;			inc = -1;	}
+			code += dimx*dimy-1;			inc = -1;
+		}
 		else
-		{	sx += 32;						inc = +1;	}
+		{
+			sx += 32;						inc = +1;
+		}
 
 		code = (code & 0x7fff) + ( (size & 0x0100) << 7 );
 

@@ -36,7 +36,6 @@ Limit for help/undo (matta):
 */
 
 #include "driver.h"
-#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "video/mc6845.h"
@@ -67,7 +66,7 @@ static MC6845_UPDATE_ROW( update_row )
 
 	for(cx=0;cx<x_count;++cx)
 	{
-		data_address=((videoram[ma+cx]+tile_bank)<<4)|ra;
+		data_address=((device->machine->generic.videoram.u8[ma+cx]+tile_bank)<<4)|ra;
 		tmp=gfx[data_address]|(gfx[data_address+0x2000]<<8)|(gfx[data_address+0x4000]<<16);
 
 		for(x=0;x<TILE_WIDTH;++x)
@@ -96,7 +95,7 @@ static PALETTE_INIT( othello )
     palette_set_color(machine,0x0f,MAKE_RGB(0xff,0xff,0xff));
 }
 
-VIDEO_UPDATE( othello )
+static VIDEO_UPDATE( othello )
 {
 	const device_config *mc6845 = devtag_get_device(screen->machine, "crtc");
 	mc6845_update(mc6845, bitmap, cliprect);
@@ -106,7 +105,7 @@ VIDEO_UPDATE( othello )
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x97ff) AM_NOP /* not populated */
-	AM_RANGE(0x9800, 0x9fff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x9800, 0x9fff) AM_RAM AM_BASE_GENERIC(videoram)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 

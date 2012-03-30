@@ -100,7 +100,7 @@ static WRITE8_HANDLER( mjsister_banksel1_w )
 	if (tmp != mjsister_colorbank)
 		mjsister_screen_redraw = 1;
 
-	memory_set_bankptr(space->machine, 1,&BANKROM[rombank0*0x10000+rombank1*0x8000]+0x10000);
+	memory_set_bankptr(space->machine, "bank1",&BANKROM[rombank0*0x10000+rombank1*0x8000]+0x10000);
 }
 
 static WRITE8_HANDLER( mjsister_banksel2_w )
@@ -119,7 +119,7 @@ static WRITE8_HANDLER( mjsister_banksel2_w )
 			logerror("%04x p31_w:%02x\n",cpu_get_pc(space->cpu),data);
 	}
 
-	memory_set_bankptr(space->machine, 1,&BANKROM[rombank0*0x10000+rombank1*0x8000]+0x10000);
+	memory_set_bankptr(space->machine, "bank1",&BANKROM[rombank0*0x10000+rombank1*0x8000]+0x10000);
 }
 
 static WRITE8_HANDLER( mjsister_input_sel1_w )
@@ -154,15 +154,15 @@ static READ8_HANDLER( mjsister_keys_r )
 static ADDRESS_MAP_START( mjsister_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1) AM_WRITE(mjsister_videoram_w)
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1") AM_WRITE(mjsister_videoram_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mjsister_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_WRITENOP /* HD46505? */
-	AM_RANGE(0x10, 0x10) AM_DEVWRITE("ay", ay8910_address_w)
-	AM_RANGE(0x11, 0x11) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x12, 0x12) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0x10, 0x10) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x11, 0x11) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x12, 0x12) AM_DEVWRITE("aysnd", ay8910_data_w)
 	AM_RANGE(0x20, 0x20) AM_READ(mjsister_keys_r)
 	AM_RANGE(0x21, 0x21) AM_READ_PORT("IN0")
 	AM_RANGE(0x30, 0x30) AM_WRITE(mjsister_banksel1_w)
@@ -327,7 +327,7 @@ static MACHINE_DRIVER_START( mjsister )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, MCLK/8)
+	MDRV_SOUND_ADD("aysnd", AY8910, MCLK/8)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 

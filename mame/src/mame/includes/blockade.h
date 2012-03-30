@@ -1,6 +1,18 @@
 #include "sound/discrete.h"
-
 #include "sound/samples.h"
+
+typedef struct _blockade_state blockade_state;
+struct _blockade_state
+{
+	UINT8 *  videoram;
+
+	/* video-related */
+	tilemap_t  *bg_tilemap;
+
+	/* input-related */
+	UINT8 coin_latch;  /* Active Low */
+	UINT8 just_been_reset;
+};
 
 
 /*----------- defined in video/blockade.c -----------*/

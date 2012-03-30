@@ -54,7 +54,7 @@ Grndtour:
 #include "cpu/z180/z180.h"
 #include "deprecat.h"
 #include "machine/8255ppi.h"
-#include "iqblock.h"
+#include "includes/iqblock.h"
 #include "sound/2413intf.h"
 
 static UINT8 *rambase;
@@ -102,7 +102,7 @@ static WRITE8_DEVICE_HANDLER( port_C_w )
 	iqblock_videoenable = data & 0x20;
 
 	/* bit 6 is coin counter */
-	coin_counter_w(0,data & 0x40);
+	coin_counter_w(device->machine, 0,data & 0x40);
 
 	/* bit 7 could be a second coin counter, but coin 2 doesn't seem to work... */
 }
@@ -134,7 +134,7 @@ static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x5080, 0x5083) AM_DEVREAD("ppi8255", ppi8255_r)
 	AM_RANGE(0x5090, 0x5090) AM_READ_PORT("SW0")
 	AM_RANGE(0x50a0, 0x50a0) AM_READ_PORT("SW1")
-	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ym", ym2413_w) // UM3567_data_port_0_w
+	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ymsnd", ym2413_w) // UM3567_data_port_0_w
 	AM_RANGE(0x50c0, 0x50c0) AM_WRITE(iqblock_irqack_w)
 	AM_RANGE(0x7000, 0x7fff) AM_READ(iqblock_bgvideoram_r)
 	AM_RANGE(0x8000, 0xffff) AM_READ(extrarom_r)
@@ -292,7 +292,7 @@ static MACHINE_DRIVER_START( iqblock )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -437,8 +437,8 @@ static DRIVER_INIT( iqblock )
 	}
 
 	/* initialize pointers for I/O mapped RAM */
-	paletteram         = rom + 0x12000;
-	paletteram_2       = rom + 0x12800;
+	machine->generic.paletteram.u8         = rom + 0x12000;
+	machine->generic.paletteram2.u8       = rom + 0x12800;
 	iqblock_fgvideoram = rom + 0x16800;
 	iqblock_bgvideoram = rom + 0x17000;
 	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xfe26, 0xfe26, 0, 0, iqblock_prot_w);
@@ -459,8 +459,8 @@ static DRIVER_INIT( grndtour )
 	}
 
 	/* initialize pointers for I/O mapped RAM */
-	paletteram         = rom + 0x12000;
-	paletteram_2       = rom + 0x12800;
+	machine->generic.paletteram.u8         = rom + 0x12000;
+	machine->generic.paletteram2.u8       = rom + 0x12800;
 	iqblock_fgvideoram = rom + 0x16800;
 	iqblock_bgvideoram = rom + 0x17000;
 	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xfe39, 0xfe39, 0, 0, grndtour_prot_w);

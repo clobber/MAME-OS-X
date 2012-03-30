@@ -196,9 +196,9 @@ TODO :
 
 #define UNBANKED_SIZE 0x800
 
-static tilemap *gfx0a_tilemap;
-static tilemap *gfx0b_tilemap;
-static tilemap *gfx1_tilemap;
+static tilemap_t *gfx0a_tilemap;
+static tilemap_t *gfx0b_tilemap;
+static tilemap_t *gfx1_tilemap;
 
 static UINT8 *gfx0_cram;
 static UINT8 *gfx0_vram;
@@ -357,7 +357,7 @@ static WRITE8_HANDLER(write_a00x)
 				UINT8 *ROM = memory_region(space->machine, "maincpu");
 				bank = newbank;
 				ROM = &ROM[0x10000+0x8000 * newbank + UNBANKED_SIZE];
-				memory_set_bankptr(space->machine, 1,ROM);
+				memory_set_bankptr(space->machine, "bank1",ROM);
 			}
 		}
 		break;
@@ -385,14 +385,14 @@ static READ8_HANDLER(prot_read_700x)
 
   switch(cpu_get_pc(space->cpu))
   {
-  	case 0x23f:
-  	case 0x246:
-  	case 0x24c:
-  	case 0x252:
-  	case 0x258:
-  	case 0x25e:
+	case 0x23f:
+	case 0x246:
+	case 0x24c:
+	case 0x252:
+	case 0x258:
+	case 0x25e:
 		return offset;//enough to pass...
-   }
+  }
   return memory_region(space->machine, "sub")[0x7000+offset];
 }
 
@@ -439,7 +439,7 @@ static const ym2203_interface ym2203_interface_1 =
 
 static ADDRESS_MAP_START( map_main, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, UNBANKED_SIZE-1) AM_ROM
-	AM_RANGE(UNBANKED_SIZE, 0x7fff) AM_READ(SMH_BANK(1))
+	AM_RANGE(UNBANKED_SIZE, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x8008, 0x8009) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
 	AM_RANGE(0xa000, 0xa00f) AM_READWRITE(read_a00x, write_a00x)
@@ -448,11 +448,11 @@ static ADDRESS_MAP_START( map_main, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xcbff) AM_READWRITE(gfx1_vram_r, gfx1_vram_w) AM_BASE(&gfx1_vram)
 	AM_RANGE(0xcc00, 0xcfff) AM_READWRITE(gfx1_cram_r, gfx1_cram_w) AM_BASE(&gfx1_cram)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM AM_BASE(&sprite_ram)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split1_w) AM_BASE(&paletteram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split2_w) AM_BASE(&paletteram_2)
-	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0xf100, 0xf17f) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xf180, 0xffff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split2_w) AM_BASE_GENERIC(paletteram2)
+	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xf100, 0xf17f) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xf180, 0xffff) AM_RAM AM_SHARE("share2")
 ADDRESS_MAP_END
 
 
@@ -460,10 +460,10 @@ static ADDRESS_MAP_START( map_sub, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x8001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x8008, 0x8009) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
-	AM_RANGE(0x8010, 0x8016) AM_DEVREADWRITE("es", read_8010, es8712_w)
+	AM_RANGE(0x8010, 0x8016) AM_DEVREADWRITE("essnd", read_8010, es8712_w)
 	AM_RANGE(0xa000, 0xa00f) AM_READWRITE(read_a00x, write_a00x)
-	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0xf180, 0xffff) AM_RAM AM_SHARE(2)
+	AM_RANGE(0xf000, 0xf0ff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xf180, 0xffff) AM_RAM AM_SHARE("share2")
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( witch )
@@ -549,7 +549,7 @@ F180 kkkbbppp ; Read onPORT 0xA005
  kkk  = KEY IN  | 1-10 ; 1-20 ; 1-40 ; 1-50 ; 1-100 ; 1-200 ; 1-250 ; 1-500
 */
 	PORT_START("A005")	/* DSW */
- 	PORT_DIPNAME( 0x07, 0x07, "PAY OUT" )
+	PORT_DIPNAME( 0x07, 0x07, "PAY OUT" )
 	PORT_DIPSETTING(    0x07, "60" )
 	PORT_DIPSETTING(    0x06, "65" )
 	PORT_DIPSETTING(    0x05, "70" )
@@ -786,7 +786,7 @@ static MACHINE_DRIVER_START( witch )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("es", ES8712, 8000)
+	MDRV_SOUND_ADD("essnd", ES8712, 8000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("ym1", YM2203, 1500000)
@@ -814,7 +814,7 @@ ROM_START( witch )
 	ROM_REGION( 0x40000, "gfx2", 0 )
 	ROM_LOAD( "rom.a1", 0x00000, 0x40000,  CRC(512300a5) SHA1(1e9ba58d1ddbfb8276c68f6d5c3591e6b77abf21)  )
 
-	ROM_REGION( 0x40000, "es", 0 )
+	ROM_REGION( 0x40000, "essnd", 0 )
 	ROM_LOAD( "rom.v10", 0x00000, 0x40000, CRC(62e42371) SHA1(5042abc2176d0c35fd6b698eca4145f93b0a3944) )
 ROM_END
 
@@ -833,14 +833,14 @@ ROM_START( pbchmp95 )
 	ROM_REGION( 0x40000, "gfx2", 0 )
 	ROM_LOAD( "1.bin", 0x00000, 0x40000,  CRC(f6cf7ed6) SHA1(327580a17eb2740fad974a01d97dad0a4bef9881)  )
 
-	ROM_REGION( 0x40000, "es", 0 )
+	ROM_REGION( 0x40000, "essnd", 0 )
 	ROM_LOAD( "5.bin", 0x00000, 0x40000, CRC(62e42371) SHA1(5042abc2176d0c35fd6b698eca4145f93b0a3944) )
 ROM_END
 
 static DRIVER_INIT(witch)
 {
- 	UINT8 *ROM = (UINT8 *)memory_region(machine, "maincpu");
-	memory_set_bankptr(machine, 1, &ROM[0x10000+UNBANKED_SIZE]);
+	UINT8 *ROM = (UINT8 *)memory_region(machine, "maincpu");
+	memory_set_bankptr(machine, "bank1", &ROM[0x10000+UNBANKED_SIZE]);
 
 	memory_install_read8_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0x7000, 0x700f, 0, 0, prot_read_700x);
 	bank = -1;

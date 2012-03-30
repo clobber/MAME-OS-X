@@ -22,12 +22,14 @@
 #include "cpu/z80/z80.h"
 
 
-static tilemap *tmap;
+static UINT8 *videoram;
+static UINT8 *colorram;
+static tilemap_t *tmap;
 
 static TILE_GET_INFO( get_tile_info )
 {
 	int code = videoram[tile_index];
-	int color=colorram[tile_index];
+	int color = colorram[tile_index];
 
 	if((color&1 ) || (color>15) )
 		logerror("COLOR %i\n",color);

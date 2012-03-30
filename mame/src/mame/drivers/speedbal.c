@@ -66,20 +66,20 @@ WRITE8_HANDLER( speedbal_background_videoram_w );
 
 static WRITE8_HANDLER( speedbal_coincounter_w )
 {
-	coin_counter_w(0, data & 0x80);
-	coin_counter_w(1, data & 0x40);
+	coin_counter_w(space->machine, 0, data & 0x80);
+	coin_counter_w(space->machine, 1, data & 0x40);
 	flip_screen_set(space->machine, data & 8); // also changes data & 0x10 at the same time too (flipx and flipy?)
 	/* unknown: (data & 0x10) and (data & 4) */
 }
 
 static ADDRESS_MAP_START( main_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdbff) AM_ROM
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE(1) // shared with SOUND
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE("share1") // shared with SOUND
 	AM_RANGE(0xe000, 0xe1ff) AM_RAM_WRITE(speedbal_background_videoram_w) AM_BASE(&speedbal_background_videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(speedbal_foreground_videoram_w) AM_BASE(&speedbal_foreground_videoram)
-	AM_RANGE(0xf000, 0xf5ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE(&paletteram)
-	AM_RANGE(0xf600, 0xfeff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xff00, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xf5ff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xf600, 0xfeff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xff00, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( main_cpu_io_map, ADDRESS_SPACE_IO, 8 )
@@ -95,13 +95,13 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( sound_cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xd000, 0xdbff) AM_RAM
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE(1) // shared with MAIN CPU
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM AM_SHARE("share1") // shared with MAIN CPU
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_cpu_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 	AM_RANGE(0x40, 0x40) AM_WRITENOP
 	AM_RANGE(0x80, 0x80) AM_WRITENOP
 	AM_RANGE(0x82, 0x82) AM_WRITENOP
@@ -257,7 +257,7 @@ static MACHINE_DRIVER_START( speedbal )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM3812, 3600000)
+	MDRV_SOUND_ADD("ymsnd", YM3812, 3600000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

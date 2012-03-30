@@ -47,15 +47,15 @@ static void set_color(running_machine *machine, int color, UINT8 r, UINT8 g, UIN
 // qgh expects to be able to read the palette shared between CPUs
 READ16_HANDLER( system24temp_sys16_paletteram1_r )
 {
-	return paletteram16[offset];
+	return space->machine->generic.paletteram.u16[offset];
 }
 
 
 WRITE16_HANDLER (system24temp_sys16_paletteram1_w)
 {
 	int r, g, b;
-	COMBINE_DATA (paletteram16 + offset);
-	data = paletteram16[offset];
+	COMBINE_DATA (space->machine->generic.paletteram.u16 + offset);
+	data = space->machine->generic.paletteram.u16[offset];
 
 	r = (data & 0x00f) << 4;
 	if(data & 0x1000)
@@ -82,7 +82,7 @@ enum {SYS24_TILES = 0x4000};
 static UINT16 *sys24_char_ram, *sys24_tile_ram;
 static UINT16 sys24_tile_mask;
 static int sys24_char_gfx_index;
-static tilemap *sys24_tile_layer[4];
+static tilemap_t *sys24_tile_layer[4];
 
 #define XOR(a) WORD_XOR_BE(a)
 

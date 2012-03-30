@@ -169,7 +169,7 @@ static WRITE8_HANDLER( argus_bankselect_w )
 	int bankaddress;
 
 	bankaddress = 0x10000 + ((data & 7) * 0x4000);
-	memory_set_bankptr(space->machine, 1, &RAM[bankaddress]);	 /* Select 8 banks of 16k */
+	memory_set_bankptr(space->machine, "bank1", &RAM[bankaddress]);	 /* Select 8 banks of 16k */
 }
 
 
@@ -181,7 +181,7 @@ static WRITE8_HANDLER( argus_bankselect_w )
 
 static ADDRESS_MAP_START( argus_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -199,13 +199,13 @@ static ADDRESS_MAP_START( argus_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(argus_txram_r, argus_txram_w) AM_BASE(&argus_txram)
 	AM_RANGE(0xd800, 0xdfff) AM_READWRITE(argus_bg1ram_r, argus_bg1ram_w) AM_BASE(&argus_bg1ram)
 	AM_RANGE(0xe000, 0xf1ff) AM_RAM
-	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( valtric_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -223,13 +223,13 @@ static ADDRESS_MAP_START( valtric_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(argus_txram_r, argus_txram_w) AM_BASE(&argus_txram)
 	AM_RANGE(0xd800, 0xdfff) AM_READWRITE(argus_bg1ram_r, argus_bg1ram_w) AM_BASE(&argus_bg1ram)
 	AM_RANGE(0xe000, 0xf1ff) AM_RAM
-	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( butasan_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -250,7 +250,7 @@ static ADDRESS_MAP_START( butasan_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xcfff) AM_READWRITE(argus_paletteram_r, butasan_paletteram_w) AM_BASE(&argus_paletteram)
 	AM_RANGE(0xd000, 0xdfff) AM_READWRITE(butasan_pagedram_r, butasan_pagedram_w)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xf67f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xf000, 0xf67f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xf680, 0xffff) AM_RAM
 ADDRESS_MAP_END
 

@@ -877,19 +877,19 @@ J1100256A VIDEO PCB
 
 #include "driver.h"
 #include "cpu/z80/z80.h"
-#include "taitoipt.h"
+#include "includes/taitoipt.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
 #include "video/taitoic.h"
 #include "audio/taitosnd.h"
 #include "sound/2610intf.h"
 #include "sound/flt_vol.h"
+#include "machine/taitoio.h"
 
 #include "contcirc.lh"
 #include "dblaxle.lh"
 
 VIDEO_START( taitoz );
-VIDEO_START( spacegun );
 
 VIDEO_UPDATE( contcirc );
 VIDEO_UPDATE( chasehq );
@@ -902,10 +902,6 @@ VIDEO_UPDATE( dblaxle );
 WRITE16_HANDLER( contcirc_out_w );
 READ16_HANDLER ( sci_spriteframe_r );
 WRITE16_HANDLER( sci_spriteframe_w );
-
-//  These TC0150ROD prototypes will go in taitoic.h  //
-READ16_HANDLER ( TC0150ROD_word_r );	/* Road generator */
-WRITE16_HANDLER( TC0150ROD_word_w );
 
 static UINT16 cpua_ctrl;
 static INT32 sci_int6 = 0;
@@ -1014,7 +1010,7 @@ static INTERRUPT_GEN( dblaxle_cpub_interrupt )
                               EEPROM
 ******************************************************************/
 
-static const UINT8 default_eeprom[128]=
+static const UINT8 spacegun_default_eeprom[128]=
 {
 	0x00,0x00,0x00,0xff,0x00,0x01,0x41,0x41,0x00,0x00,0x00,0xff,0x00,0x00,0xf0,0xf0,
 	0x00,0x00,0x00,0xff,0x00,0x01,0x41,0x41,0x00,0x00,0x00,0xff,0x00,0x00,0xf0,0xf0,
@@ -1026,7 +1022,7 @@ static const UINT8 default_eeprom[128]=
 	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff
 };
 
-static const eeprom_interface eeprom_intf =
+static const eeprom_interface spacegun_eeprom_intf =
 {
 	6,				/* address bits */
 	16,				/* data bits */
@@ -1039,25 +1035,6 @@ static const eeprom_interface eeprom_intf =
 	1				/* reset delay */
 };
 
-static NVRAM_HANDLER( spacegun )
-{
-	if (read_or_write)
-		eeprom_save(file);
-	else
-	{
-		eeprom_init(machine, &eeprom_intf);
-
-		if (file)
-			eeprom_load(file);
-		else
-			eeprom_set_data(default_eeprom,128);  /* Default the gun setup values */
-	}
-}
-
-static int eeprom_r(void)
-{
-	return (eeprom_read_bit() & 0x01)<<7;
-}
 
 #if 0
 static READ16_HANDLER( eep_latch_r )
@@ -1068,6 +1045,7 @@ static READ16_HANDLER( eep_latch_r )
 
 static WRITE16_HANDLER( spacegun_output_bypass_w )
 {
+	const device_config *tc0220ioc = devtag_get_device(space->machine, "tc0220ioc");
 	switch (offset)
 	{
 		case 0x03:
@@ -1079,13 +1057,11 @@ static WRITE16_HANDLER( spacegun_output_bypass_w )
             x0000000    (unused)                  */
 
 			COMBINE_DATA(&eep_latch);
-			eeprom_write_bit(data & 0x40);
-			eeprom_set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
-			eeprom_set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+			input_port_write(space->machine, "EEPROMOUT", data, 0xff);
 			break;
 
 		default:
-			TC0220IOC_w(space, offset, data);	/* might be a 510NIO ! */
+			tc0220ioc_w(tc0220ioc, offset, data);	/* might be a 510NIO ! */
 	}
 }
 
@@ -1098,7 +1074,8 @@ static READ8_HANDLER( contcirc_input_bypass_r )
 {
 	/* Bypass TC0220IOC controller for analog input */
 
-	UINT8 port = TC0220IOC_port_r(space, 0);	/* read port number */
+	const device_config *tc0220ioc = devtag_get_device(space->machine, "tc0220ioc");
+	UINT8 port = tc0220ioc_port_r(tc0220ioc, 0);	/* read port number */
 	int steer = 0;
 	int fake = input_port_read(space->machine, "FAKE");
 
@@ -1129,7 +1106,7 @@ static READ8_HANDLER( contcirc_input_bypass_r )
 			return steer >> 8;
 
 		default:
-			return TC0220IOC_portreg_r(space, offset);
+			return tc0220ioc_portreg_r(tc0220ioc, offset);
 	}
 }
 
@@ -1138,7 +1115,8 @@ static READ8_HANDLER( chasehq_input_bypass_r )
 {
 	/* Bypass TC0220IOC controller for extra inputs */
 
-	UINT8 port = TC0220IOC_port_r(space, 0);	/* read port number */
+	const device_config *tc0220ioc = devtag_get_device(space->machine, "tc0220ioc");
+	UINT8 port = tc0220ioc_port_r(tc0220ioc, 0);	/* read port number */
 	int steer = 0;
 	int fake = input_port_read(space->machine, "FAKE");
 
@@ -1180,7 +1158,7 @@ static READ8_HANDLER( chasehq_input_bypass_r )
 			return steer >> 8;
 
 		default:
-			return TC0220IOC_portreg_r(space, offset);
+			return tc0220ioc_portreg_r(tc0220ioc, offset);
 	}
 }
 
@@ -1269,7 +1247,7 @@ static READ16_HANDLER( sci_steer_input_r )
 		case 0x04:
 			return (steer & 0xff);
 
- 		case 0x05:
+		case 0x05:
 			return (steer & 0xff00) >> 8;
 	}
 
@@ -1281,13 +1259,16 @@ static READ16_HANDLER( sci_steer_input_r )
 
 static READ16_HANDLER( spacegun_input_bypass_r )
 {
+	const device_config *eeprom = devtag_get_device(space->machine, "eeprom");
+	const device_config *tc0220ioc = devtag_get_device(space->machine, "tc0220ioc");
+
 	switch (offset)
 	{
 		case 0x03:
-			return eeprom_r();
+			return eeprom_read_bit(eeprom) << 7;
 
 		default:
-			return TC0220IOC_r(space, offset);	/* might be a 510NIO ! */
+			return tc0220ioc_r(tc0220ioc, offset);	/* might be a 510NIO ! */
 	}
 }
 
@@ -1400,7 +1381,7 @@ static INT32 banknum;
 
 static void reset_sound_region(running_machine *machine)
 {
-	memory_set_bankptr(machine,  10, memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
+	memory_set_bankptr(machine,  "bank10", memory_region(machine, "audiocpu") + (banknum * 0x4000) + 0x10000 );
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
@@ -1522,21 +1503,21 @@ static MACHINE_START( taitoz )
 static ADDRESS_MAP_START( contcirc_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
-	AM_RANGE(0x084000, 0x087fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x084000, 0x087fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x090000, 0x090001) AM_WRITE(contcirc_out_w)    /* road palette bank, sub CPU reset, 3d glasses control */
-	AM_RANGE(0x100000, 0x100007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_rbswap_word_w)	/* palette */
-	AM_RANGE(0x200000, 0x20ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0x220000, 0x22000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0x300000, 0x301fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)	/* "root ram" */
-	AM_RANGE(0x400000, 0x4006ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x100000, 0x100007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_rbswap_word_w)	/* palette */
+	AM_RANGE(0x200000, 0x20ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0x220000, 0x22000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0x300000, 0x301fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)	/* "root ram" */
+	AM_RANGE(0x400000, 0x4006ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( contcirc_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
-	AM_RANGE(0x084000, 0x087fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x100000, 0x100001) AM_READWRITE8(contcirc_input_bypass_r, TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x100002, 0x100003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0x00ff) /* (actually game uses TC040IOC) */
+	AM_RANGE(0x084000, 0x087fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x100000, 0x100001) AM_READ8(contcirc_input_bypass_r, 0x00ff) AM_DEVWRITE8("tc0220ioc", tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x100002, 0x100003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff) /* (actually game uses TC040IOC) */
 	AM_RANGE(0x200000, 0x200003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
 ADDRESS_MAP_END
 
@@ -1544,110 +1525,110 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( chasehq_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x107fff) AM_RAM
-	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x10c000, 0x10ffff) AM_RAM
-	AM_RANGE(0x400000, 0x400001) AM_READWRITE8(chasehq_input_bypass_r, TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x400002, 0x400003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x400000, 0x400001) AM_READ8(chasehq_input_bypass_r, 0x00ff) AM_DEVWRITE8("tc0220ioc", tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x400002, 0x400003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x820000, 0x820003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
-	AM_RANGE(0xa00000, 0xa00007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_word_w)	/* palette */
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0xc20000, 0xc2000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xa00000, 0xa00007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette */
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0xc20000, 0xc2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xe00000, 0xe003ff) AM_READWRITE(chasehq_motor_r, chasehq_motor_w)	/* motor cpu */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( chq_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x800000, 0x801fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)
+	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x800000, 0x801fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( enforce_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(cpua_ctrl_w)	// works without?
-	AM_RANGE(0x300000, 0x3006ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x400000, 0x401fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)	/* "root ram" ??? */
-	AM_RANGE(0x500000, 0x500007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_rbswap_word_w)	/* palette */
-	AM_RANGE(0x600000, 0x60ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0x620000, 0x62000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
+	AM_RANGE(0x300000, 0x3006ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x400000, 0x401fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)	/* "root ram" ??? */
+	AM_RANGE(0x500000, 0x500007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_rbswap_word_w)	/* palette */
+	AM_RANGE(0x600000, 0x60ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0x620000, 0x62000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( enforce_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x200000, 0x200003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
-	AM_RANGE(0x300000, 0x300001) AM_READWRITE8(TC0220IOC_portreg_r, TC0220IOC_portreg_w, 0x00ff)
-	AM_RANGE(0x300002, 0x300003) AM_READWRITE8(TC0220IOC_port_r, TC0220IOC_port_w, 0x00ff)
+	AM_RANGE(0x300000, 0x300001) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_portreg_r, tc0220ioc_portreg_w, 0x00ff)
+	AM_RANGE(0x300002, 0x300003) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_port_r, tc0220ioc_port_w, 0x00ff)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( bshark_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x400000, 0x40000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x400000, 0x40000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x800000, 0x800007) AM_READWRITE(bshark_stick_r, bshark_stick_w)
-	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xc00000, 0xc00fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0xd00000, 0xd0ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0xd20000, 0xd2000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
+	AM_RANGE(0xa00000, 0xa01fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xc00000, 0xc00fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xd00000, 0xd0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0xd20000, 0xd2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( bshark_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x108000, 0x10bfff) AM_RAM
-	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x400000, 0x400007) AM_WRITE(spacegun_pancontrol)  /* pan */
 //  AM_RANGE(0x40000a, 0x40000b) AM_READ(taitoz_unknown_r)  // ???
-	AM_RANGE(0x600000, 0x600007) AM_DEVREADWRITE8("ym", ym2610_r, ym2610_w, 0x00ff)
+	AM_RANGE(0x600000, 0x600007) AM_DEVREADWRITE8("ymsnd", ym2610_r, ym2610_w, 0x00ff)
 	AM_RANGE(0x60000c, 0x60000d) AM_NOP	// interrupt controller?
 	AM_RANGE(0x60000e, 0x60000f) AM_NOP
-	AM_RANGE(0x800000, 0x801fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)	/* "root ram" */
+	AM_RANGE(0x800000, 0x801fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( sci_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x107fff) AM_RAM
-	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x108000, 0x10bfff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x10c000, 0x10ffff) AM_RAM
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x200000, 0x20000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x200010, 0x20001f) AM_READ(sci_steer_input_r)
 //  AM_RANGE(0x400000, 0x400001) AM_WRITE(cpua_ctrl_w)  // ?? doesn't seem to fit what's written
 	AM_RANGE(0x420000, 0x420003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0xa00000, 0xa0ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0xa20000, 0xa2000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0xa20000, 0xa2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xc08000, 0xc08001) AM_READWRITE(sci_spriteframe_r, sci_spriteframe_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sci_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0x200000, 0x203fff) AM_RAM
-	AM_RANGE(0x208000, 0x20bfff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0xa00000, 0xa01fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)
+	AM_RANGE(0x208000, 0x20bfff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xa00000, 0xa01fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( nightstr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x400000, 0x40000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x110000, 0x113fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x400000, 0x40000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x820000, 0x820003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
-	AM_RANGE(0xa00000, 0xa00007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_word_w)	/* palette */
-	AM_RANGE(0xc00000, 0xc0ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0xc20000, 0xc2000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xa00000, 0xa00007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette */
+	AM_RANGE(0xc00000, 0xc0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0xc20000, 0xc2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0xd00000, 0xd007ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0xe00000, 0xe00001) AM_WRITENOP    /* Motor 1 (left) */
 	AM_RANGE(0xe00008, 0xe00009) AM_WRITENOP    /* Motor 2 (center) */
 	AM_RANGE(0xe00010, 0xe00011) AM_WRITENOP    /* Motor 3 (right) */
@@ -1657,28 +1638,28 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( nightstr_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x800000, 0x801fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)	/* "root ram" */
+	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x800000, 0x801fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( aquajack_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(cpua_ctrl_w)	// not needed, but it's probably like the others
-	AM_RANGE(0x300000, 0x300007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_word_w)	/* palette */
-	AM_RANGE(0x800000, 0x801fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)
-	AM_RANGE(0xa00000, 0xa0ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0xa20000, 0xa2000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0xc40000, 0xc403ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x300000, 0x300007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_word_w)	/* palette */
+	AM_RANGE(0x800000, 0x801fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
+	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0xa20000, 0xa2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0xc40000, 0xc403ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( aquajack_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x200000, 0x20000f) AM_READWRITE8(TC0220IOC_r, TC0220IOC_w, 0x00ff)
+	AM_RANGE(0x104000, 0x107fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x200000, 0x20000f) AM_DEVREADWRITE8("tc0220ioc", tc0220ioc_r, tc0220ioc_w, 0x00ff)
 	AM_RANGE(0x300000, 0x300003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
 	AM_RANGE(0x800800, 0x80083f) AM_READ(aquajack_unknown_r) // Read regularly after write to 800800...
 //  AM_RANGE(0x800800, 0x800801) AM_WRITE(taitoz_unknown_w)
@@ -1689,19 +1670,19 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( spacegun_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x30c000, 0x30ffff) AM_RAM
-	AM_RANGE(0x310000, 0x31ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x500000, 0x5005ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(TC0100SCN_word_0_r, TC0100SCN_word_0_w)	/* tilemaps */
-	AM_RANGE(0x920000, 0x92000f) AM_READWRITE(TC0100SCN_ctrl_word_0_r, TC0100SCN_ctrl_word_0_w)
-	AM_RANGE(0xb00000, 0xb00007) AM_READWRITE(TC0110PCR_word_r, TC0110PCR_step1_rbswap_word_w)	/* palette */
+	AM_RANGE(0x310000, 0x31ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x500000, 0x5005ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_word_r, tc0100scn_word_w)	/* tilemaps */
+	AM_RANGE(0x920000, 0x92000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_word_r, tc0100scn_ctrl_word_w)
+	AM_RANGE(0xb00000, 0xb00007) AM_DEVREADWRITE("tc0110pcr", tc0110pcr_word_r, tc0110pcr_step1_rbswap_word_w)	/* palette */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( spacegun_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x20c000, 0x20ffff) AM_RAM
-	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x800000, 0x80000f) AM_READWRITE(spacegun_input_bypass_r, spacegun_output_bypass_w)
-	AM_RANGE(0xc00000, 0xc00007) AM_DEVREADWRITE8("ym", ym2610_r, ym2610_w, 0x00ff)
+	AM_RANGE(0xc00000, 0xc00007) AM_DEVREADWRITE8("ymsnd", ym2610_r, ym2610_w, 0x00ff)
 	AM_RANGE(0xc0000c, 0xc0000d) AM_NOP	// interrupt controller?
 	AM_RANGE(0xc0000e, 0xc0000f) AM_NOP
 	AM_RANGE(0xc20000, 0xc20007) AM_WRITE(spacegun_pancontrol)  /* pan */
@@ -1713,24 +1694,24 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( dblaxle_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x203fff) AM_RAM
-	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x400000, 0x40000f) AM_READWRITE(TC0510NIO_halfword_wordswap_r, TC0510NIO_halfword_wordswap_w)
+	AM_RANGE(0x210000, 0x21ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x400000, 0x40000f) AM_DEVREADWRITE("tc0510nio", tc0510nio_halfword_wordswap_r, tc0510nio_halfword_wordswap_w)
 	AM_RANGE(0x400010, 0x40001f) AM_READ(dblaxle_steer_input_r)
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(cpua_ctrl_w)	/* could this be causing int6 ? */
 	AM_RANGE(0x620000, 0x620003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(TC0480SCP_word_r, TC0480SCP_word_w)	  /* tilemap mirror */
-	AM_RANGE(0xa00000, 0xa0ffff) AM_READWRITE(TC0480SCP_word_r, TC0480SCP_word_w)	  /* tilemaps */
-	AM_RANGE(0xa30000, 0xa3002f) AM_READWRITE(TC0480SCP_ctrl_word_r, TC0480SCP_ctrl_word_w)
-	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size) /* mostly unused ? */
+	AM_RANGE(0x800000, 0x801fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	  /* tilemap mirror */
+	AM_RANGE(0xa00000, 0xa0ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	  /* tilemaps */
+	AM_RANGE(0xa30000, 0xa3002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_word_r, tc0480scp_ctrl_word_w)
+	AM_RANGE(0xc00000, 0xc03fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* mostly unused ? */
 	AM_RANGE(0xc08000, 0xc08001) AM_READWRITE(sci_spriteframe_r, sci_spriteframe_w)	/* set in int6, seems to stay zero */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( dblaxle_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x300000, 0x301fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)
+	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x300000, 0x301fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 	AM_RANGE(0x500000, 0x503fff) AM_RAM	/* network ram ? (see Gunbustr) */
 ADDRESS_MAP_END
 
@@ -1738,23 +1719,23 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( racingb_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x103fff) AM_RAM
-	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0x300000, 0x30000f) AM_READWRITE(TC0510NIO_halfword_wordswap_r, TC0510NIO_halfword_wordswap_w)
+	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x300000, 0x30000f) AM_DEVREADWRITE("tc0510nio", tc0510nio_halfword_wordswap_r, tc0510nio_halfword_wordswap_w)
 	AM_RANGE(0x300010, 0x30001f) AM_READ(dblaxle_steer_input_r)
 	AM_RANGE(0x500002, 0x500003) AM_WRITE(cpua_ctrl_w)
 	AM_RANGE(0x520000, 0x520003) AM_READWRITE(taitoz_sound_r, taitoz_sound_w)
-	AM_RANGE(0x700000, 0x701fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(TC0480SCP_word_r, TC0480SCP_word_w)	  /* tilemaps */
-	AM_RANGE(0x930000, 0x93002f) AM_READWRITE(TC0480SCP_ctrl_word_r, TC0480SCP_ctrl_word_w)
-	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size) /* mostly unused ? */
+	AM_RANGE(0x700000, 0x701fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x900000, 0x90ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_word_r, tc0480scp_word_w)	  /* tilemaps */
+	AM_RANGE(0x930000, 0x93002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_word_r, tc0480scp_ctrl_word_w)
+	AM_RANGE(0xb00000, 0xb03fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* mostly unused ? */
 	AM_RANGE(0xb08000, 0xb08001) AM_READWRITE(sci_spriteframe_r, sci_spriteframe_w)	/* alternates 0/0x100 */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( racingb_cpub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x400000, 0x403fff) AM_RAM
-	AM_RANGE(0x410000, 0x41ffff) AM_RAM AM_SHARE(1)
-	AM_RANGE(0xa00000, 0xa01fff) AM_READWRITE(TC0150ROD_word_r, TC0150ROD_word_w)
+	AM_RANGE(0x410000, 0x41ffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xa00000, 0xa01fff) AM_DEVREADWRITE("tc0150rod", tc0150rod_word_r, tc0150rod_word_w)
 	AM_RANGE(0xd00000, 0xd03fff) AM_RAM	/* network ram ? */
 ADDRESS_MAP_END
 
@@ -1763,9 +1744,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( z80_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(10)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank10")
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0xe000, 0xe003) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xe200, 0xe200) AM_READNOP AM_WRITE(taitosound_slave_port_w)
 	AM_RANGE(0xe201, 0xe201) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
 	AM_RANGE(0xe400, 0xe403) AM_WRITE(taitoz_pancontrol) /* pan */
@@ -2041,7 +2022,7 @@ ADDRESS_MAP_END
 
 
 static INPUT_PORTS_START( contcirc )
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW A:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, "Cockpit" )	// analogue accelerator pedal
@@ -2052,7 +2033,7 @@ static INPUT_PORTS_START( contcirc )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_WORLD_LOC(SW A)
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	PORT_DIPNAME( 0x03, 0x03, "Difficulty 1 (time/speed)" ) PORT_DIPLOCATION("SW B:1,2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( Normal ) )
@@ -2072,7 +2053,7 @@ static INPUT_PORTS_START( contcirc )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW B:7" )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW B:8" )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 )
@@ -2082,7 +2063,7 @@ static INPUT_PORTS_START( contcirc )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON4 ) PORT_PLAYER(1)
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(1)	/* main accel key */
 
-	PORT_START("IN1")	/* IN1: b3 not mapped: standardized on holding b4=lo gear */
+	PORT_START("IN1")	/* b3 not mapped: standardized on holding b4=lo gear */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_TILT )
@@ -2092,13 +2073,13 @@ static INPUT_PORTS_START( contcirc )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_BUTTON6 ) PORT_PLAYER(1)
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(1)	/* main brake key */
 
-	PORT_START("IN2")	/* IN2, unused */
+	PORT_START("IN2")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("STEER")	/* IN3, "handle" i.e. steering */
+	PORT_START("STEER")	/* "handle" i.e. steering */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(50) PORT_KEYDELTA(15) PORT_REVERSE PORT_PLAYER(1)
 
-	PORT_START("FAKE")	/* IN4, fake allowing digital steer */
+	PORT_START("FAKE")	/* fake allowing digital steer */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_DIPNAME( 0x10, 0x00, "Steering type" )
@@ -2114,7 +2095,7 @@ static INPUT_PORTS_START( contcrcu )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW A:1,2")	/* US Manual states DIPS 1 & 2 "MUST REMAIN OFF" */
 	PORT_DIPSETTING(    0x03, "Upright / Steering Lock" )
 	PORT_DIPSETTING(    0x02, "Upright / No Steering Lock" )
@@ -2126,7 +2107,7 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_WORLD_LOC(SW A)
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPNAME( 0x0c, 0x0c, "Timer Setting" ) PORT_DIPLOCATION("SW B:3,4")
 	PORT_DIPSETTING(    0x08, "70 Seconds" )
@@ -2146,7 +2127,7 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN1 )
@@ -2156,7 +2137,7 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 
-	PORT_START("IN1")	/* IN1 */
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_BUTTON3 ) PORT_PLAYER(1)	/* turbo */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_TILT )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNKNOWN )
@@ -2166,10 +2147,10 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 
-	PORT_START("IN2")	/* IN2, unused */
+	PORT_START("IN2")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("UNK1")	/* IN3, ??? */
+	PORT_START("UNK1")	/* ??? */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -2179,7 +2160,7 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("UNK2")	/* IN4, ??? */
+	PORT_START("UNK2")	/* ??? */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -2189,7 +2170,7 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("UNK3")	/* IN5, ??? */
+	PORT_START("UNK3")	/* ??? */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -2199,7 +2180,7 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("UNK4")	/* IN6, ??? */
+	PORT_START("UNK4")	/* ??? */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -2209,10 +2190,10 @@ static INPUT_PORTS_START( chasehq )	// IN3-6 perhaps used with cockpit setup? //
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("STEER")	/* IN7, steering */
+	PORT_START("STEER")	/* steering */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(50) PORT_KEYDELTA(15) PORT_PLAYER(1)
 
-	PORT_START("FAKE")	/* IN8, fake allowing digital steer */
+	PORT_START("FAKE")	/* fake allowing digital steer */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_DIPNAME( 0x10, 0x00, "Steering type" )
@@ -2228,7 +2209,7 @@ static INPUT_PORTS_START( chasehqj )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( enforce )
-	PORT_START("DSWA")	/* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW A:1" )
 	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW A:2" )
 	PORT_SERVICE_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW A:3" )
@@ -2237,7 +2218,7 @@ static INPUT_PORTS_START( enforce )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )		// Says SHIFT LO in test mode !?
 	TAITO_COINAGE_JAPAN_OLD_LOC(SW A)
 
-	PORT_START("DSWB")	/* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW B:3" )
 	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW B:4" )
@@ -2248,7 +2229,7 @@ static INPUT_PORTS_START( enforce )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW B:7" )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW B:8" )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 )
@@ -2258,7 +2239,7 @@ static INPUT_PORTS_START( enforce )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
 
-	PORT_START("IN1")	/* IN1 */
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_BUTTON2 ) PORT_PLAYER(1)	/* Bomb */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_BUTTON1 ) PORT_PLAYER(1)	/* Laser */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_TILT )
@@ -2268,12 +2249,12 @@ static INPUT_PORTS_START( enforce )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
 
-	PORT_START("IN2")	/* IN2, unused */
+	PORT_START("IN2")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( bshark )
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPNAME( 0x01, 0x01, "Mirror screen" ) PORT_DIPLOCATION("SW A:1")	// manual says it must be off
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -2284,7 +2265,7 @@ static INPUT_PORTS_START( bshark )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_US_LOC(SW A)
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPNAME( 0x0c, 0x04, "Speed of Sight" ) PORT_DIPLOCATION("SW B:3,4")
 	PORT_DIPSETTING(    0x0c, "Slow" )
@@ -2296,7 +2277,7 @@ static INPUT_PORTS_START( bshark )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW B:7" )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW B:8" )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 )
@@ -2306,10 +2287,10 @@ static INPUT_PORTS_START( bshark )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN1")	/* IN1, unused */
+	PORT_START("IN1")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN2")	/* IN2, b2-5 affect sound num in service mode but otherwise useless (?) */
+	PORT_START("IN2")	/* b2-5 affect sound num in service mode but otherwise useless (?) */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
@@ -2340,7 +2321,7 @@ static INPUT_PORTS_START( bsharkj )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( sci )
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW A:1")
 	PORT_DIPSETTING(    0x01, "Cockpit" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
@@ -2351,7 +2332,7 @@ static INPUT_PORTS_START( sci )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_WORLD_LOC(SW A)
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPNAME( 0x0c, 0x0c, "Timer Setting" ) PORT_DIPLOCATION("SW B:3,4")
 	PORT_DIPSETTING(    0x08, "70 Seconds" )
@@ -2371,7 +2352,7 @@ static INPUT_PORTS_START( sci )
 	PORT_DIPSETTING(    0x80, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Low ) )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)	/* fire */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -2381,7 +2362,7 @@ static INPUT_PORTS_START( sci )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN1")	/* IN1 */
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_BUTTON5 ) PORT_PLAYER(1)	/* turbo */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_TILT )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_BUTTON6 ) PORT_PLAYER(1)	/* "center" */
@@ -2391,13 +2372,13 @@ static INPUT_PORTS_START( sci )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 
-	PORT_START("IN2")	/* IN2, unused */
+	PORT_START("IN2")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("STEER")	/* IN3, steering */
+	PORT_START("STEER")	/* steering */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(50) PORT_KEYDELTA(15) PORT_PLAYER(1)
 
-	PORT_START("FAKE")	/* IN4, fake allowing digital steer */
+	PORT_START("FAKE")	/* fake allowing digital steer */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_DIPNAME( 0x10, 0x00, "Steering type" )
@@ -2420,7 +2401,7 @@ static INPUT_PORTS_START( scij )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( nightstr )
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW A:1")
 	PORT_DIPSETTING(    0x01, "Cockpit" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
@@ -2431,7 +2412,7 @@ static INPUT_PORTS_START( nightstr )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_WORLD_LOC(SW A)
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPNAME( 0x0c, 0x0c, "Bonus Shields" ) PORT_DIPLOCATION("SW B:3,4")
 	PORT_DIPSETTING(    0x08, "3" )
@@ -2450,7 +2431,7 @@ static INPUT_PORTS_START( nightstr )
 	PORT_DIPSETTING(    0x80, "7 Shots / Second" )
 	PORT_DIPSETTING(    0x00, "10 Shots / Second" )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -2460,10 +2441,10 @@ static INPUT_PORTS_START( nightstr )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SERVICE1 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_TILT )
 
-	PORT_START("IN1")	/* IN1, unused */
+	PORT_START("IN1")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN2")	/* IN2 */
+	PORT_START("IN2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
@@ -2501,7 +2482,7 @@ static INPUT_PORTS_START( nghtstru )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( aquajack )
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW A:1")
 	PORT_DIPSETTING(    0x80, "Cockpit" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
@@ -2521,7 +2502,7 @@ static INPUT_PORTS_START( aquajack )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_4C ) )	/* 2 Coins to Continue */
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) )	/* 3 Coins to Continue */
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW B:2,1")
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
@@ -2547,7 +2528,7 @@ static INPUT_PORTS_START( aquajack )
 	/* PORT_DIPSETTING(    0x01, "Normal Game" ) */
 	/* PORT_DIPSETTING(    0x00, "Endless Game" ) */
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -2557,7 +2538,7 @@ static INPUT_PORTS_START( aquajack )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN1")	/* IN1 */
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
@@ -2567,7 +2548,7 @@ static INPUT_PORTS_START( aquajack )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN2")	/* IN2, what is it ??? */
+	PORT_START("IN2")	/* what is it ??? */
 	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_PLAYER(1)
 INPUT_PORTS_END
 
@@ -2588,7 +2569,7 @@ static INPUT_PORTS_START( aquajckj )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( spacegun )
-	PORT_START("DSWA")	/* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW A:1" )	// Manual says Always Off
 	PORT_DIPNAME( 0x02, 0x02, "Always have gunsight power up" ) PORT_DIPLOCATION("SW A:2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
@@ -2599,7 +2580,7 @@ static INPUT_PORTS_START( spacegun )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_WORLD_LOC(SW A)
 
-	PORT_START("DSWB")	/* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW B:3" )	// Manual lists dips 3 through 6 and 8 as Always off
 	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW B:4" )
@@ -2612,7 +2593,7 @@ static INPUT_PORTS_START( spacegun )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 )
@@ -2622,10 +2603,10 @@ static INPUT_PORTS_START( spacegun )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START1)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START2)
 
-	PORT_START("IN1")	/* IN1, unused */
+	PORT_START("IN1")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN2")	/* IN2 */
+	PORT_START("IN2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
@@ -2634,6 +2615,11 @@ static INPUT_PORTS_START( spacegun )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START( "EEPROMOUT" )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_cs_line)
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_set_clock_line)
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE("eeprom", eeprom_write_bit)
 
 	PORT_START("STICKX1")
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(13) PORT_CENTERDELTA(0) PORT_REVERSE PORT_PLAYER(1)
@@ -2649,7 +2635,7 @@ static INPUT_PORTS_START( spacegun )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( dblaxle )
-	PORT_START("DSWA") /* DSW A */
+	PORT_START("DSWA")
 	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW A:1" )
 	PORT_DIPNAME( 0x02, 0x02, "Gear shift" ) PORT_DIPLOCATION("SW A:2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Normal ) )
@@ -2660,7 +2646,7 @@ static INPUT_PORTS_START( dblaxle )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	TAITO_COINAGE_US_LOC(SW A)
 
-	PORT_START("DSWB") /* DSW B */
+	PORT_START("DSWB")
 	TAITO_DIFFICULTY_LOC(SW B)
 	PORT_DIPNAME( 0x04, 0x00, "Multi-machine hookup ?" ) PORT_DIPLOCATION("SW B:3")	// doesn't boot if on
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
@@ -2675,7 +2661,7 @@ static INPUT_PORTS_START( dblaxle )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW B:7" )
 	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW B:8" )
 
-	PORT_START("IN0")	/* IN0 */
+	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)	/* shift */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -2685,7 +2671,7 @@ static INPUT_PORTS_START( dblaxle )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)	/* "back" */
 
-	PORT_START("IN1")	/* IN1 */
+	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)	/* nitro */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_TILT )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)	/* "center" */
@@ -2695,13 +2681,13 @@ static INPUT_PORTS_START( dblaxle )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN2")	/* IN2, unused */
+	PORT_START("IN2")	/* unused */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("STEER")	/* IN3, steering */
+	PORT_START("STEER")	/* steering */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(40) PORT_KEYDELTA(10) PORT_PLAYER(1)
 
-	PORT_START("FAKE")	/* IN4, fake allowing digital steer */
+	PORT_START("FAKE")	/* fake allowing digital steer */
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_PLAYER(1)
 	PORT_DIPNAME( 0x10, 0x00, "Steering type" )
@@ -2882,6 +2868,64 @@ Contcirc road glitchiness in attract?
 
 ***********************************************************/
 
+
+static const tc0100scn_interface taitoz_tc0100scn_intf =
+{
+	"screen",
+	1, 2,		/* gfxnum, txnum */
+	0, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0100scn_interface chasehq_tc0100scn_intf =
+{
+	"screen",
+	1, 3,		/* gfxnum, txnum */
+	0, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0100scn_interface spacegun_tc0100scn_intf =
+{
+	"screen",
+	1, 2,		/* gfxnum, txnum */
+	4, 0,		/* x_offset, y_offset */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0, 0,		/* flip_text_xoff, flip_text_yoff */
+	0, 0
+};
+
+static const tc0480scp_interface taitoz_tc0480scp_intf =
+{
+	1, 2,		/* gfxnum, txnum */
+	0,		/* pixels */
+	0x21, 0x08,		/* x_offset, y_offset */
+	4, 0,		/* text_xoff, text_yoff */
+	0, 0,		/* flip_xoff, flip_yoff */
+	0		/* col_base */
+};
+
+static const tc0110pcr_interface taitoz_tc0110pcr_intf = {	0	};
+
+static const tc0150rod_interface taitoz_tc0150rod_intf = {	"gfx3"	};
+
+static const tc0220ioc_interface taitoz_io220_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
+static const tc0510nio_interface taitoz_io510_intf =
+{
+	DEVCB_INPUT_PORT("DSWA"), DEVCB_INPUT_PORT("DSWB"),
+	DEVCB_INPUT_PORT("IN0"), DEVCB_INPUT_PORT("IN1"), DEVCB_INPUT_PORT("IN2")	/* port read handlers */
+};
+
+
 /* Contcirc vis area seems narrower than the other games... */
 
 static MACHINE_DRIVER_START( contcirc )
@@ -2900,6 +2944,8 @@ static MACHINE_DRIVER_START( contcirc )
 
 	MDRV_MACHINE_START(taitoz)
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2914,12 +2960,16 @@ static MACHINE_DRIVER_START( contcirc )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(contcirc)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+	MDRV_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_ADD("front", 0.0, 0.0,  0.7)
 	MDRV_SPEAKER_ADD("rear",  0.0, 0.0,  1.3)
 	MDRV_SPEAKER_ADD("subwoofer", 0.0, 0.0, 1.0)
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "subwoofer", 0.20)
 	MDRV_SOUND_ROUTE(1, "2610.1.l", 2.0)
@@ -2956,6 +3006,8 @@ static MACHINE_DRIVER_START( chasehq )
 
 	MDRV_MACHINE_START(taitoz)
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -2970,12 +3022,16 @@ static MACHINE_DRIVER_START( chasehq )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(chasehq)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", chasehq_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+	MDRV_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_ADD("front",  0.0, 0.0, 0.7)
 	MDRV_SPEAKER_ADD("rear",   0.0, 0.0, 1.3)
 	MDRV_SPEAKER_ADD("subwoofer", 0.0, 0.0, 1.0)
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "subwoofer", 0.20)
 	MDRV_SOUND_ROUTE(1, "2610.1.l", 1.0)
@@ -3012,6 +3068,8 @@ static MACHINE_DRIVER_START( enforce )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3026,10 +3084,14 @@ static MACHINE_DRIVER_START( enforce )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(contcirc)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+	MDRV_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3066,6 +3128,8 @@ static MACHINE_DRIVER_START( bshark )
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3080,10 +3144,13 @@ static MACHINE_DRIVER_START( bshark )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(bshark)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_interfaceb)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3121,6 +3188,8 @@ static MACHINE_DRIVER_START( sci )
 
 	MDRV_QUANTUM_TIME(HZ(3000))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3135,10 +3204,13 @@ static MACHINE_DRIVER_START( sci )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(sci)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3176,6 +3248,8 @@ static MACHINE_DRIVER_START( nightstr )
 
 	MDRV_QUANTUM_TIME(HZ(6000))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3190,12 +3264,16 @@ static MACHINE_DRIVER_START( nightstr )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(chasehq)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", chasehq_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+	MDRV_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_ADD("front",  0.0, 0.0, 0.7)
 	MDRV_SPEAKER_ADD("rear",   0.0, 0.0, 1.3)
 	MDRV_SPEAKER_ADD("subwoofer", 0.0, 0.0, 1.0)
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "subwoofer", 0.20)
 	MDRV_SOUND_ROUTE(1, "2610.1.l", 2.0)
@@ -3232,6 +3310,8 @@ static MACHINE_DRIVER_START( aquajack )
 
 	MDRV_QUANTUM_TIME(HZ(30000))
 
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3246,10 +3326,14 @@ static MACHINE_DRIVER_START( aquajack )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(aquajack)
 
+	MDRV_TC0100SCN_ADD("tc0100scn", taitoz_tc0100scn_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+	MDRV_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3282,7 +3366,10 @@ static MACHINE_DRIVER_START( spacegun )
 
 	MDRV_MACHINE_START(taitoz)
 
-	MDRV_NVRAM_HANDLER(spacegun)
+	MDRV_EEPROM_ADD("eeprom", spacegun_eeprom_intf)
+	MDRV_EEPROM_DATA(spacegun_default_eeprom, 128)
+
+	MDRV_TC0220IOC_ADD("tc0220ioc", taitoz_io220_intf)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -3295,13 +3382,15 @@ static MACHINE_DRIVER_START( spacegun )
 	MDRV_GFXDECODE(taitoz)
 	MDRV_PALETTE_LENGTH(4096)
 
-	MDRV_VIDEO_START(spacegun)
 	MDRV_VIDEO_UPDATE(spacegun)
+
+	MDRV_TC0100SCN_ADD("tc0100scn", spacegun_tc0100scn_intf)
+	MDRV_TC0110PCR_ADD("tc0110pcr", taitoz_tc0110pcr_intf)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_interfaceb)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3339,6 +3428,8 @@ static MACHINE_DRIVER_START( dblaxle )
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
+	MDRV_TC0510NIO_ADD("tc0510nio", taitoz_io510_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3353,10 +3444,13 @@ static MACHINE_DRIVER_START( dblaxle )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(dblaxle)
 
+	MDRV_TC0480SCP_ADD("tc0480scp", taitoz_tc0480scp_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3393,6 +3487,8 @@ static MACHINE_DRIVER_START( racingb )
 	MDRV_MACHINE_START(taitoz)
 	MDRV_QUANTUM_TIME(HZ(6000))
 
+	MDRV_TC0510NIO_ADD("tc0510nio", taitoz_io510_intf)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -3407,10 +3503,13 @@ static MACHINE_DRIVER_START( racingb )
 	MDRV_VIDEO_START(taitoz)
 	MDRV_VIDEO_UPDATE(dblaxle)
 
+	MDRV_TC0480SCP_ADD("tc0480scp", taitoz_tc0480scp_intf)
+	MDRV_TC0150ROD_ADD("tc0150rod", taitoz_tc0150rod_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 16000000/2)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 16000000/2)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
@@ -3468,11 +3567,11 @@ ROM_START( contcirc )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b33-07.64", 0x00000, 0x80000, CRC(151e1f52) SHA1(118c673d74f27c4e76b321cc0e84f166d9f0d412) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b33-09.18", 0x00000, 0x80000, CRC(1e6724b5) SHA1(48bb96b648605a9ceb88ff3b175a87226583c3d6) )
 	ROM_LOAD( "b33-10.17", 0x80000, 0x80000, CRC(e9ce03ab) SHA1(17324e8f0422118bc0912eba5750d80469f40b78) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b33-08.19", 0x00000, 0x80000, CRC(caa1c4c8) SHA1(15ef4f36e56fab793d2249252c456677ca6a85c9) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3510,11 +3609,11 @@ ROM_START( contcircu )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b33-07.64", 0x00000, 0x80000, CRC(151e1f52) SHA1(118c673d74f27c4e76b321cc0e84f166d9f0d412) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b33-09.18", 0x00000, 0x80000, CRC(1e6724b5) SHA1(48bb96b648605a9ceb88ff3b175a87226583c3d6) )
 	ROM_LOAD( "b33-10.17", 0x80000, 0x80000, CRC(e9ce03ab) SHA1(17324e8f0422118bc0912eba5750d80469f40b78) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b33-08.19", 0x00000, 0x80000, CRC(caa1c4c8) SHA1(15ef4f36e56fab793d2249252c456677ca6a85c9) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3552,11 +3651,11 @@ ROM_START( contcircua )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b33-07.64", 0x00000, 0x80000, CRC(151e1f52) SHA1(118c673d74f27c4e76b321cc0e84f166d9f0d412) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b33-09.18", 0x00000, 0x80000, CRC(1e6724b5) SHA1(48bb96b648605a9ceb88ff3b175a87226583c3d6) )
 	ROM_LOAD( "b33-10.17", 0x80000, 0x80000, CRC(e9ce03ab) SHA1(17324e8f0422118bc0912eba5750d80469f40b78) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b33-08.19", 0x00000, 0x80000, CRC(caa1c4c8) SHA1(15ef4f36e56fab793d2249252c456677ca6a85c9) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3602,12 +3701,12 @@ ROM_START( chasehq )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b52-38.34", 0x00000, 0x80000, CRC(5b5bf7f6) SHA1(71dd5b40b83870d351c9ecaccc4fb98c3a6740ae) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b52-115.71", 0x000000, 0x080000, CRC(4e117e93) SHA1(51d893fa21793335878c76f6d5987d99da60be04) )
 	ROM_LOAD( "b52-114.72", 0x080000, 0x080000, CRC(3a73d6b1) SHA1(419f02a875b30913331db207e344d0eaa275297e) )
 	ROM_LOAD( "b52-113.73", 0x100000, 0x080000, CRC(2c6a3a05) SHA1(f2f0dfbbbb6930bf53025064ebae9c07a95c6deb) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b52-116.70", 0x00000, 0x80000, CRC(ad46983c) SHA1(6fcad67456fbd8c967cd4786815f70b57a24a969) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3682,12 +3781,12 @@ ROM_START( chasehqj )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b52-38.34", 0x00000, 0x80000, CRC(5b5bf7f6) SHA1(71dd5b40b83870d351c9ecaccc4fb98c3a6740ae) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b52-41.71", 0x000000, 0x80000, CRC(8204880c) SHA1(4dfd6454b4a4c04db3593e98648afbfe8d1f59ed) )
 	ROM_LOAD( "b52-40.72", 0x080000, 0x80000, CRC(f0551055) SHA1(4498cd058a52d5e87c6d502e844908a5df3abf2a) )
 	ROM_LOAD( "b52-39.73", 0x100000, 0x80000, CRC(ac9cbbd3) SHA1(792f41fef37ff35067fd0173d944f90279176649) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b52-42.70", 0x00000, 0x80000, CRC(6e617df1) SHA1(e3d1678132130c66506f2e1419db2f6b5b062f74) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3762,12 +3861,12 @@ ROM_START( chasehqu )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b52-38.34", 0x00000, 0x80000, CRC(5b5bf7f6) SHA1(71dd5b40b83870d351c9ecaccc4fb98c3a6740ae) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b52-115.71", 0x000000, 0x080000, CRC(4e117e93) SHA1(51d893fa21793335878c76f6d5987d99da60be04) )
 	ROM_LOAD( "b52-114.72", 0x080000, 0x080000, CRC(3a73d6b1) SHA1(419f02a875b30913331db207e344d0eaa275297e) )
 	ROM_LOAD( "b52-113.73", 0x100000, 0x080000, CRC(2c6a3a05) SHA1(f2f0dfbbbb6930bf53025064ebae9c07a95c6deb) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b52-116.70", 0x00000, 0x80000, CRC(ad46983c) SHA1(6fcad67456fbd8c967cd4786815f70b57a24a969) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3901,11 +4000,11 @@ ROM_START( enforce )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b58-05.71", 0x00000, 0x80000, CRC(d1f4991b) SHA1(f1c5a9b8dce994d013290e98fda7bedf73e95900) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b58-07.11", 0x000000, 0x080000, CRC(eeb5ba08) SHA1(fe40333e09339c76e503ce87b42a89b48d487016) )
 	ROM_LOAD( "b58-08.12", 0x080000, 0x080000, CRC(049243cf) SHA1(1f3099b6d764114dc4161ed308369d0f3148dc4e) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples ??? */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples ??? */
 	ROM_LOAD( "b58-10.14", 0x00000, 0x80000, CRC(edce0cc1) SHA1(1f6cbc60502b8b12b349e48446ce3a4a1f76bccd) )	/* ??? */
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3945,10 +4044,10 @@ ROM_START( bshark )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c34_06.12", 0x00000, 0x80000, CRC(d200b6eb) SHA1(6bfe3a7dde8d4e983521877d2bb176f5d126b763) )	/* STY spritemap */
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c34_08.127", 0x00000, 0x80000, CRC(89a30450) SHA1(96b96ca5a3e20cdceb9ac5ddf377fb21a9a529fb) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c34_09.126", 0x00000, 0x80000, CRC(39d12b50) SHA1(5c5d1369597604376943e4825f6c09cc28d66047) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -3987,10 +4086,10 @@ ROM_START( bsharkj )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c34_06.12", 0x00000, 0x80000, CRC(d200b6eb) SHA1(6bfe3a7dde8d4e983521877d2bb176f5d126b763) )	/* STY spritemap */
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c34_08.127", 0x00000, 0x80000, CRC(89a30450) SHA1(96b96ca5a3e20cdceb9ac5ddf377fb21a9a529fb) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c34_09.126", 0x00000, 0x80000, CRC(39d12b50) SHA1(5c5d1369597604376943e4825f6c09cc28d66047) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4031,12 +4130,12 @@ ROM_START( sci )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c09-06.37", 0x00000, 0x80000, CRC(12df6d7b) SHA1(8ce742eb3f7eb6283b5ca32bb520d1cc7684d515) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c09-14.42", 0x000000, 0x080000, CRC(ad78bf46) SHA1(4020744bbdc4b9ec3dee1a9d7b5ffa8def43d7b2) )
 	ROM_LOAD( "c09-13.43", 0x080000, 0x080000, CRC(d57c41d3) SHA1(3375a1fc6389840544b9fdb96b2fafbc8e3276e2) )
 	ROM_LOAD( "c09-12.44", 0x100000, 0x080000, CRC(56c99fa5) SHA1(3f9a6bc89d847cc4c99d35f98157ea3f187c0f98) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c09-15.29", 0x00000, 0x80000, CRC(e63b9095) SHA1(c6ea670b5a90ab39429259ec1fefb2bde5d0213f) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4080,12 +4179,12 @@ ROM_START( scia )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c09-06.37", 0x00000, 0x80000, CRC(12df6d7b) SHA1(8ce742eb3f7eb6283b5ca32bb520d1cc7684d515) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c09-14.42", 0x000000, 0x080000, CRC(ad78bf46) SHA1(4020744bbdc4b9ec3dee1a9d7b5ffa8def43d7b2) )
 	ROM_LOAD( "c09-13.43", 0x080000, 0x080000, CRC(d57c41d3) SHA1(3375a1fc6389840544b9fdb96b2fafbc8e3276e2) )
 	ROM_LOAD( "c09-12.44", 0x100000, 0x080000, CRC(56c99fa5) SHA1(3f9a6bc89d847cc4c99d35f98157ea3f187c0f98) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c09-15.29", 0x00000, 0x80000, CRC(e63b9095) SHA1(c6ea670b5a90ab39429259ec1fefb2bde5d0213f) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4124,12 +4223,12 @@ ROM_START( scij )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c09-06.37", 0x00000, 0x80000, CRC(12df6d7b) SHA1(8ce742eb3f7eb6283b5ca32bb520d1cc7684d515) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c09-10.42", 0x000000, 0x080000, CRC(ad78bf46) SHA1(4020744bbdc4b9ec3dee1a9d7b5ffa8def43d7b2) )
 	ROM_LOAD( "c09-09.43", 0x080000, 0x080000, CRC(6a655c00) SHA1(5ae1ee422226e386550b69a1f35668c10d3bdcc2) )
 	ROM_LOAD( "c09-08.44", 0x100000, 0x080000, CRC(7ddfc316) SHA1(47f0ed8eecd4719b4c5cb8762ee6b8bb01686812) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c09-11.29", 0x00000, 0x80000, CRC(6b1a11e1) SHA1(4304d029ecf91fa5b779057f195f75ebdd0a7c1c) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4168,12 +4267,12 @@ ROM_START( sciu )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c09-06.37", 0x00000, 0x80000, CRC(12df6d7b) SHA1(8ce742eb3f7eb6283b5ca32bb520d1cc7684d515) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c09-14.42", 0x000000, 0x080000, CRC(ad78bf46) SHA1(4020744bbdc4b9ec3dee1a9d7b5ffa8def43d7b2) )
 	ROM_LOAD( "c09-13.43", 0x080000, 0x080000, CRC(d57c41d3) SHA1(3375a1fc6389840544b9fdb96b2fafbc8e3276e2) )
 	ROM_LOAD( "c09-12.44", 0x100000, 0x080000, CRC(56c99fa5) SHA1(3f9a6bc89d847cc4c99d35f98157ea3f187c0f98) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c09-15.29", 0x00000, 0x80000, CRC(e63b9095) SHA1(c6ea670b5a90ab39429259ec1fefb2bde5d0213f) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4212,12 +4311,12 @@ ROM_START( scin )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c09-06.37", 0x00000, 0x80000, CRC(12df6d7b) SHA1(8ce742eb3f7eb6283b5ca32bb520d1cc7684d515) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c09-14.42", 0x000000, 0x080000, CRC(ad78bf46) SHA1(4020744bbdc4b9ec3dee1a9d7b5ffa8def43d7b2) )
 	ROM_LOAD( "c09-13.43", 0x080000, 0x080000, CRC(d57c41d3) SHA1(3375a1fc6389840544b9fdb96b2fafbc8e3276e2) )
 	ROM_LOAD( "c09-12.44", 0x100000, 0x080000, CRC(56c99fa5) SHA1(3f9a6bc89d847cc4c99d35f98157ea3f187c0f98) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c09-15.29", 0x00000, 0x80000, CRC(e63b9095) SHA1(c6ea670b5a90ab39429259ec1fefb2bde5d0213f) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4262,11 +4361,11 @@ ROM_START( nightstr )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b91-09.bin", 0x00000, 0x80000, CRC(5f247ca2) SHA1(3b89e5d035f27f62a14c5c7a976c804f9bb5c04d) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b91-13.bin", 0x00000, 0x80000, CRC(8c7bf0f5) SHA1(6e18531991225c24a9722c9fbe1af6ae6e9b866b) )
 	ROM_LOAD( "b91-12.bin", 0x80000, 0x80000, CRC(da77c7af) SHA1(49662a69b83739e2e0209cabff83995a951383f4) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b91-14.bin", 0x00000, 0x80000, CRC(6bc314d3) SHA1(ae3e9c6b853bab4ec81a6bd951b39a4bc883f456) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4316,11 +4415,11 @@ ROM_START( nightstru )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b91-09.bin", 0x00000, 0x80000, CRC(5f247ca2) SHA1(3b89e5d035f27f62a14c5c7a976c804f9bb5c04d) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b91-13.bin", 0x00000, 0x80000, CRC(8c7bf0f5) SHA1(6e18531991225c24a9722c9fbe1af6ae6e9b866b) )
 	ROM_LOAD( "b91-12.bin", 0x80000, 0x80000, CRC(da77c7af) SHA1(49662a69b83739e2e0209cabff83995a951383f4) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b91-14.bin", 0x00000, 0x80000, CRC(6bc314d3) SHA1(ae3e9c6b853bab4ec81a6bd951b39a4bc883f456) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4369,11 +4468,11 @@ ROM_START( nightstrj )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b91-09.bin", 0x00000, 0x80000, CRC(5f247ca2) SHA1(3b89e5d035f27f62a14c5c7a976c804f9bb5c04d) )	/* STY spritemap */
 
-	ROM_REGION( 0x100000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x100000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b91-13.bin", 0x00000, 0x80000, CRC(8c7bf0f5) SHA1(6e18531991225c24a9722c9fbe1af6ae6e9b866b) )
 	ROM_LOAD( "b91-12.bin", 0x80000, 0x80000, CRC(da77c7af) SHA1(49662a69b83739e2e0209cabff83995a951383f4) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b91-14.bin", 0x00000, 0x80000, CRC(6bc314d3) SHA1(ae3e9c6b853bab4ec81a6bd951b39a4bc883f456) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4415,10 +4514,10 @@ ROM_START( aquajack )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b77-06.rom", 0x00000, 0x80000, CRC(ce2aed00) SHA1(9c992717914b13eb271122ecf7cca3634b013e56) )	/* STY spritemap */
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b77-09.rom", 0x00000, 0x80000, CRC(948e5ad9) SHA1(35cd6706470f01b5a244817d10fc65c075ff29b1) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b77-08.rom", 0x00000, 0x80000, CRC(119b9485) SHA1(2c9cd90be20df769e09016abccf59c8f119da286) )
 
 	ROM_REGION( 0x00200, "user2", 0 )	/* unused PROMs */
@@ -4456,10 +4555,10 @@ ROM_START( aquajackj )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "b77-06.rom", 0x00000, 0x80000, CRC(ce2aed00) SHA1(9c992717914b13eb271122ecf7cca3634b013e56) )	/* STY spritemap */
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "b77-09.rom", 0x00000, 0x80000, CRC(948e5ad9) SHA1(35cd6706470f01b5a244817d10fc65c075ff29b1) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "b77-08.rom", 0x00000, 0x80000, CRC(119b9485) SHA1(2c9cd90be20df769e09016abccf59c8f119da286) )
 
 	ROM_REGION( 0x00200, "user2", 0 )	/* unused PROMs */
@@ -4492,10 +4591,10 @@ ROM_START( spacegun )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c57-05.36", 0x00000, 0x80000, CRC(6a70eb2e) SHA1(307dd876af65204e86e094b4015ffb4a655824f8) )	/* STY spritemap */
 
-	ROM_REGION( 0x80000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c57-07.76", 0x00000, 0x80000, CRC(ad653dc1) SHA1(2ec440f793b0a686233fbe61c9462f8365c42b65) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c57-08.75", 0x00000, 0x80000, CRC(22593550) SHA1(e802e947e6947d146e1b57dbff7ac021e19e7b2b) )
 
 	ROM_REGION( 0x0c00, "plds", 0 )
@@ -4540,11 +4639,11 @@ ROM_START( dblaxle )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c78-04.3", 0x00000, 0x80000, CRC(cc1aa37c) SHA1(cfa2eb338dc81c98c637c2f0b14d2baea8b115f5) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c78-12.33", 0x000000, 0x100000, CRC(b0267404) SHA1(ffd337336ff9b096e3725f733364762f6e6d3fab) )
 	ROM_LOAD( "c78-13.46", 0x100000, 0x080000, CRC(1b363aa2) SHA1(0aae3988024654e98cc0c784307b1c329c8f0783) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c78-14.31",  0x00000, 0x80000, CRC(9cad4dfb) SHA1(9187ef827a3f1bc9233d0e45e72c72c0956c5912) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4586,11 +4685,11 @@ ROM_START( pwheelsj )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c78-04.3", 0x00000, 0x80000, CRC(cc1aa37c) SHA1(cfa2eb338dc81c98c637c2f0b14d2baea8b115f5) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c78-01.33", 0x000000, 0x100000, CRC(90ff1e72) SHA1(6115e3683bc701922953b644427d1ddb471bf037) )
 	ROM_LOAD( "c78-02.46", 0x100000, 0x080000, CRC(8882d2b7) SHA1(4d3abac1e50cd5ae79a562f430563032a11e8390) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c78-03.31",  0x00000, 0x80000, CRC(9b926a2f) SHA1(cc2d612441a5cc587e097bb8380b56753b9a4f7c) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */
@@ -4632,11 +4731,11 @@ ROM_START( racingb )
 	ROM_REGION16_LE( 0x80000, "user1", 0 )
 	ROM_LOAD16_WORD( "c84-88.3", 0x00000, 0x80000, CRC(edd1f49c) SHA1(f11c419dcc7da03ef1f1665c1344c27ff35fe867) )	/* STY spritemap */
 
-	ROM_REGION( 0x180000, "ym", 0 )	/* ADPCM samples */
+	ROM_REGION( 0x180000, "ymsnd", 0 )	/* ADPCM samples */
 	ROM_LOAD( "c84-86.33", 0x000000, 0x100000, CRC(98d9771e) SHA1(0cbb6b08e1fa5e632309962d7ad7dca448ef4d78) )
 	ROM_LOAD( "c84-87.46", 0x100000, 0x080000, CRC(9c1dd80c) SHA1(e1bae4e02fd94413fac4683e39e530f9d508d658) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )	/* Delta-T samples */
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )	/* Delta-T samples */
 	ROM_LOAD( "c84-85.31",  0x00000, 0x80000, CRC(24cd838d) SHA1(18139f7df191ff2d005d76b3a85a6fafb630ea42) )
 
 	ROM_REGION( 0x10000, "user2", 0 )	/* unused ROMs */

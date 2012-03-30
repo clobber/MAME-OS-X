@@ -10,15 +10,17 @@ Preliminary driver by:
 #include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/konami/konami.h" /* for the callback and the firq irq definition */
-#include "video/konamiic.h"
 #include "sound/k007232.h"
 #include "sound/2151intf.h"
-#include "konamipt.h"
+#include "video/konicdev.h"
+#include "includes/konamipt.h"
 
 /* prototypes */
 static MACHINE_RESET( aliens );
 static KONAMI_SETLINES_CALLBACK( aliens_banking );
 
+extern void aliens_tile_callback(running_machine *machine, int layer,int bank,int *code,int *color, int *flags, int *priority);
+extern void aliens_sprite_callback(running_machine *machine, int *code,int *color,int *priority_mask,int *shadow);
 
 VIDEO_START( aliens );
 VIDEO_UPDATE( aliens );
@@ -30,14 +32,16 @@ static UINT8 *ram;
 
 static INTERRUPT_GEN( aliens_interrupt )
 {
-	if (K051960_is_IRQ_enabled())
+	const device_config *k051960 = devtag_get_device(device->machine, "k051960");
+
+	if (k051960_is_irq_enabled(k051960))
 		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
 
 static READ8_HANDLER( bankedram_r )
 {
 	if (palette_selected)
-		return paletteram[offset];
+		return space->machine->generic.paletteram.u8[offset];
 	else
 		return ram[offset];
 }
@@ -52,15 +56,17 @@ static WRITE8_HANDLER( bankedram_w )
 
 static WRITE8_HANDLER( aliens_coin_counter_w )
 {
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+
 	/* bits 0-1 = coin counters */
-	coin_counter_w(0,data & 0x01);
-	coin_counter_w(1,data & 0x02);
+	coin_counter_w(space->machine, 0,data & 0x01);
+	coin_counter_w(space->machine, 1,data & 0x02);
 
 	/* bit 5 = select work RAM or palette */
 	palette_selected = data & 0x20;
 
 	/* bit 6 = enable char ROM reading through the video RAM */
-	K052109_set_RMRD_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	k052109_set_rmrd_line(k052109, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* other bits unknown */
 #if 0
@@ -90,10 +96,41 @@ static WRITE8_DEVICE_HANDLER( aliens_snd_bankswitch_w )
 }
 
 
+static READ8_HANDLER( k052109_051960_r )
+{
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+
+	if (k052109_get_rmrd_line(k052109) == CLEAR_LINE)
+	{
+		if (offset >= 0x3800 && offset < 0x3808)
+			return k051937_r(k051960, offset - 0x3800);
+		else if (offset < 0x3c00)
+			return k052109_r(k052109, offset);
+		else
+			return k051960_r(k051960, offset - 0x3c00);
+	}
+	else
+		return k052109_r(k052109, offset);
+}
+
+static WRITE8_HANDLER( k052109_051960_w )
+{
+	const device_config *k052109 = devtag_get_device(space->machine, "k052109");
+	const device_config *k051960 = devtag_get_device(space->machine, "k051960");
+
+	if (offset >= 0x3800 && offset < 0x3808)
+		k051937_w(k051960, offset - 0x3800, data);
+	else if (offset < 0x3c00)
+		k052109_w(k052109, offset, data);
+	else
+		k051960_w(k051960, offset - 0x3c00, data);
+}
+
 static ADDRESS_MAP_START( aliens_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_READWRITE(bankedram_r, bankedram_w) AM_BASE(&ram)		/* palette + work RAM */
 	AM_RANGE(0x0400, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK(1)												/* banked ROM */
+	AM_RANGE(0x2000, 0x3fff) AM_ROMBANK("bank1")												/* banked ROM */
 	AM_RANGE(0x5f80, 0x5f80) AM_READ_PORT("DSW3")
 	AM_RANGE(0x5f81, 0x5f81) AM_READ_PORT("P1")
 	AM_RANGE(0x5f82, 0x5f82) AM_READ_PORT("P2")
@@ -101,14 +138,14 @@ static ADDRESS_MAP_START( aliens_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x5f84, 0x5f84) AM_READ_PORT("DSW1")
 	AM_RANGE(0x5f88, 0x5f88) AM_READWRITE(watchdog_reset_r, aliens_coin_counter_w)		/* coin counters */
 	AM_RANGE(0x5f8c, 0x5f8c) AM_WRITE(aliens_sh_irqtrigger_w)							/* cause interrupt on audio CPU */
-	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(K052109_051960_r, K052109_051960_w)
+	AM_RANGE(0x4000, 0x7fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM														/* ROM e24_j02.bin */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( aliens_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM								/* ROM g04_b03.bin */
 	AM_RANGE(0x8000, 0x87ff) AM_RAM								/* RAM */
-	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xa000, 0xa001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xc000, 0xc000) AM_READ(soundlatch_r)				/* soundlatch_r */
 	AM_RANGE(0xe000, 0xe00d) AM_DEVREADWRITE("konami", k007232_r, k007232_w)
 ADDRESS_MAP_END
@@ -186,6 +223,23 @@ static const ym2151_interface ym2151_config =
 	aliens_snd_bankswitch_w
 };
 
+
+static const k052109_interface aliens_k052109_intf =
+{
+	"gfx1", 0,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	aliens_tile_callback
+};
+
+static const k051960_interface aliens_k051960_intf =
+{
+	"gfx2", 1,
+	NORMAL_PLANE_ORDER,
+	KONAMI_ROM_DEINTERLEAVE_2,
+	aliens_sprite_callback
+};
+
 static MACHINE_DRIVER_START( aliens )
 
 	/* basic machine hardware */
@@ -216,10 +270,13 @@ static MACHINE_DRIVER_START( aliens )
 	MDRV_VIDEO_START(aliens)
 	MDRV_VIDEO_UPDATE(aliens)
 
+	MDRV_K052109_ADD("k052109", aliens_k052109_intf)
+	MDRV_K051960_ADD("k051960", aliens_k051960_intf)
+
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.60)
 	MDRV_SOUND_ROUTE(1, "mono", 0.60)
@@ -476,7 +533,7 @@ static KONAMI_SETLINES_CALLBACK( aliens_banking )
 	if (lines & 0x10) offs -= 0x8000;
 
 	offs += (lines & 0x0f)*0x2000;
-	memory_set_bankptr(device->machine,  1, &RAM[offs] );
+	memory_set_bankptr(device->machine,  "bank1", &RAM[offs] );
 }
 
 static MACHINE_RESET( aliens )
@@ -486,16 +543,13 @@ static MACHINE_RESET( aliens )
 	konami_configure_set_lines(cputag_get_cpu(machine, "maincpu"), aliens_banking);
 
 	/* init the default bank */
-	memory_set_bankptr(machine,  1, &RAM[0x10000]);
+	memory_set_bankptr(machine,  "bank1", &RAM[0x10000]);
 }
 
 
 
 static DRIVER_INIT( aliens )
 {
-	konami_rom_deinterleave_2(machine, "gfx1");
-	konami_rom_deinterleave_2(machine, "gfx2");
-
 	state_save_register_global(machine, palette_selected);
 }
 

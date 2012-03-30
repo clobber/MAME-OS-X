@@ -1,5 +1,5 @@
 #include "driver.h"
-#include "iqblock.h"
+#include "includes/iqblock.h"
 
 
 UINT8 *iqblock_bgvideoram;
@@ -8,7 +8,7 @@ UINT8 *iqblock_fgvideoram;
 int iqblock_videoenable;
 int iqblock_video_type;
 
-static tilemap *bg_tilemap,*fg_tilemap;
+static tilemap_t *bg_tilemap,*fg_tilemap;
 
 
 /***************************************************************************

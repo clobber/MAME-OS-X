@@ -408,7 +408,7 @@ static void meritm_crt250_switch_banks( running_machine *machine )
 	int rombank = (meritm_bank & 0x07) ^ 0x07;
 
 	//logerror( "CRT250: Switching banks: rom = %0x (bank = %x)\n", rombank, meritm_bank );
-	memory_set_bank(machine, 1, rombank );
+	memory_set_bank(machine, "bank1", rombank );
 };
 
 static WRITE8_HANDLER(meritm_crt250_bank_w)
@@ -425,9 +425,9 @@ static void meritm_switch_banks( running_machine *machine )
 			  (meritm_psd_a15 & 0x1);
 
 	//logerror( "Switching banks: rom = %0x (bank = %x), ram = %0x\n", rombank, meritm_bank, rambank);
-	memory_set_bank(machine, 1, rombank );
-	memory_set_bank(machine, 2, rombank | 0x01);
-	memory_set_bank(machine, 3, rambank);
+	memory_set_bank(machine, "bank1", rombank );
+	memory_set_bank(machine, "bank2", rombank | 0x01);
+	memory_set_bank(machine, "bank3", rambank);
 };
 
 static WRITE8_HANDLER(meritm_psd_a15_w)
@@ -564,16 +564,16 @@ static READ8_HANDLER(meritm_ds1644_r)
  *************************************/
 
 static ADDRESS_MAP_START( meritm_crt250_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xdfff) AM_ROMBANK(1)
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x0000, 0xdfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( meritm_crt250_questions_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xdfff) AM_ROMBANK(1)
+	AM_RANGE(0x0000, 0xdfff) AM_ROMBANK("bank1")
 	AM_RANGE(0x0000, 0x0000) AM_WRITE(meritm_crt250_questions_lo_w)
 	AM_RANGE(0x0001, 0x0001) AM_WRITE(meritm_crt250_questions_hi_w)
 	AM_RANGE(0x0002, 0x0002) AM_WRITE(meritm_crt250_questions_bank_w)
-	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xe000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( meritm_crt250_io_map, ADDRESS_SPACE_IO, 8 )
@@ -589,8 +589,8 @@ static ADDRESS_MAP_START( meritm_crt250_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x30, 0x33) AM_DEVREADWRITE("ppi8255", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE("z80pio_0", z80pio_r, z80pio_w)
 	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE("z80pio_1", z80pio_r, z80pio_w)
-	AM_RANGE(0x80, 0x80) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0xff, 0xff) AM_WRITE(meritm_crt250_bank_w)
 ADDRESS_MAP_END
 
@@ -608,15 +608,15 @@ static ADDRESS_MAP_START( meritm_crt250_crt258_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE("z80pio_0", z80pio_r, z80pio_w)
 	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE("z80pio_1", z80pio_r, z80pio_w)
 	AM_RANGE(0x60, 0x67) AM_READWRITE(pc16552d_0_r,pc16552d_0_w)
-	AM_RANGE(0x80, 0x80) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0xff, 0xff) AM_WRITE(meritm_crt250_bank_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( meritm_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_ROMBANK(1)
-	AM_RANGE(0x8000, 0xdfff) AM_ROMBANK(2)
-	AM_RANGE(0xe000, 0xffff) AM_RAMBANK(3)
+	AM_RANGE(0x0000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0xdfff) AM_ROMBANK("bank2")
+	AM_RANGE(0xe000, 0xffff) AM_RAMBANK("bank3")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( meritm_io_map, ADDRESS_SPACE_IO, 8 )
@@ -635,8 +635,8 @@ static ADDRESS_MAP_START( meritm_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE("z80pio_0", z80pio_r, z80pio_w)
 	AM_RANGE(0x50, 0x53) AM_DEVREADWRITE("z80pio_1", z80pio_r, z80pio_w)
 	AM_RANGE(0x60, 0x67) AM_READWRITE(pc16552d_0_r,pc16552d_0_w)
-	AM_RANGE(0x80, 0x80) AM_DEVREAD("ay", ay8910_r)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x80, 0x81) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0xff, 0xff) AM_WRITE(meritm_bank_w)
 ADDRESS_MAP_END
 
@@ -913,7 +913,7 @@ static MACHINE_START(merit_common)
 
 static MACHINE_START(meritm_crt250)
 {
-	memory_configure_bank(machine, 1, 0, 8, memory_region(machine, "maincpu"), 0x10000);
+	memory_configure_bank(machine, "bank1", 0, 8, memory_region(machine, "maincpu"), 0x10000);
 	meritm_bank = 0xff;
 	meritm_crt250_switch_banks(machine);
 	MACHINE_START_CALL(merit_common);
@@ -937,10 +937,10 @@ static MACHINE_START(meritm_crt250_crt252_crt258)
 static MACHINE_START(meritm_crt260)
 {
 	meritm_ram = auto_alloc_array(machine, UINT8,  0x8000 );
-	memset( meritm_ram, 0x8000, 0x00 );
-	memory_configure_bank(machine, 1, 0, 128, memory_region(machine, "maincpu"), 0x8000);
-	memory_configure_bank(machine, 2, 0, 128, memory_region(machine, "maincpu"), 0x8000);
-	memory_configure_bank(machine, 3, 0, 4, meritm_ram, 0x2000);
+	memset(meritm_ram, 0x00, 0x8000);
+	memory_configure_bank(machine, "bank1", 0, 128, memory_region(machine, "maincpu"), 0x8000);
+	memory_configure_bank(machine, "bank2", 0, 128, memory_region(machine, "maincpu"), 0x8000);
+	memory_configure_bank(machine, "bank3", 0, 4, meritm_ram, 0x2000);
 	meritm_bank = 0xff;
 	meritm_psd_a15 = 0;
 	meritm_switch_banks(machine);
@@ -977,7 +977,7 @@ static MACHINE_DRIVER_START(meritm_crt250)
 	MDRV_CPU_PROGRAM_MAP(meritm_crt250_map)
 	MDRV_CPU_IO_MAP(meritm_crt250_io_map)
 	MDRV_CPU_CONFIG(meritm_daisy_chain)
-  	MDRV_CPU_VBLANK_INT_HACK(meritm_interrupt,262)
+	MDRV_CPU_VBLANK_INT_HACK(meritm_interrupt,262)
 
 	MDRV_MACHINE_START(meritm_crt250)
 
@@ -990,7 +990,7 @@ static MACHINE_DRIVER_START(meritm_crt250)
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-  	MDRV_SCREEN_ADD("screen",RASTER)
+	MDRV_SCREEN_ADD("screen",RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 
@@ -1006,7 +1006,7 @@ static MACHINE_DRIVER_START(meritm_crt250)
 
   /* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, SYSTEM_CLK/12)
+	MDRV_SOUND_ADD("aysnd", AY8910, SYSTEM_CLK/12)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END

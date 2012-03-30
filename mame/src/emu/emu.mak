@@ -124,28 +124,31 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/8257dma.o \
 	$(EMUMACHINE)/8255ppi.o \
 	$(EMUMACHINE)/adc083x.o \
+	$(EMUMACHINE)/adc1038.o \
 	$(EMUMACHINE)/adc1213x.o \
- 	$(EMUMACHINE)/am53cf96.o \
- 	$(EMUMACHINE)/at28c16.o \
- 	$(EMUMACHINE)/cdp1852.o \
+	$(EMUMACHINE)/am53cf96.o \
+	$(EMUMACHINE)/at28c16.o \
+	$(EMUMACHINE)/cdp1852.o \
 	$(EMUMACHINE)/ds1302.o \
 	$(EMUMACHINE)/ds2401.o \
 	$(EMUMACHINE)/ds2404.o \
 	$(EMUMACHINE)/eeprom.o \
-	$(EMUMACHINE)/eepromdev.o \
 	$(EMUMACHINE)/f3853.o \
 	$(EMUMACHINE)/generic.o \
 	$(EMUMACHINE)/i8243.o \
 	$(EMUMACHINE)/i8255a.o \
 	$(EMUMACHINE)/i2cmem.o \
 	$(EMUMACHINE)/i2cmemdev.o \
- 	$(EMUMACHINE)/idectrl.o \
- 	$(EMUMACHINE)/intelfsh.o \
+	$(EMUMACHINE)/idectrl.o \
+	$(EMUMACHINE)/intelfsh.o \
+	$(EMUMACHINE)/k033906.o \
+	$(EMUMACHINE)/k056230.o \
 	$(EMUMACHINE)/latch8.o \
 	$(EMUMACHINE)/ldcore.o \
 	$(EMUMACHINE)/ldpr8210.o \
 	$(EMUMACHINE)/ldv1000.o \
 	$(EMUMACHINE)/ldvp931.o \
+	$(EMUMACHINE)/mb14241.o \
 	$(EMUMACHINE)/mb3773.o \
 	$(EMUMACHINE)/mb87078.o \
 	$(EMUMACHINE)/mc146818.o \
@@ -164,7 +167,7 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/scsidev.o \
 	$(EMUMACHINE)/scsihd.o \
 	$(EMUMACHINE)/cr589.o \
- 	$(EMUMACHINE)/smc91c9x.o \
+	$(EMUMACHINE)/smc91c9x.o \
 	$(EMUMACHINE)/timekpr.o \
 	$(EMUMACHINE)/tmp68301.o \
 	$(EMUMACHINE)/upd4701.o \
@@ -179,18 +182,19 @@ EMUMACHINEOBJS = \
 
 EMUVIDEOOBJS = \
 	$(EMUVIDEO)/generic.o \
- 	$(EMUVIDEO)/mc6845.o \
+	$(EMUVIDEO)/mc6845.o \
 	$(EMUVIDEO)/poly.o \
 	$(EMUVIDEO)/resnet.o \
 	$(EMUVIDEO)/rgbutil.o \
 	$(EMUVIDEO)/s2636.o \
+	$(EMUVIDEO)/saa5050.o \
 	$(EMUVIDEO)/tlc34076.o \
 	$(EMUVIDEO)/tms34061.o \
- 	$(EMUVIDEO)/tms9927.o \
- 	$(EMUVIDEO)/tms9928a.o \
+	$(EMUVIDEO)/tms9927.o \
+	$(EMUVIDEO)/tms9928a.o \
 	$(EMUVIDEO)/v9938.o \
- 	$(EMUVIDEO)/vector.o \
- 	$(EMUVIDEO)/voodoo.o \
+	$(EMUVIDEO)/vector.o \
+	$(EMUVIDEO)/voodoo.o \
 
 $(LIBEMU): $(EMUOBJS) $(EMUSOUNDOBJS) $(EMUAUDIOOBJS) $(EMUDRIVEROBJS) $(EMUMACHINEOBJS) $(EMUVIDEOOBJS)
 

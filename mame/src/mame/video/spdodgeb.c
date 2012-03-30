@@ -8,7 +8,7 @@ UINT8 *spdodgeb_videoram;
 static int tile_palbank;
 static int sprite_palbank;
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 
 
 
@@ -121,7 +121,7 @@ WRITE8_HANDLER( spdodgeb_ctrl_w )
 	flip_screen_set(space->machine, data & 0x01);
 
 	/* bit 1 = ROM bank switch */
-	memory_set_bankptr(space->machine, 1,rom + 0x10000 + 0x4000 * ((~data & 0x02) >> 1));
+	memory_set_bankptr(space->machine, "bank1",rom + 0x10000 + 0x4000 * ((~data & 0x02) >> 1));
 
 	/* bit 2 = scroll high bit */
 	lastscroll = (lastscroll & 0x0ff) | ((data & 0x04) << 6);
@@ -157,6 +157,7 @@ WRITE8_HANDLER( spdodgeb_videoram_w )
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	const gfx_element *gfx = machine->gfx[1];
 	UINT8 *src;
 	int i;
@@ -166,7 +167,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 /*  240-SY   Z|F|CLR|WCH WHICH    SX
     xxxxxxxx x|x|xxx|xxx xxxxxxxx xxxxxxxx
 */
-	for (i = 0;i < spriteram_size;i += 4)
+	for (i = 0;i < machine->generic.spriteram_size;i += 4)
 	{
 		int attr = src[i+1];
 		int which = src[i+2]+((attr & 0x07)<<8);

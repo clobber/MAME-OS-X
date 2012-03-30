@@ -115,8 +115,8 @@ static WRITE16_HANDLER( shanghai_coin_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(0,data & 1);
-		coin_counter_w(1,data & 2);
+		coin_counter_w(space->machine, 0,data & 1);
+		coin_counter_w(space->machine, 1,data & 2);
 	}
 }
 
@@ -128,7 +128,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( shangha2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x03fff) AM_RAM
-	AM_RANGE(0x04000, 0x041ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x04000, 0x041ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x80000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -136,7 +136,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( shanghai_portmap, ADDRESS_SPACE_IO, 16 )
 	AM_RANGE(0x00, 0x01) AM_READWRITE(HD63484_status_r, HD63484_address_w)
 	AM_RANGE(0x02, 0x03) AM_READWRITE(HD63484_data_r, HD63484_data_w)
-	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE8("ym", ym2203_r, ym2203_w, 0x00ff)
+	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE8("ymsnd", ym2203_r, ym2203_w, 0x00ff)
 	AM_RANGE(0x40, 0x41) AM_READ_PORT("P1")
 	AM_RANGE(0x44, 0x45) AM_READ_PORT("P2")
 	AM_RANGE(0x48, 0x49) AM_READ_PORT("SYSTEM")
@@ -150,7 +150,7 @@ static ADDRESS_MAP_START( shangha2_portmap, ADDRESS_SPACE_IO, 16 )
 	AM_RANGE(0x20, 0x21) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x30, 0x31) AM_READWRITE(HD63484_status_r, HD63484_address_w)
 	AM_RANGE(0x32, 0x33) AM_READWRITE(HD63484_data_r, HD63484_data_w)
-	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE8("ym", ym2203_r, ym2203_w, 0x00ff)
+	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE8("ymsnd", ym2203_r, ym2203_w, 0x00ff)
 	AM_RANGE(0x50, 0x51) AM_WRITE(shanghai_coin_w)
 ADDRESS_MAP_END
 
@@ -167,7 +167,7 @@ static ADDRESS_MAP_START( kothello_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x09012, 0x09013) AM_READ_PORT("P2")
 	AM_RANGE(0x09014, 0x09015) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x09016, 0x0901f) AM_WRITENOP // 0x9016 is set to 0 at the boot
-	AM_RANGE(0x0a000, 0x0a1ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0a000, 0x0a1ff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0b010, 0x0b01f) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0x80000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
@@ -445,7 +445,7 @@ static MACHINE_DRIVER_START( shanghai )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 16000000/4)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 16000000/4)
 	MDRV_SOUND_CONFIG(sh_ym2203_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.15)
 	MDRV_SOUND_ROUTE(1, "mono", 0.15)
@@ -477,7 +477,7 @@ static MACHINE_DRIVER_START( shangha2 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, 16000000/4)
+	MDRV_SOUND_ADD("ymsnd", YM2203, 16000000/4)
 	MDRV_SOUND_CONFIG(sh_ym2203_interface)
 	MDRV_SOUND_ROUTE(0, "mono", 0.15)
 	MDRV_SOUND_ROUTE(1, "mono", 0.15)

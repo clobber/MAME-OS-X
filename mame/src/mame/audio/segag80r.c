@@ -10,7 +10,7 @@
 #include "driver.h"
 #include "streams.h"
 #include "cpu/mcs48/mcs48.h"
-#include "segag80r.h"
+#include "includes/segag80r.h"
 #include "machine/8255ppi.h"
 #include "machine/i8243.h"
 #include "sound/samples.h"
@@ -654,11 +654,11 @@ static const char *const spaceod_sample_names[] =
 	"eexplode.wav", 	/* 2 */
 	"pexplode.wav",		/* 3 */
 	"warp.wav", 		/* 4 */
-	"birth.wav", 		/* 5 */
-	"scoreup.wav", 		/* 6 */
+	"birth.wav",		/* 5 */
+	"scoreup.wav",		/* 6 */
 	"ssound.wav",		/* 7 */
-	"accel.wav", 		/* 8 */
-	"damaged.wav", 		/* 9 */
+	"accel.wav",		/* 8 */
+	"damaged.wav",		/* 9 */
 	"erocket.wav",		/* 10 */
 	0
 };

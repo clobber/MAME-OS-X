@@ -8,8 +8,11 @@
 *   variables
 */
 
-static tilemap *bg_tilemap;
-static tilemap *txt_tilemap;
+UINT8 * tankbust_videoram;
+UINT8 * tankbust_colorram;
+static tilemap_t *bg_tilemap;
+
+static tilemap_t *txt_tilemap;
 UINT8 * tankbust_txtram;
 
 /***************************************************************************
@@ -34,8 +37,8 @@ note:
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	int code = videoram[tile_index];
-	int attr = colorram[tile_index];
+	int code = tankbust_videoram[tile_index];
+	int attr = tankbust_colorram[tile_index];
 
 	int color = ((attr>>4) & 0x07);
 
@@ -101,22 +104,22 @@ VIDEO_START( tankbust )
 
 WRITE8_HANDLER( tankbust_background_videoram_w )
 {
-	videoram[offset] = data;
+	tankbust_videoram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 READ8_HANDLER( tankbust_background_videoram_r )
 {
-	return videoram[offset];
+	return tankbust_videoram[offset];
 }
 
 WRITE8_HANDLER( tankbust_background_colorram_w )
 {
-	colorram[offset] = data;
+	tankbust_colorram[offset] = data;
 	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 READ8_HANDLER( tankbust_background_colorram_r )
 {
-	return colorram[offset];
+	return tankbust_colorram[offset];
 }
 
 WRITE8_HANDLER( tankbust_txtram_w )
@@ -186,9 +189,10 @@ spriteram format (4 bytes per sprite):
 
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
+	UINT8 *spriteram = machine->generic.spriteram.u8;
 	int offs;
 
-	for (offs = 0; offs < spriteram_size; offs += 4)
+	for (offs = 0; offs < machine->generic.spriteram_size; offs += 4)
 	{
 		int code,color,sx,sy,flipx,flipy;
 
@@ -234,7 +238,7 @@ VIDEO_UPDATE( tankbust )
 
 	for (i=0; i<0x800; i++)
 	{
-		int tile_attrib = colorram[i];
+		int tile_attrib = tankbust_colorram[i];
 
 		if ( (tile_attrib&8) || (tile_attrib&0x80) )
 		{

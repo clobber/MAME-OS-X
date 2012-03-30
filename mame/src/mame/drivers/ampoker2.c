@@ -583,8 +583,8 @@ static WRITE8_HANDLER( ampoker2_watchdog_reset_w )
 
 static ADDRESS_MAP_START( ampoker2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(ampoker2_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(ampoker2_videoram_w) AM_BASE_GENERIC(videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( ampoker2_io_map, ADDRESS_SPACE_IO, 8 )
@@ -607,8 +607,8 @@ static ADDRESS_MAP_START( ampoker2_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x35, 0x35) AM_WRITE (ampoker2_port35_w)	/* see write handlers */
 	AM_RANGE(0x36, 0x36) AM_WRITE (ampoker2_port36_w)	/* see write handlers */
 	AM_RANGE(0x37, 0x37) AM_WRITE(ampoker2_watchdog_reset_w)
-	AM_RANGE(0x38, 0x39) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0x3A, 0x3A) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x38, 0x39) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x3A, 0x3A) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 /*
@@ -1084,7 +1084,7 @@ static MACHINE_DRIVER_START( ampoker2 )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910,MASTER_CLOCK/4)	/* 1.5 MHz, measured */
+	MDRV_SOUND_ADD("aysnd", AY8910,MASTER_CLOCK/4)	/* 1.5 MHz, measured */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END

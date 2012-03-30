@@ -324,17 +324,17 @@ static READ16_HANDLER( mechatt_gun_r )
 static ADDRESS_MAP_START( bbusters_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE(&bbusters_ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE(&videoram16)
-	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_RAM		/* service mode */
-	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size)
+	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0x0a9000, 0x0affff) AM_RAM		/* service mode */
 	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE(&bbusters_pf1_data)
 	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE(&bbusters_pf2_data)
 	AM_RANGE(0x0b4000, 0x0b5fff) AM_RAM		/* service mode */
 	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE(&bbusters_pf1_scroll_data)
 	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE(&bbusters_pf2_scroll_data)
-	AM_RANGE(0x0d0000, 0x0d0fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0d0000, 0x0d0fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("COINS")	/* Coins */
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("IN0")	/* Player 1 & 2 */
 	AM_RANGE(0x0e0004, 0x0e0005) AM_READ_PORT("IN1")	/* Player 3 */
@@ -353,14 +353,14 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mechatt_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x06ffff) AM_ROM
 	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE(&bbusters_ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE(&videoram16)
-	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_WRITENOP
 	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE(&bbusters_pf1_data)
 	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE(&bbusters_pf1_scroll_data)
 	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE(&bbusters_pf2_data)
 	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE(&bbusters_pf2_scroll_data)
-	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("IN0")
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0e0004, 0x0e0007) AM_READ(mechatt_gun_r)
@@ -378,13 +378,13 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
 	AM_RANGE(0xc0, 0xc1) AM_WRITENOP /* -> Main CPU */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sounda_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym2608_r, ym2608_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2608_r, ym2608_w)
 	AM_RANGE(0xc0, 0xc1) AM_WRITENOP /* -> Main CPU */
 ADDRESS_MAP_END
 
@@ -735,7 +735,7 @@ static MACHINE_DRIVER_START( bbusters )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2610, 8000000)
 	MDRV_SOUND_CONFIG(ym2610_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  1.0)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 1.0)
@@ -772,7 +772,7 @@ static MACHINE_DRIVER_START( mechatt )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2608, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2608, 8000000)
 	MDRV_SOUND_CONFIG(ym2608_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker",  0.50)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.50)
@@ -820,10 +820,10 @@ ROM_START( bbusters )
 	ROM_LOAD( "bb-8.a14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 	ROM_LOAD( "bb-9.c14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "bb-pcmb.l3",  0x000000, 0x80000, CRC(c8d5dd53) SHA1(0f7e94532cc14852ca12c1b792e5479667af899e) )
 ROM_END
 
@@ -865,10 +865,10 @@ ROM_START( bbustersu )
 	ROM_LOAD( "bb-8.a14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 	ROM_LOAD( "bb-9.c14",      0x000000, 0x10000, CRC(61f3de03) SHA1(736f9634fe054ea68a2aa90a743bd0dc320f23c9) )
 
-	ROM_REGION( 0x80000, "ym", 0 )
+	ROM_REGION( 0x80000, "ymsnd", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
 
-	ROM_REGION( 0x80000, "ym.deltat", 0 )
+	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
 ROM_END
 
@@ -901,7 +901,7 @@ ROM_START( mechatt )
 	ROM_REGION( 0x80000, "gfx5", 0 )
 	ROM_LOAD( "mab289c2.bin",  0x000000, 0x80000, CRC(14f97ceb) SHA1(a22033532ea616dc3a3db8b66ad6ccc6172ed7cc) )
 
-	ROM_REGION( 0x20000, "ym", 0 )
+	ROM_REGION( 0x20000, "ymsnd", 0 )
 	ROM_LOAD( "ma2.bin",       0x000000, 0x20000, CRC(ea4cc30d) SHA1(d8f089fc0ce76309411706a8110ad907f93dc97e) )
 
 	ROM_REGION( 0x20000, "user1", 0 ) /* Zoom table */
@@ -938,7 +938,7 @@ ROM_START( mechattu )
 	ROM_REGION( 0x80000, "gfx5", 0 )
 	ROM_LOAD( "mab289c2.bin",  0x000000, 0x80000, CRC(14f97ceb) SHA1(a22033532ea616dc3a3db8b66ad6ccc6172ed7cc) )
 
-	ROM_REGION( 0x20000, "ym", 0 )
+	ROM_REGION( 0x20000, "ymsnd", 0 )
 	ROM_LOAD( "ma2.bin",       0x000000, 0x20000, CRC(ea4cc30d) SHA1(d8f089fc0ce76309411706a8110ad907f93dc97e) )
 
 	ROM_REGION( 0x20000, "user1", 0 ) /* Zoom table */

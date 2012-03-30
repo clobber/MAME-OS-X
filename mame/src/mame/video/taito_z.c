@@ -1,9 +1,6 @@
 #include "driver.h"
 #include "video/taitoic.h"
 
-#define TC0100SCN_GFX_NUM 1
-#define TC0480SCP_GFX_NUM 1
-
 static int sci_spriteframe;
 
 static int road_palbank;
@@ -11,29 +8,9 @@ static int road_palbank;
 
 /**********************************************************/
 
-static void taitoz_core_vh_start(running_machine *machine, int x_offs)
-{
-	if (has_TC0480SCP(machine))	/* it's Dblaxle, a tc0480scp game */
-		TC0480SCP_vh_start(machine,TC0480SCP_GFX_NUM,x_offs,0x21,0x08,4,0,0,0,0);
-	else	/* it's a tc0100scn game */
-		TC0100SCN_vh_start(machine,1,TC0100SCN_GFX_NUM,x_offs,0,0,0,0,0,0);
-
-	if (has_TC0150ROD(machine))
-		TC0150ROD_vh_start(machine);
-
-	if (TC0110PCR_mask(machine) & 1)
-		TC0110PCR_vh_start(machine);
-}
-
 VIDEO_START( taitoz )
 {
 	road_palbank = 3;
-	taitoz_core_vh_start(machine, 0);
-}
-
-VIDEO_START( spacegun )
-{
-	taitoz_core_vh_start(machine, 4);
 }
 
 /********************************************************
@@ -169,6 +146,7 @@ confirmed
 static void contcirc_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -177,7 +155,7 @@ static void contcirc_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 	int bad_chunks;
 	static const int primasks[2] = {0xf0,0xfc};
 
-	for (offs = 0;offs < spriteram_size/2;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size/2;offs += 4)
 	{
 		data = spriteram16[offs+0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -260,6 +238,7 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 static void chasehq_draw_sprites_16x16(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -268,7 +247,7 @@ static void chasehq_draw_sprites_16x16(running_machine *machine, bitmap_t *bitma
 	int bad_chunks;
 	static const int primasks[2] = {0xf0,0xfc};
 
-	for (offs = spriteram_size/2-4;offs >=0;offs -= 4)
+	for (offs = machine->generic.spriteram_size/2-4;offs >=0;offs -= 4)
 	{
 		data = spriteram16[offs+0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -442,6 +421,7 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 static void bshark_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -450,7 +430,7 @@ static void bshark_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,
 	int bad_chunks;
 	static const int primasks[2] = {0xf0,0xfc};
 
-	for (offs = spriteram_size/2-4;offs >= 0;offs -= 4)
+	for (offs = machine->generic.spriteram_size/2-4;offs >= 0;offs -= 4)
 	{
 		data = spriteram16[offs+0];
 		zoomy = (data & 0x7e00) >> 9;
@@ -534,6 +514,7 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 static void sci_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, start_offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -635,6 +616,7 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -643,7 +625,7 @@ static void aquajack_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 	int bad_chunks;
 	static const int primasks[2] = {0xf0,0xfc};
 
-	for (offs = 0;offs < spriteram_size/2;offs += 4)
+	for (offs = 0;offs < machine->generic.spriteram_size/2;offs += 4)
 	{
 		data = spriteram16[offs+0];
 		zoomy = (data & 0x7e00) >> 9;
@@ -726,6 +708,7 @@ logerror("Sprite number %04x had %02x invalid chunks\n",tilenum,bad_chunks);
 static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int y_offs)
 {
 	UINT16 *spritemap = (UINT16 *)memory_region(machine, "user1");
+	UINT16 *spriteram16 = machine->generic.spriteram.u16;
 	int offs, data, tilenum, color, flipx, flipy;
 	int x, y, priority, curx, cury;
 	int sprites_flipscreen = 0;
@@ -734,7 +717,7 @@ static void spacegun_draw_sprites_16x8(running_machine *machine, bitmap_t *bitma
 	int bad_chunks;
 	static const int primasks[2] = {0xf0,0xfc};
 
-	for (offs = 0; offs < spriteram_size/2-4;offs += 4)
+	for (offs = 0; offs < machine->generic.spriteram_size/2-4;offs += 4)
 	{
 		data = spriteram16[offs+0];
 		zoomy = (data & 0xfe00) >> 9;
@@ -838,24 +821,26 @@ WRITE16_HANDLER( contcirc_out_w )
 
 VIDEO_UPDATE( contcirc )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
+	const device_config *tc0150rod = devtag_get_device(screen->machine, "tc0150rod");
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
 	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],0,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-3,road_palbank << 6,1,0,1,2);	// -6
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], 0, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(tc0150rod, bitmap, cliprect, -3, road_palbank << 6, 1, 0, 1, 2);	// -6
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	contcirc_draw_sprites_16x8(screen->machine, bitmap,cliprect,5);	// 7
+	contcirc_draw_sprites_16x8(screen->machine, bitmap, cliprect, 5);	// 7
 	return 0;
 }
 
@@ -864,12 +849,14 @@ VIDEO_UPDATE( contcirc )
 
 VIDEO_UPDATE( chasehq )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
+	const device_config *tc0150rod = devtag_get_device(screen->machine, "tc0150rod");
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
 	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
@@ -877,111 +864,118 @@ VIDEO_UPDATE( chasehq )
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,0,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	chasehq_draw_sprites_16x16(screen->machine, bitmap,cliprect,7);
+	chasehq_draw_sprites_16x16(screen->machine, bitmap, cliprect, 7);
 	return 0;
 }
 
 
 VIDEO_UPDATE( bshark )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
+	const device_config *tc0150rod = devtag_get_device(screen->machine, "tc0150rod");
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap_fill(bitmap, cliprect,0);
+	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,1,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 1, 1, 2);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	bshark_draw_sprites_16x8(screen->machine, bitmap,cliprect,8);
+	bshark_draw_sprites_16x8(screen->machine, bitmap, cliprect, 8);
 	return 0;
 }
 
 
 VIDEO_UPDATE( sci )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
+	const device_config *tc0150rod = devtag_get_device(screen->machine, "tc0150rod");
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,0,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	sci_draw_sprites_16x8(screen->machine, bitmap,cliprect,6);
+	sci_draw_sprites_16x8(screen->machine, bitmap, cliprect, 6);
 	return 0;
 }
 
 
 VIDEO_UPDATE( aquajack )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
+	const device_config *tc0150rod = devtag_get_device(screen->machine, "tc0150rod");
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,1);
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0,2,1,1,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 1);
+	tc0150rod_draw(tc0150rod, bitmap, cliprect, -1, 0, 2, 1, 1, 2);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	aquajack_draw_sprites_16x8(screen->machine, bitmap,cliprect,3);
+	aquajack_draw_sprites_16x8(screen->machine, bitmap, cliprect, 3);
 	return 0;
 }
 
 
 VIDEO_UPDATE( spacegun )
 {
+	const device_config *tc0100scn = devtag_get_device(screen->machine, "tc0100scn");
 	UINT8 layer[3];
 
-	TC0100SCN_tilemap_update(screen->machine);
+	tc0100scn_tilemap_update(tc0100scn);
 
-	layer[0] = TC0100SCN_bottomlayer(0);
-	layer[1] = layer[0]^1;
+	layer[0] = tc0100scn_bottomlayer(tc0100scn);
+	layer[1] = layer[0] ^ 1;
 	layer[2] = 2;
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,1);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,2);
-	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[1], 0, 2);
+	tc0100scn_tilemap_draw(tc0100scn, bitmap, cliprect, layer[2], 0, 4);
 
-	spacegun_draw_sprites_16x8(screen->machine, bitmap,cliprect,4);
+	spacegun_draw_sprites_16x8(screen->machine, bitmap, cliprect, 4);
 
 	return 0;
 }
@@ -989,34 +983,36 @@ VIDEO_UPDATE( spacegun )
 
 VIDEO_UPDATE( dblaxle )
 {
+	const device_config *tc0480scp = devtag_get_device(screen->machine, "tc0480scp");
+	const device_config *tc0150rod = devtag_get_device(screen->machine, "tc0150rod");
 	UINT8 layer[5];
 	UINT16 priority;
 
-	TC0480SCP_tilemap_update(screen->machine);
+	tc0480scp_tilemap_update(tc0480scp);
 
-	priority = TC0480SCP_get_bg_priority();
+	priority = tc0480scp_get_bg_priority(tc0480scp);
 
-	layer[0] = (priority &0xf000) >> 12;	/* tells us which bg layer is bottom */
-	layer[1] = (priority &0x0f00) >>  8;
-	layer[2] = (priority &0x00f0) >>  4;
-	layer[3] = (priority &0x000f) >>  0;	/* tells us which is top */
+	layer[0] = (priority & 0xf000) >> 12;	/* tells us which bg layer is bottom */
+	layer[1] = (priority & 0x0f00) >>  8;
+	layer[2] = (priority & 0x00f0) >>  4;
+	layer[3] = (priority & 0x000f) >>  0;	/* tells us which is top */
 	layer[4] = 4;   /* text layer always over bg layers */
 
-	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* Ensure screen blanked - this shouldn't be necessary! */
 	bitmap_fill(bitmap, cliprect, 0);
 
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[0],TILEMAP_DRAW_OPAQUE,0);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[1],0,0);
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[2],0,1);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 0);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[1], 0, 0);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[2], 0, 1);
 
-	TC0150ROD_draw(screen->machine,bitmap,cliprect,-1,0xc0,0,0,1,2);
-	bshark_draw_sprites_16x8(screen->machine, bitmap,cliprect,7);
+	tc0150rod_draw(tc0150rod, bitmap, cliprect, -1, 0xc0, 0, 0, 1, 2);
+	bshark_draw_sprites_16x8(screen->machine, bitmap, cliprect, 7);
 
 	/* This layer used for the big numeric displays */
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[3],0,4);
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[3], 0, 4);
 
-	TC0480SCP_tilemap_draw(screen->machine,bitmap,cliprect,layer[4],0,0);	/* Text layer */
+	tc0480scp_tilemap_draw(tc0480scp, bitmap, cliprect, layer[4], 0, 0);	/* Text layer */
 	return 0;
 }

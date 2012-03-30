@@ -386,8 +386,8 @@ static ADDRESS_MAP_START( shadfrce_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x102000, 0x1027ff) AM_RAM_WRITE(shadfrce_bg1videoram_w) AM_BASE(&shadfrce_bg1videoram) /* bg 2 */
 	AM_RANGE(0x102800, 0x103fff) AM_RAM
 	AM_RANGE(0x140000, 0x141fff) AM_RAM_WRITE(shadfrce_fgvideoram_w) AM_BASE(&shadfrce_fgvideoram)
-	AM_RANGE(0x142000, 0x143fff) AM_RAM AM_BASE(&shadfrce_spvideoram) AM_SIZE(&spriteram_size) /* sprites */
-	AM_RANGE(0x180000, 0x187fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x142000, 0x143fff) AM_RAM AM_BASE(&shadfrce_spvideoram) AM_SIZE_GENERIC(spriteram) /* sprites */
+	AM_RANGE(0x180000, 0x187fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x1c0000, 0x1c0001) AM_WRITE(shadfrce_bg0scrollx_w) /* SCROLL X */
 	AM_RANGE(0x1c0002, 0x1c0003) AM_WRITE(shadfrce_bg0scrolly_w) /* SCROLL Y */
 	AM_RANGE(0x1c0004, 0x1c0005) AM_WRITE(shadfrce_bg1scrollx_w) /* SCROLL X */
@@ -417,7 +417,7 @@ static WRITE8_DEVICE_HANDLER( oki_bankswitch_w )
 static ADDRESS_MAP_START( shadfrce_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xc801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0xc800, 0xc801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 	AM_RANGE(0xe800, 0xe800) AM_DEVWRITE("oki", oki_bankswitch_w)
@@ -572,7 +572,7 @@ static const ym2151_interface ym2151_config =
 };
 
 static MACHINE_DRIVER_START( shadfrce )
-	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK) 			/* verified on pcb */
+	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)			/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(shadfrce_map)
 	MDRV_TIMER_ADD_SCANLINE("scantimer", shadfrce_scanline, "screen", 0, 1)
 
@@ -593,13 +593,13 @@ static MACHINE_DRIVER_START( shadfrce )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ym", YM2151, XTAL_3_579545MHz) 		/* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz)		/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_13_4952MHz/8) 	/* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) 		/* verified on pcb, pin7 is at 2.4v */
+	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_13_4952MHz/8)	/* verified on pcb */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)		/* verified on pcb, pin7 is at 2.4v */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END

@@ -554,7 +554,7 @@ static UINT8 vdp_ctrl_r(const address_space *space, struct sms_vdp *chip)
 	UINT8 retvalue;
 
 	retvalue = (chip->frame_irq_pending<<7) |
-	   	       (chip->sprite_overflow<<6) |
+		       (chip->sprite_overflow<<6) |
 	           (chip->sprite_collision<<5);
 
 	chip->cmd_pend = 0;
@@ -1601,7 +1601,8 @@ static WRITE8_HANDLER( mt_sms_standard_rom_bank_w )
 			}
 			else
 			{
-				memory_install_readwrite8_handler(space, 0x0000, 0xbfff, 0, 0, (read8_space_func)SMH_BANK(5), (write8_space_func)SMH_UNMAP);
+				memory_install_rom(space, 0x0000, 0xbfff, 0, 0, sms_rom);
+				memory_unmap_write(space, 0x0000, 0xbfff, 0, 0);
 			}
 
 			//printf("bank ram??\n");
@@ -1643,7 +1644,7 @@ static void megatech_set_genz80_as_sms_standard_ports(running_machine *machine, 
 	/* INIT THE PORTS *********************************************************************************************/
 
 	const address_space *io = cputag_get_address_space(machine, tag, ADDRESS_SPACE_IO);
-	const device_config *sn = devtag_get_device(machine, "sn");
+	const device_config *sn = devtag_get_device(machine, "snsnd");
 
 	memory_install_readwrite8_handler(io, 0x0000, 0xffff, 0, 0, z80_unmapped_port_r, z80_unmapped_port_w);
 
@@ -1668,23 +1669,18 @@ void megatech_set_genz80_as_sms_standard_map(running_machine *machine, const cha
 	memory_install_readwrite8_handler(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0x0000, 0xffff, 0, 0, z80_unmapped_r, z80_unmapped_w);
 
 	/* main ram area */
-	sms_mainram = auto_alloc_array(machine, UINT8, 0x2000); // 8kb of main ram
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0xc000, 0xdfff, 0, 0, (read8_space_func)SMH_BANK(6), (write8_space_func)SMH_BANK(6));
-	memory_set_bankptr(machine,  6, sms_mainram );
-	memory_install_readwrite8_handler(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0xe000, 0xffff, 0, 0, (read8_space_func)SMH_BANK(7), (write8_space_func)SMH_BANK(7));
-	memory_set_bankptr(machine,  7, sms_mainram );
+	sms_mainram = (UINT8 *)memory_install_ram(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0xc000, 0xdfff, 0, 0x2000, NULL);
 	memset(sms_mainram,0x00,0x2000);
 
 	megatech_set_genz80_as_sms_standard_ports(machine,  tag);
 
+	/* fixed rom bank area */
+	sms_rom = (UINT8 *)memory_install_rom(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0x0000, 0xbfff, 0, 0, NULL);
+
+	memcpy(sms_rom, memory_region(machine, "maincpu"), 0xc000);
+
 	if (mapper == MAPPER_STANDARD )
 	{
-		/* fixed rom bank area */
-		sms_rom = auto_alloc_array(machine, UINT8, 0x400000);
-		memory_install_readwrite8_handler(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0x0000, 0xbfff, 0, 0, (read8_space_func)SMH_BANK(5), (write8_space_func)SMH_UNMAP);
-		memory_set_bankptr(machine,  5, sms_rom );
-
-		memcpy(sms_rom, memory_region(machine, "maincpu"), 0x400000);
 
 
 		memory_install_write8_handler(cputag_get_address_space(machine, tag, ADDRESS_SPACE_PROGRAM), 0xfffc, 0xffff, 0, 0, mt_sms_standard_rom_bank_w);
@@ -1692,13 +1688,6 @@ void megatech_set_genz80_as_sms_standard_map(running_machine *machine, const cha
 	}
 	else if (mapper == MAPPER_CODEMASTERS )
 	{
-		/* fixed rom bank area */
-		sms_rom = auto_alloc_array(machine, UINT8, 0xc000);
-		memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0xbfff, 0, 0, (read8_space_func)SMH_BANK(5), (write8_space_func)SMH_UNMAP);
-		memory_set_bankptr(machine,  5, sms_rom );
-
-		memcpy(sms_rom, memory_region(machine, "maincpu"), 0xc000);
-
 		memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000, 0x0000, 0, 0, codemasters_rom_bank_0000_w);
 		memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x4000, 0x4000, 0, 0, codemasters_rom_bank_4000_w);
 		memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x8000, 0, 0, codemasters_rom_bank_8000_w);
@@ -1749,7 +1738,7 @@ MACHINE_DRIVER_START( sms )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn", SN76496, 3579540)
+	MDRV_SOUND_ADD("snsnd", SN76496, 3579540)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 

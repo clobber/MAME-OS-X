@@ -83,7 +83,7 @@ static INTERRUPT_GEN( big10_interrupt )
 static VIDEO_START( big10 )
 {
 	VIDEO_START_CALL(generic_bitmapped);
-	v9938_init (machine, 0, machine->primary_screen, tmpbitmap, MODEL_V9938, VDP_MEM, big10_vdp_interrupt);
+	v9938_init (machine, 0, machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, VDP_MEM, big10_vdp_interrupt);
 	v9938_reset(0);
 }
 
@@ -128,7 +128,7 @@ static READ8_HANDLER( mux_r )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -140,8 +140,8 @@ static ADDRESS_MAP_START( main_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x99, 0x99) AM_WRITE(v9938_0_command_w) AM_READ(v9938_0_status_r)
 	AM_RANGE(0x9a, 0x9a) AM_WRITE(v9938_0_palette_w)
 	AM_RANGE(0x9b, 0x9b) AM_WRITE(v9938_0_register_w)
-	AM_RANGE(0xa0, 0xa1) AM_DEVWRITE("ay", ay8910_address_data_w)
-	AM_RANGE(0xa2, 0xa2) AM_DEVREAD("ay", ay8910_r) /* Dip-Switches routes here. */
+	AM_RANGE(0xa0, 0xa1) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xa2, 0xa2) AM_DEVREAD("aysnd", ay8910_r) /* Dip-Switches routes here. */
 ADDRESS_MAP_END
 
 
@@ -265,7 +265,7 @@ static MACHINE_DRIVER_START( big10 )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/12)	/* guess */
+	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/12)	/* guess */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END

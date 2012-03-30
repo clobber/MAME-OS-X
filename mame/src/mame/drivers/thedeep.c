@@ -28,7 +28,7 @@ Notes:
 #include "cpu/z80/z80.h"
 #include "cpu/m6502/m6502.h"
 #include "deprecat.h"
-#include "thedeep.h"
+#include "includes/thedeep.h"
 #include "sound/2203intf.h"
 
 /***************************************************************************
@@ -56,7 +56,7 @@ static int rombank;
 
 static MACHINE_RESET( thedeep )
 {
-	memory_set_bankptr(machine, 1, memory_region(machine, "maincpu") + 0x10000 + 0 * 0x4000);
+	memory_set_bankptr(machine, "bank1", memory_region(machine, "maincpu") + 0x10000 + 0 * 0x4000);
 	thedeep_scroll[0] = 0;
 	thedeep_scroll[1] = 0;
 	thedeep_scroll[2] = 0;
@@ -90,7 +90,7 @@ static WRITE8_HANDLER( thedeep_protection_w )
 			if (rombank == new_rombank)	break;
 			rombank = new_rombank;
 			rom = memory_region(space->machine, "maincpu");
-			memory_set_bankptr(space->machine, 1, rom + 0x10000 + rombank * 0x4000);
+			memory_set_bankptr(space->machine, "bank1", rom + 0x10000 + rombank * 0x4000);
 			/* there's code which falls through from the fixed ROM to bank #1, I have to */
 			/* copy it there otherwise the CPU bank switching support will not catch it. */
 			memcpy(rom + 0x08000, rom + 0x10000 + rombank * 0x4000, 0x4000);
@@ -151,7 +151,7 @@ static WRITE8_HANDLER( thedeep_e100_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_READWRITE(SMH_BANK(1), SMH_ROM)	// ROM (banked)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")	// ROM (banked)
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
 	AM_RANGE(0xd000, 0xdfff) AM_RAM				            	// RAM (MCU data copied here)
 	AM_RANGE(0xe000, 0xe000) AM_READWRITE(thedeep_protection_r, thedeep_protection_w	)	// To MCU
@@ -162,8 +162,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe00b, 0xe00b) AM_READ_PORT("e00b")			// DSW2
 	AM_RANGE(0xe00c, 0xe00c) AM_WRITE(thedeep_sound_w		)	// To Sound CPU
 	AM_RANGE(0xe100, 0xe100) AM_WRITE(thedeep_e100_w		)	// ?
-	AM_RANGE(0xe210, 0xe213) AM_WRITE(SMH_RAM) AM_BASE(&thedeep_scroll				)	// Scroll
-	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size	)	// Sprites
+	AM_RANGE(0xe210, 0xe213) AM_WRITEONLY AM_BASE(&thedeep_scroll				)	// Scroll
+	AM_RANGE(0xe400, 0xe7ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	// Sprites
 	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(thedeep_vram_1_w) AM_BASE(&thedeep_vram_1		)	// Text Layer
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(thedeep_vram_0_w) AM_BASE(&thedeep_vram_0		)	// Background Layer
 	AM_RANGE(0xf800, 0xf83f) AM_RAM AM_BASE(&thedeep_scroll2				)	// Column Scroll
@@ -179,7 +179,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym", ym2203_w	)	//
+	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ymsnd", ym2203_w	)	//
 	AM_RANGE(0x3000, 0x3000) AM_READ(soundlatch_r				)	// From Main CPU
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -356,7 +356,7 @@ static MACHINE_DRIVER_START( thedeep )
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT_HACK(thedeep_interrupt,2)	/* IRQ by MCU, NMI by vblank (maskable) */
 
- 	MDRV_CPU_ADD("audiocpu", M65C02, XTAL_12MHz/8)		/* verified on pcb */
+	MDRV_CPU_ADD("audiocpu", M65C02, XTAL_12MHz/8)		/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(audio_map)
 	/* IRQ by YM2203, NMI by when sound latch written by main cpu */
 
@@ -382,7 +382,7 @@ static MACHINE_DRIVER_START( thedeep )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ym", YM2203, XTAL_12MHz/4)  /* verified on pcb */
+	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4)  /* verified on pcb */
 	MDRV_SOUND_CONFIG(thedeep_ym2203_intf)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END

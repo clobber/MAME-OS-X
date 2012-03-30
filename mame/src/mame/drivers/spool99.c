@@ -93,12 +93,14 @@ Note
 #include "machine/eeprom.h"
 
 static UINT8 *spool99_main;
-static tilemap *sc0_tilemap;
+static tilemap_t *sc0_tilemap;
+static UINT8 *spool99_cram;
+static UINT8 *spool99_vram;
 
 static TILE_GET_INFO( get_spool99_tile_info )
 {
-	int code = ((videoram[tile_index*2+1]<<8) | (videoram[tile_index*2+0]));
-	int color = colorram[tile_index*2+0];
+	int code = ((spool99_vram[tile_index*2+1]<<8) | (spool99_vram[tile_index*2+0]));
+	int color = spool99_cram[tile_index*2+0];
 
 	SET_TILE_INFO(
 			0,
@@ -120,13 +122,13 @@ static VIDEO_UPDATE(spool99)
 
 static WRITE8_HANDLER( spool99_vram_w )
 {
-	videoram[offset] = data;
+	spool99_vram[offset] = data;
 	tilemap_mark_tile_dirty(sc0_tilemap,offset/2);
 }
 
 static WRITE8_HANDLER( spool99_cram_w )
 {
-	colorram[offset] = data;
+	spool99_cram[offset] = data;
 	tilemap_mark_tile_dirty(sc0_tilemap,offset/2);
 }
 
@@ -155,7 +157,7 @@ static READ8_HANDLER( spool99_io_r )
 			case 0xafe4: return input_port_read(space->machine,"SERVICE2");//attract mode
 //          case 0xafe5: return 1;
 //          case 0xafe6: return 1;
-			case 0xafe7: return eeprom_read_bit();
+			case 0xafe7: return eeprom_read_bit(devtag_get_device(space->machine,"eeprom"));
 			case 0xaff8: return okim6295_r(devtag_get_device(space->machine, "oki"),0);
 		}
 	}
@@ -164,37 +166,37 @@ static READ8_HANDLER( spool99_io_r )
 	return ROM[0xaf00+offset];
 }
 
-static WRITE8_HANDLER( eeprom_resetline_w )
+static WRITE8_DEVICE_HANDLER( eeprom_resetline_w )
 {
 	// reset line asserted: reset.
-	eeprom_set_cs_line((data & 0x01) ? CLEAR_LINE : ASSERT_LINE );
+	eeprom_set_cs_line(device, (data & 0x01) ? CLEAR_LINE : ASSERT_LINE );
 }
 
-static WRITE8_HANDLER( eeprom_clockline_w )
+static WRITE8_DEVICE_HANDLER( eeprom_clockline_w )
 {
 	// clock line asserted: write latch or select next bit to read
-	eeprom_set_clock_line((data & 0x01) ? ASSERT_LINE : CLEAR_LINE );
+	eeprom_set_clock_line(device, (data & 0x01) ? ASSERT_LINE : CLEAR_LINE );
 }
 
-static WRITE8_HANDLER( eeprom_dataline_w )
+static WRITE8_DEVICE_HANDLER( eeprom_dataline_w )
 {
 	// latch the bit
-	eeprom_write_bit(data & 0x01);
+	eeprom_write_bit(device, data & 0x01);
 }
 
 static ADDRESS_MAP_START( spool99_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xaeff) AM_RAM AM_BASE(&spool99_main)
 	AM_RANGE(0xaf00, 0xafff) AM_READ(spool99_io_r)
-	AM_RANGE(0xafed, 0xafed) AM_WRITE(eeprom_resetline_w )
-	AM_RANGE(0xafee, 0xafee) AM_WRITE(eeprom_clockline_w )
-	AM_RANGE(0xafef, 0xafef) AM_WRITE(eeprom_dataline_w )
+	AM_RANGE(0xafed, 0xafed) AM_DEVWRITE("eeprom", eeprom_resetline_w )
+	AM_RANGE(0xafee, 0xafee) AM_DEVWRITE("eeprom", eeprom_clockline_w )
+	AM_RANGE(0xafef, 0xafef) AM_DEVWRITE("eeprom", eeprom_dataline_w )
 	AM_RANGE(0xaff8, 0xaff8) AM_DEVWRITE("oki", okim6295_w)
 
-	AM_RANGE(0xb000, 0xb3ff) AM_RAM AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE(&paletteram) // palette
+	AM_RANGE(0xb000, 0xb3ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram) // palette
 
 	AM_RANGE(0xb800, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(spool99_vram_w) AM_BASE(&videoram)
-	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(spool99_cram_w) AM_BASE(&colorram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(spool99_vram_w) AM_BASE(&spool99_vram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(spool99_cram_w) AM_BASE(&spool99_cram)
 ADDRESS_MAP_END
 
 
@@ -280,7 +282,7 @@ static MACHINE_DRIVER_START( spool99 )
 
 	MDRV_PALETTE_LENGTH(0x200)
 
-	MDRV_NVRAM_HANDLER(93C46)
+	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	MDRV_VIDEO_START(spool99)
 	MDRV_VIDEO_UPDATE(spool99)

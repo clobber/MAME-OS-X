@@ -383,7 +383,7 @@ static WRITE8_HANDLER( disk_iobank_w )
 	if (newbank != bank)
 	{
 		bank = newbank;
-		memory_set_bankptr(space->machine,  1,memory_region(space->machine, "user1") + 0x10000 * bank );
+		memory_set_bankptr(space->machine,  "bank1",memory_region(space->machine, "user1") + 0x10000 * bank );
 	}
 
 	lastvalue = data;
@@ -487,9 +487,9 @@ static const ppi8255_interface filetto_ppi8255_intf[2] =
 	{
 		DEVCB_HANDLER(port_a_r),		/* Port A read */
 		DEVCB_HANDLER(port_b_r),		/* Port B read */
-		DEVCB_HANDLER(port_c_r),  		/* Port C read */
-		DEVCB_NULL,   					/* Port A write */
-		DEVCB_HANDLER(port_b_w),  		/* Port B write */
+		DEVCB_HANDLER(port_c_r),		/* Port C read */
+		DEVCB_NULL, 					/* Port A write */
+		DEVCB_HANDLER(port_b_w),		/* Port B write */
 		DEVCB_NULL						/* Port C write */
 	},
 	{
@@ -548,32 +548,31 @@ static WRITE8_HANDLER( drive_selection_w )
 DMA8237 Controller
 ******************/
 
+static int dma_channel;
 static UINT8 dma_offset[2][4];
 static UINT8 at_pages[0x10];
 
-static DMA8237_HRQ_CHANGED( pc_dma_hrq_changed )
+static WRITE_LINE_DEVICE_HANDLER( pc_dma_hrq_changed )
 {
 	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_HALT, state ? ASSERT_LINE : CLEAR_LINE);
 
 	/* Assert HLDA */
-	dma8237_set_hlda( device, state );
+	i8237_hlda_w( device, state );
 }
 
 
-static DMA8237_MEM_READ( pc_dma_read_byte )
+static READ8_HANDLER( pc_dma_read_byte )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	offs_t page_offset = (((offs_t) dma_offset[0][channel]) << 16)
+	offs_t page_offset = (((offs_t) dma_offset[0][dma_channel]) << 16)
 		& 0xFF0000;
 
 	return memory_read_byte(space, page_offset + offset);
 }
 
 
-static DMA8237_MEM_WRITE( pc_dma_write_byte )
+static WRITE8_HANDLER( pc_dma_write_byte )
 {
-	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	offs_t page_offset = (((offs_t) dma_offset[0][channel]) << 16)
+	offs_t page_offset = (((offs_t) dma_offset[0][dma_channel]) << 16)
 		& 0xFF0000;
 
 	memory_write_byte(space, page_offset + offset, data);
@@ -621,18 +620,25 @@ static WRITE8_HANDLER(dma_page_select_w)
 	}
 }
 
-
-static const struct dma8237_interface dma8237_1_config =
+static void set_dma_channel(const device_config *device, int channel, int state)
 {
-	XTAL_14_31818MHz/3,
+	if (!state) dma_channel = channel;
+}
 
-	pc_dma_hrq_changed,
-	pc_dma_read_byte,
-	pc_dma_write_byte,
+static WRITE_LINE_DEVICE_HANDLER( pc_dack0_w ) { set_dma_channel(device, 0, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack1_w ) { set_dma_channel(device, 1, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack2_w ) { set_dma_channel(device, 2, state); }
+static WRITE_LINE_DEVICE_HANDLER( pc_dack3_w ) { set_dma_channel(device, 3, state); }
 
-	{ NULL, NULL, NULL, NULL },
-	{ NULL, NULL, NULL, NULL },
-	NULL
+static I8237_INTERFACE( dma8237_1_config )
+{
+	DEVCB_LINE(pc_dma_hrq_changed),
+	DEVCB_NULL,
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, pc_dma_read_byte),
+	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, pc_dma_write_byte),
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL },
+	{ DEVCB_LINE(pc_dack0_w), DEVCB_LINE(pc_dack1_w), DEVCB_LINE(pc_dack2_w), DEVCB_LINE(pc_dack3_w) }
 };
 
 /******************
@@ -671,13 +677,13 @@ static ADDRESS_MAP_START( filetto_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x00400, 0x007ff) AM_RAM AM_BASE(&work_ram)
 	AM_RANGE(0x00800, 0x9ffff) AM_RAM //work RAM 640KB
 	AM_RANGE(0xa0000, 0xbffff) AM_RAM_WRITE(vga_vram_w) AM_BASE(&vga_vram)//VGA RAM
-	AM_RANGE(0xc0000, 0xcffff) AM_READ(SMH_BANK(1))
+	AM_RANGE(0xc0000, 0xcffff) AM_ROMBANK("bank1")
 	AM_RANGE(0xf0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( filetto_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3ff)
-	AM_RANGE(0x0000, 0x000f) AM_DEVREADWRITE("dma8237_1", dma8237_r, dma8237_w ) //8237 DMA Controller
+	AM_RANGE(0x0000, 0x000f) AM_DEVREADWRITE("dma8237_1", i8237_r, i8237_w ) //8237 DMA Controller
 	AM_RANGE(0x0020, 0x002f) AM_DEVREADWRITE("pic8259_1", pic8259_r, pic8259_w ) //8259 Interrupt control
 	AM_RANGE(0x0040, 0x0043) AM_DEVREADWRITE("pit8253", pit8253_r, pit8253_w)    //8253 PIT
 	AM_RANGE(0x0060, 0x0063) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)  //PPI 8255
@@ -706,7 +712,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tetriskr_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3ff)
-	AM_RANGE(0x0000, 0x000f) AM_DEVREADWRITE("dma8237_1", dma8237_r, dma8237_w ) //8237 DMA Controller
+	AM_RANGE(0x0000, 0x000f) AM_DEVREADWRITE("dma8237_1", i8237_r, i8237_w ) //8237 DMA Controller
 	AM_RANGE(0x0020, 0x002f) AM_DEVREADWRITE("pic8259_1", pic8259_r, pic8259_w ) //8259 Interrupt control
 	AM_RANGE(0x0040, 0x0043) AM_DEVREADWRITE("pit8253", pit8253_r, pit8253_w)    //8253 PIT
 	AM_RANGE(0x0060, 0x0063) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)  //PPI 8255
@@ -714,7 +720,7 @@ static ADDRESS_MAP_START( tetriskr_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0070, 0x007f) AM_READWRITE(mc146818_port_r,mc146818_port_w)
 	AM_RANGE(0x0080, 0x0087) AM_READWRITE(dma_page_select_r,dma_page_select_w)
 	AM_RANGE(0x00a0, 0x00af) AM_DEVREADWRITE("pic8259_2", pic8259_r, pic8259_w )
-  	AM_RANGE(0x0200, 0x020f) AM_RAM //game port
+	AM_RANGE(0x0200, 0x020f) AM_RAM //game port
 //  AM_RANGE(0x0201, 0x0201) AM_READ_PORT("IN1") //game port
 	AM_RANGE(0x0278, 0x027f) AM_RAM //printer (parallel) port latch
 	AM_RANGE(0x02f8, 0x02ff) AM_RAM //Modem port
@@ -927,7 +933,7 @@ static MACHINE_DRIVER_START( filetto )
 	MDRV_PPI8255_ADD( "ppi8255_0", filetto_ppi8255_intf[0] )
 	MDRV_PPI8255_ADD( "ppi8255_1", filetto_ppi8255_intf[1] )
 
-	MDRV_DMA8237_ADD( "dma8237_1", dma8237_1_config )
+	MDRV_I8237_ADD( "dma8237_1", XTAL_14_31818MHz/3, dma8237_1_config )
 
 	MDRV_PIC8259_ADD( "pic8259_1", pic8259_1_config )
 
@@ -972,7 +978,7 @@ static MACHINE_DRIVER_START( tetriskr )
 	MDRV_PPI8255_ADD( "ppi8255_0", filetto_ppi8255_intf[0] )
 	MDRV_PPI8255_ADD( "ppi8255_1", filetto_ppi8255_intf[1] )
 
-	MDRV_DMA8237_ADD( "dma8237_1", dma8237_1_config )
+	MDRV_I8237_ADD( "dma8237_1", XTAL_14_31818MHz/3, dma8237_1_config )
 
 	MDRV_PIC8259_ADD( "pic8259_1", pic8259_1_config )
 

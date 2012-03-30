@@ -3,7 +3,7 @@
 #include "driver.h"
 #include "includes/flower.h"
 
-static tilemap *flower_bg0_tilemap, *flower_bg1_tilemap, *flower_text_tilemap, *flower_text_right_tilemap;
+static tilemap_t *flower_bg0_tilemap, *flower_bg1_tilemap, *flower_text_tilemap, *flower_text_right_tilemap;
 UINT8 *flower_textram, *flower_bg0ram, *flower_bg1ram, *flower_bg0_scroll, *flower_bg1_scroll;
 
 
@@ -31,7 +31,7 @@ PALETTE_INIT( flower )
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	const gfx_element *gfx = machine->gfx[1];
-	UINT8 *source = spriteram + 0x200;
+	UINT8 *source = machine->generic.spriteram.u8 + 0x200;
 	UINT8 *finish = source - 0x200;
 
 	source -= 8;

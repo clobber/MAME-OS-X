@@ -8,7 +8,7 @@
 
 #include "driver.h"
 #include "video/resnet.h"
-#include "warpwarp.h"
+#include "includes/warpwarp.h"
 
 
 UINT8 *geebee_videoram,*warpwarp_videoram;
@@ -18,7 +18,7 @@ int warpwarp_ball_on;
 int warpwarp_ball_h,warpwarp_ball_v;
 int warpwarp_ball_sizex, warpwarp_ball_sizey;
 
-static tilemap *bg_tilemap;
+static tilemap_t *bg_tilemap;
 
 
 static const rgb_t geebee_palette[] =

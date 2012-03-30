@@ -21,6 +21,8 @@ Notes:
 #include "sound/ay8910.h"
 
 
+extern UINT8 *popeye_videoram;
+extern UINT8 *popeye_colorram;
 extern UINT8 *popeye_background_pos;
 extern UINT8 *popeye_palettebank;
 
@@ -84,10 +86,10 @@ static ADDRESS_MAP_START( skyskipr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8c00, 0x8c02) AM_RAM AM_BASE(&popeye_background_pos)
 	AM_RANGE(0x8c03, 0x8c03) AM_RAM AM_BASE(&popeye_palettebank)
-	AM_RANGE(0x8c04, 0x8e7f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x8c04, 0x8e7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x8e80, 0x8fff) AM_RAM
-	AM_RANGE(0xa000, 0xa3ff) AM_WRITE(popeye_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xa400, 0xa7ff) AM_WRITE(popeye_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xa000, 0xa3ff) AM_WRITE(popeye_videoram_w) AM_BASE(&popeye_videoram)
+	AM_RANGE(0xa400, 0xa7ff) AM_WRITE(popeye_colorram_w) AM_BASE(&popeye_colorram)
 	AM_RANGE(0xc000, 0xcfff) AM_WRITE(skyskipr_bitmap_w)
 	AM_RANGE(0xe000, 0xe001) AM_READWRITE(protection_r,protection_w)
 ADDRESS_MAP_END
@@ -98,10 +100,10 @@ static ADDRESS_MAP_START( popeye_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8800, 0x8bff) AM_RAM
 	AM_RANGE(0x8c00, 0x8c02) AM_RAM AM_BASE(&popeye_background_pos)
 	AM_RANGE(0x8c03, 0x8c03) AM_RAM AM_BASE(&popeye_palettebank)
-	AM_RANGE(0x8c04, 0x8e7f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x8c04, 0x8e7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x8e80, 0x8fff) AM_RAM
-	AM_RANGE(0xa000, 0xa3ff) AM_WRITE(popeye_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xa400, 0xa7ff) AM_WRITE(popeye_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xa000, 0xa3ff) AM_WRITE(popeye_videoram_w) AM_BASE(&popeye_videoram)
+	AM_RANGE(0xa400, 0xa7ff) AM_WRITE(popeye_colorram_w) AM_BASE(&popeye_colorram)
 	AM_RANGE(0xc000, 0xdfff) AM_WRITE(popeye_bitmap_w)
 	AM_RANGE(0xe000, 0xe001) AM_READWRITE(protection_r,protection_w)
 ADDRESS_MAP_END
@@ -111,21 +113,21 @@ static ADDRESS_MAP_START( popeyebl_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8c00, 0x8c02) AM_RAM AM_BASE(&popeye_background_pos)
 	AM_RANGE(0x8c03, 0x8c03) AM_RAM AM_BASE(&popeye_palettebank)
-	AM_RANGE(0x8c04, 0x8e7f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x8c04, 0x8e7f) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x8e80, 0x8fff) AM_RAM
-	AM_RANGE(0xa000, 0xa3ff) AM_WRITE(popeye_videoram_w) AM_BASE(&videoram)
-	AM_RANGE(0xa400, 0xa7ff) AM_WRITE(popeye_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xa000, 0xa3ff) AM_WRITE(popeye_videoram_w) AM_BASE(&popeye_videoram)
+	AM_RANGE(0xa400, 0xa7ff) AM_WRITE(popeye_colorram_w) AM_BASE(&popeye_colorram)
 	AM_RANGE(0xc000, 0xcfff) AM_WRITE(skyskipr_bitmap_w)
 	AM_RANGE(0xe000, 0xe01f) AM_ROM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( popeye_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2")
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("IN0")
-	AM_RANGE(0x03, 0x03) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x03, 0x03) AM_DEVREAD("aysnd", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -466,7 +468,7 @@ static MACHINE_DRIVER_START( skyskipr )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay", AY8910, XTAL_8MHz/4)
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_8MHz/4)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 MACHINE_DRIVER_END
